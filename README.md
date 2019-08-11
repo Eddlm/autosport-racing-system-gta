@@ -1,5 +1,6 @@
 # Autosport Racing System repo
 The repository and sourcecode for the ARS script for GTAV.
+I will be only partially active developing ARS from now on, but I will keep track of pull requests and update the script as needed.
 
 ## Terms of Use
 (C) Eddlm 2019
