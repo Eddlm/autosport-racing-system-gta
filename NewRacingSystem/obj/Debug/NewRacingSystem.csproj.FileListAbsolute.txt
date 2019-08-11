@@ -1,0 +1,2 @@
+D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\Debug\NewRacingSystem.csprojAssemblyReference.cache
+D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\Debug\NewRacingSystem.csproj.CoreCompileInputs.cache

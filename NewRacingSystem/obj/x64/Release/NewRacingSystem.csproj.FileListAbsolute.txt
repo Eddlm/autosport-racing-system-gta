@@ -1,0 +1,7 @@
+D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\bin\x64\Release\ARS.dll
+D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\bin\x64\Release\ARS.pdb
+D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\bin\x64\Release\ScriptHookVDotNet2.dll
+D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CoreCompileInputs.cache
+D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CopyComplete
+D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\x64\Release\ARS.dll
+D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\x64\Release\ARS.pdb
