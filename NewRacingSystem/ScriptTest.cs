@@ -927,12 +927,16 @@ namespace NewRacingSystem
 
                         XmlDocument f = LoadTrackFile(FilteredTrackList[TrackListPos]);//Game.GetUserInput(30)
 
-                        foreach (Vehicle v in World.GetAllVehicles().Where(s => s.Health>0 && s.IsDriveable && s.IsInRangeOf(Game.Player.Character.Position, 30f) &&  !CanWeUse(s.GetPedOnSeat(VehicleSeat.Driver))))
+                        if (DisciplineFilter.Contains("nearby"))
                         {
-                            Log(LogImportance.Info, "Added " + v.FriendlyName);
-                            Racer RandomRacer = new Racer(v, v.CreateRandomPedOnSeat(VehicleSeat.Driver));
-                            Racers.Add(RandomRacer);
+                            foreach (Vehicle v in World.GetAllVehicles().Where(s => s.Health > 0 && s.IsDriveable && s.IsInRangeOf(Game.Player.Character.Position, 30f) && !CanWeUse(s.GetPedOnSeat(VehicleSeat.Driver))))
+                            {
+                                Log(LogImportance.Info, "Added " + v.FriendlyName);
+                                Racer RandomRacer = new Racer(v, v.CreateRandomPedOnSeat(VehicleSeat.Driver));
+                                Racers.Add(RandomRacer);
+                            }
                         }
+
 
                         LoadTrack(f);
                         LoadGrid(DisciplineFilter, (int)Clamp( intendedOpponents-Racers.Count, 0, GridPositions.Count));//Game.GetUserInput(128).ToLowerInvariant()
@@ -1039,6 +1043,7 @@ namespace NewRacingSystem
             WideDict.Clear();
 
             RaceStatus = RaceState.None;
+            CountDown = MaxCountDown;
         }
         //Wheelspin turbulence
         float wheelspin = 0f;
@@ -1302,7 +1307,7 @@ namespace NewRacingSystem
             }
 
             //Scaleforms
-            if (SCCountdown.IsLoaded)  SCCountdown.Render2D();
+            if (SCCountdown.IsLoaded && CountDown != MaxCountDown)  SCCountdown.Render2D();
 
             //Info & Tips
             if (DebugLevel == (int)DebugMode.PropEdit) DisplayHelpTextThisFrame("Add or remove any ~g~prop~w~ with the tool of your prefence. They must be ~y~persistent~w~.");
@@ -1663,7 +1668,7 @@ namespace NewRacingSystem
                     LeaderboardFinish.Add(racer);
                     racer.BaseBehavior = RacerBaseBehavior.FinishedRace;
                     if (IsPointToPoint) racer.BaseBehavior = RacerBaseBehavior.FinishedStandStill;
-                    if (TimeToFinishRace == 0) TimeToFinishRace = Game.GameTime + (30*1000);
+                    if (TimeToFinishRace == 0) TimeToFinishRace = Game.GameTime + (DevSettingsFile.GetValue<int>("RACERS", "TimeoutSeconds",30)*1000);
                 }
             }
 
@@ -3461,7 +3466,7 @@ namespace NewRacingSystem
             }
         }
 
-        public static void UpdateRoute(bool path, bool raceline, bool props)
+        public void UpdateRoute(bool path, bool raceline, bool props)
         {
             Log(LogImportance.Info, "-- UPDATING CURRENT ROUTE --");
             if (path || raceline)
@@ -3631,14 +3636,16 @@ namespace NewRacingSystem
             {
                 CurrentFile.Save(@"scripts\ARS\Tracks\" + Game.GetUserInput(200) + ".xml");
 
+
             }
+
         }
         public static bool RouteIsPointToPoint(List<Vector3> route)
         {
             if (route.Count < 2) return false;
             return ((route.First().DistanceTo(route.Last()) > 10f));
         }
-        public static void SaveRoute(string filename)
+        public void SaveRoute(string filename)
         {
             if (filename == null || filename == "")
             {
@@ -3852,6 +3859,10 @@ namespace NewRacingSystem
 
             
             document.Save(@"scripts\ARS\Tracks\" + filename + ".xml");
+
+            DisplayHelpTextTimed("Adding to track dictionary...", 1000);
+            FillKnownTracks();
+            DisplayHelpTextTimed("~g~Done.", 2000);
         }
 
         public  void AttachFlare(Prop p, Color color)
@@ -5876,7 +5887,7 @@ namespace NewRacingSystem
             {
                 if (candidates.Count > 0)
                 {
-                    if (candidates.Count < maxcars)
+                    if (candidates.Count < maxcars && SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "allowduplicates",true))
                     {
                         Log(LogImportance.Info, "There are not enough candidates to fill the grid. Duplicating some vehicles...");
 

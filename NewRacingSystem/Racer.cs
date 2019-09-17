@@ -575,7 +575,7 @@ namespace NewRacingSystem
 
         void ApplySteer()
         {
-            float steerMax = 15f;
+            float steerMax = 13;
             if (understeerScore > 0) understeerScore--;
 
             if (TRCurveAngle > 0 != IdealSteeringAngle > 0 && Math.Abs(SideSlide) < 0.2f)
