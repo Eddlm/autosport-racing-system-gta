@@ -8,8 +8,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace NewRacingSystem
+namespace ARS
 {
+
+
     public enum RacerBaseBehavior
     {
         GridWait, Race, DamagedAvoid, FinishedRace, FinishedStandStill
@@ -17,10 +19,22 @@ namespace NewRacingSystem
     public class Racer
     {
 
+        public VehicleControl vControl = new VehicleControl();
+        public Memory mem = new Memory();
+
         public bool ControlledByPlayer = false;
+
+        public Dictionary<Decision, int> Decisions = new Dictionary<Decision, int>();
+        public Dictionary<Decision, int> BannedDecisions = new Dictionary<Decision, int>();
+
+        public Dictionary<Mistake, int> Mistakes = new Dictionary<Mistake, int>();
+        public Dictionary<Mistake, int> MistakesCooldown = new Dictionary<Mistake, int>();
+
+
+
         //Racer Info
-        public List<int> LapTimes = new List<int>();
-        public int StartTime = 0;
+        public List<TimeSpan> LapTimes = new List<TimeSpan>();
+        public int LapStartTime = 0;
         public string Name = "Racer";
         public Ped Driver;
         public Vehicle Car;
@@ -32,6 +46,8 @@ namespace NewRacingSystem
 
 
 
+        float CatchUpTorqueMult = 1.0f;
+
 
         //Modifiers
         public float Confidence = 1f;
@@ -39,61 +55,46 @@ namespace NewRacingSystem
         public int oldNode = 0;
 
         public int Lap = 0;
-        public int Pos = 1;
+        public int Pos = 0;
 
         //Timers
-        int BrakeAdjustCooldown = 0; //1000ms
-        int ManeuverTimeRef = 0; //500ms, actually GetRefrenceVehicle timer
-        int AITimeRef = 0; //100ms
-        public int SpeedControlTimer = 0; //200ms
-        public int SteerControlTime = 0; //200ms
-        int DebugTextTime = 0;
+        int HalfSecondCheck = 0; //1000ms
+        int ProcessAITimeRef = 0; //100ms
         int OneSecondGameTime = 0;
         float TRCurveAngle = 0f;
         Vector3 TRCurveVector = Vector3.Zero;
         Vector3 ClosestPointInTrack = Vector3.Zero;
-        int tempSPDip = 0;
 
 
         //Status
         int StuckScore = 0;
         public bool StuckRecover = false;
-        int UseGunScore = 100;
-        int GameTimeUseGun = 0;
 
         //Perceived Info to make decisions
-        public List<Vector3> Path = new List<Vector3>();
+
         public List<dynamic> TrackInfo = new List<dynamic>();
         List<Racer> referenceVehs = new List<Racer>();
         public float HandlingGrip = 0f;
         public float SurfaceGrip = 1f;
-        float maxOutofBounds = 0f;
-        public int CurrentNode = 0;
         public float SideSlide = 0f;
-        float DeviationFromTrackCenter = 2f;
 
-        bool CanRegisterNewLap = true;
+        public bool CanRegisterNewLap = true;
 
         //Cornering variables (speed  and steer)
 
         //General
-        public Vector3 CManeuverDirection = Vector3.Zero;
         float RacingLineTreshold = 0f;
-        float cSlide = 0f;
+        float SlideAngle = 0f;
 
         //Steer       
         float RacingLineDeviation = 0.0f;
         float OvertakeDeviation = 0.0f;
         float SteerToDeviation = 0f;
-        float CurrentCornerAngle = 0f;
-        Vector3 CurrentCornerDir = Vector3.Zero;
-        Vector3 CurrentTrackDir = Vector3.Zero;
-        Vector3 FollowTrackDir = Vector3.Zero;
 
         float zRotSpeed = 0f;
 
         //Speed
-        public float CurrentBrake = 0f;
+        //public float vControl.Brake = 0f;
         float CurrentLockupLimiter = 1f;
         float CurrentWheelspinLimiter = 1f;
 
@@ -101,36 +102,45 @@ namespace NewRacingSystem
         public Vector3 TractionCurvePos = Vector3.Zero;
         float spdDiff = 0f;
 
-        public List<dynamic> WorstCorners = new List<dynamic>();
+        //public List<dynamic> WorstCorners = new List<dynamic>();
         // public List<dynamic> WorstCorner = null; //1=pos, 2=angle;
-        public float IdealSpeed = 0f;
 
-        int littlebrakescore = 0;
+
+
 
         //Vehicle control
-        public float CurrentThrottle = 1f;
-        public float CurrentSteering = 20f;
+
+
         public bool CurrentHandBrake = false;
         public int HandbrakeTime = 0;
         float MaxSteeringAngle = 40f; //ScriptTest.map(Car.Velocity.Length(), 0, 60, 40, 5);
         int OutOfTrack = 0;
-        float modelw = 0;
 
+        //Avoidance info, how 'wide' the vehicle is
+        //accounting for direction and sideways slide angle
+        public float BoundingBox = 0f;
 
+        float AngleToTrack = 0f;
 
+        public List<CornerPoint> KnownCorners = new List<CornerPoint>();
 
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
-            
+            //mem.personality = ARS.personalities.Last();
+
+            //if (ARS.DevSettingsFile.GetValue<bool>("RACERS", "UsePersonalities", false)) mem.personality = ARS.personalities[ARS.GetRandomInt(0, ARS.personalities.Count )]; else mem.personality = ARS.personalities.Last();
+
+            AngleToTrack = 50f;
             Car = RacerCar;
             Driver = RacerPed;
-            Name= RacerCar.FriendlyName;
-            Path = ARS.Path;
+            Name = RacerCar.FriendlyName;
+            if (Name == "NULL" || Name == null) Name = Car.DisplayName.ToString()[0].ToString().ToUpper() + Car.DisplayName.ToString().Substring(1).ToLowerInvariant();
+
 
             if (Driver.IsPlayer) ControlledByPlayer = true;
-            SteerControlTime = Game.GameTime + (ARS.GetRandomInt(10, 50));
-            SpeedControlTimer = Game.GameTime + (ARS.GetRandomInt(10, 50));
-           // Function.Call(Hash.SET_ENTITY_MOTION_BLUR, Car, true);
+            //SteerControlTime = Game.GameTime + (ARS.GetRandomInt(10, 50));
+            HalfSecondCheck = Game.GameTime + (ARS.GetRandomInt(10, 50));
+            // Function.Call(Hash.SET_ENTITY_MOTION_BLUR, Car, true);
             //Function.Call(Hash.SET_ENTITY_MOTION_BLUR, Driver, true);
 
             //Entity proofs
@@ -140,7 +150,8 @@ namespace NewRacingSystem
             modelFlags = ARS.GetModelFlags(Car).ToString("X");
             downf = ARS.GetDownforce(Car);
             if (downf == 0f) downf = 1f;
-            trcurveLat = ARS.rad2deg( ARS.GetTRCurveLat(Car));
+            //if (downf > 4f) downf = 4f;
+            TRCurveLateral = ARS.rad2deg(ARS.GetTRCurveLat(Car));
             if (!ControlledByPlayer)
             {
 
@@ -165,7 +176,7 @@ namespace NewRacingSystem
                 }
                 else if (ARS.AIRacerAutofix == 1)
                 {
-                    
+
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_STRONG, Car, true);
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_HAS_STRONG_AXLES, Car, true);
                     Car.EngineCanDegrade = false;
@@ -179,13 +190,14 @@ namespace NewRacingSystem
 
                 Car.EngineRunning = true;
                 ARS.SetBrakes(Car, 0f);
-                if(Car.Model.IsCar)
+                if (Car.Model.IsCar)
                 {
-                 //   Driver.SetIntoVehicle(Car, VehicleSeat.Driver);
-               //     Driver.Alpha = 0;
+
+                    //Driver.Alpha = 0;
                 }
 
-                 // Driver.GiveHelmet(false, HelmetType.RegularMotorcycleHelmet, 0);
+                Driver.SetIntoVehicle(Car, VehicleSeat.Driver);
+                // Driver.GiveHelmet(false, HelmetType.RegularMotorcycleHelmet, 0);
                 /*
                 TaskSequence race = new TaskSequence();
                 Function.Call(Hash.TASK_PAUSE, 0, 100);
@@ -197,11 +209,11 @@ namespace NewRacingSystem
                 Car.IsRadioEnabled = false;
             }
             Car.IsPersistent = true;
-            HandlingGrip =  ARS.GetTRCurveMax(Car);
- 
+            HandlingGrip = ARS.GetTRCurveMax(Car);
+
             float modelw = Car.Model.GetDimensions().X / 2;
 
-            
+
 
 
 
@@ -226,7 +238,7 @@ namespace NewRacingSystem
             */
 
             //     Name = Car.FriendlyName;
-            
+
             if ((Car.CurrentBlip == null || Car.CurrentBlip.Exists() == false) && !Driver.IsPlayer)
             {
                 Car.AddBlip();
@@ -236,9 +248,12 @@ namespace NewRacingSystem
                 Function.Call(Hash._0x2B6D467DAB714E8D, Car.CurrentBlip, true);
                 //Function.Call(Hash.SET_BLIP_AS_SHORT_RANGE, Car.CurrentBlip, true);
                 Car.CurrentBlip.Name = Name;
+
+                // Function.Call(Hash._0xBFEFE3321A3F5015, Driver, Name, false,false, "Racer", 0);
+
             }
 
-            
+
             Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Car, true, 1);
             Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Driver, true, 1);
 
@@ -250,274 +265,253 @@ namespace NewRacingSystem
             Driver.MaxHealth = 1000;
             Driver.Health = 1000;
 
+
+
+
         }
 
 
 
         public void Initialize()
         {
-            IdealSteeringAngle = 0f;
-            CurrentSteeringAngle = 0f;
-            CurrentBrake = 0f;
-            CurrentThrottle = 0f;
+
+            Car.Repair();
+
+            vControl.SteerAngle = 0f;
+            trackPoint = ARS.TrackPoints.Last();
+            mem.data.SteerAngle = 0f;
+            vControl.Brake = 0f;
+            vControl.Throttle = 0f;
             LapTimes.Clear();
-            StartTime = 0;
+            LapStartTime = 0;
             BaseBehavior = RacerBaseBehavior.GridWait;
-            CurrentNode = 0;
             Lap = 0;
             FinishedPointToPoint = false;
+
+            mem.data.brakeSafety = ARS.map(Function.Call<float>((Hash)0xA132FB5370554DB0, Car), 2f, 1f, 0.5f, 1f, true);
         }
 
-        public void Steer()
-        {
 
+        float maxSteerSmooth = 50f;
+        public void SteerLogic()
+        {
+            mem.intention.DeviationFromCenter = 0f;
             if (BaseBehavior == RacerBaseBehavior.GridWait || BaseBehavior == RacerBaseBehavior.FinishedStandStill)
             {
-
-                CurrentStr = 0f;
+                vControl.SteerAngle = 0f;
                 return;
             }
 
+            //Unmodified angle to steer at, to follow the track.
+            Vector3 carVel = Car.Velocity.Normalized;
+            Vector3 track = followTrackPoint.Direction;
 
-            float rAngle = Vector3.SignedAngle(Car.Velocity.Normalized, FollowTrackDir, Vector3.WorldUp);
+            float rAngle = Vector3.SignedAngle(Car.Velocity.Normalized, followTrackPoint.Direction, Vector3.WorldUp);
 
-            if (fwspd < 0f)
+
+            //Steering behavior if we are going backwards.
+            if (mem.data.SpeedVector.Y < 0f)
             {
                 float angCorrection = 0f;
-                if (Math.Abs(DeviationFromTrackCenter) > maxOutofBounds) angCorrection = DeviationFromTrackCenter > 0 ? 20f : -20f;
-                if (Math.Abs(Vector3.Angle(Car.ForwardVector, CurrentCornerDir)) > 90f)
+                if (Math.Abs(mem.data.DeviationFromCenter) > trackPoint.TrackWide) angCorrection = mem.data.DeviationFromCenter < 0 ? 20f : -20f;
+                if (Math.Abs(AngleToTrack) > 90f)
                 {
-                    rAngle = Vector3.SignedAngle(Car.ForwardVector, FollowTrackDir, Vector3.WorldUp);
-                    IdealSteeringAngle = (float)Math.Round(rAngle, 2) * -1f;
+                    rAngle = Vector3.SignedAngle(Car.ForwardVector, followTrackPoint.Direction, Vector3.WorldUp);
+                    vControl.SteerAngle = (float)Math.Round(rAngle, 2) * -1f;
                     return;
 
                 }
                 else
                 {
-                    rAngle = Vector3.SignedAngle(Car.ForwardVector, FollowTrackDir, Vector3.WorldUp) + angCorrection;
-                    IdealSteeringAngle = (float)Math.Round(rAngle, 2) * -0.5f;
-                    // IdealSteeringAngle = AutosportRacingSystem.Clamp(IdealSteeringAngle, -20f, 20f);
-
+                    rAngle = Vector3.SignedAngle(Car.ForwardVector, followTrackPoint.Direction, Vector3.WorldUp) + angCorrection;
+                    vControl.SteerAngle = (float)Math.Round(rAngle, 2) * -0.5f;
                     return;
                 }
             }
 
 
-
-
-            //BackToTrack 
-            float weOut = (Math.Abs(DeviationFromTrackCenter) + modelw + 2f) - maxOutofBounds;
-
-            if (weOut > 0f)//(DeviationC>0 != CurrentCornerAngle>0)
-            {
-                if (CManeuverDirection.X == 0.0f || CManeuverDirection.X > 0 != DeviationFromTrackCenter > 0)
-                {
-                    float getInside = ARS.map(weOut, 0f, 20f, 0f, 40f);
-                    getInside = ARS.Clamp(getInside, 0f, 40f);
-
-                    if (DeviationFromTrackCenter < 0) getInside = -getInside;
-
-
-                    if (getInside != 0.0f) rAngle -= getInside;
-                }
-
-            }
-            // else RacingLineDeviation = 0.1f;
-
-
-
-
-            //rAngle = AutosportRacingSystem.Clamp(rAngle, -50, 50);
-            IdealSteeringAngle = (float)Math.Round(rAngle, 2);
-            IdealSteeringAngle = ARS.Clamp(IdealSteeringAngle, -90f, 90f);
-
-
-
-            //if (MaxSteeringAngle < Math.Abs(CurrentCornerAngle)) MaxSteeringAngle = Math.Abs(CurrentCornerAngle);
-
-
-
-            //intended deviation
-
-            if (ARS.RacingLine.ContainsKey(FollowNode))
-            {
-                RacingLineDeviation = -ARS.RacingLine[FollowNode];
-
-            }
-            else RacingLineDeviation = 0f;
-
-            
-
-            OvertakeDeviation = 0.0f;
-            // RacingLineDeviation = 0.0f;
-
-            if (OvertakeDeviation != 0.0f)
-            {
-                RacingLineTreshold = maxOutofBounds;
-                float modelwide = Car.Model.GetDimensions().X;
-                if (OvertakeDeviation > maxOutofBounds - modelwide) OvertakeDeviation = maxOutofBounds - modelwide;
-                if (OvertakeDeviation < -maxOutofBounds + modelwide) OvertakeDeviation = -maxOutofBounds + modelwide;
-
-
-
-                float diff = DeviationFromTrackCenter - OvertakeDeviation;
-                float treshold = 0.5f; // Car.Model.GetDimensions().X * 0.2f;
-
-
-                if (Math.Abs(diff) > treshold)
-                {
-                    if (diff < 0) diff += treshold; else diff -= treshold;
-
-                    SteerToDeviation = 0f;
-                    float toDev = ARS.GetSteerOffsetToReachDeviation(Math.Abs(diff), 4f, 4f);
-                    diff = ARS.Clamp(diff, -4f, 4f);
-
-                    if (diff > 0) toDev = -toDev;
-
-                    SteerToDeviation = toDev;
-
-                    IdealSteeringAngle += SteerToDeviation;
-                }
-                else if (ARS.IsStable(Car, 0.2f, 10f))
-                {
-                    OvertakeDeviation = 0.0f;
-                }
-            }
-            else if (RacingLineDeviation != 0.0f)// && Math.Abs(CurrentCornerAngle) < 1f && Math.Abs(FollowTrackCornerAngle) < 1f
+            //Approach the intended racing line deviation
+            if ((!mem.intention.Maneuvers.Any() || mem.intention.Maneuvers.OrderBy(v => v.X).First().X < 0.1f))
             {
 
-                // if (RacingLineDeviation > maxOutofBounds- modelwide) RacingLineDeviation = maxOutofBounds - modelwide;
-                // if(RacingLineDeviation<-maxOutofBounds+ modelwide) RacingLineDeviation = -maxOutofBounds+ modelwide;
-
-
-                float diff = DeviationFromTrackCenter - RacingLineDeviation;
-                bool canSteer = true;
-                if(impedimentOnSide!=0)
+                if (ARS.CornerPoints.Any() && trackPoint != null)
                 {
-                    if (impedimentOnSide > 0.0f == diff > 0.0f) canSteer = false;
-                }
-
-                if (canSteer)
-                {
-                    float treshold = Car.Model.GetDimensions().X + 3f; // Car.Model.GetDimensions().X * 0.2f;
-                    treshold = RacingLineTreshold;// + ScriptTest.map(Math.Abs(FollowTrackCornerAngle), 0f, 3f, 3f, 0f);//0.5f;
-
-                    if (Math.Abs(diff) > treshold)
+                    CornerPoint cornerPoint = ARS.CornerPoints[trackPoint.Node];
+                    bool ApproachingCorner = false; 
+                    if (KnownCorners.Any()) //Get to the outside to approach the corner properly
                     {
+                        int dist = KnownCorners.First().Node - (trackPoint.Node+GetBrakePointInvalidateDist());
+                        if (dist >= 30)
+                        {
+                            ApproachingCorner = true;
 
-                        // if (diff < 0) diff += treshold; else diff -= treshold;
+                            float Wide = followTrackPoint.TrackWide - BoundingBox - 2f;
+                            float Outside = (Wide * (KnownCorners.First().Angle > 0 ? -1 : 1))*-1;
+                            float lane = 0f;
+                            float maxSteer = ARS.map(Math.Abs(cornerPoint.Angle), 3f, 1f, 0f, 5f, true) * ARS.map(ARS.MStoMPH(Car.Velocity.Length() - BrakeCornerSpeed), 0, ARS.AIData.SpeedToInput * 2, 0, 1, true);
 
-                        diff = ARS.Clamp(diff, -4f, 4f);
-                        //IdealSpeed += 8 - (Math.Abs(diff)*2);
-                        SteerToDeviation = 0f;
-                        float toDev = ARS.GetSteerOffsetToReachDeviation(diff, 4f, 4f);// 0.7f
-
-                        //if (diff > 0 == CurrentCornerAngle > 0) toDev /= 2;
-                        //if (diff > 0) toDev = -toDev;
-
-
-                        SteerToDeviation = toDev * RacingLineTreshold * ARS.map(Math.Abs(SideSlide), 0.1f, 0.0f, 0.0f, 1.0f, true) ;
-
-                        //if (SteerToDeviation > 0 == CurrentCornerAngle > 0) SteerToDeviation *= 0.75f ;
-
-                        //      UI.ShowSubtitle(SteerToDeviation.ToString(), 500);
-                        // UI.ShowSubtitle(Math.Round(diff,2).ToString()+"~n~"+ Math.Round(SteerToDeviation,2).ToString(), 500);
-
-                        IdealSteeringAngle -= SteerToDeviation;
+                            if(Outside >0 != mem.data.DeviationFromCenter>0f && maxSteer>0.0f)
+                            {
+                                Vector2 maneuver = new Vector2(GetSteerToDeviation(lane, 0f, 1f, maxSteer), ARS.AIData.SpeedToInput);
+                                if (maneuver.X != 0f)
+                                {
+                                    mem.intention.Maneuvers.Add(maneuver);
+                                    mem.intention.DeviationFromCenter = lane;
+                                }
+                            }
+                        }
                     }
-                    else
+                    if (!ApproachingCorner) //Get to the inside to take corner properly
                     {
-                        RacingLineDeviation = 0.0f;
+                        float Wide = followTrackPoint.TrackWide - BoundingBox - 2f;
+                        float Inside = Wide * (cornerPoint.Angle > 0 ? -1 : 1);
+                        float lane = Inside;
+                        float maxSteer = ARS.map(Math.Abs(cornerPoint.Angle), 0f, 2f, 0f, 3f, true);
+                        lane = ARS.Clamp(lane, -Wide, Wide);
+
+                        Vector2 maneuver = new Vector2(GetSteerToDeviation(lane, 0f, 3f, maxSteer), ARS.AIData.SpeedToInput);
+                        if (maneuver.X != 0f)
+                        {
+                            mem.intention.Maneuvers.Add(maneuver);
+                            mem.intention.DeviationFromCenter = lane;
+                        }
                     }
-
-                }
+                }                
             }
 
-
-
-
-
-
-
-            //Apply Maneuver steering, don't if it would make you go out of the road
-            if (CManeuverDirection.X != 0.0f)
+            //Out-Of-Track steering modifiers  
+            float weOut = OutOfTrackDistance();
+            if (weOut > 0f)
             {
-                if (ARS.RacingLine.ContainsKey(FollowNode)) RacingLineTreshold = 0f;
-                if (Math.Abs(DeviationFromTrackCenter) > maxOutofBounds)
+                //!mem.intention.Maneuvers.Any()
+                if (1 == 1)
                 {
-                    if (DeviationFromTrackCenter > 0 != CManeuverDirection.X > 0) IdealSteeringAngle += CManeuverDirection.X;
-
+                    float max = ARS.map(ARS.MStoMPH(Car.Velocity.Length()), 50f, 10f, 10f, 50f, true);
+                    float getInside = ARS.map(weOut, 0f, 5f, 0f, max, true) * (mem.data.DeviationFromCenter > 0 ? 1f : -1f);
+                    if (getInside != 0.0f) mem.intention.Maneuvers.Add(new Vector2(getInside, ARS.AIData.SpeedToInput));
                 }
-                else IdealSteeringAngle += CManeuverDirection.X;
-
             }
+
+            //Center ourselves to avoid being on the side of the track
+            if (!mem.intention.Maneuvers.Any() && trackPoint.TrackWide - (BoundingBox + Math.Abs(mem.data.DeviationFromCenter)) < 2f)
+            {
+                float centermyself = 1f * (mem.data.DeviationFromCenter > 0 ? 1f : -1f);
+                mem.intention.Maneuvers.Add(new Vector2(centermyself, ARS.AIData.SpeedToInput));
+            }
+
+            vControl.SteerAngle = (float)Math.Round(rAngle, 2);
+            vControl.SteerAngle = ARS.Clamp(vControl.SteerAngle, -90f, 90f);
+
+            /*
+            if (vControl.SteerAngle > 0f != zRotSpeed > 0f)
+            {
+                vControl.SteerAngle = ARS.Clamp(vControl.SteerAngle, Math.Abs(SlideAngle)-10f, Math.Abs(SlideAngle)+10f);
+            }
+            */
+
 
             if (!Car.Model.IsBicycle && !Car.Model.IsBike)
             {
-                Vector3 dir = Car.Velocity.Normalized;
-                dir.Z = 0f;
-                Vector3 head = Car.ForwardVector;
-                head.Z = 0f;
+
 
 
                 zRotSpeed = ARS.rad2deg(Function.Call<Vector3>(Hash.GET_ENTITY_ROTATION_VELOCITY, Car).Z);
 
                 if (Car.Velocity.Length() > 10f)
                 {
-                    //Slide
-                    float cSlide = Vector3.SignedAngle(dir, head, Car.UpVector);
-                    if (Math.Abs(cSlide) > 2) 
+                    //Slide                    
+                    if (Math.Abs(SlideAngle) > 0.0f)
                     {
-                        float d = Vector3.SignedAngle(Car.ForwardVector, Car.Velocity.Normalized, Vector3.WorldUp) * 1f;
-                        float correction = (cSlide * 1.1f);
-                        if (zRotSpeed > 0 != cSlide > 0 && Math.Abs(zRotSpeed) > 2f) correction = 0;                        
-                        IdealSteeringAngle -= correction;                        
+
+
+
+                        float correction = (float)Math.Round(SlideAngle * ARS.map(Math.Abs(SlideAngle), mem.personality.Stability.CountersteerMinAngleSideways, mem.personality.Stability.CountersteerMaxAngleSideways, 0f, mem.personality.Stability.CountersteerSideways, true), 1);
+                        if (zRotSpeed > 0 != SlideAngle > 0 && Math.Abs(zRotSpeed) > 0f) correction *= 0.25f;
+
+                        float overC = mem.personality.Stability.CountersteerMaxOvercorrect;
+                        if (Mistakes.ContainsKey(Mistake.SlideOvercorrect)) { overC = 90f; correction *= 2f; }
+                        else if (Mistakes.ContainsKey(Mistake.SpinoutUndercorrect)) correction *= 0.25f;
+                        correction = ARS.Clamp(correction, -Math.Abs(SlideAngle) - overC, Math.Abs(SlideAngle) + overC); //The overcorrection allows the driver to recover from the slide
+                        vControl.SteerAngle -= correction;
                     }
 
 
 
                     //Stability
                     //Maximum allowed rotspeed based on velocity
-                    float reference = ARS.map(Car.Velocity.Length(), 10f, 30f, 35f, 30f, true);
-                    if (Math.Abs(zRotSpeed) > reference)  // Math.Abs(TRCurveAngle)+20
+                    float reference = Math.Abs(TRCurveAngle * 10f) + mem.personality.Stability.SpinoutSafeRotSpeed;
+                    if (Math.Abs(zRotSpeed) > reference)
                     {
                         float diff = Math.Abs(zRotSpeed) - (reference);
                         if (zRotSpeed < 0) diff = -diff;
 
-                        float correct = ARS.map(Math.Abs(diff), 0f, 40f, 0f, 1f, true);
-                        //correct = ARS.Clamp(correct, 0f, 1f);
-                        IdealSteeringAngle += -(diff * correct);
 
+
+                        if (ARS.DevSettingsFile.GetValue<bool>("RACERS", "AllowMistakes", false) && zRotSpeed > 0 == SlideAngle > 0 && Math.Abs(zRotSpeed) > 0f && Math.Abs(diff) > mem.personality.Stability.SpinoutMaxExtraRotSpeed * 0.75f)
+                        {
+                            if (Math.Abs(diff) < mem.personality.Stability.SpinoutMaxExtraRotSpeed) MakeMistake(Mistake.SpinoutUndercorrect, 25, 750, 5000, 2000);
+                            if (Math.Abs(diff) >= mem.personality.Stability.SpinoutMaxExtraRotSpeed) MakeMistake(Mistake.SlideOvercorrect, 25, 750, 5000, 2000);
+                        }
+
+
+                        float scaleMod = 1f;
+                        if (Mistakes.ContainsKey(Mistake.SpinoutUndercorrect)) scaleMod = 0f;
+
+                        float correct = ARS.map(Math.Abs(diff), 0f, mem.personality.Stability.SpinoutMaxExtraRotSpeed, 0f, mem.personality.Stability.SpinoutCounterScale * scaleMod, true);
+                        vControl.SteerAngle += -(diff * correct);                        
                     }
                 }
-
+            }
+            foreach (Vector2 m in mem.intention.Maneuvers)
+            {
+                vControl.SteerAngle += m.X;
             }
         }
-        bool WorstCornerFound()
+
+        //In meters. Negative = outside the track, on the outside of the current corner.
+        float DistToOutside()
         {
-
-            if (WorstCorners.Count > 0) return true;
-            return false;
+            if (trackPoint.Angle < 0.0f) return (float)Math.Round(trackPoint.TrackWide + mem.data.DeviationFromCenter, 1);
+            else return (float)Math.Round(trackPoint.TrackWide - mem.data.DeviationFromCenter, 1);
         }
-        float IdealSteeringAngle = 0f;
-        float CurrentSteeringAngle = 0f;
 
-        float BrakeCornerSpeed = 200f;
+        float DistToOutsideCarToCorner()
+        {
+            float carTocorner = Vector3.SignedAngle(Car.Velocity.Normalized, trackPoint.Direction, Car.UpVector);
+
+            if (carTocorner < 0.0f) return (float)Math.Round(trackPoint.TrackWide + mem.data.DeviationFromCenter, 1);
+            else return (float)Math.Round(trackPoint.TrackWide - mem.data.DeviationFromCenter, 1);
+        }
+
+        float GetSteerToDeviation(float d, float noSteerDist = 1f, float smoothSteerDist = 5f, float maxSteer = 5f)
+        {
+            float r = (float)Math.Round(mem.data.DeviationFromCenter - d, 2);
+
+            float str = (float)Math.Round(ARS.map(Math.Abs(r), noSteerDist, smoothSteerDist, 0f, maxSteer, true), 1) * (r > 0 ? 1 : -1);
+
+            return str;
+        }
+
+        public float BrakeCornerSpeed = 200f;
 
         float CurrentStr = 0f;
         Vector3 BrakingPointRef = Vector3.Zero;
-        int understeerScore = 0;
 
-        float fwspd = 0f;
 
         Vector3 SPTStart = Vector3.Zero;
         public void Launch()
         {
+            StuckRecover = false;
+            StuckScore = 0;
+
             BaseBehavior = RacerBaseBehavior.Race;
-            StartTime = Game.GameTime;
+            LapStartTime = Game.GameTime;
             HandbrakeTime = 0;
+            CurrentWheelspinLimiter = 1f;
         }
 
+
+        float theoreticalThrottle = 0f;
         void ApplyThrottle()
         {
 
@@ -526,7 +520,7 @@ namespace NewRacingSystem
 
             if (BaseBehavior == RacerBaseBehavior.GridWait)
             {
-                CurrentThrottle = 0.75f;
+                vControl.Throttle = 0.75f;
                 HandbrakeTime = Game.GameTime + 500;
                 return;
             }
@@ -534,410 +528,606 @@ namespace NewRacingSystem
 
             if (StuckRecover && BaseBehavior == RacerBaseBehavior.Race)
             {
-                IdealSpeed = -1f;
+                mem.intention.Speed = -4f;
             }
-            if (understeerScore >= 3 && fwspd > 5f)
+
+            if (mem.intention.Speed > ARS.AIData.MaxSpeed) mem.intention.Speed = ARS.AIData.MaxSpeed;
+
+            spdDiff = (float)Math.Round(mem.intention.Speed - Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true).Y, 1);
+            //spdDiff -= ARS.SpeedToInput;
+
+            vControl.Throttle = (float)Math.Round(ARS.map(spdDiff, -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput, -1f, 1f, true), 2);
+
+            if (mem.intention.Speed > 0.0f)
             {
-                CurrentThrottle = 0f;
+
+                vControl.Throttle = ARS.Clamp(vControl.Throttle, 0.001f, 1f);
             }
-            if (IdealSpeed > ARS.MaxIdealSpeed) IdealSpeed = ARS.MaxIdealSpeed;
-            spdDiff = (float)Math.Round(IdealSpeed - Car.Speed, 1);
+            //if (IdealSpeed > 0f && vControl.Throttle < 0f) vControl.Throttle = 0f;
+
+
+            vControl.Brake = (float)Math.Round(ARS.map(spdDiff, 0f, -ARS.AIData.SpeedToInput, 0f, 1f), 2);
+            vControl.Brake = ARS.Clamp(vControl.Brake, 0f, 1f);
 
 
 
-            CurrentThrottle = (float)Math.Round(ARS.map(spdDiff, -ARS.SpeedToInput, ARS.SpeedToInput, -1f, 1f), 2);
-            CurrentThrottle = ARS.Clamp(CurrentThrottle, -1f, 1f);
-            if (IdealSpeed > 0f && CurrentThrottle < 0f) CurrentThrottle = 0f;
+
+            float slideAngle = ARS.map(Math.Abs(mem.data.SpeedVector.Normalized.X), 0f, 1f, 0f, 90f, true);
+            float maxBrake = ARS.map(slideAngle, 90f, 25f, 0f, 1f, true);
+            vControl.Brake = ARS.Clamp(vControl.Brake, 0f, maxBrake);
 
 
-            CurrentBrake = (float)Math.Round(ARS.map(spdDiff, 0f, -ARS.SpeedToInput, 0f, 1f), 2);
-            CurrentBrake = ARS.Clamp(CurrentBrake, 0f, 1f);
 
-            if (IdealSpeed < 0f)
+            if (mem.intention.Speed < 0f)
             {
-                if (CurrentThrottle < -0.5f) CurrentThrottle = -0.5f;
-                if (fwspd > 10f) CurrentBrake = 1f; else CurrentBrake = 0f;
+                if (vControl.Throttle < -0.5f) vControl.Throttle = -0.5f;
+                if (fwspd > 10f) vControl.Brake = 1f; else vControl.Brake = 0f;
             }
             else
             {
-                if (fwspd < -10f) CurrentBrake = 1f;
+                if (fwspd < -1f) vControl.Brake = 1f;
             }
 
 
 
             if (BaseBehavior == RacerBaseBehavior.FinishedRace || BaseBehavior == RacerBaseBehavior.FinishedStandStill)
             {
-                if (BaseBehavior == RacerBaseBehavior.FinishedStandStill) CurrentThrottle = 0f;
-                if (CurrentBrake > 0.2f) CurrentBrake = 0.2f;
+                if (BaseBehavior == RacerBaseBehavior.FinishedStandStill) vControl.Throttle = 0f;
+                if (vControl.Brake > 0.2f) vControl.Brake = 0.2f;
             }
-            if (CurrentBrake > CurrentLockupLimiter) CurrentBrake = CurrentLockupLimiter;
+            if (vControl.Brake > CurrentLockupLimiter) vControl.Brake = CurrentLockupLimiter;
+
+
+
+
+
+
+
+
+            theoreticalThrottle = vControl.Throttle;
+
         }
 
+        float maxStrTRCurve = 0f;
         void ApplySteer()
         {
-            float steerMax = 13;
-            if (understeerScore > 0) understeerScore--;
 
-            if (TRCurveAngle > 0 != IdealSteeringAngle > 0 && Math.Abs(SideSlide) < 0.2f)
+
+            if (mem.data.SpeedVector.Y > 0)
             {
-                if (Math.Abs(TRCurveAngle) + steerMax < Math.Abs(IdealSteeringAngle))
+
+                /*
+                maxStrTRCurve = Math.Abs(TRCurveAngle * 20f);
+                if (float.IsNaN(maxStrTRCurve)) maxStrTRCurve = 0f;
+                maxStrTRCurve += 0.5f;
+                 */
+
+                //if (Math.Abs(vControl.SteerAngle) > maxStrTRCurve) maxStrTRCurve += 0.5f; else if(maxStrTRCurve>1f) maxStrTRCurve -= 1f;
+                maxStrTRCurve = (TRCurveLateral * 0.6f) + ARS.map(ARS.MStoMPH(Car.Velocity.Length()), 50f, 0f, 0f, TRCurveLateral * 0.4f, true);
+
+                if (mem.data.SpeedVector.X > 0f == vControl.SteerAngle > 0f)
                 {
-                    if (Math.Abs(IdealSteeringAngle) > 10f) understeerScore += 2;
-                    while (Math.Abs(TRCurveAngle) + steerMax < Math.Abs(IdealSteeringAngle)) IdealSteeringAngle *= 0.8f;
+                    vControl.SteerAngle = ARS.Clamp(vControl.SteerAngle, -maxStrTRCurve, maxStrTRCurve);
                 }
+
+
             }
 
-            understeerScore = (int)ARS.Clamp(understeerScore, 0, 7);
 
-            float AngleDif = IdealSteeringAngle - CurrentSteeringAngle;
 
-            if (AngleDif / 1 != AngleDif || IdealSteeringAngle / 1 != IdealSteeringAngle || CurrentSteeringAngle / 1 != CurrentSteeringAngle)
+
+            if (float.IsNaN(vControl.SteerAngle)) vControl.SteerAngle = 0f;
+            if (float.IsNaN(mem.data.SteerAngle)) mem.data.SteerAngle = 0f;
+
+            float AngleDif = (float)Math.Round(vControl.SteerAngle - mem.data.SteerAngle, 2);
+            if (float.IsNaN(AngleDif)) AngleDif = 0f;
+
+
+
+            float aimSpeedThreshold = 15f;
+
+            if (Math.Abs(AngleDif) < aimSpeedThreshold)
             {
-                IdealSteeringAngle = 0f;
-                CurrentSteeringAngle = 0f;
-                AngleDif = 0f;
-            }
-            float ttreshold = 12f; //3f
-            if (Math.Abs(AngleDif) > 10f) ttreshold = 12f;
-            if ((modelFlags.Length > 5 && modelFlags[5] == '8')) ttreshold = 100f;
-
-            if (Math.Abs(AngleDif) < ttreshold)
-            {
-                CurrentSteeringAngle = IdealSteeringAngle;
+                mem.data.SteerAngle = vControl.SteerAngle;
             }
             else
             {
-                if (CurrentSteeringAngle < IdealSteeringAngle) CurrentSteeringAngle += ttreshold; else CurrentSteeringAngle -= ttreshold;
+                if (mem.data.SteerAngle < vControl.SteerAngle) mem.data.SteerAngle += aimSpeedThreshold; else mem.data.SteerAngle -= aimSpeedThreshold;
             }
 
-            CurrentSteeringAngle = ARS.Clamp(CurrentSteeringAngle, -MaxSteeringAngle, MaxSteeringAngle);
+            mem.data.SteerAngle = ARS.Clamp(mem.data.SteerAngle, -MaxSteeringAngle, MaxSteeringAngle);
+            CurrentStr = ARS.GetRatioForAngle(Math.Abs(mem.data.SteerAngle), 1.3f); //1.2f
 
-            //   if (Math.Abs(CurrentSteeringAngle) > MaxSteeringAngle + 1f) return;
-            CurrentStr = ARS.GetRatioForAngle(Math.Abs(CurrentSteeringAngle), 1.4f); //1.2f
 
-            if (CurrentStr / 1 != CurrentStr) CurrentStr = 0f;
+            if (float.IsNaN(CurrentStr)) CurrentStr = 0f;
 
 
             //Fix for double steering for monster trucks and tracked vehicles
-            if ((handlingFlags.Length > 6 && handlingFlags[6] == '8') || (modelFlags.Length > 5 && modelFlags[5] == '8')) CurrentStr *= 0.5f;
+            // if ((handlingFlags.Length > 6 && handlingFlags[6] == '8') || (modelFlags.Length > 5 && modelFlags[5] == '8')) CurrentStr *= 0.5f;
 
 
-            CurrentStr = ARS.Clamp(CurrentStr, -1f, 1f);
-
-            if (CurrentSteeringAngle < 0f) CurrentStr = -CurrentStr;
+            CurrentStr = ARS.Clamp(CurrentStr, -1f, 1f) * (mem.data.SteerAngle > 0f ? 1 : -1);
+            //if (mem.data.SteeringAngle < 0f) CurrentStr = -CurrentStr;
         }
 
-        float MapIdealSpeedForDistance(float distance, float speedThere)
+        float MapIdealSpeedForDistance(float distance, float speedThere, float gamma = 1)
         {
-            float result= speedThere + ((mphStopInTenMeters / 10) * (distance));
-            if (result < speedThere) return speedThere;
-            else return result;
+
+            float maxSpd = (float)Math.Round((Function.Call<float>(Hash._0x53AF99BAA671CA47, Car) + (ARS.MPHtoMS(50f))));
+
+            float spd = (float)Math.Round(ARS.mapGamma(distance, 0f, 250f, speedThere, maxSpd, gamma, true), 1);
+            //ARS.DisplayHelpTextTimed("Max: " + Math.Round(ARS.MStoMPH(maxSpd)).ToString() +"~n~~b~Tgt: "+ Math.Round(ARS.MStoMPH(spd)).ToString(), 1000);
+            return spd;
 
         }
 
-
-        float cornerdip = -4;
-        public void Speed()
+        public void SpeedLogic()
         {
-
             float Currentspeed = Car.Velocity.Length();
-            IdealSpeed = ARS.MaxIdealSpeed;
+            mem.intention.Speed = ARS.AIData.MaxSpeed;
+
 
 
             if (BaseBehavior == RacerBaseBehavior.GridWait)
             {
-                IdealSpeed = 200f;
+                mem.intention.Speed = 200f;
                 return;
             }
             if (BaseBehavior == RacerBaseBehavior.FinishedRace)
             {
-                IdealSpeed = 20f;
+                mem.intention.Speed = 20f;
                 return;
             }
             if (BaseBehavior == RacerBaseBehavior.FinishedStandStill)
             {
-                IdealSpeed = 0f;
+                mem.intention.Speed = 0f;
                 return;
             }
 
-            BrakeCornerSpeed = GetBrakecornerSpeed();
 
-
-
-            if (Math.Abs(Vector3.SignedAngle(Car.ForwardVector, CurrentCornerDir, Vector3.WorldUp)) > 120f)
+            if (KnownCorners.Any())
             {
-                IdealSpeed = -2f;
+                KnownCorners = KnownCorners.OrderBy(v => MapIdealSpeedForDistance(v.Node - trackPoint.Node, v.Speed)).ToList();
+                KnownCorners.RemoveAll(v => v.Node < KnownCorners.First().Node);
+                //if (KnownCorners.Count() > 100) KnownCorners = KnownCorners.Take(100).ToList();
+            }
+
+
+            if (KnownCorners.Any())
+            {
+                if (mem.intention.NeedAggressionChange)
+                {
+                    mem.intention.NeedAggressionChange = false;
+                    mem.intention.Aggression = (ARS.GetRandomInt((int)(mem.intention.AggroToReach * 25), (int)(mem.intention.AggroToReach * 100)) * 0.01f);
+                }
+            }
+            else if (!mem.intention.NeedAggressionChange)
+            {
+                mem.intention.NeedAggressionChange = true;
+            }
+
+
+            //Try and take the corner faster if it opens in the future
+            if (KnownCorners.Any())
+            {
+                //Original speed
+                BrakeCornerSpeed = GetBrakecornerSpeed(KnownCorners.First().Node, KnownCorners.First().Angle);
+
+                //Future point reference
+                int fNode = KnownCorners.First().Node + (int)(BrakeCornerSpeed * 0.25);
+                if (ARS.CornerPoints.Count() > fNode)
+                {
+                    float p = ARS.GetPercent(Math.Abs(ARS.CornerPoints[fNode].Angle), Math.Abs(KnownCorners.First().Angle)); //Percentage of openness
+                    float bonusSpeed = ARS.map(p, 100, 0, 0, ARS.MPHtoMS(10), true) * ARS.map(ARS.MStoMPH(BrakeCornerSpeed), 50, 100, 0, 1, true); //additional speed scaled to openness and by the original speed
+                    BrakeCornerSpeed += bonusSpeed;
+                }
+
+                /*
+                BrakeCornerSpeed = 0f;
+                int nodesToCheck= (int)GetBrakecornerSpeed(KnownCorners.First().Node, KnownCorners.First().Angle)/2; 
+                if (KnownCorners.Count >= nodesToCheck) { foreach (CornerPoint c in KnownCorners.Take(nodesToCheck)) BrakeCornerSpeed += c.Speed; BrakeCornerSpeed /= nodesToCheck; }
+                else { foreach (CornerPoint c in KnownCorners) BrakeCornerSpeed += c.Speed; BrakeCornerSpeed /= KnownCorners.Count; }                
+                */
+            }
+            else BrakeCornerSpeed = ARS.AngleToSpeed.First().Value;
+
+
+            if (KnownCorners.Any() && ARS.DevSettingsFile.GetValue<bool>("RACERS", "AllowManeuvers", false) && KnownCorners.First().Node - trackPoint.Node < 75 && referenceVehs.Any() && Pos > 1)
+            {
+                if (BrakeCornerSpeed < Car.Velocity.Length() * 0.5)
+                {
+                    if (!BannedDecisions.ContainsKey(Decision.LateBrake)) MakeDecision(Decision.LateBrake, (int)(mem.intention.AggroToReach * 100), 1000, 4000, 5000);
+                }
+                else
+                {
+                    if (!BannedDecisions.ContainsKey(Decision.FastCorner)) MakeDecision(Decision.FastCorner, (int)(mem.intention.AggroToReach * 100), 4000, 6000, 10000);
+                }
+            }
+
+            if (Math.Abs(Vector3.SignedAngle(Car.ForwardVector, trackPoint.Direction, Vector3.WorldUp)) > 70f)
+            {
+                mem.intention.Speed = -5f;
+                return;
             }
             else
             {
-                if (WorstCornerFound())
+                if (KnownCorners.Any())
                 {
 
+                    float dist = KnownCorners.First().Node - trackPoint.Node;
+                    dist -= ARS.map(Math.Abs(KnownCorners.First().Angle), 5f, 0.5f, 5f, 30f, true);
 
+                    float safety = ARS.DangerousCornerNodes.Contains(KnownCorners.First().Node) ? mem.data.brakeSafety * 1.15f : mem.data.brakeSafety;
+                    if (Decisions.ContainsKey(Decision.LateBrake)) safety -= 0.05f;
 
-                    float dist = Car.Position.DistanceTo(WorstCorners[0][1]);
-                    dist += ARS.extradistancedip;
-                    int dip = ARS.extracurvedip + tempSPDip;
-                    //if (Math.Abs(CurrentCornerAngle) > 1) dip = 0;
+                    float dSafety = ARS.map(KnownCorners.First().Elevation, 0, -10, 0, 20, true);
+                    mem.intention.Speed = MapIdealSpeedForDistance(dist - (ARS.cornerDistSafety + dSafety), BrakeCornerSpeed, safety);
 
-                    IdealSpeed =  MapIdealSpeedForDistance(dist+ cornerdip, BrakeCornerSpeed + dip);
+                    if (Decisions.ContainsKey(Decision.FastCorner)) mem.intention.Speed += ARS.MPHtoMS(2f);
 
-
-
+                    //if (mem.intention.Speed < ARS.AIData.MinSpeed) mem.intention.Speed = ARS.AIData.MinSpeed;
                 }
 
                 if (RacingLineDeviation != 0.0f)
                 {
-                    float diff = DeviationFromTrackCenter - RacingLineDeviation;
-                     IdealSpeed += ARS.map(Math.Abs(diff), 2.0f,0.0f, 0.0f, ARS.MPHtoMS(3), true);
+                    float diff = mem.data.DeviationFromCenter - RacingLineDeviation;
+                    mem.intention.Speed += ARS.map(Math.Abs(diff), 2.0f, 0.0f, 0.0f, ARS.MPHtoMS(3), true);
                 }
 
-                if (CManeuverDirection.Y != 0.0f)
+
+                if (mem.intention.Maneuvers.Any())
                 {
-                    float maneuverspeed = Car.Velocity.Length() + (CManeuverDirection.Y);
-                    if (maneuverspeed < IdealSpeed)
+                    float speedMod = mem.intention.Maneuvers.OrderBy(v => v.Y).First().Y;
+
+
+
+                    //If its less than full throttle
+                    if (speedMod <= ARS.AIData.SpeedToInput)
                     {
-                        IdealSpeed = maneuverspeed;
+                        //If it results in actual reduction of speed
+                        if (Car.Velocity.Length() + speedMod < mem.intention.Speed)
+                        {
+                            //if(!Driver.IsPlayer) UI.ShowSubtitle("~o~" + Math.Round(speedMod, 1), 500);
+                            mem.intention.Speed = Car.Velocity.Length() + speedMod;
+                        }
+
+
+                    }
+                    else
+                    {
+                        //if (!Driver.IsPlayer) UI.ShowSubtitle("~g~" + Math.Round(speedMod, 1), 500);
+
+                        mem.intention.Speed += speedMod;
                     }
                 }
-
-                
-
-                //if (IdealSpeed < BrakeCornerSpeed - 25f) IdealSpeed = BrakeCornerSpeed - 25f;
-
             }
         }
-        void HandleWheelIssues()
+
+
+        void MakeDecision(Decision d, int chance, int duration, int sCooldown, int fCooldown)
+        {
+            if (!BannedDecisions.ContainsKey(d) && !Decisions.ContainsKey(d))
+            {
+                if (ARS.GetRandomInt(0, 100) <= chance) { Decisions.Add(d, Game.GameTime + duration); BannedDecisions.Add(d, Game.GameTime + duration + sCooldown); }
+                else BannedDecisions.Add(d, Game.GameTime + fCooldown);
+            }
+        }
+
+        void MakeMistake(Mistake m, int chance, int duration, int sCooldown, int fCooldown)
+        {
+            if (!MistakesCooldown.ContainsKey(m) && !Mistakes.ContainsKey(m))
+            {
+                if (ARS.GetRandomInt(0, 100) <= chance) { Mistakes.Add(m, Game.GameTime + duration); MistakesCooldown.Add(m, Game.GameTime + duration + sCooldown); }
+                else MistakesCooldown.Add(m, Game.GameTime + fCooldown);
+            }
+        }
+
+        void TractionControl()
         {
 
-            bool isOnWheelspin = false;
-            bool isOnLockup = false;
             float skid = ARS.GetWheelsMaxWheelspin(Car);
-            if (CurrentBrake > 0f)
+            if (vControl.Brake > 0f)
             {
                 if (!CurrentHandBrake)
                 {
 
 
-                    if (skid > 1.5f)
+                    if (skid > 2f)
                     {
-                        isOnLockup = true;
+                        CurrentLockupLimiter += ARS.map(skid, 4f, 2f, -0.2f, -0.025f, true);
+
                     }
+                    else CurrentLockupLimiter += 0.1f;
 
                 }
             }
-            if (!isOnLockup) CurrentLockupLimiter += 0.05f; else CurrentLockupLimiter -= 0.2f;
-            CurrentLockupLimiter = ARS.Clamp(CurrentLockupLimiter, 0.01f, 1f);
+            CurrentLockupLimiter = ARS.Clamp(CurrentLockupLimiter, 0.05f, 1f);
 
-            if (ARS.TCSLevel >= 1)
+
+
+
+
+
+            float correction = 0.2f;
+
+            if (vControl.Throttle > 0f)
             {
-
-                if (1 == 1)
+                if (skid < 0f)
                 {
 
-                    if (CurrentThrottle > 0f)
+                    float min = mem.personality.Stability.WheelspinOnMinSlide;
+                    float max = mem.personality.Stability.WheelspinOnMaxSlide;
+
+                    if (Decisions.ContainsKey(Decision.Flatout))
                     {
-                        if (skid < 0f)
-                        {
+                        min += 1; max += 1f;
+                    }
 
-                            float correctedMaxwheelspin = ARS.map(Math.Abs(cSlide), 10, ARS.idealSld + 10, ARS.maxWheelspinAllowed, -0.2f);
-                            correctedMaxwheelspin = ARS.Clamp(correctedMaxwheelspin, ARS.maxWheelspinAllowed, -0.2f);
+                    float correctedMaxwheelspin = ARS.map(Math.Abs(SlideAngle), mem.personality.Stability.WheelspinMinSlide, mem.personality.Stability.WheelspinMaxSlide, min, max, true);
+                    if (min > max) correctedMaxwheelspin = ARS.map(Math.Abs(SlideAngle), mem.personality.Stability.WheelspinMaxSlide, mem.personality.Stability.WheelspinMinSlide, max, min, true);
 
-                            correctedMaxwheelspin = ARS.maxWheelspinAllowed;
-
-
-                            if (ARS.maxWheelspinAllowed < -5f) correctedMaxwheelspin = -100f; //actual max 15f
-                            if (Car.Speed < 5f && correctedMaxwheelspin > -1f) correctedMaxwheelspin = -1f;
-
-                            if (skid < correctedMaxwheelspin)
-                            {
-                                float change = Math.Abs(skid) * 0.2f;
-                                change = ARS.Clamp(change, 0.02f, 0.1f);
-
-                                CurrentWheelspinLimiter -= change; //0.05f
-                                isOnWheelspin = true;
-                            }
-                        }
+                    if (skid < correctedMaxwheelspin)
+                    {
+                        correction = ARS.map(Math.Abs(skid), correctedMaxwheelspin + 0.4f, correctedMaxwheelspin - 0.4f, -correction, correction, true);
                     }
                 }
-                if (CurrentThrottle > 0f && CurrentWheelspinLimiter < CurrentThrottle) CurrentThrottle = CurrentWheelspinLimiter;
-
             }
 
-            //Anti-Wheelspin 
-            if (ARS.TCSLevel >= 2)
-            {
-                //Pros will prevent wheelspin only raising the throttle slowly, which will keep wheelspin to a minimum when it happens
-                if (!isOnWheelspin)
-                {
-                    if (CurrentWheelspinLimiter <= CurrentThrottle) CurrentWheelspinLimiter += 0.175f;
-                    else if (CurrentWheelspinLimiter > CurrentThrottle) CurrentWheelspinLimiter = CurrentThrottle;
-                }
-            }
-            else if (ARS.TCSLevel >= 1)
-            {
-                //Amateurs will gain confidence right away, which won't prevent wheelspin
-                if (!isOnWheelspin) CurrentWheelspinLimiter = 1f;
-            }
+            CurrentWheelspinLimiter += correction;
 
-            CurrentWheelspinLimiter = ARS.Clamp(CurrentWheelspinLimiter, 0.1f, 1f);
 
+            CurrentWheelspinLimiter = ARS.Clamp(CurrentWheelspinLimiter, 0.2f, 1f);
+
+            if (vControl.Throttle > 0f && CurrentWheelspinLimiter < vControl.Throttle) vControl.Throttle = CurrentWheelspinLimiter;
+            if (CurrentWheelspinLimiter > vControl.Throttle) CurrentWheelspinLimiter = vControl.Throttle;
         }
-        float GetBrakecornerSpeed()
+
+
+        public float GetBrakecornerSpeed(int node = 0, float angle = 0f)
         {
-
-            //Calc brakedistance if there's a valid worst angle ahead
-            if (!WorstCornerFound() || StuckRecover) return 0f;
-
-            int node = WorstCorners[0][3];
-            float downhill = 0f;
+            float result = 0f;
             float expectedGrip = 1f;
             if (ARS.MultiplierInTerrain.ContainsKey(node)) expectedGrip = ARS.MultiplierInTerrain[node];
-            if (expectedGrip < 0.9f) expectedGrip *= SurfaceGrip;
-
-            float worstAngle = Math.Abs(WorstCorners[0][0]);// + clampedlimit; // ScriptTest.GetFutureWorstCorner(Car, Path, info[0], Math.Abs(SteeringAngle), CurrentBrakeDist);
-
-            float bspeed = ARS.GetSpeedForAngle(Math.Abs(worstAngle), Confidence * expectedGrip);// ScriptTest.map(Math.Abs(worstAngle), 0f, ScriptTest.max_angle, ScriptTest.max_speed, ScriptTest.min_speed); //; 
+            if (expectedGrip < 0.99f) expectedGrip *= SurfaceGrip;
 
 
-            bspeed = ARS.Clamp(bspeed, ARS.min_speed, ARS.max_speed);
+            //Speed for Angle
+            float cornerAngle = Math.Abs(angle);
+            result = ARS.GetSpeedForAngle(Math.Abs(cornerAngle), (Confidence) * expectedGrip);
 
-            if (bspeed < ARS.min_speed * 0.75f) bspeed = ARS.min_speed * 0.75f;
-            BrakeCornerSpeed = bspeed;
-            float downfConfidence = 0f;
-            if(BrakeCornerSpeed>30.0f) downfConfidence = ((BrakeCornerSpeed - ARS.MPHtoMS(30f))* 0.1f) * downf * (ARS.map(trcurveLat, 16f,24f, 0.0f, 1.0f, true));
-            BrakeCornerSpeed += downfConfidence; // map(, 5f, 100f, 0f, 8f, true);
 
-          //  AutosportRacingSystem.DisplayHelpTextTimed(Math.Round(downfConfidence, 1).ToString()+"mph",3000);
-            
-            return BrakeCornerSpeed;
+            //Relative Elevation penalty
+            float rElevationPenalty = 0f;
+            //if (cornerAngle > 4f && ARS.CornerPoints[node].RelativeElevation < 0f) rElevationPenalty = (ARS.map(ARS.CornerPoints[node].RelativeElevation, -0, -3, 0, 3, true) * 0.25f) * (result * 0.5f);
+
+
+            if (cornerAngle > 1f && ARS.CornerPoints[node].RelativeElevation < 0f) rElevationPenalty = (ARS.map(ARS.CornerPoints[node].RelativeElevation, 4, -4f, -ARS.MPHtoMS(10), ARS.MPHtoMS(10), true));
+            float HillPenalty = 0f;// ARS.map(ARS.CornerPoints[node].Elevation, -2, -30, 0, ARS.MPHtoMS(20), true);
+
+            rElevationPenalty = (float)Math.Round(rElevationPenalty, 4);
+
+
+            // UI.ShowSubtitle("~o~-"+rElevationPenalty + "ms",500);
+
+            result -= rElevationPenalty + HillPenalty;
+
+            //Downforce
+
+            if (ARS.DevSettingsFile.GetValue<bool>("RACERS", "AccountForDownforce", false))
+            {
+                float mult = ARS.map(ARS.MStoMPH(result), 80f, 100f, 0f, 1f, true);
+
+                if (mult > 0f)
+                {
+
+                    float cBonus = ARS.map(result, 0f, 10f, 0f, 0.1f) * (downf * mult);
+                    result = ARS.GetSpeedForAngle(Math.Abs(cornerAngle), (Confidence + cBonus) * expectedGrip);
+                }
+
+            }
+
+
+
+            //Elevation
+            if (KnownCorners.Any() && KnownCorners.First().Elevation < 0f) result -= ARS.map(KnownCorners.First().Elevation, -45f, 0f, ARS.MPHtoMS(10f), 0, true);
+
+            //Aggression
+            mem.intention.RivalCornerBonusSpeed = ARS.map(mem.intention.Aggression, 0, 1, 0f, 3f, true);
+            result += mem.intention.RivalCornerBonusSpeed;
+
+            //if (result < (ARS.MPHtoMS(30))) result = ARS.MPHtoMS(30);
+            return result;
         }
 
+        float MaxOverShootSpeed = 0;
+        bool CanLowerSafety = true;
         int FastEntryScore = 0;
+
+        List<Vector3> DirChanges = new List<Vector3>();
         public void ProcessTick()
         {
-            //Draw
-            DrawDebug();
+            if (Driver.IsPlayer)
+            {
+                if (Lap >= ARS.SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5)  && CanRegisterNewLap)
+                {
+                    World.DrawMarker(MarkerType.CheckeredFlagRect, ARS.TrackPoints.First().Position + new Vector3(0, 0, 5f), ARS.TrackPoints.First().Direction, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);// DrawLine(vm,last, Color.Black);
+                }
+            }
 
+            /*
+            if (!Driver.IsPlayer && ARS.CanWeUse(Car) && Car.Model.IsCar)
+            {
+                float trcurve = ARS.rad2deg(ARS.GetTRCurveLat(Car));
+                float angle = Vector3.Angle(Car.ForwardVector, Car.Velocity.Normalized);
+                float mult = (float)Math.Round(ARS.map(angle, trcurve * 0.1f, trcurve * 0.5f, 1f, 2f, true), 2);
+                if (mult > 1f) Car.EngineTorqueMultiplier = mult;
+                //if (InverseTorqueDebug) if (mult > 1.0f) UI.ShowSubtitle("Angle: " + Math.Round(angle, 1) + "º /" + trcurve + "º~n~~b~x" + mult.ToString(), 500); else UI.ShowSubtitle("Angle: " + Math.Round(angle, 1) + "º /" + trcurve + "º~n~~w~x" + mult.ToString(), 500);
+
+            }
+            */
+            //Draw
+            if (!Driver.IsPlayer) DrawDebug();
+
+            GetTrackInfo(ARS.Path);
 
             //Important variable updates
             SideSlide = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true).Normalized.X;
-            fwspd = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true).Y;
+            mem.data.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
 
             if (trail.Count > 50) trail.RemoveAt(0);
-            if (TractionCurvePos.DistanceTo(Car.Position) > 1f)
+            if (DirChanges.Count >= 5) DirChanges.RemoveAt(0);
+            if (!DirChanges.Any()) DirChanges.Add(Car.Velocity.Normalized);
+
+            if (Car.Position.DistanceTo(DirChanges.Last()) >= 1f) DirChanges.Add(Car.Velocity.Normalized);
+
+
+            /*
+            if (TractionCurvePos.DistanceTo(Car.Position) >= 1f)
             {
                 if (TractionCurve == Vector3.Zero) TractionCurve = Car.Velocity.Normalized;
                 else
                 {
-                    TractionCurve = ((TractionCurve.Normalized - Car.Velocity.Normalized)).Normalized;
-                    TRCurveAngle = Vector3.SignedAngle(Car.Velocity.Normalized, -TractionCurve.Normalized, Vector3.WorldUp);
+                    
+                    //Vector3 change = ((TractionCurve - Car.Velocity.Normalized));
+                    TRCurveAngle = Vector3.SignedAngle(Car.Velocity.Normalized, TractionCurve, Vector3.WorldUp);
+                    if (float.IsNaN(TRCurveAngle)) TRCurveAngle = 0f;
                 }
+                TractionCurve = Car.Velocity.Normalized;
                 TractionCurvePos = Car.Position;
+
             }
+            */
+
+
+
+            float a = 0f;
+            for (int i = 1; i < DirChanges.Count; i++)
+            {
+                a += (float)Math.Round(Vector3.SignedAngle(DirChanges[i], DirChanges[i - 1], Vector3.WorldUp), 5);
+            }
+            a /= DirChanges.Count;
+            TRCurveAngle = a;
+
+
+            /*
+            if (oldNode != trackPoint.Node)
+            {
+
+                if (Driver.IsPlayer)
+                {
+                    List<int> PartTimeNodes = new List<int>();
+                    PartTimeNodes.Add((int)((25 * ARS.TrackPoints.Count) / 100));
+                    PartTimeNodes.Add((int)((50 * ARS.TrackPoints.Count) / 100));
+                    PartTimeNodes.Add((int)((75 * ARS.TrackPoints.Count) / 100));
+
+                    if (PartTimeNodes.Contains(trackPoint.Node))
+                    {
+                        TimeSpan lapTime = ARS.ParseToTimeSpan(Game.GameTime - LapStartTime);
+                       UI.Notify("Part Time (" + Math.Round((ARS.GetPercent(trackPoint.Node, ARS.TrackPoints.Count))) + "%)~n~~b~" + lapTime.ToString("m':'ss'.'fff"));
+
+                    }
+                }
+            }
+            */
 
             //AI updates
-            if (AITimeRef < Game.GameTime)
+            if (ProcessAITimeRef < Game.GameTime)
             {
-                AITimeRef = Game.GameTime + 100;
+                ProcessAITimeRef = Game.GameTime + 100;
                 if (BaseBehavior == RacerBaseBehavior.Race && ARS.Racers.Count >= 1) GetReferenceVehicle(); //refVehicle =
                 ProcessAI();
-            }
 
+            }
 
             if (!Driver.IsPlayer)
             {
-
-                if (WorstCorners.Count > 0)
+                if (CatchUpTorqueMult != 1.0f && ARS.SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "Catchup", false)) Car.EngineTorqueMultiplier = CatchUpTorqueMult;
+                if (KnownCorners.Any())
                 {
-                    if (WorstCorners[0][3] <= CurrentNode+3)
+                    if (!CanLowerSafety && MaxOverShootSpeed == 0f && BrakeCornerSpeed > 0f && (BrakeCornerSpeed < (Car.Velocity.Length() - (ARS.AIData.SpeedToInput * 3))))
                     {
-                        if ((spdDiff < -2))
+                        CanLowerSafety = true;
+                        if (ARS.DebugLevel > 0) UI.Notify("~b~[" + Name + "]~g~ BSA Enabled for node " + KnownCorners.First().Node);
+                    }
+
+                    float overShoot = Car.Velocity.Length() - mem.intention.Speed;
+
+                    //Overshooting the brakepoint by a lot, raise our safety
+                    if (CanLowerSafety)
+                    {
+                        if (overShoot > MaxOverShootSpeed && MaxOverShootSpeed > ARS.AIData.SpeedToInput * 2)
                         {
-                             if(spdDiff<-10)  HandbrakeTime = Game.GameTime + 500;
-                            if (FastEntryScore > 3)
+                            AdjustBrakeSafety(0.1f);
+                            CanLowerSafety = false;
+                            if (ARS.DebugLevel > 0) UI.Notify("~b~[" + Name + "]~y~ BSA cancelled - Too high potential speed.");
+                        }
+                    }
+
+                    if (overShoot > MaxOverShootSpeed)
+                    {
+                        MaxOverShootSpeed = (float)Math.Round(overShoot, 1);
+                    }
+
+                    //Cancel safety reduction if we're unstable
+                    if (CanLowerSafety)
+                    {
+                        if (Math.Abs(SideSlide) > 0.3f)
+                        {
+                            if (ARS.DebugLevel > 0) UI.Notify("~b~[" + Name + "]~y~ BSA cancelled - Slide.");
+                            CanLowerSafety = false;
+                        }
+                    }
+                    //int invalidateDist =IdealRelativeAngleExceed > 0f ? 0 : GetBrakePointInvalidateDist();
+                    if (KnownCorners.First().Node <= trackPoint.Node + GetBrakePointInvalidateDist())
+                    {
+                        // if(BrakeCornerSpeed>Car.Velocity.Length() || KnownCorners.First().Node <= trackPoint.Node)
+                        KnownCorners.RemoveAt(0);
+
+
+                        if (ARS.DevSettingsFile.GetValue<bool>("RACERS", "AllowManeuvers", false) && !BannedDecisions.ContainsKey(Decision.Flatout) && referenceVehs.Any() && referenceVehs.First().Pos < Pos && (!KnownCorners.Any() || KnownCorners.First().Node - trackPoint.Node > 100) && Car.CurrentGear <= 3)
+                        {
+                            MakeDecision(Decision.Flatout, (int)(mem.intention.AggroToReach * 100), 4000, 2000, 4000);
+                        }
+
+
+                        //When reaching the brakepoint, we are going way too fast, adjust
+                        if (overShoot > ARS.AIData.SpeedToInput)
+                        {
+                            AdjustBrakeSafety(0.1f);
+                            CanLowerSafety = false;
+                        }
+
+
+                        //Only adjust if the braking has gone right
+                        if (MaxOverShootSpeed != 0 && overShoot < ARS.AIData.SpeedToInput * 0.5f && MaxOverShootSpeed > 0f)
+                        {
+                            if (CanLowerSafety)
                             {
-
-                                littlebrakescore = 0;
-                                BrakeAdjustCooldown = Game.GameTime + 1000;
-                                mphStopInTenMeters -= 0.2f;
-                               // ARS.Log(ARS.LogImportance.FATAL, Name + " reduces his brake confidence to " + mphStopInTenMeters+".(-0.2)");
-                                FastEntryScore = 0;
-
+                                AdjustBrakeSafety(-0.05f);
                             }
                             else
                             {
-                                FastEntryScore++;
-                            }
-                        }
-                         //if (FastEntryScore > 0) FastEntryScore--;
-                        WorstCorners.RemoveAt(0);
-                        if (Math.Abs(SideSlide) > 0.2f && 1==2)
-                        {
-                            if (mphStopInTenMeters > 1.5f)
-                            {
-                                ARS.Log(ARS.LogImportance.Fatal, Name + " reduces his brake confidence to " + mphStopInTenMeters + ".(-0.05) (sliding)");
-                                mphStopInTenMeters -= 0.05f;
-                                // UI.ShowSubtitle(Name + "is sliding while entering a corner. Deducing 0.02 to " + mphStopInTenMeters);
-
+                                //if (ARS.DebugLevel > 0) UI.Notify("~b~[" + Name + "]~o~ Cannot gain confidence (blocked, instability)");
                             }
 
                         }
-                        else if (FastEntryScore == 0 && WorstCorners.Count == 0)
-                        {
-                            mphStopInTenMeters += 0.05f;
-                          //  ARS.Log(ARS.LogImportance.FATAL, Name + " increases his brake confidence to " + mphStopInTenMeters + ".(+0.1) (good entry)");
-
-                        }
+                        MaxOverShootSpeed = 0f;
+                        CanLowerSafety = false;
                     }
                 }
-                else if (FastEntryScore > 0) FastEntryScore = 0;
-
-
-
+                else if (FastEntryScore > 0) FastEntryScore--;
 
 
                 //AI Inputs
                 if (Driver.IsSittingInVehicle(Car) && !Driver.IsPlayer)
                 {
 
-                    /*
-                    float Current = Car.SteeringAngle;
-                    float Expected = CurrentSteeringAngle;
-
-
-                    float d = 0f;
-                    if (Current > 0 == Expected > 0) d = Math.Max(Current, Expected) - Math.Min(Current, Expected);
-                    else if (Current > Expected) d = Current - Expected; else d = Expected - Current;
-                    //UI.ShowSubtitle(Math.Round(d, 1).ToString());
-
-                    if (d > 15f)
-                    {
-                        UI.ShowSubtitle("~r~" + Math.Round(d, 1).ToString());
-                        Driver.Task.ClearAll();
-                    }
-                    */
                     if (HandbrakeTime > Game.GameTime) CurrentHandBrake = true; else CurrentHandBrake = false;
                     if (CurrentHandBrake) Car.HandbrakeOn = true; else Car.HandbrakeOn = false;
 
-                   ARS.SetThrottle(Car, CurrentThrottle);
-                   ARS.SetBrakes(Car, CurrentBrake);
-
-                 
-
-                    /*
-                    if (Car.Speed > 10f && Math.Abs(d) > 15f && Driver.IsSittingInVehicle()) //Function.Call<bool>(Hash.GET_IS_TASK_ACTIVE, Driver, 462)
-                    {
-
-                        UI.ShowSubtitle(Name + " had a steering issue " + Current + " " + Expected, 1000);
-                        //Driver.Task.ClearAll();
-                        Driver.Task.ClearAllImmediately();
-                    }
-                    */
-                    
+                    ARS.SetThrottle(Car, vControl.Throttle);
+                    ARS.SetBrakes(Car, vControl.Brake);
                     ARS.SetTrueSteer(Car, CurrentStr);
-
-
                 }
                 else
                 {
@@ -951,31 +1141,100 @@ namespace NewRacingSystem
 
 
         }
-
-        void DrawDebug()
+        public int GetBrakePointInvalidateDist()
         {
 
+            float[] spds = { Car.Velocity.Length(), BrakeCornerSpeed };
 
+            //int inv = (int)ARS.map(ARS.MStoMPH(spds.Min()), 30, 100, 2, 10, true);
+
+            int inv = (int)ARS.map(ARS.MStoMPH(spds.Min()), 50, 100, 5, 30, true);
+            inv += (int)ARS.map(mem.intention.Aggression, 0, 1, 0, 10, true);
+            return inv;
+        }
+        void AdjustBrakeSafety(float m)
+        {
+            if (BrakeSafetyAdjustCooldown < Game.GameTime)
+            {
+                mem.data.brakeSafety += m;
+                mem.data.brakeSafety = (float)Math.Round(ARS.Clamp(mem.data.brakeSafety, 0.5f, 1.5f), 2);
+                BrakeSafetyAdjustCooldown = Game.GameTime + 2000;
+
+                if (ARS.DebugLevel > 0)
+                {
+                    if (m > 0f) UI.Notify("~b~[" + Name + "]~y~ Brake Safety raised to " + mem.data.brakeSafety);
+                    else UI.Notify("~b~[" + Name + "]~g~ Brake Safety lowered to " + mem.data.brakeSafety);
+                }
+            }
+        }
+        void DrawDebug()
+        {
+            if (!Car.IsInRangeOf(Game.Player.Character.Position, 100f)) return;
+
+            /*
+            if (TRCurveAngle != 0f)
+            {
+                foreach (Vector3 v in ARS.Project(Car.Position, Car.Velocity.Normalized, -TRCurveAngle, (int)Car.Velocity.Length()))
+                {
+                    World.DrawMarker(MarkerType.DebugSphere, Car.Position + v, Vector3.Zero, Vector3.Zero, new Vector3(0.15f, 0.15f, 0.15f), Color.Blue);
+                }
+            }
+            */
+
+
+
+
+            if (Decisions.Any() && ARS.DebugLevel == 1)
+            {
+                string text = "";
+                foreach (Decision d in Decisions.Keys) text += d.ToString() + "~n~";
+                ARS.DrawText(Car.Position + new Vector3(0, 0, 2), text, Color.SkyBlue, 0.5f);
+            }
+            if (Mistakes.Any() && ARS.DebugLevel == 1)
+            {
+                string text = "";
+                foreach (Mistake d in Mistakes.Keys) text += d.ToString() + "~n~";
+                ARS.DrawText(Car.Position + new Vector3(0, 0, 1), text, Color.Orange, 0.5f);
+            }
+
+            /*
+            if (!Driver.IsPlayer && Driver.IsInRangeOf(Game.Player.Character.Position, 100f))
+            {
+                if(Decisions.Any()) World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + new Vector3(0, 0, 1.5f), Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.5f, 0.5f, -0.5f), Color.Red, false, true, 0, false, "", "", false);
+                else World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + new Vector3(0, 0, 1.5f), Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.5f, 0.5f, -0.5f), ARS.GetColorFromRedYellowGreenGradient(100 - (mem.intention.Aggression * 100)), false, true, 0, false, "", "", false);
+            }
+            */
+
+
+
+
+            //if(BannedDecisions.Any()) ARS.DrawText(Car.Position + new Vector3(0, 0, 2), BannedDecisions.First().Key.ToString(), Color.Gray, 0.5f);
+            /*
+            if (followTrackPoint != null)
+            {
+                ARS.DrawLine(Car.Position,followTrackPoint.Position, Color.Black);
+                World.DrawMarker(MarkerType.ChevronUpx1, followTrackPoint.Position, followTrackPoint.Direction,new Vector3(90,0,0), new Vector3(2f, 2f, 2f), Color.White, false, false, 0, false, "", "", false);
+                Vector3 offset = followTrackPoint.Position + (ARS.RotateDir(followTrackPoint.Direction, 90) * mem.data.DeviationFromCenter);
+                ARS.DrawLine(Car.Position, offset, Color.Black);
+                World.DrawMarker(MarkerType.DebugSphere, offset, Vector3.Zero, Vector3.Zero, new Vector3(0.15f, 0.15f, 0.15f), Color.White);
+            }
+            */
+
+            //if (Pos == 1) UI.ShowSubtitle(mphStopInTenMeters.ToString(), 1000);
             if (DebugText.Count > 0)
             {
                 if (ARS.DebugLevel == (int)DebugMode.Interactions)
                 {
                     string d = "~g~- INFO -~w~";
-                    //d+=""
                     foreach (string st in DebugText) d += "~w~~n~" + st;
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2), d, System.Drawing.Color.White, 0.4f);
                 }
             }
 
-            if (!Car.IsInRangeOf(Game.Player.Character.Position, 100f)) return;
-
             if (trail.Count == 0) trail.Add(Car.Position);
             else if (Car.Position.DistanceTo(trail[trail.Count - 1]) > 2f) trail.Add(Car.Position);
 
-
-           if(ARS.DebugLevel==(int)DebugMode.Interactions) foreach (Vehicle v in Traffic) ARS.DrawLine(Car.Position, v.Position, Color.Orange);// World.DrawMarker(MarkerType.ChevronUpx1, v.Position+new Vector3(0,0, v.Model.GetDimensions().Z), Vector3.Zero, Vector3.Zero, new Vector3(1f,1f, -1f), Color.Red, false, false, 0, false, "", "", false);
-
-
+            //if (ARS.DebugLevel == (int)DebugMode.Interactions) foreach (Vehicle v in Traffic) ARS.DrawLine(Car.Position, v.Position, Color.Orange);// World.DrawMarker(MarkerType.ChevronUpx1, v.Position+new Vector3(0,0, v.Model.GetDimensions().Z), Vector3.Zero, Vector3.Zero, new Vector3(1f,1f, -1f), Color.Red, false, false, 0, false, "", "", false);
 
             if (ARS.DebugLevel == (int)DebugMode.Trails)
             {
@@ -993,6 +1252,41 @@ namespace NewRacingSystem
 
             }
 
+            // ARS.DrawDirectionalBoundingBox(Car);
+
+
+            /*
+            if(Pos == 1 && ARS.Racers.Count >= 2)
+            {
+                Racer r = ARS.Racers[1];
+                Vehicle refVehicle = r.Car;
+
+                //float YBoundingBox = ((Car.Model.GetDimensions().Y / 2) + (refVehicle.Model.GetDimensions().Y / 2));
+                //float XBoundingBox = (Car.Model.GetDimensions().X / 2);
+
+                float myDBB = 0f;
+                float hisDBB = 0f;
+                //XDynamicBoundingBox = ARS.map(Vector3.Angle(Car.ForwardVector, refVehicle.ForwardVector), 0f, 90f, (refVehicle.Model.GetDimensions().X / 2), (refVehicle.Model.GetDimensions().Y / 2));
+                myDBB = ARS.map(Vector3.Angle(Car.ForwardVector, Car.Velocity.Normalized), 0f, 90f, (Car.Model.GetDimensions().X / 2), (Car.Model.GetDimensions().Y / 2), true);
+                hisDBB = ARS.map(Vector3.Angle(refVehicle.ForwardVector, refVehicle.Velocity.Normalized), 0f, 90f, (refVehicle.Model.GetDimensions().X / 2), (refVehicle.Model.GetDimensions().Y / 2), true);
+
+                //XDynamicBoundingBox = ARS.Clamp(XDynamicBoundingBox, refVehicle.Model.GetDimensions().X / 2, refVehicle.Model.GetDimensions().Y / 2);
+                //XDynamicBoundingBox =+ AutosportRacingSystem.map(DirDifference, 0f, 45f, 0f, 2f, true);
+
+                float sideDist = ARS.LeftOrRight(Car.Position, r.Car.Position, Car.Velocity.Normalized);
+                float insideDist = Math.Abs(sideDist) - ((myDBB+hisDBB));
+
+
+                Vector3 myside = (Vector3.Cross(Car.Velocity.Normalized, Vector3.WorldUp) * myDBB);
+
+
+                //ARS.DrawLine(Car.Position, Car.Position - (Car.RightVector * sideDist), Color.Red);
+
+                ARS.DrawLine(Car.Position + myside + (Car.Velocity.Normalized * 5f), Car.Position + myside + (Car.Velocity.Normalized * -5f), Color.Black);
+                ARS.DrawLine(Car.Position - myside + (Car.Velocity.Normalized * 5f), Car.Position - myside + (Car.Velocity.Normalized * -5f), Color.Black);
+                ARS.DisplayHelpText(Math.Round(insideDist, 1).ToString());
+            }
+            */
             /*
             if (DebugTextTime < Game.GameTime)
             {
@@ -1006,7 +1300,7 @@ namespace NewRacingSystem
             {
                 if (RacingLineDeviation != 0.0f)
                 {
-                    float d = DeviationFromTrackCenter - RacingLineDeviation;
+                    float d = mem.data.DeviationFromCenter - RacingLineDeviation;
 
 
                     World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + (Car.RightVector * d), Vector3.Zero, new Vector3(90, Car.Heading, 0), new Vector3(0.8f, 0.8f, -3.8f), Color.Green, false, false, 0, false, "", "", false);
@@ -1017,7 +1311,7 @@ namespace NewRacingSystem
 
                 if (OvertakeDeviation != 0.0f)
                 {
-                    float d = DeviationFromTrackCenter - OvertakeDeviation;
+                    float d = mem.data.DeviationFromCenter - OvertakeDeviation;
 
 
                     World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + (Car.RightVector * d), Vector3.Zero, new Vector3(90, Car.Heading, 0), new Vector3(0.8f, 0.8f, -3.8f), Color.Black, false, false, 0, false, "", "", false);
@@ -1029,29 +1323,71 @@ namespace NewRacingSystem
             {
 
                 Color cc = Color.Green;
-                if (CurrentBrake > 0.0f) cc = Color.Yellow;
-                if (CurrentBrake > 0.5f) cc = Color.Orange;
-                if (CurrentBrake > 0.9f) cc = Color.Red;
+                if (vControl.Brake > 0.0f) cc = Color.Yellow;
+                if (vControl.Brake > 0.5f) cc = Color.Orange;
+                if (vControl.Brake > 0.9f) cc = Color.Red;
 
-                if (ARS.DebugLevel > 0)
+
+                if (mem.intention.DeviationFromCenter != 0.0f)
                 {
-                    Vector3 Dimensions = Car.Model.GetDimensions();
-                    Vector3 inputplace = Car.Position + new Vector3(0, 0, (Dimensions.Z * 0.6f));
-                    Vector3 steergoal = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * CurrentSteeringAngle) * -Car.ForwardVector; // Quaternion.RotationAxis takes radian angles
-                    Vector3 idealsteergoal = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * IdealSteeringAngle) * -Car.ForwardVector; // Quaternion.RotationAxis takes radian angles
+                    Vector3 lookAheadIntention = followTrackPoint.Position - (Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * (followTrackPoint.Direction * mem.intention.DeviationFromCenter));
 
-                    float dimension = Car.Model.GetDimensions().Y + 1f;//new Vector3(90, Car.Heading + CurrentSteeringAngle, 0)
-                    World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + (steergoal * -(Dimensions.Y / 2)) + new Vector3(0, 0, -Car.HeightAboveGround), steergoal, new Vector3(90, 0, 0), new Vector3(dimension / 4, dimension / 2, -(dimension / 2)), Color.SkyBlue, false, false, 0, false, "", "", false);
+                    ARS.DrawLine(Car.Position, lookAheadIntention, Color.White);
+                    World.DrawMarker(MarkerType.DebugSphere, lookAheadIntention, Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.05f, 0.05f, 0.05f), Color.White, false, false, 0, false, "", "", false);
 
-                    if (CurrentSteeringAngle != IdealSteeringAngle) World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + (idealsteergoal * -(Dimensions.Y / 2)) + new Vector3(0, 0, -Car.HeightAboveGround), idealsteergoal, new Vector3(90, 0, 0), new Vector3(dimension / 4, dimension / 2, -(dimension / 2)), Color.FromArgb(50, Color.SkyBlue), false, false, 0, false, "", "", false);
-
-                    World.DrawMarker(MarkerType.DebugSphere, inputplace + (Car.ForwardVector * ((Dimensions.Y / 2) * (-CurrentLockupLimiter))), Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(0.05f, 0.05f, 0.05f), Color.Black, false, false, 0, false, "", "", false);
-                    World.DrawMarker(MarkerType.DebugSphere, inputplace + (Car.ForwardVector * ((Dimensions.Y / 2) * (CurrentWheelspinLimiter))), Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(0.05f, 0.05f, 0.05f), Color.Black, false, false, 0, false, "", "", false);
-
-                    World.DrawMarker(MarkerType.ChevronUpx1, inputplace + (Car.ForwardVector * ((Dimensions.Y / 2) * (CurrentThrottle - CurrentBrake))), Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(1f, 1f, 1f), cc, false, false, 0, false, "", "", false);
-                    ARS.DrawLine(inputplace + (Car.ForwardVector * -(Dimensions.Y / 2)), inputplace + (Car.ForwardVector * (Dimensions.Y / 2)), Color.White);
-                    ARS.DrawLine(inputplace + (Car.RightVector * 0.2f), inputplace - (Car.RightVector * 0.2f), Color.White);
                 }
+                else
+                {
+
+                    Vector3 lookAhead = followTrackPoint.Position - (Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * (followTrackPoint.Direction * mem.data.DeviationFromCenter));
+
+                    ARS.DrawLine(Car.Position, lookAhead, Color.GreenYellow);
+                    World.DrawMarker(MarkerType.DebugSphere, lookAhead, Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.05f, 0.05f, 0.05f), Color.White, false, false, 0, false, "", "", false);
+
+                }
+
+
+                Vector3 Dimensions = Car.Model.GetDimensions();
+                Vector3 inputplace = Car.Position + new Vector3(0, 0, (Dimensions.Z * 0.6f));
+                Vector3 steergoal = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * mem.data.SteerAngle) * -Car.ForwardVector; // Quaternion.RotationAxis takes radian angles
+                                                                                                                                                  //Vector3 avoidGoal = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * CManeuverDirection.X) * steergoal; // Quaternion.RotationAxis takes radian angles
+                Vector3 idealsteergoal = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * vControl.SteerAngle) * -Car.ForwardVector; // Quaternion.RotationAxis takes radian angles
+
+                float dimension = Car.Model.GetDimensions().Y + 1f;//new Vector3(90, Car.Heading + mem.data.SteeringAngle, 0)
+                World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + (steergoal * -(Dimensions.Y / 2)) + new Vector3(0, 0, -Car.HeightAboveGround), steergoal, new Vector3(90, 0, 0), new Vector3(dimension / 4, dimension / 2, -(dimension / 2)), Color.SkyBlue, false, false, 0, false, "", "", false);
+                //World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + (avoidGoal * -(Dimensions.Y / 2)) + new Vector3(0, 0, -Car.HeightAboveGround), avoidGoal, new Vector3(90, 0, 0), new Vector3(dimension / 4, dimension / 2, -(dimension / 2)), Color.Yellow, false, false, 0, false, "", "", false);
+                //World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + (CManeuverDirection * -(Dimensions.Y / 2)) + new Vector3(0, 0, -Car.HeightAboveGround), CManeuverDirection, new Vector3(90, 0, 0), new Vector3(dimension / 4, dimension / 2, -(dimension / 2)), Color.Yellow, false, false, 0, false, "", "", false);
+
+                if (mem.data.SteerAngle != vControl.SteerAngle) World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + (idealsteergoal * -(Dimensions.Y / 2)) + new Vector3(0, 0, -Car.HeightAboveGround), idealsteergoal, new Vector3(90, 0, 0), new Vector3(dimension / 4, dimension / 2, -(dimension / 2)), Color.FromArgb(50, Color.SkyBlue), false, false, 0, false, "", "", false);
+
+
+                World.DrawMarker(MarkerType.DebugSphere, inputplace + (Car.ForwardVector * ((Dimensions.Y / 2) * (-CurrentLockupLimiter))), Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(0.05f, 0.05f, 0.05f), Color.Black, false, false, 0, false, "", "", false);
+                World.DrawMarker(MarkerType.DebugSphere, inputplace + (Car.ForwardVector * ((Dimensions.Y / 2) * (CurrentWheelspinLimiter))), Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(0.05f, 0.05f, 0.05f), Color.Black, false, false, 0, false, "", "", false);
+
+
+
+                World.DrawMarker(MarkerType.ChevronUpx1, inputplace + (Car.ForwardVector * ((Dimensions.Y / 2) * (vControl.Throttle))), Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(1f, 1f, 1f), Color.Green, false, false, 0, false, "", "", false);
+                if (vControl.Brake > 0.0f) World.DrawMarker(MarkerType.ChevronUpx1, inputplace + (Car.ForwardVector * ((Dimensions.Y / 2) * (-vControl.Brake))), Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(1f, 1f, 1f), cc, false, false, 0, false, "", "", false);
+                ARS.DrawLine(inputplace + (Car.ForwardVector * -(Dimensions.Y / 2)), inputplace + (Car.ForwardVector * (Dimensions.Y / 2)), Color.White);
+                ARS.DrawLine(inputplace + (Car.RightVector * 0.2f), inputplace - (Car.RightVector * 0.2f), Color.White);
+
+
+                Vector3 steerG = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * mem.data.SteerAngle) * Car.ForwardVector;
+                Vector3 strMaxRight = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * maxStrTRCurve) * Car.ForwardVector;
+                Vector3 strMaxLeft = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -maxStrTRCurve) * Car.ForwardVector;
+
+                ARS.DrawLine(Car.Position, Car.Position + (strMaxLeft * 5f), Color.Red);
+                ARS.DrawLine(Car.Position, Car.Position + (strMaxRight * 5f), Color.Red);
+                ARS.DrawLine(Car.Position, Car.Position + (steerG * 5f), Color.Blue);
+
+
+                Vector3 smoothLeft = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * maxSteerSmooth) * Car.ForwardVector;
+                Vector3 smoothRight = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -maxSteerSmooth) * Car.ForwardVector;
+
+                ARS.DrawLine(Car.Position, Car.Position + (smoothLeft * 5f), Color.White);
+                ARS.DrawLine(Car.Position, Car.Position + (smoothRight * 5f), Color.White);
+
+
             }
 
 
@@ -1068,519 +1404,346 @@ namespace NewRacingSystem
                     i++;
                 }
             }
-          //  AutosportRacingSystem.DrawText(Car.Position + Vector3.WorldUp * (Car.Model.GetDimensions().Z + 0.25f), Math.Round(Car.Velocity.Length()).ToString(), Color.White, 0.5f);//mphStopInTenMeters.ToString()
 
-            if (ARS.DebugLevel == (int)DebugMode.Cornering && WorstCornerFound())
+            if (ARS.DebugLevel == (int)DebugMode.Cornering)
             {
-                ARS.DrawText(Car.Position + Vector3.WorldUp * (Car.Model.GetDimensions().Z + 0.25f), Math.Round(ARS.MStoMPH(Car.Velocity.Length())).ToString() + "mph", Color.White, 0.5f);//mphStopInTenMeters.ToString()
+                Vector3 source = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.6f);
 
+                ARS.DrawText(source, Math.Round(ARS.MStoMPH(Car.Velocity.Length())).ToString() + "mph", Color.White, 0.5f);//mphStopInTenMeters.ToString()
 
-                if (Pos == 1)
+                if (1 == 2 && Pos <= 1)
                 {
                     Vector3 front = Car.Position;
                     Vector3 back = Car.Position;
 
-                    front += Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * cThreshold) * (CurrentCornerDir * 5); // Quaternion.RotationAxis takes radian angles
-                    back += Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * cThreshold) * -(CurrentCornerDir * 5); // Quaternion.RotationAxis takes radian angles
+                    front += Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * maxCarToTrackpointAngle) * (trackPoint.Direction * 5);
+                    back += Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * maxCarToTrackpointAngle) * -(trackPoint.Direction * 5);
 
                     World.DrawMarker(MarkerType.DebugSphere, front, Vector3.Zero, Vector3.Zero, new Vector3(0.05f, 0.05f, 0.05f), Color.Red);
                     World.DrawMarker(MarkerType.DebugSphere, back, Vector3.Zero, Vector3.Zero, new Vector3(0.05f, 0.05f, 0.05f), Color.Red);
+
+
+                    Vector3 ctocorner = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * CarToCornerAngle) * (trackPoint.Direction * 5);
+                    Vector3 ctocornerb = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * CarToCornerAngle) * -(trackPoint.Direction * 5);
+
+                    //Corner angle
+                    ARS.DrawLine(Car.Position + ((trackPoint.Direction * 5)), Car.Position - ((trackPoint.Direction * 5)), Color.White);
+
+                    //Car to corner angle
+                    ARS.DrawLine(Car.Position + ((ctocorner)), Car.Position + ((ctocornerb)), Color.Blue);
+
+                    //Car to corner max angle
                     ARS.DrawLine(back, front, Color.Red);
 
-                    Vector3 ctocorner = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * cToCorner) * (CurrentCornerDir * 5);
-                    Vector3 ctocornerb = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * cToCorner) * -(CurrentCornerDir * 5);
-
-                    //Corner
-                    ARS.DrawLine(Car.Position + ((CurrentCornerDir * 5)), Car.Position - ((CurrentCornerDir * 5)), Color.White);
-
                     //Difference
-
-                    ARS.DrawLine(Car.Position + ((ctocorner)), Car.Position + ((CurrentCornerDir * 5)), Color.Orange);
-                    //Real
-                    ARS.DrawLine(Car.Position + ((ctocorner)), Car.Position + ((ctocornerb)), Color.Blue);
+                    ARS.DrawLine(Car.Position + ((ctocorner)), Car.Position + ((trackPoint.Direction * 5)), Color.Orange);
 
                 }
                 int d = 0;
-                foreach (dynamic c in WorstCorners)
+                foreach (CornerPoint c in KnownCorners)
                 {
-
-
                     d++;
-                    Vector3 wp = c[1];
+                    Vector3 wp = ARS.Path[c.Node];
+                    float expectedSpeed = MapIdealSpeedForDistance(wp.DistanceTo(ARS.Path[trackPoint.Node]), c.Speed); //BrakeCornerSpeed;
+                    Color gColor = ARS.GetColorFromRedYellowGreenGradient(ARS.map(expectedSpeed - Car.Velocity.Length(), -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput, 0, 100, true));
 
-                    if (d < 50)
+                    if (d == 1)
                     {
-                        if (ARS.MultiplierInTerrain.ContainsKey(c[3]))
-                        {
-                          //  AutosportRacingSystem.DrawText(wp + new Vector3(0, 0, 0.4f), AutosportRacingSystem.MultiplierInTerrain[c[3]].ToString(), Color.Red, 0.5f);
-
-                        }
-                        ARS.DrawText(wp, c[0].ToString()+ "º~n~" + ARS.MStoMPH(c[5]).ToString()+"mph", Color.White, 0.15f); //*(c[5]+1f)
+                        ARS.DrawLine(source, wp, gColor);
+                        //ARS.DrawText(wp+new Vector3(0,0,1), c.Angle.ToString() + "º~w~~n~~y~" + Math.Round(ARS.MStoMPH(c.Speed)) + "~w~mph~n~Elv:" + Math.Round(c.RelativeElevation, 1) + "º", textColor, ARS.map(d, 10, 1, 0.15f, 0.5f, true)); //*(c[5]+1f)
+                        ARS.DrawText(wp + new Vector3(0, 0, 1), c.Angle.ToString() + "º~w~ > ~y~" + Math.Round(ARS.MStoMPH(c.Speed)) + "~w~mph~n~Relative Elevation:" + Math.Round(c.RelativeElevation, 1) + "º", Color.White, ARS.map(d, 10, 1, 0.15f, 0.5f, true)); //*(c[5]+1f)
                     }
 
-                    float expectedSpeed = MapIdealSpeedForDistance(wp.DistanceTo(Path[CurrentNode])+ cornerdip, BrakeCornerSpeed);
-                    if (Car.Velocity.Length() < BrakeCornerSpeed)
-                    {
-                        ARS.DrawLine(Car.Position, wp, Color.Green);
-                    }
-                    else
-                    {
-                        if (Car.Velocity.Length() > expectedSpeed + (ARS.SpeedToInput) / 2)
-                        {
-                            if (Car.Velocity.Length() > expectedSpeed + ARS.SpeedToInput) ARS.DrawLine(Car.Position, wp, Color.Orange);
-                            else ARS.DrawLine(Car.Position, wp, Color.Red);
+                    World.DrawMarker(MarkerType.ChevronUpx1, wp, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2, 5, 2), Color.FromArgb(50, gColor.R, gColor.G, gColor.B));
 
-                        }
-                        else
-                        {
-                            ARS.DrawLine(Car.Position, wp, Color.Yellow);
-                        }
-                    }
                 }
-
-
             }
         }
 
         float OutOfTrackDistance()
         {
+            return (Math.Abs(mem.data.DeviationFromCenter) + BoundingBox) - trackPoint.TrackWide;
 
-            //(Math.Abs(DeviationFromTrackCenter) + modelw + 0.5f) - maxOutofBounds;
-            return Math.Abs(DeviationFromTrackCenter) - maxOutofBounds;
         }
-        int impedimentOnSide = 0;
+
+        #region Avoidance
+
+        float impedimentOnSide = 0; //Directly by your side
+        float fImpedimentOnSide = 0; //Ahead, not by yourside
         void VehicleInteractions()
         {
             DebugText.Clear();
-            impedimentOnSide = 0;
-            CManeuverDirection = Vector3.Zero;
+            impedimentOnSide = 0.0f;
+            fImpedimentOnSide = 0.0f;
             if (Car.Driver.IsPlayer || ARS.SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "Ghosts", false)) return;
-            Traffic.Clear();
-            foreach(Vehicle refVehicle in Traffic)
-            {
-                Vector3 Offset = (ARS.GetOffset(Car, refVehicle));
-                Vector3 OffsetfromHim = (ARS.GetOffset(refVehicle, Car));
-                float sideOffset = ARS.LeftOrRight(Car.Position, refVehicle.Position, refVehicle.Velocity.Normalized);
-                
-
-                //if (Car.IsTouching(refVehicle) && Offset.Y > Car.Model.GetDimensions().Y*0.5f) ManeuverThrottle(-5f);
-
-                //Vector3 OffsetToAxleY = Offset + new Vector3(0, -AxleY, 0);
-                float DirDifference = Vector3.SignedAngle(Car.Velocity.Normalized, refVehicle.Velocity.Normalized, Car.UpVector);
-
-
-                if (refVehicle.Velocity.Length() < 5f) DirDifference = 0f;
 
 
 
-                float YBoundingBox = ((Car.Model.GetDimensions().Y / 2) + (refVehicle.Model.GetDimensions().Y / 2));
-                float XBoundingBox = (Car.Model.GetDimensions().X / 2);
-
-                float XDynamicBoundingBox = 0f;
-                XDynamicBoundingBox = ARS.map(Vector3.Angle(Car.ForwardVector, refVehicle.ForwardVector), 0f, 90f, (refVehicle.Model.GetDimensions().X / 2), (refVehicle.Model.GetDimensions().Y / 2));
-
-                XDynamicBoundingBox = ARS.Clamp(XDynamicBoundingBox, refVehicle.Model.GetDimensions().X / 2, refVehicle.Model.GetDimensions().Y / 2);
-            //    XDynamicBoundingBox =+ AutosportRacingSystem.map(DirDifference, 0f, 45f, 0f, 2f, true);
-                XDynamicBoundingBox += XBoundingBox;
-
-                float SpeedDiff = refVehicle.Velocity.Length() - Car.Velocity.Length();// Positive=he is faster. Negative=he is slower;
-                
-                float sideDist = Math.Abs(Offset.X) - XDynamicBoundingBox;
-                if (Offset.Y > 0)
-                {
-                    /*
-                    //Avoid rearends via brake
-                    if (Offset.Y > YBoundingBox && SpeedDiff < 0f)
-                    {
-                        float mappedspeed = MapIdealSpeedForDistance((Offset.Y - YBoundingBox), refVehicle.Velocity.Length());
-                        float maneuver = mappedspeed - refVehicle.Velocity.Length();
-                        float mult = AutosportRacingSystem.map(Math.Abs(DirDifference), 30f, 10f, 0f, 1f);
-                        mult = AutosportRacingSystem.Clamp(mult, 0f, 1f);
-                        mult=1;
-                        if (refVehicle.Velocity.Length() < 10f) mult = 1;
-                        maneuver *= mult;
-
-                        if (maneuver < AutosportRacingSystem.SpeedToInput)
-                        {
-                            if (Car.Speed - maneuver < 15f) maneuver = 0.25f;
-                            ManeuverThrottle(maneuver);
-                        }
-                    }*/
-
-
-                    //Avoid rearends via steer
-                    if (Offset.Y > YBoundingBox && Math.Abs(sideOffset) < XDynamicBoundingBox + 1f)
-                    {
-                        if (Math.Abs(DirDifference) < 30f)
-                        {
-                            float speedDistance = ARS.map(SpeedDiff, -10f, 5f, 50f, 0f);
-                            speedDistance = ARS.Clamp(speedDistance, 0f, 50f);
-                            if (speedDistance < Offset.Y) continue;
-                        }
-                        float distInside = XDynamicBoundingBox - Math.Abs(sideOffset);
-
-
-                        float mult = 0f;
-                        //Throttle
-                        if (Math.Abs(DirDifference) < 40f && sideDist<-0.2f)
-                        {
-                            
-                            float mappedspeed = MapIdealSpeedForDistance((Offset.Y - YBoundingBox), refVehicle.Velocity.Length());
-                            float maneuver = mappedspeed - Car.Velocity.Length();
-                            mult = ARS.mapGamma(Math.Abs((Offset.Y - YBoundingBox)), 0f, 50f, 1f, 0f, 0.25f);
-                            mult = ARS.Clamp(mult, 0f, 1f);
-                            if (refVehicle.Velocity.Length() < 10f) mult = 1;
-                            maneuver *= mult;
-
-                            if (maneuver < ARS.SpeedToInput)
-                            {
-                                if (Car.Velocity.Length() - maneuver < 15f) maneuver = 0.1f;
-                                ManeuverThrottle(maneuver);
-                            }
-
-                        }
-
-
-                        //Steer
-                        float st = ARS.map(sideDist, 0.5f, -1.0f, .5f, 4.0f);
-                        st = ARS.Clamp(st, .5f, 4.0f);
-                        
-                        if (Offset.X < 0) st = -st;
-                        // if (Math.Abs(DirDifference) > 90f) st = -st;
-
-                        ManeuverSteer(st);
-                        /*
-                        //Allows the AI to realize they cannot squeeze through the gap between their target
-                        //And the track limits, so they slowly steer the other way, assuming there's a better opportunity over there
-                        if (st > 0 == DeviationFromTrackCenter > 0 && OutOfTrackDistance() > -(XDynamicBoundingBox * 2))
-                        {
-                            //ManeuverThrottle(((SpeedDiff + 2f) * 0.5f));
-                            ManeuverSteer(3 * (st > 0 ? -1 : 1));
-                        }
-                        else
-                        {
-
-                        }*/
-                    }
-                }
-
-            }
+            //Interaction with other vehicles            
             foreach (Racer r in referenceVehs)
             {
                 Vehicle refVehicle = r.Car;
-                //Interaction with other vehicles            
                 if (!ARS.CanWeUse(refVehicle)) continue;
 
                 if (ARS.CanWeUse(refVehicle))
                 {
-                    //if (Car.IsTouching(r.Car)) Car.Alpha = 0; 
-                    float AxleY = (Car.Model.GetDimensions().Y * 0.25f);
+                    Vector3 PositionRelativeToUs = (ARS.GetOffset(Car, refVehicle));
+                    Vector3 PositionRelativeToThem = (ARS.GetOffset(refVehicle, Car));
 
-                    Vector3 Offset = (ARS.GetOffset(Car, refVehicle));
-                    Vector3 OffsetfromHim = (ARS.GetOffset(refVehicle, Car));
-                    float sideOffset = ARS.LeftOrRight(Car.Position, refVehicle.Position, refVehicle.Velocity.Normalized);
+                    float SideRelToTheirDirection = ARS.LeftOrRight(Car.Position, r.Car.Position, r.Car.Velocity.Normalized);//r.Car.Velocity.Normalized
+                    float SideRelToOurDirection = ARS.LeftOrRight(r.Car.Position, Car.Position, Car.Velocity.Normalized);//Positive=left of us;
 
+                    float impedimentDist = ARS.Clamp(Math.Abs(SideRelToTheirDirection) - ((BoundingBox + r.BoundingBox)), 0f, 10f) * (SideRelToTheirDirection > 0 ? 1 : -1);
 
-                    if (Car.IsTouching(refVehicle) && Offset.Y>0) ManeuverThrottle(-0.1f);
+                    float SpeedDiff = (float)Math.Round(Car.Velocity.Length() - refVehicle.Velocity.Length(), 1);// Negative=he is faster. Positive=he is slower;
 
-
-                    //Vector3 OffsetToAxleY = Offset + new Vector3(0, -AxleY, 0);
-                    float YBoundingBox = ((Car.Model.GetDimensions().Y / 2) + (refVehicle.Model.GetDimensions().Y / 2));
-                    float XBoundingBox = (Car.Model.GetDimensions().X / 2);
+                    float YBoundingBox = Math.Abs((Car.Model.GetDimensions().Y / 2) + (refVehicle.Model.GetDimensions().Y / 2));
+                    float XBoundingBox = BoundingBox;
 
                     float XDynamicBoundingBox = 0f;
-                     XDynamicBoundingBox= ARS.map(Vector3.Angle(Car.ForwardVector, refVehicle.ForwardVector), 0f, 90f, (refVehicle.Model.GetDimensions().X / 2), (refVehicle.Model.GetDimensions().Y / 2));
-                    
+
+                    //Their bounding box relative to our direction
+                    XDynamicBoundingBox = ARS.map(Vector3.Angle(Car.Velocity.Normalized, refVehicle.ForwardVector), 0f, 90f, refVehicle.Model.GetDimensions().X / 2, (refVehicle.Model.GetDimensions().Y / 2));
                     XDynamicBoundingBox = ARS.Clamp(XDynamicBoundingBox, refVehicle.Model.GetDimensions().X / 2, refVehicle.Model.GetDimensions().Y / 2);
+
+                    //Our own bounding box                    
                     XDynamicBoundingBox += XBoundingBox;
 
-                    float SpeedDiff =(float)Math.Round( refVehicle.Velocity.Length() - Car.Velocity.Length(),1);// Positive=he is faster. Negative=he is slower;
-                    float DirDifference = Vector3.SignedAngle(Car.Velocity.Normalized, refVehicle.Velocity.Normalized, Car.UpVector);
-                    float sideDist = Math.Abs(Offset.X) - XDynamicBoundingBox;
+                    //How much the distance intersects with the sum of both BBs
+                    float sideToSideDist = Math.Abs(SideRelToTheirDirection) - ((XDynamicBoundingBox));
+                    float targetInsideDist = Math.Abs(SideRelToOurDirection) - ((XDynamicBoundingBox));
 
-                    //Side to side
-                    if (Math.Abs(OffsetfromHim.Y) < YBoundingBox+0.5f)// && 
+
+                    float DirDifference = Vector3.SignedAngle(Car.Velocity.Normalized, refVehicle.Velocity.Normalized, Car.UpVector);// + ((TRCurveAngle) - (r.TRCurveAngle));
+
+                    //Adjust the speed relative to their direction relative to us
+                    float targetRelativeSpeed = ARS.map(Math.Abs(DirDifference), 180f, 0f, -refVehicle.Velocity.Length(), refVehicle.Velocity.Length(), true);
+                    SpeedDiff = (float)Math.Round(Car.Velocity.Length() - targetRelativeSpeed, 2);
+
+                    float distance = (Car.Position.DistanceTo2D(refVehicle.Position) - YBoundingBox);
+
+                    float sToHit = 10f;
+                    if (SpeedDiff > 0f) sToHit = (float)Math.Round(distance / SpeedDiff, 2);
+                    if (float.IsNaN(sToHit) || float.IsInfinity(sToHit)) sToHit = 10f;
+                    sToHit = ARS.Clamp(sToHit, 0f, 10f);
+
+                    //Behind them
+                    if (PositionRelativeToUs.Y > 0f)
                     {
-                         impedimentOnSide = (Offset.X > 0.0f ? 1 : -1); //For future reference. AI wont steer towards the racing line if there is someone on their side
-                        if(OffsetfromHim.Y < 1f)
+                        //Update Impediment side to side.
+                        if (Math.Abs(PositionRelativeToUs.Y) < YBoundingBox)
                         {
-
-                            float directionDiff = (float)Math.Round(DirDifference, 3);
-                            if (Offset.X > 0) directionDiff = -directionDiff;
-                            float steer = directionDiff;
-                            //if (steer < 3f) steer = 3f;
-                            bool forcedOut = OutOfTrackDistance() > -((Car.Model.GetDimensions().X / 2) + 1f);
-                            if (directionDiff < 0.0f)
+                            if (impedimentOnSide == 0.0f || Math.Abs(impedimentDist) < Math.Abs(impedimentOnSide))
                             {
-                                float mult = ARS.map(sideDist, 2f, 5f, 1.25f, 0.25f, false);
-                                if (mult > 1.0f) mult = 1f;
-                                if (mult < 0.1f) mult = 0.1f;
+                                impedimentOnSide = impedimentDist;
+                            }
+                        }
+                        else
+                        {
+                            //Update ImpedimentAhead. Serves us to know if we should switch lanes down the logic pipeline
+                            if (sToHit < 5f && Math.Abs(impedimentDist) < 10f)
+                            {
+                                if (fImpedimentOnSide == 0.0f || Math.Abs(impedimentDist) < Math.Abs(fImpedimentOnSide)) fImpedimentOnSide = impedimentDist;
+                            }
+                        }
 
-                                steer *= mult;
-                                steer = ARS.Clamp(steer, -5f, 5f);
-                                if (Offset.X > 0) steer = -steer;
+                        float safeSideDist = (XDynamicBoundingBox / 2) + mem.intention.RivalSideDist;
 
-                                //Allows the AI to realize they're being squeezed, and thus they stop trying to keep their distance.
-                                if (forcedOut)
+                        //Avoid rearends via steer
+                        if (!Decisions.ContainsKey(Decision.NoOvertake) && safeSideDist < 4f)
+                        {
+                            //Sanity steer limit
+                            float maxSteer = 50f;
+                            float tSteering = 0f;
+
+                            //Lane to aim at
+                            float lane = ARS.map(sideToSideDist, safeSideDist, 0f, 0f, safeSideDist, true) * (-SideRelToOurDirection > 0f ? 1 : -1);
+
+                            if (lane > 0 == r.mem.data.DeviationFromCenter > 0) if (Math.Abs(r.mem.data.DeviationFromCenter + lane) + XDynamicBoundingBox + safeSideDist > r.trackPoint.TrackWide) lane *= -1; //If we cannot overtake by this side (too close to th track edge), steer to the other side
+
+                            //Approaching them
+                            if (SpeedDiff > 0.0f)
+                            {
+                                if (Math.Abs(DirDifference) < 30f)
                                 {
-                                    if (OffsetfromHim.X > 0 != DeviationFromTrackCenter > 0 && Math.Abs(sideDist) < (Math.Abs(directionDiff) / 2.5f) && Math.Abs(SpeedDiff) < 30f)
-                                    {
-                                        //If they're being squeezed hard enough, give way slowing down a bit.
-                                        float man = ARS.map(Offset.Y, 0f, YBoundingBox, -(ARS.SpeedToInput*0.2f), 1f);
-                                        man = ARS.Clamp(man, 0f, 1f);
-                                        ManeuverThrottle(man);
-                                        AddDebugText("~r~ |V| ");
-                                    }
-                                    else AddDebugText("~y~ | V | ");
-                                }
-                                else
-                                {
-                                    steer = (float)Math.Round(steer, 2);
-                                    ManeuverSteer(steer);
-                                    AddDebugText("~y~ \\ V / ");
+                                    float SPDtoSteer = ARS.map(ARS.MStoMPH(Car.Velocity.Length()), 100f, 50f, 1f, 4f, true);
+                                    tSteering = GetSteerToDeviation(mem.data.DeviationFromCenter + lane, 0f, 1f, SPDtoSteer);
+                                    tSteering *= ARS.map(sToHit, 5f, 1f, 0f, 2f, true); //3s=x1
+                                                                                        //UI.ShowSubtitle(tSteering.ToString(), 500);
                                 }
                             }
-
-                            if (sideDist < 1f && !forcedOut)
+                            else //Not approaching, we are slower
                             {
-                                float avoid = (float)Math.Round((sideDist - 0.5f) * 2, 1);
-                                if (avoid < 0.0f)
+                                maxSteer = ARS.map(distance, mem.personality.Rivals.BehindRivalMinDistance + 10f, mem.personality.Rivals.BehindRivalMinDistance, 0f, 3f, true);
+                                tSteering = GetSteerToDeviation(mem.data.DeviationFromCenter + lane, 0f, 2f, maxSteer);
+                            }
+
+
+                            //After making a steering decision, adjust for our context in the track
+                            if (Math.Abs(tSteering) > 0.0f)
+                            {
+                                mem.intention.DeviationFromCenter = lane;
+
+                                //If we plan to overtake by one side, but there's a car ahead on that side already, reduce our steering gradually
+                                if (fImpedimentOnSide != 0)
                                 {
-                                    AddDebugText("~b~ / V \\ ");
-                                    ManeuverSteer(Math.Abs(avoid) * (Offset.X > 0.0f ? 1 : -1));
+                                    if (fImpedimentOnSide > 0f == tSteering > 0f)
+                                    {
+                                        maxSteer = ARS.map(Math.Abs(fImpedimentOnSide), safeSideDist, safeSideDist + 1f, 0f, 2f, true);
+                                    }
                                 }
+
+                                //If we would have to steer against another car on our side, reduce our steering gradually
+                                if (impedimentOnSide != 0f)
+                                {
+                                    if (impedimentOnSide > 0f == tSteering > 0f)
+                                    {
+                                        maxSteer = ARS.map(Math.Abs(impedimentOnSide), safeSideDist, safeSideDist + 1f, 0f, 2f, true);
+                                    }
+                                }
+
+                                tSteering = ARS.Clamp(tSteering, -maxSteer, maxSteer);
+                                if (tSteering != 0f && !float.IsNaN(tSteering)) mem.intention.Maneuvers.Add(new Vector2(tSteering, ARS.AIData.SpeedToInput));
+                            }
+                        }
+
+                        //Avoid rearends via brake
+                        if (targetInsideDist < 0f)
+                        {
+                            if (SpeedDiff > -ARS.AIData.SpeedToInput)
+                            {
+                                float safeDistance = (Car.Position.DistanceTo2D(refVehicle.Position) - (YBoundingBox + mem.intention.RivalBehindDist));
+                                float rSpeed = refVehicle.Velocity.Length(); // ARS.map(safeDistance, 0f, 1f, refVehicle.Velocity.Length() - 2f, refVehicle.Velocity.Length(), true);
+
+                                float idealSpd = MapIdealSpeedForDistance(safeDistance, rSpeed, mem.data.brakeSafety * ARS.map(sToHit, 3f, 1f, 0.5f, 1f, true));
+                                if (idealSpd < rSpeed) idealSpd = rSpeed;
+
+                                float m = idealSpd - Car.Velocity.Length();
+                                if (m > ARS.AIData.SpeedToInput) m = ARS.AIData.SpeedToInput;
+                                if (!float.IsNaN(m) && !float.IsInfinity(m) && m < ARS.AIData.SpeedToInput) mem.intention.Maneuvers.Add(new Vector2(0, m));
                             }
                         }
                     }
 
-   
-
-                    if (Offset.Y > 0)
+                    //Side to side
+                    if (Math.Abs(PositionRelativeToThem.Y) < YBoundingBox)//&& Offset.Y > 0f
                     {
-                        //Avoid rearends via brake
-                        if (Offset.Y > YBoundingBox && SpeedDiff < 0f && Math.Abs(Offset.X) < XBoundingBox+0.5f)
+                        if (sideToSideDist < 20f)
                         {
-                            float mappedspeed = MapIdealSpeedForDistance((Offset.Y - YBoundingBox), refVehicle.Velocity.Length());
-                            mappedspeed = ARS.Clamp(mappedspeed, refVehicle.Velocity.Length(), Car.Velocity.Length());
-                            float maneuver = (mappedspeed - Car.Velocity.Length())*0.4f;
-                            float mult = ARS.map(Math.Abs(DirDifference), 10f, 30f,1f, 0f);
-                            mult = ARS.Clamp(mult, 0f, 1f);
+                            List<Vector2> maneuvers = new List<Vector2>();
 
-                            if (refVehicle.Velocity.Length() < 10f) mult = 1;
-                           maneuver *= mult;
 
-                            if (maneuver < ARS.SpeedToInput)
-                            {
-                               // if (Car.Speed - maneuver < 15f) maneuver = 0.25f;
-                                ManeuverThrottle(maneuver);
-                                //AutosportRacingSystem.DisplayHelpText(Math.Round(maneuver,1).ToString());
+                            float maxSteer = 10f; // ARS.map(ARS.MStoMPH(Car.Velocity.Length()), 100f, 30f, 5f, 20f, true);
+
+                            float safeSideDist = (XDynamicBoundingBox / 2) + mem.intention.RivalSideDist;
+
+                            if (Car.IsTouching(refVehicle) && PositionRelativeToThem.Y < 0f) maneuvers.Add(new Vector2(5f * (SideRelToOurDirection > 0f ? 1 : -1), 0f));
+
+                            /*
+                            else if (sideToSideDist < safeSideDist)
+                            {                                
+                                float steerAway = ARS.map(sideToSideDist, safeSideDist, 0f, 0f, 2f, true) * (SideRelToTheirDirection < 0f ? 1 : -1);                                                               
+                                Vector2 keepAway = new Vector2(steerAway, ARS.AIData.SpeedToInput);                                
+                                maneuvers.Add(keepAway);                                
                             }
-                        }
+                            */
 
-
-                        //Avoid rearends via steer
-                        if (Offset.Y > YBoundingBox +0.5f && Math.Abs(sideOffset) < XDynamicBoundingBox + 1.5f )
-                        {
-
-
-                            float st = ARS.map(XDynamicBoundingBox+1f - Math.Abs(sideOffset), 0.0f, 4.0f, 0.25f, 3.0f, true);
-
-                            float distModifier = ARS.map(Offset.Y-YBoundingBox, 1f, 10f, 1f, 0f);
-                            distModifier = ARS.Clamp(distModifier, 0.0f, 1.0f);
-
-                            st *= distModifier;
-                            
-
-                            if (sideOffset > 0) st = -st;
-
-                           
-                            //Allows the AI to realize they cannot squeeze through the gap between their target
-                            //And the track limits, so they slowly steer the other way, assuming there's a better opportunity over there
-
-                            if (impedimentOnSide == 0||impedimentOnSide>0.0f != st>0.0f)
+                            //Closing in to us
+                            if (sideToSideDist < 10.0f && DirDifference > 0 == PositionRelativeToUs.X > 0)
                             {
-                                if (st > 0 == r.DeviationFromTrackCenter > 0 && r.OutOfTrackDistance() > -(XDynamicBoundingBox * 2))
+                                Vector3 aimTo = Vector3.Zero;
+                                float maxAllowedAngle = ARS.map(Math.Abs(sideToSideDist), 0.25f, safeSideDist * 2, 0f, 20f, true);
+                                //if(PositionRelativeToUs.Y<0f) maxAllowedAngle = ARS.map(Math.Abs(sideToSideDist), 0f, safeSideDist * 2, 0f, 20f, true);
+
+                                float str = 0f;
+                                if (maxAllowedAngle > 0.0f)
                                 {
-                                    ManeuverThrottle(3f);
-                                    ManeuverSteer(3 * (st > 0 ? -1 : 1));
+                                    if (Math.Abs(DirDifference) > maxAllowedAngle)
+                                    {
+                                        float dangAng = Math.Abs(DirDifference) - maxAllowedAngle;
+                                        aimTo = Vector3.Lerp(Car.Velocity.Normalized, r.Car.Velocity.Normalized, ARS.map(dangAng, 20f, 0f, 0f, 1f, true));
+                                    }
                                 }
                                 else
                                 {
-                                    ManeuverSteer(st);
+                                    aimTo = r.Car.Velocity.Normalized;// Vector3.Lerp(Car.Velocity.Normalized, r.Car.Velocity.Normalized, ARS.map(sideToSideDist, safeSideDist+2f, safeSideDist, 0f, 1f, true));
                                 }
+
+                                if (aimTo != Vector3.Zero)
+                                {
+                                    str = Vector3.SignedAngle(Car.Velocity.Normalized, aimTo, Car.UpVector);
+                                }
+
+                                // mem.intention.Maneuvers.Add(new Vector2(str, ARS.SpeedToInput));
+                                if (str > 0 != SideRelToTheirDirection > 0f && !float.IsNaN(str)) maneuvers.Add(new Vector2(str, ARS.AIData.SpeedToInput));
+
+
+
                             }
 
+                            if (maneuvers.Any())
+                            {
+                                Vector2 m = maneuvers.OrderByDescending(x => Math.Abs(x.X)).First();
+                                m.X = ARS.Clamp(m.X, -maxSteer, maxSteer);
+
+
+                                /*
+                                //If we are steering towards the outside of the track, limit our steering to avoid leaving
+                                if (m.X > 0f == mem.data.DeviationFromCenter < 0f)
+                                {
+                                    float mult = ARS.map(OutOfTrackDistance(), 0f, -2f, 0f, 3f, true);
+
+                                    m.X = ARS.Clamp(m.X, -mult, mult);
+                                    m.X *= mult;
+                                }               
+                                */
+                                mem.intention.Maneuvers.Add(m);
+                            }
                         }
                     }
                 }
             }
         }
+        #endregion
+
         bool WouldMoveOutOfTrack(float maneuver)
         {
             //if we're already close to the outside and the maneuver turns us further there
-            if (Math.Abs(DeviationFromTrackCenter) + Car.Model.GetDimensions().X > maxOutofBounds && maneuver > 0 == DeviationFromTrackCenter > 0) return true;
+            if (Math.Abs(mem.data.DeviationFromCenter) + Car.Model.GetDimensions().X > trackPoint.TrackWide && maneuver > 0 == mem.data.DeviationFromCenter > 0) return true;
 
             return false;
         }
-        void ManeuverSteer(float x)
-        {
-            if (Math.Abs(CManeuverDirection.X) < Math.Abs(x)) CManeuverDirection.X = x;
-        }
-        void ManeuverThrottle(float y)
-        {
-
-            if (y < CManeuverDirection.Y || CManeuverDirection.Y < ARS.SpeedToInput) CManeuverDirection.Y = y;
-        }
-
         float FollowTrackCornerAngle = 0f;
         public bool FinishedPointToPoint = false;
         public int localSPDLimiter = 0;
         public int FollowNode = 0;
 
-        public float LowestReasonableSpeed = 0f;
-        public void GetTrackInfo()
+
+
+        public TrackPoint trackPoint = new TrackPoint();
+        public TrackPoint followTrackPoint = new TrackPoint();
+        public void GetTrackInfo(List<Vector3> Track)
         {
-            int followdist = (int)ARS.map(Car.Velocity.Length(), 0f, ARS.MPHtoMS(70f), 4, 8, true);// (int) Car.Velocity.Length();// 10
-            //followdist = (int)ARS.Clamp(followdist, 3, 7);
-            
-            Vector3 carpos = Car.Position;
-            if (CurrentNode >= Path.Count - 1)
+            int lookAhead = (int)(ARS.map(ARS.MStoMPH(Car.Velocity.Length()), 30f, 130f, 5, 15, true) * ARS.map(Confidence, 2, 1, 1f, 1.25f, true));
+            if (Car.Model.IsBicycle || Car.Model.IsBike) lookAhead = 2;
+
+            lookAhead += (int)Car.Model.GetDimensions().Y / 2;
+
+
+            int cNode = trackPoint.Node;
+
+            if (cNode > ARS.TrackPoints.Count - 5)
             {
-                if (ARS.IsPointToPoint)
-                {
-                    CurrentNode = Path.Count - 1;
-                }
-                else CurrentNode = 0;
-            }
-            if (CurrentNode <= 0)
-            {
-                if (ARS.IsPointToPoint) CurrentNode = 0;
-                else CurrentNode = Path.Count - 1;
-            }
-
-
-            int selectedNode = CurrentNode - 2;
-            if (selectedNode < 0)
-            {
-                if (ARS.IsPointToPoint) selectedNode = 0;
-                else selectedNode = Path.Count - 1;
-            }
-
-            Vector3 selectedNodePos = Path[selectedNode];
-            int rtries = 0;
-
-
-            int point = CurrentNode - 2;
-            if (point < 0)
-            {
-                if (ARS.IsPointToPoint) point = 0;
-                else point = Path.Count - 1;
-            }
-            if (!FinishedPointToPoint)
-            {
-
-                //int min = (int)AutosportRacingSystem.Clamp(CurrentNode - 10, 0, Path.Count - 1);
-
-                //List<Vector3> localp = Path.GetRange(min,20);
-                //selectedNode = localp.IndexOf(localp.OrderBy(v => v.DistanceTo(Car.Position)).ToList()[0]);
-                //selectedNodePos = Path[selectedNode];
-
-                while (rtries < 20)
-                {
-                    point++;
-                    rtries++;
-
-
-                    if (point >= Path.Count - 1) if (FinishedPointToPoint) point = Path.Count - 5; else point = 0;
-
-                    if (Path[point].DistanceTo(carpos) < Path[selectedNode].DistanceTo(carpos))
-                    {
-                        selectedNode = point;
-                        selectedNodePos = Path[selectedNode];
-                    }
-                }
+                trackPoint = ARS.TrackPoints.First();
             }
             else
             {
-                selectedNode = Path.Count - 3;
-                selectedNodePos = Path[selectedNode];
-
+                trackPoint = ARS.TrackPoints.Where(p => p.Node >= cNode - 10 && p.Node <= cNode + 10).OrderBy(t => t.Position.DistanceTo(Car.Position)).First();
             }
+            if (trackPoint.Node + lookAhead >= ARS.TrackPoints.Count) followTrackPoint = ARS.TrackPoints[lookAhead];
+            else followTrackPoint = ARS.TrackPoints[trackPoint.Node + lookAhead];
 
-            if (selectedNodePos != Vector3.Zero)
-            {
-                CurrentNode = selectedNode;
-                ClosestPointInTrack = selectedNodePos;
-
-
-                if (FinishedPointToPoint)
-                {
-                    CurrentTrackDir = (Path[Path.Count - 1] - Path[Path.Count - 2]).Normalized;
-                    CurrentCornerDir = CurrentTrackDir;
-                    CurrentCornerAngle = 0f;
-                    DeviationFromTrackCenter = 0f;
-
-                    FollowTrackDir = (Path[Path.Count - 1] - Path[Path.Count - 2]).Normalized;
-                    FollowTrackCornerAngle = 0f;
-                }
-                else
-                {
-                    int fRnode = selectedNode + 1;
-                    if (fRnode > Path.Count - 1) fRnode = 0;
-                    CurrentTrackDir = (Path[fRnode] - Path[selectedNode]).Normalized;
-
-
-                    int ffRnode = selectedNode + 2;
-                    if (ffRnode > Path.Count - 1) ffRnode = ffRnode - (Path.Count - 1);
-                    CurrentCornerDir = ((Path[ffRnode] - Path[fRnode])).Normalized;//- CurrentTrackDir
-
-
-                    float d = ARS.LeftOrRight(carpos, Path[fRnode], (Path[fRnode] - Path[selectedNode]));
-                    float dev = carpos.DistanceTo(ClosestPointInTrack);
-
-
-
-                    float cangle = Vector3.SignedAngle(CurrentTrackDir.Normalized, CurrentCornerDir.Normalized, Vector3.WorldUp);
-                    CurrentCornerAngle = (float)Math.Round(cangle, 2);
-
-
-                    if (d > 0) dev *= -1;
-                    DeviationFromTrackCenter = dev;
-
-
-                    rtries = 0;
-
-                    int followNode = CurrentNode + followdist;
-                    if (followNode < 0) followNode = 0;
-                    if (followNode >= Path.Count - 3) followNode = 1;// followNode-(Path.Count-1);
-
-                    Vector3 fdir = Path[followNode];
-
-                    FollowTrackDir = (Path[followNode + 1] - fdir).Normalized;
-                    Vector3 fFollowTrackDir = (Path[followNode + 2] - Path[followNode + 1]).Normalized;
-
-                    FollowTrackCornerAngle = (float)Math.Round(Vector3.SignedAngle(FollowTrackDir.Normalized, fFollowTrackDir.Normalized, Vector3.WorldUp), 2);
-                    FollowNode = followNode;
-
-                }
-
-
-            }
-            if (ARS.WideDict.ContainsKey(CurrentNode))
-            {
-                maxOutofBounds = ARS.WideDict[CurrentNode];
-            }
-            else
-            {
-                for (int i = 0; i < Path.Count - 1; i++)
-                {
-                    if (ARS.WideDict.ContainsKey(i))
-                    {
-                        maxOutofBounds = ARS.WideDict[i];
-                        //  break;
-                    }
-                }
-            }
+            mem.data.DeviationFromCenter = ARS.LeftOrRight(Car.Position, trackPoint.Position, trackPoint.Direction);
         }
         public void AddDebugText(string s)
         {
@@ -1589,92 +1752,129 @@ namespace NewRacingSystem
             if (!DebugText.Contains(s)) DebugText.Add(s);
         }
 
+
         public void ProcessAI() //100ms
         {
-            if (RacingLineDeviation != 0.0f) RacingLineTreshold += 0.1f; else RacingLineTreshold = 0f;
-            if (RacingLineTreshold > 1.0f) RacingLineTreshold = 1.0f;
-            if (RacingLineTreshold < 0.0f) RacingLineTreshold = 0.0f;
 
-            if (BaseBehavior == RacerBaseBehavior.GridWait && HandbrakeTime < Game.GameTime) HandbrakeTime = Game.GameTime + (100 * ARS.GetRandomInt(2, 6));
-
-
-
-            if (Math.Abs(DeviationFromTrackCenter) > maxOutofBounds && !ControlledByPlayer && BaseBehavior == RacerBaseBehavior.Race)
+            if (Car.Model.IsCar && !Driver.IsPlayer)
             {
-
-                if (1 == 1)//BaseBehavior == RacerBaseBehavior.Race
+                if (referenceVehs.Any() && Car.IsInRangeOf(referenceVehs.First().Car.Position, 5f))
                 {
+                    if (Driver.IsInVehicle(Car) && Car.IsSeatFree(VehicleSeat.RightFront))
+                    {
+                        Driver.Alpha = 0;
+                        Driver.SetIntoVehicle(Car, VehicleSeat.RightFront);
+                    }
+                }
+                else
+                {
+                    if (Driver.IsInVehicle(Car) && Car.IsSeatFree(VehicleSeat.Driver))
+                    {
+                        Driver.Alpha = 255;
+                        Driver.SetIntoVehicle(Car, VehicleSeat.Driver);
+
+                        Driver.CanWearHelmet = true;
+                        Driver.GiveHelmet(true, HelmetType.RegularMotorcycleHelmet, 0);
+                        Driver.RemoveHelmet(true);
+                    }
+                }
+            }
+            if (HalfSecondCheck < Game.GameTime)
+            {
+                HalfSecondCheck = Game.GameTime + 500 + (Pos * 10);
+
+                //Decision handling
+                if (Decisions.Any(de => de.Value < Game.GameTime)) Decisions.Remove(Decisions.First(de => de.Value < Game.GameTime).Key);
+                if (BannedDecisions.Any(de => de.Value < Game.GameTime)) BannedDecisions.Remove(BannedDecisions.First(de => de.Value < Game.GameTime).Key);
+
+                //Mistake handling
+                if (Mistakes.Any(de => de.Value < Game.GameTime)) Mistakes.Remove(Mistakes.First(de => de.Value < Game.GameTime).Key);
+                if (MistakesCooldown.Any(de => de.Value < Game.GameTime)) MistakesCooldown.Remove(MistakesCooldown.First(de => de.Value < Game.GameTime).Key);
+
+                if (ARS.DevSettingsFile.GetValue<bool>("RACERS", "AllowManeuvers", false) && !BannedDecisions.ContainsKey(Decision.NoOvertake) && KnownCorners.Any() && referenceVehs.Any() && referenceVehs.Where(r => r.Car.IsInRangeOf(Car.Position, 30f) && r.Car.Velocity.Length() < Car.Velocity.Length() + ARS.MPHtoMS(10f)).Count() >= 3)
+                {
+                    MakeDecision(Decision.NoOvertake, 100 - (int)(mem.intention.AggroToReach * 100), 5000, 3000, 5000);
+                }
+
+
+
+
+                if (Math.Abs(mem.data.DeviationFromCenter) > trackPoint.TrackWide && !ControlledByPlayer && BaseBehavior == RacerBaseBehavior.Race)
+                {
+
                     if (OutOfTrack == 0) OutOfTrack = Game.GameTime;
                     else if (Game.GameTime - OutOfTrack > 13000)
                     {
                         OutOfTrack = 0;
-                        Car.Position = Path[CurrentNode];
-
-                        Car.Heading = CurrentTrackDir.ToHeading();
-                        StuckScore = 0;
-                        StuckRecover = false;
-                        LastStuckPlace = Vector3.Zero;
-                        Car.Speed = 20f;
+                        ResetIntoTrack();
                     }
+
                 }
-            }
-            else
-            {
-                if (OutOfTrack != 0) OutOfTrack = 0;
+                else
+                {
+                    if (OutOfTrack != 0) OutOfTrack = 0;
+                }
+
+                if (!Driver.IsPlayer) if (referenceVehs.Count > 0) Driver.Task.LookAt(referenceVehs[0].Driver, 2000); else if (Car.Velocity.Length() > 5f) Driver.Task.LookAt(Car.Position + Car.Velocity, 2000);
+
+
+                //Rocket boost
+                if (!KnownCorners.Any())
+                {
+                    if (BaseBehavior == RacerBaseBehavior.Race && Vector3.Angle(Car.ForwardVector, trackPoint.Direction) < 5f && Math.Abs(FollowTrackCornerAngle) < 0.5f && Math.Abs(SideSlide) < 0.1f && Math.Abs(CurrentStr) < 0.2f) Function.Call((Hash)0x81E1552E35DC3839, Car, true);
+
+                }
+                if (Function.Call<bool>((Hash)0x3D34E80EED4AE3BE, Car) && vControl.Brake > 0.1f) Function.Call((Hash)0x81E1552E35DC3839, Car, false);
+
             }
 
 
-            if (mphStopInTenMeters < 2f) mphStopInTenMeters = 2f;
-            if (mphStopInTenMeters > 5f) mphStopInTenMeters = 5f;
+            //Data dathering
+            BoundingBox = ARS.GetDirectionalBoundingBox(Car);
+
+            mem.intention.RivalSideDist = mem.personality.Rivals.SideToSideMinDist; // ARS.map(referenceVehs.Count, 1, 4, 0.5f, 2f, true);
+            mem.intention.RivalBehindDist = mem.personality.Rivals.BehindRivalMinDistance; // = ARS.map(referenceVehs.Count, 1, 4, 0.25f, 3f, true);            
+
+            mem.intention.Aggression = ARS.Clamp(mem.intention.Aggression, 0, 1f);
+            SlideAngle = Vector3.SignedAngle(Car.Velocity.Normalized, Car.ForwardVector, Car.UpVector);
+
+            if (BaseBehavior == RacerBaseBehavior.GridWait && HandbrakeTime < Game.GameTime) HandbrakeTime = Game.GameTime + (100 * ARS.GetRandomInt(2, 6));
+
             if (ARS.SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "Ghosts", false))
             {
-
                 Car.Alpha = 255;
                 foreach (Racer r in referenceVehs)
                 {
-                    Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, Car, r.Car, false);
-                    if (Function.Call<bool>(Hash.IS_ENTITY_AT_ENTITY, Car, r.Car, r.Car.Model.GetDimensions().X, r.Car.Model.GetDimensions().Y, r.Car.Model.GetDimensions().Z, true, true, true)) Car.Alpha = 150;
-
+                    if (Function.Call<bool>(Hash.IS_ENTITY_AT_ENTITY, Car, r.Car, (r.Car.Model.GetDimensions().X * 2) + 0.2f, (r.Car.Model.GetDimensions().Y * 2) + 0.2f, (r.Car.Model.GetDimensions().Z * 2) + 0.2f, true, true, true))
+                    {
+                        Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, Car, r.Car, false);
+                        Car.Alpha = 150;
+                    }
                 }
-
             }
 
 
-            VehicleInteractions();
-            if(!Driver.IsPlayer) if (referenceVehs.Count > 0) Driver.Task.LookAt(referenceVehs[0].Driver, 2000); else if (Car.Velocity.Length() > 5f) Driver.Task.LookAt(Car.Position + Car.Velocity, 2000);
-
-            if (WorstCorners.Count == 0)
-            {
-                if (BaseBehavior == RacerBaseBehavior.Race && Vector3.Angle(Car.ForwardVector, CurrentCornerDir) < 5f && Math.Abs(FollowTrackCornerAngle) < 0.5f && Math.Abs(SideSlide) < 0.1f && Math.Abs(CurrentStr) < 0.2f) Function.Call((Hash)0x81E1552E35DC3839, Car, true);
-
-            }
-
-            if (Function.Call<bool>((Hash)0x3D34E80EED4AE3BE, Car) && (CurrentThrottle < 0.5f || CurrentBrake > 0.1f || WorstCorners.Count != 0)) Function.Call((Hash)0x81E1552E35DC3839, Car, false);
-            if (!WorstCornerFound())
-            {
-                IdealBrakeDist = 150f;
-            }
-
-
-
-            //Mid-Corner Traction Curve calcs
-
-            if (Car.Velocity.Length() > 10f)
-            {
-                HandleOvershoot();
-            }
 
 
 
             //Slow checks
             if (OneSecondGameTime < Game.GameTime)
             {
-                if (tempSPDip > 0) tempSPDip -= 1;
-
                 OneSecondGameTime = Game.GameTime + (1000 + (ARS.GetRandomInt(-10, 10) * 10));
 
                 if (!ControlledByPlayer)
                 {
+                    //Cheats
+                    CatchUpTorqueMult = 1.0f;
+                    if (ARS.SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "Catchup", false))
+                    {
+                        if (Pos == 1 && ARS.Racers.Count > 1)
+                        {
+                            CatchUpTorqueMult = ARS.map(ARS.Racers[1].Car.Position.DistanceTo(Car.Position), 100f, 50f, 0.5f, 1f, true);
+                        }
+                        if (Math.Abs(mem.data.SpeedVector.X) < 0.1f && ARS.GetPercent(Pos, ARS.Racers.Count) >= 75 && !referenceVehs.Any()) CatchUpTorqueMult = 2f;
+
+                    }
 
                     if (!Driver.IsSittingInVehicle(Car) && Car.IsStopped && Driver.IsStopped)
                     {
@@ -1690,22 +1890,21 @@ namespace NewRacingSystem
 
                             return;
                         }
-
-
-
                     }
+                    ARS.WorstCornerAhead(this);
+
                 }
 
                 if (ARS.AIRacerAutofix == 2 && Function.Call<bool>(Hash._IS_VEHICLE_DAMAGED, Car))
                 {
-                    if(ARS.DebugLevel>0) UI.Notify("~b~"+Name + " auto repaired");
+                    if (ARS.DebugLevel > 0) UI.Notify("~b~" + Name + " auto repaired");
                     Car.Repair();
                 }
 
                 //Stuck
                 if (BaseBehavior == RacerBaseBehavior.Race && Driver.IsSittingInVehicle(Car))
                 {
-                    if (Car.Velocity.Length() < 1f && CurrentThrottle != 0.0f && CurrentBrake == 0 && !CurrentHandBrake) StuckScore++; else StuckScore--;
+                    if (Car.Velocity.Length() < 1f && vControl.Throttle != 0.0f && vControl.Brake == 0 && !CurrentHandBrake) StuckScore++; else StuckScore--;
                     StuckScore = (int)ARS.Clamp(StuckScore, 0, 10);
 
                     if (StuckScore >= 2)
@@ -1715,10 +1914,9 @@ namespace NewRacingSystem
                         {
                             if (Driver.IsSittingInVehicle(Car) && Car.EngineHealth > 100)
                             {
-                                Car.Rotation = Vector3.WorldUp;
-                                Car.Position = Path[CurrentNode];
-                                Car.Heading = CurrentCornerDir.ToHeading();
-                                Car.Speed = 20f;
+                                StuckScore = 0;
+                                ResetIntoTrack();
+                                StuckRecover = false;
                             }
                         }
                         if (!StuckRecover && !Car.Model.IsBike)
@@ -1728,7 +1926,7 @@ namespace NewRacingSystem
                             StuckRecover = true;
                         }
                     }
-                    if (StuckRecover && !Car.IsInRangeOf(LastStuckPlace, 5f))
+                    if (StuckRecover && (!Car.IsInRangeOf(LastStuckPlace, 5f) || mem.data.SpeedVector.Y > 3f))
                     {
                         StuckRecover = false;
                         StuckScore = 0;
@@ -1738,171 +1936,83 @@ namespace NewRacingSystem
             }
 
 
-            if (ManeuverTimeRef < Game.GameTime)
+
+
+
+            AngleToTrack = Vector3.SignedAngle(Car.ForwardVector, trackPoint.Direction, Vector3.WorldUp);
+
+            if (BaseBehavior == RacerBaseBehavior.Race && ARS.GetPercent(trackPoint.Node, ARS.TrackPoints.Count) > 50 && !CanRegisterNewLap) CanRegisterNewLap = true;
+            if (CanRegisterNewLap)
             {
-                ManeuverTimeRef = Game.GameTime + 500;// (500 + (ScriptTest.GetRandomInt(-20, 20) * 10))
 
-                
-                ARS.WorstCornerAhead(this, Path, CurrentNode, CurrentCornerAngle,150);
-                if (WorstCorners.Count > 0)
+                if (ARS.GetPercent(trackPoint.Node, ARS.TrackPoints.Count) < 10 || (ARS.IsPointToPoint && ARS.GetPercent(trackPoint.Node, ARS.TrackPoints.Count) > 90 && ARS.ConvertToLocalOffset(Car, ARS.TrackPoints.Last().Position).Y < 0f))
                 {
-                  //  WorstCorners = WorstCorners.OrderBy(v => Math.Abs(v[3])).ToList();
-
-                    int index = WorstCorners.IndexOf(WorstCorners.OrderBy(v => MapIdealSpeedForDistance(v[3] - CurrentNode + cornerdip, v[5])).ToList()[0]);
-
-                    //AutosportRacingSystem.Log(AutosportRacingSystem.LogImportance.Info, "[Corners] Index: " + index);
-
-
-                   if(WorstCorners.Count>1) WorstCorners.RemoveRange(0, index);
-                    //if(WorstCorners.Count-1<index) WorstCorners.RemoveRange(index,WorstCorners.Count-2);
-                    while (WorstCorners.Count > index + 10) WorstCorners.RemoveAt(WorstCorners.Count - 1);
-
-
-                }
-
-                //WorstCorners = WorstCorners.OrderBy(v => MapIdealSpeedForDistance(v[3]-CurrentNode,v[5])).ToList();
-
-                //float worst = MapIdealSpeedForDistance(WorstCorners[0][3] - CurrentNode, WorstCorners[0][5]);
-
-                /*
-                float spd = IdealSpeed;
-                
-                int lasti = 0;
-                for (int i = 0; i < WorstCorners.Count; i++)
-                {
-                    if (i >= WorstCorners.Count) break;
-                    float d = (float) Math.Round(Car.Position.DistanceTo(WorstCorners[i][1]), 1);
-                    float newSpd = MapIdealSpeedForDistance(d, AutosportRacingSystem.GetSpeedForAngle(WorstCorners[i][0], Confidence));//WorstCorners[i][3]-CurrentNode
-                    if (newSpd < spd && i > 0)
+                    CanRegisterNewLap = false;
+                    Lap++;
+                    if (Lap > ARS.SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5))
                     {
-                        WorstCorners.RemoveAt(lasti);
-                        AutosportRacingSystem.Log(AutosportRacingSystem.LogImportance.Info, "Pruned corner ("+i+" " + newSpd + " < "+ lasti+" "+ spd + ") "+ d.ToString());
+                        if (Car.CurrentBlip != null) Car.CurrentBlip.Color = BlipColor.Green;
                     }
-                    spd = newSpd;
-                    lasti = i;
+
+                    if (Lap > 1)
+                    {
+                        TimeSpan lapTime = ARS.ParseToTimeSpan(Game.GameTime - LapStartTime);
+                        if (Driver.IsPlayer) UI.Notify("Laptime: ~b~" + lapTime.ToString("m':'ss'.'fff"));
+                        LapTimes.Add(lapTime);
+                        LapStartTime = Game.GameTime;
+                    }
                 }
-                */
+            }
 
+            oldNode = trackPoint.Node;
 
-
-                //if(WorstCorners.Count>10)  WorstCorners.RemoveRange(1, WorstCorners.Count - 10);
-                //   for (int i = 0; i < 10; i++) if (WorstCorners.Count > 1 && WorstCorners[0][0] < WorstCorners[1][0]) WorstCorners.RemoveAt(0);
-
+            HandleGrip();
 
 
 
 
-                //WorstCorners = WorstCorners.OrderBy(v => Math.Abs(v[0])).Reverse().ToList();
-                //  WorstCorners = WorstCorners.OrderBy(v => Math.Abs(v[3])).ToList();
+            if (!ControlledByPlayer)
+            {
+                mem.intention.Maneuvers.Clear();
+                VehicleInteractions();
 
+
+
+                if (ARS.RaceStatus == RaceState.InProgress) HandleOvershoot();
+
+                SpeedLogic();
+                SteerLogic();
+
+                ApplyThrottle();
+                ApplySteer();
+                TractionControl();
 
             }
 
 
-            if (SteerControlTime < Game.GameTime)
-            {
-                SteerControlTime = Game.GameTime + 100;
-                oldNode = CurrentNode;
 
-                CurrentSteering = ARS.GetTrueSteer(Car); // Car.SteeringAngle;
-
-                GetTrackInfo();
-                if (BaseBehavior == RacerBaseBehavior.Race && CurrentNode > 20 && !CanRegisterNewLap) CanRegisterNewLap = true;
-
-                if (FinishedPointToPoint)
-                {
-                    if (BaseBehavior == RacerBaseBehavior.Race)
-                    {
-
-                        LapTimes.Add(Game.GameTime);
-                        Lap = 900;
-                        CanRegisterNewLap = false;
-
-                    }
-                }
-                else
-                {
-
-                    if (oldNode != CurrentNode && CurrentNode < oldNode - 100 || (CurrentNode >= Path.Count - 6 && ARS.IsPointToPoint))
-                    {
-                        CanRegisterNewLap = false;
-                        Lap++;
-                        if (Lap > ARS.SettingsFile.GetValue("GENERAL_SETTINGS","Laps", 5))
-                        {
-                            if (Car.CurrentBlip != null) Car.CurrentBlip.Color = BlipColor.Green;
-
-                        }
-
-                        if (Lap > 1) LapTimes.Add(Game.GameTime);
-
-                    }
-                }
-
-
-                if (!ControlledByPlayer)
-                {
-                    Steer();
-                    ApplySteer();
-                }
-
-            }
-
-
-            if (SpeedControlTimer < Game.GameTime)
-            {
-                SpeedControlTimer = Game.GameTime + 200;
-                HandleGrip();
-                //  UI.ShowSubtitle(mphStopInTenMeters.ToString());
-
-                if (!WorstCornerFound()) littlebrakescore = 0;
-                //   spdDiff = IdealSpeed - Car.Velocity.Length();
-
-                if (ARS.IsStable(Car, 0.2f, 50f) && BrakeAdjustCooldown < Game.GameTime && WorstCornerFound())// && CManeuverDirection.Y==0.0f && CurrentThrottle<0.75f&& Math.Abs(CurrentCornerAngle) <1
-                {
-                    if (spdDiff < -20)
-                    {
-                        if (littlebrakescore > 0) littlebrakescore--;
-                    }
-                    else if (spdDiff > -5 && spdDiff < 5)
-                    {
-                        littlebrakescore++;
-                    }
-
-
-
-
-
-
-                }
-
-
-
-                if (!ControlledByPlayer)
-                {
-
-                    switch (BaseBehavior)
-                    {
-                        default:
-                            {
-                                Speed();
-                                ApplyThrottle();
-                                HandleWheelIssues();
-                                break;
-                            }
-
-
-                    }
-                }
-
-
-
-
-            }
         }
+        int BrakeSafetyAdjustCooldown = 0;
+        void ResetIntoTrack()
+        {
+            vControl.SteerAngle = 0f;
+            mem.data.SteerAngle = 0f;
+
+            Car.Position = ARS.Path[trackPoint.Node];
+
+            Car.Heading = trackPoint.Direction.ToHeading();
+
+            StuckRecover = false;
+            LastStuckPlace = Vector3.Zero;
+            Car.Speed = 20f;
+
+        }
+
         string handlingFlags = "";
         string modelFlags = "";
-      public  float downf = 0f;
-      public  float trcurveLat = 0f;
+
+        public float downf = 0f;
+        public float TRCurveLateral = 0f;
         void HandleGrip()
         {
 
@@ -1924,9 +2034,9 @@ namespace NewRacingSystem
 
             SurfaceGrip = (float)Math.Round(avg, 1);
 
-            HandlingGrip = (float)Math.Round(ARS.GetTRCurveMax(Car), 1);
+            HandlingGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);//Car grip
             HandlingGrip = ARS.Clamp(HandlingGrip, 0.4f, 3f);
-            
+
             int nWheels = ARS.GetNumWheels(Car);
             float penalization = 0f;
             for (int i = -1; i < 6; i++)
@@ -1935,129 +2045,110 @@ namespace NewRacingSystem
                 if (Function.Call<bool>(Hash.IS_VEHICLE_TYRE_BURST, Car, i, true))
                 {
 
-                    float penalizationPercent = (float)Math.Round((1f / (float)nWheels) * 100, 2);
+                    float penalizationPercent = (float)Math.Round((1f / (float)nWheels) * 50, 2);
                     penalization += ((float)HandlingGrip / (float)100) * penalizationPercent;
 
                 }
             }
             HandlingGrip -= penalization;
-            if(HandlingGrip<0.1f) HandlingGrip=0.1f;
+            if (HandlingGrip < 0.1f) HandlingGrip = 0.1f;
 
 
             HandlingGrip *= (SurfaceGrip * wetavg);
 
 
-
-            Confidence = 1f;
-            Confidence = ARS.map(HandlingGrip, 0.2f, 3f, 0.2f, 3f);
+            Confidence = HandlingGrip;
             Confidence = ARS.Clamp(Confidence, 0.2f, 3f);
-            //Confidence += (Car.Velocity.Length() * 0.02f) * downf;// AutosportRacingSystem.map(Car.Velocity.Length(), 30f, 100f, 0, (0.2f * downf), true);
 
-            if (Pos < 0 && !ARS.MultiplierInTerrain.ContainsKey(CurrentNode))
+
+            if (Pos < 2 && !ARS.MultiplierInTerrain.ContainsKey(trackPoint.Node))
             {
-                ARS.MultiplierInTerrain.Add(CurrentNode, SurfaceGrip);
+                ARS.MultiplierInTerrain.Add(trackPoint.Node, SurfaceGrip);
             }
-
-
-
         }
 
 
-        float cThreshold = 0f;
-        float cToCorner = 0f;
+        float maxCarToTrackpointAngle = 0f;
+        float CarToCornerAngle = 0f;
+        float IdealRelativeAngleExceed = 0f;
+
+        float UndersteerPenalty = 0f;
         void HandleOvershoot()
         {
-            cThreshold = 0f;
-            Vector3 c = CurrentCornerDir;
-            c.Z = 0f;
-            Vector3 f = FollowTrackDir;
-            f.Z = 0f;
-            float angle = Vector3.SignedAngle(c, f, Vector3.WorldUp);
+            //if (ARS.MStoMPH(Car.Velocity.Length()) < 30) return;
 
-            float CarToCornerAngle = Vector3.SignedAngle(Car.Velocity.Normalized, CurrentCornerDir, Vector3.WorldUp);
-            float CarHeadingToCornerAngle = Vector3.SignedAngle(Car.ForwardVector, CurrentCornerDir, Vector3.WorldUp);
+            Vector3 currentTrackDir = trackPoint.Direction;
+            currentTrackDir.Z = 0f;
+            Vector3 followTrackDir = followTrackPoint.Direction;
+            followTrackDir.Z = 0f;
 
-            cToCorner = Math.Abs(CarToCornerAngle) * (angle < 0.0f ? 1 : -1); ;
-            //Help AI not throttle too much if they would overshoot in a straight
-            if (1==1)
+            Vector3 carDir = Car.Velocity.Normalized;
+            carDir.Z = 0f;
+
+            float angle = Vector3.SignedAngle(currentTrackDir, followTrackDir, Vector3.WorldUp);
+
+            CarToCornerAngle = Vector3.SignedAngle(carDir, currentTrackDir, Vector3.WorldUp);
+            //CarToCornerAngle *= (angle < 0.0f ? 1 : -1);
+
+            float man = ARS.AIData.SpeedToInput;
+
+            float CornerAngle = ARS.CornerPoints[trackPoint.Node].Angle;
+            if (Math.Abs(CornerAngle) > 0f && CarToCornerAngle > 0f == CornerAngle > 0f)
             {
-                float outOfBounds = maxOutofBounds;
-                if (angle < 0.0f) outOfBounds = -outOfBounds;
-                //if (CarToCornerAngle > 0) outOfBounds = -outOfBounds;
-                float myDeviation = (float)Math.Round(DeviationFromTrackCenter,1);
-                //myDeviation += AutosportRacingSystem.map(Math.Abs(CurrentCornerAngle), 0f, 1f, -1f, 1f);//Stricter if in a corner
 
-                //float outTrack = myDeviation + outOfBounds;
-                int Safety = (int)ARS.map(myDeviation + outOfBounds, 0f, outOfBounds *2, 0f, 100f, false);
+                float maxRAngle = 5f;//ARS.map(Math.Abs(CornerAngle), 10f, 1f, 20f, 20f, true);
 
-                float threshold = (float)Math.Round(ARS.map(Safety, 35, 100, 0, 20, true));
-                cThreshold = threshold * (angle < 0.0f ? 1 : -1);
-                // AutosportRacingSystem.DisplayHelpText(Safety+"% Safe~n~Max"+threshold+"º");
+                maxCarToTrackpointAngle = (float)Math.Round(ARS.map(DistToOutside(), 3f, 10f, 0f, maxRAngle, true)) * (angle < 0.0f ? 1 : -1);
 
-                if (Safety < 0.0f)
+
+                IdealRelativeAngleExceed = (float)Math.Round(Math.Abs(CarToCornerAngle) - Math.Abs(maxCarToTrackpointAngle), 1); //How many degress over the limit
+                //float TRCurveOvershoot = Math.Abs(followTrackPoint.Angle) - Math.Abs(TRCurveAngle); //Positive: our TR curve is more open than the corner
+                float TRCurveOvershoot = Math.Abs(ARS.CornerPoints[followTrackPoint.Node].Angle / 10) - Math.Abs(TRCurveAngle); //Positive: our TR curve is more open than the corner
+
+                //If our TRCurve is better than the corner, have confidence and don't brake as much
+                float minInput = ARS.map(TRCurveOvershoot, 2, -2, -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput, true);
+
+                //Never brake below 10mph less than the original corner speed
+                float minSpd = BrakeCornerSpeed - ARS.MPHtoMS(10);
+
+                man = ARS.map(IdealRelativeAngleExceed, 5, -5f, minInput, ARS.AIData.SpeedToInput, true);
+
+
+                if (Car.Velocity.Length() + man < minSpd)
                 {
-                    float expectedSpeed = ARS.GetSpeedForAngle(Math.Abs(CurrentCornerAngle), Confidence);
-                    expectedSpeed += ARS.map(Safety, -10, 0, -24, 0, true);
-                    float m =   Car.Velocity.Length()+ expectedSpeed;
-                    ManeuverThrottle(m);
+                    minInput = ARS.map((Car.Velocity.Length() + man) - minSpd, 0, -10, -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput, true);
+                    man = ARS.map(IdealRelativeAngleExceed, 5, -5f, minInput, ARS.AIData.SpeedToInput, true);
 
                 }
 
-                if (CarToCornerAngle > 0 == CurrentCornerAngle > 0 && Math.Abs(CurrentCornerAngle)>0.5) //Math.Abs(TRCurveAngle) < Math.Abs(CurrentCornerAngle) * 2f &&
+
+                if (man != ARS.AIData.SpeedToInput)
                 {
-
-                  
-
-                    float input = (float)Math.Round(ARS.map(Math.Abs(CarToCornerAngle), threshold, threshold + 10f, 1f, -1f), 1);//maxOutAng
-
-                    input = ARS.Clamp(input, -1f, 1f);
-
-
-                    float maneuver = ARS.SpeedToInput * input;
-                    float nextspeed = Car.Velocity.Length()  +maneuver;
-
-                    if (maneuver < ARS.SpeedToInput)
-                    {
-                        float minspeed = ARS.GetSpeedForAngle(Math.Abs(CurrentCornerAngle), Confidence) +ARS.map(Safety, -10, 10, -24, 0, true);// IdealSpeed - 5f;
-                       // AutosportRacingSystem.DisplayHelpText(minspeed.ToString());
-                     //   if (minspeed > Car.Velocity.Length()) minspeed = AutosportRacingSystem.map(myDeviation, maxOutofBounds, maxOutofBounds + 4, 25f, 5f);
-                      //  if (minspeed < 5f) minspeed = 5f;
-
-                        if (nextspeed < minspeed) maneuver = minspeed - Car.Velocity.Length();
-                        ManeuverThrottle(maneuver);
-                    //    if (Pos == 1) AutosportRacingSystem.DisplayHelpTextTimed("Current: " + Math.Round(Math.Abs(CarToCornerAngle), 1) + "º~n~Treshold:" + treshold + "º~n~Input " + input, 500);
-
-                    }
-
+                    mem.intention.Maneuvers.Add(new Vector2(0, man));
 
                 }
-                
+                //string debug = "Overshoot: " + Math.Round(TRCurveOvershoot, 3)+"~n~Angle exceed:" + Math.Round(IdealRelativeAngleExceed, 3) ;
+                //UI.ShowSubtitle(debug.ToString(), 500);
+
+                if (Math.Abs(vControl.SteerAngle) >= maxStrTRCurve) UndersteerPenalty -= 1f; else UndersteerPenalty = ARS.AIData.SpeedToInput;
                 /*
-                else 
-                
-                if (CurrentThrottle > 0.0f)
+                if (UndersteerPenalty < ARS.AIData.SpeedToInput)
                 {
-                    float max = CarToCornerAngle / 2;
-                    if (max > 4) max = 4;
+                    if (TRCurveOvershoot < 0f) UndersteerPenalty = ARS.Clamp(UndersteerPenalty, 0f, ARS.AIData.SpeedToInput);
+                    else UndersteerPenalty = ARS.Clamp(UndersteerPenalty, -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput);
 
-                    if (CurrentCornerAngle > 0) max = -max;
+                    mem.intention.Maneuvers.Add(new Vector2(0, UndersteerPenalty));
                 }
                 */
-
             }
-
-            //if (CurrentCornerAngle < 0f) CarHeadingToCornerAngle = -CarHeadingToCornerAngle;
-
-
         }
-        public float mphStopInTenMeters =2.5f;
-        public float IdealBrakeDist = 150f; //default, changes on the function below
 
 
         public List<Vehicle> Traffic = new List<Vehicle>();
         public void GetReferenceVehicle()
         {
-            if(ARS.DevSettingsFile.GetValue<bool>("TRACK", "Traffic", false)) {
+            if (ARS.DevSettingsFile.GetValue<bool>("TRACK", "Traffic", false))
+            {
                 Traffic.Clear();
                 Traffic = ARS.GlobalTraffic.Where(s => s.Position.DistanceTo(Car.Position) < 100f
                 && (ARS.GetOffset(Car, s).Y > 0f)
@@ -2065,40 +2156,45 @@ namespace NewRacingSystem
                 && Math.Abs(ARS.GetOffset(Car, s).Z) < 5f).ToList();
                 Traffic.OrderBy(v => v.Position.DistanceTo(Car.Position));
                 if (Traffic.Count > 4) Traffic.RemoveRange(3, Traffic.Count - 4);
-
             }
 
-            //List<Vehicle> racers= AutosportRacingSystem.Racers.Where(s => s.Car)).Tolist()
-            /*
-            RaycastResult cast = World.RaycastCapsule(Car.Position, CurrentTrackDir, 100f, (modelw*2f)+4f, (IntersectOptions)2+4+8, Car);//(Car.Velocity.Normalized)
-            if (cast.DitHitEntity && cast.HitEntity.Model.IsVehicle)
-            {
-                bool isTr = true;
-                foreach (Racer r in AutosportRacingSystem.Racers) if(r.Car == cast.HitEntity as Vehicle) { isTr = false; break; }
-                if (isTr)
-                {
 
-                    UI.Notify("Added traffic");
-                    Traffic.Add(cast.HitEntity as Vehicle);
-                }
-            }*/
-
+            mem.intention.AggroToReach = 0f;
             Vector3 refpoint = Car.Position + (Car.Velocity.Normalized * 2f);
             referenceVehs.Clear();
             List<Racer> Candidates = new List<Racer>();
-            foreach (Racer r in ARS.Racers)
+            foreach (Racer r in ARS.Racers as IEnumerable<Racer>)
             {
-                if (r.Car.Handle != Car.Handle && r.Car.Position.DistanceTo(refpoint) < 200f)
+
+                if (r.Car.Handle != Car.Handle && r.Car.Position.DistanceTo(refpoint) < 120f)
                 {
                     float dist = r.Car.Position.DistanceTo(Car.Position);
+
+                    //Aggro
+                    if (r.Pos < Pos && dist < 100f)
+                    {
+                        float aggro = 0f;
+                        if (dist > 50f) aggro = ARS.map(dist, 100f, 50f, 0f, mem.personality.Rivals.AggressionCap * 0.75f, true);
+                        else aggro = ARS.map(dist, 50f, 20f, mem.personality.Rivals.AggressionCap * 0.75f, mem.personality.Rivals.AggressionCap, true);
+
+                        if (aggro > mem.intention.AggroToReach) mem.intention.AggroToReach = aggro;
+                    }
+
+
+                    if (ARS.GetOffset(Car, r.Car).Y < -5f) continue;
                     if (dist > 10f)
                     {
-                        float spdDiff = r.Car.Velocity.Length() - Car.Velocity.Length(); //Positive=target is faster
-                        float maxDiff = (float)Math.Round(ARS.map(dist, 20f, 10f, 0.0f, 5.0f), 1);
+                        float spdDiff = Car.Velocity.Length() - r.Car.Velocity.Length(); //Positive=we are faster
+                        float maxDiff = (float)Math.Round(ARS.map(dist, 30f, 10f, 0.0f, 10.0f), 1);
+                        float sToHit = (float)Math.Round(dist / spdDiff, 2);
+                        if (float.IsNaN(sToHit) || float.IsInfinity(sToHit)) sToHit = 10f;
 
-                        
-                        if (ARS.GetOffset(Car, r.Car).Y > 0f  && spdDiff > maxDiff) continue;
-                        if (ARS.GetOffset(Car, r.Car).Y < 0f && spdDiff < -maxDiff) continue;
+                        if (ARS.GetOffset(Car, r.Car).Y < 0f) continue; //If he's behind, we do not care
+                        if (ARS.GetOffset(Car, r.Car).Y > 0f)//If he is ahead
+                        {
+                            if (spdDiff < 0f && spdDiff < -maxDiff) continue;
+                            if (spdDiff > 0f && sToHit > 5f) continue;
+                        }
                     }
                     Candidates.Add(r);
                 }
@@ -2108,6 +2204,21 @@ namespace NewRacingSystem
             int max = 3;
             while (Candidates.Count > max) Candidates.RemoveAt(Candidates.Count - 1);
             referenceVehs = Candidates;
+
+
+            //if (Aggro) mem.personality.data.Aggression += mem.personality.Rivals.AggressionBuildup; else mem.personality.data.Aggression -= mem.personality.Rivals.AggressionBuildup;
+
+            /*
+            if (Candidates.Where(c=>c.Car.IsInRangeOf(Car.Position, 15f)).Count() >= 4) mem.intention.Aggression = 0f;
+            else
+            {
+                if (ARS.DevSettingsFile.GetValue<bool>("RACERS", "UsePersonalities", false))
+                {
+                    if (mem.intention.Aggression<mem.personality.Rivals.AggressionCap && mem.intention.Aggression < AggroToReach) mem.intention.Aggression += mem.personality.Rivals.AggressionBuildup;
+                    if (mem.intention.Aggression > AggroToReach) mem.intention.Aggression -= mem.personality.Rivals.AggressionBuildup;
+                }
+            }
+            */
         }
 
 
