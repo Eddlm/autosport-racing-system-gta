@@ -242,6 +242,7 @@ namespace ARS
             Script.Yield();
             FillKnownTracks();
             ReFilterKnownTracks(TrackFilter);
+            FillCachedCandidates(DisciplineFilter, intendedOpponents);
 
             PersonalitySet p;
 

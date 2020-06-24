@@ -348,7 +348,7 @@ namespace ARS
                             float Wide = followTrackPoint.TrackWide - BoundingBox - 2f;
                             float Outside = (Wide * (KnownCorners.First().Angle > 0 ? -1 : 1))*-1;
                             float lane = 0f;
-                            float maxSteer = ARS.map(Math.Abs(cornerPoint.Angle), 3f, 1f, 0f, 5f, true) * ARS.map(ARS.MStoMPH(Car.Velocity.Length() - BrakeCornerSpeed), 0, ARS.AIData.SpeedToInput * 2, 0, 1, true);
+                            float maxSteer = ARS.map(Math.Abs(cornerPoint.Angle), 2f, 0f, 0f, 2f, true) * ARS.map(ARS.MStoMPH(Car.Velocity.Length() - BrakeCornerSpeed), 0, ARS.AIData.SpeedToInput * 2, 0, 1, true);
 
                             if(Outside >0 != mem.data.DeviationFromCenter>0f && maxSteer>0.0f)
                             {
@@ -366,7 +366,7 @@ namespace ARS
                         float Wide = followTrackPoint.TrackWide - BoundingBox - 2f;
                         float Inside = Wide * (cornerPoint.Angle > 0 ? -1 : 1);
                         float lane = Inside;
-                        float maxSteer = ARS.map(Math.Abs(cornerPoint.Angle), 0f, 2f, 0f, 3f, true);
+                        float maxSteer = ARS.map(Math.Abs(cornerPoint.Angle), 0f, 1f, 0f, 3f, true);
                         lane = ARS.Clamp(lane, -Wide, Wide);
 
                         Vector2 maneuver = new Vector2(GetSteerToDeviation(lane, 0f, 3f, maxSteer), ARS.AIData.SpeedToInput);
@@ -417,7 +417,7 @@ namespace ARS
 
                 zRotSpeed = ARS.rad2deg(Function.Call<Vector3>(Hash.GET_ENTITY_ROTATION_VELOCITY, Car).Z);
 
-                if (Car.Velocity.Length() > 10f)
+                if (Car.Velocity.Length() > 3f)
                 {
                     //Slide                    
                     if (Math.Abs(SlideAngle) > 0.0f)
@@ -714,7 +714,7 @@ namespace ARS
                 BrakeCornerSpeed = GetBrakecornerSpeed(KnownCorners.First().Node, KnownCorners.First().Angle);
 
                 //Future point reference
-                int fNode = KnownCorners.First().Node + (int)(BrakeCornerSpeed * 0.25);
+                int fNode = KnownCorners.First().Node + (int)(BrakeCornerSpeed);
                 if (ARS.CornerPoints.Count() > fNode)
                 {
                     float p = ARS.GetPercent(Math.Abs(ARS.CornerPoints[fNode].Angle), Math.Abs(KnownCorners.First().Angle)); //Percentage of openness
@@ -901,7 +901,7 @@ namespace ARS
             //if (cornerAngle > 4f && ARS.CornerPoints[node].RelativeElevation < 0f) rElevationPenalty = (ARS.map(ARS.CornerPoints[node].RelativeElevation, -0, -3, 0, 3, true) * 0.25f) * (result * 0.5f);
 
 
-            if (cornerAngle > 1f && ARS.CornerPoints[node].RelativeElevation < 0f) rElevationPenalty = (ARS.map(ARS.CornerPoints[node].RelativeElevation, 4, -4f, -ARS.MPHtoMS(10), ARS.MPHtoMS(10), true));
+            if (cornerAngle > 1f && ARS.CornerPoints[node].RelativeElevation < 0f) rElevationPenalty = (ARS.map(ARS.CornerPoints[node].RelativeElevation, 10f, -10f, -ARS.MPHtoMS(10), ARS.MPHtoMS(10), true));
             float HillPenalty = 0f;// ARS.map(ARS.CornerPoints[node].Elevation, -2, -30, 0, ARS.MPHtoMS(20), true);
 
             rElevationPenalty = (float)Math.Round(rElevationPenalty, 4);
@@ -929,7 +929,7 @@ namespace ARS
 
 
             //Elevation
-            if (KnownCorners.Any() && KnownCorners.First().Elevation < 0f) result -= ARS.map(KnownCorners.First().Elevation, -45f, 0f, ARS.MPHtoMS(10f), 0, true);
+            if (KnownCorners.Any() && KnownCorners.First().Elevation < 0f) result -= ARS.map(KnownCorners.First().Elevation, 0f, -45f,0, ARS.MPHtoMS(10f), true);
 
             //Aggression
             mem.intention.RivalCornerBonusSpeed = ARS.map(mem.intention.Aggression, 0, 1, 0f, 3f, true);
@@ -1148,7 +1148,7 @@ namespace ARS
 
             //int inv = (int)ARS.map(ARS.MStoMPH(spds.Min()), 30, 100, 2, 10, true);
 
-            int inv = (int)ARS.map(ARS.MStoMPH(spds.Min()), 50, 100, 5, 30, true);
+            int inv = (int)ARS.map(ARS.MStoMPH(spds.Min()), 20, 100, 5, 20, true);
             inv += (int)ARS.map(mem.intention.Aggression, 0, 1, 0, 10, true);
             return inv;
         }
@@ -1724,7 +1724,7 @@ namespace ARS
         public TrackPoint followTrackPoint = new TrackPoint();
         public void GetTrackInfo(List<Vector3> Track)
         {
-            int lookAhead = (int)(ARS.map(ARS.MStoMPH(Car.Velocity.Length()), 30f, 130f, 5, 15, true) * ARS.map(Confidence, 2, 1, 1f, 1.25f, true));
+            int lookAhead = (int)(ARS.map(ARS.MStoMPH(Car.Velocity.Length()), 30f, 130f, 5, 15, true) * ARS.map(Confidence, 2, 1, 1f, 1.5f, true));
             if (Car.Model.IsBicycle || Car.Model.IsBike) lookAhead = 2;
 
             lookAhead += (int)Car.Model.GetDimensions().Y / 2;
@@ -2075,6 +2075,7 @@ namespace ARS
         float UndersteerPenalty = 0f;
         void HandleOvershoot()
         {
+            
             //if (ARS.MStoMPH(Car.Velocity.Length()) < 30) return;
 
             Vector3 currentTrackDir = trackPoint.Direction;
@@ -2091,7 +2092,7 @@ namespace ARS
             //CarToCornerAngle *= (angle < 0.0f ? 1 : -1);
 
             float man = ARS.AIData.SpeedToInput;
-
+            //float fSpd= GetBrakecornerSpeed(ARS.CornerPoints[trackPoint.Node], )
             float CornerAngle = ARS.CornerPoints[trackPoint.Node].Angle;
             if (Math.Abs(CornerAngle) > 0f && CarToCornerAngle > 0f == CornerAngle > 0f)
             {
@@ -2103,13 +2104,14 @@ namespace ARS
 
                 IdealRelativeAngleExceed = (float)Math.Round(Math.Abs(CarToCornerAngle) - Math.Abs(maxCarToTrackpointAngle), 1); //How many degress over the limit
                 //float TRCurveOvershoot = Math.Abs(followTrackPoint.Angle) - Math.Abs(TRCurveAngle); //Positive: our TR curve is more open than the corner
-                float TRCurveOvershoot = Math.Abs(ARS.CornerPoints[followTrackPoint.Node].Angle / 10) - Math.Abs(TRCurveAngle); //Positive: our TR curve is more open than the corner
+                float TRCurveOvershoot = Math.Abs(ARS.CornerPoints[trackPoint.Node].Angle / 10) - Math.Abs(TRCurveAngle); //Positive: our TR curve is more open than the corner
 
                 //If our TRCurve is better than the corner, have confidence and don't brake as much
                 float minInput = ARS.map(TRCurveOvershoot, 2, -2, -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput, true);
 
                 //Never brake below 10mph less than the original corner speed
                 float minSpd = BrakeCornerSpeed - ARS.MPHtoMS(10);
+                //if (KnownCorners.Any()) minSpd += ARS.map(KnownCorners.Last().Node - trackPoint.Node, 50, 10, 0, ARS.MPHtoMS(20), true);
 
                 man = ARS.map(IdealRelativeAngleExceed, 5, -5f, minInput, ARS.AIData.SpeedToInput, true);
 
