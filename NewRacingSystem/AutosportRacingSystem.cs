@@ -18,11 +18,11 @@ namespace ARS
 
     public enum Decision
     {
-        LateBrake, Divebomb, Flatout, SqueezeThrough, Tailgate, NoOvertake, FastCorner
+        LateBrake, Flatout, NoOvertake, FastCorner, EarlyExit
     }
     public enum Mistake
     {
-        SlideOvercorrect, SlideUndercorrect, SpinoutUndercorrect, SpinoutOvercorrect
+        ForgetSteeringLimiter, ForgetTCS, ForgetABS, ForgetCounterSteer, ForgetSpinoutPrevention
     }
     public enum RaceState
     {
@@ -31,22 +31,32 @@ namespace ARS
 
     public enum Options
     {
-        Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps
+        Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis,ShowPhysics, UseNearbyCars
+    }
+
+    public enum OptionValues
+    {
+        ShowAggression,
     }
 
 
     public enum DebugMode
     {
-        None, Inputs, Trails, Cornering, Interactions, Route, RacingLineEdit, PropEdit
+        None, Inputs, Trails, CorneringSpeed, TrackPositioning, Interactions, Route, RacingLineEdit, PropEdit
     }
 
+
+    public enum DebugDisplay
+    {
+        None, Inputs, Speed, Positioning, PropEdit
+    }
     public enum CameraTransition
     {
         None, ToAir, AirToAir, AirToPlayer
     }
 
-    
+
     public class ARS : Script
     {
         /*  CHANGELOG
@@ -66,12 +76,6 @@ namespace ARS
          - Add an Options menu (laps, grid, gamemodes, skills and personality variance)
         */
 
-        //Camerawork
-        Camera CamVerticalPlayer;
-        Camera CamVerticalTrack;
-        CameraTransition cTransition = CameraTransition.None;
-
-        public static Dictionary<float, int> AngleToSpeed = new Dictionary<float, int>();
 
         public static Dictionary<Vector3, string> ImmersiveJoins = new Dictionary<Vector3, string>();
 
@@ -83,18 +87,25 @@ namespace ARS
         public static List<string> KnownDisciplines = new List<string>();
         public static List<string> KnownTracks = new List<string>();
         public static int RaceReward = 0;
-        
+
         public static XmlDocument TrackFile = new XmlDocument();
 
         public static ScriptSettings SettingsFile;
         public static ScriptSettings DevSettingsFile;
-
+        //public static List<ScriptSettings> personalities = new List<ScriptSettings>();
 
         public static bool HideHudMode = false;
 
-        public static int cornerDistSafety = 10;
+        public static int cornerDistSafety = 2;
 
-
+        public static Dictionary<Options, bool> OptionValuesList = new Dictionary<Options, bool>()
+    {
+        { Options.ShowAggro, false },
+            { Options.ShowInputs, false },
+        { Options.ShowTrackAnalysis, false },
+        { Options.ShowPhysics, false },
+        { Options.UseNearbyCars, false }
+    };
 
 
         public static List<Prop> CustomProps = new List<Prop>();
@@ -156,7 +167,7 @@ namespace ARS
 
 
         //AI personality sets to control agressiveness and other biases.
-        public static List<PersonalitySet> personalities = new List<PersonalitySet>();
+        //public static List<PersonalitySet> personalities = new List<PersonalitySet>();
 
         //Route info
         public static List<Vector3> Path = new List<Vector3>(); //List of nodes that conform the race path.
@@ -166,21 +177,12 @@ namespace ARS
         public static Dictionary<int, float> WideDict = new Dictionary<int, float>(); //How wide (meters) each node is.
 
 
-
         public static Dictionary<int, float> EditWideDict = new Dictionary<int, float>();
         public static List<Prop> TrackLimits = new List<Prop>(); //Trackside props, placed automatically.
-
         public static Vector3 MiniMap = Vector3.Zero; //Center of the minimap. Functional, but unused.
-
-
         public static XmlDocument CurrentFile = null;
-
-
         static bool routeEditMode = false;
-
-        public static int DebugLevel = 0;
-        public static bool IsShiftOn = false;
-
+        public static int DebugVisual = 0;
 
 
         int TimeToFinishRace = 0;
@@ -208,35 +210,8 @@ namespace ARS
         bool Loaded = false;
         public void LoadScript()
         {
+            DisplayHelpTextTimed("Loading ~b~ARS.~w~ May take a while.", 20000);
 
-            AngleToSpeed.Add(0, (int)ARS.MPHtoMS(500));
-            AngleToSpeed.Add(0.5f, (int)ARS.MPHtoMS(150));
-            AngleToSpeed.Add(1, (int)ARS.MPHtoMS(120));
-            AngleToSpeed.Add(2, (int)ARS.MPHtoMS(90));
-            AngleToSpeed.Add(3, (int)ARS.MPHtoMS(80));
-            AngleToSpeed.Add(5, (int)ARS.MPHtoMS(65));
-            AngleToSpeed.Add(10, (int)ARS.MPHtoMS(55));
-            AngleToSpeed.Add(15, (int)ARS.MPHtoMS(50));
-            AngleToSpeed.Add(20, (int)ARS.MPHtoMS(40));
-            AngleToSpeed.Add(30, (int)ARS.MPHtoMS(37));
-            AngleToSpeed.Add(90, (int)ARS.MPHtoMS(35));
-            AngleToSpeed.Add(180, (int)ARS.MPHtoMS(30));
-
-            /*
-            AngleToSpeed.Add(0, (int)ARS.MPHtoMS(200));
-            AngleToSpeed.Add(0.5f, (int)ARS.MPHtoMS(150));
-            AngleToSpeed.Add(1, (int)ARS.MPHtoMS(125));
-            AngleToSpeed.Add(2, (int)ARS.MPHtoMS(95));            
-            AngleToSpeed.Add(3, (int)ARS.MPHtoMS(85));            
-            AngleToSpeed.Add(5, (int)ARS.MPHtoMS(70));
-            AngleToSpeed.Add(10, (int)ARS.MPHtoMS(60));
-            AngleToSpeed.Add(15, (int)ARS.MPHtoMS(55));
-            AngleToSpeed.Add(20, (int)ARS.MPHtoMS(45));
-            AngleToSpeed.Add(30, (int)ARS.MPHtoMS(42));
-            AngleToSpeed.Add(90, (int)ARS.MPHtoMS(40));
-            AngleToSpeed.Add(180, (int)ARS.MPHtoMS(37));
-            */
-            DisplayHelpTextTimed("Loading ~b~ARS.~w~ May take a while.", 10000);
 
             FillKnownDisciplines();
             Script.Yield();
@@ -244,92 +219,19 @@ namespace ARS
             ReFilterKnownTracks(TrackFilter);
             FillCachedCandidates(DisciplineFilter, intendedOpponents);
 
-            PersonalitySet p;
-
-            p = new PersonalitySet();
-            p.Name = "Unresponsive";
-            p.Rivals.AggressionBuildup = 0f;
-            p.Rivals.AggressionCap = 0f;
-            p.Rivals.BehindRivalMinDistance = 1f;
-            ARS.personalities.Add(p);
-
-
-            p = new PersonalitySet();
-            p.Name = "Cautious";
-            p.Rivals.AggressionBuildup = 0.005f;
-            p.Rivals.AggressionCap = 0.25f;
-            p.Rivals.BehindRivalMinDistance = 2f;
-
-
-            p.Stability.CountersteerMaxAngleSideways = 1f;
-            p.Stability.CountersteerMaxOvercorrect = 10f;
-
-            p.Stability.WheelspinOnMaxSlide = 1f;
-            p.Stability.WheelspinOnMinSlide = 1.25f;
-            p.Stability.SpinoutMaxExtraRotSpeed = 25f;
-            ARS.personalities.Add(p);
-
-
-            p = new PersonalitySet();
-            p.Name = "Normal";
-            ARS.personalities.Add(p);
-
-
-
-            p = new PersonalitySet();
-            p.Name = "Competitive";
-            p.Rivals.AggressionBuildup = 0.02f;
-            p.Rivals.AggressionCap = 0.7f;
-
-            p.Stability.CountersteerMaxAngleSideways = 1f;
-            p.Stability.CountersteerMaxOvercorrect = 15f;
-
-            p.Rivals.BehindRivalMinDistance = 0.5f;
-            p.Rivals.SideToSideMinDist = 0.2f;
-
-            p.Stability.WheelspinMinSlide = 1f;
-            p.Stability.WheelspinMaxSlide = 2f;
-
-            p.Stability.WheelspinOnMaxSlide = 1.5f;
-            p.Stability.WheelspinOnMinSlide = 2f;
-
-            ARS.personalities.Add(p);
-
-
-            p = new PersonalitySet();
-            p.Name = "Aggresive";
-            p.Rivals.AggressionBuildup = 0.02f;
-            p.Rivals.AggressionCap = 1f;
-
-            p.Stability.CountersteerMaxAngleSideways = 2f;
-            p.Stability.CountersteerMaxOvercorrect = 15f;
-
-            p.Rivals.BehindRivalMinDistance = 0f;
-            p.Rivals.SideToSideMinDist = 0f;
-
-            p.Stability.WheelspinMinSlide = 2f;
-            p.Stability.WheelspinMaxSlide = 4f;
-
-            p.Stability.WheelspinOnMinSlide = 2.5f;
-            p.Stability.WheelspinOnMaxSlide = 1f;
-            ARS.personalities.Add(p);
-
-
-
-
-
             Log(LogImportance.Info, "Initialization complete.", true);
             DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
             HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARSe~w~ menu.");
             Loaded = true;
-            
+
 
         }
         public ARS()
         {
+
             Tick += OnTick;
-            KeyDown += OnKeyDown;
-            KeyUp += OnKeyUp;
+            Aborted += OnAbort;
+
 
             File.WriteAllText(@"scripts\ARS\Log.log", "----------------------------");
             Log(LogImportance.Info, "Script initialized - " + DateTime.Now);
@@ -371,7 +273,7 @@ namespace ARS
                     count++;
                     if (count > 5)
                     {
-                        DisplayHelpTextTimed("Loading " + n,5000);
+                        DisplayHelpTextTimed("Loading " + n, 5000);
                         count = 0;
                         Yield();
                     }
@@ -532,9 +434,10 @@ namespace ARS
             return Vector3.Dot(right, rPos);
 
         }
-        public static Vector3 RotateDir(Vector3 d, float angle)
+
+        public static Vector3 RotateDir(Vector3 d, float angle, Vector3 axis)
         {
-            return Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * angle) * -d;
+            return Quaternion.RotationAxis(axis, (float)(Math.PI / 180f) * angle) * -d;
         }
         public static Vector3 GetOffset(Entity reference, Entity ent)
         {
@@ -550,13 +453,12 @@ namespace ARS
 
         }
 
-        public static Vector3 ConvertToLocalOffset(Entity reference, Vector3 pos)
+        public static float EngineTopSpeed(Vehicle v)
         {
 
-            return Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS, reference, pos.X, pos.Y, pos.Z);
+            return Function.Call<float>(Hash._0x53AF99BAA671CA47, v) / 0.75f;
 
         }
-
         public static float map(float x, float in_min, float in_max, float out_min, float out_max, bool clamp = false)
         {
 
@@ -627,32 +529,6 @@ namespace ARS
         }
 
 
-        static public unsafe float GetTrueSteer(Vehicle handle)
-        {
-
-            if (!CanWeUse(handle)) return 0f;
-
-            if (steeroffset == 0x0)
-            {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxxx????xx");
-
-                if (addr != null)
-                {
-
-
-                    steeroffset = *(uint*)(addr + 6) + 8;
-                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset:" + steeroffset);
-                }
-            }
-            else
-            {
-                var address = (ulong)handle.MemoryAddress;
-                return *((float*)(address + steeroffset));
-            }
-
-            return 0;
-        }
-
 
         static public unsafe void SetNitroOn(Vehicle v)
         {
@@ -682,8 +558,54 @@ namespace ARS
                 // *((bool*)(vehHandle + g_vehNitroEnabledOffset)) = true;
             }
         }
-        static public unsafe void SetTrueSteer(Vehicle handle, float value)
+        static public unsafe void SetSteerInput(Vehicle handle, float value)
         {
+
+            if (!CanWeUse(handle)) return;
+
+            if (steeroffset == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxxx????xx");
+                if (addr != null)
+                {
+                    steeroffset = *(uint*)(addr + 6);
+                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset: " + steeroffset);
+                }
+            }
+            else
+            {
+                var address = (ulong)handle.MemoryAddress;
+                *((float*)(address + steeroffset)) = value;
+            }
+
+        }
+        static ulong steerAngle = 0x0;
+        static public unsafe void SetSteerAngle(Vehicle handle, float value)
+        {
+
+            if (!CanWeUse(handle)) return;
+
+            if (steerAngle == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxxx????xx");
+                if (addr != null)
+                {
+                    steerAngle = *(uint*)(addr + 6) + 8;
+                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset: " + steerAngle);
+                }
+            }
+            else
+            {
+                var address = (ulong)handle.MemoryAddress;
+                *((float*)(address + steerAngle)) = value;
+            }
+
+        }
+
+        static public unsafe float GetSteerInput(Vehicle handle)
+        {
+
+            if (!CanWeUse(handle)) return 0f;
 
             if (steeroffset == 0x0)
             {
@@ -691,18 +613,20 @@ namespace ARS
 
                 if (addr != null)
                 {
-                    steeroffset = *(uint*)(addr + 6) + 8;
-                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset: " + steeroffset);
-
+                    steeroffset = *(uint*)(addr + 6);
+                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset:" + steeroffset);
                 }
             }
-            else if (1 == 1)
+            else
             {
                 var address = (ulong)handle.MemoryAddress;
-                *((float*)(address + steeroffset)) = value;
+                return *((float*)(address + steeroffset));
             }
 
+            return 0;
         }
+
+
         static public unsafe void SetThrottle(Vehicle handle, float value)
         {
             if (throttleOffset == 0x0)
@@ -761,13 +685,6 @@ namespace ARS
             return (float)(Math.PI * angle / 180.0f);
         }
 
-        public static float MapIdealSpeedForDistance(float distance, float speedThere, float ratio)
-        {
-            float result = speedThere + ((ratio / 10) * (distance));
-            if (result < speedThere) return speedThere;
-            else return result;
-
-        }
         public static float GetSpeedForAngle_b(float degrees, float confidence)
         {
 
@@ -791,26 +708,6 @@ namespace ARS
             return speed;
         }
 
-        public static float GetSpeedForAngle(float degrees, float confidence)
-        {
-
-            degrees /= confidence;
-
-            KeyValuePair<float, int> higherEnd = AngleToSpeed.Where(p => p.Key > degrees).First();
-            KeyValuePair<float, int> lowerEnd = AngleToSpeed.Where(p => p.Key < degrees).Last();
-
-            float lowerAngle = lowerEnd.Key;
-            float higherAngle = higherEnd.Key;
-
-            float lowerAngleSpeed = lowerEnd.Value;
-            float higherAngleSpeed = higherEnd.Value;
-
-
-            float speed = map(degrees, higherAngle, lowerAngle, higherAngleSpeed, lowerAngleSpeed, false);
-
-
-            return speed;
-        }
 
         public static float LerpDelta(float current, float from, float to, float delta)
         {
@@ -824,20 +721,9 @@ namespace ARS
         {
             if (degrees > 40) degrees = 40;
             degrees /= 40; // scale to 1.0;
-            degrees = (float)Math.Pow(degrees, gamma);
-            float maxSpeed = 0f;
-            float minSpeed = 1f;
 
-            float minAngle = 0f;
-            float maxAngle = 1.0f;
-
-
-            float speed = map(degrees, minAngle, maxAngle, maxSpeed, minSpeed);
-
-            if (speed > 1f) speed = 1f;
-
-
-            return speed;
+            float input = (float)Math.Pow(degrees, gamma);
+            return input;
         }
 
         public static Vector3 QuaternionRotate(Vector3 v, float a, Vector3 axis)
@@ -917,13 +803,16 @@ namespace ARS
 
                 if (o == Options.TrackList) name = "Track";
                 if (o == Options.LeaveRace && RaceStatus == RaceState.Finished) name = "Finish Race";
-                if (o == OptionsList[OptionHovered]) Menu += "~b~> " + name + "~w~";
-                else Menu += name;
+
+                if (o == OptionsList[OptionHovered]) Menu += "~b~> ";
+                Menu += name + "~w~";
+
+                if (OptionValuesList.ContainsKey(o)) if (OptionValuesList[o] == true) Menu += " [~g~X~w~]"; else Menu += " [ ]";
 
                 if (o == Options.TrackNameFilter) Menu += " [" + TrackFilter + "]";
                 if (o == Options.Laps) Menu += " [~y~" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~w~]";
                 if (o == Options.GridSize) Menu += " [~y~" + intendedOpponents + "~w~]";
-                if (o == Options.DebugLevel) Menu += " [" + (DebugMode)DebugLevel + "]";
+                if (o == Options.DebugLevel) Menu += " [" + (DebugDisplay)DebugVisual + "]";
                 if (o == Options.TrackList)
                 {
                     Menu += " (" + FilteredTrackList.Count + ") [";
@@ -951,7 +840,7 @@ namespace ARS
                     s = s.Replace("-", "~o~-");
                     s = s.Replace("*", "~b~*");
                     s = s.Replace(" ", "~w~ ");
-                    Menu += " ~w~[~w~" + s + "~w~]"+"("+CachedCandidates.Count+")";
+                    Menu += " ~w~[~w~" + s + "~w~]" + "(" + CachedCandidates.Count + ")";
                 }
 
 
@@ -981,9 +870,9 @@ namespace ARS
 
                 if (oSelected == Options.DebugLevel)
                 {
-                    DebugLevel--;
-                    if (DebugLevel < 0) DebugLevel = 0;
-                    if (DebugLevel == (int)DebugMode.Inputs) SetSPLVisibility(true);
+                    DebugVisual--;
+                    if (DebugVisual < 0) DebugVisual = 0;
+                    if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(true);
                 }
             }
             if (Game.IsControlJustPressed(2, GTA.Control.FrontendRight))
@@ -995,18 +884,27 @@ namespace ARS
 
                 if (oSelected == Options.DebugLevel)
                 {
-                    if (DebugLevel == (int)DebugMode.Inputs) SetSPLVisibility(false);
+                    if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(false);
 
-                    if (DebugLevel < 7) DebugLevel++;
+                    if (DebugVisual < 7) DebugVisual++;
 
 
-                    if (DebugLevel == (int)DebugMode.Inputs) SetSPLVisibility(true);
+                    if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(true);
 
                 }
             }
             if (Game.IsControlJustPressed(2, GTA.Control.FrontendAccept))
             {
-
+                if (oSelected == Options.RaceOptions)
+                {
+                    OptionsList.Clear();
+                    //OptionsList.Add(Options.DebugLevel);
+                    OptionsList.Add(Options.ShowAggro);
+                    OptionsList.Add(Options.ShowInputs);
+                    OptionsList.Add(Options.ShowTrackAnalysis);
+                    OptionsList.Add(Options.ShowPhysics);
+                    return;
+                }
 
                 if (oSelected == Options.FindCustomProps)
                 {
@@ -1095,7 +993,17 @@ namespace ARS
                 {
                     CleanEverything();
                 }
-
+                if (oSelected == Options.Race)
+                {
+                    OptionsList.Clear();
+                    OptionsList.Add(Options.TrackList);
+                    OptionsList.Add(Options.Disciplines);
+                    OptionsList.Add(Options.GridSize);
+                    OptionsList.Add(Options.Laps);
+                    OptionsList.Add(Options.UseNearbyCars);
+                    OptionsList.Add(Options.Start);
+                    return;
+                }
                 if (oSelected == Options.Start)
                 {
                     if (FilteredTrackList.Count > 0)
@@ -1103,7 +1011,7 @@ namespace ARS
 
                         XmlDocument f = LoadTrackFile(FilteredTrackList[TrackListPos]);//Game.GetUserInput(30)
 
-                        if (DisciplineFilter.Contains("nearby"))
+                        if (OptionValuesList[Options.UseNearbyCars])
                         {
 
                             foreach (Vehicle v in GetNearbyCandidates())
@@ -1116,42 +1024,51 @@ namespace ARS
 
                                 Racer RandomRacer = new Racer(v, p);
 
-                                //if (i > 1) RandomRacer.mem.personality = personalities[2];
+                                if (v.ColorCombinationCount < 2)
+                                {
+                                    VehicleColor c = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
+                                    v.PrimaryColor = c;
+                                    v.SecondaryColor = c;
+                                    v.PearlescentColor = c;
+                                }
                                 Racers.Add(RandomRacer);
                             }
-
-                            //List<PersonalitySet> distributed = new List<PersonalitySet>();
-
-                            if(DevSettingsFile.GetValue<bool>("RACERS", "UsePersonalities", true))
-                            {
-
-                                int fBatch = DevSettingsFile.GetValue<int>("RACER_PERSONALITIES", "Unresponsive", 0);
-                                int sBatch = DevSettingsFile.GetValue<int>("RACER_PERSONALITIES", "Cautious", 0);
-                                int tBatch = DevSettingsFile.GetValue<int>("RACER_PERSONALITIES", "Normal", 0);
-                                int fourthBatch = DevSettingsFile.GetValue<int>("RACER_PERSONALITIES", "Competitive", 0);
-                                int fifthBatch = DevSettingsFile.GetValue<int>("RACER_PERSONALITIES", "Aggresive", 0);
-                                for (int i = 0; i < Racers.Count; i++)
-                                {
-                                    if (GetPercent(i, Racers.Count) < fBatch) Racers[i].mem.personality = ARS.personalities[0];
-                                    else if (GetPercent(i, Racers.Count) < fBatch + sBatch) Racers[i].mem.personality = ARS.personalities[1];
-                                    else if (GetPercent(i, Racers.Count) < fBatch + sBatch + tBatch) Racers[i].mem.personality = ARS.personalities[2];
-                                    else if (GetPercent(i, Racers.Count) < fBatch + sBatch + tBatch+fourthBatch) Racers[i].mem.personality = ARS.personalities[3];
-                                    else if (GetPercent(i, Racers.Count) < fBatch + sBatch + tBatch+fourthBatch+fifthBatch) Racers[i].mem.personality = ARS.personalities[4];
-                                }
-                            }
-                            else
-                            {
-                                for (int i = 0; i < Racers.Count; i++)
-                                {
-                                     Racers[i].mem.personality = ARS.personalities.First();
-                                }
-                            }
-
                         }
+
 
                         LoadTrack(f);
                         LoadGrid(DisciplineFilter, (int)Clamp(intendedOpponents - Racers.Count, 0, GridPositions.Count));
 
+                        if (DevSettingsFile.GetValue("RACERS", "UsePersonalities", true))
+                        {
+                            for (int i = 0; i < Racers.Count; i++)
+                            {
+                                PersonalitySet p = personalitySets.Find(ps => ps.Model != "" && ps.Model == Racers[i].Car.DisplayName);
+                                if (p != null)
+                                {
+                                    Racers[i].mem.personality = p;
+                                    continue;
+                                }
+
+                                for (int per = 0; per < personalitySets.Count; per++)
+                                {
+                                    float percentOfThisPersonality = GetPercent(Racers.Where(r => r.mem.personality.Name == personalitySets[per].Name).Count(), Racers.Count);
+                                    if (percentOfThisPersonality < personalitySets[per].ProbToUse || per >= personalitySets.Count - 1)
+                                    {
+                                        p = personalitySets[per];
+                                        string[] skills = p.SkillRange.Split(',');
+                                        if (skills.Count() >= 2)
+                                        {
+                                            int skill = GetRandomInt(int.Parse(skills.First()), int.Parse(skills.Last()));
+                                            p.Stability.Skill = skill;
+                                        }
+
+                                        Racers[i].mem.personality = p;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                         StartRace();
 
                         if (CanWeUse(Game.Player.Character.CurrentVehicle)) HelpMessages.Add("Rev up your engine to start the countdown.");
@@ -1165,7 +1082,6 @@ namespace ARS
                 {
                     LoadGrid(DisciplineFilter, intendedOpponents);
                     StartRace();
-
                 }
                 if (oSelected == Options.Freecam)
                 {
@@ -1180,27 +1096,21 @@ namespace ARS
                         StartCoundown();
                     }
                 }
-
+                if (OptionValuesList.Keys.Contains(oSelected)) OptionValuesList[oSelected] = !OptionValuesList[oSelected];
 
 
                 //Exits the menu any time an option is applied, exept the TrackNameFilter input.
-                if (!(new List<Options> { Options.Laps, Options.GridSize, Options.TrackList, Options.Disciplines }.Contains(OptionsList[OptionHovered])))
+                if (!OptionValuesList.ContainsKey(OptionsList[OptionHovered]) && !(new List<Options> { Options.Laps, Options.GridSize, Options.TrackList, Options.Disciplines, Options.ShowAggro }.Contains(OptionsList[OptionHovered])))
                 {
                     if (oSelected == Options.DebugLevel)
                     {
-                        if (DebugLevel == (int)DebugMode.PropEdit)
+                        if (DebugVisual == (int)DebugDisplay.PropEdit)
                         {
                             HelpMessages.Add("The ~b~Prop Edit~w~ mode lets you modify which props will be saved along the route.");
                             HelpMessages.Add("Props marked in ~g~green~w~ are considered part of the route.");
                             HelpMessages.Add("Remember to update the current route on the menu after you're finished.");
                         }
-                        if (DebugLevel == (int)DebugMode.RacingLineEdit)
-                        {
-                            HelpMessages.Add("The ~y~Racing Line Edit~w~ mode lets you define a racing line along the route.");
-                            HelpMessages.Add("The RL operates on ~y~guides~w~, which let you only define a couple key points.");
-                            HelpMessages.Add("Navigate the nodes using the up/down arrows and edit them using left or right.");
-                            HelpMessages.Add("You can delete the current node with the Delete key.");
-                        }
+
                     }
                     OptionsList.Clear(); //
 
@@ -1245,64 +1155,36 @@ namespace ARS
             CountDown = MaxCountDown;
         }
 
-        //Wheelspin turbulence
-        float wheelspin = 0f;
-
-
-        //InverseTorque
-        bool IT = true;
+        Dictionary<int, Vector3> ExhaustOffsets = new Dictionary<int, Vector3>();
         void HandlePlayerDebugStuff()
         {
-            return;
-            Vehicle v = Game.Player.Character.CurrentVehicle;
 
-
-            if (WasCheatStringJustEntered("bs"))
-            {
-                Racer r = Racers.Single(x => x.Car.GetPedOnSeat(VehicleSeat.Passenger) == Game.Player.Character);
-                if (r != null) r.mem.data.brakeSafety = float.Parse(Game.GetUserInput(3));
-            }
-
-            //Generates camera shake if youre wheels are suffering wheelspin.
-
-
-            if (CanWeUse(v))
-            {
-
-                float newwheelspin = GetWheelsAvgWheelspin(v);
-                if (newwheelspin > wheelspin)
-                {
-                    if (newwheelspin > wheelspin + 1.3f) wheelspin += 1.3f; else wheelspin = newwheelspin;
-                }
-                else
-                {
-                    if (newwheelspin < wheelspin - 1.3f) wheelspin -= 1.3f; else wheelspin = newwheelspin;
-                }
-                if (Math.Abs(wheelspin) > 0f)
-                {
-                    GameplayCamera.Shake(CameraShake.Jolt, -wheelspin * 0.02f);
-                    //Function.Call(Hash._0xF4C8CF9E353AFECA, "JOLT_SHAKE", Math.Abs(wheelspin * 0.005f));
-                    Function.Call(Hash.SHAKE_CINEMATIC_CAM, "JOLT_SHAKE", -wheelspin * 0.02f);
-                }
-            }
-
+            Vehicle v = Game.Player.Character.LastVehicle;
+            if (!CanWeUse(v)) return;
             /*
-            if (Game.IsControlJustPressed(2, GTA.Control.Context))
-            {
-                float top = Function.Call<float>(Hash._0x53AF99BAA671CA47, v) * 1.30f;
-                float spd = float.Parse(Game.GetUserInput(20));
-                v.MaxSpeed = spd;
-                UI.Notify("Max speed: " + spd);
-            }
+            List<Vector3> roads = new List<Vector3>();
 
-            if (Game.IsControlJustPressed(2, GTA.Control.VehicleHandbrake))
-            {
-                float spd = float.Parse(Game.GetUserInput(20));
-                Function.Call((Hash)0xBAA045B4E42F3C06, v, spd);
-                UI.Notify("Max speed: " + spd);
+            roads.Add(GetRoadPos(v.Position) + new Vector3(0, 0, 0.2f));
+            roads.Add(GetRoadPos(v.Position + (v.Velocity * 1)) + new Vector3(0, 0, 0.2f));
+            roads.Add(GetRoadPos(v.Position + (v.Velocity * 2)) + new Vector3(0, 0, 0.2f));
+            roads.Add(GetRoadPos(v.Position + (v.Velocity * 3)) + new Vector3(0, 0, 0.2f));
+            roads.Add(GetRoadPos(v.Position + (v.Velocity * 4)) + new Vector3(0, 0, 0.2f));
 
+            if (roads.Count > 1)
+            {
+                for (int i = 0; i < roads.Count-1; i++)
+                {
+                    DrawLine(roads[i], roads[i+1], Color.Green);
+                    World.DrawMarker(MarkerType.DebugSphere, roads[i], Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), Color.Green);
+                }
             }
             */
+
+            //UI.ShowSubtitle("~g~" + Math.Round(ARS.GetWheelInternalDownforceMod(v).Sum(), 4).ToString() + "Gs", 500);
+            //UI.ShowSubtitle(Function.Call<float>(Hash._0x53AF99BAA671CA47, v)/0.75f+" m/s", 1000);
+            //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0x53AF99BAA671CA47, v) / 0.75f) +" m/s", 1000);
+
+            return;
         }
 
 
@@ -1400,15 +1282,9 @@ namespace ARS
         }
 
 
-        //Modify speed
-        //Function.Call((Hash)0x30B5831ECD9C35C5, debugVeh, -5f);
-
         void OnTick(object sender, EventArgs e)
         {
             HandlePlayerDebugStuff();
-            //HandleImmersiveJoins();
-
-            
 
             if (!Loaded)
             {
@@ -1417,12 +1293,6 @@ namespace ARS
                     LoadScript();
                 }
                 return;
-            }
-
-            IsShiftOn = false;
-            if (Game.IsControlPressed(2, GTA.Control.Sprint))
-            {
-                IsShiftOn = true;
             }
 
 
@@ -1441,27 +1311,16 @@ namespace ARS
             HandleFreecam();
 
             //Drawing and GUI stuff
-            if (DebugLevel == (int)DebugMode.Route || DebugLevel == (int)DebugMode.RacingLineEdit || routeEditMode) DrawPath(Path, WideDict, PathDisplayFidelity);
+            if (routeEditMode) DrawPath(Path, WideDict, PathDisplayFidelity);
             if (TimeToFinishRace != 0 && TimeToFinishRace > Game.GameTime) DisplayHelpText("~y~" + (TimeToFinishRace - Game.GameTime) / 1000 + "s~w~ to end the race.");
-            if (DebugLevel == (int)DebugMode.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);// DrawLine(p.Position, Path[ClosestNodeToPlace(p.Position, Path)]+new Vector3(0,0,0.5f), Color.Red);
+            if (DebugVisual == (int)DebugDisplay.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);// DrawLine(p.Position, Path[ClosestNodeToPlace(p.Position, Path)]+new Vector3(0,0,0.5f), Color.Red);
 
-            if (Path.Count > 0 && !HideHudMode && (routeEditMode || DebugLevel == (int)DebugMode.Inputs))
-            {
-                foreach (int inode in SPDLimiter.Keys)
-                {
-                    if (PlayerOrCameraNearPos(Path[inode], 25f))
-                    {
-                        float mult = SPDLimiter[inode];
-                        DrawText(Path[inode] + new Vector3(0, 0, 2), "Multiplier:~n~~y~" + mult.ToString(), Color.White, 0.4f);
-                    }
-                }
-            }
 
             //Scaleforms
             if (SCCountdown.IsLoaded && CountDown != MaxCountDown) SCCountdown.Render2D();
 
             //Info & Tips
-            if (DebugLevel == (int)DebugMode.PropEdit) DisplayHelpTextThisFrame("Add or remove any ~g~prop~w~ with the tool of your prefence. They must be ~y~persistent~w~.");
+            if (DebugVisual == (int)DebugDisplay.PropEdit) DisplayHelpTextThisFrame("Add or remove any ~g~prop~w~ with the tool of your prefence. They must be ~y~persistent~w~.");
 
 
 
@@ -1520,9 +1379,9 @@ namespace ARS
             //Create the menu on key inputs
             if (OptionsList.Count == 0)
             {
-                if (Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlPressed(2, GTA.Control.Context))
+                if ((DevSettingsFile.GetValue<bool>("GENERAL", "Hotkeys", true) && Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlPressed(2, GTA.Control.Context)) || WasCheatStringJustEntered("arsmenu"))
                 {
-
+                    OptionHovered = 0;
                     if (routeEditMode)
                     {
                         OptionsList.Add(Options.SaveTrack);
@@ -1532,24 +1391,11 @@ namespace ARS
                     {
                         if (Path.Count == 0)
                         {
-                            OptionsList.Add(Options.TrackList);
-                            OptionsList.Add(Options.Disciplines);
-                            OptionsList.Add(Options.GridSize);
-                            OptionsList.Add(Options.Laps);
-                            OptionsList.Add(Options.Start);
+                            OptionsList.Add(Options.Race);
 
-                            if (SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AdvOptions", true))
-                            {
-                                OptionsList.Add(Options.CreateTrack);
-                                if (CanWeUse(Game.Player.Character.CurrentVehicle))
-                                {
-                                    OptionsList.Add(Options.SaveThisCar);
-                                }
-                            }
                         }
                         else
                         {
-                            if (SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AdvOptions", true)) OptionsList.Add(Options.DebugLevel);
 
                             if (Racers.Count == 0)
                             {
@@ -1558,6 +1404,7 @@ namespace ARS
                                 OptionsList.Add(Options.GridSize);
                                 OptionsList.Add(Options.Laps);
                             }
+                            OptionsList.Add(Options.RaceOptions);
                             OptionsList.Add(Options.LeaveRace);
 
                             if (RaceStatus > RaceState.NotInitiated)
@@ -1565,7 +1412,7 @@ namespace ARS
                                 OptionsList.Add(Options.RestartRace);
                             }
 
-                            if (DebugLevel == (int)DebugMode.PropEdit)
+                            if (DebugVisual == (int)DebugDisplay.PropEdit)
                             {
                                 OptionsList.Add(Options.FindCustomProps);
                                 OptionsList.Add(Options.UpdateTrackFile);
@@ -1581,19 +1428,13 @@ namespace ARS
                 {
                     if (OptionsList[OptionHovered] == Options.DebugLevel)
                     {
-                        if (DebugLevel == (int)DebugMode.PropEdit)
+                        if (DebugVisual == (int)DebugDisplay.PropEdit)
                         {
                             HelpMessages.Add("The ~b~Prop Edit~w~ mode lets you modify which props will be saved along the route.");
                             HelpMessages.Add("Props marked in ~g~green~w~ are considered part of the route.");
                             HelpMessages.Add("Remember to update the current route on the menu after you're finished.");
                         }
-                        if (DebugLevel == (int)DebugMode.RacingLineEdit)
-                        {
-                            HelpMessages.Add("The ~y~Racing Line Edit~w~ mode lets you define a racing line along the route.");
-                            HelpMessages.Add("The RL operates on ~y~guides~w~, which let you only define a couple key points.");
-                            HelpMessages.Add("Navigate the nodes using the up/down arrows and edit them using left or right.");
-                            HelpMessages.Add("You can delete the current node with the Delete key.");
-                        }
+
                     }
                     OptionsList.Clear();
                     SetSPLVisibility(false);
@@ -1602,7 +1443,7 @@ namespace ARS
                 else
                 {
                     HandleMenu();
-                    if (OptionsList.Any() && OptionsList[OptionHovered] == Options.Start && DisciplineFilter.Contains("nearby"))
+                    if (OptionsList.Any() && OptionsList[OptionHovered] == Options.UseNearbyCars && OptionValuesList[Options.UseNearbyCars])
                     {
                         foreach (Vehicle candidate in GetNearbyCandidates())
                         {
@@ -1747,7 +1588,7 @@ namespace ARS
             }
             else if (Function.Call<bool>(Hash._0xAF754F20EB5CD51A)) //radar enabled
             {
-                
+
                 if (Game.IsControlPressed(2, GTA.Control.Sprint))
                 {
                     foreach (Racer r in Racers)
@@ -1772,9 +1613,10 @@ namespace ARS
                 {
                     foreach (Racer r in Racers)
                     {
-                        string text = "~b~" + r.Pos + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                      if(DebugLevel!=(int) DebugMode.None)  text = "~b~" + r.Pos + "º~g~ " + r.mem.personality.Name + " (~y~"+(Math.Round(r.mem.intention.Aggression * 100)) + "~g~%) ~w~" + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                        //text = "~b~" + r.Pos + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                        string text = "~b~" + r.Pos + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";                                               
+                        //text = "~b~" + r.Pos + "º~g~ " + r.mem.personality.Name + " (~y~" + (Math.Round(r.mem.intention.Aggression * 100)) + "~g~%) ~w~" + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                        text = "~b~" + r.Pos + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                        
 
                         if (r.Driver.IsPlayer)
                         {
@@ -1789,7 +1631,7 @@ namespace ARS
 
 
             //Draw the leaderboard positions
-            if (positions.Count > 0 && !HideHudMode && OptionsList.Count == 0  && Function.Call<bool>(Hash._0xAF754F20EB5CD51A))
+            if (positions.Count > 0 && OptionsList.Count == 0 && Function.Call<bool>(Hash._0xAF754F20EB5CD51A))
             {
                 float z = 0.15f;
                 float scale = 0.4f;
@@ -1909,7 +1751,7 @@ namespace ARS
                     {
                         if (Path.Count > 2)
                         {
-                            if (IsShiftOn)
+                            if (Game.IsControlPressed(2, GTA.Control.Sprint))
                             {
                                 int i = 0;
                                 while (i < 10)
@@ -1990,6 +1832,7 @@ namespace ARS
                 }
                 else
                 {
+
                     World.DrawMarker(MarkerType.ChevronUpx3, ray.HitCoords, FreecCamRide.ForwardVector, new Vector3(-90, 0, 0), new Vector3(1, 1, 1), Color.Blue);
                     World.DrawMarker(MarkerType.ChevronUpx3, ray.HitCoords, FreecCamRide.ForwardVector, new Vector3(-90, 0, 0), new Vector3(1, 1, 1), Color.Blue);
                     DrawLine(ray.HitCoords, ray.HitCoords - (FreecCamRide.ForwardVector * 10), Color.Blue);
@@ -2038,7 +1881,6 @@ namespace ARS
 
             float target = 1f;
 
-            float step = 0f; // 0 > 1
             float stepDist = 0f;
             points.Add(sStart);
 
@@ -2138,8 +1980,9 @@ namespace ARS
         }
 
 
-        public static Color GetColorFromRedYellowGreenGradient(double percentage)
+        public static Color GetColorFromRedYellowGreenGradient(float percentage)
         {
+            percentage = ARS.Clamp((float)percentage, 0, 100);
 
             var red = (percentage > 50 ? 1 - 2 * (percentage - 50) / 100.0 : 1.0) * 255;
             var green = (percentage > 50 ? 1.0 : 2 * percentage / 100.0) * 255;
@@ -2148,6 +1991,17 @@ namespace ARS
             return result;
         }
 
+        public static Color GradientAtoB(Color A, Color B, float percentage)
+        {
+            percentage = ARS.Clamp((float)percentage, 0, 100);
+
+            var red = ARS.map(percentage, 0, 100, A.R, B.R);
+            var green = ARS.map(percentage, 0, 100, A.G, B.G);
+            var blue = ARS.map(percentage, 0, 100, A.B, B.B);
+
+            Color result = Color.FromArgb((int)red, (int)green, (int)blue);
+            return result;
+        }
         void SetloadingPromptText(string t)
         {
             Function.Call(Hash._0xABA17D7CE615ADBF, "STRING");
@@ -2199,21 +2053,12 @@ namespace ARS
 
                     if (1 == 1)
                     {
-                        if (DebugLevel == (int)DebugMode.RacingLineEdit)
-                        {
-                            scaleform.CallFunction("SET_DATA_SLOT", 4, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.FrontendUp), "Next Guide");
-                            scaleform.CallFunction("SET_DATA_SLOT", 3, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.FrontendDown), "Previous Guide");
-                            scaleform.CallFunction("SET_DATA_SLOT", 2, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.FrontendLeft), "Move Left");
-                            scaleform.CallFunction("SET_DATA_SLOT", 1, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.FrontendRight), "Move Right");
-
-                            scaleform.CallFunction("SET_DATA_SLOT", 0, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.FrontendDelete), "Delete guide");
-                        }
-                        else if (routeEditMode)
+                        if (routeEditMode)
                         {
                             if (Path.Count() > 0)
                             {
 
-                                if (IsShiftOn)
+                                if (Game.IsControlPressed(2, GTA.Control.Sprint))
                                 {
                                     scaleform.CallFunction("SET_DATA_SLOT", 0, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Aim), "Delete last ten nodes");
                                 }
@@ -2286,18 +2131,18 @@ namespace ARS
                 FreecCamRide.Rotation = FreecCamRide.Rotation + new Vector3(0, 0, GameplayCamera.RelativeHeading);
 
                 float spd = 0.01f;
-                float heightd = FreecCamRide.HeightAboveGround;
+                float hAboveGround = FreecCamRide.HeightAboveGround;
 
-                string dir = "" + Math.Round(CamIntendedHeight - heightd, 1);
-                if (CamIntendedHeight - heightd <= -1f) dir = "v " + Math.Round(CamIntendedHeight - heightd, 0);
-                if (CamIntendedHeight - heightd >= 1f) dir = "^ " + Math.Round(CamIntendedHeight - heightd, 0);
+                string dir = "" + Math.Round(CamIntendedHeight - hAboveGround, 1);
+                if (CamIntendedHeight - hAboveGround <= -1f) dir = "v " + Math.Round(CamIntendedHeight - hAboveGround, 0);
+                if (CamIntendedHeight - hAboveGround >= 1f) dir = "^ " + Math.Round(CamIntendedHeight - hAboveGround, 0);
 
                 Game.Player.Character.Position = FreecCamRide.Position + new Vector3(0, 0, -1.5f);
                 Game.Player.Character.Rotation = FreecCamRide.Rotation + new Vector3(0, 0, 180f);
                 if (FreeCamMovement.Length() < 7f)
                 {
                     if (!IsDroneMode) spd = 0.02f;
-                    if (IsShiftOn) spd += 0.05f;
+                    if (Game.IsControlPressed(2, GTA.Control.Sprint)) spd += 0.05f;
 
                     if (GameplayCamera.IsRendering)
                     {
@@ -2337,26 +2182,17 @@ namespace ARS
                     if (IsDroneMode)
                     {
                         if (CamIntendedHeight < 2f) CamIntendedHeight = 2f;
-                        if (heightd > 0.0f)
+                        if (hAboveGround > 0.0f)
                         {
-                            if (heightd > CamIntendedHeight + 1f)
-                            {
-                                if (FreeCamMovement.Z > -0.2f) FreeCamMovement -= new Vector3(0, 0, (heightd - (CamIntendedHeight + 1f)) * 0.002f);
-                            }
-                            else if (heightd < CamIntendedHeight - 1f)
-                            {
+                            float diff = CamIntendedHeight - hAboveGround;
 
-                                if (FreeCamMovement.Z < 0.5f)
-                                {
-                                    float d = map(heightd, 1f, 4f, 5f, 1f);
-                                    d = Clamp(d, 1f, 5f);
-                                    FreeCamMovement += new Vector3(0, 0, ((CamIntendedHeight - 1f) - heightd) * (0.0025f * d));//0.04f
-                                }
+                            if (Math.Abs(diff) > 1f)
+                            {
+                                FreeCamMovement += new Vector3(0, 0, ARS.Clamp(diff / 200, -0.1f, 0.1f));
+                                FreeCamMovement.Z = ARS.Clamp(FreeCamMovement.Z, -0.5f, 0.5f);
                             }
-                            else FreeCamMovement.Z *= 0.9f;
+                            FreeCamMovement.Z *= 0.9f;
                         }
-
-
                     }
 
                 }
@@ -2370,16 +2206,15 @@ namespace ARS
 
                             if (FreeCamMovement.Length() > 0.2f)
                             {
-                                FreeCamMovement.X *= 1 - (spd * 0.5f); // *= new Vector3(1f, 1f, 1f);
+                                FreeCamMovement.X *= 1 - (spd * 0.5f);
                                 FreeCamMovement.Y *= 1 - (spd * 0.5f);
-                                if (Math.Abs(heightd) < 1f) FreeCamMovement.Z *= 1 - (spd * 2f);
+                                if (Math.Abs(hAboveGround) < 1f) FreeCamMovement.Z *= 1 - (spd * 2f);
                             }
                             else
                             {
-                                FreeCamMovement.X *= 1 - (spd * 2f); // *= new Vector3(1f, 1f, 1f);
+                                FreeCamMovement.X *= 1 - (spd * 2f);
                                 FreeCamMovement.Y *= 1 - (spd * 2f);
-                                if (Math.Abs(heightd) < 1f) FreeCamMovement.Z *= 1 - (spd * 2f);
-
+                                if (Math.Abs(hAboveGround) < 1f) FreeCamMovement.Z *= 1 - (spd * 2f);
                             }
                         }
                     }
@@ -2387,7 +2222,7 @@ namespace ARS
                     {
                         if (Reduce)
                         {
-                            FreeCamMovement.X *= 1 - (spd * 2f); // *= new Vector3(1f, 1f, 1f);
+                            FreeCamMovement.X *= 1 - (spd * 2f);
                             FreeCamMovement.Y *= 1 - (spd * 2f);
                             FreeCamMovement.Z *= 1 - (spd * 2f);
                         }
@@ -2542,10 +2377,32 @@ namespace ARS
 
         }
         */
-
+        enum GridSort
+        {
+            Power, PowerDescendent, TopSpeed, TopSpeedDescendent, Random
+        }
         void PlaceCars(bool sortbypower)
         {
-            if (sortbypower) Racers = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList();
+            if (sortbypower)
+            {
+
+                GridSort sort = GridSort.Power;
+                foreach (GridSort g in Enum.GetValues(typeof(GridSort)))
+                {
+                    g.ToString().ToLowerInvariant().Contains(DevSettingsFile.GetValue<string>("RACERS", "GridSorting", "Power").ToLowerInvariant());
+                    sort = g;
+                }
+
+                switch (sort)
+                {
+                    case GridSort.Power: { Racers = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList(); break; }
+                    case GridSort.PowerDescendent: { Racers = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).Reverse().ToList(); break; }
+                    case GridSort.TopSpeed: { Racers = Racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).ToList(); break; }
+                    case GridSort.TopSpeedDescendent: { Racers = Racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).Reverse().ToList(); break; }
+                    case GridSort.Random: { Racers = Racers.OrderBy(v => v.Car.Model.Hash.ToString().Substring(0, 1) + (int)v.Car.PrimaryColor).ToList(); break; }
+                }
+
+            }
             Racer p = null;
             int index = 0;
             foreach (Racer r in Racers) if (r.Driver.IsPlayer)
@@ -2740,8 +2597,7 @@ namespace ARS
         {
             GridPositions.Clear();
 
-            string ModelOne = "none"; //xm_prop_base_fence_01//prop_offroad_tyres01//prop_wheel_tyre
-            string ModelTwo = "none";// "prop_offroad_tyres02"; //prop_ind_light_03c//prop_mp_cone_03
+            string ModelOne = "none"; //xm_prop_base_fence_01//prop_offroad_tyres01//prop_wheel_tyre  "prop_offroad_tyres02"; //prop_ind_light_03c//prop_mp_cone_03
             //if (nodes.Count < 5) return;
             Vector3 oldpos = Vector3.Zero;
             int dd = 0;
@@ -3036,7 +2892,6 @@ namespace ARS
             int closestnode = ClosestNodeToPlace(Game.Player.Character.Position, nodes);
             Vector3 oldpos = Vector3.Zero;
 
-            int lastLineGuide = 0;
             int start = closestnode - 50;
             int end = closestnode + 50;
             int countmax = 1;
@@ -3049,7 +2904,7 @@ namespace ARS
             dd = start;
 
 
-            if (DebugLevel >= (int)DebugMode.Route || routeEditMode) World.DrawMarker(MarkerType.CheckeredFlagRect, nodes[0] + new Vector3(0, 0, 3f), (nodes[1] - nodes[0]).Normalized, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);// DrawLine(vm,last, Color.Black);
+            if (routeEditMode) World.DrawMarker(MarkerType.CheckeredFlagRect, nodes[0] + new Vector3(0, 0, 3f), (nodes[1] - nodes[0]).Normalized, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);// DrawLine(vm,last, Color.Black);
 
             for (int ph = start; ph < end; ph += 1)
             {
@@ -3098,7 +2953,7 @@ namespace ARS
                             if (w != 0f)
                             {
 
-                                if ((DebugMode)DebugLevel == DebugMode.Route || (DebugMode)DebugLevel == DebugMode.RacingLineEdit || routeEditMode)
+                                if (routeEditMode)
                                 {
 
                                     if (ph == end - 1)
@@ -3123,17 +2978,15 @@ namespace ARS
                                     }
                                 }
 
-                                if ((DebugMode)DebugLevel == DebugMode.Route)
-                                {
-                                    col.ToArgb();
+                                col.ToArgb();
 
-                                    Color chevcolor = Color.FromArgb(50, col);
+                                Color chevcolor = Color.FromArgb(50, col);
 
-                                    if (IsClose) World.DrawMarker(MarkerType.ChevronUpx1, pos, (oldpos - pos).Normalized, new Vector3(-90, 0, 0), new Vector3(4f, 2f, 2f), chevcolor);// DrawLine(vm,last, Color.Black);
+                                if (IsClose) World.DrawMarker(MarkerType.ChevronUpx1, pos, (oldpos - pos).Normalized, new Vector3(-90, 0, 0), new Vector3(4f, 2f, 2f), chevcolor);// DrawLine(vm,last, Color.Black);
 
-                                    //       DrawLine(oldpos, pos, Color.Yellow);
+                                //       DrawLine(oldpos, pos, Color.Yellow);
 
-                                }
+
                             }
                         }
                     }
@@ -3152,7 +3005,6 @@ namespace ARS
             int closestnode = ClosestNodeToPlace(Game.Player.Character.Position, nodes);
             Vector3 oldpos = Vector3.Zero;
 
-            int lastLineGuide = 0;
             int start = closestnode - 100;
             int end = closestnode + 100;
             int countmax = 1;
@@ -3170,8 +3022,6 @@ namespace ARS
 
                 if (count >= countmax || 1 == 1)//Math.Abs( ph-closestnode)>50
                 {
-                    bool IsClose = false;
-
 
                     count = 0;
 
@@ -3315,18 +3165,7 @@ namespace ARS
         public bool listenmode = false;
         public void Cheats()
         {
-            if (WasCheatStringJustEntered("cam"))
-            {
-                cTransition = CameraTransition.ToAir;
-                Function.Call(Hash.RENDER_SCRIPT_CAMS, 2, true, 1000, true, true);
 
-            }
-            if (WasCheatStringJustEntered("cam2"))
-            {
-                cTransition = CameraTransition.None;
-                Function.Call(Hash.RENDER_SCRIPT_CAMS, false, true, 1000, true, true);
-
-            }
             if (WasCheatStringJustEntered("combo"))
             {
                 Vehicle v = Game.Player.Character.CurrentVehicle;
@@ -3340,13 +3179,7 @@ namespace ARS
 
                 UI.Notify(t);
             }
-            if (WasCheatStringJustEntered("arsbrakec"))
-            {
-                UI.ShowSubtitle("AI braking confidence. Use between 2 and 4.", 3000);
 
-                float c = 0f;
-                float.TryParse(Game.GetUserInput(4), out c);
-            }
             if (WasCheatStringJustEntered("arson"))
             {
                 LoadScript();
@@ -3398,11 +3231,6 @@ namespace ARS
                 DevSettingsFile = null;
                 LoadSettings();
             }
-            if (WasCheatStringJustEntered("arsautogen"))
-            {
-                //UI.Notify("Random track " + KnownTracks[GetRandomInt(0, KnownTracks.Count - 1)] + ".");
-                //UI.Notify("Random discipline " + KnownDisciplines[GetRandomInt(0, KnownDisciplines.Count - 1)] + ".");
-            }
 
 
             if (WasCheatStringJustEntered("arsddip"))
@@ -3420,11 +3248,9 @@ namespace ARS
                 CleanEverything();
             }
         }
-        public static bool IntHasFlag(int number, int flag)
+        public static bool IsBitSet(int number, int bit)
         {
-
-            if ((number & (int)flag) != 0) return true;
-            return false;
+            return (number & bit) != 0;
         }
 
         public static void FindCustomProps()
@@ -3598,11 +3424,7 @@ namespace ARS
             }
 
         }
-        public static bool RouteIsPointToPoint(List<Vector3> route)
-        {
-            if (route.Count < 2) return false;
-            return ((route.First().DistanceTo(route.Last()) > 10f));
-        }
+
         public void SaveRoute(string filename)
         {
             if (filename == null || filename == "")
@@ -3854,23 +3676,11 @@ namespace ARS
         public void LoadTrack(XmlDocument xmlFile)
         {
 
-            /*
-            if (CamVerticalPlayer== null) CamVerticalPlayer = World.CreateCamera(Game.Player.Character.Position + new Vector3(0, 0, 50f), new Vector3(-90f, GameplayCamera.Rotation.Y, GameplayCamera.Rotation.Z), GameplayCamera.FieldOfView);
-            CamVerticalPlayer.Position = Game.Player.Character.Position+ new Vector3(0, 0, 50f);
-
-            Function.Call(Hash.RENDER_SCRIPT_CAMS, 1, true, 1000, true, true);
-            */
-
-
-
-
-
             if (xmlFile == null)
             {
                 UI.Notify("~r~Invalid track file.");
                 return;
             }
-            //Function.Call(Hash._0xA328A24AAA6B7FDC, 500);
             if (!InFreeCam) Function.Call(Hash.DO_SCREEN_FADE_OUT, 200);
             SetloadingPromptText("Loading track...");
             Script.Wait(500);
@@ -3934,8 +3744,6 @@ namespace ARS
                     int.TryParse(prop.SelectSingleNode("Model").InnerText, out hash);
                     if (hash != 0 && new Model(hash).IsValid)
                     {
-
-
                         Prop myprop = World.CreateProp(hash, pos, rot, false, false);
                         myprop.Position = pos;
                         Function.Call(Hash.SET_ENTITY_DYNAMIC, myprop, isDynamic);
@@ -3945,7 +3753,6 @@ namespace ARS
                         if (prop.SelectSingleNode("TextureVariation") != null) Function.Call(Hash._0x971DA0055324D033, myprop, int.Parse(prop.SelectSingleNode("TextureVariation").InnerText));
 
                         CustomProps.Add(myprop);
-
 
                         if (hash == Game.GenerateHash("prop_mp_repair_01") && 1 == 2) //Garage stuff, never used
                         {
@@ -4056,69 +3863,6 @@ namespace ARS
         }
 
 
-        public static void CalcAnglesForPath(List<Vector3> Path)
-        {
-            DangerousCornerNodes.Clear();
-            int i = 0;
-            Vector3 cDir = Vector3.Zero;
-            Vector3 fDir = Vector3.Zero;
-            foreach (Vector3 pos in Path)
-            {
-                float a = 0f;
-
-                //if (i > 3)
-                if (i > 5 && i < Path.Count - 5)
-                {
-
-
-                    cDir = (Path[i - 1] - Path[i]).Normalized;
-                    fDir = (Path[i] - Path[i + 1]).Normalized;
-                    cDir.Z = 0f; //0.3
-                    fDir.Z = 0f;
-
-                    a = (float)Math.Round(Vector3.SignedAngle(cDir, fDir, Vector3.WorldUp), 2);//*0.5f
-                                                                                               //Angles.Add(i, angle); //17
-
-                }
-                Angles.Add(i, (float)Math.Round(a, 1)); //17
-
-
-                i++;
-            }
-            for (int z = 0; z < Path.Count; z++)
-            {
-                if (!Angles.ContainsKey(z))
-                {
-                    Angles.Add(z, 0f);
-                    Log(LogImportance.Error, "Missing angle at node " + z);
-                }
-
-                if (z > 4 && Path.Count > z + 4)
-                {
-
-                    Vector3 pastDir = (Path[z - 2] - Path[z]).Normalized;
-                    Vector3 futureDir = (Path[z] - Path[z + 2]).Normalized;
-
-                    float ang = map(futureDir.Z - pastDir.Z, -1f, 1f, -90f, 90f, true);
-
-
-                    if (ang > 2f)
-                    {
-                        for (int y = 10; y < 80; y++)
-                        {
-                            if (ARS.Angles.Count > y && !DangerousCornerNodes.Contains(i + y) && ARS.Angles.Count > z + y && Math.Abs(ARS.Angles[z + y]) > 0.5f)
-                            {
-                                DangerousCornerNodes.Add(z + y);
-
-                            }
-                        }
-                    }
-
-                }
-
-            }
-        }
-
         public static void GenerateRouteInfo()
         {
 
@@ -4141,7 +3885,6 @@ namespace ARS
 
             }
 
-
             //Fill all trackpoints with info from the Path
             foreach (TrackPoint t in TrackPoints)
             {
@@ -4162,79 +3905,167 @@ namespace ARS
                     l.Z = 0f;
                     f.Z = 0f;
                     float Angle = Vector3.SignedAngle(l, f, Vector3.WorldUp);
-                    t.Angle = (float)Math.Round(Angle, 2);
+                    t.Angle = (float)Math.Round(Angle, 4);
                 }
                 else
                 {
                     t.Angle = 0f;
-                    t.Direction = (  Path[5] - Path.First()).Normalized;
+                    t.Direction = (Path[5] - Path.First()).Normalized;
                     t.Elevation = 0f;
                     t.RelativeElevation = 0f;
+
                 }
 
                 if (ARS.WideDict.ContainsKey(t.Node)) t.TrackWide = ARS.WideDict[t.Node];
             }
 
+            //Fill all cornerpoints with info
+            int extension = 5;
             foreach (CornerPoint c in CornerPoints)
             {
-                if (c.Node > 11 && c.Node < Path.Count - 11)
+
+                if (c.Node > extension + 1 && c.Node < Path.Count - extension - 1)
                 {
-                    Vector3 l = (Path[c.Node] - Path[c.Node-5]).Normalized;
-                    Vector3 f = (Path[c.Node + 5] - Path[c.Node]).Normalized;
 
-
-
-                    float RelativeElevation = (f - l).Z;  // Vector3.SignedAngle(l, f, Vector3.RelativeRight);
-                    c.RelativeElevation = RelativeElevation*90; // (float)Math.Round(RelativeElevation * 100, 5);
-
-                    Vector3 dir = (Path[c.Node + 5] - Path[c.Node-5]).Normalized;
-
-                    float Elevation = ARS.map(dir.Z, -1, 1, -90, 90, true);
-                    c.Elevation = (float)Math.Round(Elevation, 2);
-
-                    float Angle = Vector3.SignedAngle(l, f, Vector3.WorldUp);
-                    c.Angle = (float)Math.Round(Angle, 2);
+                    Vector3 pre = TrackPoints[c.Node - extension].Direction;
+                    Vector3 fut = TrackPoints[c.Node + extension].Direction;
+                    c.Angle = Vector3.SignedAngle(pre, fut, Vector3.WorldUp);
+                    c.ElevationChange = ((fut - pre).Z * 90);
+                    c.Elevation = TrackPoints[c.Node].Elevation;
+                    c.Radius = GetCurveRadius(TrackPoints[c.Node - extension], TrackPoints[c.Node + extension], TrackPoints[c.Node]);
                 }
                 else
                 {
                     c.Angle = 0f;
                     c.Elevation = 0f;
-                    c.RelativeElevation = 0f;
+                    c.ElevationChange = 0f;
+                }
+            }
+            List<float> OGAngles = new List<float>();
+            foreach (CornerPoint c in CornerPoints) OGAngles.Add(c.Angle);
+
+            //Average the cornerpoints angles with nearby ones
+            //helps smoother transitions from one to another
+            foreach (CornerPoint c in CornerPoints)
+            {
+                if (c.Node > extension && c.Node < CornerPoints.Count() - extension)
+                {
+                    List<float> angles = new List<float>();
+                    angles.Add(OGAngles[c.Node - 1]);
+                    angles.Add(OGAngles[c.Node + 1]);
+
+                    if (!float.IsNaN(angles.Sum()))
+                    {
+                        c.Angle = (float)Math.Round(angles.Sum() / 2, 3);
+                    }
                 }
 
+                int scale = 10;
+                if (c.Node > scale + 5 && c.Node + scale < CornerPoints.Count() - 5)
+                {
+                    float ang = Vector3.SignedAngle(ARS.TrackPoints[c.Node - scale].Direction, ARS.TrackPoints[c.Node + scale].Direction, Vector3.WorldUp) / (scale / 5);
+                    c.AvgAngle = (float)Math.Round(ang, 3);
+                    c.AvgRadius = GetCurveRadius(TrackPoints[c.Node - scale], TrackPoints[c.Node + scale], TrackPoints[c.Node]);
+                }
+
+                int length = 0;
+                int h = (int)TrackPoints[c.Node].TrackWide * 2;
+                int currentMpointH = 2;
+
+                while (h > currentMpointH && length < 100)
+                {
+                    length += 5;
+                    if (length < c.Node - 5 && length < CornerPoints.Count() - c.Node - 5)
+                    {
+                        Vector3 mPoint = (TrackPoints[c.Node - length].Position + TrackPoints[c.Node + length].Position) / 2;
+                        currentMpointH = (int)Vector3.Distance(mPoint, TrackPoints[c.Node].Position);
+
+                        c.AvgRadius = GetCurveRadius(TrackPoints[c.Node - length], TrackPoints[c.Node + length], TrackPoints[c.Node]);
+
+                        float ang = Vector3.SignedAngle(TrackPoints[c.Node - length].Direction, TrackPoints[c.Node + length].Direction, Vector3.WorldUp) / (length / 5);
+                        c.AvgAngle = (float)Math.Round(ang, 3);
+
+                        c.AvgScale = length;
+
+                        Vector3 pre = TrackPoints[c.Node - length].Direction;
+                        Vector3 fut = TrackPoints[c.Node + length].Direction;
+                        c.Angle = Vector3.SignedAngle(pre, fut, Vector3.WorldUp);
+                        c.AvgElChange = ((fut - pre).Z * 90);
+                    }
+                }
+            }
+        }
+
+        public static float GetCurveRadius(TrackPoint a, TrackPoint b, TrackPoint midpoint)
+        {
+
+            Vector3 mPoint = (a.Position + b.Position) / 2;
+            float H = Vector3.Distance(mPoint, midpoint.Position);
+            float W = Vector3.Distance(a.Position, b.Position);
+
+            float C = H / 2;
+            float D = (float)Math.Pow(W, 2);
+            float E = H * 8;
+            float F = D / E;
+
+            float R = C + F;
+            return R;
+        }
+
+        public static float GetSpeedForCorner(CornerPoint c, Racer r)
+        {
+            //Error handling - return max and be done with it
+            if (float.IsInfinity(c.AvgRadius) || float.IsNaN(c.AvgRadius) || c.AvgRadius == 0f) return AIData.MaxSpeed;
+
+            //Base percieved grip
+            float finalGrip = r.vehData.WheelsGrip + r.mem.personality.Stability.OverdriveCalm;
+
+            //Aggro increases percieved grip, so AI calculates a faster corner.
+            finalGrip += r.mem.intention.Aggression * r.mem.personality.Stability.OverdriveAggro;
+            if (r.Decisions.ContainsKey(Decision.FastCorner)) finalGrip += r.mem.personality.Rivals.ManeuverExtraGs;
+
+            //Any hill that's not flat reduces grip as gravity isn't fully nailing you down
+            finalGrip *= ARS.map(c.Elevation, -22.5f, 0f, 0.5f, 1, true);
+
+            //Initial judgement
+            float spd = (float)Math.Sqrt((finalGrip * 9.8f) * c.AvgRadius);
+
+            //Expected grip bonus at that speed
+            finalGrip += GetDownforceGsAtSpeed(r, spd);
+
+            //Re-Judge with the new bonus
+            spd = (float)Math.Sqrt((finalGrip * 9.8f) * c.AvgRadius);
+
+            //Down slopes
+            if (c.ElevationChange < 0.0f)
+            {
+                float spdGravity = ARS.map(c.ElevationChange, -5, 0, ARS.MPHtoMS(100), ARS.MPHtoMS(300), true) * ARS.map(Math.Abs(c.AvgAngle), 5f, 1f, 0.8f, 1f, true);
+                if (spd > spdGravity) spd = spdGravity;
             }
 
-
-            CalcAnglesForPath(Path);
-
-
-
+            if (spd < ARS.AIData.MinSpeed) spd = ARS.AIData.MinSpeed;
+            if (spd > 0) return spd; else return ARS.AIData.MaxSpeed;
         }
 
         //Asumes the entity is going forward, at most, 90º sideways. Not backwards
         static public float GetDirectionalBoundingBox(Entity e)
         {
             if (!CanWeUse(e)) return 0f;
-
-            return ARS.map(Vector3.Angle(e.ForwardVector, e.Velocity.Normalized), 0f, 90f, (e.Model.GetDimensions().X / 2), (e.Model.GetDimensions().Y / 2), true);
-
+            return ARS.map(Vector3.Angle(e.ForwardVector, e.Velocity.Normalized), 0f, 90f, e.Model.GetDimensions().X, e.Model.GetDimensions().Y, true);
         }
 
         static public void DrawDirectionalBoundingBox(Entity e, float lenght = 5f)
         {
             float w = GetDirectionalBoundingBox(e);
+            Vector3 direction = (Vector3.Cross(e.Velocity.Normalized, Vector3.WorldUp) * w);
 
-            Vector3 myside = (Vector3.Cross(e.Velocity.Normalized, Vector3.WorldUp) * w);
-
-            ARS.DrawLine(e.Position + myside + (e.Velocity.Normalized * lenght), e.Position + myside + (e.Velocity.Normalized * -lenght), Color.Red);
-            ARS.DrawLine(e.Position - myside + (e.Velocity.Normalized * lenght), e.Position - myside + (e.Velocity.Normalized * -lenght), Color.Red);
+            ARS.DrawLine(e.Position + direction + (e.Velocity.Normalized * lenght), e.Position + direction + (e.Velocity.Normalized * -lenght), Color.Red);
+            ARS.DrawLine(e.Position - direction + (e.Velocity.Normalized * lenght), e.Position - direction + (e.Velocity.Normalized * -lenght), Color.Red);
         }
         static public unsafe ulong GetWheelsPtr(Vehicle handle)
         {
-
             GameVersion gameVersion = Game.Version;
             var address = (ulong)handle.MemoryAddress;
-
             if (wheelsptr == 0x0)
             {
                 IntPtr addr = (IntPtr)FindPattern("\x3B\xB7\x48\x0B\x00\x00\x7D\x0D", "xx????xx");
@@ -4244,7 +4075,6 @@ namespace ARS
                     wheelsptr = *(uint*)(addr + 2) - 8;
                 }
             }
-
             return *((ulong*)(address + wheelsptr));
         }
 
@@ -4262,19 +4092,12 @@ namespace ARS
             }
             GameVersion gameVersion = Game.Version;
             var address = (ulong)handle.MemoryAddress;
-            //   ulong offset = 0xB60; // GetWheelsPtr(handle);// (ulong)(gameVersion >= GameVersion.VER_1_0_372_2_STEAM ? 0xAA0 : 0xA80);
-
-            // offset += 8;
-
-
-            // UI.ShowSubtitle((*((int*)(address + offset))).ToString());
             return *((int*)(address + numwheelsoffset));
         }
 
         static public unsafe List<ulong> GetWheelPtrs(Vehicle handle)
         {
-            //if (wheelsptr == 0x0) GetWheelsPtr();
-            var wheelPtr = GetWheelsPtr(handle);  // pointer to wheel pointers
+            var wheelPtr = GetWheelsPtr(handle);
             var numWheels = GetNumWheels(handle);
             List<ulong> wheelPtrs = new List<ulong>();
             for (int i = 0; i < numWheels; i++)
@@ -4289,17 +4112,37 @@ namespace ARS
         static public unsafe List<float> GetWheelsPower(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
-
             ulong offset = 0x1D4;
-
-
             List<float> angle = new List<float>();
-
             foreach (var wheel in wheelPtrs)
             {
-
                 float pos = (float)Math.Round(*((float*)(wheel + offset)), 5);
+                angle.Add(pos);
+            }
+            return angle;
+        }
 
+
+        static public unsafe List<float> GetWheelInternalDownforceMod(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x220;
+            List<float> angle = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 5);
+                angle.Add(pos);
+            }
+            return angle;
+        }
+        static public unsafe List<float> GetMoreShit(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x20A;
+            List<float> angle = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 5);
                 angle.Add(pos);
             }
             return angle;
@@ -4308,17 +4151,11 @@ namespace ARS
         static public unsafe List<float> GetWheelsGrip(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
-
             ulong offset = 0x198;
-
-
             List<float> angle = new List<float>();
-
             foreach (var wheel in wheelPtrs)
             {
-
                 float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
-
                 angle.Add(pos);
             }
             return angle;
@@ -4326,17 +4163,11 @@ namespace ARS
         static public unsafe List<float> GetWheelsWetgrip(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
-
             ulong offset = 0x19C;
-
-
             List<float> angle = new List<float>();
-
             foreach (var wheel in wheelPtrs)
             {
-
                 float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
-
                 angle.Add(pos);
             }
             return angle;
@@ -4345,13 +4176,10 @@ namespace ARS
         static public unsafe float GetWheelsMaxWheelspin(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
-
             ulong offset = 0x174;
-
             float w = 0f;
             foreach (var wheel in wheelPtrs)
             {
-
                 float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
                 if (Math.Abs(pos) > Math.Abs(w)) w = pos;
             }
@@ -4360,14 +4188,10 @@ namespace ARS
         static public unsafe float GetWheelsAvgWheelspin(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
-
             ulong offset = 0x174;
-
             float w = 0f;
-
             foreach (var wheel in wheelPtrs)
             {
-
                 float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
                 w += pos;
             }
@@ -4376,21 +4200,16 @@ namespace ARS
         static public unsafe List<float> GetWheelSkidmark(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
-
             ulong offset = 0x1B8;
             if (Game.Version <= GameVersion.VER_1_0_1290_1_STEAM) offset = 0x1B8;
             List<float> angle = new List<float>();
-
             foreach (var wheel in wheelPtrs)
             {
-
                 float pos = *((float*)(wheel + offset));
-
                 angle.Add(pos);
             }
             return angle;
         }
-
 
         static public void DrawStats(Racer r)
         {
@@ -4416,32 +4235,6 @@ namespace ARS
 
             debugFrontend.Render2D();
 
-            return;
-            if (racertext == null || !racertext.IsLoaded)
-            {
-                racertext = new Scaleform("mp_car_stats_01");
-
-            }
-            else
-            {
-
-
-                float enginePoer = 0f;
-                float traction = 0f;
-                float topSpeed = 0f;
-                racertext.CallFunction("SET_VEHICLE_INFOR_AND_STATS", r.Car.FriendlyName, r.Car.ClassType.ToString(), "MPCarHUD", "Dinka", "Acceleration", "Brake", "Slide", "IdealSpeedDiff", (int)acc, (int)r.vControl.Brake * 100f, (int)r.SideSlide * 100f, (int)diff);
-
-                racertext.CallFunction("setBars", 1, r.Car.Speed);
-                racertext.Render3D(r.Car.Position + new Vector3(0.0f, 0.0f, r.Car.Model.GetDimensions().Z + (1f + 3f)), GameplayCamera.Rotation, new Vector3(6f * 3f, 3f * 3f, 1f * 3f));
-                if (GetRandomInt(0, 100) < 2)
-                {
-                    racertext.Unload();
-                    racertext = new Scaleform("mp_car_stats_01");
-                }
-
-                //  
-            }
-
 
         }
 
@@ -4456,7 +4249,7 @@ namespace ARS
             }
             else
             {
-                sc.CallFunction("SET_VEHICLE_INFOR_AND_STATS", entity_name, entity_desc, "MPCarHUD", "Obey", first_name, second_name, third_name, fourth_name, first_value, second_value, third_value, fourth_value);
+                sc.CallFunction("SET_VEHICLE_INFOR_AND_STATS", entity_name, entity_desc, "MPCarHUD", "Pfister", first_name, second_name, third_name, fourth_name, first_value, second_value, third_value, fourth_value);
 
 
                 //racertext.CallFunction("setBars", 1, 1, 1); //(float)Math.Round((float)(first_value * 2))
@@ -4468,16 +4261,11 @@ namespace ARS
         static public unsafe List<float> GetWheelSlippage(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
-
             ulong offset = 0x1A8;
-
             List<float> angle = new List<float>();
-
             foreach (var wheel in wheelPtrs)
             {
-
                 float pos = *((float*)(wheel + offset));
-
                 angle.Add(pos);
             }
             return angle;
@@ -4520,25 +4308,21 @@ namespace ARS
             return 0;
         }
 
-        public static Vector3 GetRoadPos(Entity E, float ahead)
+        public static Vector3 GetRoadPos(Vector3 pos)
         {
-            if (CanWeUse(E))
+
+            OutputArgument outArgA = new OutputArgument();
+            OutputArgument outArgB = new OutputArgument();
+            Vector3 p = pos;
+
+            if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING, p.X, p.Y, p.Z, outArgA, outArgB, 0, 1077936128, 0))
             {
-                OutputArgument outArgA = new OutputArgument();
-                OutputArgument outArgB = new OutputArgument();
-                Vector3 p = E.Position + (E.ForwardVector * ahead);
-
-                if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING, p.X, p.Y, p.Z, outArgA, outArgB, 0, 1077936128, 0))
-                {
-                    Vector3 pos = outArgA.GetResult<Vector3>();
-
-                    return pos;
-                    //return outArgB.GetResult<float>();
-                }
+                Vector3 r = outArgA.GetResult<Vector3>();
+                return r;
             }
+
             return Vector3.Zero;
         }
-
         Vector3 Bezier3(float t, Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
         {
             float u = 1 - t;
@@ -4568,34 +4352,27 @@ namespace ARS
         }
 
 
-        public static Dictionary<int, float> SPDLimiter = new Dictionary<int, float>();
         public static void WorstCornerAhead(Racer r)
         {
-            r.KnownCorners.Clear();
-
-
-            int inv = r.GetBrakePointInvalidateDist();
             if (r.trackPoint.Node >= Path.Count - 5) return;
 
-            int maxD = (int)(r.Car.Speed*6);
-            float rSpd = r.Car.Velocity.Length() + MPHtoMS(20);
-            //if (r.KnownCorners.Any()) rSpd = r.BrakeCornerSpeed;
-            
+            int minD = (int)r.Car.Velocity.Length();
+            int maxD = (int)(r.Car.Velocity.Length() * 8);
 
-            IEnumerable<CornerPoint> corners = CornerPoints.SkipWhile(c => c.Node < r.trackPoint.Node + inv).ToList().Where(c => c.Node < r.trackPoint.Node + maxD && Math.Abs(c.Angle) > 0.25f && r.GetBrakecornerSpeed(c.Node, (Math.Abs(c.Angle))) < rSpd);
-            
+            //Filtering speed. Current speed + input + acceleration (m/s per s)
+            float rSpd = r.Car.Velocity.Length() + ARS.MPHtoMS(25);
+
+            IEnumerable<CornerPoint> corners = CornerPoints.SkipWhile(c => c.Node < r.trackPoint.Node + minD).ToList().Where(c => c.Node < r.trackPoint.Node + maxD && GetSpeedForCorner(c, r) < rSpd);
 
             foreach (CornerPoint c in corners)
-            {            
-                if (!r.KnownCorners.Contains(c))                    
+            {
+                if (!r.KnownCorners.Contains(c))
                 {
-                    c.Speed = r.GetBrakecornerSpeed(c.Node, (Math.Abs(c.Angle)));
+                    c.Speed = GetSpeedForCorner(c, r);
                     r.KnownCorners.Add(c);
                 }
             }
-            return;
         }
-
 
         public enum WorstCornerData
         {
@@ -4606,7 +4383,7 @@ namespace ARS
             Vector3 P = x * Vector3.Normalize(B - A) + A;
             return P;
         }
-        static Vector3 GetXfromPosInDirection(Vector3 mypos, Vector3 dir, Vector3 pos)
+        public static Vector3 GetXfromPosInDirection(Vector3 mypos, Vector3 dir, Vector3 pos)
         {
 
             Vector3 newDir = mypos - pos;
@@ -4632,10 +4409,95 @@ namespace ARS
             return false;
         }
 
+        //Returns the speed (m/s) you should be going at, given a distance (m) to the target, 
+        //the target speed (m/s) at distance Zero and a theoretical max deceleration (m/s^2)
+        public static float MapIdealSpeedForDistance(CornerPoint c, Racer r, bool prejudgement = false)
+        {
+            //Distance before the corner node to achieve the expected speed
+            float dSafety = 15;
+
+            //Late brake reduces the safety distance    
+            //dSafety *= ARS.map(r.mem.intention.Aggression, 1, 0, 0.5f, 1f, true);
+
+            //Absolute minimum
+            if (dSafety < c.Speed) dSafety = c.Speed;
+            if (prejudgement) dSafety = 0;
+
+            //Math variables
+            float targetDistance = (c.Node - r.trackPoint.Node) - dSafety;
+            if (targetDistance < 0f) targetDistance = 0f;
+            float velCurrent = r.Car.Velocity.Length();
+            float velTarget = c.Speed;
+            float timeToReachTarget = targetDistance / velCurrent;
+
+            //Braking ability has to account for at least 25% of the wheel grip to count as fully taking advantage of the grip. Else, braking Gs are less than grip Gs
+            float brakingAbility = (float)Math.Round(ARS.map(ARS.GetPercent(r.handlingData.BrakingAbility, r.vehData.WheelsGrip), 0f, 25f, 0f, 1f, true), 2);
+
+            brakingAbility *= ARS.map(r.followTrackPoint.Elevation, -22.5f, 0, 0.5f, 1, true);
+
+            //We want to decelerate this many Gs
+            float targetDeceleration = ((velTarget - velCurrent) / (timeToReachTarget - 0)) / 9.8f;
+            if (targetDistance == 0f) targetDeceleration = (velTarget - velCurrent);
+
+            //We can decelerate this many Gs
+            float availableDeceleration = -(((r.vehData.WheelsGrip * brakingAbility)));
+            if (prejudgement) availableDeceleration *= 0.75f;
+
+            //How many Gs over the car's braking ability we are allowed to go
+            float Risk = r.mem.personality.Stability.OverBrakeCalm + (r.mem.intention.Aggression * r.mem.personality.Stability.OverBrakeAggro);
+            if (r.Decisions.ContainsKey(Decision.LateBrake) && timeToReachTarget > 2f) Risk += r.mem.personality.Rivals.ManeuverExtraGs;
+            if (prejudgement) Risk = 0;
+
+            //Brake risk. There's a 0.5Gs deceleration leeway between no braking and full brake.
+            float NoBrake = availableDeceleration + 0.25f - Risk;
+            float FullBrake = availableDeceleration - 0.25f - Risk;
+
+            float SpeedMod = ARS.map(targetDeceleration, FullBrake, NoBrake, -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput, true);
+            float spd = velCurrent + SpeedMod;
+            return spd;
+        }
+
+        //Returns the speed (m/s) you should be going at, given a distance (m) to the target, 
+        //the target speed (m/s) at distance Zero and a theoretical max deceleration (m/s^2)
+        public static float MapIdealSpeedForDistanceG(Racer r, float distance, float speedThere)
+        {
+            //Absolute minimum
+            if (distance <= 0f) return speedThere;
+
+            //Math variables
+            float targetDistance = distance;
+            if (targetDistance < 0f) targetDistance = 0f;
+            float velCurrent = r.Car.Velocity.Length();
+            float velTarget = speedThere;
+            float timeToReachTarget = targetDistance / velCurrent;
+
+            //Braking ability has to account for at least 25% of the wheel grip to count as fully taking advantage of the grip. Else, braking Gs are less than grip Gs
+            float brakingAbility = (float)Math.Round(ARS.map(ARS.GetPercent(r.handlingData.BrakingAbility, r.vehData.WheelsGrip), 0f, 25f, 0f, 1f, true), 2);
+
+            //Gravity equals to 1G when fully pointing down;
+            float gravityAssist = ARS.map(r.Car.ForwardVector.Normalized.Z, -1, 1, -1, 1, true);
+
+            //We want to decelerate this many Gs
+            float targetDeceleration = ((velTarget - velCurrent) / (timeToReachTarget - 0)) / 9.8f;
+            if (targetDistance == 0f) targetDeceleration = (velTarget - velCurrent);
+
+            //We can decelerate this many Gs
+            float availableDeceleration = -(((r.vehData.WheelsGrip * brakingAbility) + gravityAssist));
+
+            //How many Gs over the car's braking ability we are allowed to go
+            float Risk = DevSettingsFile.GetValue<float>("RACERS", "BaseBrakeRisk", 0.0f) + (r.mem.intention.Aggression * DevSettingsFile.GetValue<float>("RACERS", "AggroBrakeRisk", 0.0f));
+
+            //Brake risk. There's a 0.5Gs deceleration leeway between no braking and full brake.
+            float NoBrake = -0.25f + Risk;
+            float FullBrake = 0.25f + Risk;
+
+            float SpeedMod = ARS.map(targetDeceleration, availableDeceleration + NoBrake, availableDeceleration - FullBrake, -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput, true);
+            float spd = velCurrent + SpeedMod;
+            return spd;
+        }
         static Vector3 OffsetByAngle(Vehicle v, Vector3 refDir, Vector3 goal, float angle)
         {
             Vector3 outVec = Vector3.Zero;
-
 
             float speed = v.Position.DistanceTo(goal);
             Vector3 Position = v.Position;
@@ -4653,8 +4515,6 @@ namespace ARS
 
             outVec = Vector3.Cross(Direction, (new Vector3(0, 0, (Goal.DistanceTo(physGoal)))));
             if (Vector3.SignedAngle(Direction, offsetDirection, Vector3.WorldUp) > 0) outVec = -outVec;
-
-
 
             DrawLine(Position, goal, Color.White);
             DrawLine(Position, goal + outVec, Color.White);
@@ -4681,27 +4541,15 @@ namespace ARS
             return rnd.Next(min, max);
         }
 
-
-
-        void OnKeyDown(object sender, KeyEventArgs e)
-        {
-
-        }
-        void OnKeyUp(object sender, KeyEventArgs e)
-        {
-
-        }
-
         public static void DrawLine(Vector3 from, Vector3 to, Color color)
         {
             Function.Call(Hash.DRAW_LINE, from.X, from.Y, from.Z, to.X, to.Y, to.Z, color.R, color.G, color.B, color.A);
         }
 
-        protected override void Dispose(bool dispose)
+        //protected override void Dispose(bool dispose)
+        void OnAbort(object sourc, EventArgs e)
         {
 
-            if (CamVerticalTrack != null) CamVerticalTrack.Destroy();
-            if (CamVerticalPlayer != null) CamVerticalPlayer.Destroy();
             World.RenderingCamera = null;
             Function.Call(Hash._STOP_ALL_SCREEN_EFFECTS);
             if (InFreeCam)
@@ -4735,9 +4583,8 @@ namespace ARS
             Function.Call(Hash._0x10D373323E5B9C0D);
             Game.Player.Character.HasGravity = true;
 
-            base.Dispose(dispose);
+            //base.Dispose(dispose);
         }
-
         public bool IsAhead(Vehicle v, Vector3 pos)
         {
             return Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS, v, pos.X, pos.Y, pos.Z).Y < 0;
@@ -4807,16 +4654,66 @@ namespace ARS
                 steeroffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Steer", 0x0);
                 brakeOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Brake", 0x0);
                 Log(LogImportance.Info, "Loaded Memory Offsets.");
+
+                steeroffset = 0x9AC;
+                Log(LogImportance.Info, "[MEMORY] Learned the steer offset from file: " + steeroffset);
+
             }
             else
             {
                 Log(LogImportance.Error, " 'Scripts/ARS/MemoryOffsets.ini' does not exist. ARS will try to learn the memory offsets from the game.");
                 UI.Notify("~o~Failed to load the MemoryOffsets file.~w~ Check you've installed ARS properly.");
             }
-        }
 
+
+            List<ScriptSettings> pFiles = new List<ScriptSettings>();
+            foreach (string file in Directory.EnumerateFiles(@"scripts\ARS\Personalities"))
+            {
+                pFiles.Add(ScriptSettings.Load(file));
+            }
+
+            personalitySets = new List<PersonalitySet>();
+            for (int per = 0; per < pFiles.Count; per++)
+            {
+                ScriptSettings pFile = pFiles[per];
+                PersonalitySet p = new PersonalitySet();
+
+                p.Name = pFile.GetValue<string>("GENERAL", "Name", "Normal");
+                p.ProbToUse = pFile.GetValue<int>("GENERAL", "ProbToUse", 50);
+                p.Model = pFile.GetValue<string>("GENERAL", "Model", "");
+
+                p.SkillRange = pFile.GetValue<string>("GENERAL", "SkillRange", "50,100");
+
+
+                p.Stability.WheelspinOnMinSlide = pFile.GetValue("WHEELSPIN", "Base", 100f) / 100f;
+                p.Stability.WheelspinOnMaxSlide = pFile.GetValue("WHEELSPIN", "FullSlide", 50f) / 100f;
+
+                p.Stability.CorrAtFullslide = pFile.GetValue("COUNTERSTEER", "AtFullSlide", 100f) / 100f;
+                p.Stability.MaxFullInput = pFile.GetValue("COUNTERSTEER", "MaxFullInput", 100f) / 100f;
+
+                p.Rivals.AggressionBuildup = pFile.GetValue("AGGRESSION_RIVAL", "AggroBuildup", 0.01f);
+
+
+                p.Rivals.BehindRivalMinDistance = pFile.GetValue("AGGRESSION_RIVAL", "BehindRivalMinDistance", 0.01f);
+                p.Rivals.SideToSideMinDist = pFile.GetValue("AGGRESSION_RIVAL", "SideToRivalMinDistance", 0.01f);
+
+                p.Stability.OverdriveCalm = pFile.GetValue("AGGRESSION_TRACK", "BaseOverdrive", 0f);
+                p.Stability.OverdriveAggro = pFile.GetValue("AGGRESSION_TRACK", "FullAggroOverdrive", 0.2f);
+
+                p.Stability.OverBrakeCalm = pFile.GetValue("AGGRESSION_TRACK", "BaseBrakeRisk", 0.2f);
+                p.Stability.OverBrakeAggro = pFile.GetValue("AGGRESSION_TRACK", "FullAggroBrakeRisk", 0.2f);
+
+                p.Rivals.ManeuverExtraGs = pFile.GetValue("AGGRESSION_TRACK", "ManeuverAggression", 0.2f);
+
+                personalitySets.Add(p);
+            }
+
+            personalitySets = personalitySets.OrderBy(p => p.ProbToUse).Reverse().ToList();
+
+        }
+        List<PersonalitySet> personalitySets = new List<PersonalitySet>();
         public enum LogImportance { Info, Error, Fatal }
-        public static void Log(LogImportance i, string text, bool forced=false)
+        public static void Log(LogImportance i, string text, bool forced = false)
         {
             if (DevSettingsFile != null && DevSettingsFile.GetValue<LogImportance>("GENERAL", "LogLevel", LogImportance.Info) > i && !forced) return;
             string log = "\n[" + DateTime.Now + "](" + i.ToString() + "): " + text;
@@ -4887,12 +4784,30 @@ namespace ARS
 
             return size;
         }
+
+
+        public static float GetDownforceGsAtSpeed(Racer r, float ms)
+        {
+            if (!ARS.DevSettingsFile.GetValue("RACERS", "AccountForDownforce", true)) return 0f;
+
+            float Gs = 0f;
+            int nwheels = ARS.GetNumWheels(r.Car);
+            float basedownf = 0.035f;
+
+            //Downforce at that speed
+            if (r.Car.HasBone("spoiler")) Gs = 0.035f * nwheels;
+            else if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) Gs = 0.035f * nwheels;
+            else Gs += map(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, basedownf, true) * r.handlingData.Downforce * nwheels;
+            if (float.IsNaN(Gs) || Gs > 5f) return 0f;
+            else return Gs;
+        }
         public static unsafe ulong GetHandlingPtr(Vehicle v)
         {
             if (!CanWeUse(v)) return (ulong)0;
 
             var address = (ulong)v.MemoryAddress;
             ulong offset = 0x918;
+            if (Game.Version > GameVersion.VER_1_0_1868_0_STEAM) offset = 0x938;
             return *((ulong*)(address + offset));
         }
 
@@ -4914,6 +4829,16 @@ namespace ARS
             ulong tractionCurveMaxOffset = 0x088;
             if (handlingAddress < 1) return 0f;
             float result = *(float*)(handlingAddress + tractionCurveMaxOffset);
+            return result;
+        }
+        public static unsafe float GetSteerLock(Vehicle v)
+        {
+
+            if (!CanWeUse(v)) return 0f;
+            ulong handlingAddress = GetHandlingPtr(v);
+            ulong steerlock = 0x0080;
+            if (handlingAddress < 1) return 0f;
+            float result = *(float*)(handlingAddress + steerlock);
             return result;
         }
         public static unsafe float GetDownforce(Vehicle v)
@@ -4976,7 +4901,7 @@ namespace ARS
             if (livery && veh.LiveryCount > 0) veh.Livery = GetRandomInt(0, veh.LiveryCount);
             if (veh.GetModCount(VehicleMod.Livery) > 0) veh.SetMod(VehicleMod.Livery, GetRandomInt(0, veh.GetModCount(VehicleMod.Livery)), false);
 
-
+            if (performance) veh.ToggleMod(VehicleToggleMod.Turbo, true);
             if (color)
             {
                 int c = GetRandomInt(1, Function.Call<int>(Hash.GET_NUMBER_OF_VEHICLE_COLOURS, veh));
@@ -5313,12 +5238,12 @@ namespace ARS
                     bool fitsRequired = false;
                     bool fitspriority = false;
                     int reqscore = 0;
-                    
+
                     foreach (string racerTag in RacerTags[racerfile].Split(' '))
                     {
                         //Log(LogImportance.Info, racerTag + " ...  ");
                         foreach (string partial in optionals) if (racerTag.Contains(partial)) fitsOptionals = true;
-                        foreach (string req in required) if (racerTag==req) {  Log(LogImportance.Info, racerfile+ " fits  " + req+""); reqscore++; }
+                        foreach (string req in required) if (racerTag == req) { Log(LogImportance.Info, racerfile + " fits  " + req + ""); reqscore++; }
                         foreach (string pri in priority) if (pri.Contains(racerTag) || racerTag.Contains(pri)) { fitspriority = true; }
                         if (banned.Contains(racerTag))
                         {
@@ -5328,7 +5253,7 @@ namespace ARS
                     }
                     if (reqscore == required.Count) fitsRequired = true;
 
-                    if (!fitsBanned && ( (fitsOptionals && fitsRequired)))
+                    if (!fitsBanned && ((fitsOptionals && fitsRequired)))
                     {
                         Log(LogImportance.Info, System.IO.Path.GetFileName(racerfile) + " fits the criteria.");
                         approved.Add(racerfile);
@@ -5391,7 +5316,7 @@ namespace ARS
                         }
 
                     }
-                    
+
                     XMLFile = new XmlDocument();
                 }
                 Log(LogImportance.Info, "Vehicles found: " + candidates.Count);
@@ -5401,7 +5326,7 @@ namespace ARS
                 Log(LogImportance.Info, "The discipline criteria is empty. Skipping the vehicle lookup.");
 
             }
-            
+
             if (maxcars > -1)
             {
                 if (candidates.Count > 0)
@@ -5431,7 +5356,7 @@ namespace ARS
 
                         while (candidates.Count < maxcars)
                         {
-                            
+
                             candidates.AddRange(dupes);
                         }
 
@@ -5450,7 +5375,7 @@ namespace ARS
 
                         candidates.RemoveAt(r);
                         candidates.Insert(GetRandomInt(0, candidates.Count - 1), taken);
-                        
+
                     }
                     int patience = 0;
 
@@ -5469,7 +5394,7 @@ namespace ARS
                             if (patience > 10) break; else continue;
                         }
 
-                        
+
                         candidates.RemoveAt(r);
                     }
                 }
@@ -5725,7 +5650,7 @@ namespace ARS
                     int.TryParse(modelname, out hashvModel);
                     vmodel = hashvModel;
                 }
-                Model racermodel =  new Model("mp_m_freemode_01");
+                Model racermodel = new Model("mp_m_freemode_01");
                 racermodel.Request();
 
                 while (!vmodel.IsLoaded)
@@ -5734,7 +5659,7 @@ namespace ARS
                     Script.Wait(10);
                 }
 
-                car = World.CreateVehicle(vmodel, Path[(Racers.Count+1) * 10]);
+                car = World.CreateVehicle(vmodel, Path[(Racers.Count + 1) * 10]);
 
                 car.Heading = (Path[2] - Path[0]).ToHeading();
 
@@ -5764,8 +5689,10 @@ namespace ARS
                         if (car.ColorCombinationCount > 2) car.ColorCombination = GetRandomInt(0, car.ColorCombinationCount);
                         else
                         {
-                            car.PrimaryColor = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
-                            car.SecondaryColor = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
+                            VehicleColor c = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
+                            car.PrimaryColor = c;
+                            car.SecondaryColor = c;
+                            car.PearlescentColor = c;
                         }
                     }
                     if (File.SelectSingleNode("//Secondary") != null) car.SecondaryColor = (VehicleColor)int.Parse(File.SelectSingleNode("//Secondary").InnerText);
@@ -5774,12 +5701,12 @@ namespace ARS
                     if (File.SelectSingleNode("//Dash") != null) car.DashboardColor = (VehicleColor)int.Parse(File.SelectSingleNode("//Dash").InnerText);
                     if (File.SelectSingleNode("//Trim") != null) car.TrimColor = (VehicleColor)int.Parse(File.SelectSingleNode("//Trim").InnerText);
 
-  
+
                     if (NodeExists(File, "//Mods"))
                     {
-                       
-                        if(File.SelectNodes("//Mods/Mod").Count > 0)
-                        {                            
+
+                        if (File.SelectNodes("//Mods/Mod").Count > 0)
+                        {
                             foreach (XmlElement modelement in File.SelectNodes("//Mods/Mod"))
                             {
                                 if (int.Parse(modelement.GetAttribute("ModIndex")) == 48)
@@ -5794,7 +5721,7 @@ namespace ARS
                     {
                         //RandomTuning(car, false, true, true, true, false);
                     }
-                    
+
                     foreach (XmlElement modelement in File.SelectNodes("//Mods/ToggleMod")) car.ToggleMod((VehicleToggleMod)int.Parse(modelement.GetAttribute("ModIndex")), int.Parse(modelement.InnerText) == 1 ? true : false);
 
                     if (File.SelectNodes("//Extras/Extra").Count > 0) for (int i = 0; i < 15; i++) if (car.ExtraExists(i)) car.ToggleExtra(i, false);
@@ -5830,7 +5757,7 @@ namespace ARS
                 {
                     drivermodel = StreetRacerModels[GetRandomInt(0, StreetRacerModels.Length - 1)];
                 }
-                Ped DriverPed = World.CreatePed(drivermodel,  car.Position.Around(5));
+                Ped DriverPed = World.CreatePed(drivermodel, car.Position.Around(5));
                 int p = 0;
                 while (!CanWeUse(DriverPed) && p < 3000)
                 {
@@ -5838,14 +5765,14 @@ namespace ARS
                     Script.Wait(10);
                     DriverPed = World.CreatePed(drivermodel, car.Position.Around(5));
                     p++;
-                    }
-                
+                }
 
-                
-                
-                DriverPed.SetIntoVehicle(car, VehicleSeat.Driver);
-                
-                
+
+
+
+                //DriverPed.SetIntoVehicle(car, VehicleSeat.Passenger);
+
+
                 if (!tags.Contains("street"))
                 {
                     foreach (XmlElement e in DriverXML.SelectNodes("//Cloth"))
@@ -5866,11 +5793,11 @@ namespace ARS
 
                     }
 
-                    
+
                 }
-                
+
                 if (CanWeUse(car))
-                    {
+                {
                     Racer r = new Racer(car, DriverPed);
 
                     if (File.SelectSingleNode("//Name") != null) r.Name = File.SelectSingleNode("//Name").InnerText;
@@ -5915,16 +5842,17 @@ namespace ARS
         {
             return GlobalTraffic.Where(s => s.Health > 0 && s.IsDriveable && s.IsInRangeOf(Game.Player.Character.Position, 30f) && !CanWeUse(s.GetPedOnSeat(VehicleSeat.Driver))).ToList();
         }
-        void CreateVehicle( Vehicle car, bool auto=false)
+        void CreateVehicle(Vehicle car, bool auto = false)
         {
-            
+
             if (!CanWeUse(car))
             {
                 UI.Notify("~o~Weird error.~w~Car doesn't seem to exist, try reentering.");
                 return;
             }
             string name = "";
-            if (auto) name = car.FriendlyName; else
+            if (auto) name = car.FriendlyName;
+            else
             {
                 UI.ShowSubtitle("~b~Enter your car's name, or leave empty to auto-generate one. ~w~~n~This will be the filename name.");
                 name = Game.GetUserInput(32);
@@ -5935,7 +5863,7 @@ namespace ARS
             string filePath = @"Scripts\ARS\Vehicles\" + name + ".xml";
 
 
-            if(File.Exists(filePath))
+            if (File.Exists(filePath))
             {
                 DateTime today = DateTime.Now;
                 name += " (" + today.Year + today.Month + today.Day + today.Hour + today.Minute + today.Second + ")";
@@ -5958,7 +5886,7 @@ namespace ARS
             XMLFile.AppendChild(Data);
 
             XmlNode Vehicle = XMLFile.CreateNode(XmlNodeType.Element, "Vehicle", null);
-            
+
 
             XmlNode temp = XMLFile.CreateElement("Name");
             temp.InnerText = car.FriendlyName;
@@ -5976,7 +5904,7 @@ namespace ARS
             nameAutotag = nameAutotag.Replace(@" ", "");
 
 
-            keywords.Add(car.ClassType.ToString()); 
+            keywords.Add(car.ClassType.ToString());
             keywords.Add(car.DisplayName);
             //keywords.AddRange(nameAutotag.Split(' '));
             keywords.Add(nameAutotag);
@@ -6108,12 +6036,12 @@ namespace ARS
 
 
             Data.AppendChild(Vehicle);
-            
+
 
             XMLFile.AppendChild(Data);
 
             XMLFile.Save(@"scripts\\ARS\Vehicles\" + name + ".xml");
-            UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~"+name+".xml");
+            UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
 
         void CreateVehicleFromHash(VehicleHash h)
@@ -6124,7 +6052,7 @@ namespace ARS
 
             if (Function.Call<int>(Hash._0x2AD93716F184EDA4, (int)h) == 0)
             {
-                Log(LogImportance.Info,  h.ToString() +" has no seats. Aborting this one.");
+                Log(LogImportance.Info, h.ToString() + " has no seats. Aborting this one.");
                 return;
             }
 
@@ -6210,16 +6138,20 @@ namespace ARS
             UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
 
-        public static List<Vector3> Project(Vector3 pos, Vector3 dir, float mod, int m)
+        public static Vector3 Project(Vector3 pos, Vector3 dir, float mod, int m)
         {
-            List<Vector3> r = new List<Vector3>();
+            return Quaternion.RotationAxis(Vector3.WorldUp, (float)(System.Math.PI / 180f) * (mod * m)) * (dir * m);
+
+            /*
+             * List<Vector3> r = new List<Vector3>();
             for (int i = 0; i < m; i++)
             {
                 Vector3 v = Quaternion.RotationAxis(Vector3.WorldUp, (float)(System.Math.PI / 180f) * (mod*i)) * (dir*i);
                 r.Add(v);
             }
-            
             return r;
+            */
+
         }
     }
 
