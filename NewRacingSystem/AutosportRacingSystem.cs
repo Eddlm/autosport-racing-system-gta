@@ -32,7 +32,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis,ShowPhysics, UseNearbyCars
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis,ShowPhysics, UseNearbyCars,ReloadSettings
     }
 
     public enum OptionValues
@@ -153,21 +153,12 @@ namespace ARS
 
         public static List<string> HelpMessages = new List<string>();
 
-
-
-        //Loaded from config
-        public static int TuningLevel = 0;
-
-        public static int AIRacerAutofix = 1;
-
-
+       
 
         //AI racers, and the player if they participate
         public static List<Racer> Racers = new List<Racer>();
+        public static int catchupPos = 0; //For catchup stuff only
 
-
-        //AI personality sets to control agressiveness and other biases.
-        //public static List<PersonalitySet> personalities = new List<PersonalitySet>();
 
         //Route info
         public static List<Vector3> Path = new List<Vector3>(); //List of nodes that conform the race path.
@@ -685,28 +676,6 @@ namespace ARS
             return (float)(Math.PI * angle / 180.0f);
         }
 
-        public static float GetSpeedForAngle_b(float degrees, float confidence)
-        {
-
-
-            degrees /= confidence;
-            if (degrees > AIData.MaxAngle) degrees = AIData.MaxAngle;
-            degrees /= AIData.MaxAngle; // scale to 1.0;
-            degrees = (float)Math.Pow(degrees, AIData.Delta); //original 0.4f
-
-            float maxSpeed = AIData.MaxSpeed;//60f;
-            float minSpeed = AIData.MinSpeed;//20f;
-
-            float minAngle = 0f;
-            float maxAngle = 1.0f;
-
-
-            float speed = map(degrees, minAngle, maxAngle, maxSpeed, minSpeed);
-
-            Clamp(speed, minSpeed, maxSpeed);
-
-            return speed;
-        }
 
 
         public static float LerpDelta(float current, float from, float to, float delta)
@@ -895,10 +864,16 @@ namespace ARS
             }
             if (Game.IsControlJustPressed(2, GTA.Control.FrontendAccept))
             {
+                if (oSelected == Options.ReloadSettings)
+                {                    
+                    SettingsFile = null;
+                    DevSettingsFile = null;
+                    LoadSettings();
+                    UI.Notify("Reloaded setting files");
+                }
                 if (oSelected == Options.RaceOptions)
                 {
-                    OptionsList.Clear();
-                    //OptionsList.Add(Options.DebugLevel);
+                    OptionsList.Clear();                   
                     OptionsList.Add(Options.ShowAggro);
                     OptionsList.Add(Options.ShowInputs);
                     OptionsList.Add(Options.ShowTrackAnalysis);
@@ -995,7 +970,7 @@ namespace ARS
                 }
                 if (oSelected == Options.Race)
                 {
-                    OptionsList.Clear();
+                    OptionsList.Clear(); 
                     OptionsList.Add(Options.TrackList);
                     OptionsList.Add(Options.Disciplines);
                     OptionsList.Add(Options.GridSize);
@@ -1043,7 +1018,7 @@ namespace ARS
                         {
                             for (int i = 0; i < Racers.Count; i++)
                             {
-                                PersonalitySet p = personalitySets.Find(ps => ps.Model != "" && ps.Model == Racers[i].Car.DisplayName);
+                                PersonalitySet p = personalitySets.Find(ps => ps.Model != "" && ps.Model.ToLowerInvariant() == Racers[i].Car.DisplayName.ToLowerInvariant());
                                 if (p != null)
                                 {
                                     Racers[i].mem.personality = p;
@@ -1392,6 +1367,8 @@ namespace ARS
                         if (Path.Count == 0)
                         {
                             OptionsList.Add(Options.Race);
+                            OptionsList.Add(Options.CreateTrack);
+                            OptionsList.Add(Options.ReloadSettings);
 
                         }
                         else
@@ -1600,7 +1577,7 @@ namespace ARS
 
                         string text = "";
                         if (r.Driver.IsPlayer) text = "~b~" + r.Pos + "º~y~ " + r.Name + " T" + fTime + "~n~";
-                        else text = "~b~" + r.Pos + "º~w~ " + r.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
+                        else text = "~b~" + r.Pos + "º~w~ " + r.mem.personality.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
 
 
                         positions.Add(text);
@@ -1921,7 +1898,7 @@ namespace ARS
 
         //Generates a set of Vector3 points in a bezier curve shape, from a starting position to an end position.
         //The direction defines the starting direction of the points and generates a middlepoint. The end direction is not controlled.
-        public List<Vector3> GenerateBezier(Vector3 sStart, Vector3 sDirection, Vector3 sEnd, float sScale)
+        public static List<Vector3> GenerateBezier(Vector3 sStart, Vector3 sDirection, Vector3 sEnd, float sScale)
         {
             List<Vector3> points = new List<Vector3>();
             sScale = sStart.DistanceTo2D(sEnd) * map(Vector3.Angle((sEnd - sStart).Normalized, sDirection), 0f, 90f, 1f, 1.5f, true);
@@ -2001,6 +1978,33 @@ namespace ARS
 
             Color result = Color.FromArgb((int)red, (int)green, (int)blue);
             return result;
+        }
+
+        public static Color GradientAtoBtoC(Color A, Color B, Color C, float percentage)
+        {
+            percentage = ARS.Clamp((float)percentage, 0, 100);
+
+            if (percentage <= 50)
+            {
+                var red = ARS.map(percentage, 0, 100, A.R, B.R);
+                var green = ARS.map(percentage, 0, 100, A.G, B.G);
+                var blue = ARS.map(percentage, 0, 100, A.B, B.B);
+
+                Color result = Color.FromArgb((int)red, (int)green, (int)blue);
+                return result;
+
+            }
+            else
+            {
+                var red = ARS.map(percentage, 50, 100, B.R, C.R);
+                var green = ARS.map(percentage, 50, 100, B.G, C.G);
+                var blue = ARS.map(percentage, 50, 100, B.B, C.B);
+
+                Color result = Color.FromArgb((int)red, (int)green, (int)blue);
+                return result;
+
+            }
+
         }
         void SetloadingPromptText(string t)
         {
@@ -2265,6 +2269,8 @@ namespace ARS
             Game.SetControlNormal(2, GTA.Control.VehicleLookBehind, 1f);
 
 
+            if (ARS.SettingsFile.GetValue("CATCHUP", "OnlyLastHalf", true)) ARS.catchupPos = (int)(ARS.Racers.Count / 2);
+
         }
 
         public void CleanRacers()
@@ -2497,7 +2503,7 @@ namespace ARS
                 {
                     if (!Game.Player.Character.IsInVehicle(r.Car) && r.Car.GetMod(VehicleMod.Engine) == -1)
                     {
-                        switch (TuningLevel)
+                        switch (DevSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 1))
                         {
                             case 0: continue;
                             case 1: ARS.RandomTuning(r.Car, true, true, true, false, false); break;
@@ -3972,14 +3978,14 @@ namespace ARS
                 int h = (int)TrackPoints[c.Node].TrackWide * 2;
                 int currentMpointH = 2;
 
-                while (h > currentMpointH && length < 100)
+                while (h > currentMpointH && length < 500)
                 {
-                    length += 5;
+                    length += 2;
                     if (length < c.Node - 5 && length < CornerPoints.Count() - c.Node - 5)
                     {
                         Vector3 mPoint = (TrackPoints[c.Node - length].Position + TrackPoints[c.Node + length].Position) / 2;
-                        currentMpointH = (int)Vector3.Distance(mPoint, TrackPoints[c.Node].Position);
-
+                        currentMpointH = (int)Vector3.Distance(new Vector3(mPoint.X, mPoint.Y, 0), new Vector3(TrackPoints[c.Node].Position.X, TrackPoints[c.Node].Position.Y, 0));
+                        
                         c.AvgRadius = GetCurveRadius(TrackPoints[c.Node - length], TrackPoints[c.Node + length], TrackPoints[c.Node]);
 
                         float ang = Vector3.SignedAngle(TrackPoints[c.Node - length].Direction, TrackPoints[c.Node + length].Direction, Vector3.WorldUp) / (length / 5);
@@ -4024,8 +4030,8 @@ namespace ARS
             finalGrip += r.mem.intention.Aggression * r.mem.personality.Stability.OverdriveAggro;
             if (r.Decisions.ContainsKey(Decision.FastCorner)) finalGrip += r.mem.personality.Rivals.ManeuverExtraGs;
 
-            //Any hill that's not flat reduces grip as gravity isn't fully nailing you down
-            finalGrip *= ARS.map(c.Elevation, -22.5f, 0f, 0.5f, 1, true);
+            //Downhill - any hill that's not flat reduces grip as gravity isn't fully nailing you down
+            finalGrip -= ARS.map(c.Elevation, 0f, -45f, 0f, 1f, true);
 
             //Initial judgement
             float spd = (float)Math.Sqrt((finalGrip * 9.8f) * c.AvgRadius);
@@ -4033,15 +4039,25 @@ namespace ARS
             //Expected grip bonus at that speed
             finalGrip += GetDownforceGsAtSpeed(r, spd);
 
+            // + Math.Abs(c.AvgAngle / 100) + (spd / 100);
+            if (DevSettingsFile.GetValue("RACERS", "AccountForSlopeChanges", 100) > 0) 
+            {
+                //Slopes - they remove or add Gs
+                float penaltyGs = 1 + ((c.AvgElChange / 50) * (ARS.DevSettingsFile.GetValue("RACERS", "AccountForSlopeChanges", 100) / 100));
+                finalGrip *= ARS.Clamp(penaltyGs, 0.5f, 2f);
+            }
+
+            
+            if (r.mem.personality.Stability.UndersteerFactor > 0)
+            {
+                float penalty = (Math.Abs(c.AvgAngle) - (r.handlingData.TRlateral / 4)) * 0.01f * r.mem.personality.Stability.UndersteerFactor;
+                if (penalty > 0) finalGrip -= (penalty * (spd * 0.1f));
+            }
+
+            if (finalGrip < 0.2f) finalGrip = 0.2f;
+
             //Re-Judge with the new bonus
             spd = (float)Math.Sqrt((finalGrip * 9.8f) * c.AvgRadius);
-
-            //Down slopes
-            if (c.ElevationChange < 0.0f)
-            {
-                float spdGravity = ARS.map(c.ElevationChange, -5, 0, ARS.MPHtoMS(100), ARS.MPHtoMS(300), true) * ARS.map(Math.Abs(c.AvgAngle), 5f, 1f, 0.8f, 1f, true);
-                if (spd > spdGravity) spd = spdGravity;
-            }
 
             if (spd < ARS.AIData.MinSpeed) spd = ARS.AIData.MinSpeed;
             if (spd > 0) return spd; else return ARS.AIData.MaxSpeed;
@@ -4357,9 +4373,9 @@ namespace ARS
             if (r.trackPoint.Node >= Path.Count - 5) return;
 
             int minD = (int)r.Car.Velocity.Length();
-            int maxD = (int)(r.Car.Velocity.Length() * 8);
+            int maxD = (int)(r.Car.Velocity.Length() * 6);
 
-            //Filtering speed. Current speed + input + acceleration (m/s per s)
+            //Filtering speed. 
             float rSpd = r.Car.Velocity.Length() + ARS.MPHtoMS(25);
 
             IEnumerable<CornerPoint> corners = CornerPoints.SkipWhile(c => c.Node < r.trackPoint.Node + minD).ToList().Where(c => c.Node < r.trackPoint.Node + maxD && GetSpeedForCorner(c, r) < rSpd);
@@ -4421,7 +4437,7 @@ namespace ARS
 
             //Absolute minimum
             if (dSafety < c.Speed) dSafety = c.Speed;
-            if (prejudgement) dSafety = 0;
+            //if (prejudgement) dSafety = 0;
 
             //Math variables
             float targetDistance = (c.Node - r.trackPoint.Node) - dSafety;
@@ -4630,14 +4646,6 @@ namespace ARS
 
                 DevSettingsFile = ScriptSettings.Load(@"scripts\ARS\Developer Settings.ini");
 
-                /*
-                AIData.MaxAngle = DevSettingsFile.GetValue<float>("AI_LOGIC", "MaxAngle", 35);
-                AIData.MaxSpeed = ARS.MPHtoMS(DevSettingsFile.GetValue<float>("AI_LOGIC", "MaxSpeed", 400));
-                AIData.MinSpeed = ARS.MPHtoMS(DevSettingsFile.GetValue<float>("AI_LOGIC", "MinSpeed", 30));
-                AIData.Delta = DevSettingsFile.GetValue<float>("AI_LOGIC", "Delta", 0.065f);
-                */
-                AIRacerAutofix = DevSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1);
-                TuningLevel = DevSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 2);
 
                 Log(LogImportance.Info, "Loaded Developer settings.");
             }
@@ -4688,8 +4696,8 @@ namespace ARS
                 p.Stability.WheelspinOnMinSlide = pFile.GetValue("WHEELSPIN", "Base", 100f) / 100f;
                 p.Stability.WheelspinOnMaxSlide = pFile.GetValue("WHEELSPIN", "FullSlide", 50f) / 100f;
 
-                p.Stability.CorrAtFullslide = pFile.GetValue("COUNTERSTEER", "AtFullSlide", 100f) / 100f;
-                p.Stability.MaxFullInput = pFile.GetValue("COUNTERSTEER", "MaxFullInput", 100f) / 100f;
+                p.Stability.CounterFactor = pFile.GetValue("COUNTERSTEER", "CounterFactor", 100f) / 100f;
+                p.Stability.MaxAbsoluteCounter = pFile.GetValue("COUNTERSTEER", "MaxAbsoluteCounter", 100f) / 100f;
 
                 p.Rivals.AggressionBuildup = pFile.GetValue("AGGRESSION_RIVAL", "AggroBuildup", 0.01f);
 
@@ -4704,6 +4712,9 @@ namespace ARS
                 p.Stability.OverBrakeAggro = pFile.GetValue("AGGRESSION_TRACK", "FullAggroBrakeRisk", 0.2f);
 
                 p.Rivals.ManeuverExtraGs = pFile.GetValue("AGGRESSION_TRACK", "ManeuverAggression", 0.2f);
+
+                //Understeer
+                p.Stability.UndersteerFactor = pFile.GetValue("AGGRESSION_TRACK", "UndersteerFactor", 0f);
 
                 personalitySets.Add(p);
             }
@@ -4788,7 +4799,7 @@ namespace ARS
 
         public static float GetDownforceGsAtSpeed(Racer r, float ms)
         {
-            if (!ARS.DevSettingsFile.GetValue("RACERS", "AccountForDownforce", true)) return 0f;
+            if (ARS.DevSettingsFile.GetValue("RACERS", "AccountForDownforce", 100)==0) return 0f;
 
             float Gs = 0f;
             int nwheels = ARS.GetNumWheels(r.Car);
@@ -4799,7 +4810,7 @@ namespace ARS
             else if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) Gs = 0.035f * nwheels;
             else Gs += map(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, basedownf, true) * r.handlingData.Downforce * nwheels;
             if (float.IsNaN(Gs) || Gs > 5f) return 0f;
-            else return Gs;
+            else return Gs*(ARS.DevSettingsFile.GetValue("RACERS", "AccountForDownforce", 100)/100);
         }
         public static unsafe ulong GetHandlingPtr(Vehicle v)
         {

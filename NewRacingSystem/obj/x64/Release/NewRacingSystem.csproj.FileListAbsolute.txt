@@ -15,3 +15,12 @@ D:\Mis Archivos\Proyectos\ARSE\ARSE Project\NewRacingSystem\obj\x64\Release\NewR
 D:\Mis Archivos\Proyectos\ARSE\ARSE Project\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CopyComplete
 D:\Mis Archivos\Proyectos\ARSE\ARSE Project\NewRacingSystem\obj\x64\Release\ARS.dll
 D:\Mis Archivos\Proyectos\ARSE\ARSE Project\NewRacingSystem\obj\x64\Release\ARS.pdb
+D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\bin\x64\Release\ARS.dll
+D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\bin\x64\Release\ARS.pdb
+D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\bin\x64\Release\ScriptHookVDotNet2.dll
+D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\bin\x64\Release\ScriptHookVDotNet2.xml
+D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CoreCompileInputs.cache
+D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CopyComplete
+D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64\Release\ARS.dll
+D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64\Release\ARS.pdb
+D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64\Release\NewRacingSystem.csprojAssemblyReference.cache

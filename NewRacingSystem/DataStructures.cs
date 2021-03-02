@@ -14,14 +14,9 @@ namespace ARS
 
     public class AIData
     {
-        public float SpeedToInput = ARS.MPHtoMS(20); 
-
-        public float MinAngle = 0;
-        public float MaxAngle = 30;
+        public float SpeedToInput = ARS.MPHtoMS(10); 
         public float MaxSpeed = ARS.MPHtoMS(250);
-        public float MinSpeed = ARS.MPHtoMS(10f);
-
-        public float Delta = 0.12f;
+        public float MinSpeed = ARS.MPHtoMS(20f);
 
     }
     public class VehData
@@ -148,8 +143,8 @@ namespace ARS
         //Slide
         public float MinAlowedSlideToTRLat = 0f;
         public float MaxAllowedSlideToTRLat = 1f;
-        public float CorrAtFullslide = 1f;
-        public float MaxFullInput = 10f;
+        public float CounterFactor = 1f;
+        public float MaxAbsoluteCounter = 10f;
 
         //Spinouts
         public float SpinoutSafeRotSpeed = 20f;
@@ -158,6 +153,9 @@ namespace ARS
 
         public float SpinoutUnsafeExtraRotSpeed = 40f;
         public float SpinoutMaxWheelspinAtExtra = 0;
+
+
+        public float UndersteerFactor = 0f;
     }
 
     public class PersonalitySet
