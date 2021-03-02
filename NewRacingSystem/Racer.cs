@@ -367,7 +367,7 @@ namespace ARS
             }
 
             //Limit the th the input to the car's top speed. Cars can surpass defined engine top speed in V
-            if (mem.intention.Speed > ARS.EngineTopSpeed(Car)) mem.intention.Speed = ARS.EngineTopSpeed(Car) + ARS.MPHtoMS(10);
+            if (mem.intention.Speed > ARS.EngineTopSpeed(Car)) mem.intention.Speed = ARS.EngineTopSpeed(Car) + ARS.MPHtoMS(25);
 
             //Catchup - racers going in first will slow down if they get too far ahead
             if (ARS.SettingsFile.GetValue("CATCHUP", "LeaderTopSpeed", 75) !=100 && Pos == 1 && ARS.Racers.Count > 1)
