@@ -23,4 +23,20 @@ D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64
 D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CopyComplete
 D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64\Release\ARS.dll
 D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64\Release\ARS.pdb
-D:\Mis Archivos\Repos\GitHub\autosport-racing-system-gta\NewRacingSystem\obj\x64\Release\NewRacingSystem.csprojAssemblyReference.cache
+C:\Users\Juanjo\Desktop\2\NewRacingSystem\bin\x64\Release\ARS.dll
+C:\Users\Juanjo\Desktop\2\NewRacingSystem\bin\x64\Release\ARS.pdb
+C:\Users\Juanjo\Desktop\2\NewRacingSystem\bin\x64\Release\ScriptHookVDotNet2.dll
+C:\Users\Juanjo\Desktop\2\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CoreCompileInputs.cache
+C:\Users\Juanjo\Desktop\2\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CopyComplete
+C:\Users\Juanjo\Desktop\2\NewRacingSystem\obj\x64\Release\ARS.dll
+C:\Users\Juanjo\Desktop\2\NewRacingSystem\obj\x64\Release\ARS.pdb
+C:\Users\Juanjo\Desktop\2\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.AssemblyReference.cache
+D:\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\bin\x64\Release\ARS.dll
+D:\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\bin\x64\Release\ARS.pdb
+D:\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\bin\x64\Release\ScriptHookVDotNet2.dll
+D:\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\bin\x64\Release\ScriptHookVDotNet2.xml
+D:\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.AssemblyReference.cache
+D:\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CoreCompileInputs.cache
+D:\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\x64\Release\NewRacingSystem.csproj.CopyComplete
+D:\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\x64\Release\ARS.dll
+D:\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\x64\Release\ARS.pdb

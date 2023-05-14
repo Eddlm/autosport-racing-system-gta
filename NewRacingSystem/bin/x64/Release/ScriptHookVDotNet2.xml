@@ -91,7 +91,7 @@
             Initializes a new instance of the <see cref="T:GTA.Math.Matrix"/> structure.
             </summary>
             <param name="values">The values to assign to the components of the matrix. This must be an array with sixteen elements.</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="values"/> is <c>null</c>.</exception>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null" />.</exception>
             <exception cref="T:System.ArgumentOutOfRangeException">Thrown when <paramref name="values"/> contains more or less than sixteen elements.</exception>
         </member>
         <member name="P:GTA.Math.Matrix.Identity">
@@ -119,7 +119,7 @@
             Gets a value indicating whether this instance is an identity matrix.
             </summary>
             <value>
-            <c>true</c> if this instance is an identity matrix; otherwise, <c>false</c>.
+            <see langword="true" /> if this instance is an identity matrix; otherwise, <see langword="false" />.
             </value>
         </member>
         <member name="P:GTA.Math.Matrix.HasInverse">
@@ -366,7 +366,7 @@
             </summary>
             <param name="left">The first value to compare.</param>
             <param name="right">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="left"/> has the same value as <paramref name="right"/>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="left"/> has the same value as <paramref name="right"/>; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="M:GTA.Math.Matrix.op_Inequality(GTA.Math.Matrix,GTA.Math.Matrix)">
             <summary>
@@ -374,7 +374,7 @@
             </summary>
             <param name="left">The first value to compare.</param>
             <param name="right">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="left"/> has a different value than <paramref name="right"/>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="left"/> has a different value than <paramref name="right"/>; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="M:GTA.Math.Matrix.ToArray">
             <summary>
@@ -398,14 +398,14 @@
             Returns a value that indicates whether the current instance is equal to a specified object.
             </summary>
             <param name="obj">Object to make the comparison with.</param>
-            <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
+            <returns><see langword="true" /> if the current instance is equal to the specified object; <see langword="false" /> otherwise.</returns>
         </member>
         <member name="M:GTA.Math.Matrix.Equals(GTA.Math.Matrix)">
             <summary>
             Returns a value that indicates whether the current instance is equal to the specified object.
             </summary>
             <param name="other">Object to make the comparison with.</param>
-            <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
+            <returns><see langword="true" /> if the current instance is equal to the specified object; <see langword="false" /> otherwise.</returns>
         </member>
         <member name="M:GTA.Math.Matrix.Equals(GTA.Math.Matrix@,GTA.Math.Matrix@)">
             <summary>
@@ -413,8 +413,8 @@
             </summary>
             <param name="value1"></param>
             <param name="value2"></param>
-            <returns><c>true</c> if <paramref name="value1"/> is the same instance as <paramref name="value2"/> or
-            if both are <c>null</c> references or if <c>value1.Equals(value2)</c> returns <c>true</c>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="value1"/> is the same instance as <paramref name="value2"/> or
+            if both are <see langword="null" /> references or if <c>value1.Equals(value2)</c> returns <see langword="true" />; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="F:GTA.Math.Quaternion.X">
             <summary>
@@ -733,7 +733,7 @@
             </summary>
             <param name="left">The first value to compare.</param>
             <param name="right">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="left"/> has the same value as <paramref name="right"/>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="left"/> has the same value as <paramref name="right"/>; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="M:GTA.Math.Quaternion.op_Inequality(GTA.Math.Quaternion,GTA.Math.Quaternion)">
             <summary>
@@ -741,7 +741,7 @@
             </summary>
             <param name="left">The first value to compare.</param>
             <param name="right">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="left"/> has a different value than <paramref name="right"/>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="left"/> has a different value than <paramref name="right"/>; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="M:GTA.Math.Quaternion.ToString">
             <summary>
@@ -767,14 +767,14 @@
             Returns a value that indicates whether the current instance is equal to a specified object.
             </summary>
             <param name="obj">Object to make the comparison with.</param>
-            <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
+            <returns><see langword="true" /> if the current instance is equal to the specified object; <see langword="false" /> otherwise.</returns>
         </member>
         <member name="M:GTA.Math.Quaternion.Equals(GTA.Math.Quaternion)">
             <summary>
             Returns a value that indicates whether the current instance is equal to the specified object.
             </summary>
             <param name="other">Object to make the comparison with.</param>
-            <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
+            <returns><see langword="true" /> if the current instance is equal to the specified object; <see langword="false" /> otherwise.</returns>
         </member>
         <member name="M:GTA.Math.Quaternion.Equals(GTA.Math.Quaternion@,GTA.Math.Quaternion@)">
             <summary>
@@ -782,8 +782,8 @@
             </summary>
             <param name="value1"></param>
             <param name="value2"></param>
-            <returns><c>true</c> if <paramref name="value1"/> is the same instance as <paramref name="value2"/> or
-            if both are <c>null</c> references or if <c>value1.Equals(value2)</c> returns <c>true</c>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="value1"/> is the same instance as <paramref name="value2"/> or
+            if both are <see langword="null" /> references or if <c>value1.Equals(value2)</c> returns <see langword="true" />; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="F:GTA.Math.Vector2.X">
             <summary>
@@ -1075,7 +1075,7 @@
             </summary>
             <param name="left">The first value to compare.</param>
             <param name="right">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="left"/> has the same value as <paramref name="right"/>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="left"/> has the same value as <paramref name="right"/>; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="M:GTA.Math.Vector2.op_Inequality(GTA.Math.Vector2,GTA.Math.Vector2)">
             <summary>
@@ -1083,7 +1083,7 @@
             </summary>
             <param name="left">The first value to compare.</param>
             <param name="right">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="left"/> has a different value than <paramref name="right"/>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="left"/> has a different value than <paramref name="right"/>; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="M:GTA.Math.Vector2.op_Implicit(GTA.Math.Vector2)~GTA.Math.Vector3">
             <summary>
@@ -1114,14 +1114,14 @@
             Returns a value that indicates whether the current instance is equal to a specified object.
             </summary>
             <param name="obj">Object to make the comparison with.</param>
-            <returns><c>true</c> if the current instance is equal to the specified object; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if the current instance is equal to the specified object; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="M:GTA.Math.Vector2.Equals(GTA.Math.Vector2)">
             <summary>
             Returns a value that indicates whether the current instance is equal to the specified object.
             </summary>
             <param name="other">Object to make the comparison with.</param>
-            <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
+            <returns><see langword="true" /> if the current instance is equal to the specified object; <see langword="false" /> otherwise.</returns>
         </member>
         <member name="M:GTA.Math.Vector2.Equals(GTA.Math.Vector2@,GTA.Math.Vector2@)">
             <summary>
@@ -1129,8 +1129,8 @@
             </summary>
             <param name="value1">The first value to compare.</param>
             <param name="value2">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="value1"/> is the same instance as <paramref name="value2"/> or
-            if both are <c>null</c> references or if <c>value1.Equals(value2)</c> returns <c>true</c>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="value1"/> is the same instance as <paramref name="value2"/> or
+            if both are <see langword="null" /> references or if <c>value1.Equals(value2)</c> returns <see langword="true" />; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="F:GTA.Math.Vector3.X">
             <summary>
@@ -1533,7 +1533,7 @@
             </summary>
             <param name="left">The first value to compare.</param>
             <param name="right">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="left"/> has the same value as <paramref name="right"/>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="left"/> has the same value as <paramref name="right"/>; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="M:GTA.Math.Vector3.op_Inequality(GTA.Math.Vector3,GTA.Math.Vector3)">
             <summary>
@@ -1541,7 +1541,7 @@
             </summary>
             <param name="left">The first value to compare.</param>
             <param name="right">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="left"/> has a different value than <paramref name="right"/>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="left"/> has a different value than <paramref name="right"/>; otherwise, <see langword="false" />.</returns>
         </member>
         <member name="M:GTA.Math.Vector3.op_Implicit(GTA.Math.Vector3)~GTA.Math.Vector2">
             <summary>
@@ -1570,14 +1570,14 @@
             Returns a value that indicates whether the current instance is equal to a specified object.
             </summary>
             <param name="obj">Object to make the comparison with.</param>
-            <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
+            <returns><see langword="true" /> if the current instance is equal to the specified object; <see langword="false" /> otherwise.</returns>
         </member>
         <member name="M:GTA.Math.Vector3.Equals(GTA.Math.Vector3)">
             <summary>
             Returns a value that indicates whether the current instance is equal to the specified object.
             </summary>
             <param name="other">Object to make the comparison with.</param>
-            <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
+            <returns><see langword="true" /> if the current instance is equal to the specified object; <see langword="false" /> otherwise.</returns>
         </member>
         <member name="M:GTA.Math.Vector3.Equals(GTA.Math.Vector3@,GTA.Math.Vector3@)">
             <summary>
@@ -1585,8 +1585,80 @@
             </summary>
             <param name="value1">The first value to compare.</param>
             <param name="value2">The second value to compare.</param>
-            <returns><c>true</c> if <paramref name="value1"/> is the same instance as <paramref name="value2"/> or
-            if both are <c>null</c> references or if <c>value1.Equals(value2)</c> returns <c>true</c>; otherwise, <c>false</c>.</returns>
+            <returns><see langword="true" /> if <paramref name="value1"/> is the same instance as <paramref name="value2"/> or
+            if both are <see langword="null" /> references or if <c>value1.Equals(value2)</c> returns <see langword="true" />; otherwise, <see langword="false" />.</returns>
+        </member>
+        <member name="F:GTA.Native.PedHash.Franklin02">
+            <summary>
+            The Franklin Clinton model added in the Contract update, and this model is not used for story mode. The model name is <c>P_Franklin_02</c>.
+            The leader player will control a <see cref="T:GTA.Ped" /> with this model in Short Trip missions.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.ARY">
+            <summary>
+            The first in-game model of Andre Romelle Young, known professionally as Dr. Dre.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.ARY02">
+            <summary>
+            The second in-game model of Andre Romelle Young, known professionally as Dr. Dre.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.JIO">
+            <summary>
+            The first in-game model of Jimmy Iovine.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.JIO02">
+            <summary>
+            The second in-game model of Jimmy Iovine.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.MJO">
+            <summary>
+            The first in-game model of Mark Jordan, known professionally as DJ Pooh.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.MJO02">
+            <summary>
+            The second in-game model of Mark Jordan, known professionally as DJ Pooh.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.ARYCutscene">
+            <summary>
+            The first cutscene model of Andre Romelle Young, known professionally as Dr. Dre.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.ARY02Cutscene">
+            <summary>
+            The second cutscene model of Andre Romelle Young, known professionally as Dr. Dre.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.JIOCutscene">
+            <summary>
+            The first cutscene model of Jimmy Iovine.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.JIO02Cutscene">
+            <summary>
+            The second cutscene model of Jimmy Iovine.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.MJOCutscene">
+            <summary>
+            The first cutscene model of Mark Jordan, known professionally as DJ Pooh.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.PedHash.MJO02Cutscene">
+            <summary>
+            The second cutscene model of Mark Jordan, known professionally as DJ Pooh.
+            </summary>
+        </member>
+        <member name="F:GTA.Native.VehicleHash.TenF">
+            <summary>10F</summary>
+        </member>
+        <member name="F:GTA.Native.VehicleHash.TenF2">
+            <summary>10F Widebody</summary>
         </member>
         <member name="P:GTA.NaturalMotion.Euphoria.ActivePose">
             <summary>
@@ -16113,6 +16185,19 @@
             <summary>
             This value also represents the exe version 1.0.1734.0 for non-Steam version. 1.0.1737.0 basically works in the same way as 1.0.1734.0 but with bug fixes.
             </summary>
+        </member>
+        <member name="F:GTA.GameVersion.VER_1_0_2372_0_STEAM">
+            <summary>
+            This value also represents the exe version 1.0.2372.2 for Steam version. 1.0.2372.2 basically works in the same way as 1.0.2372.0 but with bug fixes.
+            </summary>
+        </member>
+        <member name="F:GTA.GameVersion.VER_1_0_2372_0_NOSTEAM">
+            <summary>
+            This value also represents the exe version 1.0.2372.2 for non-Steam version. 1.0.2372.2 basically works in the same way as 1.0.2372.0 but with bug fixes.
+            </summary>
+        </member>
+        <member name="F:GTA.Language.Chinese">
+            <summary>Traditional Chinese</summary>
         </member>
         <member name="M:GTA.MenuBase.Draw">
             Draws the menu 
