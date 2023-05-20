@@ -1564,6 +1564,8 @@ namespace ARS
                 {
                     if (LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
                     RaceStatus = RaceState.Finished;
+                    
+                    DisplayHelpText(LeaderboardFinish[0].Name + " has won the race and receives the $" + RaceReward + " award."); //Before ending the race, give a moment for the player to see who won.
 
                     CleanEverything();
                 }
