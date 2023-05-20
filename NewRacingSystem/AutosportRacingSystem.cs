@@ -1,4 +1,4 @@
-﻿using GTA;
+using GTA;
 using GTA.Math;
 using GTA.Native;
 using System;
@@ -1448,6 +1448,54 @@ namespace ARS
                 }
             }
 
+            //Pardoxian - Now warp whenever you press Z or X
+            if (Game.IsKeyPressed(Keys.Z) && RaceStatus == RaceState.InProgress && isThePlayerDrivingACar == false) //Forwards
+            {
+                WarpToRacer();
+                Wait(100);
+            }
+            if (Game.IsKeyPressed(Keys.X) && RaceStatus == RaceState.InProgress && isThePlayerDrivingACar == false) //Backwards
+            {
+                WarpToRacer2ElectricBoogaloo();
+                Wait(100);
+            }
+
+            //Pardoxian - Cars will repair more quickly on setting 1
+            if (ARS.DevSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1) == 1)
+            {
+                AutoRepairWhenDamaged();
+            }
+
+            for (int i = 0; i < Racers.Count; i++) //Pardoxian - Fun little coding test: change colors based on racers lap compared to first place.
+            {
+                if (Racers[0] != Racers[i])
+                {
+                    if (Racers[0].Lap == Racers[i].Lap)
+                    {
+                        if (Racers[i].Car.CurrentBlip != null) Racers[i].Car.CurrentBlip.Color = BlipColor.Blue;
+                    }
+                    if (Racers[0].Lap - 1 == Racers[i].Lap)
+                    {
+                        if (Racers[i].Car.CurrentBlip != null) Racers[i].Car.CurrentBlip.Color = BlipColor.BlueDark;
+                    }
+                    if (Racers[0].Lap - 2 == Racers[i].Lap)
+                    {
+                        if (Racers[i].Car.CurrentBlip != null) Racers[i].Car.CurrentBlip.Color = BlipColor.Yellow;
+                    }
+                    if (Racers[0].Lap - 3 == Racers[i].Lap)
+                    {
+                        if (Racers[i].Car.CurrentBlip != null) Racers[i].Car.CurrentBlip.Color = BlipColor.Purple;
+                    }
+                    if (Racers[0].Lap - 4 == Racers[i].Lap)
+                    {
+                        if (Racers[i].Car.CurrentBlip != null) Racers[i].Car.CurrentBlip.Color = BlipColor.Orange;
+                    }
+                    if (Racers[i].BaseBehavior == RacerBaseBehavior.FinishedRace)
+                    {
+                        if (Racers[i].Car.CurrentBlip != null) Racers[i].Car.CurrentBlip.Color = BlipColor.Green;
+                    }
+                }
+            }
 
             //Where the magic happens.
             foreach (Racer racer in Racers)
@@ -2253,15 +2301,18 @@ namespace ARS
             RaceStatus = RaceState.NotInitiated;
         }
 
-
+        bool isThePlayerDrivingACar; //Pardoxian - Self-explanatory variable I think
         bool AddPlayerToGrid()
         {
             Vehicle cv = Game.Player.Character.CurrentVehicle;
             if (CanWeUse(cv))
             {
                 Racers.Add(new Racer(cv, Game.Player.Character));
+                isThePlayerDrivingACar = true; 
                 return true;
             }
+
+            isThePlayerDrivingACar = false;
             return false;
         }
 
@@ -5454,6 +5505,60 @@ namespace ARS
             CachedCandidates = candidates;
         }
 
+        //Pardoxian - Next two methods are spectate controls
+        int jizzle = 0; //initialize the tracker
+        void WarpToRacer()
+        {
+            jizzle++; //Go to next car next time method is activated
+
+            //BUT HOLD UP
+            if (!(jizzle < Racers.Count)) //DON'T LET THIS GET BIGGER than the amount of cars
+            {
+                jizzle = 0; //Set back to 0 to avoid error
+            }
+
+            Racer r = Racers[jizzle]; //Get current instance of car to spectate
+
+            Game.Player.Character.SetIntoVehicle(r.Car, VehicleSeat.Passenger); //Set player in racer's car
+        }
+
+        void WarpToRacer2ElectricBoogaloo() //The reverse version
+        {
+            jizzle--; //Go to next car next time method is activated 
+
+            //BUT HOLD UP
+            if (!(jizzle >= 0)) //DON'T LET THIS GET BIGGER than the amount of cars
+            {
+                jizzle = Racers.Count - 1; //Set back to max
+            }
+
+            Racer r = Racers[jizzle]; //Get current instance of car to spectate
+
+            Game.Player.Character.SetIntoVehicle(r.Car, VehicleSeat.Passenger); //Set player in racer's car
+        }
+
+        //Pardoxian - Helps keep track of and manage the "repair when damaged enough" setting more consistently so no racers explode
+
+        void AutoRepairWhenDamaged()
+        {
+
+            for (int i = 0; i < Racers.Count; i++)
+            {
+                float checker = Racers[i].Car.EngineHealth;
+                float checker2 = Racers[i].Car.PetrolTankHealth;
+                float checker3 = Racers[i].Car.Health;
+
+                if (checker <= 15 && checker3 <= 100)
+                {
+                    Racers[i].Car.Repair();
+                }
+                else if (checker <= 15)
+                {
+                    Racers[i].Car.EngineHealth = 1000;
+
+                }
+            }
+        }
         void LoadGrid(string dlist, int maxcars)
         {
             SetloadingPromptText("Loading vehicles...");
