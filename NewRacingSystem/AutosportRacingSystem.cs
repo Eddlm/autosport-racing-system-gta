@@ -1331,6 +1331,11 @@ namespace ARS
                             OptionsList.Add(Options.Race);
                             OptionsList.Add(Options.CreateTrack);
                             OptionsList.Add(Options.ReloadSettings);
+                            
+                            if (Game.Player.Character.IsInVehicle()) //Reenabled savethiscar option
+                            {
+                                OptionsList.Add(Options.SaveThisCar);
+                            }
 
                         }
                         else
