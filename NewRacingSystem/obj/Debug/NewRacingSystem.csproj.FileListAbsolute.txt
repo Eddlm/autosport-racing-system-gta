@@ -2,3 +2,11 @@ D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacing
 D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\Debug\NewRacingSystem.csproj.CoreCompileInputs.cache
 D:\Mis Archivos\Proyectos\ARSE\ARSE Project\NewRacingSystem\obj\Debug\NewRacingSystem.csprojAssemblyReference.cache
 D:\Mis Archivos\Proyectos\ARSE\ARSE Project\NewRacingSystem\obj\Debug\NewRacingSystem.csproj.CoreCompileInputs.cache
+f:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\Debug\NewRacingSystem.csproj.AssemblyReference.cache
+f:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\Debug\NewRacingSystem.csproj.CoreCompileInputs.cache
+f:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\bin\Debug\ARS.dll
+f:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\bin\Debug\ARS.pdb
+f:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\bin\Debug\ScriptHookVDotNet2.dll
+f:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\Debug\NewRacin.36AAA071.Up2Date
+f:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\Debug\ARS.dll
+f:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\NewRacingSystem\obj\Debug\ARS.pdb

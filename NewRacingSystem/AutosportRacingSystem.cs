@@ -13,12 +13,17 @@ using System.Threading;
 using System.Windows.Forms;
 using System.Xml;
 using System.Text.RegularExpressions;
+
 namespace ARS
 {
-
+    public enum RelativePos { Unreachable, Ahead, Left, Right, Behind }
+    public enum Team
+    {
+        None, Red, Blue, Cop, Crook
+    }
     public enum Decision
     {
-        LateBrake, Flatout, NoOvertake, FastCorner, EarlyExit
+        LateBrake, Flatout, NoOvertake, FastCorner, EarlyExit, AttackInside
     }
     public enum Mistake
     {
@@ -32,18 +37,12 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis,ShowPhysics, UseNearbyCars,ReloadSettings
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute
     }
 
     public enum OptionValues
     {
         ShowAggression,
-    }
-
-
-    public enum DebugMode
-    {
-        None, Inputs, Trails, CorneringSpeed, TrackPositioning, Interactions, Route, RacingLineEdit, PropEdit
     }
 
 
@@ -55,31 +54,125 @@ namespace ARS
     {
         None, ToAir, AirToAir, AirToPlayer
     }
+    public class PID
+    {
+        // Fields
+        private float value;
+        private float target;
+        private float velocity;
+        private float maxSpeed;
+        private float maxAccel;
+        private float kP;
+        private float kD;
+        private float kI;
+        private float integral;
+        private int lastTick = Game.GameTime;
+        // Constructor
+        public PID(
+            float kP = 1.0f,
+            float kD = 0.1f,
+            float kI = 0.0f,
+            float maxSpeed = 99,
+            float maxAccel = 99)
+        {
+            this.kP = kP;
+            this.kD = kD;
+            this.kI = kI;
+            this.maxSpeed = maxSpeed;
+            this.maxAccel = maxAccel;
+            this.value = 0.0f;
+            this.target = 0.0f;
+            this.velocity = 0.0f;
+            this.integral = 0.0f;
+        }
 
+        // Update method - advances the controller by dt seconds
+        public float Update()
+        {
+            float dt = (Game.GameTime - lastTick)*0.01f;
+            lastTick = Game.GameTime;
+            if (dt <= 0.0) return value;
+
+            float error = target - value;
+            float proportional = error * kP;
+            float derivative = -velocity * kD;
+            integral += error * dt;
+            float integralTerm = integral * kI;
+
+            float acceleration = proportional + derivative + integralTerm;
+
+            // Clamp acceleration to maxAccel
+            if (Math.Abs(acceleration) > maxAccel)
+            {
+                acceleration = maxAccel * (acceleration > 0 ? 1 : -1);
+            }
+
+            velocity += acceleration * dt;
+
+            // Clamp velocity to maxSpeed
+            if (Math.Abs(velocity) > maxSpeed)
+            {
+                velocity = maxSpeed * (velocity > 0 ? 1 : -1);
+            }
+
+            value += velocity * dt;
+
+            // Snap to target if close enough
+            if (float.IsNaN(value) || (Math.Abs(error) < 0.1 && Math.Abs(velocity) < 0.1f))
+            {
+                value = target;
+                velocity = 0;
+            }
+            
+            return value;
+        }
+
+        // Set target value with clamping
+        public void SetTarget(float target, float maxVal = 90.0f)
+        {
+            this.target = ARS.Clamp(target, -maxVal, maxVal);
+        }
+
+        // Set current value and reset velocity and integral
+        public void SetValue(float value)
+        {
+            this.value = value;
+            velocity = 0;
+            integral = 0;
+        }
+
+        // Get current value
+        public float GetValue()
+        {
+            return value;
+        }
+
+        // Get target value
+        public float GetTarget()
+        {
+            return target;
+        }
+
+        // Modify target value with clamping
+        public void ModifyTarget(float delta, float maxVal = 20.0f)
+        {
+            target = ARS.Clamp(target + delta, -maxVal, maxVal);
+        }
+
+        // Check if close to target within threshold
+        public bool IsClose(float threshold = 0.01f)
+        {
+            return Math.Abs(target - value) < threshold;
+        }
+    }
 
     public class ARS : Script
     {
-        /*  CHANGELOG
-         *  0.6.9
-         *  - Reworked traction curve speed adjustments for corners
-         *  - Improved avoidance, steering and braking
-         *  - Improved performance
-         *  - Improved throttle and steer control
-         *  - Improved Spinout, Oversteer and Understeer correction
-         *  - Added Personalities, Maneuvers and Mistakes
-         */
-
-
-        /*
-         - TO DO
-         - Rework the cam
-         - Add an Options menu (laps, grid, gamemodes, skills and personality variance)
-        */
-
 
         public static Dictionary<Vector3, string> ImmersiveJoins = new Dictionary<Vector3, string>();
 
-        public static AIData AIData = new AIData();
+        public static float TracjectoryProjectionSeconds = 1;
+
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
         public static List<CornerPoint> CornerPoints = new List<CornerPoint>();
         public static List<Vehicle> GlobalTraffic = new List<Vehicle>();
@@ -92,7 +185,6 @@ namespace ARS
 
         public static ScriptSettings SettingsFile;
         public static ScriptSettings DevSettingsFile;
-        //public static List<ScriptSettings> personalities = new List<ScriptSettings>();
 
         public static bool HideHudMode = false;
 
@@ -101,12 +193,12 @@ namespace ARS
         public static Dictionary<Options, bool> OptionValuesList = new Dictionary<Options, bool>()
     {
         { Options.ShowAggro, false },
-            { Options.ShowInputs, false },
+        { Options.ShowInputs, false },
         { Options.ShowTrackAnalysis, false },
         { Options.ShowPhysics, false },
-        { Options.UseNearbyCars, false }
+        { Options.UseNearbyCars, false },
+        { Options.ReverseRoute, false }
     };
-
 
         public static List<Prop> CustomProps = new List<Prop>();
         public static List<Prop> AutoGeneratedProps = new List<Prop>();
@@ -114,10 +206,7 @@ namespace ARS
         public static int OptionHovered = 0;
         public static List<Options> OptionsList = new List<Options>();
 
-
         public static List<Racer> LeaderboardFinish = new List<Racer>();
-
-
 
         //Freecam
         bool IsDroneMode = true;
@@ -128,18 +217,14 @@ namespace ARS
 
 
         public static RaceState RaceStatus = RaceState.None;
-
-
-
-        string ScriptName = "ARS";
-        string ScriptVer = "0.0.0.0";
-        string ScriptDate = "30/09/2018";
+    
 
         //offsets
         static public ulong steeroffset = 0x0;
         static public ulong throttleOffset = 0x0;
         static public ulong brakeOffset = 0x0;
-        public static ulong wheelsptr = 0x0;
+        public static ulong handlingPtr = 0x0;
+        public static ulong wheelsPtr = 0x0;
         public static ulong numwheelsoffset = 0x0;
 
         //Terrain hashes
@@ -152,8 +237,6 @@ namespace ARS
 
 
         public static List<string> HelpMessages = new List<string>();
-
-       
 
         //AI racers, and the player if they participate
         public static List<Racer> Racers = new List<Racer>();
@@ -223,24 +306,39 @@ namespace ARS
             Tick += OnTick;
             Aborted += OnAbort;
 
-
             File.WriteAllText(@"scripts\ARS\Log.log", "----------------------------");
             Log(LogImportance.Info, "Script initialized - " + DateTime.Now);
             File.AppendAllText(@"scripts\ARS\Log.log", "\n----------------------------");
             LoadSettings();
 
+
+            string ScriptName = "ARS";
+            string ScriptVer = "0.0.0.0";
+            string ScriptDate = "30/09/2018";
+
             // Get the version of the current application.
             Assembly assem = Assembly.GetExecutingAssembly();
             AssemblyName assemName = assem.GetName();
             Version ver = assemName.Version;
-            ScriptVer = ver.ToString();
+            ScriptVer = ver.ToString() + " ~o~[PUBLIC BETA]~w~";
             ScriptDate = File.GetLastWriteTimeUtc(@"scripts/ARS/ARS.dll").ToString();
 
 
             UI.Notify("~b~" + ScriptName + "~g~e~w~" + "~y~ " + ScriptVer + "~n~Build: ~g~" + ScriptDate);
+
         }
 
+        public static float LaneApproach(float DistPercent)
+        {
+            float lanePercent = 0;
+            if (DistPercent >= 80) lanePercent = ARS.map(DistPercent, 80, 100, 95, 100, true);
+            else if (DistPercent >= 60) lanePercent = ARS.map(DistPercent, 60, 80, 80, 95, true);
+            else if (DistPercent >= 40) lanePercent = ARS.map(DistPercent, 40, 60, 50, 80, true);
+            else if (DistPercent >= 20) lanePercent = ARS.map(DistPercent, 20, 40, 25, 50, true);
+            else if (DistPercent >= 0) lanePercent = ARS.map(DistPercent, 0, 20, 0, 25, true);
 
+            return lanePercent;
+        }
 
 
         Dictionary<string, string> TrackTags = new Dictionary<string, string>();
@@ -298,9 +396,7 @@ namespace ARS
                 tags.Add(node.InnerText.ToLowerInvariant());
             }
 
-
             return tags;
-
         }
 
         public static Vector3 GetTrackStartPos(string path)
@@ -338,7 +434,6 @@ namespace ARS
                 return p;
             }
             return Vector3.Zero;
-
         }
 
         public static List<string> GetRacerTags(string path)
@@ -432,27 +527,22 @@ namespace ARS
         }
         public static Vector3 GetOffset(Entity reference, Entity ent)
         {
-
             Vector3 pos = ent.Position;
             return Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS, reference, pos.X, pos.Y, pos.Z);
-
         }
         public static Vector3 GetOffset(Entity reference, Vector3 pos)
         {
-
             return Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS, reference, pos.X, pos.Y, pos.Z);
-
         }
 
         public static float EngineTopSpeed(Vehicle v)
         {
-
             return Function.Call<float>(Hash._0x53AF99BAA671CA47, v) / 0.75f;
-
         }
+
+
         public static float map(float x, float in_min, float in_max, float out_min, float out_max, bool clamp = false)
         {
-
             float r = (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
             if (clamp) r = Clamp(r, out_min, out_max);
             return r;
@@ -502,53 +592,6 @@ namespace ARS
         }
 
 
-        static public unsafe float GetGravity(Vehicle handle)
-        {
-
-            if (!CanWeUse(handle)) return 0f;
-            ulong addrOffset = 0x0BA0;
-
-
-            IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxxx????xx");
-
-            if (addr != null)
-            {
-                var address = (ulong)handle.MemoryAddress;
-                return *((float*)(address + addrOffset));
-            }
-            return 0;
-        }
-
-
-
-        static public unsafe void SetNitroOn(Vehicle v)
-        {
-            var vehHandle = v.MemoryAddress;
-            IntPtr address = (IntPtr)FindPattern("\x38\x8B\x00\x00\x00\x00\x74\x04\xB1\x01\xEB\x58", "xx????xxxxxx");
-            //\x38\x8B\x00\x00\x00\x00\x74\x04\xB1\x01\xEB\x58
-            //\x8A\x83\x00\x00\x00\x00\x84\xC0\x75\x09\x40\x84\xFF
-            if (address != null)
-            {
-
-
-                var g_vehNitroEnabledOffset = *(int*)(address + 2);
-                bool d = *((bool*)(vehHandle + g_vehNitroEnabledOffset));
-
-                Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, "veh_xs_vehicle_mods");
-
-                Function.Call((Hash)0xC8E9B6B71B8E660D, v, 1);//Enable nitro
-                Function.Call((Hash)0x30B5831ECD9C35C5, v, 1f); //Set mult
-                Function.Call((Hash)0x6E31900C2247D4ED, v, 1); //??
-                Function.Call((Hash)0x6DEE944E1EE90CFB, v, 1); //??
-                Function.Call((Hash)0x6411EB7E837170B5, v, 1f); //??
-
-                Function.Call((Hash)0x2970EAA18FD5E42F, v, 1); //??
-
-
-
-                // *((bool*)(vehHandle + g_vehNitroEnabledOffset)) = true;
-            }
-        }
         static public unsafe void SetSteerInput(Vehicle handle, float value)
         {
 
@@ -556,7 +599,7 @@ namespace ARS
 
             if (steeroffset == 0x0)
             {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxxx????xx");
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
                 if (addr != null)
                 {
                     steeroffset = *(uint*)(addr + 6);
@@ -574,13 +617,15 @@ namespace ARS
         static public unsafe void SetSteerAngle(Vehicle handle, float value)
         {
 
+
             if (!CanWeUse(handle)) return;
 
             if (steerAngle == 0x0)
             {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxxx????xx");
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
                 if (addr != null)
                 {
+
                     steerAngle = *(uint*)(addr + 6) + 8;
                     Log(LogImportance.Info, "[MEMORY] Learned the steer offset: " + steerAngle);
                 }
@@ -598,36 +643,34 @@ namespace ARS
 
             if (!CanWeUse(handle)) return 0f;
 
-            if (steeroffset == 0x0)
+            if (steerAngle == 0x0)
             {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxxx????xx");
-
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
                 if (addr != null)
                 {
-                    steeroffset = *(uint*)(addr + 6);
-                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset:" + steeroffset);
+                    steerAngle = *(uint*)(addr + 6) + 8;
+                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset:" + steerAngle);
                 }
             }
             else
             {
                 var address = (ulong)handle.MemoryAddress;
-                return *((float*)(address + steeroffset));
+                return *((float*)(address + steerAngle));
             }
 
             return 0;
         }
 
-
         static public unsafe void SetThrottle(Vehicle handle, float value)
         {
+
+
             if (throttleOffset == 0x0)
             {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxxx????xx");
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
 
                 if (addr != null)
                 {
-
-
                     throttleOffset = *(uint*)(addr + 6) + 0x10;
                     Log(LogImportance.Info, "[MEMORY] Learned the throttle offset: " + throttleOffset);
 
@@ -646,9 +689,12 @@ namespace ARS
         static public unsafe void SetBrakes(Vehicle handle, float value)
         {
             if (!CanWeUse(handle)) return;
+
+
+
             if (brakeOffset == 0x0)
             {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxxx????xx");
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
 
                 if (addr != null)
                 {
@@ -668,15 +714,13 @@ namespace ARS
         }
         public static float rad2deg(float rad)
         {
-            return (rad * (180.0f / (float)Math.PI)); //3.14159265358979323846264338327950288f));
+            return (rad * (180.0f / (float)Math.PI));
         }
 
         public static float deg2rad(float angle)
         {
             return (float)(Math.PI * angle / 180.0f);
         }
-
-
 
         public static float LerpDelta(float current, float from, float to, float delta)
         {
@@ -685,33 +729,6 @@ namespace ARS
             r = percent * map(percent, 0f, 50f, 0f, 1f, true);
             return (float)Math.Round(r, 1);
         }
-
-        public static float GetRatioForAngle(float degrees, float gamma)
-        {
-            if (degrees > 40) degrees = 40;
-            degrees /= 40; // scale to 1.0;
-
-            float input = (float)Math.Pow(degrees, gamma);
-            return input;
-        }
-
-        public static Vector3 QuaternionRotate(Vector3 v, float a, Vector3 axis)
-        {
-            Vector3 r = Quaternion.RotationAxis(axis, (float)(Math.PI / 180f) * a) * -v; // Quaternion.RotationAxis takes radian angles
-            return r;
-        }
-        public static float GetSteerOffsetToReachDeviation(float distToDev, float maxDist, float maxSteer)
-        {
-
-            float result = 0f;
-
-            result = map(distToDev, -maxDist, maxDist, -maxSteer, maxSteer);
-            result = Clamp(result, -maxSteer, maxSteer);
-
-            return result;
-        }
-
-
 
         //Route Creator active section
         List<Vector3> RouteSection = new List<Vector3>();
@@ -746,8 +763,6 @@ namespace ARS
         public static List<string> FilteredTrackList = new List<string>();
         public static string TrackFilter = "airport";
         public static string DisciplineFilter = "sports";
-
-
 
         //Menu
         Dictionary<string, string> RacerTags = new Dictionary<string, string>();
@@ -865,7 +880,7 @@ namespace ARS
             if (Game.IsControlJustPressed(2, GTA.Control.FrontendAccept))
             {
                 if (oSelected == Options.ReloadSettings)
-                {                    
+                {
                     SettingsFile = null;
                     DevSettingsFile = null;
                     LoadSettings();
@@ -873,7 +888,7 @@ namespace ARS
                 }
                 if (oSelected == Options.RaceOptions)
                 {
-                    OptionsList.Clear();                   
+                    OptionsList.Clear();
                     OptionsList.Add(Options.ShowAggro);
                     OptionsList.Add(Options.ShowInputs);
                     OptionsList.Add(Options.ShowTrackAnalysis);
@@ -970,12 +985,13 @@ namespace ARS
                 }
                 if (oSelected == Options.Race)
                 {
-                    OptionsList.Clear(); 
+                    OptionsList.Clear();
                     OptionsList.Add(Options.TrackList);
                     OptionsList.Add(Options.Disciplines);
                     OptionsList.Add(Options.GridSize);
                     OptionsList.Add(Options.Laps);
                     OptionsList.Add(Options.UseNearbyCars);
+                    OptionsList.Add(Options.ReverseRoute);
                     OptionsList.Add(Options.Start);
                     return;
                 }
@@ -999,7 +1015,7 @@ namespace ARS
 
                                 Racer RandomRacer = new Racer(v, p);
 
-                                if (v.ColorCombinationCount < 2)
+                                if (v.ColorCombinationCount < 2 && v.ClassType != VehicleClass.Emergency)
                                 {
                                     VehicleColor c = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
                                     v.PrimaryColor = c;
@@ -1012,12 +1028,15 @@ namespace ARS
 
 
                         LoadTrack(f);
+                        Log(LogImportance.Info, "Loading grid");
                         LoadGrid(DisciplineFilter, (int)Clamp(intendedOpponents - Racers.Count, 0, GridPositions.Count));
 
                         if (DevSettingsFile.GetValue("RACERS", "UsePersonalities", true))
                         {
                             for (int i = 0; i < Racers.Count; i++)
                             {
+                                Racers[i].mem.personality = personalitySets.Find(s => s.ProbToUse >=100);
+
                                 PersonalitySet p = personalitySets.Find(ps => ps.Model != "" && ps.Model.ToLowerInvariant() == Racers[i].Car.DisplayName.ToLowerInvariant());
                                 if (p != null)
                                 {
@@ -1027,8 +1046,11 @@ namespace ARS
 
                                 for (int per = 0; per < personalitySets.Count; per++)
                                 {
-                                    float percentOfThisPersonality = GetPercent(Racers.Where(r => r.mem.personality.Name == personalitySets[per].Name).Count(), Racers.Count);
-                                    if (percentOfThisPersonality < personalitySets[per].ProbToUse || per >= personalitySets.Count - 1)
+                                    if (personalitySets[per].ProbToUse >= 100) continue;
+
+                                    int chance = ARS.GetRandomInt(0, 100);
+                                    //UI.Notify("Chance " + chance + " for " + Racers[i].Name);
+                                    if (chance < personalitySets[per].ProbToUse)
                                     {
                                         p = personalitySets[per];
                                         string[] skills = p.SkillRange.Split(',');
@@ -1103,9 +1125,7 @@ namespace ARS
         void CleanEverything()
         {
             CleanRacers();
-
             foreach (Prop p in TrackLimits) if (CanWeUse(p)) p.Delete();
-
 
 
             WideDict.Clear();
@@ -1130,12 +1150,60 @@ namespace ARS
             CountDown = MaxCountDown;
         }
 
+        Vehicle debugTrailer;
         Dictionary<int, Vector3> ExhaustOffsets = new Dictionary<int, Vector3>();
-        void HandlePlayerDebugStuff()
+        void HandlePlayerDebugStuff(Vehicle v)
         {
 
-            Vehicle v = Game.Player.Character.LastVehicle;
+
             if (!CanWeUse(v)) return;
+
+
+            if (CanWeUse(debugTrailer))
+            {
+                //debugTrailer.HandbrakeOn = true;
+                //Function.Call(Hash._0x9007A2F21DC108D4, debugTrailer, 0f);
+
+
+
+
+                if (debugTrailer.IsAttachedTo(v))
+                {
+
+                    //float str = Vector3.SignedAngle(debugTrailer.ForwardVector, v.ForwardVector, debugTrailer.UpVector) / 100;
+                    //if (Math.Abs(str) > 0.01f)  v.SteeringAngle = str;
+                    //Function.Call(Hash._0x42A8EC77D5150CBE, v, -1);
+                    //if (Math.Abs(str) > 1) debugTrailer.SteeringAngle = str; else debugTrailer.SteeringAngle = 0;
+
+
+                    //debugTrailer.SteeringAngle = v.SteeringAngle * -0.8f;
+                    //UI.ShowSubtitle(message: str + "-" + debugTrailer.FriendlyName, 100);
+
+                }
+                else
+                {
+
+                    if (!debugTrailer.IsInRangeOf(v.Position, 40)) debugTrailer = null;
+                }
+            }
+            else
+            {
+                debugTrailer = World.GetAllVehicles().Where(predicate: car => car.IsAttachedTo(v)).FirstOrDefault();
+                //Function.Call(Hash.SET_VEHICLE_OUT_OF_CONTROL, debugTrailer, true, false);
+
+            }
+
+
+
+
+            //if(Function.Call<bool>(Hash.GET_VEHICLE_TRAILER_VEHICLE, v, *t))
+            {
+
+            }
+            //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0xF417C2502FFFED43, v.Model.Hash) / 0.75f)+ " mph", 1000);
+            //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0x53AF99BAA671CA47, v)/0.75f)+" mph", 1000);
+
+            //UI.ShowSubtitle(GetDirVsHeading(v,1).ToString(), 200);
             /*
             List<Vector3> roads = new List<Vector3>();
 
@@ -1159,9 +1227,14 @@ namespace ARS
             //UI.ShowSubtitle(Function.Call<float>(Hash._0x53AF99BAA671CA47, v)/0.75f+" m/s", 1000);
             //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0x53AF99BAA671CA47, v) / 0.75f) +" m/s", 1000);
 
-            return;
         }
 
+        static public Vector3 GetSpeedVector(Entity e, bool local)
+        {
+            if (!CanWeUse(e)) return Vector3.Zero;
+
+            return Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, e, local);
+        }
 
         void DrawBlackBars(float intensity)
         {
@@ -1248,7 +1321,7 @@ namespace ARS
             foreach (Vector3 ip in NeabyImmersiveJoins.Keys)
             {
                 World.DrawMarker(MarkerType.VerticalCylinder, ip + new Vector3(0, 0, -25f), Vector3.Zero, -Vector3.WorldDown, new Vector3(10f, 10f, 30f), Color.Yellow);
-                if (Game.Player.Character.IsInRangeOf(ip, 3f) && Game.Player.Character.IsSittingInVehicle() && Game.Player.Character.IsStopped)
+                if (Game.Player.Character.IsInRangeOf(ip, 3f) && Game.Player.Character.IsStopped)
                 {
                     LoadRace(ImmersiveJoins[ip], null, intendedOpponents);
                     return;
@@ -1257,10 +1330,23 @@ namespace ARS
         }
 
 
+        public List<Vector3> AccelerationVector = new List<Vector3>();
+        Vector3 lSpeed = Vector3.Zero;
+
+
+
+        int NextInLine = 0;
+        int GameTimeNextInLine = 0;
+
+        Vector3 GsClamp = new Vector3(1, 1, 1f);
+        Vector3 directionClamp = new Vector3(1, 1, 1f);
+
         void OnTick(object sender, EventArgs e)
         {
-            HandlePlayerDebugStuff();
 
+            Vehicle v = Game.Player.LastVehicle;
+            //HandlePlayerDebugStuff(v);
+            //HandleImmersiveJoins();
             if (!Loaded)
             {
                 if (DevSettingsFile.GetValue<bool>("GENERAL", "LoadAtStart", true) || WasCheatStringJustEntered("arson"))
@@ -1270,9 +1356,21 @@ namespace ARS
                 return;
             }
 
+            /*
+            float min = 0;
+            float max = 5;
+            for (float i = 0; i <= 10; i += 0.1f)
+            {
+                Vector3 p = v.Position + (v.ForwardVector *i) + (v.ForwardVector*5);
+                p += v.RightVector * ARS.mapGamma(i, 0, 10, min, max, v.Velocity.Length()/2, false);
 
+                World.DrawMarker(MarkerType.DebugSphere,p,Vector3.Zero,Vector3.Zero,new Vector3(0.1f,0.1f,0.1f), Color.Red);
+                
+            }
+            UI.ShowSubtitle((v.Velocity.Length() / 2).ToString("0.0"), 500);
+
+            */
             HandleTrackCreator();
-
 
 
             //Priority, anticrash checks
@@ -1283,6 +1381,8 @@ namespace ARS
                 if (CanWeUse(FreecCamRide)) FreecCamRide.HasGravity = false;
                 Log(LogImportance.Info, "Creating needed freecam object.");
             }
+
+
             HandleFreecam();
 
             //Drawing and GUI stuff
@@ -1334,7 +1434,7 @@ namespace ARS
 
 
             //Never really used
-            if (Path.Count > 20 && MiniMap != Vector3.Zero) DrawMiniaturizedPath(MiniMap);
+            //if (Path.Count > 20 && MiniMap != Vector3.Zero) DrawMiniaturizedPath(MiniMap);
 
 
 
@@ -1349,7 +1449,6 @@ namespace ARS
                 Function.Call(Hash.SET_PED_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
                 Function.Call(Hash.SET_SCENARIO_PED_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
             }
-
 
             //Create the menu on key inputs
             if (OptionsList.Count == 0)
@@ -1397,6 +1496,7 @@ namespace ARS
                         }
                     }
                     OptionsList.Add(Options.Freecam);
+                    OptionsList.Add(Options.SaveThisCar);
                 }
             }
             else
@@ -1430,9 +1530,6 @@ namespace ARS
                 }
             }
 
-
-
-
             //Handle the countdown
             if (RaceStatus != RaceState.Countdown && GametimeCountDown - Game.GameTime > 5000) CountDown = MaxCountDown - 1;
             if (RaceStatus == RaceState.NotInitiated)
@@ -1442,9 +1539,7 @@ namespace ARS
                     if ((Game.IsControlJustPressed(2, GTA.Control.VehicleAccelerate))) StartCoundown();
                 }
                 else StartCoundown();
-
             }
-
 
             if (GametimeCountDown < Game.GameTime)
             {
@@ -1492,6 +1587,21 @@ namespace ARS
             }
 
 
+            if (Racers.Any())
+            {
+                if (GameTimeNextInLine <= Game.GameTime)
+                {
+                    int count = (int)Clamp(Racers.Count, 1, 6);
+                    for (int i = 0; i < count; i++)
+                    {
+                        Racers.GetRange(NextInLine, 1).FirstOrDefault()?.RunTimedCore();
+                        NextInLine++;
+                        if (NextInLine > Racers.Count - 1) NextInLine = 0;
+                        GameTimeNextInLine = Game.GameTime + (10 / (Racers.Count / count));
+                    }
+                }
+            }
+
             //Where the magic happens.
             foreach (Racer racer in Racers)
             {
@@ -1527,16 +1637,16 @@ namespace ARS
                     while (pos < Racers.Count)
                     {
                         LapPos = RPositions.Where(vl => vl.Lap == L).ToList();
-                        LapPos = LapPos.OrderBy(vl => vl.trackPoint.Node).Reverse().ToList();
+                        LapPos = LapPos.OrderBy(vl => vl.CurrentTrackPoint.Node).Reverse().ToList();
                         foreach (Racer r in LapPos)
                         {
-                            r.Pos = pos;
+                            r.RacePosition = pos;
                             pos++;
                         }
                         L--;
                     }
                 }
-                Racers = Racers.OrderBy(vl => vl.Pos).ToList();
+                Racers = Racers.OrderBy(vl => vl.RacePosition).ToList();
             }
 
             //Configure the leaderboard and handle lapping logic
@@ -1551,8 +1661,8 @@ namespace ARS
 
 
                     string fTime = totaltime.ToString("m':'ss'.'fff"); //"mm':'ss'.'fff"
-                    if (r.Driver.IsPlayer) positions.Add("~g~" + r.Pos + "º~w~ " + r.Name + " T" + fTime + "~n~");
-                    else positions.Add("~y~" + r.Pos + "º~w~ " + r.Name + " T" + fTime + "~n~");
+                    if (r.Driver.IsPlayer) positions.Add("~g~" + r.RacePosition + "º~w~ " + r.Name + " T" + fTime + "~n~");
+                    else positions.Add("~y~" + r.RacePosition + "º~w~ " + r.Name + " T" + fTime + "~n~");
                 }
 
                 if (LeaderboardFinish.Count == Racers.Count || (TimeToFinishRace != 0 && Game.GameTime > TimeToFinishRace))
@@ -1563,7 +1673,7 @@ namespace ARS
                     CleanEverything();
                 }
             }
-            else if (Function.Call<bool>(Hash._0xAF754F20EB5CD51A)) //radar enabled
+            else if (Function.Call<bool>(Hash._0xAF754F20EB5CD51A) ||1==1) //radar enabled
             {
 
                 if (Game.IsControlPressed(2, GTA.Control.Sprint))
@@ -1576,8 +1686,8 @@ namespace ARS
                         string fTime = totaltime.ToString("m':'ss'.'fff");
 
                         string text = "";
-                        if (r.Driver.IsPlayer) text = "~b~" + r.Pos + "º~y~ " + r.Name + " T" + fTime + "~n~";
-                        else text = "~b~" + r.Pos + "º~w~ " + r.mem.personality.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
+                        if (r.Driver.IsPlayer) text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " T" + fTime + "~n~";
+                        else text = "~b~" + r.RacePosition + "º~w~ " + r.mem.personality.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
 
 
                         positions.Add(text);
@@ -1590,14 +1700,16 @@ namespace ARS
                 {
                     foreach (Racer r in Racers)
                     {
-                        string text = "~b~" + r.Pos + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";                                               
+                        string text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
                         //text = "~b~" + r.Pos + "º~g~ " + r.mem.personality.Name + " (~y~" + (Math.Round(r.mem.intention.Aggression * 100)) + "~g~%) ~w~" + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                        text = "~b~" + r.Pos + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                        
+                        //text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                        text = "~b~" + r.vData.TextPerformanceIndex + " - ~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+
 
                         if (r.Driver.IsPlayer)
                         {
-                            text = "~b~" + r.Pos + "º~y~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            //text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            text = "~b~" + r.vData.TextPerformanceIndex + " - ~y~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
                         }
 
                         positions.Add(text);
@@ -1608,7 +1720,7 @@ namespace ARS
 
 
             //Draw the leaderboard positions
-            if (positions.Count > 0 && OptionsList.Count == 0 && Function.Call<bool>(Hash._0xAF754F20EB5CD51A))
+            if (positions.Count > 0 && OptionsList.Count == 0 && (Function.Call<bool>(Hash._0xAF754F20EB5CD51A) || 1 == 1))  //radar enabled
             {
                 float z = 0.15f;
                 float scale = 0.4f;
@@ -1891,8 +2003,6 @@ namespace ARS
                 }
                 points.Add(p);
             }
-
-
             return points;
         }
 
@@ -1956,6 +2066,13 @@ namespace ARS
             return points;
         }
 
+        public static Vector3 QuadraticBezier(Vector3 a, Vector3 b, Vector3 c, float t)
+        {
+            Vector3 AB = Vector3.Lerp(a, b, t);
+            Vector3 BC = Vector3.Lerp(b, c, t);
+            Vector3 ABC = Vector3.Lerp(AB, BC, t);
+            return ABC;
+        }
 
         public static Color GetColorFromRedYellowGreenGradient(float percentage)
         {
@@ -2126,7 +2243,7 @@ namespace ARS
                 }
 
 
-                FreecCamRide.Position = FreecCamRide.Position + (FreeCamMovement * 1f);
+                FreecCamRide.Position = FreecCamRide.Position + (FreeCamMovement * Clamp((60 / Game.FPS), 1, 10));
                 FreecCamRide.Rotation = new Vector3(0f, 0f, FreecCamRide.Rotation.Z);
 
                 bool Reduce = true;
@@ -2246,6 +2363,7 @@ namespace ARS
 
         public void StartRace()
         {
+            Log(LogImportance.Info, "Starting race");
             if (Path.Count == 0)
             {
                 UI.Notify("~r~Load or create a path route first.");
@@ -2254,7 +2372,7 @@ namespace ARS
 
             //  UI.ShowSubtitle("Type in the Discipline tags used to look up the vehicles, separated by a space. Example: ~b~muscle~w~ ~b~racecar~w~ ",5000);
 
-
+            Log(LogImportance.Info, "Adding player to grid");
             AddPlayerToGrid();
             if (Racers.Count == 0)
             {
@@ -2263,13 +2381,16 @@ namespace ARS
             }
 
             Game.MissionFlag = true;
+            Log(LogImportance.Info, "Setting up");
             SetupRace(true, true);
+            Log(LogImportance.Info, "Set up");
 
             if (!InFreeCam || Game.IsScreenFadedIn) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
             Game.SetControlNormal(2, GTA.Control.VehicleLookBehind, 1f);
 
 
             if (ARS.SettingsFile.GetValue("CATCHUP", "OnlyLastHalf", true)) ARS.catchupPos = (int)(ARS.Racers.Count / 2);
+            Log(LogImportance.Info, "Started race");
 
         }
 
@@ -2299,6 +2420,7 @@ namespace ARS
 
         void LoadRace(string track, string disciplines, int gridSize)
         {
+            Log(LogImportance.Info, "Loading race (" + track + ")");
             if (!KnownTracks.Contains(track))
             {
                 UI.Notify("Track does not exist.");
@@ -2309,23 +2431,26 @@ namespace ARS
             LoadTrack(LoadTrackFile(track));
 
             //Load the grid of vehicles
-
+            Log(LogImportance.Info, "Loading grid of vehicles");
 
             if (disciplines == null)
             {
                 List<VehicleHash> hashes = Enum.GetValues(typeof(VehicleHash)).Cast<VehicleHash>().ToList();
 
-                Vehicle playerveh = Game.Player.Character.CurrentVehicle;
+                Vehicle playerveh = Game.Player.Character.LastVehicle;
                 float acc = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, playerveh.Model.Hash);
-                float spd = Function.Call<float>(Hash._0xF417C2502FFFED43, playerveh.Model.Hash);
+                float spd = Function.Call<float>(Hash._GET_VEHICLE_MAX_SPEED, playerveh.Model.Hash);
 
-                hashes.RemoveAll(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h) < acc - 0.05f);
-                hashes.RemoveAll(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h) > acc + 0.05f);
+                hashes.RemoveAll(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h) < acc - 0.075f);
+                hashes.RemoveAll(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h) > acc + 0.075f);
 
-                hashes.RemoveAll(h => Function.Call<float>(Hash._0xF417C2502FFFED43, (int)h) > spd + ARS.MPHtoMS(40));
-                hashes.RemoveAll(h => Function.Call<float>(Hash._0xF417C2502FFFED43, (int)h) < spd - ARS.MPHtoMS(20));
+                hashes.RemoveAll(h => Function.Call<float>(Hash._GET_VEHICLE_MAX_SPEED, (int)h) > spd + ARS.MPHtoMS(20));
+                hashes.RemoveAll(h => Function.Call<float>(Hash._GET_VEHICLE_MAX_SPEED, (int)h) < spd - ARS.MPHtoMS(20));
 
                 hashes.OrderByDescending(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h));
+
+
+
 
                 List<VehicleHash> final = new List<VehicleHash>();
 
@@ -2334,7 +2459,7 @@ namespace ARS
                     Model m = new Model(hash);
 
                     //Similar size and same kind of vehicle
-                    if (Math.Abs(m.GetDimensions().Length() - playerveh.Model.GetDimensions().Length()) < 2f &&
+                    if (Math.Abs(m.GetDimensions().Length() - playerveh.Model.GetDimensions().Length()) < 5f &&
                         (m.IsCar && playerveh.Model.IsCar) ||
                         (m.IsQuadbike && playerveh.Model.IsQuadbike) ||
                         (m.IsBike && playerveh.Model.IsBike) ||
@@ -2409,6 +2534,12 @@ namespace ARS
                 }
 
             }
+            if (Racers.Any(r => r.team == Team.Cop))
+            {
+                UI.Notify("Cops 'n' Crooks detected");
+                Racers = Racers.OrderBy(v => (int)v.team).ToList();
+            }
+
             Racer p = null;
             int index = 0;
             foreach (Racer r in Racers) if (r.Driver.IsPlayer)
@@ -2422,6 +2553,7 @@ namespace ARS
                 Racers.RemoveAt(index);
                 Racers.Add(p);
             }
+
 
 
             if (IsPointToPoint) { GridPositions.Reverse(); }
@@ -2461,7 +2593,7 @@ namespace ARS
         public void SetupRace(bool placecars, bool tunecars)
         {
             LeaderboardFinish.Clear();
-
+            Log(LogImportance.Info, "Initializing racers");
             foreach (Racer r in Racers)
             {
                 r.Initialize();
@@ -2491,6 +2623,7 @@ namespace ARS
 
             if (placecars)
             {
+                Log(LogImportance.Info, "Placing cars");
                 PlaceCars(true);
                 Racer mostPower = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList()[0];
                 int r = ((Path.Count / 3) * SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5)) + (Racers.Count * 100) + (int)Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, mostPower.Car) * 400, 0);
@@ -2499,6 +2632,7 @@ namespace ARS
 
             if (tunecars)
             {
+                Log(LogImportance.Info, "Tuning cars");
                 foreach (Racer r in Racers)
                 {
                     if (!Game.Player.Character.IsInVehicle(r.Car) && r.Car.GetMod(VehicleMod.Engine) == -1)
@@ -2739,7 +2873,7 @@ namespace ARS
             }
 
 
-
+            /*
             for (int ph = 0; ph < nodes.Count; ph++)
             {
 
@@ -2847,7 +2981,7 @@ namespace ARS
                 oldpos = pos;
                 dd++;
             }
-
+            */
             Function.Call(GTA.Native.Hash.CLEAR_FOCUS);
 
             float length = (float)Math.Round(Path.Count() * 0.001f, 1);
@@ -3060,6 +3194,7 @@ namespace ARS
 
                             //  World.DrawMarker(MarkerType.DebugSphere, pos, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.2f, 0.2f, 0.2f), Color.Blue);
 
+
                             if (w != 0f)
                             {
 
@@ -3169,8 +3304,11 @@ namespace ARS
         }
 
         public bool listenmode = false;
+        public Dictionary<int, int> DistToPercent = new Dictionary<int, int>();
         public void Cheats()
         {
+
+
 
             if (WasCheatStringJustEntered("combo"))
             {
@@ -3198,7 +3336,7 @@ namespace ARS
 
             if (WasCheatStringJustEntered("arsreload"))
             {
-                UI.Notify("~b~[" + ScriptName + "]:~w~ Reloading settings and filling track/racer dictionaries.");
+                //UI.Notify("~b~[" + ScriptName + "]:~w~ Reloading settings and filling track/racer dictionaries.");
                 // UI.Notify("~b~[" + ScriptName+ "]:~w~ .");
                 FillKnownDisciplines();
 
@@ -3213,20 +3351,19 @@ namespace ARS
             if (WasCheatStringJustEntered("arsupdroute"))
 
             {
-                UI.Notify("~b~[" + ScriptName + "]:~w~ Updating current route..");
+                //UI.Notify("~b~[" + ScriptName + "]:~w~ Updating current route..");
                 UpdateRoute(true, true, true);
 
             }
             if (WasCheatStringJustEntered("arsbuildcarlist"))
             {
-                UI.Notify("~b~[" + ScriptName + "]:~w~ Generating vehicle files for all SHVDN known vehicles in the game.");
+                UI.Notify("~b~[ARS]:~w~ Generating vehicle files for all SHVDN known vehicles in the game.");
 
                 foreach (VehicleHash hash in Enum.GetValues(typeof(VehicleHash)).Cast<VehicleHash>())
                 {
                     Model m = new Model(hash);
                     if (m.IsBike || m.IsQuadbike || m.IsBicycle || m.IsCar) CreateVehicleFromHash(hash);
                     Script.Yield();
-
                 }
             }
 
@@ -3681,7 +3818,7 @@ namespace ARS
 
         public void LoadTrack(XmlDocument xmlFile)
         {
-
+            Log(LogImportance.Info, "Loading track");
             if (xmlFile == null)
             {
                 UI.Notify("~r~Invalid track file.");
@@ -3795,7 +3932,7 @@ namespace ARS
             List<XmlElement> RouteNodes = new List<XmlElement>();
             foreach (XmlElement e in r.SelectNodes("Route/Point")) RouteNodes.Add(e);
 
-            if (SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "ReverseRoutes", false) == true)
+            if (OptionValuesList[Options.ReverseRoute])
             {
                 RouteNodes.Reverse();
                 UI.Notify("~g~Route is reversed.");
@@ -3803,6 +3940,7 @@ namespace ARS
 
             int i = 0;
             float W = 5;
+            float oldW = 0;
             foreach (XmlElement e in RouteNodes)
             {
 
@@ -3818,11 +3956,12 @@ namespace ARS
                 float fz = 0f;
                 float.TryParse(z, out fz);
                 Vector3 pos = new Vector3(fx, fy, fz);
-                float sensibleW = W;
+
                 float.TryParse(e.SelectSingleNode("Wide").InnerText, out W);
 
-                if (Math.Abs(sensibleW) > Math.Abs(W) + 1) W = sensibleW - 0.25f;//1
-                if (Math.Abs(sensibleW) < Math.Abs(W) - 1) W = sensibleW + 0.25f;//1
+                if (Path.Count > 5) W = ARS.Clamp(W, oldW - 0.25f, oldW + 0.25f);
+                //if (Math.Abs(oldW) > Math.Abs(W) + 0.5f) W = oldW - 0.5f;//1
+                //if (Math.Abs(oldW) < Math.Abs(W) - 0.5f) W = oldW + 0.5f;//1
 
                 if (e.SelectSingleNode("RacingLine") != null && SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "ReverseRoutes", false) == false)
                 {
@@ -3833,7 +3972,7 @@ namespace ARS
 
                 Path.Add(pos);
                 WideDict.Add(i, W);
-
+                oldW = W;
                 i++;
             }
 
@@ -3845,17 +3984,18 @@ namespace ARS
 
 
             Script.Wait(1000);
-
+            Log(LogImportance.Info, "Loading props");
             SetloadingPromptText("Loading props...");
             SpawnTrackLimits(Path, WideDict, 1);
 
-            if (ARS.CanWeUse(Game.Player.Character.CurrentVehicle)) Game.Player.Character.CurrentVehicle.Position = Path[0]; else Game.Player.Character.Position = Path[0];
+
+            if (ARS.CanWeUse(Game.Player.Character.CurrentVehicle)) Game.Player.Character.CurrentVehicle.Position = Path[0]; else Game.Player.Character.Position = Path[20];
             if (CanWeUse(FreecCamRide)) FreecCamRide.Position = Path[5] + new Vector3(0, 0, 20);
             SetloadingPromptText("Finished loading props");
             Function.Call(Hash._0x10D373323E5B9C0D);
             SetSPLVisibility(false);
 
-
+            Log(LogImportance.Info, "Loaded track");
 
             //CamVerticalPlayer.Position = Game.Player.Character.Position + new Vector3(0, 0, 50f);
 
@@ -3864,14 +4004,16 @@ namespace ARS
 
             //Function.Call(Hash.DO_SCREEN_FADE_IN, 1000);
             //Function.Call(Hash._0xEFACC8AEF94430D5, 3000);
-            Function.Call((Hash)0x48608C3464F58AB4, 0f, 0f, 0f);
+
+            //Cam rotation
+            //Function.Call((Hash)0x48608C3464F58AB4, 0f, 0f, 0f);
 
         }
 
 
         public static void GenerateRouteInfo()
         {
-
+            Log(LogImportance.Info, "Generating route info...");
             TrackPoints.Clear();
             CornerPoints.Clear();
 
@@ -3891,54 +4033,62 @@ namespace ARS
 
             }
 
+
             //Fill all trackpoints with info from the Path
             foreach (TrackPoint t in TrackPoints)
             {
-                if (t.Node > 3 && t.Node < Path.Count - 3)
+                int Average =  (int)(t.TrackWide * 2); 
+                if (t.Node > 50 && t.Node < Path.Count - 50)
                 {
-                    Vector3 l = (Path[t.Node] - Path[t.Node - 3]).Normalized;
-                    Vector3 f = (Path[t.Node + 3] - Path[t.Node]).Normalized;
 
-                    float RelativeElevation = Vector3.SignedAngle(l, f, Vector3.RelativeRight);
-                    t.RelativeElevation = (float)Math.Round(RelativeElevation, 2);
+                    Vector3 l = (Path[t.Node] - Path[t.Node - Average]).Normalized;
+                    Vector3 f = (Path[t.Node + Average] - Path[t.Node]).Normalized;
 
-                    Vector3 dir = (Path[t.Node + 3] - Path[t.Node - 3]).Normalized;
-                    t.Direction = dir;
+                    t.Direction = (Path[t.Node + 2] - Path[t.Node - 2]).Normalized;
 
-                    float Elevation = ARS.map(dir.Z, -1, 1, -90, 90, true);
-                    t.Elevation = (float)Math.Round(Elevation, 2);
+                    t.Elevation = (Path[t.Node + 10] - Path[t.Node - 10]).Normalized.Z * 90f;
+
+                    //float RelativeElevation = Vector3.SignedAngle(l, f, Vector3.RelativeRight);
+                 
+                    l = (Path[t.Node] - Path[t.Node - Average]).Normalized;
+                    f = (Path[t.Node + Average] - Path[t.Node]).Normalized;
 
                     l.Z = 0f;
                     f.Z = 0f;
+
                     float Angle = Vector3.SignedAngle(l, f, Vector3.WorldUp);
-                    t.Angle = (float)Math.Round(Angle, 4);
+                    if (float.IsNaN(Angle) || float.IsInfinity(Angle)) Angle = 0;
+                    t.Angle = Angle;
+
+                    int LongAF = 20;
+                    int PreciseAF = 10;
+
+                    t.GeneralCurveRadius = GetCurveRadius(Path[t.Node - LongAF], Path[t.Node + LongAF], Path[t.Node]); //* (GetCurveRadius(Path[t.Node - Average], Path[t.Node + Average], t.BezierMidPoint)+
+                    t.PreciseCurveRadius = GetCurveRadius(Path[t.Node - PreciseAF], Path[t.Node + PreciseAF], Path[t.Node]); //* (GetCurveRadius(Path[t.Node - Average], Path[t.Node + Average], t.BezierMidPoint)+
+
                 }
                 else
                 {
                     t.Angle = 0f;
-                    t.Direction = (Path[5] - Path.First()).Normalized;
+                    t.Direction = (Path[10] - Path[5]).Normalized;
                     t.Elevation = 0f;
-                    t.RelativeElevation = 0f;
-
                 }
 
                 if (ARS.WideDict.ContainsKey(t.Node)) t.TrackWide = ARS.WideDict[t.Node];
             }
 
             //Fill all cornerpoints with info
-            int extension = 5;
             foreach (CornerPoint c in CornerPoints)
             {
+                int Average = 20;
 
-                if (c.Node > extension + 1 && c.Node < Path.Count - extension - 1)
+                if (c.Node > Average && c.Node < Path.Count - Average)
                 {
-
-                    Vector3 pre = TrackPoints[c.Node - extension].Direction;
-                    Vector3 fut = TrackPoints[c.Node + extension].Direction;
+                    Vector3 pre = TrackPoints[c.Node - Average].Direction;
+                    Vector3 fut = TrackPoints[c.Node + Average].Direction;
                     c.Angle = Vector3.SignedAngle(pre, fut, Vector3.WorldUp);
                     c.ElevationChange = ((fut - pre).Z * 90);
                     c.Elevation = TrackPoints[c.Node].Elevation;
-                    c.Radius = GetCurveRadius(TrackPoints[c.Node - extension], TrackPoints[c.Node + extension], TrackPoints[c.Node]);
                 }
                 else
                 {
@@ -3946,121 +4096,259 @@ namespace ARS
                     c.Elevation = 0f;
                     c.ElevationChange = 0f;
                 }
-            }
-            List<float> OGAngles = new List<float>();
-            foreach (CornerPoint c in CornerPoints) OGAngles.Add(c.Angle);
 
-            //Average the cornerpoints angles with nearby ones
-            //helps smoother transitions from one to another
+                c.LengthStart = 20; 
+                c.LenghtEnd = 20; 
+            }
+
+
+            for (int i = 20; i < CornerPoints.Count - 20; i++)
+            {
+                float Radius = CornerPoints[i].GetRadius();
+                if (Radius < 90)
+                {
+                    if (CornerPoints[i - 5].GetRadius() > Radius && Radius < CornerPoints[i + 5].GetRadius())
+                    {
+                        CornerPoints[i].IsKey = true;
+                        i += 20;
+                    }
+                }
+            }
+            
+            CornerPoint lastC = CornerPoints.First();
             foreach (CornerPoint c in CornerPoints)
             {
-                if (c.Node > extension && c.Node < CornerPoints.Count() - extension)
-                {
-                    List<float> angles = new List<float>();
-                    angles.Add(OGAngles[c.Node - 1]);
-                    angles.Add(OGAngles[c.Node + 1]);
 
-                    if (!float.IsNaN(angles.Sum()))
+                TrackPoint refTrackpoint = TrackPoints[c.Node];
+
+                if (lastC.IsKey)
+                {
+                    if (lastC.Node + c.LenghtEnd * 2 > c.Node) c.IsKey = false;
+                }
+
+                int radiusToDistance = (int)(TrackPoints[c.Node].TrackWide * 4);
+                c.LengthStart = radiusToDistance;
+                c.LenghtEnd = radiusToDistance;
+
+                for (int nodeID = c.Node - 250; nodeID < c.Node + 250; nodeID++)
+                {
+                    if (nodeID > 10 && nodeID < TrackPoints.Count - 11)
                     {
-                        c.Angle = (float)Math.Round(angles.Sum() / 2, 3);
+                        TrackPoint checkedTrackpoint = TrackPoints[nodeID];
+                        float refRadius = checkedTrackpoint.GeneralCurveRadius;
+                        if (checkedTrackpoint.Node < c.Node)
+                        {
+                            if (checkedTrackpoint.PreciseCurveRadius > c.GetPreciseRadius() * 4) { c.LengthStart = c.Node - nodeID; }
+                        }
+                        else
+                        {
+                            if (checkedTrackpoint.PreciseCurveRadius > c.GetPreciseRadius() * 4) { c.LenghtEnd = nodeID - c.Node; break; }
+                        }
                     }
                 }
-
-                int scale = 10;
-                if (c.Node > scale + 5 && c.Node + scale < CornerPoints.Count() - 5)
-                {
-                    float ang = Vector3.SignedAngle(ARS.TrackPoints[c.Node - scale].Direction, ARS.TrackPoints[c.Node + scale].Direction, Vector3.WorldUp) / (scale / 5);
-                    c.AvgAngle = (float)Math.Round(ang, 3);
-                    c.AvgRadius = GetCurveRadius(TrackPoints[c.Node - scale], TrackPoints[c.Node + scale], TrackPoints[c.Node]);
-                }
-
-                int length = 0;
-                int h = (int)TrackPoints[c.Node].TrackWide * 2;
-                int currentMpointH = 2;
-
-                while (h > currentMpointH && length < 500)
-                {
-                    length += 2;
-                    if (length < c.Node - 5 && length < CornerPoints.Count() - c.Node - 5)
-                    {
-                        Vector3 mPoint = (TrackPoints[c.Node - length].Position + TrackPoints[c.Node + length].Position) / 2;
-                        currentMpointH = (int)Vector3.Distance(new Vector3(mPoint.X, mPoint.Y, 0), new Vector3(TrackPoints[c.Node].Position.X, TrackPoints[c.Node].Position.Y, 0));
-                        
-                        c.AvgRadius = GetCurveRadius(TrackPoints[c.Node - length], TrackPoints[c.Node + length], TrackPoints[c.Node]);
-
-                        float ang = Vector3.SignedAngle(TrackPoints[c.Node - length].Direction, TrackPoints[c.Node + length].Direction, Vector3.WorldUp) / (length / 5);
-                        c.AvgAngle = (float)Math.Round(ang, 3);
-
-                        c.AvgScale = length;
-
-                        Vector3 pre = TrackPoints[c.Node - length].Direction;
-                        Vector3 fut = TrackPoints[c.Node + length].Direction;
-                        c.Angle = Vector3.SignedAngle(pre, fut, Vector3.WorldUp);
-                        c.AvgElChange = ((fut - pre).Z * 90);
-                    }
-                }
+                lastC = c;
             }
+
+                Log(LogImportance.Info, "Route generated");
+
+            CornerPoint corner = CornerPoints.FirstOrDefault(co => co.IsKey);
+            foreach (Racer r in ARS.Racers) r.mem.Corner = new Corner(GetSpeedForCorner(corner, r), corner);
         }
 
-        public static float GetCurveRadius(TrackPoint a, TrackPoint b, TrackPoint midpoint)
+        public static float GetCurveRadius(Vector3 a, Vector3 b, Vector3 midpoint)
         {
+            Vector2 a2 = new Vector2(a.X, a.Y);
+            Vector2 b2 = new Vector2(b.X, b.Y);
+            Vector2 midpoint2 = new Vector2(midpoint.X, midpoint.Y);
 
-            Vector3 mPoint = (a.Position + b.Position) / 2;
-            float H = Vector3.Distance(mPoint, midpoint.Position);
-            float W = Vector3.Distance(a.Position, b.Position);
+            return GetCurveRadius2D(a2, b2, midpoint2);
+        }
+        public static float GetCurveRadius2D(Vector2 a, Vector2 b, Vector2 midPoint)
+        {
+            Vector2 point1 = a;
+            Vector2 point2 = b;
+            Vector2 point3 = midPoint;
 
-            float C = H / 2;
-            float D = (float)Math.Pow(W, 2);
-            float E = H * 8;
-            float F = D / E;
+            Vector2 midpoint1 = (point1 + point2) / 2;
+            float slope1 = (point2.Y - point1.Y) / (point2.X - point1.X);
 
-            float R = C + F;
-            return R;
+            // Calculate slope of line perpendicular to chord between points 1 and 2
+            float perpendicularSlope1 = -1 / slope1;
+
+            // Calculate midpoint and slope of chord between points 2 and 3
+            Vector2 midpoint2 = (point2 + point3) / 2;
+            float slope2 = (point3.Y - point2.Y) / (point3.X - point2.X);
+
+            // Calculate slope of line perpendicular to chord between points 2 and 3
+            float perpendicularSlope2 = -1 / slope2;
+
+            // Calculate intersection of two perpendicular bisectors
+            float centerX = (midpoint1.Y - midpoint2.Y + perpendicularSlope2 * midpoint2.X - perpendicularSlope1 * midpoint1.X) / (perpendicularSlope2 - perpendicularSlope1);
+            float centerY = midpoint1.Y + perpendicularSlope1 * (centerX - midpoint1.X);
+
+            // Calculate distance between center and any of the three points
+            float radius = Vector2.Distance(new Vector2(centerX, centerY), point1);
+
+            return radius;
+        }
+
+        /// <summary>
+        /// Returns grip delta in Gs caused by vertical curvature at this speed.
+        /// Negative = grip loss on crest, positive = grip gain in compression.
+        /// </summary>
+        public static float WouldLiftOffRoadAtSpeed(Vector3 start, Vector3 midpoint, Vector3 end, float velocity)
+        {
+            if (velocity <= 0f) return 0f;
+
+            // Build a 2D vertical profile: X = distance along track projection, Y = elevation.
+            float s0 = 0f;
+            float s1 = Vector2.Distance(new Vector2(start.X, start.Y), new Vector2(midpoint.X, midpoint.Y));
+            float s2 = s1 + Vector2.Distance(new Vector2(midpoint.X, midpoint.Y), new Vector2(end.X, end.Y));
+
+            if (s1 <= 0.001f || s2 <= s1 + 0.001f) return 0f;
+
+            Vector2 p0 = new Vector2(s0, start.Z);
+            Vector2 p1 = new Vector2(s1, midpoint.Z);
+            Vector2 p2 = new Vector2(s2, end.Z);
+
+            // Signed curvature for the osculating circle through 3 points.
+            Vector2 ab = p1 - p0;
+            Vector2 bc = p2 - p1;
+            Vector2 ac = p2 - p0;
+
+            float abLen = ab.Length();
+            float bcLen = bc.Length();
+            float acLen = ac.Length();
+            if (abLen < 0.001f || bcLen < 0.001f || acLen < 0.001f) return 0f;
+
+            float cross = (ab.X * ac.Y) - (ab.Y * ac.X);
+            float curvature = (2f * cross) / (abLen * bcLen * acLen);
+            if (Math.Abs(curvature) < 0.00001f) return 0f;
+
+            const float gravity = 9.8f;
+            float deltaGs = ((velocity * velocity) * curvature) / gravity;
+
+            if (float.IsNaN(deltaGs) || float.IsInfinity(deltaGs)) return 0f;
+            return deltaGs;
+        }
+
+        /// <summary>
+        /// Returns G-loss from road grade magnitude at racer's current track point.
+        /// 0 = level ground. Positive = slope penalty in Gs (uphill or downhill).
+        /// </summary>
+        public static float GetHillGsLossAtCurrentTrackPoint(Racer r)
+        {
+            if (r == null || !CanWeUse(r.Car) || TrackPoints.Count < 2) return 0f;
+
+            int node = (int)Clamp(r.CurrentTrackPoint.Node, 0, TrackPoints.Count - 1);
+            int forwardOffset = (int)Clamp((int)(Math.Max(r.Car.Velocity.Length(), 5f) * 0.5f), 1, 50);
+            int aheadNode = node + forwardOffset;
+            if (aheadNode >= TrackPoints.Count) aheadNode -= TrackPoints.Count;
+
+            Vector3 from = TrackPoints[node].Position;
+            Vector3 to = TrackPoints[aheadNode].Position;
+
+            float horizontalDistance = Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y));
+            if (horizontalDistance <= 0.001f) return 0f;
+
+            float climbAngleRad = (float)Math.Atan2(to.Z - from.Z, horizontalDistance);
+            if (Math.Abs(climbAngleRad) <= 0.0001f) return 0f;
+
+            float gravityScale = r.Handling.Gravity / 9.8f;
+            float lossGs = (float)Math.Abs(Math.Sin(climbAngleRad)) * gravityScale;
+
+            if (float.IsNaN(lossGs) || float.IsInfinity(lossGs)) return 0f;
+            return Clamp(lossGs, 0f, 2f);
+        }
+
+        /// <summary>
+        /// Returns G-loss from vehicle velocity slope only.
+        /// Upward velocity implies uphill. 0 = level motion.
+        /// </summary>
+        public static float GetHillGsLossAtCurrentVelocityVector(Racer r)
+        {
+            if (r == null || !CanWeUse(r.Car)) return 0f;
+
+            Vector3 v = r.Car.Velocity;
+            float horizontalSpeed = new Vector2(v.X, v.Y).Length();
+            if (horizontalSpeed <= 0.001f) return 0f;
+
+            float climbAngleRad = (float)Math.Atan2(v.Z, horizontalSpeed);
+            if (Math.Abs(climbAngleRad) <= 0.0001f) return 0f;
+
+            float gravityScale = r.Handling.Gravity / 9.8f;
+            float lossGs = (float)Math.Abs(Math.Sin(climbAngleRad)) * gravityScale;
+
+            if (float.IsNaN(lossGs) || float.IsInfinity(lossGs)) return 0f;
+            return Clamp(lossGs, 0f, 2f);
+        }
+
+        /// <summary>
+        /// Returns a grip multiplier from road grade magnitude at racer's current track point.
+        /// Linear model: 0 degrees -> x1, 90 degrees -> x0.
+        /// factor scales grip loss strength (1 = base, 2 = double loss).
+        /// </summary>
+        public static float GetHillGripMultiplierAtCurrentTrackPoint(Racer r, float factor = 1f)
+        {
+            if (r == null || !CanWeUse(r.Car) || TrackPoints.Count < 2) return 1f;
+            if (factor <= 0f) factor = 1f;
+
+            int node = (int)Clamp(r.CurrentTrackPoint.Node, 0, TrackPoints.Count - 1);
+            int forwardOffset = (int)Clamp((int)(Math.Max(r.Car.Velocity.Length(), 5f) * 0.5f), 1, 50);
+            int aheadNode = node + forwardOffset;
+            if (aheadNode >= TrackPoints.Count) aheadNode -= TrackPoints.Count;
+
+            Vector3 from = TrackPoints[node].Position;
+            Vector3 to = TrackPoints[aheadNode].Position;
+
+            float horizontalDistance = Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y));
+            if (horizontalDistance <= 0.001f) return 1f;
+
+            float climbAngleRad = (float)Math.Atan2(to.Z - from.Z, horizontalDistance);
+            float slopeAngleRad = Math.Abs(climbAngleRad);
+            float normalizedSlope = slopeAngleRad / ((float)Math.PI * 0.5f); // 0..1 for 0..90 deg
+            float loss = normalizedSlope * factor;
+            float multiplier = 1f - loss;
+            if (float.IsNaN(multiplier) || float.IsInfinity(multiplier)) return 1f;
+            return Clamp(multiplier, 0f, 1f);
+        }
+
+        /// <summary>
+        /// Returns grip multiplier from vehicle velocity slope only.
+        /// Upward velocity implies uphill. Linear model: 0 degrees -> x1, 90 degrees -> x0.
+        /// factor scales grip loss strength (1 = base, 2 = double loss).
+        /// </summary>
+        public static float GetHillGripMultiplierAtCurrentVelocityVector(Racer r, float factor = 1f)
+        {
+            if (r == null || !CanWeUse(r.Car)) return 1f;
+            if (factor <= 0f) factor = 1f;
+
+            Vector3 v = r.Car.Velocity;
+            float horizontalSpeed = new Vector2(v.X, v.Y).Length();
+            if (horizontalSpeed <= 0.001f) return 1f;
+
+            float climbAngleRad = (float)Math.Atan2(v.Z, horizontalSpeed);
+            float slopeAngleRad = Math.Abs(climbAngleRad);
+            float normalizedSlope = slopeAngleRad / ((float)Math.PI * 0.5f); // 0..1 for 0..90 deg
+            float loss = normalizedSlope * factor;
+            float multiplier = 1f - loss;
+            if (float.IsNaN(multiplier) || float.IsInfinity(multiplier)) return 1f;
+            return Clamp(multiplier, 0f, 1f);
         }
 
         public static float GetSpeedForCorner(CornerPoint c, Racer r)
         {
             //Error handling - return max and be done with it
-            if (float.IsInfinity(c.AvgRadius) || float.IsNaN(c.AvgRadius) || c.AvgRadius == 0f) return AIData.MaxSpeed;
+            if (float.IsInfinity(c.GetRadius()) || float.IsNaN(c.GetRadius()) || c.GetRadius() == 0f) return AIData.MaxSpeed;
 
             //Base percieved grip
-            float finalGrip = r.vehData.WheelsGrip + r.mem.personality.Stability.OverdriveCalm;
+            float vehicleGripGs = r.vData.CurrentMechanicalGrip;
 
-            //Aggro increases percieved grip, so AI calculates a faster corner.
-            finalGrip += r.mem.intention.Aggression * r.mem.personality.Stability.OverdriveAggro;
-            if (r.Decisions.ContainsKey(Decision.FastCorner)) finalGrip += r.mem.personality.Rivals.ManeuverExtraGs;
+            if (vehicleGripGs < 0.2f) vehicleGripGs = 0.2f;
+            float spd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * c.GetRadius());
 
-            //Downhill - any hill that's not flat reduces grip as gravity isn't fully nailing you down
-            finalGrip -= ARS.map(c.Elevation, 0f, -45f, 0f, 1f, true);
 
-            //Initial judgement
-            float spd = (float)Math.Sqrt((finalGrip * 9.8f) * c.AvgRadius);
-
-            //Expected grip bonus at that speed
-            finalGrip += GetDownforceGsAtSpeed(r, spd);
-
-            // + Math.Abs(c.AvgAngle / 100) + (spd / 100);
-            if (DevSettingsFile.GetValue("RACERS", "AccountForSlopeChanges", 100) > 0) 
-            {
-                //Slopes - they remove or add Gs
-                float penaltyGs = 1 + ((c.AvgElChange / 50) * (ARS.DevSettingsFile.GetValue("RACERS", "AccountForSlopeChanges", 100) / 100));
-                finalGrip *= ARS.Clamp(penaltyGs, 0.5f, 2f);
-            }
-
-            
-            if (r.mem.personality.Stability.UndersteerFactor > 0)
-            {
-                float penalty = (Math.Abs(c.AvgAngle) - (r.handlingData.TRlateral / 4)) * 0.01f * r.mem.personality.Stability.UndersteerFactor;
-                if (penalty > 0) finalGrip -= (penalty * (spd * 0.1f));
-            }
-
-            if (finalGrip < 0.2f) finalGrip = 0.2f;
-
-            //Re-Judge with the new bonus
-            spd = (float)Math.Sqrt((finalGrip * 9.8f) * c.AvgRadius);
-
-            if (spd < ARS.AIData.MinSpeed) spd = ARS.AIData.MinSpeed;
-            if (spd > 0) return spd; else return ARS.AIData.MaxSpeed;
+            return ARS.Clamp(spd, AIData.MinSpeed, AIData.MaxSpeed);
         }
 
         //Asumes the entity is going forward, at most, 90º sideways. Not backwards
@@ -4082,16 +4370,18 @@ namespace ARS
         {
             GameVersion gameVersion = Game.Version;
             var address = (ulong)handle.MemoryAddress;
-            if (wheelsptr == 0x0)
+            if (wheelsPtr == 0x0)
             {
                 IntPtr addr = (IntPtr)FindPattern("\x3B\xB7\x48\x0B\x00\x00\x7D\x0D", "xx????xx");
 
                 if (addr != null)
                 {
-                    wheelsptr = *(uint*)(addr + 2) - 8;
+                    wheelsPtr = *(uint*)(addr + 2) - 8;
+                    Log(LogImportance.Info, "[MEMORY] Learned the handling offset: " + wheelsPtr);
+
                 }
             }
-            return *((ulong*)(address + wheelsptr));
+            return *((ulong*)(address + wheelsPtr));
         }
 
         static public unsafe int GetNumWheels(Vehicle handle)
@@ -4366,34 +4656,25 @@ namespace ARS
             for (int i = 0; i < PathRoute.Count - 1; i++) if (PathRoute[i] == closest) return i;
             return 0;
         }
-
-
-        public static void WorstCornerAhead(Racer r)
+        public static float LaneSelectionApproachCorner(Racer r,Corner c, bool draw = false)
         {
-            if (r.trackPoint.Node >= Path.Count - 5) return;
+            return 0f;
+        }
+        public static void LookForCornerAhead(Racer r)
+        {
 
-            int minD = (int)r.Car.Velocity.Length();
-            int maxD = (int)(r.Car.Velocity.Length() * 6);
+            int spd = (int)(r.Car.Velocity.Length());
+            int refNode = (int)(r.CurrentTrackPoint.Node + (spd * 3));
+            CornerPoint possiblyNext = CornerPoints.Skip(refNode).Take(spd * 5).FirstOrDefault(c => c.IsKey);
 
-            //Filtering speed. 
-            float rSpd = r.Car.Velocity.Length() + ARS.MPHtoMS(25);
 
-            IEnumerable<CornerPoint> corners = CornerPoints.SkipWhile(c => c.Node < r.trackPoint.Node + minD).ToList().Where(c => c.Node < r.trackPoint.Node + maxD && GetSpeedForCorner(c, r) < rSpd);
-
-            foreach (CornerPoint c in corners)
-            {
-                if (!r.KnownCorners.Contains(c))
-                {
-                    c.Speed = GetSpeedForCorner(c, r);
-                    r.KnownCorners.Add(c);
-                }
+            if(possiblyNext != null)
+            {                
+                r.mem.Corner = new Corner(GetSpeedForCorner(possiblyNext, r), possiblyNext);
             }
+
         }
 
-        public enum WorstCornerData
-        {
-            AbsAngle, Position, Direction, Node, AnglePenalization, Speed, Angle
-        }
         public static Vector3 LerpByDistance(Vector3 A, Vector3 B, float x)
         {
             Vector3 P = x * Vector3.Normalize(B - A) + A;
@@ -4404,8 +4685,6 @@ namespace ARS
 
             Vector3 newDir = mypos - pos;
             Vector3 offset = Vector3.Cross(dir, newDir);
-
-
             return offset;
         }
         public static bool IsRoadBusy(Vector3 pos, int carNum)
@@ -4427,90 +4706,27 @@ namespace ARS
 
         //Returns the speed (m/s) you should be going at, given a distance (m) to the target, 
         //the target speed (m/s) at distance Zero and a theoretical max deceleration (m/s^2)
-        public static float MapIdealSpeedForDistance(CornerPoint c, Racer r, bool prejudgement = false)
+        public static float MapIdealSpeedForDistance(CornerPoint c, Racer r)
         {
             //Distance before the corner node to achieve the expected speed
-            float dSafety = 15;
+            
+            //Math variables
+            float targetDistance = (c.Node - c.LengthStart - r.CurrentTrackPoint.Node)-25-r.Car.Velocity.Length();
+            
+            float velCurrent = r.Car.Velocity.Length();
+            float velTarget = r.mem.Corner.Speed;// * r.BehaviorVariance[RandomVariance.SpeedAggroVariance];
+            float timeToReachTarget = Math.Max((targetDistance / velCurrent), 0.01f);
+
+            //Braking ability has to account for at least 25% of the wheel grip to count as fully taking advantage of the grip. Else, braking Gs are less than grip Gs
+            //float brakingAbility = (r.vehData.CurrentGrip * (float)Math.Round(ARS.map(ARS.GetPercent(r.handlingData.BrakingAbility, r.vehData.CurrentGrip), 0f, 25f, 0f, 1f, true), 3));
+            float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.vData.CurrentMechanicalGrip) * r.RiskFactorForBrake();
+                        
 
             //Late brake reduces the safety distance    
-            //dSafety *= ARS.map(r.mem.intention.Aggression, 1, 0, 0.5f, 1f, true);
-
-            //Absolute minimum
-            if (dSafety < c.Speed) dSafety = c.Speed;
-            //if (prejudgement) dSafety = 0;
-
-            //Math variables
-            float targetDistance = (c.Node - r.trackPoint.Node) - dSafety;
-            if (targetDistance < 0f) targetDistance = 0f;
-            float velCurrent = r.Car.Velocity.Length();
-            float velTarget = c.Speed;
-            float timeToReachTarget = targetDistance / velCurrent;
-
-            //Braking ability has to account for at least 25% of the wheel grip to count as fully taking advantage of the grip. Else, braking Gs are less than grip Gs
-            float brakingAbility = (float)Math.Round(ARS.map(ARS.GetPercent(r.handlingData.BrakingAbility, r.vehData.WheelsGrip), 0f, 25f, 0f, 1f, true), 2);
-
-            brakingAbility *= ARS.map(r.followTrackPoint.Elevation, -22.5f, 0, 0.5f, 1, true);
-
-            //We want to decelerate this many Gs
-            float targetDeceleration = ((velTarget - velCurrent) / (timeToReachTarget - 0)) / 9.8f;
-            if (targetDistance == 0f) targetDeceleration = (velTarget - velCurrent);
-
-            //We can decelerate this many Gs
-            float availableDeceleration = -(((r.vehData.WheelsGrip * brakingAbility)));
-            if (prejudgement) availableDeceleration *= 0.75f;
-
-            //How many Gs over the car's braking ability we are allowed to go
-            float Risk = r.mem.personality.Stability.OverBrakeCalm + (r.mem.intention.Aggression * r.mem.personality.Stability.OverBrakeAggro);
-            if (r.Decisions.ContainsKey(Decision.LateBrake) && timeToReachTarget > 2f) Risk += r.mem.personality.Rivals.ManeuverExtraGs;
-            if (prejudgement) Risk = 0;
-
-            //Brake risk. There's a 0.5Gs deceleration leeway between no braking and full brake.
-            float NoBrake = availableDeceleration + 0.25f - Risk;
-            float FullBrake = availableDeceleration - 0.25f - Risk;
-
-            float SpeedMod = ARS.map(targetDeceleration, FullBrake, NoBrake, -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput, true);
-            float spd = velCurrent + SpeedMod;
+            float spd =  velTarget + (float)((brakingAbility * r.Handling.Gravity) * timeToReachTarget);
             return spd;
         }
 
-        //Returns the speed (m/s) you should be going at, given a distance (m) to the target, 
-        //the target speed (m/s) at distance Zero and a theoretical max deceleration (m/s^2)
-        public static float MapIdealSpeedForDistanceG(Racer r, float distance, float speedThere)
-        {
-            //Absolute minimum
-            if (distance <= 0f) return speedThere;
-
-            //Math variables
-            float targetDistance = distance;
-            if (targetDistance < 0f) targetDistance = 0f;
-            float velCurrent = r.Car.Velocity.Length();
-            float velTarget = speedThere;
-            float timeToReachTarget = targetDistance / velCurrent;
-
-            //Braking ability has to account for at least 25% of the wheel grip to count as fully taking advantage of the grip. Else, braking Gs are less than grip Gs
-            float brakingAbility = (float)Math.Round(ARS.map(ARS.GetPercent(r.handlingData.BrakingAbility, r.vehData.WheelsGrip), 0f, 25f, 0f, 1f, true), 2);
-
-            //Gravity equals to 1G when fully pointing down;
-            float gravityAssist = ARS.map(r.Car.ForwardVector.Normalized.Z, -1, 1, -1, 1, true);
-
-            //We want to decelerate this many Gs
-            float targetDeceleration = ((velTarget - velCurrent) / (timeToReachTarget - 0)) / 9.8f;
-            if (targetDistance == 0f) targetDeceleration = (velTarget - velCurrent);
-
-            //We can decelerate this many Gs
-            float availableDeceleration = -(((r.vehData.WheelsGrip * brakingAbility) + gravityAssist));
-
-            //How many Gs over the car's braking ability we are allowed to go
-            float Risk = DevSettingsFile.GetValue<float>("RACERS", "BaseBrakeRisk", 0.0f) + (r.mem.intention.Aggression * DevSettingsFile.GetValue<float>("RACERS", "AggroBrakeRisk", 0.0f));
-
-            //Brake risk. There's a 0.5Gs deceleration leeway between no braking and full brake.
-            float NoBrake = -0.25f + Risk;
-            float FullBrake = 0.25f + Risk;
-
-            float SpeedMod = ARS.map(targetDeceleration, availableDeceleration + NoBrake, availableDeceleration - FullBrake, -ARS.AIData.SpeedToInput, ARS.AIData.SpeedToInput, true);
-            float spd = velCurrent + SpeedMod;
-            return spd;
-        }
         static Vector3 OffsetByAngle(Vehicle v, Vector3 refDir, Vector3 goal, float angle)
         {
             Vector3 outVec = Vector3.Zero;
@@ -4536,20 +4752,6 @@ namespace ARS
             DrawLine(Position, goal + outVec, Color.White);
             return outVec;
         }
-
-        public static bool IsStable(Vehicle v, float maxSlide, float maxSpin)
-        {
-            if (maxSpin > 0f && Math.Abs(rad2deg(Function.Call<Vector3>(Hash.GET_ENTITY_ROTATION_VELOCITY, v, true).Z)) >= maxSpin) return false;
-            if (maxSlide > 0f && Math.Abs(Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, v, true).Normalized.X) >= maxSlide) return false;
-            return true;
-        }
-
-        public static bool IsSliding(Vehicle v, float maxSlide)
-        {
-            if (Math.Abs(Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, v, true).Normalized.X) * 100 >= maxSlide) return true;
-            return false;
-        }
-
 
         static Random rnd = new Random();
         public static int GetRandomInt(int min, int max)
@@ -4598,7 +4800,6 @@ namespace ARS
             scaleform.Dispose();
             Function.Call(Hash._0x10D373323E5B9C0D);
             Game.Player.Character.HasGravity = true;
-
             //base.Dispose(dispose);
         }
         public bool IsAhead(Vehicle v, Vector3 pos)
@@ -4663,7 +4864,7 @@ namespace ARS
                 brakeOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Brake", 0x0);
                 Log(LogImportance.Info, "Loaded Memory Offsets.");
 
-                steeroffset = 0x9AC;
+                //                steeroffset = 0x9AC;
                 Log(LogImportance.Info, "[MEMORY] Learned the steer offset from file: " + steeroffset);
 
             }
@@ -4696,8 +4897,6 @@ namespace ARS
                 p.Stability.WheelspinOnMinSlide = pFile.GetValue("WHEELSPIN", "Base", 100f) / 100f;
                 p.Stability.WheelspinOnMaxSlide = pFile.GetValue("WHEELSPIN", "FullSlide", 50f) / 100f;
 
-                p.Stability.CounterFactor = pFile.GetValue("COUNTERSTEER", "CounterFactor", 100f) / 100f;
-                p.Stability.MaxAbsoluteCounter = pFile.GetValue("COUNTERSTEER", "MaxAbsoluteCounter", 100f) / 100f;
 
                 p.Rivals.AggressionBuildup = pFile.GetValue("AGGRESSION_RIVAL", "AggroBuildup", 0.01f);
 
@@ -4705,13 +4904,13 @@ namespace ARS
                 p.Rivals.BehindRivalMinDistance = pFile.GetValue("AGGRESSION_RIVAL", "BehindRivalMinDistance", 0.01f);
                 p.Rivals.SideToSideMinDist = pFile.GetValue("AGGRESSION_RIVAL", "SideToRivalMinDistance", 0.01f);
 
-                p.Stability.OverdriveCalm = pFile.GetValue("AGGRESSION_TRACK", "BaseOverdrive", 0f);
-                p.Stability.OverdriveAggro = pFile.GetValue("AGGRESSION_TRACK", "FullAggroOverdrive", 0.2f);
+                p.Stability.SpeedRiskFactorBase = pFile.GetValue("AGGRESSION_TRACK", "SpeedRiskFactorBase", 1);
+                p.Stability.SpeedRiskFactorAggro = pFile.GetValue("AGGRESSION_TRACK", "SpeedRiskFactorAggro", 1);
 
-                p.Stability.OverBrakeCalm = pFile.GetValue("AGGRESSION_TRACK", "BaseBrakeRisk", 0.2f);
-                p.Stability.OverBrakeAggro = pFile.GetValue("AGGRESSION_TRACK", "FullAggroBrakeRisk", 0.2f);
+                p.Stability.BrakeRiskFactorBase = pFile.GetValue("AGGRESSION_TRACK", "BrakeRiskFactorBase", 1);
+                p.Stability.BrakeRiskFactorAggro = pFile.GetValue("AGGRESSION_TRACK", "BrakeRiskFactorAggro", 1);
 
-                p.Rivals.ManeuverExtraGs = pFile.GetValue("AGGRESSION_TRACK", "ManeuverAggression", 0.2f);
+                p.Rivals.ManeuverRiskFactor = pFile.GetValue("AGGRESSION_TRACK", "ManeuverRiskFactor", 1);
 
                 //Understeer
                 p.Stability.UndersteerFactor = pFile.GetValue("AGGRESSION_TRACK", "UndersteerFactor", 0f);
@@ -4799,7 +4998,7 @@ namespace ARS
 
         public static float GetDownforceGsAtSpeed(Racer r, float ms)
         {
-            if (ARS.DevSettingsFile.GetValue("RACERS", "AccountForDownforce", 100)==0) return 0f;
+
 
             float Gs = 0f;
             int nwheels = ARS.GetNumWheels(r.Car);
@@ -4808,18 +5007,27 @@ namespace ARS
             //Downforce at that speed
             if (r.Car.HasBone("spoiler")) Gs = 0.035f * nwheels;
             else if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) Gs = 0.035f * nwheels;
-            else Gs += map(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, basedownf, true) * r.handlingData.Downforce * nwheels;
+            else Gs += map(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, basedownf, true) * r.Handling.Downforce * nwheels;
+            //UI.ShowSubtitle(Gs.ToString("0.000"), 500);
             if (float.IsNaN(Gs) || Gs > 5f) return 0f;
-            else return Gs*(ARS.DevSettingsFile.GetValue("RACERS", "AccountForDownforce", 100)/100);
+            else return Gs;
         }
-        public static unsafe ulong GetHandlingPtr(Vehicle v)
-        {
-            if (!CanWeUse(v)) return (ulong)0;
 
-            var address = (ulong)v.MemoryAddress;
-            ulong offset = 0x918;
-            if (Game.Version > GameVersion.VER_1_0_1868_0_STEAM) offset = 0x938;
-            return *((ulong*)(address + offset));
+
+        static public unsafe ulong GetHandlingPtr(Vehicle handle)
+        {
+            GameVersion gameVersion = Game.Version;
+            var address = (ulong)handle.MemoryAddress;
+            if (handlingPtr == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x3C\x03\x0F\x85\x00\x00\x00\x00\x48\x8B\x41\x20\x48\x8B\x88", "xxxx????xxxxxxx");
+
+                if (addr != null)
+                {
+                    handlingPtr = *(uint*)(addr + 0x16);
+                }
+            }
+            return *((ulong*)(address + handlingPtr));
         }
 
         public static unsafe float GetTRCurveLat(Vehicle v)
@@ -4827,6 +5035,7 @@ namespace ARS
 
             if (!CanWeUse(v)) return 0f;
             ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0f;
             ulong tractionCurveMaxOffset = 0x0098;
             if (handlingAddress < 1) return 0f;
             float result = *(float*)(handlingAddress + tractionCurveMaxOffset);
@@ -4837,6 +5046,7 @@ namespace ARS
 
             if (!CanWeUse(v)) return 0f;
             ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0f;
             ulong tractionCurveMaxOffset = 0x088;
             if (handlingAddress < 1) return 0f;
             float result = *(float*)(handlingAddress + tractionCurveMaxOffset);
@@ -4847,6 +5057,7 @@ namespace ARS
 
             if (!CanWeUse(v)) return 0f;
             ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0f;
             ulong steerlock = 0x0080;
             if (handlingAddress < 1) return 0f;
             float result = *(float*)(handlingAddress + steerlock);
@@ -4857,6 +5068,7 @@ namespace ARS
 
             if (!CanWeUse(v)) return 0f;
             ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0f;
             ulong downfOffset = 0x0014;
             if (handlingAddress < 1) return 0f;
             float result = *(float*)(handlingAddress + downfOffset);
@@ -4869,6 +5081,7 @@ namespace ARS
 
             if (!CanWeUse(v)) return 0;
             ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0;
             ulong modelflags = 0x124;
             if (handlingAddress < 1) return 0;
             int result = *(int*)(handlingAddress + modelflags);
@@ -4879,6 +5092,7 @@ namespace ARS
 
             if (!CanWeUse(v)) return 0;
             ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0;
             ulong modelflags = 0x128;
             if (handlingAddress < 1) return 0;
             int result = *(int*)(handlingAddress + modelflags);
@@ -4889,6 +5103,7 @@ namespace ARS
             if (!CanWeUse(v)) return;
 
             ulong handlingAddress = GetHandlingPtr(v);
+
             ulong tractionCurveMaxOffset = 0x00D0;
             *(float*)(handlingAddress + tractionCurveMaxOffset) = mult;
         }
@@ -5198,7 +5413,6 @@ namespace ARS
         {
             CachedCandidates.Clear();
 
-            //if (maxcars > GridPositions.Count) maxcars = GridPositions.Count;
             List<string> disciplinesArray = dlist.Split(' ').ToList();
             List<string> optionals = new List<string>();
             List<string> required = new List<string>();
@@ -5234,6 +5448,7 @@ namespace ARS
             List<XmlDocument> files = new List<XmlDocument>();
             List<XmlDocument> candidates = new List<XmlDocument>();
 
+            Dictionary<XmlDocument, float> RacerToStats = new Dictionary<XmlDocument, float>();
             List<string> approved = new List<string>();
             List<string> haspriority = new List<string>();
             int cooldown = 0;
@@ -5288,7 +5503,7 @@ namespace ARS
 
                         string m = "";
                         if (GetChild(XMLFile, "//Model") != null) m = GetChild(XMLFile, "//Model").InnerText;
-                        if (new Model(m).IsValid)
+                        if (1==2 && new Model(m).IsValid)
                         {
 
                             if (haspriority.Contains(filename))
@@ -5307,8 +5522,12 @@ namespace ARS
 
                             int n = 0;
                             int.TryParse(m, out n);
-                            if (new Model(n).IsValid)
+                            Model model = new Model(n);
+                            if (model.IsValid)
                             {
+
+
+                                
                                 if (haspriority.Contains(filename))
                                 {
                                     Log(LogImportance.Info, "added priority reminder");
@@ -5317,6 +5536,10 @@ namespace ARS
                                     if (GetChild(XMLFile, "Vehicle") != null) GetChild(XMLFile, "Vehicle").AppendChild(donot);
                                 }
                                 candidates.Add(XMLFile);
+                                float stats = Function.Call<float>((Hash)0xF417C2502FFFED43, model) / 100;
+                                stats += Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model);
+                                stats += Function.Call<float>(Hash.GET_VEHICLE_MODEL_MAX_TRACTION, model) / 2;
+                                RacerToStats.Add(XMLFile, stats);
                             }
                             else
                             {
@@ -5331,6 +5554,19 @@ namespace ARS
                     XMLFile = new XmlDocument();
                 }
                 Log(LogImportance.Info, "Vehicles found: " + candidates.Count);
+
+                candidates.Clear();
+
+                
+                foreach (var item in RacerToStats.OrderBy(r => r.Value))
+                {
+                    candidates.Add(item.Key);
+                }
+
+                while (candidates.Count > maxcars) candidates.RemoveAt(0);
+                Log(LogImportance.Info, "Vehicles sorted by top speed.");
+
+
             }
             else
             {
@@ -5342,6 +5578,8 @@ namespace ARS
             {
                 if (candidates.Count > 0)
                 {
+                    
+
                     if (candidates.Count < maxcars && SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AllowDuplicates", true))
                     {
                         Log(LogImportance.Info, "There are not enough candidates to fill the grid. Duplicating some vehicles...");
@@ -5378,15 +5616,14 @@ namespace ARS
                 if (candidates.Count > maxcars && candidates.Count > 1)
                 {
 
-                    Log(LogImportance.Info, "There are too many candidates for the selected grid size. Shuffling vehicles around to randomize the final list.");
-                    for (int i = 0; i < 10; i++)
+                    Log(LogImportance.Info, "There are too many candidates ("+candidates.Count+") for the selected grid size. Shuffling vehicles around to randomize the final list.");
+                    for (int i = 0; i < 30; i++)
                     {
                         int r = GetRandomInt(0, candidates.Count - 1);
                         XmlDocument taken = candidates[r];
 
                         candidates.RemoveAt(r);
                         candidates.Insert(GetRandomInt(0, candidates.Count - 1), taken);
-
                     }
                     int patience = 0;
 
@@ -5402,10 +5639,8 @@ namespace ARS
                             //Log(LogImportance.Info, "this guy is priority");
 
                             patience++;
-                            if (patience > 10) break; else continue;
+                            if (patience > 100) break; else continue;
                         }
-
-
                         candidates.RemoveAt(r);
                     }
                 }
@@ -5416,227 +5651,8 @@ namespace ARS
         void LoadGrid(string dlist, int maxcars)
         {
             SetloadingPromptText("Loading vehicles...");
-            /*
-            if (maxcars > GridPositions.Count) maxcars = GridPositions.Count;
-            List<string> disciplinesArray = dlist.Split(' ').ToList();
-            List<string> optionals = new List<string>();
-            List<string> required = new List<string>();
-            List<string> banned = new List<string>();
-            List<string> priority = new List<string>();
 
-
-                for (int i = 0; i < disciplinesArray.Count; i++)
-                {                    
-                    if (disciplinesArray[i].Contains("+"))
-                    {
-                        disciplinesArray[i]= disciplinesArray[i].Replace("+", "");
-                        required.Add(disciplinesArray[i].ToLowerInvariant());
-                    }
-                    else if (disciplinesArray[i].Contains("-"))
-                    {
-                        disciplinesArray[i] = disciplinesArray[i].Replace("-", "");
-                         banned.Add(disciplinesArray[i].ToLowerInvariant());                        
-                    }
-                    else if (disciplinesArray[i].Contains("*"))
-                    {
-                          //Log(LogImportance.Info, "has priority tag");
-                        disciplinesArray[i] = disciplinesArray[i].Replace("*", "");
-                        priority.Add(disciplinesArray[i].ToLowerInvariant());
-                     }
-                    else
-                    {
-                        optionals.Add(disciplinesArray[i].ToLowerInvariant());
-                    }
-                }
-
-            XmlDocument XMLFile = new XmlDocument();
-            List<XmlDocument> files = new List<XmlDocument>();
-            List<XmlDocument> candidates = new List<XmlDocument>();
-
-            List<string> approved = new List<string>();
-            List<string> haspriority = new List<string>();
-
-            if (dlist.Length > 0)
-            {
-                Log(LogImportance.Info, "Looking up racers that fit the " + dlist + " criteria...");
-
-                foreach (string racerfile in RacerTags.Keys)
-                {
-
-                    bool fitsOptionals = optionals.Count == 0;
-                    bool fitsBanned = false;
-                    bool fitsRequired = required.Count == 0;
-                    bool fitspriority = false;
-                    int reqscore = 0;
-                    foreach (string racerTag in RacerTags[racerfile].Split(' '))
-                    {
-
-                        foreach (string partial in optionals) if (racerTag.Contains(partial)) fitsOptionals = true;
-                        foreach (string req in required) if (racerTag.Contains(req)) reqscore++;
-                        foreach (string pri in priority) if (pri.Contains(racerTag) || racerTag.Contains(pri)) { fitspriority = true; }
-
-
-                        if (banned.Contains(racerTag))
-                        {
-                            fitsBanned = true;
-                            break;
-                        }
-
-
-                    }
-                    if (reqscore == required.Count) fitsRequired = true;
-
-                    if (!fitsBanned && (fitspriority || (fitsOptionals && fitsRequired)))
-                    {
-                        Log(LogImportance.Info, System.IO.Path.GetFileName(racerfile) + " fits the criteria.");
-                        approved.Add(racerfile);
-                        if (fitspriority) haspriority.Add(racerfile);
-                    }
-
-                }
-
-
-                foreach (string filename in approved)
-                {
-                    bool isMenyoo = false;
-                    XMLFile.Load(filename);
-
-
-                    if (1 == 1)
-                    {
-
-                        string m = "";
-                        if (GetChild(XMLFile, "//Model") != null) m = GetChild(XMLFile, "//Model").InnerText;
-                        if (new Model(m).IsValid)
-                        {
-
-                            if (haspriority.Contains(filename))
-                            {
-                                Log(LogImportance.Info, "added priority reminder");
-
-                                XmlNode donot = XMLFile.CreateElement("priority");
-                                if (GetChild(XMLFile, "Vehicle") != null) GetChild(XMLFile, "Vehicle").AppendChild(donot);
-
-                            }
-                            candidates.Add(XMLFile);
-
-                        }
-                        else
-                        {
-
-                            int n = 0;
-                            int.TryParse(m, out n);
-                            if (new Model(n).IsValid)
-                            {
-                                if (haspriority.Contains(filename))
-                                {
-                                    Log(LogImportance.Info, "added priority reminder");
-
-                                    XmlNode donot = XMLFile.CreateElement("priority");
-                                    if (GetChild(XMLFile, "Vehicle") != null) GetChild(XMLFile, "Vehicle").AppendChild(donot);
-                                }
-                                candidates.Add(XMLFile);
-                            }
-                            else
-                            {
-
-                                Log(LogImportance.Error, n + " in " + filename + " is not a valid model. Its probably just not installed in this machine.");
-
-                            }
-                        }
-
-                    }
-
-                    XMLFile = new XmlDocument();
-                }
-                Log(LogImportance.Info, "Vehicles found: " + candidates.Count);
-            }
-            else
-            {
-                Log(LogImportance.Info, "The discipline criteria is empty. Skipping the vehicle lookup.");
-
-            }
-
-
-
-
-            if (maxcars > -1)
-            {
-                if (candidates.Count > 0)
-                {
-                    if (candidates.Count < maxcars && SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "allowduplicates",true))
-                    {
-                        Log(LogImportance.Info, "There are not enough candidates to fill the grid. Duplicating some vehicles...");
-
-                        List<XmlDocument> dupes = new List<XmlDocument>();
-                        foreach (XmlDocument d in candidates)
-                        {
-                            XmlDocument n = new XmlDocument();
-                            n= (XmlDocument)d.Clone();
-                            //Log(LogImportance.Info, "Adding a random vehicle");
-                            if (n.SelectSingleNode("//Colors") != null)
-                            {
-                                n.SelectSingleNode("//Colors").RemoveAll();
-                                //Log(LogImportance.Info, "Removed color");
-                            }
-
-                            
-                            if (n.SelectNodes("//Mods/Mod").Count>0)
-                            {
-
-                                n.SelectSingleNode("//Vehicle").RemoveChild(n.SelectSingleNode("//Mods"));
-                                //Log(LogImportance.Info, "Removed mods");
-                            }
-
-                            dupes.Add(n);
-                        }
-                        
-                        while (candidates.Count < maxcars)
-                        {
-                            Script.Wait(0);
-                            candidates.AddRange(dupes);
-                        }
-
-                    }
-
-
-                }
-                if (candidates.Count > maxcars && candidates.Count > 1)
-                {
-
-                    Log(LogImportance.Info, "There are too many candidates for the selected grid size. Shuffling vehicles around to randomize the final list.");
-                    for (int i = 0; i < 10; i++)
-                    {
-                        int r = GetRandomInt(0, candidates.Count - 1);
-                        XmlDocument taken = candidates[r];
-                        
-                        candidates.RemoveAt(r);
-                        candidates.Insert(GetRandomInt(0, candidates.Count - 1), taken);
-                        Script.Wait(20);
-                    }
-                    int patience = 0;
-
-                    Log(LogImportance.Info, "Removing random vehicles until we are within the grid size (" +maxcars+").");
-                    while (candidates.Count > maxcars)
-                    {
-
-                        //Log(LogImportance.Info, "Checking if its priority");
-
-                        int r = GetRandomInt(0, candidates.Count - 1);
-                        if (NodeExists(GetChild(candidates[r], "//Vehicle"), "priority"))
-                        {
-                            //Log(LogImportance.Info, "this guy is priority");
-
-                            patience++;
-                            if (patience > 10) break; else continue;
-                        }
-
-                        Script.Wait(20);
-                        candidates.RemoveAt(r);
-                    }
-                }
-            }
-            */
+            Log(LogImportance.Info, "Loading vehicle models");
             Vehicle car = null;
             List<dynamic> result = new List<dynamic>();
 
@@ -5739,13 +5755,14 @@ namespace ARS
                     foreach (XmlElement modelement in File.SelectNodes("//Extras/Extra")) car.ToggleExtra(int.Parse(modelement.InnerText), true);
 
                 }
-                /*
+                
                 if (File.SelectSingleNode("//Acceleration") != null)
                 {
-                    float acc = float.Parse(File.SelectSingleNode("//Acceleration").InnerText);
+                    float acc = float.Parse(File.SelectSingleNode("//Acceleration").InnerText)-0.05f;
 
-                    if (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc)
+                    if (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc && car.HighGear>2)
                     {
+                        UI.Notify(car.DisplayName + " powers up");
                         float mul = 10f;
                         while (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc && mul < 500)
                         {
@@ -5755,10 +5772,11 @@ namespace ARS
                         }
                     }
                 }
-                */
+                
 
 
                 string DriverChosen = "default";
+
                 if (File.SelectSingleNode("DriverName") != null) DriverChosen = File.SelectSingleNode("DriverName").InnerText;
 
                 XmlDocument DriverXML = new XmlDocument();
@@ -5803,8 +5821,6 @@ namespace ARS
                         Function.Call(Hash.SET_PED_PROP_INDEX, DriverPed, int.Parse(e.InnerText), prop, texture, true);
 
                     }
-
-
                 }
 
                 if (CanWeUse(car))
@@ -6058,7 +6074,6 @@ namespace ARS
         void CreateVehicleFromHash(VehicleHash h)
         {
 
-
             Log(LogImportance.Info, "Creating item from hash: " + h.ToString());
 
             if (Function.Call<int>(Hash._0x2AD93716F184EDA4, (int)h) == 0)
@@ -6148,7 +6163,10 @@ namespace ARS
             XMLFile.Save(@"scripts\\ARS\Vehicles\" + name + ".xml");
             UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
-
+        public static bool IsBetweenRange(float n, float a,float b)
+        {
+            return n > a && n < b;
+        }
         public static Vector3 Project(Vector3 pos, Vector3 dir, float mod, int m)
         {
             return Quaternion.RotationAxis(Vector3.WorldUp, (float)(System.Math.PI / 180f) * (mod * m)) * (dir * m);
