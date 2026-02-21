@@ -13,6 +13,7 @@ using System.Threading;
 using System.Windows.Forms;
 using System.Xml;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace ARS
 {
@@ -282,23 +283,48 @@ namespace ARS
         }
 
         bool Loaded = false;
-        public void LoadScript()
+        bool IsLoadingScript = false;
+        Task LoadScriptTask = null;
+
+        public void StartLoadScript()
         {
+            if (IsLoadingScript) return;
+
             DisplayHelpTextTimed("Loading ~b~ARS.~w~ May take a while.", 20000);
+            Loaded = false;
+            IsLoadingScript = true;
+            LoadScriptTask = Task.Run(() =>
+            {
+                FillKnownDisciplines(false);
+                FillKnownTracks(false);
+                ReFilterKnownTracks(TrackFilter);
+            });
+        }
 
+        void HandleLoadScriptTask()
+        {
+            if (!IsLoadingScript || LoadScriptTask == null) return;
+            if (!LoadScriptTask.IsCompleted) return;
 
-            FillKnownDisciplines();
-            Script.Yield();
-            FillKnownTracks();
-            ReFilterKnownTracks(TrackFilter);
-            FillCachedCandidates(DisciplineFilter, intendedOpponents);
+            if (LoadScriptTask.IsFaulted)
+            {
+                Loaded = false;
+                Exception ex = LoadScriptTask.Exception?.GetBaseException();
+                Log(LogImportance.Error, "Initialization failed: " + (ex != null ? ex.Message : "Unknown error"), true);
+                DisplayHelpTextTimed("~r~ARS failed to load. Check log.", 4000);
+            }
+            else
+            {
+                // Must run on the script thread: this path uses GTA natives/models.
+                FillCachedCandidates(DisciplineFilter, intendedOpponents, true);
+                Log(LogImportance.Info, "Initialization complete.", true);
+                DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
+                HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARSe~w~ menu.");
+                Loaded = true;
+            }
 
-            Log(LogImportance.Info, "Initialization complete.", true);
-            DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
-            HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARSe~w~ menu.");
-            Loaded = true;
-
-
+            IsLoadingScript = false;
+            LoadScriptTask = null;
         }
         public ARS()
         {
@@ -342,7 +368,7 @@ namespace ARS
 
 
         Dictionary<string, string> TrackTags = new Dictionary<string, string>();
-        public void FillKnownTracks()
+        public void FillKnownTracks(bool allowScriptYield = true)
         {
             TrackTags.Clear();
             ImmersiveJoins.Clear();
@@ -360,7 +386,7 @@ namespace ARS
                     if (!ImmersiveJoins.ContainsKey(GetTrackStartPos(st))) ImmersiveJoins.Add(GetTrackStartPos(st), st);
 
                     count++;
-                    if (count > 5)
+                    if (allowScriptYield && count > 5)
                     {
                         DisplayHelpTextTimed("Loading " + n, 5000);
                         count = 0;
@@ -480,7 +506,7 @@ namespace ARS
         }
 
 
-        public void FillKnownDisciplines()
+        public void FillKnownDisciplines(bool allowScriptYield = true)
         {
             RacerTags.Clear();
             Log(LogImportance.Info, "-------------");
@@ -497,7 +523,7 @@ namespace ARS
                     RacerTags.Add(st, string.Join(" ", GetRacerTags(st)));
 
                     count++;
-                    if (count > 20)
+                    if (allowScriptYield && count > 20)
                     {
                         DisplayHelpTextTimed("Loading " + n, 5000);
 
@@ -767,324 +793,390 @@ namespace ARS
         //Menu
         Dictionary<string, string> RacerTags = new Dictionary<string, string>();
         public static int TrackListPos = 0;
-        void HandleMenu()
+        class MenuItemDefinition
         {
-            if (OptionsList.Count == 0) return;
-            if (TrackListPos > FilteredTrackList.Count - 1) TrackListPos = FilteredTrackList.Count - 1;
-            if (TrackListPos < 0) TrackListPos = 0;
+            public Func<string> Name;
+            public Func<string> ValueSuffix;
+            public Action<int> OnAdjust;
+            public Action OnAccept;
+            public bool KeepMenuOpen;
+        }
+        readonly Dictionary<Options, MenuItemDefinition> MenuItemDefinitions = new Dictionary<Options, MenuItemDefinition>();
+        void SetMenuOptions(params Options[] options)
+        {
+            OptionsList.Clear();
+            OptionsList.AddRange(options);
+        }
 
-            Game.DisableControlThisFrame(2, GTA.Control.Phone);
+        string GetOptionName(Options option)
+        {
+            if (option == Options.TrackList) return "Track";
+            if (option == Options.LeaveRace && RaceStatus == RaceState.Finished) return "Finish Race";
+            return ParsedEnum(option.ToString());
+        }
 
-            string Menu = "-- Options --";
-            if (OptionHovered > OptionsList.Count - 1) OptionHovered = OptionsList.Count - 1;
-            if (OptionHovered < 0) OptionHovered = OptionsList.Count - 1;
+        string GetTrackListPreview()
+        {
+            if (FilteredTrackList.Count == 0) return " (0) []";
 
-            float zoffset = 0;
-            foreach (Options o in OptionsList)
+            string preview = " (" + FilteredTrackList.Count + ") [";
+            for (int c = 0; c < FilteredTrackList.Count; c++)
             {
-                string name = ParsedEnum(o.ToString());
-                Menu += "~w~~n~";
+                if (c < TrackListPos - 1 || c > TrackListPos + 1) continue;
+                if (c == TrackListPos) preview += "~y~";
+                preview += System.IO.Path.GetFileNameWithoutExtension(FilteredTrackList[c]) + " ";
+                if (c == TrackListPos) preview += "~w~";
+            }
+            preview += "]";
+            return preview;
+        }
 
-                if (o == Options.TrackList) name = "Track";
-                if (o == Options.LeaveRace && RaceStatus == RaceState.Finished) name = "Finish Race";
+        string GetDisciplinesPreview()
+        {
+            string s = DisciplineFilter.Replace("+", "~g~+");
+            s = s.Replace("-", "~o~-");
+            s = s.Replace("*", "~b~*");
+            s = s.Replace(" ", "~w~ ");
+            return " ~w~[~w~" + s + "~w~]" + "(" + CachedCandidates.Count + ")";
+        }
 
-                if (o == OptionsList[OptionHovered]) Menu += "~b~> ";
-                Menu += name + "~w~";
+        string GetOptionValueSuffix(Options option)
+        {
+            if (OptionValuesList.ContainsKey(option)) return OptionValuesList[option] ? " [~g~X~w~]" : " [ ]";
+            if (option == Options.TrackNameFilter) return " [" + TrackFilter + "]";
+            if (option == Options.Laps) return " [~y~" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~w~]";
+            if (option == Options.GridSize) return " [~y~" + intendedOpponents + "~w~]";
+            if (option == Options.DebugLevel) return " [" + (DebugDisplay)DebugVisual + "]";
+            if (option == Options.TrackList) return GetTrackListPreview();
+            if (option == Options.Disciplines) return GetDisciplinesPreview();
+            return "";
+        }
 
-                if (OptionValuesList.ContainsKey(o)) if (OptionValuesList[o] == true) Menu += " [~g~X~w~]"; else Menu += " [ ]";
-
-                if (o == Options.TrackNameFilter) Menu += " [" + TrackFilter + "]";
-                if (o == Options.Laps) Menu += " [~y~" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~w~]";
-                if (o == Options.GridSize) Menu += " [~y~" + intendedOpponents + "~w~]";
-                if (o == Options.DebugLevel) Menu += " [" + (DebugDisplay)DebugVisual + "]";
-                if (o == Options.TrackList)
-                {
-                    Menu += " (" + FilteredTrackList.Count + ") [";
-                    int c = -1;
-                    foreach (string s in FilteredTrackList)
-                    {
-                        c++;
-                        if (c < TrackListPos - 1 || c > TrackListPos + 1)
-                        {
-                            //Menu += " . ";
-                            continue;
-                        }
-                        if (c == TrackListPos) Menu += "~y~";
-                        string d = System.IO.Path.GetFileName(FilteredTrackList[c]);
-                        Regex r = new Regex("\\.{1}(xml)");
-                        Menu += "" + r.Replace(d, "") + " ";
-                        if (c == TrackListPos) Menu += "~w~";
-
-                    }
-                    Menu += "]";
-                }
-                if (o == Options.Disciplines)
-                {
-                    string s = DisciplineFilter.Replace("+", "~g~+");
-                    s = s.Replace("-", "~o~-");
-                    s = s.Replace("*", "~b~*");
-                    s = s.Replace(" ", "~w~ ");
-                    Menu += " ~w~[~w~" + s + "~w~]" + "(" + CachedCandidates.Count + ")";
-                }
-
-
-                DrawText(new Vector2(0.02f, 0.2f + zoffset), Menu, Color.White, DrawTextFont.Default, DrawTextAlign.Left, 0.5f);
-                Menu = "";
-                zoffset += 0.04f;
-
+        void AdjustTrackListPos(int delta)
+        {
+            if (FilteredTrackList.Count == 0)
+            {
+                TrackListPos = 0;
+                return;
             }
 
-            Options oSelected = OptionsList[OptionHovered];
-            if (Game.IsControlJustPressed(2, GTA.Control.FrontendDown)) OptionHovered++;
-            if (Game.IsControlJustPressed(2, GTA.Control.FrontendUp)) OptionHovered--;
+            TrackListPos += delta;
+            if (TrackListPos < 0) TrackListPos = FilteredTrackList.Count - 1;
+            if (TrackListPos > FilteredTrackList.Count - 1) TrackListPos = 0;
+        }
 
-            if (OptionHovered < 0) OptionHovered = OptionsList.Count - 1;
-            if (OptionHovered > OptionsList.Count - 1) OptionHovered = 0;
+        void AdjustMenuOption(Options selected, int direction)
+        {
+            if (selected == Options.TrackList) AdjustTrackListPos(direction);
+            if (selected == Options.GridSize) intendedOpponents += direction;
+            if (selected == Options.Laps) SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) + direction);
 
-            if (Game.IsControlJustPressed(2, GTA.Control.FrontendLeft))
+            if (intendedOpponents < 0) intendedOpponents = 0;
+            if (SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) < 1) SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", 5);
+
+            if (selected == Options.DebugLevel)
             {
-                if (oSelected == Options.GridSize) intendedOpponents--;
-                if (oSelected == Options.Laps) SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) - 1);
-
-                if (intendedOpponents < 0) intendedOpponents = 0;
-                if (SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) < 1) SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", 5);
-
-                if (oSelected == Options.TrackList) TrackListPos--;
-                if (TrackListPos < 0) TrackListPos = FilteredTrackList.Count - 1;
-
-                if (oSelected == Options.DebugLevel)
-                {
-                    DebugVisual--;
-                    if (DebugVisual < 0) DebugVisual = 0;
-                    if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(true);
-                }
-            }
-            if (Game.IsControlJustPressed(2, GTA.Control.FrontendRight))
-            {
-                if (oSelected == Options.TrackList) TrackListPos++;
-                if (oSelected == Options.GridSize) intendedOpponents++;
-                if (oSelected == Options.Laps) SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) + 1);
-                if (TrackListPos > FilteredTrackList.Count - 1) TrackListPos = 0;
-
-                if (oSelected == Options.DebugLevel)
+                int next = DebugVisual + direction;
+                if (direction > 0)
                 {
                     if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(false);
-
-                    if (DebugVisual < 7) DebugVisual++;
-
-
+                    if (next <= 7) DebugVisual = next;
                     if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(true);
-
+                }
+                else
+                {
+                    if (next < 0) next = 0;
+                    DebugVisual = next;
+                    if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(true);
                 }
             }
-            if (Game.IsControlJustPressed(2, GTA.Control.FrontendAccept))
+        }
+
+        void ShowPropEditHelpMessages()
+        {
+            HelpMessages.Add("The ~b~Prop Edit~w~ mode lets you modify which props will be saved along the route.");
+            HelpMessages.Add("Props marked in ~g~green~w~ are considered part of the route.");
+            HelpMessages.Add("Remember to update the current route on the menu after you're finished.");
+        }
+
+        void OpenRaceOptionsMenu()
+        {
+            SetMenuOptions(
+                Options.ShowAggro,
+                Options.ShowInputs,
+                Options.ShowTrackAnalysis,
+                Options.ShowPhysics
+            );
+        }
+
+        void OpenRaceSetupMenu()
+        {
+            SetMenuOptions(
+                Options.TrackList,
+                Options.Disciplines,
+                Options.GridSize,
+                Options.Laps,
+                Options.UseNearbyCars,
+                Options.ReverseRoute,
+                Options.Start
+            );
+        }
+
+        void OpenMenuFromContext()
+        {
+            OptionHovered = 0;
+            if (routeEditMode)
             {
-                if (oSelected == Options.ReloadSettings)
+                SetMenuOptions(Options.SaveTrack, Options.ExitCreator, Options.Freecam, Options.SaveThisCar);
+                return;
+            }
+
+            if (Path.Count == 0)
+            {
+                SetMenuOptions(Options.Race, Options.CreateTrack, Options.ReloadSettings, Options.Freecam, Options.SaveThisCar);
+                return;
+            }
+
+            List<Options> options = new List<Options>();
+            if (Racers.Count == 0)
+            {
+                options.Add(Options.Disciplines);
+                options.Add(Options.StartRace);
+                options.Add(Options.GridSize);
+                options.Add(Options.Laps);
+            }
+            options.Add(Options.RaceOptions);
+            options.Add(Options.LeaveRace);
+
+            if (RaceStatus > RaceState.NotInitiated) options.Add(Options.RestartRace);
+            if (DebugVisual == (int)DebugDisplay.PropEdit)
+            {
+                options.Add(Options.FindCustomProps);
+                options.Add(Options.UpdateTrackFile);
+            }
+            options.Add(Options.Freecam);
+            options.Add(Options.SaveThisCar);
+            SetMenuOptions(options.ToArray());
+        }
+
+        void RefreshDisciplinesFromInput()
+        {
+            DisciplineFilter = Game.GetUserInput(999);
+
+            string[] disciplines = DisciplineFilter.Split(' ');
+            string[] aliases = SettingsFile.GetAllValues("GENERAL_SETTINGS", "alias");
+            string[] atags = SettingsFile.GetAllValues("GENERAL_SETTINGS", "tags");
+            for (int d = 0; d < disciplines.Length; d++)
+            {
+                for (int i = 0; i < aliases.Length; i++)
+                {
+                    if (aliases[i] == disciplines[d])
+                    {
+                        disciplines[d] = atags[i];
+                        break;
+                    }
+                }
+            }
+            DisciplineFilter = string.Join(" ", disciplines);
+            FillCachedCandidates(DisciplineFilter, intendedOpponents);
+        }
+
+        void StartFromMenu()
+        {
+            if (FilteredTrackList.Count <= 0)
+            {
+                UI.Notify("~r~No track selected.");
+                return;
+            }
+
+            XmlDocument f = LoadTrackFile(FilteredTrackList[TrackListPos]);//Game.GetUserInput(30)
+
+            if (OptionValuesList[Options.UseNearbyCars])
+            {
+                foreach (Vehicle v in GetNearbyCandidates())
+                {
+                    Script.Wait(100);
+                    Log(LogImportance.Info, "Added " + v.FriendlyName);
+                    v.IsPersistent = true;
+                    Ped p = World.CreatePed(RacerModels[GetRandomInt(0, RacerModels.Count - 1)], v.Position + (v.ForwardVector * 5));
+
+                    Racer RandomRacer = new Racer(v, p);
+
+                    if (v.ColorCombinationCount < 2 && v.ClassType != VehicleClass.Emergency)
+                    {
+                        VehicleColor c = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
+                        v.PrimaryColor = c;
+                        v.SecondaryColor = c;
+                        v.PearlescentColor = c;
+                    }
+                    Racers.Add(RandomRacer);
+                }
+            }
+
+            LoadTrack(f);
+            Log(LogImportance.Info, "Loading grid");
+            LoadGrid(DisciplineFilter, (int)Clamp(intendedOpponents - Racers.Count, 0, GridPositions.Count));
+
+            if (DevSettingsFile.GetValue("RACERS", "UsePersonalities", true))
+            {
+                for (int i = 0; i < Racers.Count; i++)
+                {
+                    Racers[i].mem.personality = personalitySets.Find(s => s.ProbToUse >= 100);
+
+                    PersonalitySet p = personalitySets.Find(ps => ps.Model != "" && ps.Model.ToLowerInvariant() == Racers[i].Car.DisplayName.ToLowerInvariant());
+                    if (p != null)
+                    {
+                        Racers[i].mem.personality = p;
+                        continue;
+                    }
+
+                    for (int per = 0; per < personalitySets.Count; per++)
+                    {
+                        if (personalitySets[per].ProbToUse >= 100) continue;
+
+                        int chance = ARS.GetRandomInt(0, 100);
+                        if (chance < personalitySets[per].ProbToUse)
+                        {
+                            p = personalitySets[per];
+                            string[] skills = p.SkillRange.Split(',');
+                            if (skills.Count() >= 2)
+                            {
+                                int skill = GetRandomInt(int.Parse(skills.First()), int.Parse(skills.Last()));
+                                p.Stability.Skill = skill;
+                            }
+
+                            Racers[i].mem.personality = p;
+                            break;
+                        }
+                    }
+                }
+            }
+            StartRace();
+
+            if (CanWeUse(Game.Player.Character.CurrentVehicle)) HelpMessages.Add("Rev up your engine to start the countdown.");
+        }
+
+        void EnsureMenuItemDefinitions()
+        {
+            if (MenuItemDefinitions.Count > 0) return;
+
+            MenuItemDefinitions[Options.TrackList] = new MenuItemDefinition
+            {
+                Name = () => "Track",
+                ValueSuffix = () => GetTrackListPreview(),
+                OnAdjust = (delta) => AdjustTrackListPos(delta),
+                OnAccept = () =>
+                {
+                    TrackFilter = Game.GetUserInput(40);
+                    ReFilterKnownTracks(TrackFilter);
+                },
+                KeepMenuOpen = true
+            };
+            MenuItemDefinitions[Options.LeaveRace] = new MenuItemDefinition
+            {
+                Name = () => RaceStatus == RaceState.Finished ? "Finish Race" : ParsedEnum(Options.LeaveRace.ToString())
+            };
+            MenuItemDefinitions[Options.Laps] = new MenuItemDefinition
+            {
+                ValueSuffix = () => " [~y~" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~w~]",
+                OnAdjust = (delta) =>
+                {
+                    SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) + delta);
+                    if (SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) < 1) SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", 5);
+                },
+                OnAccept = () =>
+                {
+                    int pLaps = 6;
+                    int.TryParse(Game.GetUserInput(4), out pLaps);
+                    SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", pLaps);
+                },
+                KeepMenuOpen = true
+            };
+            MenuItemDefinitions[Options.GridSize] = new MenuItemDefinition
+            {
+                ValueSuffix = () => " [~y~" + intendedOpponents + "~w~]",
+                OnAdjust = (delta) =>
+                {
+                    intendedOpponents += delta;
+                    if (intendedOpponents < 0) intendedOpponents = 0;
+                },
+                OnAccept = () =>
+                {
+                    int pGrid = 6;
+                    int.TryParse(Game.GetUserInput(4), out pGrid);
+                    intendedOpponents = pGrid;
+                },
+                KeepMenuOpen = true
+            };
+            MenuItemDefinitions[Options.DebugLevel] = new MenuItemDefinition
+            {
+                ValueSuffix = () => " [" + (DebugDisplay)DebugVisual + "]",
+                OnAdjust = (delta) => AdjustMenuOption(Options.DebugLevel, delta)
+            };
+            MenuItemDefinitions[Options.Disciplines] = new MenuItemDefinition
+            {
+                ValueSuffix = () => GetDisciplinesPreview(),
+                OnAccept = () => RefreshDisciplinesFromInput(),
+                KeepMenuOpen = true
+            };
+            MenuItemDefinitions[Options.RaceOptions] = new MenuItemDefinition { OnAccept = () => OpenRaceOptionsMenu(), KeepMenuOpen = true };
+            MenuItemDefinitions[Options.Race] = new MenuItemDefinition { OnAccept = () => OpenRaceSetupMenu(), KeepMenuOpen = true };
+            MenuItemDefinitions[Options.ReloadSettings] = new MenuItemDefinition
+            {
+                OnAccept = () =>
                 {
                     SettingsFile = null;
                     DevSettingsFile = null;
                     LoadSettings();
                     UI.Notify("Reloaded setting files");
                 }
-                if (oSelected == Options.RaceOptions)
-                {
-                    OptionsList.Clear();
-                    OptionsList.Add(Options.ShowAggro);
-                    OptionsList.Add(Options.ShowInputs);
-                    OptionsList.Add(Options.ShowTrackAnalysis);
-                    OptionsList.Add(Options.ShowPhysics);
-                    return;
-                }
-
-                if (oSelected == Options.FindCustomProps)
-                {
-                    FindCustomProps();
-                }
-                if (oSelected == Options.Laps)
-                {
-                    int p = 6;
-                    int.TryParse(Game.GetUserInput(4), out p);
-                    SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", p);
-                }
-                if (oSelected == Options.GridSize)
-                {
-                    int p = 6;
-                    int.TryParse(Game.GetUserInput(4), out p);
-                    intendedOpponents = p;
-                }
-                if (oSelected == Options.Disciplines)
-                {
-                    DisciplineFilter = Game.GetUserInput(999);
-
-                    string[] disciplines = DisciplineFilter.Split(' ');
-                    string[] aliases = SettingsFile.GetAllValues("GENERAL_SETTINGS", "alias");
-                    string[] atags = SettingsFile.GetAllValues("GENERAL_SETTINGS", "tags");
-                    for (int d = 0; d < disciplines.Length; d++)
-                    {
-                        for (int i = 0; i < aliases.Length; i++)
-                        {
-                            if (aliases[i] == disciplines[d])
-                            {
-
-                                disciplines[d] = atags[i];
-                                break;
-                            }
-                        }
-                    }
-                    DisciplineFilter = string.Join(" ", disciplines);
-                    FillCachedCandidates(DisciplineFilter, intendedOpponents);
-                }
-                if (oSelected == Options.SaveDriverModel)
-                {
-                    CreateDriver(Game.Player.Character);
-                }
-                if (oSelected == Options.SaveThisCar)
-                {
-                    CreateVehicle(Game.Player.Character.CurrentVehicle);
-                }
-                if (oSelected == Options.TrackList)
-                {
-                    TrackFilter = Game.GetUserInput(40);
-                    ReFilterKnownTracks(TrackFilter);
-                }
-                if (oSelected == Options.CreateTrack)
+            };
+            MenuItemDefinitions[Options.FindCustomProps] = new MenuItemDefinition { OnAccept = () => FindCustomProps() };
+            MenuItemDefinitions[Options.SaveDriverModel] = new MenuItemDefinition { OnAccept = () => CreateDriver(Game.Player.Character) };
+            MenuItemDefinitions[Options.SaveThisCar] = new MenuItemDefinition { OnAccept = () => CreateVehicle(Game.Player.Character.CurrentVehicle) };
+            MenuItemDefinitions[Options.CreateTrack] = new MenuItemDefinition
+            {
+                OnAccept = () =>
                 {
                     routeEditMode = true;
-
                     if (routeEditMode)
                     {
                         if (!InFreeCam) ToggleFreeCam();
                         IsDroneMode = false;
                     }
                 }
-                if (oSelected == Options.ExitCreator)
+            };
+            MenuItemDefinitions[Options.ExitCreator] = new MenuItemDefinition
+            {
+                OnAccept = () =>
                 {
                     routeEditMode = false;
                     CleanEverything();
                 }
-
-                if (oSelected == Options.SaveTrack)
+            };
+            MenuItemDefinitions[Options.SaveTrack] = new MenuItemDefinition
+            {
+                OnAccept = () =>
                 {
                     UI.ShowSubtitle("Write a name for the track.", 5000);
-
                     SaveRoute(Game.GetUserInput(30));
-
                 }
-                if (oSelected == Options.UpdateTrackFile)
-                {
-                    UpdateRoute(true, true, true);
-
-                }
-                if (oSelected == Options.StopRace)
-                {
-                    CleanRacers();
-                }
-                if (oSelected == Options.LeaveRace)
-                {
-                    CleanEverything();
-                }
-                if (oSelected == Options.Race)
-                {
-                    OptionsList.Clear();
-                    OptionsList.Add(Options.TrackList);
-                    OptionsList.Add(Options.Disciplines);
-                    OptionsList.Add(Options.GridSize);
-                    OptionsList.Add(Options.Laps);
-                    OptionsList.Add(Options.UseNearbyCars);
-                    OptionsList.Add(Options.ReverseRoute);
-                    OptionsList.Add(Options.Start);
-                    return;
-                }
-                if (oSelected == Options.Start)
-                {
-                    if (FilteredTrackList.Count > 0)
-                    {
-
-                        XmlDocument f = LoadTrackFile(FilteredTrackList[TrackListPos]);//Game.GetUserInput(30)
-
-                        if (OptionValuesList[Options.UseNearbyCars])
-                        {
-
-                            foreach (Vehicle v in GetNearbyCandidates())
-                            {
-
-                                Script.Wait(100);
-                                Log(LogImportance.Info, "Added " + v.FriendlyName);
-                                v.IsPersistent = true;
-                                Ped p = World.CreatePed(RacerModels[GetRandomInt(0, RacerModels.Count - 1)], v.Position + (v.ForwardVector * 5));
-
-                                Racer RandomRacer = new Racer(v, p);
-
-                                if (v.ColorCombinationCount < 2 && v.ClassType != VehicleClass.Emergency)
-                                {
-                                    VehicleColor c = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
-                                    v.PrimaryColor = c;
-                                    v.SecondaryColor = c;
-                                    v.PearlescentColor = c;
-                                }
-                                Racers.Add(RandomRacer);
-                            }
-                        }
-
-
-                        LoadTrack(f);
-                        Log(LogImportance.Info, "Loading grid");
-                        LoadGrid(DisciplineFilter, (int)Clamp(intendedOpponents - Racers.Count, 0, GridPositions.Count));
-
-                        if (DevSettingsFile.GetValue("RACERS", "UsePersonalities", true))
-                        {
-                            for (int i = 0; i < Racers.Count; i++)
-                            {
-                                Racers[i].mem.personality = personalitySets.Find(s => s.ProbToUse >=100);
-
-                                PersonalitySet p = personalitySets.Find(ps => ps.Model != "" && ps.Model.ToLowerInvariant() == Racers[i].Car.DisplayName.ToLowerInvariant());
-                                if (p != null)
-                                {
-                                    Racers[i].mem.personality = p;
-                                    continue;
-                                }
-
-                                for (int per = 0; per < personalitySets.Count; per++)
-                                {
-                                    if (personalitySets[per].ProbToUse >= 100) continue;
-
-                                    int chance = ARS.GetRandomInt(0, 100);
-                                    //UI.Notify("Chance " + chance + " for " + Racers[i].Name);
-                                    if (chance < personalitySets[per].ProbToUse)
-                                    {
-                                        p = personalitySets[per];
-                                        string[] skills = p.SkillRange.Split(',');
-                                        if (skills.Count() >= 2)
-                                        {
-                                            int skill = GetRandomInt(int.Parse(skills.First()), int.Parse(skills.Last()));
-                                            p.Stability.Skill = skill;
-                                        }
-
-                                        Racers[i].mem.personality = p;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        StartRace();
-
-                        if (CanWeUse(Game.Player.Character.CurrentVehicle)) HelpMessages.Add("Rev up your engine to start the countdown.");
-                    }
-                    else
-                    {
-                        UI.Notify("~r~No track selected.");
-                    }
-                }
-                if (oSelected == Options.StartRace)
+            };
+            MenuItemDefinitions[Options.UpdateTrackFile] = new MenuItemDefinition { OnAccept = () => UpdateRoute(true, true, true) };
+            MenuItemDefinitions[Options.StopRace] = new MenuItemDefinition { OnAccept = () => CleanRacers() };
+            MenuItemDefinitions[Options.Start] = new MenuItemDefinition { OnAccept = () => StartFromMenu() };
+            MenuItemDefinitions[Options.StartRace] = new MenuItemDefinition
+            {
+                OnAccept = () =>
                 {
                     LoadGrid(DisciplineFilter, intendedOpponents);
                     StartRace();
                 }
-                if (oSelected == Options.Freecam)
-                {
-                    ToggleFreeCam();
-                }
-                if (oSelected == Options.RestartRace)
+            };
+            MenuItemDefinitions[Options.Freecam] = new MenuItemDefinition { OnAccept = () => ToggleFreeCam() };
+            MenuItemDefinitions[Options.RestartRace] = new MenuItemDefinition
+            {
+                OnAccept = () =>
                 {
                     if (Racers.Count > 0)
                     {
@@ -1093,25 +1185,98 @@ namespace ARS
                         StartCoundown();
                     }
                 }
-                if (OptionValuesList.Keys.Contains(oSelected)) OptionValuesList[oSelected] = !OptionValuesList[oSelected];
+            };
+        }
 
+        MenuItemDefinition GetMenuItemDefinition(Options option)
+        {
+            EnsureMenuItemDefinitions();
+            if (MenuItemDefinitions.ContainsKey(option)) return MenuItemDefinitions[option];
+            return new MenuItemDefinition();
+        }
 
-                //Exits the menu any time an option is applied, exept the TrackNameFilter input.
-                if (!OptionValuesList.ContainsKey(OptionsList[OptionHovered]) && !(new List<Options> { Options.Laps, Options.GridSize, Options.TrackList, Options.Disciplines, Options.ShowAggro }.Contains(OptionsList[OptionHovered])))
+        string GetMenuItemName(Options option)
+        {
+            MenuItemDefinition def = GetMenuItemDefinition(option);
+            if (def.Name != null) return def.Name();
+            return GetOptionName(option);
+        }
+
+        string GetMenuItemValueSuffix(Options option)
+        {
+            MenuItemDefinition def = GetMenuItemDefinition(option);
+            if (def.ValueSuffix != null) return def.ValueSuffix();
+            return GetOptionValueSuffix(option);
+        }
+
+        bool KeepMenuOpenAfterAccept(Options option)
+        {
+            if (OptionValuesList.ContainsKey(option)) return true;
+            return GetMenuItemDefinition(option).KeepMenuOpen;
+        }
+
+        void HandleMenuAdjust(Options selected, int direction)
+        {
+            MenuItemDefinition def = GetMenuItemDefinition(selected);
+            if (def.OnAdjust != null) def.OnAdjust(direction);
+            else AdjustMenuOption(selected, direction);
+        }
+
+        void HandleMenuAccept(Options selected)
+        {
+            MenuItemDefinition definition = GetMenuItemDefinition(selected);
+            if (definition.OnAccept != null) definition.OnAccept();
+
+            if (OptionValuesList.Keys.Contains(selected)) OptionValuesList[selected] = !OptionValuesList[selected];
+
+            if (!KeepMenuOpenAfterAccept(selected))
+            {
+                if (selected == Options.DebugLevel)
                 {
-                    if (oSelected == Options.DebugLevel)
-                    {
-                        if (DebugVisual == (int)DebugDisplay.PropEdit)
-                        {
-                            HelpMessages.Add("The ~b~Prop Edit~w~ mode lets you modify which props will be saved along the route.");
-                            HelpMessages.Add("Props marked in ~g~green~w~ are considered part of the route.");
-                            HelpMessages.Add("Remember to update the current route on the menu after you're finished.");
-                        }
-
-                    }
-                    OptionsList.Clear(); //
-
+                    if (DebugVisual == (int)DebugDisplay.PropEdit) ShowPropEditHelpMessages();
                 }
+
+                OptionsList.Clear();
+            }
+        }
+
+        void HandleMenu()
+        {
+            if (OptionsList.Count == 0) return;
+            if (FilteredTrackList.Count == 0) TrackListPos = 0;
+            else if (TrackListPos > FilteredTrackList.Count - 1) TrackListPos = FilteredTrackList.Count - 1;
+
+            Game.DisableControlThisFrame(2, GTA.Control.Phone);
+
+            if (OptionHovered > OptionsList.Count - 1) OptionHovered = OptionsList.Count - 1;
+            if (OptionHovered < 0) OptionHovered = OptionsList.Count - 1;
+
+            float zoffset = 0;
+            foreach (Options o in OptionsList)
+            {
+                string line = (o == OptionsList[OptionHovered] ? "~b~> " : "") + GetMenuItemName(o) + "~w~" + GetMenuItemValueSuffix(o);
+                DrawText(new Vector2(0.02f, 0.2f + zoffset), line, Color.White, DrawTextFont.Default, DrawTextAlign.Left, 0.5f);
+                zoffset += 0.04f;
+            }
+
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendDown)) OptionHovered++;
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendUp)) OptionHovered--;
+
+            if (OptionHovered < 0) OptionHovered = OptionsList.Count - 1;
+            if (OptionHovered > OptionsList.Count - 1) OptionHovered = 0;
+
+            Options oSelected = OptionsList[OptionHovered];
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendLeft))
+            {
+                HandleMenuAdjust(oSelected, -1);
+            }
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendRight))
+            {
+                HandleMenuAdjust(oSelected, 1);
+            }
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendAccept))
+            {
+                HandleMenuAccept(oSelected);
             }
         }
         public static float MStoMPH(float ms)
@@ -1343,15 +1508,21 @@ namespace ARS
 
         void OnTick(object sender, EventArgs e)
         {
+            try
+            {
+                HandleLoadScriptTask();
 
-            Vehicle v = Game.Player.LastVehicle;
+                Player player = Game.Player;
+                if (player == null || player.Character == null || !player.Character.Exists()) return;
+
+                Vehicle v = player.LastVehicle;
             //HandlePlayerDebugStuff(v);
             //HandleImmersiveJoins();
             if (!Loaded)
             {
                 if (DevSettingsFile.GetValue<bool>("GENERAL", "LoadAtStart", true) || WasCheatStringJustEntered("arson"))
                 {
-                    LoadScript();
+                    StartLoadScript();
                 }
                 return;
             }
@@ -1455,48 +1626,7 @@ namespace ARS
             {
                 if ((DevSettingsFile.GetValue<bool>("GENERAL", "Hotkeys", true) && Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlPressed(2, GTA.Control.Context)) || WasCheatStringJustEntered("arsmenu"))
                 {
-                    OptionHovered = 0;
-                    if (routeEditMode)
-                    {
-                        OptionsList.Add(Options.SaveTrack);
-                        OptionsList.Add(Options.ExitCreator);
-                    }
-                    else
-                    {
-                        if (Path.Count == 0)
-                        {
-                            OptionsList.Add(Options.Race);
-                            OptionsList.Add(Options.CreateTrack);
-                            OptionsList.Add(Options.ReloadSettings);
-
-                        }
-                        else
-                        {
-
-                            if (Racers.Count == 0)
-                            {
-                                OptionsList.Add(Options.Disciplines);
-                                OptionsList.Add(Options.StartRace);
-                                OptionsList.Add(Options.GridSize);
-                                OptionsList.Add(Options.Laps);
-                            }
-                            OptionsList.Add(Options.RaceOptions);
-                            OptionsList.Add(Options.LeaveRace);
-
-                            if (RaceStatus > RaceState.NotInitiated)
-                            {
-                                OptionsList.Add(Options.RestartRace);
-                            }
-
-                            if (DebugVisual == (int)DebugDisplay.PropEdit)
-                            {
-                                OptionsList.Add(Options.FindCustomProps);
-                                OptionsList.Add(Options.UpdateTrackFile);
-                            }
-                        }
-                    }
-                    OptionsList.Add(Options.Freecam);
-                    OptionsList.Add(Options.SaveThisCar);
+                    OpenMenuFromContext();
                 }
             }
             else
@@ -1505,12 +1635,7 @@ namespace ARS
                 {
                     if (OptionsList[OptionHovered] == Options.DebugLevel)
                     {
-                        if (DebugVisual == (int)DebugDisplay.PropEdit)
-                        {
-                            HelpMessages.Add("The ~b~Prop Edit~w~ mode lets you modify which props will be saved along the route.");
-                            HelpMessages.Add("Props marked in ~g~green~w~ are considered part of the route.");
-                            HelpMessages.Add("Remember to update the current route on the menu after you're finished.");
-                        }
+                        if (DebugVisual == (int)DebugDisplay.PropEdit) ShowPropEditHelpMessages();
 
                     }
                     OptionsList.Clear();
@@ -1750,6 +1875,11 @@ namespace ARS
                 }
             }
             Cheats();
+            }
+            catch (Exception ex)
+            {
+                Log(LogImportance.Error, "OnTick error: " + ex, true);
+            }
         }
         public static TimeSpan ParseToTimeSpan(int gameTime)
         {
@@ -3326,7 +3456,7 @@ namespace ARS
 
             if (WasCheatStringJustEntered("arson"))
             {
-                LoadScript();
+                StartLoadScript();
             }
             if (WasCheatStringJustEntered("arsoff"))
             {
@@ -3565,9 +3695,7 @@ namespace ARS
 
 
             }
-
         }
-
         public void SaveRoute(string filename)
         {
             if (filename == null || filename == "")
@@ -5409,7 +5537,7 @@ namespace ARS
 
         List<XmlDocument> CachedCandidates = new List<XmlDocument>();
 
-        void FillCachedCandidates(string dlist, int maxcars)
+        void FillCachedCandidates(string dlist, int maxcars, bool allowScriptYield = true)
         {
             CachedCandidates.Clear();
 
@@ -5486,7 +5614,7 @@ namespace ARS
                         if (fitspriority) haspriority.Add(racerfile);
                     }
                     cooldown++;
-                    if (cooldown > 20)
+                    if (allowScriptYield && cooldown > 20)
                     {
                         cooldown = 0;
                         Yield();

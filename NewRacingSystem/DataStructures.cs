@@ -1,9 +1,6 @@
-﻿using GTA.Math;
+using GTA.Math;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ARS
 {
@@ -12,12 +9,12 @@ namespace ARS
         public static float MaxSpeed = ARS.MPHtoMS(500f);
         public static float MinSpeed = ARS.MPHtoMS(15f);
 
-        public static float SpeedToInput(float spd, float tSpd, float scale=1f)
+        public static float SpeedToInput(float spd, float tSpd, float scale = 1f)
         {
-            return (tSpd-spd) / scale;
+            return (tSpd - spd) / scale;
         }
     }
-   public enum BrakeStabilityStrat { Invalid, Checking,Checked };
+    public enum BrakeStabilityStrat { Invalid, Checking, Checked }
     public class VehData
     {
         public List<Vector3> AccelerationVector = new List<Vector3> { Vector3.Zero};
@@ -284,5 +281,6 @@ namespace ARS
         public PersonalityStability Stability = new PersonalityStability();
     }
 }
+
 
 
