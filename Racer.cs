@@ -54,12 +54,15 @@ namespace ARS
         int OneSecondTick = 0; //1000ms
 
         PID SteerPID = new PID(6, 12f, 0);
-        PID LanePID = new PID(0.2f, 0.5f, 0);
+        PID LanePID = new PID(0.075f, 0.4f, 0);
 
-        // Minimal stuck detector state: throttle command present + almost no movement for 2s.
+        // Minimal stuck detector state: intent to move + low speed + no node progress for a short window.
         int StuckCheckStartTime = 0;
         public bool IsStuckByThrottle = false;
         const int StuckCheckTimeMs = 2000;
+        int LastProgressNode = -1;
+        int LastProgressTime = 0;
+        const int StuckNoProgressTimeMs = 1200;
         bool IsRecoveringFromStuck = false;
         int StuckRecoveryEndTime = 0;
         const int StuckRecoveryTimeMs = 2000;
@@ -238,8 +241,6 @@ namespace ARS
 
 
             float roadWide = LookAheads[eLookAheads.HalfSec].TrackWide;
-            float Outside = 0;
-            float Inside = 0;
             float AngleOneSec = AngleToTrackDir(CurrentTrackPoint, LookAheads[eLookAheads.OneSec]);
 
 
@@ -250,24 +251,35 @@ namespace ARS
             TargetLane = mem.data.DeviationFromCenter - (KeepInside / Handling.Grip);
 
 
-            if (mem.Corner.Valid && Lap > 0 && Car.Velocity.Length() > mem.Corner.Speed * 0.9f)
+            if (mem.Corner.Valid && Lap > 0)
             {
                 CornerPoint c = mem.Corner.OG;
-                float distToApex = (ARS.TrackPoints[c.Node].Position - ARS.TrackPoints[CurrentTrackPoint.Node].Position).Length();
-                float distToCornerEntrance = (ARS.TrackPoints[c.Node - c.LengthStart].Position - ARS.TrackPoints[CurrentTrackPoint.Node].Position).Length();
-                float sToReachCornerStart = ARS.Clamp(distToCornerEntrance / Car.Velocity.Length(), 0, 99);
-                float sToReachCornerApex = ARS.Clamp(distToApex / Car.Velocity.Length(), 0, 99);
+                int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
+                int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
+                float speedMs = Math.Max(Car.Velocity.Length(), 1f);
+                float distToCornerEntrance = (ARS.TrackPoints[startNode].Position - ARS.TrackPoints[CurrentTrackPoint.Node].Position).Length();
+                float sToReachCornerStart = ARS.Clamp(distToCornerEntrance / speedMs, 0f, 99f);
                 mem.Corner.sToEntrance = sToReachCornerStart;
 
-                //Keep yourelf on the outside when approaching a corner.
-                if (sToReachCornerStart < 5)
+                float entranceLane = 0f;
+                if (!ARS.NodeScalarData.TryGetValue(startNode, out entranceLane))
                 {
-                    float Fraction = DistToInside(ARS.TrackPoints[c.Node].Direction) / (CurrentTrackPoint.TrackWide * 2);
-                    Outside = ARS.TrackPoints[c.Node].TrackWide * (c.Angle > 0 ? 1 : -1);
-                    Inside = -Outside;
-                    float sNeccesarytoTurnIn = (ARS.TrackPoints[c.Node].TrackWide * 0.33f);
-                    float mult = ARS.map(Car.Velocity.Length() - mem.Corner.Speed, -15, -5, 0, 1, true);
-                    if (sToReachCornerApex < 5 && sToReachCornerApex > sNeccesarytoTurnIn * Fraction) TargetLane = Outside * mult;
+                    entranceLane = Math.Sign(c.Angle) * ARS.TrackPoints[startNode].TrackWide;
+                }
+
+                if (CurrentTrackPoint.Node < startNode)
+                {
+                    TargetLane = entranceLane;
+                }
+                else if (CurrentTrackPoint.Node <= endNode)
+                {
+                    int followNode = (int)ARS.Clamp(LookAheads[eLookAheads.OneSec].Node, startNode, endNode);
+                    float profileLane = entranceLane;
+                    if (ARS.NodeScalarData.TryGetValue(followNode, out float laneFromProfile))
+                    {
+                        profileLane = laneFromProfile;
+                    }
+                    TargetLane = profileLane;
                 }
             }
 
@@ -438,6 +450,8 @@ namespace ARS
             vControl.MaxThrottle = 1f;
             IsStuckByThrottle = false;
             StuckCheckStartTime = 0;
+            LastProgressNode = -1;
+            LastProgressTime = 0;
             IsRecoveringFromStuck = false;
             StuckRecoveryEndTime = 0;
             followLaneTrail.Clear();
@@ -920,28 +934,6 @@ namespace ARS
                             Color gColor = ARS.GetColorFromRedYellowGreenGradient(ARS.map(expectedSpeed - Car.Velocity.Length(), -1, 1, 0, 100, true));
 
 
-                            Vector3 oldpos = Vector3.Zero;
-                            for (int i = c.Node - (int)(c.GetRadius() * 2); i <= c.Node; i++)
-                            {
-                                float howFarBack = ARS.TrackPoints[i].TrackWide / 4;// ARS.map(ARS.TrackPoints[i].TrackWide, 5, 20, 1, 4, false);
-
-                                int dist = c.Node - i;
-                                float DistPercent = ((dist / (c.GetRadius() * howFarBack)) * 100);
-
-
-                                float Outside = (ARS.TrackPoints[i].TrackWide - (vData.BoundingBox / 2)) * (c.Angle > 0 ? 1 : -1);
-                                float Inside = (ARS.TrackPoints[i].TrackWide - (vData.BoundingBox / 2)) * (c.Angle < 0 ? 1 : -1);
-
-                                float laneApproach = ARS.Lerp(Inside, Outside, ARS.LaneApproach(DistPercent) * 0.01f);
-
-
-                                Vector3 dot = ARS.TrackPoints[i].Position - (Vector3.Cross(Vector3.WorldUp, ARS.TrackPoints[i].Direction) * laneApproach) + (Vector3.WorldUp / 4);
-
-                                if (oldpos != Vector3.Zero) ARS.DrawLine(oldpos, dot, Color.Red);
-                                oldpos = dot;
-
-                            }
-
                             // Draw configured node offsets for the active corner (from NodeScalarData), mapped onto the track.
                             int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
                             int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
@@ -1067,7 +1059,7 @@ namespace ARS
         Vector3 GetFollowLaneTrailPoint(int node)
         {
             TrackPoint t = ARS.TrackPoints[node];
-            return t.Position - (Vector3.Cross(Vector3.WorldUp, t.Direction) * vControl.FollowLane) + (Vector3.WorldUp * 0.3f);
+            return t.Position - (Vector3.Cross(Vector3.WorldUp, t.Direction) * LanePID.GetValue()) + (Vector3.WorldUp * 0.3f);
         }
 
         void DrawFollowLaneTrail()
@@ -1312,6 +1304,8 @@ namespace ARS
             {
                 IsStuckByThrottle = false;
                 StuckCheckStartTime = 0;
+                LastProgressNode = -1;
+                LastProgressTime = 0;
                 IsRecoveringFromStuck = false;
                 StuckRecoveryEndTime = 0;
             }
@@ -1338,12 +1332,26 @@ namespace ARS
             {
                 IsStuckByThrottle = false;
                 StuckCheckStartTime = 0;
+                LastProgressNode = -1;
+                LastProgressTime = 0;
                 return;
             }
 
-            bool throttleApplied = Math.Abs(vControl.Throttle) > 0.01f;
-            bool almostStopped = Car.Velocity.Length() < 1.0f;
-            bool stuckCondition = throttleApplied && almostStopped;
+            if (LastProgressNode < 0)
+            {
+                LastProgressNode = CurrentTrackPoint.Node;
+                LastProgressTime = Game.GameTime;
+            }
+            else if (CurrentTrackPoint.Node != LastProgressNode)
+            {
+                LastProgressNode = CurrentTrackPoint.Node;
+                LastProgressTime = Game.GameTime;
+            }
+
+            bool wantsToMoveForward = vControl.Throttle > 0.15f && mem.intention.Speed > 2f;
+            bool almostStopped = Car.Velocity.Length() < 1.2f;
+            bool noNodeProgress = (Game.GameTime - LastProgressTime) >= StuckNoProgressTimeMs;
+            bool stuckCondition = wantsToMoveForward && almostStopped && noNodeProgress;
 
             if (!stuckCondition)
             {
@@ -1389,6 +1397,8 @@ namespace ARS
                 IsRecoveringFromStuck = false;
                 StuckRecoveryEndTime = 0;
                 StuckCheckStartTime = 0;
+                LastProgressNode = CurrentTrackPoint.Node;
+                LastProgressTime = Game.GameTime;
                 return;
             }
         }
@@ -1402,6 +1412,8 @@ namespace ARS
                 IsRecoveringFromStuck = false;
                 StuckRecoveryEndTime = 0;
                 StuckCheckStartTime = 0;
+                LastProgressNode = CurrentTrackPoint.Node;
+                LastProgressTime = Game.GameTime;
                 return;
             }
 

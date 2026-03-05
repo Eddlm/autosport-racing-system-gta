@@ -349,18 +349,6 @@ namespace ARS
 
         }
 
-        public static float LaneApproach(float DistPercent)
-        {
-            float lanePercent = 0;
-            if (DistPercent >= 80) lanePercent = ARS.map(DistPercent, 80, 100, 95, 100, true);
-            else if (DistPercent >= 60) lanePercent = ARS.map(DistPercent, 60, 80, 80, 95, true);
-            else if (DistPercent >= 40) lanePercent = ARS.map(DistPercent, 40, 60, 50, 80, true);
-            else if (DistPercent >= 20) lanePercent = ARS.map(DistPercent, 20, 40, 25, 50, true);
-            else if (DistPercent >= 0) lanePercent = ARS.map(DistPercent, 0, 20, 0, 25, true);
-
-            return lanePercent;
-        }
-
 
         Dictionary<string, string> TrackTags = new Dictionary<string, string>();
         public void FillKnownTracks(bool allowScriptYield = true)
@@ -4258,42 +4246,53 @@ namespace ARS
             // Compute key-corner spans and their lane bias profile.
             var keyCorners = CornerPoints.Where(co => co.IsKey).OrderBy(co => co.Node).ToList();
 
-            const int minSpan = 25;
-            const int maxSpan = 320;
+            const int minSpan = 5;
+            const int maxSpanSearch = 300;
+            const float radiusFactorForCornerBounds = 50;
 
             // 1) Compute a span for each key corner from local geometry.
             foreach (CornerPoint c in keyCorners)
             {
-                float radius = c.GetPreciseRadius();
-                if (float.IsNaN(radius) || float.IsInfinity(radius) || radius <= 0f) radius = c.GetRadius();
-                radius = Clamp(radius, 10f, 300f);
+                float radius = GetPreciseRadius(TrackPoints[c.Node], 3);
+                radius = Clamp(radius, 5f, 9999f);
+                float thresholdRadius = radius * radiusFactorForCornerBounds;
 
-                // Longer-radius corners need longer setup distance.
-                // Angle factor raises span for tighter corners so cars move earlier.
-                float absAngle = Math.Abs(c.Angle);
-                float angleFactor = map(absAngle, 5f, 120f, 0.9f, 1.7f, true);
-                int span = (int)Clamp(radius * angleFactor, minSpan, maxSpan);
+                int startCandidates = Math.Max(10, c.Node - maxSpanSearch);
+                int endCandidates = Math.Min(TrackPoints.Count - 11, c.Node + maxSpanSearch);
 
-                c.LengthStart = span;
-                c.LenghtEnd = span;
+                int foundStartNode = startCandidates;
+                for (int nodeID = c.Node - 1; nodeID >= startCandidates; nodeID--)
+                {
+                    if (TrackPoints[nodeID].PreciseCurveRadius >= thresholdRadius)
+                    {
+                        foundStartNode = nodeID;
+                        break;
+                    }
+                }
+
+                c.LengthStart = Math.Max(minSpan, c.Node - foundStartNode);
+                c.LenghtEnd = c.LengthStart;
             }
 
-            // 2) Resolve overlap between adjacent key-corner spans.
-            for (int i = 1; i < keyCorners.Count; i++)
+            // 2) Remove any key corner ahead that overlaps this corner's span.
+            // Do not adjust span lengths; just discard the close-ahead key corner.
+            for (int i = 1; i < keyCorners.Count;)
             {
                 CornerPoint prev = keyCorners[i - 1];
                 CornerPoint curr = keyCorners[i];
 
                 int prevEnd = prev.Node + prev.LenghtEnd;
                 int currStart = curr.Node - curr.LengthStart;
-                if (currStart > prevEnd) continue;
+                bool overlaps = currStart <= prevEnd;
 
-                int overlapSplit = (currStart + prevEnd) / 2;
-                int newPrevEnd = Math.Max(prev.Node + 1, overlapSplit);
-                int newCurrStart = Math.Min(curr.Node - 1, overlapSplit + 1);
+                if (overlaps)
+                {
+                    curr.IsKey = false;
+                    keyCorners.RemoveAt(i);
+                    continue;
+                }
 
-                prev.LenghtEnd = Math.Max(1, newPrevEnd - prev.Node);
-                curr.LengthStart = Math.Max(1, curr.Node - newCurrStart);
+                i++;
             }
 
             // 3) Build per-node lane bias: outside -> apex -> outside.
@@ -4306,25 +4305,110 @@ namespace ARS
                 int endNode = (int)Clamp(c.Node + c.LenghtEnd, 0, TrackPoints.Count - 1);
                 if (endNode < startNode) continue;
 
+                // Build an absolute lane target from a quadratic Bezier with lane-biased anchors:
+                // start/end = outside, control = apex (inside).
+                TrackPoint startTrackPoint = TrackPoints[startNode];
+                TrackPoint apexTrackPoint = TrackPoints[c.Node];
+                TrackPoint endTrackPoint = TrackPoints[endNode];
+
+                const float outsideAnchorFactor = 0.9f;
+                int bezierSamples = Math.Max(24, (endNode - startNode) * 3);
+                float apexAnchorFactor = 5f;
+                const int maxApexSolveTries = 300;
+                const float apexTargetTolerance = 0.1f;
+                const float apexAdjustGain = 0.8f;
+                const float maxFactorDeltaPerTry = 0.08f;
+                const float minApexAnchorFactor = -5f;
+                const float maxApexAnchorFactor = 5f;
+                const float apexSearchWindow = 0.2f;
+                const float apexProjectedClampFactor = 3f;
+
+                Vector3 apexRight = Vector3.Cross(Vector3.WorldUp, apexTrackPoint.Direction);
+                bool canSolveApex = apexRight.LengthSquared() > 0.0001f;
+                if (canSolveApex) apexRight.Normalize();
+
+                List<Vector3> bezierPoints = null;
+                for (int attempt = 0; attempt < maxApexSolveTries; attempt++)
+                {
+                    float startOutsideOffset = cornerSign * startTrackPoint.TrackWide * outsideAnchorFactor;
+                    float apexInsideOffset = -cornerSign * apexTrackPoint.TrackWide * apexAnchorFactor;
+                    float endOutsideOffset = cornerSign * endTrackPoint.TrackWide * outsideAnchorFactor;
+
+                    Vector3 bezierStart = startTrackPoint.Position - (Vector3.Cross(Vector3.WorldUp, startTrackPoint.Direction) * startOutsideOffset);
+                    Vector3 bezierControl = apexTrackPoint.Position - (Vector3.Cross(Vector3.WorldUp, apexTrackPoint.Direction) * apexInsideOffset);
+                    Vector3 bezierEnd = endTrackPoint.Position - (Vector3.Cross(Vector3.WorldUp, endTrackPoint.Direction) * endOutsideOffset);
+
+                    bezierPoints = new List<Vector3>(bezierSamples + 1);
+                    for (int s = 0; s <= bezierSamples; s++)
+                    {
+                        float t = (float)s / bezierSamples;
+                        bezierPoints.Add(QuadraticBezier(bezierStart, bezierControl, bezierEnd, t));
+                    }
+
+                    if (!canSolveApex) break;
+
+                    Vector3 apexPos = apexTrackPoint.Position;
+                    int apexSampleIndex = bezierSamples / 2;
+                    int windowHalf = Math.Max(2, (int)(bezierSamples * apexSearchWindow * 0.5f));
+                    int sampleStart = Math.Max(0, apexSampleIndex - windowHalf);
+                    int sampleEnd = Math.Min(bezierSamples, apexSampleIndex + windowHalf);
+
+                    Vector3 closestAtApex = bezierPoints[sampleStart];
+                    float bestApexDistSq = (closestAtApex - apexPos).LengthSquared();
+                    for (int i = sampleStart + 1; i <= sampleEnd; i++)
+                    {
+                        float distSq = (bezierPoints[i] - apexPos).LengthSquared();
+                        if (distSq < bestApexDistSq)
+                        {
+                            bestApexDistSq = distSq;
+                            closestAtApex = bezierPoints[i];
+                        }
+                    }
+
+                    float apexProjectedOffset = Vector3.Dot(apexPos - closestAtApex, apexRight);
+                    float apexProjectedBound = Math.Max(0.001f, apexTrackPoint.TrackWide * apexProjectedClampFactor);
+                    float apexProjectedOffsetForError = Clamp(apexProjectedOffset, -apexProjectedBound, apexProjectedBound);
+                    float apexTargetOffset = -cornerSign * apexTrackPoint.TrackWide;
+                    float insideSign = Math.Sign(apexTargetOffset);
+                    if (insideSign == 0f) insideSign = 1f;
+                    float apexProjectedInsideAxis = apexProjectedOffsetForError * insideSign;
+                    float apexTargetInsideAxis = Math.Abs(apexTargetOffset);
+                    float apexError = apexTargetInsideAxis - apexProjectedInsideAxis;
+                    if (Math.Abs(apexError) <= apexTargetTolerance) break;
+
+                    float normalizedError = apexError / Math.Max(0.001f, apexTrackPoint.TrackWide);
+                    float factorDelta = Clamp(Math.Abs(normalizedError) * apexAdjustGain, 0f, maxFactorDeltaPerTry);
+                    apexAnchorFactor = Clamp(apexAnchorFactor - factorDelta, minApexAnchorFactor, maxApexAnchorFactor);
+                }
+
+                // For each node in this corner span, project to the closest Bezier sample
+                // and derive absolute lane offset from track center using local track right vector.
                 for (int node = startNode; node <= endNode; node++)
                 {
-                    float width = TrackPoints[node].TrackWide;
-                    float outsideOffset = cornerSign * width;
-                    float apexOffset = -outsideOffset;
-                    float t;
-                    float offset;
+                    TrackPoint tNode = TrackPoints[node];
+                    Vector3 nodePos = tNode.Position;
 
-                    if (node <= c.Node)
+                    Vector3 closestBezier = bezierPoints[0];
+                    float bestDistSq = (closestBezier - nodePos).LengthSquared();
+                    for (int i = 1; i < bezierPoints.Count; i++)
                     {
-                        t = c.Node <= startNode ? 1f : Clamp((float)(node - startNode) / (c.Node - startNode), 0f, 1f);
-                        offset = Lerp(outsideOffset, apexOffset, t);
-                    }
-                    else
-                    {
-                        t = endNode <= c.Node ? 1f : Clamp((float)(node - c.Node) / (endNode - c.Node), 0f, 1f);
-                        offset = Lerp(apexOffset, outsideOffset, t);
+                        float distSq = (bezierPoints[i] - nodePos).LengthSquared();
+                        if (distSq < bestDistSq)
+                        {
+                            bestDistSq = distSq;
+                            closestBezier = bezierPoints[i];
+                        }
                     }
 
+                    Vector3 trackRight = Vector3.Cross(Vector3.WorldUp, tNode.Direction);
+                    if (trackRight.LengthSquared() < 0.0001f)
+                    {
+                        NodeScalarData[node] = 0f;
+                        continue;
+                    }
+
+                    trackRight.Normalize();
+                    float offset = Vector3.Dot(nodePos - closestBezier, trackRight);
                     NodeScalarData[node] = offset;
                 }
             }
@@ -4370,6 +4454,25 @@ namespace ARS
             float radius = Vector2.Distance(new Vector2(centerX, centerY), point1);
 
             return radius;
+        }
+
+        public static float GetPreciseRadius(TrackPoint trackPoint, int span)
+        {
+            if (trackPoint == null || TrackPoints == null || TrackPoints.Count < 3) return 999f;
+
+            int safeSpan = Math.Max(1, span);
+            int node = (int)Clamp(trackPoint.Node, 0, TrackPoints.Count - 1);
+            int minSafeNode = safeSpan;
+            int maxSafeNode = TrackPoints.Count - 1 - safeSpan;
+            if (node < minSafeNode || node > maxSafeNode) return trackPoint.PreciseCurveRadius;
+
+            Vector3 prev = TrackPoints[node - safeSpan].Position;
+            Vector3 next = TrackPoints[node + safeSpan].Position;
+            Vector3 mid = TrackPoints[node].Position;
+
+            float r = GetCurveRadius(prev, next, mid);
+            if (float.IsNaN(r) || float.IsInfinity(r) || r <= 0f) return trackPoint.PreciseCurveRadius;
+            return r;
         }
 
         /// <summary>
