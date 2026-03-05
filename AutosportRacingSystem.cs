@@ -1,0 +1,6334 @@
+using GTA;
+using GTA.Math;
+using GTA.Native;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Windows.Forms;
+using System.Xml;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+
+namespace ARS
+{
+    public enum RelativePos { Unreachable, Ahead, Left, Right, Behind }
+    public enum Team
+    {
+        None, Red, Blue, Cop, Crook
+    }
+    public enum Decision
+    {
+        LateBrake, Flatout, NoOvertake, FastCorner, EarlyExit, AttackInside
+    }
+    public enum Mistake
+    {
+        ForgetSteeringLimiter, ForgetTCS, ForgetABS, ForgetCounterSteer, ForgetSpinoutPrevention
+    }
+    public enum RaceState
+    {
+        None, NotInitiated, Countdown, InProgress, PostRace, Finished,
+    }
+
+    public enum Options
+    {
+        Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute
+    }
+
+    public enum OptionValues
+    {
+        ShowAggression,
+    }
+
+
+    public enum DebugDisplay
+    {
+        None, Inputs, Speed, Positioning, PropEdit
+    }
+    public enum CameraTransition
+    {
+        None, ToAir, AirToAir, AirToPlayer
+    }
+    public class PID
+    {
+        // Fields
+        private float value;
+        private float target;
+        private float velocity;
+        private float maxSpeed;
+        private float maxAccel;
+        private float kP;
+        private float kD;
+        private float kI;
+        private float integral;
+        private int lastTick = Game.GameTime;
+        // Constructor
+        public PID(
+            float kP = 1.0f,
+            float kD = 0.1f,
+            float kI = 0.0f,
+            float maxSpeed = 99,
+            float maxAccel = 99)
+        {
+            this.kP = kP;
+            this.kD = kD;
+            this.kI = kI;
+            this.maxSpeed = maxSpeed;
+            this.maxAccel = maxAccel;
+            this.value = 0.0f;
+            this.target = 0.0f;
+            this.velocity = 0.0f;
+            this.integral = 0.0f;
+        }
+
+        // Update method - advances the controller by dt seconds
+        public float Update()
+        {
+            float dt = (Game.GameTime - lastTick) * 0.01f;
+            lastTick = Game.GameTime;
+            if (dt <= 0.0) return value;
+
+            float error = target - value;
+            float proportional = error * kP;
+            float derivative = -velocity * kD;
+            integral += error * dt;
+            float integralTerm = integral * kI;
+
+            float acceleration = proportional + derivative + integralTerm;
+
+            // Clamp acceleration to maxAccel
+            if (Math.Abs(acceleration) > maxAccel)
+            {
+                acceleration = maxAccel * (acceleration > 0 ? 1 : -1);
+            }
+
+            velocity += acceleration * dt;
+
+            // Clamp velocity to maxSpeed
+            if (Math.Abs(velocity) > maxSpeed)
+            {
+                velocity = maxSpeed * (velocity > 0 ? 1 : -1);
+            }
+
+            value += velocity * dt;
+
+            // Snap to target if close enough
+            if (float.IsNaN(value) || (Math.Abs(error) < 0.1 && Math.Abs(velocity) < 0.1f))
+            {
+                value = target;
+                velocity = 0;
+            }
+
+            return value;
+        }
+
+        // Set target value with clamping
+        public void SetTarget(float target, float maxVal = 90.0f)
+        {
+            this.target = ARS.Clamp(target, -maxVal, maxVal);
+        }
+
+        // Set current value and reset velocity and integral
+        public void SetValue(float value)
+        {
+            this.value = value;
+            velocity = 0;
+            integral = 0;
+        }
+
+        // Get current value
+        public float GetValue()
+        {
+            return value;
+        }
+
+        // Get target value
+        public float GetTarget()
+        {
+            return target;
+        }
+
+        // Modify target value with clamping
+        public void ModifyTarget(float delta, float maxVal = 20.0f)
+        {
+            target = ARS.Clamp(target + delta, -maxVal, maxVal);
+        }
+
+        // Check if close to target within threshold
+        public bool IsClose(float threshold = 0.01f)
+        {
+            return Math.Abs(target - value) < threshold;
+        }
+    }
+
+    public class ARS : Script
+    {
+
+        public static Dictionary<Vector3, string> ImmersiveJoins = new Dictionary<Vector3, string>();
+
+        public static float TracjectoryProjectionSeconds = 1;
+
+        public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
+        public static List<CornerPoint> CornerPoints = new List<CornerPoint>();
+        public static List<Vehicle> GlobalTraffic = new List<Vehicle>();
+
+        public static List<string> KnownTracks = new List<string>();
+        public static List<Model> KnownVehicleModels = new List<Model>();
+        public static int RaceReward = 0;
+
+        public static ScriptSettings SettingsFile;
+        public static ScriptSettings DevSettingsFile;
+
+        public static bool HideHudMode = false;
+
+        public static Dictionary<Options, bool> OptionValuesList = new Dictionary<Options, bool>()
+    {
+        { Options.ShowAggro, false },
+        { Options.ShowInputs, false },
+        { Options.ShowTrackAnalysis, false },
+        { Options.ShowPhysics, false },
+        { Options.UseNearbyCars, false },
+        { Options.ReverseRoute, false }
+    };
+
+        public static List<Prop> CustomProps = new List<Prop>();
+        public static List<Prop> AutoGeneratedProps = new List<Prop>();
+
+        public static int OptionHovered = 0;
+        public static List<Options> OptionsList = new List<Options>();
+
+        public static List<Racer> LeaderboardFinish = new List<Racer>();
+
+        //Freecam
+        bool IsDroneMode = true;
+        public static Prop FreecCamRide = null;
+
+        public static PedHash[] StreetRacerModels = { PedHash.Car3Guy2, PedHash.Vinewood02AFY, PedHash.Stwhi02AMY, PedHash.StrPunk02GMY, PedHash.Stbla02AMY };
+        public static List<Model> RacerModels = new List<Model> { "a_m_y_motox_01", "a_m_y_motox_02" };
+
+
+        public static RaceState RaceStatus = RaceState.None;
+
+
+        //offsets
+        static public ulong steeroffset = 0x0;
+        static public ulong throttleOffset = 0x0;
+        static public ulong brakeOffset = 0x0;
+        public static ulong handlingPtr = 0x0;
+        public static ulong wheelsPtr = 0x0;
+        public static ulong numwheelsoffset = 0x0;
+
+        //Terrain hashes
+        public static List<int> Other = new List<int> { 555004797, -399872228, -1447280105, 722686013 };
+        public static List<int> Road = new List<int> { 1187676648, 282940568, -108464011, 1187676648, -1084640111, };       //-1286696947<grass
+        public static List<int> Dirt = new List<int> { 1144315879, 510490462, -1907520769, -1885547121, -700658213, 2128369009,
+            -1595148316,-765206029,509508168,1333033863,951832588,-840216541,-1907520769,510490462,-1942898710}; //-461750719
+        public static List<int> Sand = new List<int> { 1288448767, };
+
+
+
+        public static List<string> HelpMessages = new List<string>();
+
+        //AI racers, and the player if they participate
+        public static List<Racer> Racers = new List<Racer>();
+        public static int catchupPos = 0; //For catchup stuff only
+
+
+        //Route info
+        public static List<Vector3> Path = new List<Vector3>(); //List of nodes that conform the race path.
+        public static Dictionary<int, float> Angles = new Dictionary<int, float>(); //List of angles from node to node, on the path above.
+        public static Dictionary<int, float> MultiplierInTerrain = new Dictionary<int, float>();  //Grip multiplier on each node. Initially empty, the first racer fills them as they pass.
+        public static Dictionary<int, float> WideDict = new Dictionary<int, float>(); //How wide (meters) each node is.
+
+
+        public static Dictionary<int, float> EditWideDict = new Dictionary<int, float>();
+        public static List<Prop> TrackLimits = new List<Prop>(); //Trackside props, placed automatically.
+        public static XmlDocument CurrentFile = null;
+        static bool routeEditMode = false;
+        public static int DebugVisual = 0;
+
+
+        int TimeToFinishRace = 0;
+        float TimeScale = 1f;
+        float IdealTimeScale = 1f;
+        int GameTimeRef = 0;
+        int GametimerefLong = 0;
+
+        public enum TerrainTypes
+        {
+            Sand = 1288448767,
+            RockySand = -1595148316,
+            Gravel = -1885547121,
+            GravelGrass = 2128369009,
+            LooseGravel = 510490462,
+            Rock = -840216541,
+            MoreTarmac = 1187676648, //Concrete
+            Tarmac = 282940568,
+            WetTarmac = 999829011,
+            Grass = 1286696947,
+            FullGrass = -461750719,
+            ShortGrass = 1333033863,
+        }
+
+        bool Loaded = false;
+        bool IsLoadingScript = false;
+        Task LoadScriptTask = null;
+
+        public void StartLoadScript()
+        {
+            if (IsLoadingScript) return;
+
+            DisplayHelpTextTimed("Loading ~b~ARS.~w~ May take a while.", 20000);
+            Loaded = false;
+            IsLoadingScript = true;
+            LoadScriptTask = Task.Run(() =>
+            {
+                FillKnownDisciplines(false);
+                FillKnownTracks(false);
+                ReFilterKnownTracks(TrackFilter);
+            });
+        }
+
+        void HandleLoadScriptTask()
+        {
+            if (!IsLoadingScript || LoadScriptTask == null) return;
+            if (!LoadScriptTask.IsCompleted) return;
+
+            if (LoadScriptTask.IsFaulted)
+            {
+                Loaded = false;
+                Exception ex = LoadScriptTask.Exception?.GetBaseException();
+                Log(LogImportance.Error, "Initialization failed: " + (ex != null ? ex.Message : "Unknown error"), true);
+                DisplayHelpTextTimed("~r~ARS failed to load. Check log.", 4000);
+            }
+            else
+            {
+                // Must run on the script thread: this path uses GTA natives/models.
+                FillCachedCandidates(DisciplineFilter, intendedOpponents, true);
+                Log(LogImportance.Info, "Initialization complete.", true);
+                DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
+                HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARSe~w~ menu.");
+                Loaded = true;
+            }
+
+            IsLoadingScript = false;
+            LoadScriptTask = null;
+        }
+        public ARS()
+        {
+
+            Tick += OnTick;
+            Aborted += OnAbort;
+
+            File.WriteAllText(@"scripts\ARS\Log.log", "----------------------------");
+            Log(LogImportance.Info, "Script initialized - " + DateTime.Now);
+            File.AppendAllText(@"scripts\ARS\Log.log", "\n----------------------------");
+            LoadSettings();
+
+
+            string ScriptName = "ARS";
+            string ScriptVer = "0.0.0.0";
+            string ScriptDate = "30/09/2018";
+
+            // Get the version of the current application.
+            Assembly assem = Assembly.GetExecutingAssembly();
+            AssemblyName assemName = assem.GetName();
+            Version ver = assemName.Version;
+            ScriptVer = ver.ToString() + " ~o~[PUBLIC BETA]~w~";
+            ScriptDate = File.GetLastWriteTimeUtc(@"scripts/ARS/ARS.dll").ToString();
+
+
+            UI.Notify("~b~" + ScriptName + "~g~e~w~" + "~y~ " + ScriptVer + "~n~Build: ~g~" + ScriptDate);
+
+        }
+
+        public static float LaneApproach(float DistPercent)
+        {
+            float lanePercent = 0;
+            if (DistPercent >= 80) lanePercent = ARS.map(DistPercent, 80, 100, 95, 100, true);
+            else if (DistPercent >= 60) lanePercent = ARS.map(DistPercent, 60, 80, 80, 95, true);
+            else if (DistPercent >= 40) lanePercent = ARS.map(DistPercent, 40, 60, 50, 80, true);
+            else if (DistPercent >= 20) lanePercent = ARS.map(DistPercent, 20, 40, 25, 50, true);
+            else if (DistPercent >= 0) lanePercent = ARS.map(DistPercent, 0, 20, 0, 25, true);
+
+            return lanePercent;
+        }
+
+
+        Dictionary<string, string> TrackTags = new Dictionary<string, string>();
+        public void FillKnownTracks(bool allowScriptYield = true)
+        {
+            TrackTags.Clear();
+            ImmersiveJoins.Clear();
+            Log(LogImportance.Info, "Learning available tracks...");
+            List<string> folders = Directory.GetDirectories(@"scripts\ARS\Tracks").ToList();
+            folders.Add(@"scripts\ARS\Tracks");
+            foreach (string dir in folders)
+            {
+                int count = 0;
+                foreach (string st in Directory.EnumerateFiles(@dir))
+                {
+                    string n = System.IO.Path.GetFileName(st);
+                    Log(LogImportance.Info, st + " - [" + string.Join(", ", GetTrackTags(st)) + "]");
+                    TrackTags.Add(st, string.Join(", ", GetTrackTags(st)));
+                    if (!ImmersiveJoins.ContainsKey(GetTrackStartPos(st))) ImmersiveJoins.Add(GetTrackStartPos(st), st);
+
+                    count++;
+                    if (allowScriptYield && count > 5)
+                    {
+                        DisplayHelpTextTimed("Loading " + n, 5000);
+                        count = 0;
+                        Yield();
+                    }
+                }
+            }
+
+
+            KnownTracks = Directory.GetFiles(@"scripts\ARS\Tracks").ToList();
+            Log(LogImportance.Info, "Done.");
+            Log(LogImportance.Info, "-------------");
+        }
+
+        public static List<string> GetTrackTags(string path)
+        {
+            XmlDocument document = new XmlDocument();
+            document.Load(path);
+            int pat = 0;
+
+            while (document == null && pat < 1000)
+            {
+                pat++;
+                document.Load(path);
+            }
+
+            //string tags = "";
+            List<string> tags = new List<string>();
+            tags.Add(System.IO.Path.GetFileName(path).ToLowerInvariant());
+            XmlNodeList nl = document.SelectNodes("//Tags/*");
+            foreach (XmlNode node in nl)
+            {
+                tags.Add(node.InnerText.ToLowerInvariant());
+            }
+
+            return tags;
+        }
+
+        public static Vector3 GetTrackStartPos(string path)
+        {
+            XmlDocument document = new XmlDocument();
+            document.Load(path);
+            int pat = 0;
+
+            while (document == null && pat < 1000)
+            {
+                pat++;
+                document.Load(path);
+            }
+
+            //string tags = "";
+            List<string> tags = new List<string>();
+            tags.Add(System.IO.Path.GetFileName(path).ToLowerInvariant());
+            XmlNode point = document.SelectNodes("//Route/Point")[0];
+            XmlNodeList nl = point.ChildNodes;
+
+            if (nl != null)
+            {
+                Vector3 p = Vector3.Zero;
+
+                foreach (XmlNode node in nl)
+                {
+                    string t = node.InnerText;
+
+                    float i = 0;
+                    float.TryParse(t.Replace('.', ','), out i);
+                    if (node.Name == "X") p.X = i;
+                    if (node.Name == "Y") p.Y = i;
+                    if (node.Name == "Z") p.Z = i;
+                }
+                return p;
+            }
+            return Vector3.Zero;
+        }
+
+        public static List<string> GetRacerTags(string path)
+        {
+            XmlDocument document = new XmlDocument();
+            document.Load(path);
+            int pat = 0;
+
+            while (document == null && pat < 1000)
+            {
+                pat++;
+                document.Load(path);
+            }
+
+            List<string> tags = new List<string>();
+            string dir = System.IO.Path.GetDirectoryName(path);
+
+            dir = dir.Split(System.IO.Path.DirectorySeparatorChar).Last().ToLowerInvariant();
+            if (dir != "vehicles") tags.Add(dir);
+            XmlNodeList nl = document.SelectNodes("//Disciplines/*");
+            foreach (XmlNode node in nl)
+            {
+                tags.Add(node.InnerText.ToLowerInvariant());
+            }
+
+
+            return tags;
+
+        }
+
+        public static string GetRacerModel(string path)
+        {
+            try
+            {
+                XmlDocument document = new XmlDocument();
+                document.Load(path);
+                XmlNode modelNode = document.SelectSingleNode("//Model");
+                return modelNode?.InnerText?.Trim();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        public void ReFilterKnownTracks(string filter = "test")
+        {
+
+            FilteredTrackList.Clear();
+            string[] tags = filter.ToLowerInvariant().Split(' ');
+            foreach (string file in TrackTags.Keys)
+            {
+                int score = 0;
+                foreach (string tag in tags)
+                {
+                    if (TrackTags[file].Contains(tag)) score++;
+                }
+                if (score == tags.Length) FilteredTrackList.Add(file);
+            }
+        }
+
+
+        public void FillKnownDisciplines(bool allowScriptYield = true)
+        {
+            RacerTags.Clear();
+            KnownVehicleModels.Clear();
+            Log(LogImportance.Info, "-------------");
+            Log(LogImportance.Info, "Learning available disciplines...");
+            List<string> folders = Directory.GetDirectories(@"scripts\ARS\Vehicles").ToList();
+            folders.Add(@"scripts\ARS\Vehicles");
+            HashSet<string> knownModelsSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string dir in folders)
+            {
+                int count = 0;
+                foreach (string st in Directory.EnumerateFiles(@dir))
+                {
+                    string n = System.IO.Path.GetFileName(st);
+                    List<string> racerTags = GetRacerTags(st);
+                    string model = GetRacerModel(st);
+
+                    Log(LogImportance.Info, st + " - [" + string.Join(", ", racerTags) + "]");
+                    RacerTags.Add(st, string.Join(" ", racerTags));
+
+                    if (!string.IsNullOrWhiteSpace(model) && knownModelsSet.Add(model))
+                    {
+                        KnownVehicleModels.Add(new Model(model));
+                    }
+
+                    count++;
+                    if (allowScriptYield && count > 20)
+                    {
+                        DisplayHelpTextTimed("Loading " + n, 5000);
+
+                        count = 0;
+                        Yield();
+                    }
+                }
+            }
+            KnownTracks = Directory.GetFiles(@"scripts\ARS\Tracks").ToList();
+            Log(LogImportance.Info, "Done.");
+            Log(LogImportance.Info, "-------------");
+
+        }
+
+        public static float LeftOrRight(Vector3 pos, Vector3 refPoint, Vector3 refDir)
+        {
+            Vector3 right = Vector3.Cross(refDir, Vector3.WorldUp);
+            Vector3 rPos = pos - refPoint;
+
+            return Vector3.Dot(right, rPos);
+
+        }
+
+        public static Vector3 RotateDir(Vector3 d, float angle, Vector3 axis)
+        {
+            return Quaternion.RotationAxis(axis, (float)(Math.PI / 180f) * angle) * -d;
+        }
+        public static Vector3 GetOffset(Entity reference, Entity ent)
+        {
+            Vector3 pos = ent.Position;
+            return Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS, reference, pos.X, pos.Y, pos.Z);
+        }
+        public static Vector3 GetOffset(Entity reference, Vector3 pos)
+        {
+            return Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS, reference, pos.X, pos.Y, pos.Z);
+        }
+
+        public static float EngineTopSpeed(Vehicle v)
+        {
+            return Function.Call<float>(Hash._0x53AF99BAA671CA47, v) / 0.75f;
+        }
+
+
+        public static float map(float x, float in_min, float in_max, float out_min, float out_max, bool clamp = false)
+        {
+            float r = (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+            if (clamp) r = Clamp(r, out_min, out_max);
+            return r;
+        }
+
+        public static float mapGamma(float value, float in_min, float in_max, float min, float max, float gamma, bool clamp = false)
+        {
+            if (value > in_max) value = in_max;
+            value /= in_max; // scale to 1.0;
+            value = (float)Math.Pow(value, gamma); //original 0.4f
+
+            float r = map(value, 0.0f, 1.0f, in_min, in_max, clamp);
+            r = map(r, in_min, in_max, min, max);
+            return r;
+        }
+
+        public static float Clamp(float val, float min, float max)
+        {
+            if (val.CompareTo(min) < 0) return min;
+            else if (val.CompareTo(max) > 0) return max;
+            else return val;
+        }
+
+        public unsafe static byte* FindPattern(string pattern, string mask)
+        {
+            ProcessModule module = Process.GetCurrentProcess().MainModule;
+
+            ulong address = (ulong)module.BaseAddress.ToInt64();
+            ulong endAddress = address + (ulong)module.ModuleMemorySize;
+
+            for (; address < endAddress; address++)
+            {
+                for (int i = 0; i < pattern.Length; i++)
+                {
+                    if (mask[i] != '?' && ((byte*)address)[i] != pattern[i])
+                    {
+                        break;
+                    }
+                    else if (i + 1 == pattern.Length)
+                    {
+                        return (byte*)address;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+
+        static public unsafe void SetSteerInput(Vehicle handle, float value)
+        {
+
+            if (!CanWeUse(handle)) return;
+
+            if (steeroffset == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
+                if (addr != null)
+                {
+                    steeroffset = *(uint*)(addr + 6);
+                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset: " + steeroffset);
+                }
+            }
+            else
+            {
+                var address = (ulong)handle.MemoryAddress;
+                *((float*)(address + steeroffset)) = value;
+            }
+
+        }
+        static ulong steerAngle = 0x0;
+        static public unsafe void SetSteerAngle(Vehicle handle, float value)
+        {
+
+
+            if (!CanWeUse(handle)) return;
+
+            if (steerAngle == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
+                if (addr != null)
+                {
+
+                    steerAngle = *(uint*)(addr + 6) + 8;
+                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset: " + steerAngle);
+                }
+            }
+            else
+            {
+                var address = (ulong)handle.MemoryAddress;
+                *((float*)(address + steerAngle)) = value;
+            }
+
+        }
+
+        static public unsafe float GetSteerInput(Vehicle handle)
+        {
+
+            if (!CanWeUse(handle)) return 0f;
+
+            if (steerAngle == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
+                if (addr != null)
+                {
+                    steerAngle = *(uint*)(addr + 6) + 8;
+                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset:" + steerAngle);
+                }
+            }
+            else
+            {
+                var address = (ulong)handle.MemoryAddress;
+                return *((float*)(address + steerAngle));
+            }
+
+            return 0;
+        }
+
+        static public unsafe void SetThrottle(Vehicle handle, float value)
+        {
+
+
+            if (throttleOffset == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
+
+                if (addr != null)
+                {
+                    throttleOffset = *(uint*)(addr + 6) + 0x10;
+                    Log(LogImportance.Info, "[MEMORY] Learned the throttle offset: " + throttleOffset);
+
+                }
+            }
+            else if (1 == 1)
+            {
+                var address = (ulong)handle.MemoryAddress;
+
+                *((float*)(address + throttleOffset)) = value;
+            }
+
+
+        }
+
+        static public unsafe void SetBrakes(Vehicle handle, float value)
+        {
+            if (!CanWeUse(handle)) return;
+
+
+
+            if (brakeOffset == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
+
+                if (addr != null)
+                {
+
+                    brakeOffset = *(uint*)(addr + 6) + 0x14;
+                    Log(LogImportance.Info, "[MEMORY] Learned the brakeOffset offset:" + brakeOffset);
+
+                }
+            }
+            else if (1 == 1)
+            {
+                var address = (ulong)handle.MemoryAddress;
+
+                *((float*)(address + brakeOffset)) = value;
+            }
+
+        }
+        public static float rad2deg(float rad)
+        {
+            return (rad * (180.0f / (float)Math.PI));
+        }
+
+        public static float deg2rad(float angle)
+        {
+            return (float)(Math.PI * angle / 180.0f);
+        }
+
+        public static float LerpDelta(float current, float from, float to, float delta)
+        {
+            float r = from;
+            float percent = (float)Math.Round((current * 100f) / to, 2);
+            r = percent * map(percent, 0f, 50f, 0f, 1f, true);
+            return (float)Math.Round(r, 1);
+        }
+
+        //Route Creator active section
+        List<Vector3> RouteSection = new List<Vector3>();
+        Vector3 rBezier = Vector3.Zero;
+        float scale = 1.5f;
+        int wide = 5;
+        int PathDisplayFidelity = 1;
+
+
+
+        int GametimeCountDown = 0;
+        int MaxCountDown = 7;
+        int CountDown = 7;
+
+        Vector3 FreeCamMovement = Vector3.Zero;
+        Vector3 FreeCamRotation = Vector3.Zero;
+
+
+        public static Scaleform scaleform = new Scaleform("INSTRUCTIONAL_BUTTONS");
+        public static Scaleform racertext = null;// new Scaleform("mp_car_stats_01");
+        public static Scaleform debugFrontend = new Scaleform("instructional_buttons");
+        public static Scaleform floatingtext = new Scaleform("HUD_FLOATING_HELP_TEXT");
+        public static Scaleform SCCountdown = new Scaleform("MP_BIG_MESSAGE_FREEMODE");
+
+
+
+        string ParsedEnum(string t)
+        {
+            return string.Concat(t.Select(x => Char.IsUpper(x) ? " " + x : x.ToString())).TrimStart(' ');
+        }
+
+        public static List<string> FilteredTrackList = new List<string>();
+        public static string TrackFilter = "airport";
+        public static string DisciplineFilter = "sports";
+
+        //Menu
+        Dictionary<string, string> RacerTags = new Dictionary<string, string>();
+        public static int TrackListPos = 0;
+        class MenuItemDefinition
+        {
+            public Func<string> Name;
+            public Func<string> ValueSuffix;
+            public Action<int> OnAdjust;
+            public Action OnAccept;
+            public bool KeepMenuOpen;
+        }
+        readonly Dictionary<Options, MenuItemDefinition> MenuItemDefinitions = new Dictionary<Options, MenuItemDefinition>();
+        void SetMenuOptions(params Options[] options)
+        {
+            OptionsList.Clear();
+            OptionsList.AddRange(options);
+        }
+
+        string GetOptionName(Options option)
+        {
+            if (option == Options.TrackList) return "Track";
+            if (option == Options.LeaveRace && RaceStatus == RaceState.Finished) return "Finish Race";
+            return ParsedEnum(option.ToString());
+        }
+
+        string GetTrackListPreview()
+        {
+            if (FilteredTrackList.Count == 0) return " (0) []";
+
+            string preview = " (" + FilteredTrackList.Count + ") [";
+            for (int c = 0; c < FilteredTrackList.Count; c++)
+            {
+                if (c < TrackListPos - 1 || c > TrackListPos + 1) continue;
+                if (c == TrackListPos) preview += "~y~";
+                preview += System.IO.Path.GetFileNameWithoutExtension(FilteredTrackList[c]) + " ";
+                if (c == TrackListPos) preview += "~w~";
+            }
+            preview += "]";
+            return preview;
+        }
+
+        string GetDisciplinesPreview()
+        {
+            string s = DisciplineFilter.Replace("+", "~g~+");
+            s = s.Replace("-", "~o~-");
+            s = s.Replace("*", "~b~*");
+            s = s.Replace(" ", "~w~ ");
+            return " ~w~[~w~" + s + "~w~]" + "(" + CachedCandidates.Count + ")";
+        }
+
+        string GetOptionValueSuffix(Options option)
+        {
+            if (OptionValuesList.ContainsKey(option)) return OptionValuesList[option] ? " [~g~X~w~]" : " [ ]";
+            if (option == Options.TrackNameFilter) return " [" + TrackFilter + "]";
+            if (option == Options.Laps) return " [~y~" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~w~]";
+            if (option == Options.GridSize) return " [~y~" + intendedOpponents + "~w~]";
+            if (option == Options.DebugLevel) return " [" + (DebugDisplay)DebugVisual + "]";
+            if (option == Options.TrackList) return GetTrackListPreview();
+            if (option == Options.Disciplines) return GetDisciplinesPreview();
+            return "";
+        }
+
+        void AdjustTrackListPos(int delta)
+        {
+            if (FilteredTrackList.Count == 0)
+            {
+                TrackListPos = 0;
+                return;
+            }
+
+            TrackListPos += delta;
+            if (TrackListPos < 0) TrackListPos = FilteredTrackList.Count - 1;
+            if (TrackListPos > FilteredTrackList.Count - 1) TrackListPos = 0;
+        }
+
+        void AdjustMenuOption(Options selected, int direction)
+        {
+            if (selected == Options.TrackList) AdjustTrackListPos(direction);
+            if (selected == Options.GridSize) intendedOpponents += direction;
+            if (selected == Options.Laps) SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) + direction);
+
+            if (intendedOpponents < 0) intendedOpponents = 0;
+            if (SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) < 1) SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", 5);
+
+            if (selected == Options.DebugLevel)
+            {
+                int next = DebugVisual + direction;
+                if (direction > 0)
+                {
+                    if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(false);
+                    if (next <= 7) DebugVisual = next;
+                    if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(true);
+                }
+                else
+                {
+                    if (next < 0) next = 0;
+                    DebugVisual = next;
+                    if (DebugVisual == (int)DebugDisplay.Inputs) SetSPLVisibility(true);
+                }
+            }
+        }
+
+        void ShowPropEditHelpMessages()
+        {
+            HelpMessages.Add("The ~b~Prop Edit~w~ mode lets you modify which props will be saved along the route.");
+            HelpMessages.Add("Props marked in ~g~green~w~ are considered part of the route.");
+            HelpMessages.Add("Remember to update the current route on the menu after you're finished.");
+        }
+
+        void OpenRaceOptionsMenu()
+        {
+            SetMenuOptions(
+                Options.ShowAggro,
+                Options.ShowInputs,
+                Options.ShowTrackAnalysis,
+                Options.ShowPhysics
+            );
+        }
+
+        void OpenRaceSetupMenu()
+        {
+            SetMenuOptions(
+                Options.TrackList,
+                Options.Disciplines,
+                Options.GridSize,
+                Options.Laps,
+                Options.UseNearbyCars,
+                Options.ReverseRoute,
+                Options.Start
+            );
+        }
+
+        void OpenMenuFromContext()
+        {
+            OptionHovered = 0;
+            if (routeEditMode)
+            {
+                SetMenuOptions(Options.SaveTrack, Options.ExitCreator, Options.Freecam, Options.SaveThisCar);
+                return;
+            }
+
+            if (Path.Count == 0)
+            {
+                SetMenuOptions(Options.Race, Options.CreateTrack, Options.ReloadSettings, Options.Freecam, Options.SaveThisCar);
+                return;
+            }
+
+            List<Options> options = new List<Options>();
+            if (Racers.Count == 0)
+            {
+                options.Add(Options.Disciplines);
+                options.Add(Options.StartRace);
+                options.Add(Options.GridSize);
+                options.Add(Options.Laps);
+            }
+            options.Add(Options.RaceOptions);
+            options.Add(Options.LeaveRace);
+
+            if (RaceStatus > RaceState.NotInitiated) options.Add(Options.RestartRace);
+            if (DebugVisual == (int)DebugDisplay.PropEdit)
+            {
+                options.Add(Options.FindCustomProps);
+                options.Add(Options.UpdateTrackFile);
+            }
+            options.Add(Options.Freecam);
+            options.Add(Options.SaveThisCar);
+            SetMenuOptions(options.ToArray());
+        }
+
+        void RefreshDisciplinesFromInput()
+        {
+            DisciplineFilter = Game.GetUserInput(999);
+
+            string[] disciplines = DisciplineFilter.Split(' ');
+            string[] aliases = SettingsFile.GetAllValues("GENERAL_SETTINGS", "alias");
+            string[] atags = SettingsFile.GetAllValues("GENERAL_SETTINGS", "tags");
+            for (int d = 0; d < disciplines.Length; d++)
+            {
+                for (int i = 0; i < aliases.Length; i++)
+                {
+                    if (aliases[i] == disciplines[d])
+                    {
+                        disciplines[d] = atags[i];
+                        break;
+                    }
+                }
+            }
+            DisciplineFilter = string.Join(" ", disciplines);
+            FillCachedCandidates(DisciplineFilter, intendedOpponents);
+        }
+
+        void StartFromMenu()
+        {
+            if (FilteredTrackList.Count <= 0)
+            {
+                UI.Notify("~r~No track selected.");
+                return;
+            }
+
+            XmlDocument f = LoadTrackFile(FilteredTrackList[TrackListPos]);//Game.GetUserInput(30)
+
+            if (OptionValuesList[Options.UseNearbyCars])
+            {
+                foreach (Vehicle v in GetNearbyCandidates())
+                {
+                    Script.Wait(100);
+                    Log(LogImportance.Info, "Added " + v.FriendlyName);
+                    v.IsPersistent = true;
+                    Ped p = World.CreatePed(RacerModels[GetRandomInt(0, RacerModels.Count - 1)], v.Position + (v.ForwardVector * 5));
+
+                    Racer RandomRacer = new Racer(v, p);
+
+                    if (v.ColorCombinationCount < 2 && v.ClassType != VehicleClass.Emergency)
+                    {
+                        VehicleColor c = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
+                        v.PrimaryColor = c;
+                        v.SecondaryColor = c;
+                        v.PearlescentColor = c;
+                    }
+                    Racers.Add(RandomRacer);
+                }
+            }
+
+            LoadTrack(f);
+            Log(LogImportance.Info, "Loading grid");
+            LoadGrid(DisciplineFilter, (int)Clamp(intendedOpponents - Racers.Count, 0, GridPositions.Count));
+
+            if (DevSettingsFile.GetValue("RACERS", "UsePersonalities", true))
+            {
+                for (int i = 0; i < Racers.Count; i++)
+                {
+                    Racers[i].mem.personality = personalitySets.Find(s => s.ProbToUse >= 100);
+
+                    PersonalitySet p = personalitySets.Find(ps => ps.Model != "" && ps.Model.ToLowerInvariant() == Racers[i].Car.DisplayName.ToLowerInvariant());
+                    if (p != null)
+                    {
+                        Racers[i].mem.personality = p;
+                        continue;
+                    }
+
+                    for (int per = 0; per < personalitySets.Count; per++)
+                    {
+                        if (personalitySets[per].ProbToUse >= 100) continue;
+
+                        int chance = ARS.GetRandomInt(0, 100);
+                        if (chance < personalitySets[per].ProbToUse)
+                        {
+                            p = personalitySets[per];
+                            string[] skills = p.SkillRange.Split(',');
+                            if (skills.Count() >= 2)
+                            {
+                                int skill = GetRandomInt(int.Parse(skills.First()), int.Parse(skills.Last()));
+                                p.Stability.Skill = skill;
+                            }
+
+                            Racers[i].mem.personality = p;
+                            break;
+                        }
+                    }
+                }
+            }
+            StartRace();
+
+            if (CanWeUse(Game.Player.Character.CurrentVehicle)) HelpMessages.Add("Rev up your engine to start the countdown.");
+        }
+
+        void EnsureMenuItemDefinitions()
+        {
+            if (MenuItemDefinitions.Count > 0) return;
+
+            MenuItemDefinitions[Options.TrackList] = new MenuItemDefinition
+            {
+                Name = () => "Track",
+                ValueSuffix = () => GetTrackListPreview(),
+                OnAdjust = (delta) => AdjustTrackListPos(delta),
+                OnAccept = () =>
+                {
+                    TrackFilter = Game.GetUserInput(40);
+                    ReFilterKnownTracks(TrackFilter);
+                },
+                KeepMenuOpen = true
+            };
+            MenuItemDefinitions[Options.LeaveRace] = new MenuItemDefinition
+            {
+                Name = () => RaceStatus == RaceState.Finished ? "Finish Race" : ParsedEnum(Options.LeaveRace.ToString()),
+                OnAccept = () => CleanRacers()
+            };
+            MenuItemDefinitions[Options.Laps] = new MenuItemDefinition
+            {
+                ValueSuffix = () => " [~y~" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~w~]",
+                OnAdjust = (delta) =>
+                {
+                    SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) + delta);
+                    if (SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) < 1) SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", 5);
+                },
+                OnAccept = () =>
+                {
+                    int pLaps = 6;
+                    int.TryParse(Game.GetUserInput(4), out pLaps);
+                    SettingsFile.SetValue("GENERAL_SETTINGS", "Laps", pLaps);
+                },
+                KeepMenuOpen = true
+            };
+            MenuItemDefinitions[Options.GridSize] = new MenuItemDefinition
+            {
+                ValueSuffix = () => " [~y~" + intendedOpponents + "~w~]",
+                OnAdjust = (delta) =>
+                {
+                    intendedOpponents += delta;
+                    if (intendedOpponents < 0) intendedOpponents = 0;
+                },
+                OnAccept = () =>
+                {
+                    int pGrid = 6;
+                    int.TryParse(Game.GetUserInput(4), out pGrid);
+                    intendedOpponents = pGrid;
+                },
+                KeepMenuOpen = true
+            };
+            MenuItemDefinitions[Options.DebugLevel] = new MenuItemDefinition
+            {
+                ValueSuffix = () => " [" + (DebugDisplay)DebugVisual + "]",
+                OnAdjust = (delta) => AdjustMenuOption(Options.DebugLevel, delta)
+            };
+            MenuItemDefinitions[Options.Disciplines] = new MenuItemDefinition
+            {
+                ValueSuffix = () => GetDisciplinesPreview(),
+                OnAccept = () => RefreshDisciplinesFromInput(),
+                KeepMenuOpen = true
+            };
+            MenuItemDefinitions[Options.RaceOptions] = new MenuItemDefinition { OnAccept = () => OpenRaceOptionsMenu(), KeepMenuOpen = true };
+            MenuItemDefinitions[Options.Race] = new MenuItemDefinition { OnAccept = () => OpenRaceSetupMenu(), KeepMenuOpen = true };
+            MenuItemDefinitions[Options.ReloadSettings] = new MenuItemDefinition
+            {
+                OnAccept = () =>
+                {
+                    SettingsFile = null;
+                    DevSettingsFile = null;
+                    LoadSettings();
+                    UI.Notify("Reloaded setting files");
+                }
+            };
+            MenuItemDefinitions[Options.FindCustomProps] = new MenuItemDefinition { OnAccept = () => FindCustomProps() };
+            MenuItemDefinitions[Options.SaveDriverModel] = new MenuItemDefinition { OnAccept = () => CreateDriver(Game.Player.Character) };
+            MenuItemDefinitions[Options.SaveThisCar] = new MenuItemDefinition { OnAccept = () => CreateVehicle(Game.Player.Character.CurrentVehicle) };
+            MenuItemDefinitions[Options.CreateTrack] = new MenuItemDefinition
+            {
+                OnAccept = () =>
+                {
+                    routeEditMode = true;
+                    if (routeEditMode)
+                    {
+                        if (!InFreeCam) ToggleFreeCam();
+                        IsDroneMode = false;
+                    }
+                }
+            };
+            MenuItemDefinitions[Options.ExitCreator] = new MenuItemDefinition
+            {
+                OnAccept = () =>
+                {
+                    routeEditMode = false;
+                    CleanEverything();
+                }
+            };
+            MenuItemDefinitions[Options.SaveTrack] = new MenuItemDefinition
+            {
+                OnAccept = () =>
+                {
+                    UI.ShowSubtitle("Write a name for the track.", 5000);
+                    SaveRoute(Game.GetUserInput(30));
+                }
+            };
+            MenuItemDefinitions[Options.UpdateTrackFile] = new MenuItemDefinition { OnAccept = () => UpdateRoute(true, true, true) };
+            MenuItemDefinitions[Options.StopRace] = new MenuItemDefinition { OnAccept = () => CleanRacers() };
+            MenuItemDefinitions[Options.Start] = new MenuItemDefinition { OnAccept = () => StartFromMenu() };
+            MenuItemDefinitions[Options.StartRace] = new MenuItemDefinition
+            {
+                OnAccept = () =>
+                {
+                    LoadGrid(DisciplineFilter, intendedOpponents);
+                    StartRace();
+                }
+            };
+            MenuItemDefinitions[Options.Freecam] = new MenuItemDefinition { OnAccept = () => ToggleFreeCam() };
+            MenuItemDefinitions[Options.RestartRace] = new MenuItemDefinition
+            {
+                OnAccept = () =>
+                {
+                    if (Racers.Count > 0)
+                    {
+                        GametimeCountDown = 0;
+                        SetupRace(true, false);
+                        StartCoundown();
+                    }
+                }
+            };
+        }
+
+        MenuItemDefinition GetMenuItemDefinition(Options option)
+        {
+            EnsureMenuItemDefinitions();
+            if (MenuItemDefinitions.ContainsKey(option)) return MenuItemDefinitions[option];
+            return new MenuItemDefinition();
+        }
+
+        string GetMenuItemName(Options option)
+        {
+            MenuItemDefinition def = GetMenuItemDefinition(option);
+            if (def.Name != null) return def.Name();
+            return GetOptionName(option);
+        }
+
+        string GetMenuItemValueSuffix(Options option)
+        {
+            MenuItemDefinition def = GetMenuItemDefinition(option);
+            if (def.ValueSuffix != null) return def.ValueSuffix();
+            return GetOptionValueSuffix(option);
+        }
+
+        bool KeepMenuOpenAfterAccept(Options option)
+        {
+            if (OptionValuesList.ContainsKey(option)) return true;
+            return GetMenuItemDefinition(option).KeepMenuOpen;
+        }
+
+        void HandleMenuAdjust(Options selected, int direction)
+        {
+            MenuItemDefinition def = GetMenuItemDefinition(selected);
+            if (def.OnAdjust != null) def.OnAdjust(direction);
+            else AdjustMenuOption(selected, direction);
+        }
+
+        void HandleMenuAccept(Options selected)
+        {
+            MenuItemDefinition definition = GetMenuItemDefinition(selected);
+            if (definition.OnAccept != null) definition.OnAccept();
+
+            if (OptionValuesList.Keys.Contains(selected)) OptionValuesList[selected] = !OptionValuesList[selected];
+
+            if (!KeepMenuOpenAfterAccept(selected))
+            {
+                if (selected == Options.DebugLevel)
+                {
+                    if (DebugVisual == (int)DebugDisplay.PropEdit) ShowPropEditHelpMessages();
+                }
+
+                OptionsList.Clear();
+            }
+        }
+
+        void HandleMenu()
+        {
+            if (OptionsList.Count == 0) return;
+            if (FilteredTrackList.Count == 0) TrackListPos = 0;
+            else if (TrackListPos > FilteredTrackList.Count - 1) TrackListPos = FilteredTrackList.Count - 1;
+
+            Game.DisableControlThisFrame(2, GTA.Control.Phone);
+
+            if (OptionHovered > OptionsList.Count - 1) OptionHovered = OptionsList.Count - 1;
+            if (OptionHovered < 0) OptionHovered = OptionsList.Count - 1;
+
+            float zoffset = 0;
+            foreach (Options o in OptionsList)
+            {
+                string line = (o == OptionsList[OptionHovered] ? "~b~> " : "") + GetMenuItemName(o) + "~w~" + GetMenuItemValueSuffix(o);
+                DrawText(new Vector2(0.02f, 0.2f + zoffset), line, Color.White, DrawTextFont.Default, DrawTextAlign.Left, 0.5f);
+                zoffset += 0.04f;
+            }
+
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendDown)) OptionHovered++;
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendUp)) OptionHovered--;
+
+            if (OptionHovered < 0) OptionHovered = OptionsList.Count - 1;
+            if (OptionHovered > OptionsList.Count - 1) OptionHovered = 0;
+
+            Options oSelected = OptionsList[OptionHovered];
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendLeft))
+            {
+                HandleMenuAdjust(oSelected, -1);
+            }
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendRight))
+            {
+                HandleMenuAdjust(oSelected, 1);
+            }
+            if (Game.IsControlJustPressed(2, GTA.Control.FrontendAccept))
+            {
+                HandleMenuAccept(oSelected);
+            }
+        }
+        public static float MStoMPH(float ms)
+        {
+            return (float)Math.Round(ms * 2.236936f, 3);
+        }
+        public static float MPHtoMS(float mph)
+        {
+            return (float)Math.Round(mph * 0.44704f, 3);
+        }
+        void CleanEverything()
+        {
+            CleanRacers();
+            foreach (Prop p in TrackLimits) if (CanWeUse(p)) p.Delete();
+
+
+            WideDict.Clear();
+            EditWideDict.Clear();
+            Path.Clear();
+
+            foreach (int fx in FlareFX) Function.Call(Hash.STOP_PARTICLE_FX_LOOPED, fx);
+            FlareFX.Clear();
+            LeaderboardFinish.Clear();
+            routeEditMode = false;
+            TimeToFinishRace = 0;
+
+            foreach (Prop p in CustomProps) if (CanWeUse(p)) p.Delete();
+            foreach (Prop p in AutoGeneratedProps) if (CanWeUse(p)) p.Delete();
+            foreach (Prop p in TrackLimits) if (CanWeUse(p)) p.Delete();
+
+            Angles.Clear();
+            Path.Clear();
+            WideDict.Clear();
+
+            RaceStatus = RaceState.None;
+            CountDown = MaxCountDown;
+        }
+
+        Vehicle debugTrailer;
+        Dictionary<int, Vector3> ExhaustOffsets = new Dictionary<int, Vector3>();
+        void HandlePlayerDebugStuff(Vehicle v)
+        {
+
+
+            if (!CanWeUse(v)) return;
+
+
+            if (CanWeUse(debugTrailer))
+            {
+                //debugTrailer.HandbrakeOn = true;
+                //Function.Call(Hash._0x9007A2F21DC108D4, debugTrailer, 0f);
+
+
+
+
+                if (debugTrailer.IsAttachedTo(v))
+                {
+
+                    //float str = Vector3.SignedAngle(debugTrailer.ForwardVector, v.ForwardVector, debugTrailer.UpVector) / 100;
+                    //if (Math.Abs(str) > 0.01f)  v.SteeringAngle = str;
+                    //Function.Call(Hash._0x42A8EC77D5150CBE, v, -1);
+                    //if (Math.Abs(str) > 1) debugTrailer.SteeringAngle = str; else debugTrailer.SteeringAngle = 0;
+
+
+                    //debugTrailer.SteeringAngle = v.SteeringAngle * -0.8f;
+                    //UI.ShowSubtitle(message: str + "-" + debugTrailer.FriendlyName, 100);
+
+                }
+                else
+                {
+
+                    if (!debugTrailer.IsInRangeOf(v.Position, 40)) debugTrailer = null;
+                }
+            }
+            else
+            {
+                debugTrailer = World.GetAllVehicles().Where(predicate: car => car.IsAttachedTo(v)).FirstOrDefault();
+                //Function.Call(Hash.SET_VEHICLE_OUT_OF_CONTROL, debugTrailer, true, false);
+
+            }
+
+
+
+
+            //if(Function.Call<bool>(Hash.GET_VEHICLE_TRAILER_VEHICLE, v, *t))
+            {
+
+            }
+            //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0xF417C2502FFFED43, v.Model.Hash) / 0.75f)+ " mph", 1000);
+            //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0x53AF99BAA671CA47, v)/0.75f)+" mph", 1000);
+
+            //UI.ShowSubtitle(GetDirVsHeading(v,1).ToString(), 200);
+            /*
+            List<Vector3> roads = new List<Vector3>();
+
+            roads.Add(GetRoadPos(v.Position) + new Vector3(0, 0, 0.2f));
+            roads.Add(GetRoadPos(v.Position + (v.Velocity * 1)) + new Vector3(0, 0, 0.2f));
+            roads.Add(GetRoadPos(v.Position + (v.Velocity * 2)) + new Vector3(0, 0, 0.2f));
+            roads.Add(GetRoadPos(v.Position + (v.Velocity * 3)) + new Vector3(0, 0, 0.2f));
+            roads.Add(GetRoadPos(v.Position + (v.Velocity * 4)) + new Vector3(0, 0, 0.2f));
+
+            if (roads.Count > 1)
+            {
+                for (int i = 0; i < roads.Count-1; i++)
+                {
+                    DrawLine(roads[i], roads[i+1], Color.Green);
+                    World.DrawMarker(MarkerType.DebugSphere, roads[i], Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), Color.Green);
+                }
+            }
+            */
+
+            //UI.ShowSubtitle("~g~" + Math.Round(ARS.GetWheelInternalDownforceMod(v).Sum(), 4).ToString() + "Gs", 500);
+            //UI.ShowSubtitle(Function.Call<float>(Hash._0x53AF99BAA671CA47, v)/0.75f+" m/s", 1000);
+            //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0x53AF99BAA671CA47, v) / 0.75f) +" m/s", 1000);
+
+        }
+
+        static public Vector3 GetSpeedVector(Entity e, bool local)
+        {
+            if (!CanWeUse(e)) return Vector3.Zero;
+
+            return Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, e, local);
+        }
+
+        void DrawBlackBars(float intensity)
+        {
+            Function.Call(Hash.DRAW_RECT, 0.5f, 0f, 1f, intensity, 0f, 0f, 0f, 255, 0f);
+            Function.Call(Hash.DRAW_RECT, 0.5f, 1f, 1f, intensity, 0f, 0f, 0f, 255, 0f);
+        }
+
+
+        List<Vector3> MiniaturizedPath = new List<Vector3>();
+        void DrawMiniaturizedPath(Vector3 pos)
+        {
+            if (!Game.Player.Character.IsInRangeOf(pos, 20f)) return;
+            if (Path.Count > 0)
+            {
+                if (MiniaturizedPath.Count == 0)
+                {
+                    Vector3 middle = Vector3.Zero;
+                    foreach (Vector3 posp in Path) middle += posp;
+                    middle /= Path.Count;
+                    int c = (int)(Path.Count * 0.1f);
+                    Vector3 newpos = (Path[4]) - middle;
+                    foreach (Vector3 modded in Path)
+                    {
+                        c++;
+                        if (c >= 15)
+                        {
+                            c = 0;
+                            Vector3 lerped = Vector3.Lerp(middle, modded, 0.005f);
+                            MiniaturizedPath.Add(lerped);
+                        }
+                    }
+                }
+                else
+                {
+                    Vector3 modified = (pos - MiniaturizedPath[0]);
+                    Vector3 last = MiniaturizedPath[MiniaturizedPath.Count - 1];
+                    foreach (Vector3 vm in MiniaturizedPath)
+                    {
+                        if (vm == MiniaturizedPath[0])
+                        {
+                            World.DrawMarker(MarkerType.CheckeredFlagRect, vm + modified, (last - vm).Normalized, new Vector3(0, 0, 0), new Vector3(0.1f, 0.1f, 0.1f), Color.White);// DrawLine(vm,last, Color.Black);
+                        }
+                        else
+                        {
+                            DrawLine(vm + modified, last + modified, Color.SkyBlue);
+                        }
+                        last = vm;
+                    }
+                }
+            }
+        }
+
+        static public float Lerp(float a, float b, float t)
+        {
+            return (1f - t) * a + t * b;
+        }
+        int GameTimeShort = Game.GameTime;
+
+
+        //Immersive joins
+        int secInteval = 0;
+        Dictionary<Vector3, string> NeabyImmersiveJoins = new Dictionary<Vector3, string>();
+
+        void HandleImmersiveJoins()
+        {
+            if (secInteval < Game.GameTime)
+            {
+                secInteval = Game.GameTime + 1000;
+                NeabyImmersiveJoins.Clear();
+                if (RaceStatus == RaceState.None)
+                {
+                    for (int i = 0; i < ImmersiveJoins.Count; i++)
+                    {
+                        if (Game.Player.Character.IsInRangeOf(ImmersiveJoins.ElementAt(i).Key, 50f))
+                        {
+                            NeabyImmersiveJoins.Add(ImmersiveJoins.ElementAt(i).Key, ImmersiveJoins.ElementAt(i).Value);
+                            UI.Notify("added" + ImmersiveJoins.ElementAt(i).Value);
+                        }
+                    }
+                }
+            }
+
+
+            foreach (Vector3 ip in NeabyImmersiveJoins.Keys)
+            {
+                World.DrawMarker(MarkerType.VerticalCylinder, ip + new Vector3(0, 0, -25f), Vector3.Zero, -Vector3.WorldDown, new Vector3(10f, 10f, 30f), Color.Yellow);
+                if (Game.Player.Character.IsInRangeOf(ip, 3f) && Game.Player.Character.IsStopped)
+                {
+                    LoadRace(ImmersiveJoins[ip], null, intendedOpponents);
+                    return;
+                }
+            }
+        }
+
+
+        public List<Vector3> AccelerationVector = new List<Vector3>();
+        Vector3 lSpeed = Vector3.Zero;
+
+
+
+        int NextInLine = 0;
+        int GameTimeNextInLine = 0;
+
+        Vector3 GsClamp = new Vector3(1, 1, 1f);
+        Vector3 directionClamp = new Vector3(1, 1, 1f);
+
+        void OnTick(object sender, EventArgs e)
+        {
+            try
+            {
+                HandleLoadScriptTask();
+
+                Player player = Game.Player;
+                if (player == null || player.Character == null || !player.Character.Exists()) return;
+
+                Vehicle v = player.LastVehicle;
+                //HandlePlayerDebugStuff(v);
+                //HandleImmersiveJoins();
+                if (!Loaded)
+                {
+                    if (DevSettingsFile.GetValue<bool>("GENERAL", "LoadAtStart", true) || WasCheatStringJustEntered("arson"))
+                    {
+                        StartLoadScript();
+                    }
+                    return;
+                }
+
+                /*
+                float min = 0;
+                float max = 5;
+                for (float i = 0; i <= 10; i += 0.1f)
+                {
+                    Vector3 p = v.Position + (v.ForwardVector *i) + (v.ForwardVector*5);
+                    p += v.RightVector * ARS.mapGamma(i, 0, 10, min, max, v.Velocity.Length()/2, false);
+
+                    World.DrawMarker(MarkerType.DebugSphere,p,Vector3.Zero,Vector3.Zero,new Vector3(0.1f,0.1f,0.1f), Color.Red);
+
+                }
+                UI.ShowSubtitle((v.Velocity.Length() / 2).ToString("0.0"), 500);
+
+                */
+                HandleTrackCreator();
+
+
+                //Priority, anticrash checks
+                if (!CanWeUse(FreecCamRide))
+                {
+                    FreecCamRide = World.CreateProp("ba_prop_battle_drone_quad_static", Game.Player.Character.Position + new Vector3(0, 0, 10), true, false);//prop_wheel_tyre
+                                                                                                                                                             //FreecCamRide.IsPersistent = false;
+                    if (CanWeUse(FreecCamRide)) FreecCamRide.HasGravity = false;
+                    Log(LogImportance.Info, "Creating needed freecam object.");
+                }
+
+
+                HandleFreecam();
+
+                //Drawing and GUI stuff
+                if (routeEditMode) DrawPath(Path, WideDict, PathDisplayFidelity);
+                if (TimeToFinishRace != 0 && TimeToFinishRace > Game.GameTime) DisplayHelpText("~y~" + (TimeToFinishRace - Game.GameTime) / 1000 + "s~w~ to end the race.");
+                if (DebugVisual == (int)DebugDisplay.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);// DrawLine(p.Position, Path[ClosestNodeToPlace(p.Position, Path)]+new Vector3(0,0,0.5f), Color.Red);
+
+
+                //Scaleforms
+                if (SCCountdown.IsLoaded && CountDown != MaxCountDown) SCCountdown.Render2D();
+
+                //Info & Tips
+                if (DebugVisual == (int)DebugDisplay.PropEdit) DisplayHelpTextThisFrame("Add or remove any ~g~prop~w~ with the tool of your prefence. They must be ~y~persistent~w~.");
+
+
+
+                if (listenmode)
+                {
+                    if (Game.IsControlJustPressed(2, GTA.Control.Jump))
+                    {
+                        Vehicle playerVeh = Game.Player.Character.CurrentVehicle;
+                        if (CanWeUse(playerVeh)) CreateVehicle(playerVeh, true);
+                    }
+                }
+
+
+
+
+                //Timescale control
+                if (GameTimeShort < Game.GameTime)
+                {
+                    GameTimeShort = Game.GameTime + 50;
+
+                    if (TimeScale > IdealTimeScale)
+                    {
+                        TimeScale -= 0.01f;
+                        if (TimeScale < IdealTimeScale) TimeScale = IdealTimeScale;
+                        TimeScale = (float)Math.Round(TimeScale, 12);
+                        Game.TimeScale = TimeScale;
+                    }
+                    if (TimeScale < IdealTimeScale)
+                    {
+                        TimeScale += 0.1f;
+                        if (TimeScale > IdealTimeScale) TimeScale = IdealTimeScale;
+                        TimeScale = (float)Math.Round(TimeScale, 2);
+                        Game.TimeScale = TimeScale;
+                    }
+                }
+
+
+                //Never really used
+                //if (Path.Count > 20 && MiniMap != Vector3.Zero) DrawMiniaturizedPath(MiniMap);
+
+
+
+
+                //Prevents the world from generating population. The AI cannot handle traffic yet            
+                if ((routeEditMode || Path.Count > 0) && DevSettingsFile.GetValue("GENERAL_SETTINGS", "Traffic", false) == false)
+                {
+                    Function.Call(Hash.SET_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
+                    Function.Call(Hash.SET_RANDOM_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
+                    Function.Call(Hash.SET_PARKED_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
+                    if (Racers.Count() > 0) Function.Call(Hash._0x90B6DA738A9A25DA, 0f); //Actively forces deletion of anything unwanted
+                    Function.Call(Hash.SET_PED_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
+                    Function.Call(Hash.SET_SCENARIO_PED_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
+                }
+
+                //Create the menu on key inputs
+                if (OptionsList.Count == 0)
+                {
+                    if ((DevSettingsFile.GetValue<bool>("GENERAL", "Hotkeys", true) && Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlPressed(2, GTA.Control.Context)) || WasCheatStringJustEntered("arsmenu"))
+                    {
+                        OpenMenuFromContext();
+                    }
+                }
+                else
+                {
+                    if (Game.IsControlJustPressed(2, GTA.Control.FrontendCancel))
+                    {
+                        if (OptionsList[OptionHovered] == Options.DebugLevel)
+                        {
+                            if (DebugVisual == (int)DebugDisplay.PropEdit) ShowPropEditHelpMessages();
+
+                        }
+                        OptionsList.Clear();
+                        SetSPLVisibility(false);
+
+                    }
+                    else
+                    {
+                        HandleMenu();
+                        if (OptionsList.Any() && OptionsList[OptionHovered] == Options.UseNearbyCars && OptionValuesList[Options.UseNearbyCars])
+                        {
+                            foreach (Vehicle candidate in GetNearbyCandidates())
+                            {
+                                World.DrawMarker(MarkerType.ChevronUpx1, candidate.Position + (new Vector3(0, 0, 1)), Vector3.Zero, Vector3.Zero, new Vector3(1, 1, -1), Color.SkyBlue, true, true, 0, false, "", "", false);
+                            }
+                        }
+                    }
+                }
+
+                //Handle the countdown
+                if (RaceStatus != RaceState.Countdown && GametimeCountDown - Game.GameTime > 5000) CountDown = MaxCountDown - 1;
+                if (RaceStatus == RaceState.NotInitiated)
+                {
+                    if (CanWeUse(Game.Player.Character.CurrentVehicle))
+                    {
+                        if ((Game.IsControlJustPressed(2, GTA.Control.VehicleAccelerate))) StartCoundown();
+                    }
+                    else StartCoundown();
+                }
+
+                if (GametimeCountDown < Game.GameTime)
+                {
+                    GametimeCountDown = Game.GameTime + 1000;
+
+                    //While the countdown is on, you can enter the opponents' vehicles
+                    Vehicle jack = Game.Player.Character.GetVehicleIsTryingToEnter();
+                    if (CountDown > 0 && Racers.Count > 0 && CanWeUse(jack) && jack != Game.Player.Character.LastVehicle && !jack.IsSeatFree(VehicleSeat.Driver) && jack.Handle == Racers.OrderBy(c => c.Car.Position.DistanceTo(Game.Player.Character.Position)).ToList()[0].Car.Handle)
+                    {
+                        Game.Player.Character.SetIntoVehicle(jack, VehicleSeat.Passenger);
+                    }
+
+                    if (RaceStatus == RaceState.Countdown)
+                    {
+                        CountDown--;
+
+                        foreach (Racer r in Racers) r.BaseBehavior = RacerBaseBehavior.GridWait;
+
+                        if (CountDown <= 3)
+                        {
+                            //if (CountDown == 3) foreach (Racer r in Racers) if (r.Car.HasRoof && r.Car.RoofState== VehicleRoofState.Closed) r.Car.RoofState = VehicleRoofState.Opening; //Function.Call(Hash.SET_VEHICLE_ENGINE_ON, r.Car, true, false, false);
+
+
+                            Game.PlaySound("3_2_1", "HUD_MINI_GAME_SOUNDSET");
+
+                            if (CountDown == 0) SCCountdown.CallFunction("SHOW_SHARD_CENTERED_TOP_MP_MESSAGE", "GO", "", (int)12, (int)2);
+                            else SCCountdown.CallFunction("SHOW_SHARD_CENTERED_TOP_MP_MESSAGE", CountDown, "", (int)12, (int)2);
+
+                            if (CountDown == 0)
+                            {
+                                SCCountdown.CallFunction("TRANSITION_OUT", 0.6f);
+                            }
+                        }
+
+                        if (CountDown == 0)
+                        {
+                            foreach (Racer r in Racers)
+                            {
+                                r.Launch();
+                            }
+                            CountDown = MaxCountDown;
+                            RaceStatus = RaceState.InProgress;
+                        }
+                    }
+                }
+
+
+                if (Racers.Any())
+                {
+                    if (GameTimeNextInLine <= Game.GameTime)
+                    {
+                        int count = (int)Clamp(Racers.Count, 1, 6);
+                        for (int i = 0; i < count; i++)
+                        {
+                            Racers.GetRange(NextInLine, 1).FirstOrDefault()?.RunTimedCore();
+                            NextInLine++;
+                            if (NextInLine > Racers.Count - 1) NextInLine = 0;
+                            GameTimeNextInLine = Game.GameTime + (10 / (Racers.Count / count));
+                        }
+                    }
+                }
+
+                //Where the magic happens.
+                foreach (Racer racer in Racers)
+                {
+                    racer.ProcessTick();
+                    if ((racer.Lap > SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) || (IsPointToPoint && racer.Lap > 1)) && !LeaderboardFinish.Contains(racer))
+                    {
+                        if (racer.Car.CurrentBlip != null) racer.Car.CurrentBlip.Color = BlipColor.Green;
+
+                        LeaderboardFinish.Add(racer);
+                        racer.BaseBehavior = RacerBaseBehavior.FinishedRace;
+                        if (IsPointToPoint) racer.BaseBehavior = RacerBaseBehavior.FinishedStandStill;
+                        if (TimeToFinishRace == 0) TimeToFinishRace = Game.GameTime + (DevSettingsFile.GetValue<int>("RACERS", "TimeoutSeconds", 30) * 1000);
+                    }
+                }
+
+
+                //Handle the racing positions
+                if (GameTimeRef < Game.GameTime)
+                {
+                    GameTimeRef = Game.GameTime + 200;
+                    GlobalTraffic = World.GetAllVehicles().ToList();
+                    foreach (Racer r in ARS.Racers) if (GlobalTraffic.Contains(r.Car)) GlobalTraffic.Remove(r.Car);
+
+                    List<Racer> LapPos = new List<Racer>();
+                    List<Racer> RPositions = Racers;
+                    if (Racers.Any())
+                    {
+                        RPositions = RPositions.OrderBy(d => d.Lap).Reverse().ToList();
+                        int L = RPositions[0].Lap;
+
+                        int pos = 1;
+
+                        while (pos < Racers.Count)
+                        {
+                            LapPos = RPositions.Where(vl => vl.Lap == L).ToList();
+                            LapPos = LapPos.OrderBy(vl => vl.CurrentTrackPoint.Node).Reverse().ToList();
+                            foreach (Racer r in LapPos)
+                            {
+                                r.RacePosition = pos;
+                                pos++;
+                            }
+                            L--;
+                        }
+                    }
+                    Racers = Racers.OrderBy(vl => vl.RacePosition).ToList();
+                }
+
+                //Configure the leaderboard and handle lapping logic
+                List<string> positions = new List<string>();
+                if (LeaderboardFinish.Count > 0)
+                {
+                    foreach (Racer r in LeaderboardFinish)
+                    {
+
+                        TimeSpan totaltime = new TimeSpan();
+                        foreach (TimeSpan t in r.LapTimes) totaltime += t;
+
+
+                        string fTime = totaltime.ToString("m':'ss'.'fff"); //"mm':'ss'.'fff"
+                        if (r.Driver.IsPlayer) positions.Add("~g~" + r.RacePosition + "º~w~ " + r.Name + " T" + fTime + "~n~");
+                        else positions.Add("~y~" + r.RacePosition + "º~w~ " + r.Name + " T" + fTime + "~n~");
+                    }
+
+                    if (LeaderboardFinish.Count == Racers.Count || (TimeToFinishRace != 0 && Game.GameTime > TimeToFinishRace))
+                    {
+                        if (LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
+                        RaceStatus = RaceState.Finished;
+
+                        CleanEverything();
+                    }
+                }
+                else if (Function.Call<bool>(Hash._0xAF754F20EB5CD51A) || 1 == 1) //radar enabled
+                {
+
+                    if (Game.IsControlPressed(2, GTA.Control.Sprint))
+                    {
+                        foreach (Racer r in Racers)
+                        {
+                            TimeSpan totaltime = new TimeSpan();
+
+                            totaltime = ParseToTimeSpan(Game.GameTime - r.LapStartTime);
+                            string fTime = totaltime.ToString("m':'ss'.'fff");
+
+                            string text = "";
+                            if (r.Driver.IsPlayer) text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " T" + fTime + "~n~";
+                            else text = "~b~" + r.RacePosition + "º~w~ " + r.mem.personality.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
+
+
+                            positions.Add(text);
+
+                            //if (r.Driver.IsPlayer) DisplayHelpTextTimed("~g~" + fTime, 600);
+
+                        }
+                    }
+                    else
+                    {
+                        foreach (Racer r in Racers)
+                        {
+                            string text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            //text = "~b~" + r.Pos + "º~g~ " + r.mem.personality.Name + " (~y~" + (Math.Round(r.mem.intention.Aggression * 100)) + "~g~%) ~w~" + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            //text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            text = "~b~" + r.vData.TextPerformanceIndex + " - ~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+
+
+                            if (r.Driver.IsPlayer)
+                            {
+                                //text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                                text = "~b~" + r.vData.TextPerformanceIndex + " - ~y~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            }
+
+                            positions.Add(text);
+
+                        }
+                    }
+                }
+
+
+                //Draw the leaderboard positions
+                if (positions.Count > 0 && OptionsList.Count == 0 && (Function.Call<bool>(Hash._0xAF754F20EB5CD51A) || 1 == 1))  //radar enabled
+                {
+                    float z = 0.15f;
+                    float scale = 0.4f;
+
+                    float height = scale * 0.06f;
+                    float width = 0f;
+                    Vector2 point = new Vector2(0.016f, 0.008f);
+                    foreach (string st in positions)
+                    {
+                        float w = DrawText(point + new Vector2(0f, z), "~u~" + st, Color.White, DrawTextFont.Default, DrawTextAlign.Left, scale);
+                        if (w > width) width = w;
+                        z += scale * 0.06f;
+                    }
+                    //Function.Call(Hash.DRAW_RECT, point.X + (width * 0.15f) - 0.016f, point.Y+(or*0.5f) + (point.Y * 0.5f) + (z * 0.5f), ((width) * 0.25f), (z-or) + 0.008f, 0f, 0f, 0f, 100, 0f);
+                }
+
+                if (GametimerefLong < Game.GameTime)
+                {
+                    GametimerefLong = Game.GameTime + 3000;
+
+                    Vehicle playerVeh = Game.Player.Character.CurrentVehicle;
+                    if (CanWeUse(playerVeh) && !KnownVehicleModels.Contains(playerVeh.Model))
+                    {
+                        KnownVehicleModels.Add(playerVeh.Model);
+
+                        CreateVehicle(playerVeh, true);
+                        UI.Notify("New vehicle model detected, added to the list of known models: " + playerVeh.Model.ToString());
+                    }
+
+                    if (HelpMessages.Count > 0 && !HideHudMode)
+                    {
+                        if (!Function.Call<bool>(Hash.IS_HELP_MESSAGE_BEING_DISPLAYED))
+                        {
+                            DisplayHelpTextTimed(HelpMessages[0], (int)(HelpMessages[0].Length * 120));
+                            HelpMessages.RemoveAt(0);
+                        }
+                    }
+                }
+                Cheats();
+            }
+            catch (Exception ex)
+            {
+                Log(LogImportance.Error, "OnTick error: " + ex, true);
+            }
+        }
+        public static TimeSpan ParseToTimeSpan(int gameTime)
+        {
+            TimeSpan t = new TimeSpan();
+            t = TimeSpan.FromMilliseconds(gameTime);
+            return t; //TimeSpan.FromMilliseconds(gameTime).ToString("m':'ss'.'f");
+        }
+        public static float GetPercent(float current, float max)
+        {
+            return (current / max) * 100;
+        }
+        public void ToggleSPLVisibility()
+        {
+            foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (p.Alpha == 0) p.Alpha = 255; else p.Alpha = 0;
+        }
+
+        public void SetSPLVisibility(bool state)
+        {
+            foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (state) p.Alpha = 255; else p.Alpha = 0;
+        }
+        bool InFreeCam = false;
+        void HandleTrackCreator()
+        {
+
+            //Visuals
+            int Cool = -1; //If cool, the track is closed, no need to render more
+
+            if (Path.Count > 50)
+            {
+                if (RouteSection.Count > 0)
+                {
+                    Vector3 last = RouteSection[RouteSection.Count - 1];
+                    if (Path[Path.Count - 1].DistanceTo(Path[0]) < 20f)
+                    {
+                        if (Path[0].DistanceTo(Path[Path.Count - 1]) < 2f)
+                        {
+                            Cool = 1;
+                            DrawLine(Path[Path.Count - 1], Path[0], Color.Green);
+                        }
+                        else
+                        {
+                            Cool = 0;
+                            DrawLine(Path[Path.Count - 1], Path[0], Color.Red);
+                        }
+                    }
+                    if (Cool < 1 && last.DistanceTo(Path[0]) < 20f)
+                    {
+                        World.DrawMarker(MarkerType.DebugSphere, last + new Vector3(0, 0, 0.2f), Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), Color.Blue);
+                        World.DrawMarker(MarkerType.DebugSphere, Path[0] + new Vector3(0, 0, 0.2f), Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), Color.Black);
+                        if (last.DistanceTo(Path[0]) > 2f)
+                        {
+                            DrawLine(last + new Vector3(0, 0, 0.2f), Path[0] + new Vector3(0, 0, 0.2f), Color.Red);
+                        }
+                        else
+                        {
+                            DrawLine(last + new Vector3(0, 0, 0.2f), Path[0] + new Vector3(0, 0, 0.2f), Color.Green);
+                        }
+                    }
+                }
+            }
+            if (Cool < 1) DrawSection(RouteSection, EditWideDict);
+
+            //Creating the track
+            if (routeEditMode && InFreeCam)
+            {
+                if (wide < 1) wide = 1;
+                if (scale < 5f) scale = 5f;
+                RaycastResult ray = World.Raycast(GameplayCamera.Position, GameplayCamera.Position + ((GameplayCamera.Direction.Normalized) * 100), IntersectOptions.Everything);
+
+                //Already started
+                if (Path.Count > 0)
+                {
+                    if (Cool == -1) DisplayHelpTextThisFrame("Create the rest of the route. ~n~- Looped: ~b~Circuit~n~~w~- Open: ~b~Point to Point");
+                    if (Cool == 0) DisplayHelpTextThisFrame("Close the circuit near the ~b~Start Line.");
+                    if (Cool == 1) DisplayHelpTextThisFrame("~g~The circuit is closed.");
+
+
+                    //Controls
+                    if (Game.IsControlJustPressed(2, GTA.Control.NextWeapon))
+                    {
+                        if (!Game.IsControlPressed(2, GTA.Control.Sprint)) scale -= 5f; else wide--;
+                    }
+                    if (Game.IsControlJustPressed(2, GTA.Control.PrevWeapon))
+                    {
+                        if (!Game.IsControlPressed(2, GTA.Control.Sprint)) scale += 5f; else wide++;
+                    }
+                    if (Game.IsControlJustPressed(2, GTA.Control.Aim))
+                    {
+                        if (Path.Count > 2)
+                        {
+                            if (Game.IsControlPressed(2, GTA.Control.Sprint))
+                            {
+                                int i = 0;
+                                while (i < 10)
+                                {
+                                    if (Path.Count == 0) break;
+                                    Path.RemoveAt(Path.Count - 1);
+                                    i++;
+                                }
+                            }
+                            else
+                            {
+                                Path.RemoveAt(Path.Count - 1);
+                            }
+                        }
+                        else
+                        {
+                            Path.Clear();
+                            return;
+                        }
+                    }
+
+                    //Add section
+                    if (Game.IsControlJustPressed(2, GTA.Control.Attack) && Cool < 1)
+                    {
+                        for (int i = 1; i < RouteSection.Count; i++)
+                        {
+                            Path.Add(RouteSection[i]);
+                        }
+                    }
+                }
+                else //Placing the Start Line
+                {
+                    DisplayHelpTextThisFrame("Place the ~b~Start Line.");
+
+                    if (Game.IsControlJustPressed(2, GTA.Control.NextWeapon)) wide--;
+                    if (Game.IsControlJustPressed(2, GTA.Control.PrevWeapon)) wide++;
+
+                }
+
+
+
+                //Section rendering
+                if (Path.Count > 1)
+                {
+                    if (ray.DitHitAnything && Cool < 1)
+                    {
+                        //Reference marker
+                        World.DrawMarker(MarkerType.DebugSphere, ray.HitCoords, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.25f, 0.25f, 0.25f), Color.Blue);
+
+                        Vector3 sStart = Path[Path.Count - 1];
+                        Vector3 sDirection = (Path[Path.Count - 1] - Path[Path.Count - 2]).Normalized;
+                        Vector3 sEnd = ray.HitCoords;
+                        float sScale = sStart.DistanceTo(sEnd) * 0.5f;
+
+                        List<Vector3> temporaryPath = GenerateBezier(sStart, sDirection, sEnd, sScale);
+
+                        foreach (Vector3 p in temporaryPath)
+                        {
+                            World.DrawMarker(MarkerType.DebugSphere, p, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.25f, 0.25f, 0.25f), Color.Blue);
+                        }
+                        RouteSection.Clear();
+                        RouteSection.AddRange(temporaryPath);
+
+
+
+                        EditWideDict.Clear();
+                        for (int d = 0; d < RouteSection.Count - 1; d++)
+                        {
+                            EditWideDict.Add(d, wide);
+                        }
+                        if (RouteSection.Count > 4)
+                        {
+                            Vector3 aim = Vector3.Lerp(RouteSection[RouteSection.Count - 2] + new Vector3(0, 0, 0.5f), RouteSection[RouteSection.Count - 1] + new Vector3(0, 0, 0.5f), 10f);
+
+                            DrawLine(RouteSection[RouteSection.Count - 2] + new Vector3(0, 0, 0.5f), aim, Color.Blue);
+                        }
+                    }
+                }
+                else
+                {
+
+                    World.DrawMarker(MarkerType.ChevronUpx3, ray.HitCoords, FreecCamRide.ForwardVector, new Vector3(-90, 0, 0), new Vector3(1, 1, 1), Color.Blue);
+                    World.DrawMarker(MarkerType.ChevronUpx3, ray.HitCoords, FreecCamRide.ForwardVector, new Vector3(-90, 0, 0), new Vector3(1, 1, 1), Color.Blue);
+                    DrawLine(ray.HitCoords, ray.HitCoords - (FreecCamRide.ForwardVector * 10), Color.Blue);
+
+                    Vector3 right = ray.HitCoords + (FreecCamRide.RightVector * wide);
+                    Vector3 left = ray.HitCoords - (FreecCamRide.RightVector * wide);
+
+                    World.DrawMarker(MarkerType.UpsideDownCone, right + new Vector3(0, 0, 1), FreecCamRide.ForwardVector, new Vector3(0, 0, 0), new Vector3(1, 1, 1), Color.Blue);
+                    World.DrawMarker(MarkerType.UpsideDownCone, left + new Vector3(0, 0, 1), FreecCamRide.ForwardVector, new Vector3(0, 0, 0), new Vector3(1, 1, 1), Color.Blue);
+                    DrawLine(left + new Vector3(0, 0, 0.05f), right + new Vector3(0, 0, 0.05f), Color.Blue);
+
+                    if (Game.IsControlJustPressed(2, GTA.Control.Attack) && ray.DitHitAnything)
+                    {
+                        Vector3 p = ray.HitCoords;// + new Vector3(0, 0, 0.5f);
+                        Path.Add(p);
+                        p = ray.HitCoords - (FreecCamRide.ForwardVector * 1);
+                        Path.Add(p);
+                        rBezier = (ray.HitCoords - (FreecCamRide.ForwardVector * 6));
+
+                    }
+                }
+
+                for (int i = 0; i < Path.Count - 1; i++)
+                {
+                    if (WideDict.Count - 1 < Path.Count - 1)
+                    {
+                        if (!WideDict.ContainsKey(i))
+                        {
+                            WideDict.Add(i, wide);
+                        }
+                    }
+                }
+
+                while (WideDict.Count - 1 > Path.Count - 1)
+                {
+                    WideDict.Remove(WideDict.Count - 1);
+                }
+
+            }
+        }
+
+
+        public List<Vector3> GenerateCubicBezier(Vector3 sStart, Vector3 sControl1, Vector3 sControl2, Vector3 sEnd)
+        {
+            List<Vector3> points = new List<Vector3>();
+
+            float target = 1f;
+
+            float stepDist = 0f;
+            points.Add(sStart);
+
+            int pat = 0;
+            while (stepDist < 1.0f && pat < 1000)
+            {
+                pat++;
+                int tries = 0;
+                Vector3 p = Bezier3(stepDist, sStart, sControl1, sControl2, sEnd);
+                while (p.DistanceTo(points.Last()) < target - 0.001f && tries < 2000)
+                {
+                    tries++;
+
+                    stepDist += 0.001f;
+                    p = Bezier3(stepDist, sStart, sControl1, sControl2, sEnd);
+                }
+                tries = 0;
+                while (p.DistanceTo(points.Last()) > target + 0.001f && tries < 2000)
+                {
+                    tries++;
+
+                    stepDist -= 0.001f;
+                    p = Bezier3(stepDist, sStart, sControl1, sControl2, sEnd);
+                }
+                if (stepDist > 1.0f) break;
+
+                if (!Game.IsControlPressed(2, GTA.Control.Sprint))
+                {
+                    RaycastResult toGround = World.Raycast(p + new Vector3(0, 0, 2f), p + (Vector3.WorldDown * 30f), IntersectOptions.Map);
+                    if (toGround.DitHitAnything) p.Z = toGround.HitCoords.Z;
+                }
+                points.Add(p);
+            }
+            return points;
+        }
+
+        //Generates a set of Vector3 points in a bezier curve shape, from a starting position to an end position.
+        //The direction defines the starting direction of the points and generates a middlepoint. The end direction is not controlled.
+        public static List<Vector3> GenerateBezier(Vector3 sStart, Vector3 sDirection, Vector3 sEnd, float sScale)
+        {
+            List<Vector3> points = new List<Vector3>();
+            sScale = sStart.DistanceTo2D(sEnd) * map(Vector3.Angle((sEnd - sStart).Normalized, sDirection), 0f, 90f, 1f, 1.5f, true);
+
+
+            Vector3 middlePoint = sStart + (sDirection * (sScale / 2));
+            Vector3 directionStart = sStart - middlePoint;
+            Vector3 directionEnd = ((sEnd) - middlePoint).Normalized * (sScale / 2f);
+
+            //DrawLine(directionStart + middlePoint, middlePoint, Color.Black);
+            //DrawLine(directionEnd + middlePoint, middlePoint, Color.Black);
+
+            float separationDist = 1f;
+
+            float addition = (1 / directionEnd.DistanceTo(directionStart));
+
+            float stepLerp = 0;
+            int step = 0;
+            float scaleAdjust = 0;
+            while (stepLerp < 1.0f && step < 400)
+            {
+                step++;
+
+                scaleAdjust = 0f;
+
+                Vector3 currentPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp);
+                Vector3 addPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp + addition);
+
+                int tries = 0;
+                while (currentPos.DistanceTo2D(addPos) < separationDist - 0.001f && tries < 200)
+                {
+                    tries++;
+                    scaleAdjust += 0.001f;
+                    addPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp + addition + scaleAdjust);
+                }
+                tries = 0;
+                while (currentPos.DistanceTo2D(addPos) > separationDist + 0.001f && tries < 200)
+                {
+                    tries++;
+                    scaleAdjust -= 0.001f;
+                    addPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp + addition + scaleAdjust);
+                }
+                stepLerp += addition + scaleAdjust;
+
+                //Sprint on = Zpos is ground
+                //Sprint off= zpos is defined by the bezier curve (transition)
+                if (!Game.IsControlPressed(2, GTA.Control.Sprint))
+                {
+                    RaycastResult toGround = World.Raycast(addPos + new Vector3(0, 0, 2f), addPos + (Vector3.WorldDown * 30f), IntersectOptions.Map);
+                    if (toGround.DitHitAnything) addPos.Z = toGround.HitCoords.Z;
+                }
+                points.Add(addPos);
+
+            }
+            return points;
+        }
+
+        public static Vector3 QuadraticBezier(Vector3 a, Vector3 b, Vector3 c, float t)
+        {
+            Vector3 AB = Vector3.Lerp(a, b, t);
+            Vector3 BC = Vector3.Lerp(b, c, t);
+            Vector3 ABC = Vector3.Lerp(AB, BC, t);
+            return ABC;
+        }
+
+        public static Color GetColorFromRedYellowGreenGradient(float percentage)
+        {
+            percentage = ARS.Clamp((float)percentage, 0, 100);
+
+            var red = (percentage > 50 ? 1 - 2 * (percentage - 50) / 100.0 : 1.0) * 255;
+            var green = (percentage > 50 ? 1.0 : 2 * percentage / 100.0) * 255;
+            var blue = 0.0;
+            Color result = Color.FromArgb((int)red, (int)green, (int)blue);
+            return result;
+        }
+
+        public static Color GradientAtoB(Color A, Color B, float percentage)
+        {
+            percentage = ARS.Clamp((float)percentage, 0, 100);
+
+            var red = ARS.map(percentage, 0, 100, A.R, B.R);
+            var green = ARS.map(percentage, 0, 100, A.G, B.G);
+            var blue = ARS.map(percentage, 0, 100, A.B, B.B);
+
+            Color result = Color.FromArgb((int)red, (int)green, (int)blue);
+            return result;
+        }
+
+        public static Color GradientAtoBtoC(Color A, Color B, Color C, float percentage)
+        {
+            percentage = ARS.Clamp((float)percentage, 0, 100);
+
+            if (percentage <= 50)
+            {
+                var red = ARS.map(percentage, 0, 100, A.R, B.R);
+                var green = ARS.map(percentage, 0, 100, A.G, B.G);
+                var blue = ARS.map(percentage, 0, 100, A.B, B.B);
+
+                Color result = Color.FromArgb((int)red, (int)green, (int)blue);
+                return result;
+
+            }
+            else
+            {
+                var red = ARS.map(percentage, 50, 100, B.R, C.R);
+                var green = ARS.map(percentage, 50, 100, B.G, C.G);
+                var blue = ARS.map(percentage, 50, 100, B.B, C.B);
+
+                Color result = Color.FromArgb((int)red, (int)green, (int)blue);
+                return result;
+
+            }
+
+        }
+        void SetloadingPromptText(string t)
+        {
+            Function.Call(Hash._0xABA17D7CE615ADBF, "STRING");
+            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, t);
+            Function.Call(Hash._0xBD12F8228410D9B4, 5);
+        }
+
+
+
+        public void HandleFreecam()
+        {
+
+            if (World.RenderingCamera == null && HideHudMode) HideHudMode = false;
+
+
+            if (!CanWeUse(FreecCamRide))
+            {
+                return;
+            }
+
+            if (!InFreeCam && FreecCamRide.Position.DistanceTo(Game.Player.Character.Position) > 100f) FreecCamRide.Position = Game.Player.Character.Position + new Vector3(0, 0, 20);
+
+            if (InFreeCam)
+            {
+                Function.Call(Hash.HIDE_HUD_AND_RADAR_THIS_FRAME, true);
+
+                if (Game.IsControlJustPressed(2, GTA.Control.Detonate))
+                {
+                    HideHudMode = !HideHudMode;
+                }
+
+
+
+
+
+
+                //Instructional buttons
+                if (1 == 1)
+                {
+                    if (scaleform == null || !scaleform.IsLoaded)
+                    {
+                        scaleform = new Scaleform("INSTRUCTIONAL_BUTTONS");
+                        UI.ShowSubtitle("~o~Scaleform not loaded", 500);
+                        return;
+                    }
+
+                    scaleform.CallFunction("CLEAR_ALL", true);
+                    scaleform.CallFunction("CREATE_CONTAINER");
+
+                    if (1 == 1)
+                    {
+                        if (routeEditMode)
+                        {
+                            if (Path.Count() > 0)
+                            {
+
+                                if (Game.IsControlPressed(2, GTA.Control.Sprint))
+                                {
+                                    scaleform.CallFunction("SET_DATA_SLOT", 0, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Aim), "Delete last ten nodes");
+                                }
+                                else
+                                {
+
+                                    scaleform.CallFunction("SET_DATA_SLOT", 2, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Attack), "Apply Section");
+                                    scaleform.CallFunction("SET_DATA_SLOT", 1, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Aim), "Delete last node");
+                                    scaleform.CallFunction("SET_DATA_SLOT", 0, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Sprint), "More options");
+
+                                }
+                            }
+                            else
+                            {
+                                scaleform.CallFunction("SET_DATA_SLOT", 2, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Attack), "Place Start Line");
+                                scaleform.CallFunction("SET_DATA_SLOT", 1, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.WeaponWheelPrev), "Widen");
+                                scaleform.CallFunction("SET_DATA_SLOT", 0, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.WeaponWheelNext), "Tighten");
+                            }
+
+                        }
+                        else
+                        {
+
+                            if (IsDroneMode) scaleform.CallFunction("SET_DATA_SLOT", 0, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.NextCamera), "Freecam Mode");
+                            else scaleform.CallFunction("SET_DATA_SLOT", 0, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.NextCamera), "Drone Mode");
+                            scaleform.CallFunction("SET_DATA_SLOT", 1, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Detonate), "Hide Hud");
+                            scaleform.CallFunction("SET_DATA_SLOT", 2, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Jump), "Slow Mo");
+
+                        }
+                    }
+                    scaleform.CallFunction("DRAW_INSTRUCTIONAL_BUTTONS", 0);
+                    if (!HideHudMode) scaleform.Render2D();
+
+                }
+                Game.DisableControlThisFrame(0, GTA.Control.Attack);
+                Game.DisableControlThisFrame(0, GTA.Control.Aim);
+                Game.DisableControlThisFrame(0, GTA.Control.NextCamera);
+                Game.DisableControlThisFrame(0, GTA.Control.Sprint);
+                Game.DisableControlThisFrame(0, GTA.Control.Jump);
+                Game.DisableControlThisFrame(0, GTA.Control.Phone);
+
+
+                //Controls
+                if (Game.IsControlJustPressed(2, GTA.Control.Jump))
+                {
+
+                    if (TimeScale > 0.1f)
+                    {
+                        if (TimeScale > 0.5) Function.Call(Hash._START_SCREEN_EFFECT, "FocusOut", 500, false);
+
+                        TimeScale = 0.001f;
+                        IdealTimeScale = 0.001f;
+                        Game.TimeScale = 0.001f;
+                    }
+                    else
+                    {
+                        IdealTimeScale = 1.0f;
+                        if (TimeScale < 0.1f) TimeScale = 0.1f;
+                        Game.TimeScale = TimeScale;
+                    }
+                }
+
+
+                FreecCamRide.Position = FreecCamRide.Position + (FreeCamMovement * Clamp((60 / Game.FPS), 1, 10));
+                FreecCamRide.Rotation = new Vector3(0f, 0f, FreecCamRide.Rotation.Z);
+
+                bool Reduce = true;
+                float mouseX = Function.Call<float>(Hash.GET_CONTROL_NORMAL, 0, (int)GTA.Control.LookLeftRight);
+                float mouseY = Function.Call<float>(Hash.GET_CONTROL_NORMAL, 0, (int)GTA.Control.LookUpDown);
+                FreecCamRide.Rotation = FreecCamRide.Rotation + new Vector3(0, 0, GameplayCamera.RelativeHeading);
+
+                float spd = 0.01f;
+                float hAboveGround = FreecCamRide.HeightAboveGround;
+
+                string dir = "" + Math.Round(CamIntendedHeight - hAboveGround, 1);
+                if (CamIntendedHeight - hAboveGround <= -1f) dir = "v " + Math.Round(CamIntendedHeight - hAboveGround, 0);
+                if (CamIntendedHeight - hAboveGround >= 1f) dir = "^ " + Math.Round(CamIntendedHeight - hAboveGround, 0);
+
+                Game.Player.Character.Position = FreecCamRide.Position + new Vector3(0, 0, -1.5f);
+                Game.Player.Character.Rotation = FreecCamRide.Rotation + new Vector3(0, 0, 180f);
+                if (FreeCamMovement.Length() < 7f)
+                {
+                    if (!IsDroneMode) spd = 0.02f;
+                    if (Game.IsControlPressed(2, GTA.Control.Sprint)) spd += 0.05f;
+
+                    if (GameplayCamera.IsRendering)
+                    {
+
+                        if (Game.IsControlJustPressed(2, GTA.Control.NextCamera))
+                        {
+                            IsDroneMode = !IsDroneMode;
+                            if (IsDroneMode) CamIntendedHeight = FreecCamRide.HeightAboveGround;
+                        }
+
+                        if (Game.IsControlPressed(2, GTA.Control.Context)) CamIntendedHeight += 0.2f;
+                        if (Game.IsControlPressed(2, GTA.Control.Cover)) CamIntendedHeight -= 0.2f;
+
+                        if (Game.IsControlPressed(2, GTA.Control.VehicleAccelerate))
+                        {
+                            Reduce = false;
+
+                            if (!IsDroneMode) FreeCamMovement += GameplayCamera.Direction * spd; else FreeCamMovement += Game.Player.Character.ForwardVector * spd;
+                        }
+                        if (Game.IsControlPressed(2, GTA.Control.VehicleBrake))
+                        {
+                            Reduce = false;
+                            if (!IsDroneMode) FreeCamMovement -= GameplayCamera.Direction * spd; else FreeCamMovement -= Game.Player.Character.ForwardVector * spd;
+
+                        }
+                        if (Game.IsControlPressed(2, GTA.Control.MoveLeftOnly))
+                        {
+                            Reduce = false;
+                            FreeCamMovement += Game.Player.Character.RightVector * -spd;
+                        }
+                        if (Game.IsControlPressed(2, GTA.Control.MoveRightOnly))
+                        {
+                            Reduce = false;
+                            FreeCamMovement += Game.Player.Character.RightVector * +spd;
+                        }
+                    }
+                    if (IsDroneMode)
+                    {
+                        if (CamIntendedHeight < 2f) CamIntendedHeight = 2f;
+                        if (hAboveGround > 0.0f)
+                        {
+                            float diff = CamIntendedHeight - hAboveGround;
+
+                            if (Math.Abs(diff) > 1f)
+                            {
+                                FreeCamMovement += new Vector3(0, 0, ARS.Clamp(diff / 200, -0.1f, 0.1f));
+                                FreeCamMovement.Z = ARS.Clamp(FreeCamMovement.Z, -0.5f, 0.5f);
+                            }
+                            FreeCamMovement.Z *= 0.9f;
+                        }
+                    }
+
+                }
+                if (Reduce)
+                {
+                    if (IsDroneMode)
+                    {
+
+                        if (Reduce)
+                        {
+
+                            if (FreeCamMovement.Length() > 0.2f)
+                            {
+                                FreeCamMovement.X *= 1 - (spd * 0.5f);
+                                FreeCamMovement.Y *= 1 - (spd * 0.5f);
+                                if (Math.Abs(hAboveGround) < 1f) FreeCamMovement.Z *= 1 - (spd * 2f);
+                            }
+                            else
+                            {
+                                FreeCamMovement.X *= 1 - (spd * 2f);
+                                FreeCamMovement.Y *= 1 - (spd * 2f);
+                                if (Math.Abs(hAboveGround) < 1f) FreeCamMovement.Z *= 1 - (spd * 2f);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (Reduce)
+                        {
+                            FreeCamMovement.X *= 1 - (spd * 2f);
+                            FreeCamMovement.Y *= 1 - (spd * 2f);
+                            FreeCamMovement.Z *= 1 - (spd * 2f);
+                        }
+
+                    }
+                }
+
+            }
+            else //Freecam is not rendering
+            {
+                FreeCamMovement = Vector3.Zero;
+            }
+
+
+        }
+
+
+        public void StartRace()
+        {
+            Log(LogImportance.Info, "Starting race");
+            if (Path.Count == 0)
+            {
+                UI.Notify("~r~Load or create a path route first.");
+                return;
+            }
+
+            //  UI.ShowSubtitle("Type in the Discipline tags used to look up the vehicles, separated by a space. Example: ~b~muscle~w~ ~b~racecar~w~ ",5000);
+
+            Log(LogImportance.Info, "Adding player to grid");
+            AddPlayerToGrid();
+            if (Racers.Count == 0)
+            {
+                UI.Notify("~r~No vehicles found with those tags.");
+                return;
+            }
+
+            Game.MissionFlag = true;
+            Log(LogImportance.Info, "Setting up");
+            SetupRace(true, true);
+            Log(LogImportance.Info, "Set up");
+
+            if (!InFreeCam || Game.IsScreenFadedIn) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+            Game.SetControlNormal(2, GTA.Control.VehicleLookBehind, 1f);
+
+
+            if (ARS.SettingsFile.GetValue("CATCHUP", "OnlyLastHalf", true)) ARS.catchupPos = (int)(ARS.Racers.Count / 2);
+            Log(LogImportance.Info, "Started race");
+
+        }
+
+        public void CleanRacers()
+        {
+            Game.MissionFlag = false;
+            foreach (Racer r in Racers)
+            {
+                r.Delete();
+            }
+            Racers.Clear();
+            LeaderboardFinish.Clear();
+            RaceStatus = RaceState.NotInitiated;
+        }
+
+
+        bool AddPlayerToGrid()
+        {
+            Vehicle cv = Game.Player.Character.CurrentVehicle;
+            if (CanWeUse(cv))
+            {
+                Racers.Add(new Racer(cv, Game.Player.Character));
+                return true;
+            }
+            return false;
+        }
+
+        void LoadRace(string track, string disciplines, int gridSize)
+        {
+            Log(LogImportance.Info, "Loading race (" + track + ")");
+            if (!KnownTracks.Contains(track))
+            {
+                UI.Notify("Track does not exist.");
+                return;
+            }
+
+            //Load track into Path
+            LoadTrack(LoadTrackFile(track));
+
+            //Load the grid of vehicles
+            Log(LogImportance.Info, "Loading grid of vehicles");
+
+            if (disciplines == null)
+            {
+                List<VehicleHash> hashes = Enum.GetValues(typeof(VehicleHash)).Cast<VehicleHash>().ToList();
+
+                Vehicle playerveh = Game.Player.Character.LastVehicle;
+                float acc = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, playerveh.Model.Hash);
+                float spd = Function.Call<float>(Hash._GET_VEHICLE_MAX_SPEED, playerveh.Model.Hash);
+
+                hashes.RemoveAll(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h) < acc - 0.075f);
+                hashes.RemoveAll(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h) > acc + 0.075f);
+
+                hashes.RemoveAll(h => Function.Call<float>(Hash._GET_VEHICLE_MAX_SPEED, (int)h) > spd + ARS.MPHtoMS(20));
+                hashes.RemoveAll(h => Function.Call<float>(Hash._GET_VEHICLE_MAX_SPEED, (int)h) < spd - ARS.MPHtoMS(20));
+
+                hashes.OrderByDescending(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h));
+
+
+
+
+                List<VehicleHash> final = new List<VehicleHash>();
+
+                foreach (VehicleHash hash in hashes)
+                {
+                    Model m = new Model(hash);
+
+                    //Similar size and same kind of vehicle
+                    if (Math.Abs(m.GetDimensions().Length() - playerveh.Model.GetDimensions().Length()) < 5f &&
+                        (m.IsCar && playerveh.Model.IsCar) ||
+                        (m.IsQuadbike && playerveh.Model.IsQuadbike) ||
+                        (m.IsBike && playerveh.Model.IsBike) ||
+                        (m.IsBicycle && playerveh.Model.IsBicycle))
+                    {
+                        final.Add(hash);
+                    }
+                }
+
+
+                while (final.Count > gridSize) final.RemoveAt(GetRandomInt(0, final.Count - 1));
+
+                foreach (VehicleHash h in final)
+                {
+                    Model m = new Model(h);
+
+                    Vehicle v = World.CreateVehicle(m, Path[Racers.Count * 5]);
+                    Ped p = v.CreateRandomPedOnSeat(VehicleSeat.Driver);
+                    Racer r = new Racer(v, p);
+
+                    Racers.Add(r);
+                    //UI.Notify(h.ToString() + " - " + Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h));
+
+                }
+
+            }
+            else LoadGrid(disciplines, gridSize);
+            StartRace();
+        }
+
+        /*
+        void LoadAndRace(string track)
+        {
+            ARS.Log(LogImportance.Info, "Loading " + track);
+
+            if (track == null) LoadTrack(LoadTrackFile(FilteredTrackList[0]));
+            else if (KnownTracks.Contains(track))
+            {
+                LoadTrack(LoadTrackFile(track));
+                ARS.Log(LogImportance.Info, "Loaded " + track);
+                LoadGrid("asbo", intendedOpponents);
+
+                StartRace();
+            }
+
+
+        }
+        */
+        enum GridSort
+        {
+            Power, PowerDescendent, TopSpeed, TopSpeedDescendent, Random
+        }
+        void PlaceCars(bool sortbypower)
+        {
+            if (sortbypower)
+            {
+
+                GridSort sort = GridSort.Power;
+                foreach (GridSort g in Enum.GetValues(typeof(GridSort)))
+                {
+                    g.ToString().ToLowerInvariant().Contains(DevSettingsFile.GetValue<string>("RACERS", "GridSorting", "Power").ToLowerInvariant());
+                    sort = g;
+                }
+
+                switch (sort)
+                {
+                    case GridSort.Power: { Racers = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList(); break; }
+                    case GridSort.PowerDescendent: { Racers = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).Reverse().ToList(); break; }
+                    case GridSort.TopSpeed: { Racers = Racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).ToList(); break; }
+                    case GridSort.TopSpeedDescendent: { Racers = Racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).Reverse().ToList(); break; }
+                    case GridSort.Random: { Racers = Racers.OrderBy(v => v.Car.Model.Hash.ToString().Substring(0, 1) + (int)v.Car.PrimaryColor).ToList(); break; }
+                }
+
+            }
+            if (Racers.Any(r => r.team == Team.Cop))
+            {
+                UI.Notify("Cops 'n' Crooks detected");
+                Racers = Racers.OrderBy(v => (int)v.team).ToList();
+            }
+
+            Racer p = null;
+            int index = 0;
+            foreach (Racer r in Racers) if (r.Driver.IsPlayer)
+            {
+                index = Racers.IndexOf(r);
+                p = r;
+            }
+            if (p != null)
+            {
+
+                Racers.RemoveAt(index);
+                Racers.Add(p);
+            }
+
+
+
+            if (IsPointToPoint) { GridPositions.Reverse(); }
+            int pos = 0;
+            foreach (Racer r in Racers)
+            {
+                r.Initialize();
+
+                r.Car.Position = GridPositions[pos];
+                if (IsPointToPoint)
+                {
+                    r.Car.Heading = (Path[2] - Path[0]).ToHeading();
+                }
+                else
+                {
+                    if (pos > GridPositions.Count - 2)
+                    {
+                        r.Car.Heading = (GridPositions[pos - 2] - GridPositions[pos]).Normalized.ToHeading();
+                    }
+                    else
+                    {
+                        r.Car.Heading = (GridPositions[pos] - GridPositions[pos + 2]).Normalized.ToHeading();
+                    }
+                }
+
+                /*
+                Prop p = World.CreateProp("prop_start_grid_01", r.Car.Position + (r.Car.ForwardVector * ((r.Car.Model.GetDimensions().Y / 2) + 0.0f)), false, true);
+                p.Heading = r.Car.Heading;
+                
+                AutoGeneratedProps.Add(p);
+                */
+                pos++;
+            }
+        }
+
+        float CamIntendedHeight = 4f;
+        public void SetupRace(bool placecars, bool tunecars)
+        {
+            LeaderboardFinish.Clear();
+            Log(LogImportance.Info, "Initializing racers");
+            foreach (Racer r in Racers)
+            {
+                r.Initialize();
+            }
+
+            /*
+            float maxacc = 0f;
+           foreach (Racer r in Racers)
+
+           {
+               if (maxacc < Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, r.Car)) maxacc = Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, r.Car);
+
+           }
+
+           foreach (Racer r in Racers)
+           {
+               float mul = 10f;
+               while (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, r.Car) < maxacc)
+               {
+                   mul += 10;
+                   r.Car.EnginePowerMultiplier = mul;
+                   Script.Wait(0);
+               }
+           }
+           */
+
+
+            if (placecars)
+            {
+                Log(LogImportance.Info, "Placing cars");
+                PlaceCars(true);
+                Racer mostPower = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList()[0];
+                int r = ((Path.Count / 3) * SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5)) + (Racers.Count * 100) + (int)Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, mostPower.Car) * 400, 0);
+                RaceReward = (int)(Math.Round((float)r / 100)) * 100;
+            }
+
+            if (tunecars)
+            {
+                Log(LogImportance.Info, "Tuning cars");
+                foreach (Racer r in Racers)
+                {
+                    if (!Game.Player.Character.IsInVehicle(r.Car) && r.Car.GetMod(VehicleMod.Engine) == -1)
+                    {
+                        switch (DevSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 1))
+                        {
+                            case 0: continue;
+                            case 1: ARS.RandomTuning(r.Car, true, true, true, false, false); break;
+                            case 2: ARS.RandomTuning(r.Car, true, true, true, true, false); break;
+                            case 3: ARS.RandomTuning(r.Car, true, true, true, true, false); r.Car.EnginePowerMultiplier = GetRandomInt(1, 5) * 10; break;
+                        }
+                    }
+                }
+            }
+
+            if (SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "Ghosts", false) && 1 == 2)
+            {
+                DisplayHelpTextTimed("Ghosting cars...", 10000);
+                List<int> orig = new List<int>();
+                List<int> target = new List<int>();
+
+                foreach (Racer o in Racers)
+                {
+                    foreach (Racer t in Racers)
+                    {
+                        if (o.Car.Handle == t.Car.Handle) continue;
+
+                        Script.Wait(500);
+                        bool dupe = false;
+
+                        if (orig.Contains(t.Car.Handle))
+                        {
+
+                            for (int i = orig.IndexOf(t.Car.Handle); i < orig.Count; i++)
+                            {
+                                if (orig[i] != t.Car.Handle) break;
+                                if (target[i] == o.Car.Handle)
+                                {
+                                    dupe = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!dupe)
+                        {
+
+                            Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, o.Car, t.Car, false);
+                            orig.Add(o.Car.Handle);
+                            target.Add(t.Car.Handle);
+                            Log(LogImportance.Info, o.Car.Handle + " " + t.Car.Handle);
+                        }
+                        else Log(LogImportance.Info, o.Car.Handle + "-" + t.Car.Handle);
+
+                    }
+                }
+                DisplayHelpTextTimed("Done.", 2000);
+            }
+
+
+            foreach (Racer r in Racers) if (r.Car.CurrentBlip != null) r.Car.CurrentBlip.Color = BlipColor.Blue;
+            RaceStatus = RaceState.NotInitiated;
+        }
+        public void StartCoundown()
+        {
+            HelpMessages.Add("The prize is: ~g~" + RaceReward.ToString() + "~w~$.");
+            RaceStatus = RaceState.Countdown;
+            GametimeCountDown = Game.GameTime;
+            CountDown = MaxCountDown;
+
+        }
+        public static int GetSurfaceHash(Vector3 start, Vector3 end)
+        {
+            Vector3 pos = start;// v.Position + (v.UpVector * 2f);
+            Vector3 endpos = end;// v.Position + (v.UpVector * -5f);
+
+            int shape = Function.Call<int>(Hash._0x28579D1B8F8AAC80, pos.X, pos.Y, pos.Z, endpos.X, endpos.Y, endpos.Z, 0.3f, (int)IntersectOptions.Map, Game.Player.Character, 7);
+
+            OutputArgument didhit = new OutputArgument();
+            OutputArgument hitpos = new OutputArgument();
+            OutputArgument snormal = new OutputArgument();
+            OutputArgument materialhash = new OutputArgument();
+
+            OutputArgument entity = new OutputArgument();
+
+            Function.Call(Hash._0x65287525D951F6BE, shape, didhit, hitpos, snormal, materialhash, entity);
+
+
+            return materialhash.GetResult<int>();
+        }
+        public void PlaceOnGround(Prop p)
+        {
+
+        }
+
+
+
+        static public List<Vector3> GridPositions = new List<Vector3>();
+        List<int> FlareFX = new List<int>();
+        static public bool IsPointToPoint = false;
+        public void SpawnTrackLimits(List<Vector3> nodes, Dictionary<int, float> widedict, int fidelity)
+        {
+            GridPositions.Clear();
+
+            string ModelOne = "none"; //xm_prop_base_fence_01//prop_offroad_tyres01//prop_wheel_tyre  "prop_offroad_tyres02"; //prop_ind_light_03c//prop_mp_cone_03
+            //if (nodes.Count < 5) return;
+            Vector3 oldpos = Vector3.Zero;
+            Vector3 pos = Vector3.Zero;
+            Vector3 rCol = nodes[0];// nodes.OrderBy(v => v.DistanceTo(Game.Player.Character.Position)).Reverse().ToList()[0];
+            Function.Call(Hash.REQUEST_COLLISION_AT_COORD, rCol.X, rCol.Y, rCol.Z);
+            //  Function.Call(Hash._SET_FOCUS_AREA, rCol.X, rCol.Y, rCol.Z);
+            //Prop gate = World.CreateProp("prop_start_gate_01b", nodes[0] + new Vector3(0f, 0f, -0.25f), new Vector3(0, 0, (nodes[1] - nodes[0]).Normalized.ToHeading()), false, false); //prop_tri_start_banner
+
+            Color FlaresColor = Color.GreenYellow;
+            if (TrackLimits.Count == 0)
+            {
+                int f = 0;
+                string att = GetAttribute((CurrentFile.SelectSingleNode("//Trackside")) as XmlElement, "Flares");
+                if (att != "" && att.ToLowerInvariant() != "false" && att.Length == 9 && int.TryParse(att, out f))
+                {
+                    //  Color col = Color.FromName(GetAttribute((CurrentFile.SelectSingleNode("//Trackside")) as XmlElement, "HasFlares").ToLowerInvariant());
+                    FlaresColor = Color.FromArgb(int.Parse(att.Substring(0, 3)), int.Parse(att.Substring(3, 3)), int.Parse(att.Substring(6, 3)));
+                    Vector3 p = nodes[0];
+                    if (IsPointToPoint) p = nodes[8 + ((intendedOpponents) * 3)];
+                    Prop gate = World.CreateProp("prop_flare_01b", p + new Vector3(0f, 0f, 0.05f), new Vector3(0, 0, (nodes[1] - nodes[0]).Normalized.ToHeading() + 90f), false, false);
+                    gate.Position = GetPerpendicular(gate.Position, gate.Position - gate.RightVector, WideDict[0], true);
+                    AttachFlare(gate, FlaresColor);
+                    gate.FreezePosition = true;
+                    gate.HasCollision = false;
+                    TrackLimits.Add(gate);
+
+
+                    gate = World.CreateProp("prop_flare_01b", p + new Vector3(0f, 0f, 0.05f), new Vector3(0, 0, (nodes[1] - nodes[0]).Normalized.ToHeading() + 90f), false, false); ;
+                    gate.Position = GetPerpendicular(gate.Position, gate.Position + gate.RightVector, WideDict[0], true);
+                    AttachFlare(gate, FlaresColor);
+                    gate.FreezePosition = true;
+                    gate.HasCollision = false;
+                    TrackLimits.Add(gate);
+                }
+
+            }
+
+
+            if (nodes[0].DistanceTo(nodes[nodes.Count - 1]) > 20f)
+            {
+                IsPointToPoint = true;
+
+            }
+
+
+            if (IsPointToPoint)
+            {
+                if (GetAttribute((CurrentFile.SelectSingleNode("//Trackside")) as XmlElement, "Flares").ToLowerInvariant() == "true")
+                {
+
+                    int c = nodes.Count();
+                    Prop gate = World.CreateProp("prop_flare_01b", nodes.Last() + new Vector3(0f, 0f, 0.05f), new Vector3(0, 0, (nodes[c - 2] - nodes.Last()).Normalized.ToHeading() + 90f), false, false); ;
+                    gate.Position = GetPerpendicular(gate.Position, gate.Position - gate.RightVector, WideDict[0], true);
+                    AttachFlare(gate, FlaresColor);
+                    gate.FreezePosition = true;
+                    gate.HasCollision = false;
+                    TrackLimits.Add(gate);
+
+
+                    gate = World.CreateProp("prop_flare_01b", nodes.Last() + new Vector3(0f, 0f, 0.05f), new Vector3(0, 0, (nodes[c - 2] - nodes.Last()).Normalized.ToHeading() + 90f), false, false); ;
+                    gate.Position = GetPerpendicular(gate.Position, gate.Position + gate.RightVector, WideDict[0], true);
+                    AttachFlare(gate, FlaresColor);
+                    gate.FreezePosition = true;
+                    gate.HasCollision = false;
+                    TrackLimits.Add(gate);
+                }
+
+            }
+
+            int frecuency = 6;
+            if (CurrentFile != null)
+            {
+
+                XmlNode f = CurrentFile.SelectSingleNode("Data/Trackside/Frecuency");
+                if (f != null) int.TryParse(f.InnerText, out frecuency);
+
+                f = CurrentFile.SelectSingleNode("Data/Trackside/Model");
+                if (DevSettingsFile.GetValue<bool>("TRACK", "SpawnTracksideProps", true) && f != null) ModelOne = f.InnerText;
+            }
+
+            List<int> Terrains = new List<int>();
+
+            // RaycastResult terrainRaycast = World.Raycast(Path[0], Path[0] + new Vector3(0, 0, -5), IntersectOptions.Map);
+
+            //int _GET_SHAPE_TEST_RESULT_EX(int rayHandle, bool* hit, Vector3* endCoords, Vector3* surfaceNormal, Hash* materialHash, Entity* entityHit) // 0x65287525D951F6BE 0x4301E10C b323
+            int hash = GetSurfaceHash(Path[0], Path[0] + new Vector3(0, 0, -5));
+            if (hash > 0) Terrains.Add(hash);
+
+            //  Vector3 behind = (nodes[5] - nodes[1]).Normalized;
+
+
+            if (IsPointToPoint)
+            {
+                for (int i = 50; i > 1; i--)
+                {
+                    Vector3 p = nodes[i * 3];
+                    Vector3 pnorm = (p - nodes[(i * 3) - 1]).Normalized;
+                    GridPositions.Add((p) - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * (pnorm * ((i % 2 == 1) ? widedict[0] * 0.45f : -widedict[0] * 0.45f)));
+                }
+
+
+            }
+            else
+            {
+                int nRef = nodes.Count - 1;
+                for (int i = nodes.Count - 1; i > 50; i--)
+                {
+                    if (i < nRef - 5)
+                    {
+                        Vector3 p = nodes[i];
+                        Vector3 pnorm = (nodes[nRef] - nodes[i]).Normalized;
+
+                        for (int posInNode = -1; posInNode < 2; posInNode++)
+                        {
+                            float sideP = ARS.map(posInNode, -1, 2, -5, 5, true);
+                            //GridPositions.Add((p) - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * (pnorm * (sideP)));
+                        }
+                        GridPositions.Add((p) - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * (pnorm * ((GridPositions.Count % 2 == 1) ? -widedict[0] * 0.45f : widedict[0] * 0.45f)));
+                        nRef = i;
+                    }
+                    if (GridPositions.Count > 40) break;
+                }
+            }
+
+
+            /*
+            for (int ph = 0; ph < nodes.Count; ph++)
+            {
+
+                int percent = (100 * ph) / (nodes.Count - 1);
+                SetloadingPromptText("Loading Objects - " + percent + "%");
+                pos = nodes[ph];
+                float w = 0f;
+                float oldw = 0f;
+                if (widedict.ContainsKey(dd)) w = widedict[dd];
+                if (widedict.ContainsKey(dd - 1)) oldw = widedict[dd - 1]; else oldw = w;
+                if (oldpos != Vector3.Zero)
+                {
+                    lights++;
+                    barriers++;
+                    terrain++;
+                    if (IsPointToPoint)
+                    {
+
+
+                    }
+                    else
+                    {
+
+                    }
+
+
+                    Vector3 oldrWidepos = oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * oldw);
+                    Vector3 oldlWidepos = oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * oldw);
+
+                    Vector3 rWidepos = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * w);
+                    Vector3 lWidepos = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * w);
+                    if (TrackLimits.Count > 0)
+                    {
+                        Function.Call(GTA.Native.Hash._SET_FOCUS_AREA, pos.X, pos.Y, pos.Z);
+
+                    }
+
+
+                    if (terrain >= 10)
+                    {
+                        terrain = 0;
+
+                        hash = GetSurfaceHash(Path[ph], Path[ph] + new Vector3(0, 0, -5));
+                        if (hash > 0) Terrains.Add(hash);
+                    }
+
+
+                    if (barriers == frecuency && ((Model)ModelOne).IsValid)
+                    {
+                        barriers = 0;
+                        Prop cone = null;
+                        for (int i = 0; i < 5; i++)
+                        {
+                            if (!CanWeUse(cone))
+                            {
+                                cone = World.CreateProp(ModelOne, pos - lWidepos, new Vector3(0, 0, (pos - oldpos).Normalized.ToHeading() + 90f), true, false); //prop_mp_cone_03
+                                cone.Position += new Vector3(0, 0, 2f);
+                                if (i > 2) Script.Wait(10);
+                            }
+                            else
+                            {
+                                int patience = 100;
+                                while (!Function.Call<bool>(Hash.HAS_COLLISION_LOADED_AROUND_ENTITY, cone) && patience > 0)
+                                {
+                                    patience--;
+                                    Script.Wait(1);
+                                }
+                                cone.Position += new Vector3(0, 0, -cone.HeightAboveGround);
+                                cone.FreezePosition = Frozen;
+                                cone.HasCollision = !Frozen;
+                                //Function.Call(Hash.SET_ENTITY_COLLISION, cone, false, false);
+                                if (cone.Model == new Model("prop_flare_01b")) AttachFlare(cone, FlaresColor);
+                                TrackLimits.Add(cone);
+                                break;
+                            }
+                        }
+                        cone = null;
+                        for (int i = 0; i < 5; i++)
+                        {
+                            if (!CanWeUse(cone))
+                            {
+                                cone = World.CreateProp(ModelOne, pos - rWidepos, new Vector3(0, 0, (pos - oldpos).Normalized.ToHeading() + 90f), true, false);
+                                cone.Position += new Vector3(0, 0, 2f);
+                                if (i > 2) Script.Wait(10);
+                            }
+                            else
+                            {
+                                int patience = 100;
+                                while (!Function.Call<bool>(Hash.HAS_COLLISION_LOADED_AROUND_ENTITY, cone) && patience > 0)
+                                {
+                                    patience--;
+                                    Script.Wait(1);
+                                }
+                                cone.Position += new Vector3(0, 0, -cone.HeightAboveGround);
+                                cone.FreezePosition = Frozen;
+                                cone.HasCollision = !Frozen;
+                                if (cone.Model == new Model("prop_flare_01b")) AttachFlare(cone, FlaresColor);
+                                TrackLimits.Add(cone);
+                                break;
+                            }
+                        }
+                        Script.Wait(0);
+                    }
+                }
+                oldpos = pos;
+                dd++;
+            }
+            */
+            Function.Call(GTA.Native.Hash.CLEAR_FOCUS);
+
+            float length = (float)Math.Round(Path.Count() * 0.001f, 1);
+            float miles = (float)Math.Round(length * 0.62123, 1);
+            int road = 0;
+            int dirtp = 0;
+            int otherp = 0;
+
+            foreach (int d in Terrains)
+            {
+
+                foreach (TerrainTypes type in Enum.GetValues(typeof(TerrainTypes)))
+                {
+
+                    if ((int)type == d)
+                    {
+                        if (type.ToString().ToLowerInvariant().Contains("tarmac"))
+                        {
+
+                            road++;
+                        }
+                        else if (type.ToString().ToLowerInvariant().Contains("dirt") || type.ToString().ToLowerInvariant().Contains("grass") || type.ToString().ToLowerInvariant().Contains("gravel")) dirtp++;
+                        else otherp++;
+
+                    }
+                }
+            }
+
+            int total = dirtp + road + otherp;
+
+            float PercentRoad = (float)Math.Round((road * 100f) / total, 2);
+            float PercentDirt = (float)Math.Round((dirtp * 100f) / total, 2);
+            float PercentOther = (float)Math.Round((otherp * 100f) / total, 2);
+            UI.Notify("Track stats:~n~~b~Track Length: ~w~" + length + " Km ~n~(" + miles + " Miles).~n~Road: " + PercentRoad + "%~n~Dirt: " + PercentDirt + "% ~n~Other: " + PercentOther + "% ");
+        }
+
+        public bool PlayerOrCameraNearPos(Vector3 pos, float dist)
+        {
+            if (InFreeCam) return Game.Player.Character.Position.DistanceTo(pos) < dist;
+            else return World.RenderingCamera.Position.DistanceTo(pos) < dist;
+
+
+        }
+
+        public void DrawPath(List<Vector3> nodes, Dictionary<int, float> widedict, int fidelity)
+        {
+            if (nodes.Count == 0) return;
+            int closestnode = ClosestNodeToPlace(Game.Player.Character.Position, nodes);
+            Vector3 oldpos = Vector3.Zero;
+
+            int start = closestnode - 50;
+            int end = closestnode + 50;
+            int countmax = 1;
+            int count = 0;
+            int dd = 0;
+            Vector3 pos = Vector3.Zero;
+            Vector3 lastline = Vector3.Zero;
+            if (start < 0) start = 0;
+            if (end > nodes.Count - 1) end = nodes.Count - 1;
+            dd = start;
+
+
+            if (routeEditMode) World.DrawMarker(MarkerType.CheckeredFlagRect, nodes[0] + new Vector3(0, 0, 3f), (nodes[1] - nodes[0]).Normalized, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);// DrawLine(vm,last, Color.Black);
+
+            for (int ph = start; ph < end; ph += 1)
+            {
+                count++;
+
+
+                if (count >= countmax || 1 == 1)//Math.Abs( ph-closestnode)>50
+                {
+                    bool IsClose = false;
+
+
+                    count = 0;
+
+                    pos = nodes[ph];
+                    float w = 0f;
+                    float oldw = 0f;
+                    if (widedict != null)
+                    {
+                        if (widedict.ContainsKey(dd)) w = widedict[dd];
+                        if (widedict.ContainsKey(dd - 1)) oldw = widedict[dd - 1]; else oldw = w;
+                    }
+
+                    if (oldpos == Vector3.Zero) oldpos = nodes[nodes.Count - 1];
+
+
+                    if (oldpos != Vector3.Zero && PlayerOrCameraNearPos(nodes[ph], 120))
+                    {
+
+                        if (1 == 1)//Game.Player.Character.IsInRangeOf(pos, 30000f)
+                        {
+                            Vector3 rWidepos = GetPerpendicular(pos, oldpos, w, true); //Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * w);
+                            Vector3 lWidepos = GetPerpendicular(pos, oldpos, w, false); //Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * w);
+
+                            Vector3 oldrWidepos = GetPerpendicular(pos, oldpos, oldw, true) - (pos - oldpos); // oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * oldw);
+                            Vector3 oldlWidepos = GetPerpendicular(pos, oldpos, oldw, false) - (pos - oldpos);// oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * oldw);
+
+
+
+
+                            Color col = Color.Green;
+
+
+
+                            //  World.DrawMarker(MarkerType.DebugSphere, pos, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.2f, 0.2f, 0.2f), Color.Blue);
+
+                            if (w != 0f)
+                            {
+
+                                if (routeEditMode)
+                                {
+
+                                    if (ph == end - 1)
+                                    {
+
+                                        //  DrawLine(lWidepos + new Vector3(0, 0, 0.5f), rWidepos + new Vector3(0, 0, 0.5f), Color.Blue);
+                                        // World.DrawMarker(MarkerType.DebugSphere, lWidepos , new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.3f, 0.3f, 0.3f), Color.Blue);// DrawLine(vm,last, Color.Black);
+                                        //World.DrawMarker(MarkerType.DebugSphere, rWidepos, new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.3f, 0.3f, 0.3f), Color.Blue);// DrawLine(vm,last, Color.Black);
+
+                                    }
+                                    else
+                                        if (pos != nodes[0] && ph % 5 == 0)
+                                        {
+
+
+                                            World.DrawMarker(MarkerType.DebugSphere, lWidepos, new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Blue);// DrawLine(vm,last, Color.Black);
+                                            World.DrawMarker(MarkerType.DebugSphere, rWidepos, new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Blue);// DrawLine(vm,last, Color.Black);
+                                                                                                                                                                                      // DrawLine(lWidepos, rWidepos, Color.Blue);
+
+
+
+                                        }
+                                }
+
+                                col.ToArgb();
+
+                                Color chevcolor = Color.FromArgb(50, col);
+
+                                if (IsClose) World.DrawMarker(MarkerType.ChevronUpx1, pos, (oldpos - pos).Normalized, new Vector3(-90, 0, 0), new Vector3(4f, 2f, 2f), chevcolor);// DrawLine(vm,last, Color.Black);
+
+                                //       DrawLine(oldpos, pos, Color.Yellow);
+
+
+                            }
+                        }
+                    }
+                }
+
+                oldpos = pos;
+
+                dd++;
+            }
+        }
+
+
+        public void DrawSection(List<Vector3> nodes, Dictionary<int, float> widedict)
+        {
+            if (nodes.Count == 0) return;
+            int closestnode = ClosestNodeToPlace(Game.Player.Character.Position, nodes);
+            Vector3 oldpos = Vector3.Zero;
+
+            int start = closestnode - 100;
+            int end = closestnode + 100;
+            int countmax = 1;
+            int count = 0;
+            int dd = 0;
+            Vector3 pos = Vector3.Zero;
+            Vector3 lastline = Vector3.Zero;
+            if (start < 0) start = 0;
+            if (end > nodes.Count - 1) end = nodes.Count - 1;
+            dd = start;
+            for (int ph = start; ph < end; ph += 1)
+            {
+                count++;
+
+
+                if (count >= countmax || 1 == 1)//Math.Abs( ph-closestnode)>50
+                {
+
+                    count = 0;
+
+                    pos = nodes[ph];
+                    float w = 0f;
+                    float oldw = 0f;
+                    if (widedict != null)
+                    {
+                        if (widedict.ContainsKey(dd)) w = widedict[dd];
+                        if (widedict.ContainsKey(dd - 1)) oldw = widedict[dd - 1]; else oldw = w;
+                    }
+
+                    if (oldpos == Vector3.Zero) oldpos = nodes[nodes.Count - 1];
+
+
+                    if (oldpos != Vector3.Zero && PlayerOrCameraNearPos(nodes[ph], 120))
+                    {
+
+                        if (1 == 1)//Game.Player.Character.IsInRangeOf(pos, 30000f)
+                        {
+                            Vector3 rWidepos = GetPerpendicular(pos, oldpos, w, true); //Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * w);
+                            Vector3 lWidepos = GetPerpendicular(pos, oldpos, w, false); //Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * w);
+
+                            Vector3 oldrWidepos = GetPerpendicular(pos, oldpos, oldw, true) - (pos - oldpos); // oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * oldw);
+                            Vector3 oldlWidepos = GetPerpendicular(pos, oldpos, oldw, false) - (pos - oldpos);// oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * oldw);
+
+
+                            Color col = Color.Green;
+
+
+                            //  World.DrawMarker(MarkerType.DebugSphere, pos, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.2f, 0.2f, 0.2f), Color.Blue);
+
+
+                            if (w != 0f)
+                            {
+
+                                if (routeEditMode)
+                                {
+                                    //if(pos== nodes[0]) World.DrawMarker(MarkerType.CheckeredFlagRect, pos, new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(1f,1f,1f), Color.White);// DrawLine(vm,last, Color.Black);
+
+                                    if (ph == end - 1)
+                                    {
+
+                                        DrawLine(lWidepos + new Vector3(0, 0, 0.5f), rWidepos + new Vector3(0, 0, 0.5f), Color.Blue);
+                                        World.DrawMarker(MarkerType.DebugSphere, lWidepos + new Vector3(0, 0, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.3f, 0.3f, 0.3f), Color.Blue);// DrawLine(vm,last, Color.Black);
+                                        World.DrawMarker(MarkerType.DebugSphere, rWidepos + new Vector3(0, 0, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.3f, 0.3f, 0.3f), Color.Blue);// DrawLine(vm,last, Color.Black);
+
+                                    }
+                                    else
+                                        if (pos != nodes[0] && ph % 6 == 0)
+                                        {
+
+
+                                            World.DrawMarker(MarkerType.DebugSphere, lWidepos + new Vector3(0f, 0f, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Green);// DrawLine(vm,last, Color.Black);
+                                            World.DrawMarker(MarkerType.DebugSphere, rWidepos + new Vector3(0f, 0f, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Green);// DrawLine(vm,last, Color.Black);
+                                            DrawLine(lWidepos + new Vector3(0f, 0f, 0.5f), rWidepos + new Vector3(0f, 0f, 0.5f), Color.Green);
+
+
+
+                                        }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                oldpos = pos;
+
+                dd++;
+            }
+        }
+        Vector3 GetPerpendicular(Vector3 a, Vector3 b, float length, bool clockwise)
+        {
+            Vector3 ab = (b - a).Normalized;
+            Vector3 abCw = Vector3.Zero;
+            if (clockwise)
+            {
+                abCw.X = -ab.Y;
+                abCw.Y = ab.X;
+            }
+            else
+            {
+                abCw.X = ab.Y;
+                abCw.Y = -ab.X;
+            }
+            return a + abCw * length;
+        }
+        public void Notify(string text, float timeMult)
+        {
+
+            GTA.Native.Function.Call(GTA.Native.Hash._SET_NOTIFICATION_TEXT_ENTRY, "STRING");
+            GTA.Native.Function.Call(GTA.Native.Hash._ADD_TEXT_COMPONENT_STRING, text);
+            GTA.Native.Function.Call(Hash._0x1E6611149DB3DB6B, "CHAR_DEFAULT", "CHAR_DEFAULT", false, 2, "", "", timeMult);
+
+        }
+
+        void ToggleFreeCam()
+        {
+
+            if (InFreeCam)
+            {
+                InFreeCam = false;
+
+                Game.Player.Character.Heading = FreecCamRide.Heading;//+180f;
+                Game.Player.Character.IsVisible = true;
+                Game.Player.Character.HasGravity = true;
+                Game.Player.Character.HasCollision = true;
+
+                Game.Player.Character.Position = FreecCamRide.Position - new Vector3(0, 0, FreecCamRide.HeightAboveGround);
+                if (IdealTimeScale != 1.0f)
+                {
+                    IdealTimeScale = 1.0f;
+                    if (TimeScale < 0.1f) TimeScale = 0.1f;
+                    Game.TimeScale = TimeScale;
+                }
+
+
+            }
+            else
+            {
+                if ((CanWeUse(FreecCamRide)))
+                {
+                    if (Function.Call<int>(Hash.GET_FOLLOW_PED_CAM_VIEW_MODE) != 4)
+                    {
+                        Function.Call(Hash.SET_FOLLOW_PED_CAM_VIEW_MODE, 4);
+                        // HelpMessages.Add("Its reccomended to use First Person to use the dronecam for now.");
+                        // HelpMessages.Add("Except if you plan on recording anything via R* editor, of course.");
+
+                    }
+
+                    InFreeCam = true;
+                    FreecCamRide.HasGravity = false;
+                    Game.Player.Character.HasGravity = false;
+                    Game.Player.Character.IsVisible = false;
+                    Game.Player.Character.HasCollision = false;
+                }
+
+            }
+
+        }
+
+        public bool listenmode = false;
+        public Dictionary<int, int> DistToPercent = new Dictionary<int, int>();
+        public void Cheats()
+        {
+
+
+
+            if (WasCheatStringJustEntered("combo"))
+            {
+                Vehicle v = Game.Player.Character.CurrentVehicle;
+                string t = "";
+                t += (int)v.PrimaryColor + "~n~";
+                t += (int)v.SecondaryColor + "~n~";
+                t += (int)v.PearlescentColor + "~n~";
+                t += (int)v.RimColor + "~n~";
+                t += (int)v.TrimColor + "~n~";
+                t += (int)v.DashboardColor + "~n~";
+
+                UI.Notify(t);
+            }
+
+            if (WasCheatStringJustEntered("arson"))
+            {
+                StartLoadScript();
+            }
+            if (WasCheatStringJustEntered("arsoff"))
+            {
+                DisplayHelpTextTimed("ARS is now disabled. You can re-enable it with the 'arson' cheat.", 3000);
+                Loaded = false;
+            }
+
+            if (WasCheatStringJustEntered("arsreload"))
+            {
+                //UI.Notify("~b~[" + ScriptName + "]:~w~ Reloading settings and filling track/racer dictionaries.");
+                // UI.Notify("~b~[" + ScriptName+ "]:~w~ .");
+                FillKnownDisciplines();
+
+                FillKnownTracks();
+                ReFilterKnownTracks(TrackFilter);
+            }
+            if (WasCheatStringJustEntered("arscarlisten"))
+            {
+                listenmode = !listenmode;
+                if (listenmode) UI.Notify("~g~Listen mode is on."); else UI.Notify("~y~Listen mode disabled.");
+            }
+            if (WasCheatStringJustEntered("arsupdroute"))
+            {
+                //UI.Notify("~b~[" + ScriptName + "]:~w~ Updating current route..");
+                UpdateRoute(true, true, true);
+
+            }
+            if (WasCheatStringJustEntered("arsbuildcarlist"))
+            {
+                UI.Notify("~b~[ARS]:~w~ Generating vehicle files for all SHVDN known vehicles in the game.");
+
+                foreach (VehicleHash hash in Enum.GetValues(typeof(VehicleHash)).Cast<VehicleHash>())
+                {
+                    Model m = new Model(hash);
+                    if (m.IsBike || m.IsQuadbike || m.IsBicycle || m.IsCar) CreateVehicleFromHash(hash);
+                    Script.Yield();
+                }
+            }
+
+            if (WasCheatStringJustEntered("arssettings"))
+            {
+                UI.Notify("Re loading settings.");
+                SettingsFile = null;
+                DevSettingsFile = null;
+                LoadSettings();
+            }
+
+
+            if (WasCheatStringJustEntered("arssavedriver")) CreateDriver(Game.Player.Character);
+            if (WasCheatStringJustEntered("arssavecar"))
+            {
+                CreateVehicle(Game.Player.Character.CurrentVehicle);//
+            }
+
+            if (WasCheatStringJustEntered("arsclean"))
+            {
+                CleanEverything();
+            }
+        }
+        public static bool IsBitSet(int number, int bit)
+        {
+            return (number & bit) != 0;
+        }
+
+        public static void FindCustomProps()
+        {
+            if (Path.Count == 0) return;
+            CustomProps.Clear();
+            foreach (Prop propchecked in World.GetAllProps().ToList())
+            {
+                if (propchecked.IsPersistent && !AutoGeneratedProps.Contains(propchecked) && !TrackLimits.Contains(propchecked) && FreecCamRide != propchecked)
+                {
+                    float maxDist = 0f;
+
+                    Vector3 d = Path.OrderBy(v => propchecked.Position.DistanceTo(v)).ToList().First();//.First().DistanceTo(propchecked.Position);
+                    for (int i = 0; i < Path.Count; i++) if (d == Path[i]) if (WideDict.ContainsKey(i)) maxDist = WideDict[i] + 200f;
+                    if (maxDist > propchecked.Position.DistanceTo(d))
+                    {
+                        CustomProps.Add(propchecked);
+                    }
+                }
+            }
+        }
+
+        public void UpdateRoute(bool path, bool raceline, bool props)
+        {
+            Log(LogImportance.Info, "-- UPDATING CURRENT ROUTE --");
+            if (path || raceline)
+            {
+                UI.Notify("Updating path and raceline.");
+                XmlNode route = CurrentFile.SelectSingleNode("//Route");
+                Log(LogImportance.Info, "Removing original path.");
+                route.RemoveAll();
+
+                XmlElement p = null;
+                XmlElement info = null;
+                int i = 0;
+                int W = 5;
+                Log(LogImportance.Info, "Creating new path info from the current loaded path.");
+
+                foreach (Vector3 v in Path)
+                {
+                    p = CurrentFile.CreateElement("Point");
+                    //document.SelectSingleNode("Data/Route").AppendChild(element);
+
+                    info = CurrentFile.CreateElement("X");
+                    info.InnerText = Math.Round(v.X, 2).ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    info = CurrentFile.CreateElement("Y");
+                    info.InnerText = Math.Round(v.Y, 2).ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    info = CurrentFile.CreateElement("Z");
+                    info.InnerText = Math.Round(v.Z, 2).ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    info = CurrentFile.CreateElement("Wide");
+                    int wide = W;
+                    if (WideDict.ContainsKey(i)) int.TryParse(WideDict[i].ToString(), out wide);
+                    if (wide == 0)
+                    {
+                        wide = 5;
+                        Log(LogImportance.Error, "Node nº" + i + "wide setting WAS 0, setting to default wide (5)");
+
+                    }
+                    else
+                    {
+                        W = wide;
+                    }
+
+                    info.InnerText = wide.ToString();
+                    p.AppendChild(info);
+
+                    route.AppendChild(p);
+                    i++;
+                }
+                CurrentFile.SelectSingleNode("Data").AppendChild(route);
+
+            }
+
+            if (props)
+            {
+                UI.Notify("Updating objects.");
+                XmlElement info = null;
+                Log(LogImportance.Info, "Removing all object references.");
+
+                foreach (XmlNode o in CurrentFile.SelectNodes("//Objects")) o.RemoveAll();
+
+                XmlNode objects = CurrentFile.SelectSingleNode("//Objects");
+                if (objects == null) objects = CurrentFile.CreateElement("Objects");
+
+                objects.RemoveAll();
+
+                CustomProps.Clear();
+                FindCustomProps();
+
+                Log(LogImportance.Info, "Filling objects list from the persistent props in the world. (Near the track).");
+
+                foreach (Prop prop in CustomProps)
+                {
+                    XmlElement p = CurrentFile.CreateElement("Prop");
+                    info = CurrentFile.CreateElement("Model");
+                    info.InnerText = prop.Model.Hash.ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    //void _SET_OBJECT_TEXTURE_VARIANT(Object object, int paintIndex)
+
+                    info = CurrentFile.CreateElement("TextureVariation");
+                    info.InnerText = Function.Call<int>((Hash)0xE84EB93729C5F36A, prop).ToString();
+                    p.AppendChild(info);
+
+
+                    info = CurrentFile.CreateElement("X");
+                    info.InnerText = Math.Round(prop.Position.X, 2).ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    info = CurrentFile.CreateElement("Y");
+                    info.InnerText = Math.Round(prop.Position.Y, 2).ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    info = CurrentFile.CreateElement("Z");
+                    info.InnerText = Math.Round(prop.Position.Z, 2).ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    info = CurrentFile.CreateElement("RotX");
+                    info.InnerText = Math.Round(prop.Rotation.X, 2).ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    info = CurrentFile.CreateElement("RotY");
+                    info.InnerText = Math.Round(prop.Rotation.Y, 2).ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    info = CurrentFile.CreateElement("RotZ");
+                    info.InnerText = Math.Round(prop.Rotation.Z, 2).ToString();
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    info = CurrentFile.CreateElement("IsDynamic");
+                    info.InnerText = (!prop.FreezePosition).ToString(); // (!Function.Call<bool>(Hash.IS_ENTITY_STATIC, prop)).ToString();
+
+
+                    info.InnerText = info.InnerText.Replace(",", ".");
+                    p.AppendChild(info);
+
+                    objects.AppendChild(p);
+
+                    //  document.SelectSingleNode("Data").AppendChild(info);
+                }
+                CurrentFile.SelectSingleNode("Data").AppendChild(objects);
+            }
+
+            XmlNode getname = CurrentFile.SelectSingleNode("//Name");
+            if (getname != null)
+            {
+                CurrentFile.Save(@"scripts\ARS\Tracks\" + CurrentFile.SelectSingleNode("//Name").InnerText + ".xml");
+
+            }
+            else
+            {
+                CurrentFile.Save(@"scripts\ARS\Tracks\" + Game.GetUserInput(200) + ".xml");
+
+
+            }
+        }
+        public void SaveRoute(string filename)
+        {
+            if (filename == null || filename == "")
+            {
+                filename = World.GetStreetName(Path[0]);
+            }
+
+            if (File.Exists(@"scripts\ARS\Tracks\" + filename + ".xml"))
+            {
+                DateTime today = DateTime.Now;
+                filename += " (" + today.Year + today.Month + today.Day + today.Hour + today.Minute + today.Second + ")";
+            }
+
+
+            XmlDocument document = new XmlDocument();
+
+
+
+            XmlElement element = document.CreateElement("Data");
+            document.AppendChild(element);
+
+            XmlComment c = document.CreateComment("comment");
+
+            c.InnerText = " Flares='204255051' would put flares at the startline.\n The value is actually three RGB values from 000 to 255.\n 255255255 would be white. ";
+            element.AppendChild(c);
+
+            XmlElement trackside = document.CreateElement("Trackside");
+            XmlElement t = document.CreateElement("Model");
+            t.InnerText = ARS.DevSettingsFile.GetValue("CREATOR_DEFAULTS", "TracksideModel", "prop_wheel_tyre");
+            trackside.AppendChild(t);
+
+            t = document.CreateElement("Frecuency");
+            t.InnerText = ARS.DevSettingsFile.GetValue("CREATOR_DEFAULTS", "TracksideModelFrecuency", "10");
+            trackside.AppendChild(t);
+
+
+            XmlAttribute isFrozen = document.CreateAttribute("Frozen");
+            isFrozen.InnerText = "true";
+            trackside.Attributes.Append(isFrozen);
+
+            XmlAttribute Flares = document.CreateAttribute("Flares");
+            Flares.InnerText = "false";
+            trackside.Attributes.Append(Flares);
+
+            element.AppendChild(trackside);
+
+
+
+            //element = document.CreateElement("Route");
+            XmlElement route = document.CreateElement("Route");
+
+            XmlElement objects = document.CreateElement("Objects");
+
+            XmlElement name = document.CreateElement("Name");
+            name.InnerText = filename;
+            element.AppendChild(name);
+
+
+
+
+            UI.ShowSubtitle("Write any tags you want for this track, separated by spaces. Example: rally long");
+            XmlElement tags = document.CreateElement("Tags");
+            XmlElement tag = document.CreateElement("Tag");
+            tag.InnerText = World.GetStreetName(Path[0]);
+            tags.AppendChild(tag);
+            tag = document.CreateElement("Tag");
+            tag.InnerText = World.GetZoneName(Path[0]).Replace(" ", "");
+            tags.AppendChild(tag);
+
+            string userTags = Game.GetUserInput(32);
+            if (userTags != "")
+            {
+                foreach (string s in userTags.Split(' '))
+                {
+                    tag = document.CreateElement("Tag");
+                    tag.InnerText = s;
+                    tags.AppendChild(tag);
+                }
+            }
+
+
+            element.AppendChild(tags);
+
+
+
+
+            XmlElement p = null;
+            XmlElement info = null;
+            int i = 0;
+            int W = 5;
+
+            foreach (Vector3 v in Path)
+            {
+                p = document.CreateElement("Point");
+                //document.SelectSingleNode("Data/Route").AppendChild(element);
+
+                info = document.CreateElement("X");
+                info.InnerText = Math.Round(v.X, 2).ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                info = document.CreateElement("Y");
+                info.InnerText = Math.Round(v.Y, 2).ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                info = document.CreateElement("Z");
+                info.InnerText = Math.Round(v.Z, 2).ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                info = document.CreateElement("Wide");
+                if (WideDict.ContainsKey(i)) int.TryParse(WideDict[i].ToString(), out W);
+                info.InnerText = W.ToString();
+                p.AppendChild(info);
+
+                route.AppendChild(p);
+                i++;
+            }
+
+
+            CustomProps.Clear();
+
+
+            foreach (Prop propchecked in World.GetAllProps().ToList())
+            {
+                if (propchecked.IsPersistent && !AutoGeneratedProps.Contains(propchecked) && !TrackLimits.Contains(propchecked))
+                {
+
+                    float d = Path.OrderBy(v => propchecked.Position.DistanceTo(v)).ToList().First().DistanceTo(propchecked.Position);
+                    if (d < 10) CustomProps.Add(propchecked);
+                }
+            }
+
+            foreach (Prop prop in CustomProps)
+            {
+                p = document.CreateElement("Prop");
+                info = document.CreateElement("Model");
+                info.InnerText = prop.Model.Hash.ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                //void _SET_OBJECT_TEXTURE_VARIANT(Object object, int paintIndex)
+
+                info = document.CreateElement("TextureVariation");
+                info.InnerText = Function.Call<int>((Hash)0xE84EB93729C5F36A, prop).ToString();
+                ;//"0";
+                p.AppendChild(info);
+
+
+                info = document.CreateElement("X");
+                info.InnerText = Math.Round(prop.Position.X, 2).ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                info = document.CreateElement("Y");
+                info.InnerText = Math.Round(prop.Position.Y, 2).ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                info = document.CreateElement("Z");
+                info.InnerText = Math.Round(prop.Position.Z, 2).ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                info = document.CreateElement("RotX");
+                info.InnerText = Math.Round(prop.Rotation.X, 2).ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                info = document.CreateElement("RotY");
+                info.InnerText = Math.Round(prop.Rotation.Y, 2).ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                info = document.CreateElement("RotZ");
+                info.InnerText = Math.Round(prop.Rotation.Z, 2).ToString();
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                info = document.CreateElement("IsDynamic");
+                info.InnerText = (!prop.FreezePosition).ToString(); // (!Function.Call<bool>(Hash.IS_ENTITY_STATIC, prop)).ToString();
+
+
+                info.InnerText = info.InnerText.Replace(",", ".");
+                p.AppendChild(info);
+
+                objects.AppendChild(p);
+
+            }
+            document.SelectSingleNode("Data").AppendChild(route);
+            document.SelectSingleNode("Data").AppendChild(objects);
+
+
+            document.Save(@"scripts\ARS\Tracks\" + filename + ".xml");
+
+            DisplayHelpTextTimed("Adding to track dictionary...", 1000);
+            FillKnownTracks();
+            DisplayHelpTextTimed("~g~Done.", 2000);
+        }
+
+        public void AttachFlare(Prop p, Color color)
+        {
+            int d = 0;
+            while (!Function.Call<bool>(Hash.HAS_NAMED_PTFX_ASSET_LOADED, "scr_apartment_mp") && d < 2000)
+            {
+                Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, "scr_apartment_mp");
+                d++;
+                Script.Wait(0);
+            }
+            if (Function.Call<bool>(Hash.HAS_NAMED_PTFX_ASSET_LOADED, "scr_apartment_mp"))
+            {
+                Function.Call(Hash._SET_PTFX_ASSET_NEXT_CALL, "scr_apartment_mp");
+                if (CanWeUse(p))
+                {
+                    int fx = Function.Call<int>(Hash.START_PARTICLE_FX_LOOPED_ON_ENTITY, "scr_finders_package_flare", p, 0f, 0f, 0.1f, 0f, 0f, 0f, 1f, true, true, true);
+                    Function.Call(Hash.SET_PARTICLE_FX_LOOPED_ALPHA, fx, 1f);
+                    Function.Call(Hash.SET_PARTICLE_FX_LOOPED_COLOUR, fx, color.R / 255f, color.G / 255f, color.B / 255f, 1f, true); //scr_lowrider scr_lowrider_flare
+                    FlareFX.Add(fx);
+                }
+            }
+        }
+        public static bool NodeExists(XmlNode node, string name)
+        {
+            return node.SelectSingleNode(name) != null;
+        }
+        public static XmlElement GetChild(XmlNode node, string name)
+        {
+            XmlNode n = node.SelectSingleNode(name);
+            if (n == null) return null;
+            else return n as XmlElement;
+        }
+        public static string GetAttribute(XmlElement node, string name)
+        {
+            if (node == null) return "";
+            if (node.HasAttribute(name)) return node.GetAttribute(name);
+            return "";
+        }
+        public static XmlDocument LoadTrackFile(string trackname = null)
+        {
+            Log(LogImportance.Info, "Loading " + trackname);
+            XmlDocument doc = new XmlDocument();
+
+            doc.Load(trackname);
+            return doc;
+
+        }
+
+        public void LoadTrack(XmlDocument xmlFile)
+        {
+            Log(LogImportance.Info, "Loading track");
+            if (xmlFile == null)
+            {
+                UI.Notify("~r~Invalid track file.");
+                return;
+            }
+            if (!InFreeCam) Function.Call(Hash.DO_SCREEN_FADE_OUT, 200);
+            SetloadingPromptText("Loading track...");
+            Script.Wait(500);
+
+
+
+            CurrentFile = xmlFile;
+            foreach (Prop p in CustomProps) if (CanWeUse(p)) p.Delete();
+            foreach (Prop p in AutoGeneratedProps) if (CanWeUse(p)) p.Delete();
+            foreach (Prop p in TrackLimits) if (CanWeUse(p)) p.Delete();
+            Angles.Clear();
+            Path.Clear();
+            WideDict.Clear();
+            TrackLimits.Clear();
+
+
+            XmlNode r = xmlFile.SelectSingleNode("Data");
+
+            Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+
+            foreach (XmlElement prop in r.SelectNodes("Objects/Prop"))
+            {
+                string x = "0";
+                string y = "0";
+                string z = "0";
+                if (NodeExists(prop, "X") && NodeExists(prop, "Y") && NodeExists(prop, "Z"))
+                {
+                    x = prop.SelectSingleNode("X").InnerText;
+                    y = prop.SelectSingleNode("Y").InnerText;
+                    z = prop.SelectSingleNode("Z").InnerText;
+                }
+
+                bool isDynamic = false;
+
+                if (NodeExists(prop, "IsDynamic")) bool.TryParse(prop.SelectSingleNode("IsDynamic").InnerText, out isDynamic);
+
+                float fx = 0f;
+                float.TryParse(x, out fx);
+                float fy = 0f;
+                float.TryParse(y, out fy);
+                float fz = 0f;
+                float.TryParse(z, out fz);
+                Vector3 pos = new Vector3(fx, fy, fz);
+                if (NodeExists(prop, "RotX") && NodeExists(prop, "RotY") && NodeExists(prop, "RotZ"))
+                {
+                    x = prop.SelectSingleNode("RotX").InnerText;
+                    y = prop.SelectSingleNode("RotY").InnerText;
+                    z = prop.SelectSingleNode("RotZ").InnerText;
+                }
+                fx = 0f;
+                float.TryParse(x, out fx);
+                fy = 0f;
+                float.TryParse(y, out fy);
+                fz = 0f;
+                float.TryParse(z, out fz);
+                Vector3 rot = new Vector3(fx, fy, fz);
+
+                if (NodeExists(prop, "Model"))
+                {
+                    int hash = 0;
+                    int.TryParse(prop.SelectSingleNode("Model").InnerText, out hash);
+                    if (hash != 0 && new Model(hash).IsValid)
+                    {
+                        Prop myprop = World.CreateProp(hash, pos, rot, false, false);
+                        myprop.Position = pos;
+                        Function.Call(Hash.SET_ENTITY_DYNAMIC, myprop, isDynamic);
+                        Function.Call(Hash.FREEZE_ENTITY_POSITION, myprop, !isDynamic);
+                        Function.Call(Hash.SET_OBJECT_PHYSICS_PARAMS, myprop, 200f * myprop.Model.GetDimensions().Length(), 1f);
+
+                        if (prop.SelectSingleNode("TextureVariation") != null) Function.Call(Hash._0x971DA0055324D033, myprop, int.Parse(prop.SelectSingleNode("TextureVariation").InnerText));
+
+                        CustomProps.Add(myprop);
+
+                        if (hash == Game.GenerateHash("prop_mp_repair_01") && 1 == 2) //Garage stuff, never used
+                        {
+                            myprop.Alpha = 50;
+
+
+                            if (CanWeUse(Game.Player.Character.LastVehicle))
+                            {
+                                Game.Player.Character.LastVehicle.Position = myprop.Position + new Vector3(0, 0, 0);
+                                Game.Player.Character.LastVehicle.Heading = myprop.Heading;
+                                Game.Player.Character.LastVehicle.PlaceOnGround();
+                            }
+
+                            Prop autog = World.CreateProp("prop_gazebo_03", myprop.Position, myprop.Rotation, false, true);
+
+                            AutoGeneratedProps.Add(autog);
+
+                            Function.Call(Hash.FREEZE_ENTITY_POSITION, autog, true);
+                            Function.Call(Hash.SET_ENTITY_DYNAMIC, autog, false);
+
+                            autog = World.CreateProp("prop_table_04", myprop.Position -= (myprop.ForwardVector * 3), myprop.Rotation, false, true);
+                            AutoGeneratedProps.Add(autog);
+
+                            Function.Call(Hash.FREEZE_ENTITY_POSITION, autog, true);
+                            Function.Call(Hash.SET_ENTITY_DYNAMIC, autog, false);
+
+
+                        }
+                    }
+                }
+            }
+            List<XmlElement> RouteNodes = new List<XmlElement>();
+            foreach (XmlElement e in r.SelectNodes("Route/Point")) RouteNodes.Add(e);
+
+            if (OptionValuesList[Options.ReverseRoute])
+            {
+                RouteNodes.Reverse();
+                UI.Notify("~g~Route is reversed.");
+            }
+
+            int i = 0;
+            float W = 5;
+            float oldW = 0;
+            foreach (XmlElement e in RouteNodes)
+            {
+
+
+                string x = e.SelectSingleNode("X").InnerText;
+                string y = e.SelectSingleNode("Y").InnerText;
+                string z = e.SelectSingleNode("Z").InnerText;
+
+                float fx = 0f;
+                float.TryParse(x, out fx);
+                float fy = 0f;
+                float.TryParse(y, out fy);
+                float fz = 0f;
+                float.TryParse(z, out fz);
+                Vector3 pos = new Vector3(fx, fy, fz);
+
+                float.TryParse(e.SelectSingleNode("Wide").InnerText, out W);
+
+                if (Path.Count > 5) W = ARS.Clamp(W, oldW - 0.25f, oldW + 0.25f);
+                //if (Math.Abs(oldW) > Math.Abs(W) + 0.5f) W = oldW - 0.5f;//1
+                //if (Math.Abs(oldW) < Math.Abs(W) - 0.5f) W = oldW + 0.5f;//1
+
+                if (e.SelectSingleNode("RacingLine") != null && SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "ReverseRoutes", false) == false)
+                {
+                    float racingline = 0.0f;
+                    float.TryParse(e.SelectSingleNode("RacingLine").InnerText, out racingline);
+                }
+
+
+                Path.Add(pos);
+                WideDict.Add(i, W);
+                oldW = W;
+                i++;
+            }
+
+
+            GenerateRouteInfo();
+
+            IsPointToPoint = false;
+            if (Path[0].DistanceTo(Path[Path.Count - 1]) > 20) IsPointToPoint = true;
+
+
+            Script.Wait(1000);
+            Log(LogImportance.Info, "Loading props");
+            SetloadingPromptText("Loading props...");
+            SpawnTrackLimits(Path, WideDict, 1);
+
+
+            if (ARS.CanWeUse(Game.Player.Character.CurrentVehicle)) Game.Player.Character.CurrentVehicle.Position = Path[0]; else Game.Player.Character.Position = Path[20];
+            if (CanWeUse(FreecCamRide)) FreecCamRide.Position = Path[5] + new Vector3(0, 0, 20);
+            SetloadingPromptText("Finished loading props");
+            Function.Call(Hash._0x10D373323E5B9C0D);
+            SetSPLVisibility(false);
+
+            Log(LogImportance.Info, "Loaded track");
+
+            //CamVerticalPlayer.Position = Game.Player.Character.Position + new Vector3(0, 0, 50f);
+
+            //Function.Call(Hash.RENDER_SCRIPT_CAMS, 0, true, 1000, true, true);
+            //Function.Call(Hash._0xA328A24AAA6B7FDC, 0f);
+
+            //Function.Call(Hash.DO_SCREEN_FADE_IN, 1000);
+            //Function.Call(Hash._0xEFACC8AEF94430D5, 3000);
+
+            //Cam rotation
+            //Function.Call((Hash)0x48608C3464F58AB4, 0f, 0f, 0f);
+
+        }
+
+
+        public static void GenerateRouteInfo()
+        {
+            Log(LogImportance.Info, "Generating route info...");
+            TrackPoints.Clear();
+            CornerPoints.Clear();
+
+
+            //Generate All base trackpoints, empty
+            while (TrackPoints.Count() < Path.Count())
+            {
+                TrackPoint t = new TrackPoint();
+                t.Node = TrackPoints.Count();
+                t.Position = Path[t.Node];
+
+                CornerPoint c = new CornerPoint();
+                c.Node = TrackPoints.Count();
+
+                TrackPoints.Add(t);
+                CornerPoints.Add(c);
+
+            }
+
+
+            //Fill all trackpoints with info from the Path
+            foreach (TrackPoint t in TrackPoints)
+            {
+                int Average = (int)(t.TrackWide * 2);
+                if (t.Node > 50 && t.Node < Path.Count - 50)
+                {
+
+                    Vector3 l = (Path[t.Node] - Path[t.Node - Average]).Normalized;
+                    Vector3 f = (Path[t.Node + Average] - Path[t.Node]).Normalized;
+
+                    t.Direction = (Path[t.Node + 2] - Path[t.Node - 2]).Normalized;
+
+                    t.Elevation = (Path[t.Node + 10] - Path[t.Node - 10]).Normalized.Z * 90f;
+
+                    //float RelativeElevation = Vector3.SignedAngle(l, f, Vector3.RelativeRight);
+
+                    l = (Path[t.Node] - Path[t.Node - Average]).Normalized;
+                    f = (Path[t.Node + Average] - Path[t.Node]).Normalized;
+
+                    l.Z = 0f;
+                    f.Z = 0f;
+
+                    float Angle = Vector3.SignedAngle(l, f, Vector3.WorldUp);
+                    if (float.IsNaN(Angle) || float.IsInfinity(Angle)) Angle = 0;
+                    t.Angle = Angle;
+
+                    int LongAF = 20;
+                    int PreciseAF = 10;
+
+                    t.GeneralCurveRadius = GetCurveRadius(Path[t.Node - LongAF], Path[t.Node + LongAF], Path[t.Node]); //* (GetCurveRadius(Path[t.Node - Average], Path[t.Node + Average], t.BezierMidPoint)+
+                    t.PreciseCurveRadius = GetCurveRadius(Path[t.Node - PreciseAF], Path[t.Node + PreciseAF], Path[t.Node]); //* (GetCurveRadius(Path[t.Node - Average], Path[t.Node + Average], t.BezierMidPoint)+
+
+                }
+                else
+                {
+                    t.Angle = 0f;
+                    t.Direction = (Path[10] - Path[5]).Normalized;
+                    t.Elevation = 0f;
+                }
+
+                if (ARS.WideDict.ContainsKey(t.Node)) t.TrackWide = ARS.WideDict[t.Node];
+            }
+
+            //Fill all cornerpoints with info
+            foreach (CornerPoint c in CornerPoints)
+            {
+                int Average = 20;
+
+                if (c.Node > Average && c.Node < Path.Count - Average)
+                {
+                    Vector3 pre = TrackPoints[c.Node - Average].Direction;
+                    Vector3 fut = TrackPoints[c.Node + Average].Direction;
+                    c.Angle = Vector3.SignedAngle(pre, fut, Vector3.WorldUp);
+                    c.ElevationChange = ((fut - pre).Z * 90);
+                    c.Elevation = TrackPoints[c.Node].Elevation;
+                }
+                else
+                {
+                    c.Angle = 0f;
+                    c.Elevation = 0f;
+                    c.ElevationChange = 0f;
+                }
+
+                c.LengthStart = 20;
+                c.LenghtEnd = 20;
+            }
+
+
+            for (int i = 20; i < CornerPoints.Count - 20; i++)
+            {
+                float Radius = CornerPoints[i].GetRadius();
+                if (Radius < 90)
+                {
+                    if (CornerPoints[i - 5].GetRadius() > Radius && Radius < CornerPoints[i + 5].GetRadius())
+                    {
+                        CornerPoints[i].IsKey = true;
+                        i += 20;
+                    }
+                }
+            }
+
+            CornerPoint lastC = CornerPoints.First();
+            foreach (CornerPoint c in CornerPoints)
+            {
+
+                TrackPoint refTrackpoint = TrackPoints[c.Node];
+
+                if (lastC.IsKey)
+                {
+                    if (lastC.Node + c.LenghtEnd * 2 > c.Node) c.IsKey = false;
+                }
+
+                int radiusToDistance = (int)(TrackPoints[c.Node].TrackWide * 4);
+                c.LengthStart = radiusToDistance;
+                c.LenghtEnd = radiusToDistance;
+
+                for (int nodeID = c.Node - 250; nodeID < c.Node + 250; nodeID++)
+                {
+                    if (nodeID > 10 && nodeID < TrackPoints.Count - 11)
+                    {
+                        TrackPoint checkedTrackpoint = TrackPoints[nodeID];
+                        float refRadius = checkedTrackpoint.GeneralCurveRadius;
+                        if (checkedTrackpoint.Node < c.Node)
+                        {
+                            if (checkedTrackpoint.PreciseCurveRadius > c.GetPreciseRadius() * 4) { c.LengthStart = c.Node - nodeID; }
+                        }
+                        else
+                        {
+                            if (checkedTrackpoint.PreciseCurveRadius > c.GetPreciseRadius() * 4) { c.LenghtEnd = nodeID - c.Node; break; }
+                        }
+                    }
+                }
+                lastC = c;
+            }
+
+            Log(LogImportance.Info, "Route generated");
+
+            CornerPoint corner = CornerPoints.FirstOrDefault(co => co.IsKey);
+            foreach (Racer r in ARS.Racers) r.mem.Corner = new Corner(GetSpeedForCorner(corner, r), corner);
+        }
+
+        public static float GetCurveRadius(Vector3 a, Vector3 b, Vector3 midpoint)
+        {
+            Vector2 a2 = new Vector2(a.X, a.Y);
+            Vector2 b2 = new Vector2(b.X, b.Y);
+            Vector2 midpoint2 = new Vector2(midpoint.X, midpoint.Y);
+
+            return GetCurveRadius2D(a2, b2, midpoint2);
+        }
+        public static float GetCurveRadius2D(Vector2 a, Vector2 b, Vector2 midPoint)
+        {
+            Vector2 point1 = a;
+            Vector2 point2 = b;
+            Vector2 point3 = midPoint;
+
+            Vector2 midpoint1 = (point1 + point2) / 2;
+            float slope1 = (point2.Y - point1.Y) / (point2.X - point1.X);
+
+            // Calculate slope of line perpendicular to chord between points 1 and 2
+            float perpendicularSlope1 = -1 / slope1;
+
+            // Calculate midpoint and slope of chord between points 2 and 3
+            Vector2 midpoint2 = (point2 + point3) / 2;
+            float slope2 = (point3.Y - point2.Y) / (point3.X - point2.X);
+
+            // Calculate slope of line perpendicular to chord between points 2 and 3
+            float perpendicularSlope2 = -1 / slope2;
+
+            // Calculate intersection of two perpendicular bisectors
+            float centerX = (midpoint1.Y - midpoint2.Y + perpendicularSlope2 * midpoint2.X - perpendicularSlope1 * midpoint1.X) / (perpendicularSlope2 - perpendicularSlope1);
+            float centerY = midpoint1.Y + perpendicularSlope1 * (centerX - midpoint1.X);
+
+            // Calculate distance between center and any of the three points
+            float radius = Vector2.Distance(new Vector2(centerX, centerY), point1);
+
+            return radius;
+        }
+
+        /// <summary>
+        /// Returns grip delta in Gs caused by vertical curvature at this speed.
+        /// Negative = grip loss on crest, positive = grip gain in compression.
+        /// </summary>
+        public static float WouldLiftOffRoadAtSpeed(Vector3 start, Vector3 midpoint, Vector3 end, float velocity)
+        {
+            if (velocity <= 0f) return 0f;
+
+            // Build a 2D vertical profile: X = distance along track projection, Y = elevation.
+            float s0 = 0f;
+            float s1 = Vector2.Distance(new Vector2(start.X, start.Y), new Vector2(midpoint.X, midpoint.Y));
+            float s2 = s1 + Vector2.Distance(new Vector2(midpoint.X, midpoint.Y), new Vector2(end.X, end.Y));
+
+            if (s1 <= 0.001f || s2 <= s1 + 0.001f) return 0f;
+
+            Vector2 p0 = new Vector2(s0, start.Z);
+            Vector2 p1 = new Vector2(s1, midpoint.Z);
+            Vector2 p2 = new Vector2(s2, end.Z);
+
+            // Signed curvature for the osculating circle through 3 points.
+            Vector2 ab = p1 - p0;
+            Vector2 bc = p2 - p1;
+            Vector2 ac = p2 - p0;
+
+            float abLen = ab.Length();
+            float bcLen = bc.Length();
+            float acLen = ac.Length();
+            if (abLen < 0.001f || bcLen < 0.001f || acLen < 0.001f) return 0f;
+
+            float cross = (ab.X * ac.Y) - (ab.Y * ac.X);
+            float curvature = (2f * cross) / (abLen * bcLen * acLen);
+            if (Math.Abs(curvature) < 0.00001f) return 0f;
+
+            const float gravity = 9.8f;
+            float deltaGs = ((velocity * velocity) * curvature) / gravity;
+
+            if (float.IsNaN(deltaGs) || float.IsInfinity(deltaGs)) return 0f;
+            return deltaGs;
+        }
+
+        /// <summary>
+        /// Returns G-loss from road grade magnitude at racer's current track point.
+        /// 0 = level ground. Positive = slope penalty in Gs (uphill or downhill).
+        /// </summary>
+        public static float GetHillGsLossAtCurrentTrackPoint(Racer r)
+        {
+            if (r == null || !CanWeUse(r.Car) || TrackPoints.Count < 2) return 0f;
+
+            int node = (int)Clamp(r.CurrentTrackPoint.Node, 0, TrackPoints.Count - 1);
+            int forwardOffset = (int)Clamp((int)(Math.Max(r.Car.Velocity.Length(), 5f) * 0.5f), 1, 50);
+            int aheadNode = node + forwardOffset;
+            if (aheadNode >= TrackPoints.Count) aheadNode -= TrackPoints.Count;
+
+            Vector3 from = TrackPoints[node].Position;
+            Vector3 to = TrackPoints[aheadNode].Position;
+
+            float horizontalDistance = Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y));
+            if (horizontalDistance <= 0.001f) return 0f;
+
+            float climbAngleRad = (float)Math.Atan2(to.Z - from.Z, horizontalDistance);
+            if (Math.Abs(climbAngleRad) <= 0.0001f) return 0f;
+
+            float gravityScale = r.Handling.Gravity / 9.8f;
+            float lossGs = (float)Math.Abs(Math.Sin(climbAngleRad)) * gravityScale;
+
+            if (float.IsNaN(lossGs) || float.IsInfinity(lossGs)) return 0f;
+            return Clamp(lossGs, 0f, 2f);
+        }
+
+        /// <summary>
+        /// Returns G-loss from vehicle velocity slope only.
+        /// Upward velocity implies uphill. 0 = level motion.
+        /// </summary>
+        public static float GetHillGsLossAtCurrentVelocityVector(Racer r)
+        {
+            if (r == null || !CanWeUse(r.Car)) return 0f;
+
+            Vector3 v = r.Car.Velocity;
+            float horizontalSpeed = new Vector2(v.X, v.Y).Length();
+            if (horizontalSpeed <= 0.001f) return 0f;
+
+            float climbAngleRad = (float)Math.Atan2(v.Z, horizontalSpeed);
+            if (Math.Abs(climbAngleRad) <= 0.0001f) return 0f;
+
+            float gravityScale = r.Handling.Gravity / 9.8f;
+            float lossGs = (float)Math.Abs(Math.Sin(climbAngleRad)) * gravityScale;
+
+            if (float.IsNaN(lossGs) || float.IsInfinity(lossGs)) return 0f;
+            return Clamp(lossGs, 0f, 2f);
+        }
+
+        /// <summary>
+        /// Returns a grip multiplier from road grade magnitude at racer's current track point.
+        /// Linear model: 0 degrees -> x1, 90 degrees -> x0.
+        /// factor scales grip loss strength (1 = base, 2 = double loss).
+        /// </summary>
+        public static float GetHillGripMultiplierAtCurrentTrackPoint(Racer r, float factor = 1f)
+        {
+            if (r == null || !CanWeUse(r.Car) || TrackPoints.Count < 2) return 1f;
+            if (factor <= 0f) factor = 1f;
+
+            int node = (int)Clamp(r.CurrentTrackPoint.Node, 0, TrackPoints.Count - 1);
+            int forwardOffset = (int)Clamp((int)(Math.Max(r.Car.Velocity.Length(), 5f) * 0.5f), 1, 50);
+            int aheadNode = node + forwardOffset;
+            if (aheadNode >= TrackPoints.Count) aheadNode -= TrackPoints.Count;
+
+            Vector3 from = TrackPoints[node].Position;
+            Vector3 to = TrackPoints[aheadNode].Position;
+
+            float horizontalDistance = Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y));
+            if (horizontalDistance <= 0.001f) return 1f;
+
+            float climbAngleRad = (float)Math.Atan2(to.Z - from.Z, horizontalDistance);
+            float slopeAngleRad = Math.Abs(climbAngleRad);
+            float normalizedSlope = slopeAngleRad / ((float)Math.PI * 0.5f); // 0..1 for 0..90 deg
+            float loss = normalizedSlope * factor;
+            float multiplier = 1f - loss;
+            if (float.IsNaN(multiplier) || float.IsInfinity(multiplier)) return 1f;
+            return Clamp(multiplier, 0f, 1f);
+        }
+
+        /// <summary>
+        /// Returns grip multiplier from vehicle velocity slope only.
+        /// Upward velocity implies uphill. Linear model: 0 degrees -> x1, 90 degrees -> x0.
+        /// factor scales grip loss strength (1 = base, 2 = double loss).
+        /// </summary>
+        public static float GetHillGripMultiplierAtCurrentVelocityVector(Racer r, float factor = 1f)
+        {
+            if (r == null || !CanWeUse(r.Car)) return 1f;
+            if (factor <= 0f) factor = 1f;
+
+            Vector3 v = r.Car.Velocity;
+            float horizontalSpeed = new Vector2(v.X, v.Y).Length();
+            if (horizontalSpeed <= 0.001f) return 1f;
+
+            float climbAngleRad = (float)Math.Atan2(v.Z, horizontalSpeed);
+            float slopeAngleRad = Math.Abs(climbAngleRad);
+            float normalizedSlope = slopeAngleRad / ((float)Math.PI * 0.5f); // 0..1 for 0..90 deg
+            float loss = normalizedSlope * factor;
+            float multiplier = 1f - loss;
+            if (float.IsNaN(multiplier) || float.IsInfinity(multiplier)) return 1f;
+            return Clamp(multiplier, 0f, 1f);
+        }
+
+        public static float GetSpeedForCorner(CornerPoint c, Racer r)
+        {
+            //Error handling - return max and be done with it
+            if (float.IsInfinity(c.GetRadius()) || float.IsNaN(c.GetRadius()) || c.GetRadius() == 0f) return AIData.MaxSpeed;
+
+            //Base percieved grip
+            float vehicleGripGs = r.vData.CurrentMechanicalGrip;
+
+            if (vehicleGripGs < 0.2f) vehicleGripGs = 0.2f;
+            float spd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * c.GetRadius());
+
+
+            return ARS.Clamp(spd, AIData.MinSpeed, AIData.MaxSpeed);
+        }
+
+        //Asumes the entity is going forward, at most, 90º sideways. Not backwards
+        static public float GetDirectionalBoundingBox(Entity e)
+        {
+            if (!CanWeUse(e)) return 0f;
+            return ARS.map(Vector3.Angle(e.ForwardVector, e.Velocity.Normalized), 0f, 90f, e.Model.GetDimensions().X, e.Model.GetDimensions().Y, true);
+        }
+
+        static public void DrawDirectionalBoundingBox(Entity e, float lenght = 5f)
+        {
+            float w = GetDirectionalBoundingBox(e);
+            Vector3 direction = (Vector3.Cross(e.Velocity.Normalized, Vector3.WorldUp) * w);
+
+            ARS.DrawLine(e.Position + direction + (e.Velocity.Normalized * lenght), e.Position + direction + (e.Velocity.Normalized * -lenght), Color.Red);
+            ARS.DrawLine(e.Position - direction + (e.Velocity.Normalized * lenght), e.Position - direction + (e.Velocity.Normalized * -lenght), Color.Red);
+        }
+        static public unsafe ulong GetWheelsPtr(Vehicle handle)
+        {
+            GameVersion gameVersion = Game.Version;
+            var address = (ulong)handle.MemoryAddress;
+            if (wheelsPtr == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x3B\xB7\x48\x0B\x00\x00\x7D\x0D", "xx????xx");
+
+                if (addr != null)
+                {
+                    wheelsPtr = *(uint*)(addr + 2) - 8;
+                    Log(LogImportance.Info, "[MEMORY] Learned the handling offset: " + wheelsPtr);
+
+                }
+            }
+            return *((ulong*)(address + wheelsPtr));
+        }
+
+        static public unsafe int GetNumWheels(Vehicle handle)
+        {
+
+            if (numwheelsoffset == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x3B\xB7\x48\x0B\x00\x00\x7D\x0D", "xx????xx");
+
+                if (addr != null)
+                {
+                    numwheelsoffset = *(uint*)(addr + 2);
+                }
+            }
+            GameVersion gameVersion = Game.Version;
+            var address = (ulong)handle.MemoryAddress;
+            return *((int*)(address + numwheelsoffset));
+        }
+
+        static public unsafe List<ulong> GetWheelPtrs(Vehicle handle)
+        {
+            var wheelPtr = GetWheelsPtr(handle);
+            var numWheels = GetNumWheels(handle);
+            List<ulong> wheelPtrs = new List<ulong>();
+            for (int i = 0; i < numWheels; i++)
+            {
+                var wheelAddr = *((ulong*)(wheelPtr + 0x008 * (ulong)i));
+                wheelPtrs.Add(wheelAddr);
+            }
+            return wheelPtrs;
+        }
+
+
+        static public unsafe List<float> GetWheelsPower(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x1D4;
+            List<float> angle = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 5);
+                angle.Add(pos);
+            }
+            return angle;
+        }
+
+
+        static public unsafe List<float> GetWheelInternalDownforceMod(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x220;
+            List<float> angle = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 5);
+                angle.Add(pos);
+            }
+            return angle;
+        }
+        static public unsafe List<float> GetMoreShit(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x20A;
+            List<float> angle = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 5);
+                angle.Add(pos);
+            }
+            return angle;
+        }
+
+        static public unsafe List<float> GetWheelsGrip(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x198;
+            List<float> angle = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
+                angle.Add(pos);
+            }
+            return angle;
+        }
+        static public unsafe List<float> GetWheelsWetgrip(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x19C;
+            List<float> angle = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
+                angle.Add(pos);
+            }
+            return angle;
+        }
+
+        static public unsafe float GetWheelsMaxWheelspin(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x174;
+            float w = 0f;
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
+                if (Math.Abs(pos) > Math.Abs(w)) w = pos;
+            }
+            return w;
+        }
+        static public unsafe float GetWheelsAvgWheelspin(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x174;
+            float w = 0f;
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
+                w += pos;
+            }
+            return w / wheelPtrs.Count;
+        }
+        static public unsafe List<float> GetWheelSkidmark(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x1B8;
+            if (Game.Version <= GameVersion.VER_1_0_1290_1_STEAM) offset = 0x1B8;
+            List<float> angle = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = *((float*)(wheel + offset));
+                angle.Add(pos);
+            }
+            return angle;
+        }
+
+        static public void DrawStats(Racer r)
+        {
+            float diff = (r.Car.Velocity.Length() - r.mem.intention.Speed) * 10;
+            float acc = (r.vControl.Throttle * 100f);
+
+            string percent = "";
+
+            for (int i = 0; i < 100 - acc; i++) percent += " ";
+            for (int i = 0; i < acc; i++) percent += "<";
+            //       percent += "~w~";
+            if (diff < 0f) diff = 0f;
+            //
+            //    racertext.Unload();
+            //  
+            debugFrontend.CallFunction("CLEAR_ALL", true);
+            debugFrontend.CallFunction("CREATE_CONTAINER");
+
+
+            debugFrontend.CallFunction("SET_DATA_SLOT", 0, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Attack), percent + "%");
+
+            debugFrontend.CallFunction("DRAW_INSTRUCTIONAL_BUTTONS", -1);
+
+            debugFrontend.Render2D();
+
+
+        }
+
+        static public void DrawStats(string entity_name, string entity_desc, string first_name, string second_name, string third_name, string fourth_name, int first_value, int second_value, int third_value, int fourth_value, Vector3 position, int scaleformNumber = 1)
+        {
+            Scaleform sc = new Scaleform("mp_car_stats_0" + scaleformNumber + "");
+            if (sc == null || !sc.IsLoaded)
+            {
+                //sc = new Scaleform("mp_car_stats_01");
+
+
+            }
+            else
+            {
+                sc.CallFunction("SET_VEHICLE_INFOR_AND_STATS", entity_name, entity_desc, "MPCarHUD", "Pfister", first_name, second_name, third_name, fourth_name, first_value, second_value, third_value, fourth_value);
+
+
+                //racertext.CallFunction("setBars", 1, 1, 1); //(float)Math.Round((float)(first_value * 2))
+
+                sc.Render3D(position, GameplayCamera.Rotation, new Vector3(6f * 3f, 3f * 3f, 1f * 3f));
+            }
+        }
+
+        static public unsafe List<float> GetWheelSlippage(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x1A8;
+            List<float> angle = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = *((float*)(wheel + offset));
+                angle.Add(pos);
+            }
+            return angle;
+        }
+
+
+        public static float GetRoadHeading(Entity E, float ahead)
+        {
+            if (CanWeUse(E))
+            {
+                OutputArgument outArgA = new OutputArgument();
+                OutputArgument outArgB = new OutputArgument();
+                Vector3 p = E.Position + (E.ForwardVector * ahead);
+
+                if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING, p.X, p.Y, p.Z, outArgA, outArgB, 0, 1077936128, 0))
+                {
+                    Vector3 pos = outArgA.GetResult<Vector3>();
+
+                    return outArgB.GetResult<float>();
+                }
+            }
+            return 0;
+        }
+
+        public static float GetRoadOutOfBoundsX(Entity E, float ahead)
+        {
+            if (CanWeUse(E))
+            {
+                OutputArgument outArgA = new OutputArgument();
+                OutputArgument outArgB = new OutputArgument();
+                Vector3 p = E.Position + (E.ForwardVector * ahead);
+
+                if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING, p.X, p.Y, p.Z, outArgA, outArgB, 0, 1077936128, 0))
+                {
+                    Vector3 pos = outArgA.GetResult<Vector3>();
+
+                    return GetOffset(E, pos).X;
+                }
+            }
+            return 0;
+        }
+
+        public static Vector3 GetRoadPos(Vector3 pos)
+        {
+
+            OutputArgument outArgA = new OutputArgument();
+            OutputArgument outArgB = new OutputArgument();
+            Vector3 p = pos;
+
+            if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING, p.X, p.Y, p.Z, outArgA, outArgB, 0, 1077936128, 0))
+            {
+                Vector3 r = outArgA.GetResult<Vector3>();
+                return r;
+            }
+
+            return Vector3.Zero;
+        }
+        Vector3 Bezier3(float t, Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
+        {
+            float u = 1 - t;
+            float tt = t * t;
+            float uu = u * u;
+            float uuu = uu * u;
+            float ttt = tt * t;
+
+            Vector3 p = uuu * p0;
+            p += 3 * uu * t * p1;
+            p += 3 * u * tt * p2;
+            p += ttt * p3;
+
+            return p;
+        }
+
+        public static Vector3 Bezier2(Vector3 Start, Vector3 End, float t)
+        {
+            return (((1 - t) * (1 - t)) * Start) + (2 * t * (1 - t) * Vector3.Zero) + ((t * t) * End);
+        }
+
+        public static int ClosestNodeToPlace(Vector3 v, List<Vector3> PathRoute)
+        {
+            Vector3 closest = PathRoute.OrderBy(p => p.DistanceTo(v)).ToList()[0];
+            for (int i = 0; i < PathRoute.Count - 1; i++) if (PathRoute[i] == closest) return i;
+            return 0;
+        }
+        public static float LaneSelectionApproachCorner(Racer r, Corner c, bool draw = false)
+        {
+            return 0f;
+        }
+        public static void LookForCornerAhead(Racer r)
+        {
+
+            int spd = (int)(r.Car.Velocity.Length());
+            int refNode = (int)(r.CurrentTrackPoint.Node + (spd * 3));
+            CornerPoint possiblyNext = CornerPoints.Skip(refNode).Take(spd * 5).FirstOrDefault(c => c.IsKey);
+
+
+            if (possiblyNext != null)
+            {
+                r.mem.Corner = new Corner(GetSpeedForCorner(possiblyNext, r), possiblyNext);
+            }
+
+        }
+
+        public static Vector3 LerpByDistance(Vector3 A, Vector3 B, float x)
+        {
+            Vector3 P = x * Vector3.Normalize(B - A) + A;
+            return P;
+        }
+        public static Vector3 GetXfromPosInDirection(Vector3 mypos, Vector3 dir, Vector3 pos)
+        {
+
+            Vector3 newDir = mypos - pos;
+            Vector3 offset = Vector3.Cross(dir, newDir);
+            return offset;
+        }
+        public static bool IsRoadBusy(Vector3 pos, int carNum)
+        {
+            OutputArgument outArgA = new OutputArgument();
+            OutputArgument outArgB = new OutputArgument();
+            if (Function.Call<bool>(Hash.GET_VEHICLE_NODE_PROPERTIES, pos.X, pos.Y, pos.Z, outArgA, outArgB))
+            {
+                int busy = outArgA.GetResult<int>();
+                int flags = outArgB.GetResult<int>();
+
+                //DisplayHelpTextThisFrame("Busy:" + busy + "~n~Flags:" + flags);
+                if (busy >= carNum) return true;
+
+                //BOOL GET_VEHICLE_NODE_PROPERTIES(float x, float y, float z, int *density, int* flags) // 0x0568566ACBB5DEDC 0xCC90110B
+            }
+            return false;
+        }
+
+        //Returns the speed (m/s) you should be going at, given a distance (m) to the target, 
+        //the target speed (m/s) at distance Zero and a theoretical max deceleration (m/s^2)
+        public static float MapIdealSpeedForDistance(CornerPoint c, Racer r)
+        {
+            //Distance before the corner node to achieve the expected speed
+
+            //Math variables
+            float targetDistance = (c.Node - c.LengthStart - r.CurrentTrackPoint.Node) - 25 - r.Car.Velocity.Length();
+
+            float velCurrent = r.Car.Velocity.Length();
+            float velTarget = r.mem.Corner.Speed;// * r.BehaviorVariance[RandomVariance.SpeedAggroVariance];
+            float timeToReachTarget = Math.Max((targetDistance / velCurrent), 0.01f);
+
+            //Braking ability has to account for at least 25% of the wheel grip to count as fully taking advantage of the grip. Else, braking Gs are less than grip Gs
+            //float brakingAbility = (r.vehData.CurrentGrip * (float)Math.Round(ARS.map(ARS.GetPercent(r.handlingData.BrakingAbility, r.vehData.CurrentGrip), 0f, 25f, 0f, 1f, true), 3));
+            float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.vData.CurrentMechanicalGrip) * r.RiskFactorForBrake();
+
+
+            //Late brake reduces the safety distance    
+            float spd = velTarget + (float)((brakingAbility * r.Handling.Gravity) * timeToReachTarget);
+            return spd;
+        }
+
+        static Vector3 OffsetByAngle(Vehicle v, Vector3 refDir, Vector3 goal, float angle)
+        {
+            Vector3 outVec = Vector3.Zero;
+
+            float speed = v.Position.DistanceTo(goal);
+            Vector3 Position = v.Position;
+
+            Vector3 Goaltemp = goal; //Position + (v.ForwardVector * speed);
+            Vector3 Direction = (Goaltemp - Position).Normalized;
+            Vector3 Goal = Position + Direction * speed;
+
+            float Angle = angle;// Vector3.Angle(v.Velocity.Normalized, Direction);
+            if (Vector3.SignedAngle(Direction, refDir, Vector3.WorldUp) < 0) Angle = -Angle;
+
+            Vector3 offsetDirection = Quaternion.RotationAxis(Vector3.WorldUp, (float)(System.Math.PI / 180f) * Angle) * Direction; // Quaternion.RotationAxis takes radian angles
+
+            Vector3 physGoal = Position + offsetDirection * speed;
+
+            outVec = Vector3.Cross(Direction, (new Vector3(0, 0, (Goal.DistanceTo(physGoal)))));
+            if (Vector3.SignedAngle(Direction, offsetDirection, Vector3.WorldUp) > 0) outVec = -outVec;
+
+            DrawLine(Position, goal, Color.White);
+            DrawLine(Position, goal + outVec, Color.White);
+            return outVec;
+        }
+
+        static Random rnd = new Random();
+        public static int GetRandomInt(int min, int max)
+        {
+            return rnd.Next(min, max);
+        }
+
+        public static void DrawLine(Vector3 from, Vector3 to, Color color)
+        {
+            Function.Call(Hash.DRAW_LINE, from.X, from.Y, from.Z, to.X, to.Y, to.Z, color.R, color.G, color.B, color.A);
+        }
+
+        //protected override void Dispose(bool dispose)
+        void OnAbort(object sourc, EventArgs e)
+        {
+
+            World.RenderingCamera = null;
+            Function.Call(Hash._STOP_ALL_SCREEN_EFFECTS);
+            if (InFreeCam)
+            {
+                ToggleFreeCam();
+
+            }
+            Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+
+
+            foreach (int fx in FlareFX) Function.Call(Hash.STOP_PARTICLE_FX_LOOPED, fx);
+            if (CanWeUse(FreecCamRide)) FreecCamRide.Delete();
+
+            foreach (Prop p in CustomProps) if (CanWeUse(p)) p.Delete();
+            foreach (Prop p in AutoGeneratedProps) if (CanWeUse(p)) p.Delete();
+            foreach (Prop p in TrackLimits) if (CanWeUse(p)) p.Delete();
+            foreach (Racer racer in Racers)
+            {
+                racer.Delete();
+            }
+
+            Racers.Clear();
+            if (racertext != null && racertext.IsLoaded) racertext.Unload();
+            if (SCCountdown != null)
+            {
+                SCCountdown.Dispose();
+
+            }
+            scaleform.Unload();
+            scaleform.Dispose();
+            Function.Call(Hash._0x10D373323E5B9C0D);
+            Game.Player.Character.HasGravity = true;
+            //base.Dispose(dispose);
+        }
+        public bool IsAhead(Vehicle v, Vector3 pos)
+        {
+            return Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS, v, pos.X, pos.Y, pos.Z).Y < 0;
+        }
+
+        public bool HasArrived(Vehicle v, Vector3 pos, float range)
+        {
+            return v.IsInRangeOf(pos, range) || (Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS, v, pos.X, pos.Y, pos.Z).Y < range && v.IsInRangeOf(pos, range * 2));
+        }
+        public static bool WasCheatStringJustEntered(string cheat)
+        {
+            return Function.Call<bool>(Hash._0x557E43C447E700A8, Game.GenerateHash(cheat));
+        }
+
+        int intendedOpponents = 5;
+
+        /// TOOLS ///
+        void LoadSettings()
+        {
+            Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+
+            Log(LogImportance.Info, "Loading Options.ini ...");
+            if (File.Exists(@"scripts\ARS\Options.ini"))
+            {
+
+                SettingsFile = ScriptSettings.Load(@"scripts\ARS\Options.ini");
+
+
+                intendedOpponents = SettingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 5);
+                TrackFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "TrackFilter", "city");
+                DisciplineFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "Disciplines", "muscle");
+                Log(LogImportance.Info, "Loaded Options.");
+            }
+            else
+            {
+                Log(LogImportance.Error, " 'Scripts/ARS/Options.ini' does not exist. All config values will be default.");
+                UI.Notify("~o~Failed to load the Options file.~w~ Check you've installed ARS properly.");
+            }
+
+            Log(LogImportance.Info, "Loading Developer Settings.ini ...");
+            if (File.Exists(@"scripts\ARS\Developer Settings.ini"))
+            {
+
+                DevSettingsFile = ScriptSettings.Load(@"scripts\ARS\Developer Settings.ini");
+
+
+                Log(LogImportance.Info, "Loaded Developer settings.");
+            }
+            else
+            {
+                Log(LogImportance.Error, " 'Scripts/ARS/Settings.ini' does not exist. All config values will be default.");
+                UI.Notify("~o~Failed to load the Settings file.~w~ Check you've installed ARS properly.");
+            }
+
+            if (File.Exists(@"scripts\ARS\MemoryOffsets.ini"))
+            {
+                ScriptSettings menOffexts = ScriptSettings.Load(@"scripts\ARS\MemoryOffsets.ini");
+                throttleOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Throttle", 0x0);
+                steeroffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Steer", 0x0);
+                brakeOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Brake", 0x0);
+                Log(LogImportance.Info, "Loaded Memory Offsets.");
+
+                //                steeroffset = 0x9AC;
+                Log(LogImportance.Info, "[MEMORY] Learned the steer offset from file: " + steeroffset);
+
+            }
+            else
+            {
+                Log(LogImportance.Error, " 'Scripts/ARS/MemoryOffsets.ini' does not exist. ARS will try to learn the memory offsets from the game.");
+                UI.Notify("~o~Failed to load the MemoryOffsets file.~w~ Check you've installed ARS properly.");
+            }
+
+
+            List<ScriptSettings> pFiles = new List<ScriptSettings>();
+            foreach (string file in Directory.EnumerateFiles(@"scripts\ARS\Personalities"))
+            {
+                pFiles.Add(ScriptSettings.Load(file));
+            }
+
+            personalitySets = new List<PersonalitySet>();
+            for (int per = 0; per < pFiles.Count; per++)
+            {
+                ScriptSettings pFile = pFiles[per];
+                PersonalitySet p = new PersonalitySet();
+
+                p.Name = pFile.GetValue<string>("GENERAL", "Name", "Normal");
+                p.ProbToUse = pFile.GetValue<int>("GENERAL", "ProbToUse", 50);
+                p.Model = pFile.GetValue<string>("GENERAL", "Model", "");
+
+                p.SkillRange = pFile.GetValue<string>("GENERAL", "SkillRange", "50,100");
+
+
+                p.Stability.WheelspinOnMinSlide = pFile.GetValue("WHEELSPIN", "Base", 100f) / 100f;
+                p.Stability.WheelspinOnMaxSlide = pFile.GetValue("WHEELSPIN", "FullSlide", 50f) / 100f;
+
+
+                p.Rivals.AggressionBuildup = pFile.GetValue("AGGRESSION_RIVAL", "AggroBuildup", 0.01f);
+
+
+                p.Rivals.BehindRivalMinDistance = pFile.GetValue("AGGRESSION_RIVAL", "BehindRivalMinDistance", 0.01f);
+                p.Rivals.SideToSideMinDist = pFile.GetValue("AGGRESSION_RIVAL", "SideToRivalMinDistance", 0.01f);
+
+                p.Stability.SpeedRiskFactorBase = pFile.GetValue("AGGRESSION_TRACK", "SpeedRiskFactorBase", 1);
+                p.Stability.SpeedRiskFactorAggro = pFile.GetValue("AGGRESSION_TRACK", "SpeedRiskFactorAggro", 1);
+
+                p.Stability.BrakeRiskFactorBase = pFile.GetValue("AGGRESSION_TRACK", "BrakeRiskFactorBase", 1);
+                p.Stability.BrakeRiskFactorAggro = pFile.GetValue("AGGRESSION_TRACK", "BrakeRiskFactorAggro", 1);
+
+                p.Rivals.ManeuverRiskFactor = pFile.GetValue("AGGRESSION_TRACK", "ManeuverRiskFactor", 1);
+
+                //Understeer
+                p.Stability.UndersteerFactor = pFile.GetValue("AGGRESSION_TRACK", "UndersteerFactor", 0f);
+
+                personalitySets.Add(p);
+            }
+
+            personalitySets = personalitySets.OrderBy(p => p.ProbToUse).Reverse().ToList();
+
+        }
+        List<PersonalitySet> personalitySets = new List<PersonalitySet>();
+        public enum LogImportance { Info, Error, Fatal }
+        public static void Log(LogImportance i, string text, bool forced = false)
+        {
+            if (DevSettingsFile != null && DevSettingsFile.GetValue<LogImportance>("GENERAL", "LogLevel", LogImportance.Info) > i && !forced) return;
+            string log = "\n[" + DateTime.Now + "](" + i.ToString() + "): " + text;
+            File.AppendAllText(@"scripts\ARS\Log.log", log);
+        }
+
+        void WarnPlayer(string script_name, string title, string message)
+        {
+            Function.Call(Hash._SET_NOTIFICATION_TEXT_ENTRY, "STRING");
+            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, message);
+            Function.Call(Hash._SET_NOTIFICATION_MESSAGE, "CHAR_SOCIAL_CLUB", "CHAR_SOCIAL_CLUB", true, 0, title, "~b~" + script_name);
+        }
+
+        public static bool CanWeUse(Entity entity)
+        {
+            return entity != null && entity.Exists();
+        }
+
+
+        void DisplayHelpTextThisFrame(string text)
+        {
+            if (HelpMessages.Count > 0) return;
+            Function.Call(Hash._SET_TEXT_COMPONENT_FORMAT, "STRING");
+            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, text);
+            Function.Call(Hash._DISPLAY_HELP_TEXT_FROM_STRING_LABEL, 0, false, false, -1);
+        }
+
+
+        static Vector2 World3DToScreen2d(Vector3 pos)
+        {
+            var x2dp = new OutputArgument();
+            var y2dp = new OutputArgument();
+
+            Function.Call<bool>(Hash._WORLD3D_TO_SCREEN2D, pos.X, pos.Y, pos.Z, x2dp, y2dp);
+            return new Vector2(x2dp.GetResult<float>(), y2dp.GetResult<float>());
+        }
+
+        public enum DrawTextAlign { Center, Left, Right }
+        public enum DrawTextFont { Default, Italics, Squared }
+        public static void DrawText(Vector3 pos, string t, Color c, float scale)
+        {
+            Vector2 screeninfo = World3DToScreen2d(pos);
+            Function.Call(Hash._SET_TEXT_ENTRY, "STRING");
+            Function.Call(Hash.SET_TEXT_CENTRE, true);
+            Function.Call(Hash.SET_TEXT_COLOUR, c.R, c.G, c.B, c.A);
+            Function.Call(Hash.SET_TEXT_SCALE, 1f, scale);
+            Function.Call(Hash.SET_TEXT_DROP_SHADOW, true);
+            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, t);
+            Function.Call(Hash._DRAW_TEXT, screeninfo.X, screeninfo.Y);
+        }
+
+
+        public static float DrawText(Vector2 pos, string t, Color c, DrawTextFont font, DrawTextAlign align, float scale)
+        {
+            Function.Call(Hash._SET_TEXT_ENTRY, "STRING");
+            Function.Call(Hash.SET_TEXT_COLOUR, c.R, c.G, c.B, c.A);
+            Function.Call(Hash.SET_TEXT_SCALE, 1f, scale);
+            Function.Call(Hash.SET_TEXT_RIGHT_JUSTIFY, true);
+            Function.Call(Hash.SET_TEXT_DROP_SHADOW, true);
+            Function.Call(Hash.SET_TEXT_JUSTIFICATION, (int)align);
+            Function.Call(Hash.SET_TEXT_FONT, (int)font);
+            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, t);
+            Function.Call(Hash._DRAW_TEXT, pos.X, pos.Y);
+            Function.Call(Hash._0x54CE8AC98E120CAB, "STRING");
+            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, t);
+
+            float size = Function.Call<float>(Hash._0x85F061DA64ED2F67, 1);
+
+            return size;
+        }
+
+
+        public static float GetDownforceGsAtSpeed(Racer r, float ms)
+        {
+
+
+            float Gs = 0f;
+            int nwheels = ARS.GetNumWheels(r.Car);
+            float basedownf = 0.035f;
+
+            //Downforce at that speed
+            if (r.Car.HasBone("spoiler")) Gs = 0.035f * nwheels;
+            else if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) Gs = 0.035f * nwheels;
+            else Gs += map(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, basedownf, true) * r.Handling.Downforce * nwheels;
+            //UI.ShowSubtitle(Gs.ToString("0.000"), 500);
+            if (float.IsNaN(Gs) || Gs > 5f) return 0f;
+            else return Gs;
+        }
+
+
+        static public unsafe ulong GetHandlingPtr(Vehicle handle)
+        {
+            GameVersion gameVersion = Game.Version;
+            var address = (ulong)handle.MemoryAddress;
+            if (handlingPtr == 0x0)
+            {
+                IntPtr addr = (IntPtr)FindPattern("\x3C\x03\x0F\x85\x00\x00\x00\x00\x48\x8B\x41\x20\x48\x8B\x88", "xxxx????xxxxxxx");
+
+                if (addr != null)
+                {
+                    handlingPtr = *(uint*)(addr + 0x16);
+                }
+            }
+            return *((ulong*)(address + handlingPtr));
+        }
+
+        public static unsafe float GetTRCurveLat(Vehicle v)
+        {
+
+            if (!CanWeUse(v)) return 0f;
+            ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0f;
+            ulong tractionCurveMaxOffset = 0x0098;
+            if (handlingAddress < 1) return 0f;
+            float result = *(float*)(handlingAddress + tractionCurveMaxOffset);
+            return result;
+        }
+        public static unsafe float GetTRCurveMax(Vehicle v)
+        {
+
+            if (!CanWeUse(v)) return 0f;
+            ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0f;
+            ulong tractionCurveMaxOffset = 0x088;
+            if (handlingAddress < 1) return 0f;
+            float result = *(float*)(handlingAddress + tractionCurveMaxOffset);
+            return result;
+        }
+        public static unsafe float GetSteerLock(Vehicle v)
+        {
+
+            if (!CanWeUse(v)) return 0f;
+            ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0f;
+            ulong steerlock = 0x0080;
+            if (handlingAddress < 1) return 0f;
+            float result = *(float*)(handlingAddress + steerlock);
+            return result;
+        }
+        public static unsafe float GetDownforce(Vehicle v)
+        {
+
+            if (!CanWeUse(v)) return 0f;
+            ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0f;
+            ulong downfOffset = 0x0014;
+            if (handlingAddress < 1) return 0f;
+            float result = *(float*)(handlingAddress + downfOffset);
+            return result;
+        }
+
+
+        public static unsafe int GetModelFlags(Vehicle v)
+        {
+
+            if (!CanWeUse(v)) return 0;
+            ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0;
+            ulong modelflags = 0x124;
+            if (handlingAddress < 1) return 0;
+            int result = *(int*)(handlingAddress + modelflags);
+            return result;
+        }
+        public static unsafe int GetHandlingFlags(Vehicle v)
+        {
+
+            if (!CanWeUse(v)) return 0;
+            ulong handlingAddress = GetHandlingPtr(v);
+            if (handlingAddress == 0) return 0;
+            ulong modelflags = 0x128;
+            if (handlingAddress < 1) return 0;
+            int result = *(int*)(handlingAddress + modelflags);
+            return result;
+        }
+        public static unsafe void SetDefMultiplier(Vehicle v, float mult)
+        {
+            if (!CanWeUse(v)) return;
+
+            ulong handlingAddress = GetHandlingPtr(v);
+
+            ulong tractionCurveMaxOffset = 0x00D0;
+            *(float*)(handlingAddress + tractionCurveMaxOffset) = mult;
+        }
+        unsafe private void SetGearRatio(Vehicle v, uint gear, float ratio)
+        {
+            if (!CanWeUse(v)) return;
+
+            if (gear > 7) return;
+
+            if (!v.Exists()) return;
+
+            *(float*)(v.MemoryAddress + 0x838 + gear * sizeof(float)) = ratio;
+        }
+
+        public static void RandomTuning(Vehicle veh, bool color, bool livery, bool parts, bool performance, bool horn)
+        {
+
+            veh.InstallModKit();
+
+            Script.Wait(100);
+            if (livery && veh.LiveryCount > 0) veh.Livery = GetRandomInt(0, veh.LiveryCount);
+            if (veh.GetModCount(VehicleMod.Livery) > 0) veh.SetMod(VehicleMod.Livery, GetRandomInt(0, veh.GetModCount(VehicleMod.Livery)), false);
+
+            if (performance) veh.ToggleMod(VehicleToggleMod.Turbo, true);
+            if (color)
+            {
+                int c = GetRandomInt(1, Function.Call<int>(Hash.GET_NUMBER_OF_VEHICLE_COLOURS, veh));
+                Function.Call(Hash.SET_VEHICLE_COLOUR_COMBINATION, veh, c);
+            }
+
+
+            //Change tuning parts
+            foreach (int mod in Enum.GetValues(typeof(VehicleMod)).Cast<VehicleMod>())
+            {
+                if (mod == (int)VehicleMod.Horns) continue;
+                if (veh.GetModCount((VehicleMod)mod) > 0)
+                {
+
+                    if (new List<VehicleMod> { VehicleMod.Engine, VehicleMod.Transmission, VehicleMod.Brakes, VehicleMod.Suspension }.Contains((VehicleMod)mod))
+                    {
+                        if (!performance) continue;
+                    }
+                    else if (!parts) continue;
+                    if (mod == (int)VehicleMod.FrontWheels) continue;
+                    if (mod == (int)VehicleMod.Suspension) continue;
+                    if (mod == (int)VehicleMod.Livery && !livery) continue;
+                    if (mod == (int)VehicleMod.Horns && !horn) continue;
+                    int d = veh.GetModCount((VehicleMod)mod);
+
+                    if (d > 0)
+                    {
+                        Script.Wait(30);
+                        veh.SetMod((VehicleMod)mod, GetRandomInt(0, d), false);
+
+                    }
+                }
+            }
+
+            //Change neons if at night
+            if (World.CurrentDayTime.Hours > 20 || World.CurrentDayTime.Hours < 7)
+            {
+
+                //Color neoncolor = Color.FromArgb(0, Util.GetRandomInt(0, 255), Util.GetRandomInt(0, 255), Util.GetRandomInt(0, 255));
+                Script.Wait(30);
+                Color neoncolor = Color.Red;// veh.CustomPrimaryColor;// Color.FromKnownColor((KnownColor)GetRandomInt(0, Enum.GetValues(typeof(KnownColor)).Cast<KnownColor>().Count()));
+                veh.NeonLightsColor = neoncolor;
+                /*
+                veh.SetNeonLightsOn(VehicleNeonLight.Front, true);
+                veh.SetNeonLightsOn(VehicleNeonLight.Back, true);
+                veh.SetNeonLightsOn(VehicleNeonLight.Left, true);
+                veh.SetNeonLightsOn(VehicleNeonLight.Right, true);
+                */
+            }
+
+
+
+
+
+
+        }
+
+
+        static public void DisplayHelpTextTimed(string text, int time)
+        {
+
+            Function.Call(Hash._SET_TEXT_COMPONENT_FORMAT, "STRING");
+            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, text);
+            Function.Call(Hash._DISPLAY_HELP_TEXT_FROM_STRING_LABEL, 0, false, false, time);
+        }
+
+        static public void DisplayHelpText(string text)
+        {
+            if (HelpMessages.Count > 0) return;
+            Function.Call(Hash._SET_TEXT_COMPONENT_FORMAT, "STRING");
+            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, text);
+            Function.Call(Hash._DISPLAY_HELP_TEXT_FROM_STRING_LABEL, 0, false, false, -1f);
+        }
+
+
+        public XmlDocument LoadDriver(string DriverName)
+        {
+            List<dynamic> info = new List<dynamic>();
+
+            string filePath = @"Scripts\ARS\Drivers\" + DriverName + ".xml";
+
+
+
+            // File.Create(filePath);
+            //            if (File.Exists(@"scripts\\NewRacingSystem.ini"))
+
+            Script.Wait(200);
+
+            XmlDocument XMLFile = new XmlDocument();
+            XMLFile.Load(filePath);
+
+            if (XMLFile == null)
+            {
+                UI.Notify("~r~cannot find file");
+                return XMLFile;
+            }
+
+
+            info.Add(XMLFile);
+            return XMLFile;
+        }
+        public static string CreateDriver(Ped ped)
+        {
+            string name = Game.GetUserInput(32);
+
+            string filePath = @"Scripts\ARS\Drivers\" + name + ".xml";
+
+            File.AppendAllText(filePath, "");
+
+            XmlDocument XMLFile = new XmlDocument();
+            if (XMLFile == null)
+            {
+                UI.Notify("~r~cannot find file");
+            }
+
+            XmlNode Data = XMLFile.CreateNode(XmlNodeType.Element, "Data", null);
+            XMLFile.AppendChild(Data);
+
+            XmlNode Driver = XMLFile.CreateNode(XmlNodeType.Element, "Driver", null);
+
+            //Name and model
+            XmlNode temp = XMLFile.CreateElement("Name");
+            temp.InnerText = name;
+            Driver.AppendChild(temp);
+
+            temp = XMLFile.CreateElement("Model");
+            temp.InnerText = ped.Model.Hash.ToString();
+            Driver.AppendChild(temp);
+            temp = XMLFile.CreateElement("Clothes");
+            for (int i = -1; i < 20; i++)
+            {
+
+                int Component = Function.Call<int>(Hash.GET_PED_DRAWABLE_VARIATION, ped, i);
+                int Drawable = Function.Call<int>(Hash.GET_PED_TEXTURE_VARIATION, ped, i);
+
+                if (Component > -1 && Drawable > -1)
+                {
+                    XmlElement cloth = XMLFile.CreateElement("Cloth");
+                    cloth.InnerText = i.ToString();
+                    XmlAttribute id = XMLFile.CreateAttribute("DrawableID");
+                    id.InnerText = Drawable.ToString();
+                    XmlAttribute component = XMLFile.CreateAttribute("ComponentID");
+                    component.InnerText = Component.ToString();
+
+                    cloth.Attributes.Append(component);
+
+                    cloth.Attributes.Append(id);
+                    // id = XMLFile.CreateAttribute(i.ToString());
+                    temp.AppendChild(cloth);
+                }
+
+                //Function.Call<bool>(Hash.IS_VEHICLE_EXTRA_TURNED_ON, veh, i)
+            }
+            for (int i = -1; i < 20; i++)
+            {
+
+                int Component = Function.Call<int>(Hash.GET_PED_PROP_INDEX, ped, i);
+                int Drawable = Function.Call<int>(Hash.GET_PED_PROP_TEXTURE_INDEX, ped, i);
+
+                if (Component > -1 && Drawable > -1)
+                {
+                    XmlElement prop = XMLFile.CreateElement("Prop");
+                    prop.InnerText = i.ToString();
+                    XmlAttribute id = XMLFile.CreateAttribute("PropID");
+                    id.InnerText = Component.ToString();
+                    XmlAttribute component = XMLFile.CreateAttribute("TextureID");
+                    component.InnerText = Drawable.ToString();
+
+                    prop.Attributes.Append(component);
+
+                    prop.Attributes.Append(id);
+                    // id = XMLFile.CreateAttribute(i.ToString());
+                    temp.AppendChild(prop);
+                }
+
+                //Function.Call<bool>(Hash.IS_VEHICLE_EXTRA_TURNED_ON, veh, i)
+            }
+            Driver.AppendChild(temp);
+
+            //Skills
+            XmlNode DriverSkills = XMLFile.CreateElement("Skills");
+
+
+            XmlNode Skill = XMLFile.CreateElement("Skill");
+            Skill.InnerText = "ExampleSkill";
+            XmlAttribute att = XMLFile.CreateAttribute("value");
+            att.InnerText = "25";
+            Skill.Attributes.Append(att);
+            DriverSkills.AppendChild(Skill);
+
+            Skill = XMLFile.CreateElement("Skill");
+            Skill.InnerText = "ExampleSkill2";
+            att = XMLFile.CreateAttribute("value2");
+            att.InnerText = "50";
+            Skill.Attributes.Append(att);
+            DriverSkills.AppendChild(Skill);
+
+
+
+            Driver.AppendChild(DriverSkills);
+
+
+            Data.AppendChild(Driver);
+
+            XMLFile.AppendChild(Data);
+
+            XMLFile.Save(@"scripts\\ARS\Drivers\" + name + ".xml");
+            UI.Notify("Saved");
+            return "Finished";
+
+        }
+        List<dynamic> LoadVehicle(string name, Vector3 place)
+        {
+            Vehicle car = null;
+            XmlDocument XMLFile = new XmlDocument();
+
+            List<dynamic> result = new List<dynamic>();
+            List<XmlDocument> files = new List<XmlDocument>();
+
+            foreach (string filename in Directory.GetFiles(@"Scripts\ARS\Vehicles\"))
+            {
+                XMLFile.Load(filename);
+                string vehiclename = XMLFile.SelectSingleNode("//Name").InnerText;
+
+                if (vehiclename == name)
+                {
+                    UI.Notify("Found");
+                    break;
+                }
+            }
+
+            car = World.CreateVehicle(int.Parse(XMLFile.SelectSingleNode("//Model").InnerText), place);
+            car.PrimaryColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Primary").InnerText);
+            car.SecondaryColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Secondary").InnerText);
+            car.PearlescentColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Pearl").InnerText);
+            car.RimColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Wheel").InnerText);
+            car.DashboardColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Dash").InnerText);
+            car.TrimColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Trim").InnerText);
+
+            foreach (XmlElement modelement in XMLFile.SelectNodes("//Mods/Mod")) car.SetMod((VehicleMod)int.Parse(modelement.GetAttribute("ModID")), int.Parse(modelement.InnerText), false);
+
+
+
+            foreach (XmlElement modelement in XMLFile.SelectNodes("//Mods/ToggleMod")) car.ToggleMod((VehicleToggleMod)int.Parse(modelement.GetAttribute("ModID")), bool.Parse(modelement.InnerText));
+
+
+            foreach (XmlElement modelement in XMLFile.SelectNodes("//Extras/Extra")) car.ToggleExtra(int.Parse(modelement.InnerText), true);
+
+
+
+            /*
+
+            float acc = float.Parse(XMLFile.SelectSingleNode("//Acceleration").InnerText);
+
+            if (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc)
+            {
+                float mul = 10f;
+                while (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc)
+                {
+                    mul += 10;
+                    car.EnginePowerMultiplier = mul;
+                    Script.Wait(0);
+                }
+            }
+            */
+
+
+
+
+            car.IsPersistent = false;
+
+            result.Add(car);
+            result.Add(XMLFile);
+
+
+            return result;
+        }
+        VehicleColor[] randomcolors = { VehicleColor.MetallicRed, VehicleColor.MetallicRaceYellow, VehicleColor.MetallicBlue, VehicleColor.MetallicOrange, VehicleColor.MetallicSteelGray };
+
+        List<XmlDocument> CachedCandidates = new List<XmlDocument>();
+
+        void FillCachedCandidates(string dlist, int maxcars, bool allowScriptYield = true)
+        {
+            CachedCandidates.Clear();
+
+            List<string> disciplinesArray = dlist.Split(' ').ToList();
+            List<string> optionals = new List<string>();
+            List<string> required = new List<string>();
+            List<string> banned = new List<string>();
+            List<string> priority = new List<string>();
+
+
+            for (int i = 0; i < disciplinesArray.Count; i++)
+            {
+                if (disciplinesArray[i].Contains("+"))
+                {
+                    disciplinesArray[i] = disciplinesArray[i].Replace("+", "");
+                    required.Add(disciplinesArray[i].ToLowerInvariant());
+                }
+                else if (disciplinesArray[i].Contains("-"))
+                {
+                    disciplinesArray[i] = disciplinesArray[i].Replace("-", "");
+                    banned.Add(disciplinesArray[i].ToLowerInvariant());
+                }
+                else if (disciplinesArray[i].Contains("*"))
+                {
+                    //Log(LogImportance.Info, "has priority tag");
+                    disciplinesArray[i] = disciplinesArray[i].Replace("*", "");
+                    priority.Add(disciplinesArray[i].ToLowerInvariant());
+                }
+                else
+                {
+                    optionals.Add(disciplinesArray[i].ToLowerInvariant());
+                }
+            }
+
+            XmlDocument XMLFile = new XmlDocument();
+            List<XmlDocument> files = new List<XmlDocument>();
+            List<XmlDocument> candidates = new List<XmlDocument>();
+
+            Dictionary<XmlDocument, float> RacerToStats = new Dictionary<XmlDocument, float>();
+            List<string> approved = new List<string>();
+            List<string> haspriority = new List<string>();
+            int cooldown = 0;
+            if (dlist.Length > 0)
+            {
+                Log(LogImportance.Info, "Looking up racers that fit the " + dlist + " criteria...");
+
+                foreach (string racerfile in RacerTags.Keys)
+                {
+
+                    bool fitsOptionals = optionals.Count == 0;
+                    bool fitsBanned = false;
+                    bool fitsRequired = false;
+                    bool fitspriority = false;
+                    int reqscore = 0;
+
+                    foreach (string racerTag in RacerTags[racerfile].Split(' '))
+                    {
+                        //Log(LogImportance.Info, racerTag + " ...  ");
+                        foreach (string partial in optionals) if (racerTag.Contains(partial)) fitsOptionals = true;
+                        foreach (string req in required) if (racerTag == req) { Log(LogImportance.Info, racerfile + " fits  " + req + ""); reqscore++; }
+                        foreach (string pri in priority) if (pri.Contains(racerTag) || racerTag.Contains(pri)) { fitspriority = true; }
+                        if (banned.Contains(racerTag))
+                        {
+                            fitsBanned = true;
+                            break;
+                        }
+                    }
+                    if (reqscore == required.Count) fitsRequired = true;
+
+                    if (!fitsBanned && ((fitsOptionals && fitsRequired)))
+                    {
+                        Log(LogImportance.Info, System.IO.Path.GetFileName(racerfile) + " fits the criteria.");
+                        approved.Add(racerfile);
+                        if (fitspriority) haspriority.Add(racerfile);
+                    }
+                    cooldown++;
+                    if (allowScriptYield && cooldown > 20)
+                    {
+                        cooldown = 0;
+                        Yield();
+                    }
+                }
+
+
+                foreach (string filename in approved)
+                {
+                    XMLFile.Load(filename);
+
+                    if (1 == 1)
+                    {
+
+                        string m = "";
+                        if (GetChild(XMLFile, "//Model") != null) m = GetChild(XMLFile, "//Model").InnerText;
+                        if (1 == 2 && new Model(m).IsValid)
+                        {
+
+                            if (haspriority.Contains(filename))
+                            {
+                                Log(LogImportance.Info, "added priority reminder");
+
+                                XmlNode donot = XMLFile.CreateElement("priority");
+                                if (GetChild(XMLFile, "Vehicle") != null) GetChild(XMLFile, "Vehicle").AppendChild(donot);
+
+                            }
+                            candidates.Add(XMLFile);
+
+                        }
+                        else
+                        {
+
+                            int n = 0;
+                            int.TryParse(m, out n);
+                            Model model = new Model(n);
+                            if (model.IsValid)
+                            {
+
+
+
+                                if (haspriority.Contains(filename))
+                                {
+                                    Log(LogImportance.Info, "added priority reminder");
+
+                                    XmlNode donot = XMLFile.CreateElement("priority");
+                                    if (GetChild(XMLFile, "Vehicle") != null) GetChild(XMLFile, "Vehicle").AppendChild(donot);
+                                }
+                                candidates.Add(XMLFile);
+                                float stats = Function.Call<float>((Hash)0xF417C2502FFFED43, model) / 100;
+                                stats += Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model);
+                                stats += Function.Call<float>(Hash.GET_VEHICLE_MODEL_MAX_TRACTION, model) / 2;
+                                RacerToStats.Add(XMLFile, stats);
+                            }
+                            else
+                            {
+
+                                Log(LogImportance.Info, n + " in " + filename + " is not a valid model. Its probably just not installed in this machine.");
+
+                            }
+                        }
+
+                    }
+
+                    XMLFile = new XmlDocument();
+                }
+                Log(LogImportance.Info, "Vehicles found: " + candidates.Count);
+
+                candidates.Clear();
+
+
+                foreach (var item in RacerToStats.OrderBy(r => r.Value))
+                {
+                    candidates.Add(item.Key);
+                }
+
+                while (candidates.Count > maxcars) candidates.RemoveAt(0);
+                Log(LogImportance.Info, "Vehicles sorted by top speed.");
+
+
+            }
+            else
+            {
+                Log(LogImportance.Info, "The discipline criteria is empty. Skipping the vehicle lookup.");
+
+            }
+
+            if (maxcars > -1)
+            {
+                if (candidates.Count > 0)
+                {
+
+
+                    if (candidates.Count < maxcars && SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AllowDuplicates", true))
+                    {
+                        Log(LogImportance.Info, "There are not enough candidates to fill the grid. Duplicating some vehicles...");
+
+                        List<XmlDocument> dupes = new List<XmlDocument>();
+                        foreach (XmlDocument d in candidates)
+                        {
+                            XmlDocument n = new XmlDocument();
+                            n = (XmlDocument)d.Clone();
+                            if (n.SelectSingleNode("//Colors") != null)
+                            {
+                                n.SelectSingleNode("//Colors").RemoveAll();
+                            }
+
+
+                            if (n.SelectNodes("//Mods/Mod").Count > 0)
+                            {
+                                n.SelectSingleNode("//Vehicle").RemoveChild(n.SelectSingleNode("//Mods"));
+                            }
+
+                            dupes.Add(n);
+                        }
+
+                        while (candidates.Count < maxcars)
+                        {
+
+                            candidates.AddRange(dupes);
+                        }
+
+                    }
+
+
+                }
+                if (candidates.Count > maxcars && candidates.Count > 1)
+                {
+
+                    Log(LogImportance.Info, "There are too many candidates (" + candidates.Count + ") for the selected grid size. Shuffling vehicles around to randomize the final list.");
+                    for (int i = 0; i < 30; i++)
+                    {
+                        int r = GetRandomInt(0, candidates.Count - 1);
+                        XmlDocument taken = candidates[r];
+
+                        candidates.RemoveAt(r);
+                        candidates.Insert(GetRandomInt(0, candidates.Count - 1), taken);
+                    }
+                    int patience = 0;
+
+                    Log(LogImportance.Info, "Removing random vehicles until we are within the grid size (" + maxcars + ").");
+                    while (candidates.Count > maxcars)
+                    {
+
+                        //Log(LogImportance.Info, "Checking if its priority");
+
+                        int r = GetRandomInt(0, candidates.Count - 1);
+                        if (NodeExists(GetChild(candidates[r], "//Vehicle"), "priority"))
+                        {
+                            //Log(LogImportance.Info, "this guy is priority");
+
+                            patience++;
+                            if (patience > 100) break; else continue;
+                        }
+                        candidates.RemoveAt(r);
+                    }
+                }
+            }
+            CachedCandidates = candidates;
+        }
+
+        void LoadGrid(string dlist, int maxcars)
+        {
+            SetloadingPromptText("Loading vehicles...");
+
+            Log(LogImportance.Info, "Loading vehicle models");
+            Vehicle lastCar = null;
+            List<dynamic> result = new List<dynamic>();
+
+            Model LoadVehicleModel(string modelName)
+            {
+                int modelHash = 0;
+                int.TryParse(modelName, out modelHash);
+                if (modelHash == 0) Log(LogImportance.Info, "Loading Racer: " + modelName); else Log(LogImportance.Info, "Loading Racer: " + Function.Call<string>(Hash.GET_DISPLAY_NAME_FROM_VEHICLE_MODEL, modelHash));
+
+                Model vehicleModel = new Model(modelName);
+                Script.Wait(10);
+                if (vehicleModel.IsValid)
+                {
+                    vehicleModel = new Model(modelName);
+                }
+                else
+                {
+                    int hashVehicleModel = 0;
+                    int.TryParse(modelName, out hashVehicleModel);
+                    vehicleModel = hashVehicleModel;
+                }
+
+                Model raceModel = new Model("mp_m_freemode_01");
+                raceModel.Request();
+
+                while (!vehicleModel.IsLoaded)
+                {
+                    vehicleModel.Request();
+                    Script.Wait(10);
+                }
+
+                return vehicleModel;
+            }
+
+            List<string> GetVehicleTags(XmlDocument file)
+            {
+                XmlNodeList disciplines = file.SelectNodes("//Disciplines/Discipline");
+                List<string> tags = new List<string>();
+                foreach (XmlElement t in disciplines)
+                {
+                    tags.Add(t.InnerText.ToLowerInvariant());
+                }
+                return tags;
+            }
+
+            void ApplyCarAppearance(XmlDocument file, Vehicle car, List<string> tags)
+            {
+                if (tags.Contains("tuner"))
+                {
+                    RandomTuning(car, true, true, true, true, false);
+                }
+                else
+                {
+                    if (file.SelectSingleNode("//WheelType") != null) car.WheelType = (VehicleWheelType)int.Parse(file.SelectSingleNode("//WheelType").InnerText);
+                    if (file.SelectSingleNode("//Livery") != null) car.Livery = int.Parse(file.SelectSingleNode("//Livery").InnerText);
+                    if (file.SelectSingleNode("//Primary") != null) car.PrimaryColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Primary").InnerText);
+                    else
+                    {
+                        if (car.ColorCombinationCount > 2) car.ColorCombination = GetRandomInt(0, car.ColorCombinationCount);
+                        else
+                        {
+                            VehicleColor c = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
+                            car.PrimaryColor = c;
+                            car.SecondaryColor = c;
+                            car.PearlescentColor = c;
+                        }
+                    }
+                    if (file.SelectSingleNode("//Secondary") != null) car.SecondaryColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Secondary").InnerText);
+                    if (file.SelectSingleNode("//Pearl") != null) car.PearlescentColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Pearl").InnerText);
+                    if (file.SelectSingleNode("//Wheel") != null) car.RimColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Wheel").InnerText);
+                    if (file.SelectSingleNode("//Dash") != null) car.DashboardColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Dash").InnerText);
+                    if (file.SelectSingleNode("//Trim") != null) car.TrimColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Trim").InnerText);
+
+                    if (NodeExists(file, "//Mods"))
+                    {
+                        if (file.SelectNodes("//Mods/Mod").Count > 0)
+                        {
+                            foreach (XmlElement modElement in file.SelectNodes("//Mods/Mod"))
+                            {
+                                if (int.Parse(modElement.GetAttribute("ModIndex")) == 48)
+                                {
+                                    if (int.Parse(modElement.InnerText) == -1) car.SetMod(VehicleMod.Livery, GetRandomInt(0, car.GetModCount(VehicleMod.Livery)), false);
+                                }
+                                else
+                                {
+                                    car.SetMod((VehicleMod)int.Parse(modElement.GetAttribute("ModIndex")), int.Parse(modElement.InnerText), modElement.HasAttribute("IsCustom") && modElement.GetAttribute("IsCustom").ToLowerInvariant() == "true");
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        //RandomTuning(car, false, true, true, true, false);
+                    }
+
+                    foreach (XmlElement modElement in file.SelectNodes("//Mods/ToggleMod")) car.ToggleMod((VehicleToggleMod)int.Parse(modElement.GetAttribute("ModIndex")), int.Parse(modElement.InnerText) == 1 ? true : false);
+
+                    if (file.SelectNodes("//Extras/Extra").Count > 0) for (int i = 0; i < 15; i++) if (car.ExtraExists(i)) car.ToggleExtra(i, false);
+                    foreach (XmlElement modElement in file.SelectNodes("//Extras/Extra")) car.ToggleExtra(int.Parse(modElement.InnerText), true);
+                }
+            }
+
+            void ApplyAccelerationOverride(XmlDocument file, Vehicle car)
+            {
+                if (file.SelectSingleNode("//Acceleration") != null)
+                {
+                    float acc = float.Parse(file.SelectSingleNode("//Acceleration").InnerText) - 0.05f;
+
+                    if (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc && car.HighGear > 2)
+                    {
+                        UI.Notify(car.DisplayName + " powers up");
+                        float mul = 10f;
+                        while (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc && mul < 500)
+                        {
+                            mul += 10;
+                            car.EnginePowerMultiplier = mul;
+                            Script.Wait(0);
+                        }
+                    }
+                }
+            }
+
+            Ped CreateDriverPed(XmlDocument file, Vehicle car, List<string> tags, out XmlDocument driverXml)
+            {
+                string driverChosen = "default";
+                if (file.SelectSingleNode("DriverName") != null) driverChosen = file.SelectSingleNode("DriverName").InnerText;
+
+                driverXml = new XmlDocument();
+                driverXml = LoadDriver(driverChosen);
+                Model driverModel = int.Parse(driverXml.SelectSingleNode("//Model").InnerText);
+                if (tags.Contains("street"))
+                {
+                    driverModel = StreetRacerModels[GetRandomInt(0, StreetRacerModels.Length - 1)];
+                }
+
+                Ped driverPed = World.CreatePed(driverModel, car.Position.Around(5));
+                int p = 0;
+                while (!CanWeUse(driverPed) && p < 3000)
+                {
+                    Log(LogImportance.Fatal, "Driver ped is not spawning, requesting again.");
+                    Script.Wait(10);
+                    driverPed = World.CreatePed(driverModel, car.Position.Around(5));
+                    p++;
+                }
+
+                return driverPed;
+            }
+
+            void ApplyDriverClothes(Ped driverPed, XmlDocument driverXml, List<string> tags)
+            {
+                if (!tags.Contains("street"))
+                {
+                    foreach (XmlElement e in driverXml.SelectNodes("//Cloth"))
+                    {
+                        int component = int.Parse(e.GetAttribute("ComponentID"));
+                        int drawable = int.Parse(e.GetAttribute("DrawableID"));
+                        Function.Call(Hash.SET_PED_COMPONENT_VARIATION, driverPed, int.Parse(e.InnerText), component, drawable, 2);
+                    }
+
+                    foreach (XmlElement e in driverXml.SelectNodes("//Clothes/Prop"))
+                    {
+                        int prop = int.Parse(e.GetAttribute("PropID"));
+                        int texture = int.Parse(e.GetAttribute("TextureID"));
+                        Function.Call(Hash.SET_PED_PROP_INDEX, driverPed, int.Parse(e.InnerText), prop, texture, true);
+                    }
+                }
+            }
+
+            void AddRacer(XmlDocument file, Vehicle car, Ped driverPed)
+            {
+                if (CanWeUse(car))
+                {
+                    Racer r = new Racer(car, driverPed);
+
+                    if (file.SelectSingleNode("//Name") != null) r.Name = file.SelectSingleNode("//Name").InnerText;
+                    if (file.SelectSingleNode("//Nickname") != null) r.Name = file.SelectSingleNode("//Nickname").InnerText;
+                    if (r.Name == "NULL" || r.Name == null) r.Name = r.Car.DisplayName.ToString()[0].ToString().ToUpper() + r.Car.DisplayName.ToString().Substring(1).ToLowerInvariant();
+                    if (car == Game.Player.Character.CurrentVehicle) r.Name = Game.Player.Name;
+
+                    /*
+                    string livery = car.GetModName(VehicleMod.Livery, car.GetMod(VehicleMod.Livery));
+                    livery = Function.Call<string>(Hash._GET_LABEL_TEXT, livery);
+                    livery = livery.Replace("Livery", "");
+                    livery = livery.Replace("livery", "");
+                    if (livery.Length > 0 && livery != "NULL") r.Name+= "("+livery+")";
+                    */
+                    Racers.Add(r);
+                }
+            }
+
+            foreach (XmlDocument file in CachedCandidates)
+            {
+                string modelName = file.SelectSingleNode("//Model").InnerText;
+                Model vehicleModel = LoadVehicleModel(modelName);
+
+                Vehicle car = World.CreateVehicle(vehicleModel, Path[(Racers.Count + 1) * 10]);
+                car.Heading = (Path[2] - Path[0]).ToHeading();
+                car.InstallModKit();
+
+                List<string> tags = GetVehicleTags(file);
+                ApplyCarAppearance(file, car, tags);
+                ApplyAccelerationOverride(file, car);
+
+                XmlDocument driverXml;
+                Ped driverPed = CreateDriverPed(file, car, tags, out driverXml);
+                ApplyDriverClothes(driverPed, driverXml, tags);
+                AddRacer(file, car, driverPed);
+
+                lastCar = car;
+            }
+
+            result.Add(lastCar);
+
+            RaceStatus = RaceState.NotInitiated;
+            Function.Call(Hash._0x10D373323E5B9C0D);
+        }
+
+
+        List<Vehicle> GetNearbyCandidates()
+        {
+            return GlobalTraffic.Where(s => s.Health > 0 && s.IsDriveable && s.IsInRangeOf(Game.Player.Character.Position, 30f) && !CanWeUse(s.GetPedOnSeat(VehicleSeat.Driver))).ToList();
+        }
+        void CreateVehicle(Vehicle car, bool auto = false)
+        {
+
+            if (!CanWeUse(car))
+            {
+                UI.Notify("~o~Weird error.~w~Car doesn't seem to exist, try reentering.");
+                return;
+            }
+            string name = "";
+            if (auto) name = car.FriendlyName;
+            else
+            {
+                UI.ShowSubtitle("~b~Enter your car's name, or leave empty to auto-generate one. ~w~~n~This will be the filename name.");
+                name = Game.GetUserInput(32);
+            }
+            if (name == null || name == "") name = car.FriendlyName;
+            if (name == null || name == "") name = car.DisplayName.ToString()[0].ToString().ToUpper() + car.DisplayName.ToString().Substring(1).ToLowerInvariant();
+
+            string filePath = @"Scripts\ARS\Vehicles\" + name + ".xml";
+
+
+            if (File.Exists(filePath))
+            {
+                DateTime today = DateTime.Now;
+                name += " (" + today.Year + today.Month + today.Day + today.Hour + today.Minute + today.Second + ")";
+
+                //name += " (" + DateTime.Now.GetHashCode() + ")";
+            }
+
+
+
+
+
+            File.AppendAllText(filePath, "");
+
+            Script.Wait(200);
+
+            XmlDocument XMLFile = new XmlDocument();
+
+
+            XmlNode Data = XMLFile.CreateNode(XmlNodeType.Element, "Data", null);
+            XMLFile.AppendChild(Data);
+
+            XmlNode Vehicle = XMLFile.CreateNode(XmlNodeType.Element, "Vehicle", null);
+
+
+            XmlNode temp = XMLFile.CreateElement("Name");
+            temp.InnerText = car.FriendlyName;
+            Vehicle.AppendChild(temp);
+
+            XmlNode Class = XMLFile.CreateElement("Class");
+            Class.InnerText = car.ClassType.ToString();
+            Vehicle.AppendChild(Class);
+
+            List<string> keywords = new List<string>();
+            string nameAutotag = car.FriendlyName;
+
+            nameAutotag = nameAutotag.Replace(@"-", "");
+            nameAutotag = nameAutotag.Replace(@"/", "");
+            nameAutotag = nameAutotag.Replace(@" ", "");
+
+
+            keywords.Add(car.ClassType.ToString());
+            keywords.Add(car.DisplayName);
+            //keywords.AddRange(nameAutotag.Split(' '));
+            keywords.Add(nameAutotag);
+            UI.ShowSubtitle("~b~Enter the vehicle's Class set.~w~~n~Write as much as you need, separate with spaces.");
+            if (!auto)
+            {
+
+                string userTags = Game.GetUserInput(32);
+                if (userTags != "") keywords.AddRange(userTags.Split(' '));
+
+            }
+            XmlNode keyw = XMLFile.CreateElement("Disciplines");
+            foreach (string keyword in keywords)
+            {
+                XmlNode ktoadd = XMLFile.CreateElement("Discipline");
+                ktoadd.InnerText = keyword.ToLowerInvariant();
+                keyw.AppendChild(ktoadd);
+            }
+
+            Vehicle.AppendChild(keyw);
+            temp = XMLFile.CreateElement("Model");
+            temp.InnerText = car.Model.Hash.ToString();
+            Vehicle.AppendChild(temp);
+
+            temp = XMLFile.CreateElement("Livery");
+            temp.InnerText = car.Livery.ToString();
+            Vehicle.AppendChild(temp);
+
+            //Absolute acceleration, it iss affected by the engine power multiplier and its used to simulate further engine performance mods.
+            //On load, the vehicle will be boosted until its acceleration equals this one.
+            temp = XMLFile.CreateElement("Acceleration");
+            temp.InnerText = Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car), 3).ToString();
+            temp.InnerText = temp.InnerText.Replace(",", ".");
+
+            Vehicle.AppendChild(temp);
+
+
+            XmlAttribute vname = XMLFile.CreateAttribute("ModelName");
+            vname.InnerText = car.FriendlyName;
+            if (vname.InnerText == "NULL") vname.InnerText = car.DisplayName;
+            temp.Attributes.Append(vname);
+
+            XmlElement Colors = XMLFile.CreateElement("Colors");
+
+            XmlElement c = XMLFile.CreateElement("Primary");
+            c.InnerText = ((int)car.PrimaryColor).ToString();
+            Colors.AppendChild(c);
+
+            c = XMLFile.CreateElement("Secondary");
+            c.InnerText = ((int)car.SecondaryColor).ToString();
+            Colors.AppendChild(c);
+
+            c = XMLFile.CreateElement("Pearl");
+            c.InnerText = ((int)car.PearlescentColor).ToString();
+            Colors.AppendChild(c);
+
+            c = XMLFile.CreateElement("Wheel");
+            c.InnerText = ((int)car.RimColor).ToString();
+            Colors.AppendChild(c);
+
+            c = XMLFile.CreateElement("Dash");
+            c.InnerText = ((int)car.DashboardColor).ToString();
+            Colors.AppendChild(c);
+
+            c = XMLFile.CreateElement("Trim");
+            c.InnerText = ((int)car.TrimColor).ToString();
+            Colors.AppendChild(c);
+
+            Vehicle.AppendChild(Colors);
+            XmlElement Mods = XMLFile.CreateElement("Mods");
+            for (int i = 0; i <= 100; i++)
+            {
+                XmlElement Component = XMLFile.CreateElement("Mod");
+
+                XmlAttribute Attribute = XMLFile.CreateAttribute("ModIndex");
+                Attribute.InnerText = i.ToString();
+                Component.Attributes.Append(Attribute);
+
+                if (Function.Call<int>(Hash.GET_VEHICLE_MOD, car, i) != -1)
+                {
+                    Component.InnerText = Function.Call<int>(Hash.GET_VEHICLE_MOD, car, i).ToString();
+                    bool iscustom = Function.Call<bool>(Hash.GET_VEHICLE_MOD_VARIATION, car, i);
+
+                    if (iscustom)
+                    {
+                        XmlAttribute CustomMod = XMLFile.CreateAttribute("IsCustom");
+                        CustomMod.InnerText = iscustom.ToString();
+                        Component.Attributes.Append(CustomMod);
+
+                    }
+                    Mods.AppendChild(Component);
+
+                }
+            }
+            XmlElement wheelkind = XMLFile.CreateElement("WheelType");
+            wheelkind.InnerText = ((int)car.WheelType).ToString();
+            Vehicle.AppendChild(wheelkind);
+
+            for (int i = 0; i <= 100; i++)
+            {
+                XmlElement Mod = XMLFile.CreateElement("ToggleMod");
+
+                XmlAttribute Attribute = XMLFile.CreateAttribute("ModIndex");
+                Attribute.InnerText = i.ToString();
+                Mod.Attributes.Append(Attribute);
+
+                if (Function.Call<int>(Hash.IS_TOGGLE_MOD_ON, car, i) != 0)
+                {
+                    Mod.InnerText = Function.Call<int>(Hash.IS_TOGGLE_MOD_ON, car, i).ToString();
+                    Mods.AppendChild(Mod);
+                }
+            }
+            Vehicle.AppendChild(Mods);
+
+
+
+            XmlElement Components = XMLFile.CreateElement("Extras");
+
+            for (int i = 0; i <= 15; i++)
+            {
+                if (Function.Call<bool>(Hash.IS_VEHICLE_EXTRA_TURNED_ON, car, i))
+                {
+                    XmlElement Component = XMLFile.CreateElement("Extra");
+                    Component.InnerText = i.ToString();
+                    Components.AppendChild(Component);
+                }
+            }
+            Vehicle.AppendChild(Components);
+
+
+            Data.AppendChild(Vehicle);
+
+
+            XMLFile.AppendChild(Data);
+
+            XMLFile.Save(@"scripts\\ARS\Vehicles\" + name + ".xml");
+            UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
+        }
+
+        void CreateVehicleFromHash(VehicleHash h)
+        {
+
+            Log(LogImportance.Info, "Creating item from hash: " + h.ToString());
+
+            if (Function.Call<int>(Hash._0x2AD93716F184EDA4, (int)h) == 0)
+            {
+                Log(LogImportance.Info, h.ToString() + " has no seats. Aborting this one.");
+                return;
+            }
+
+
+            if (Function.Call<int>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h) <= 0.01f)
+            {
+                Log(LogImportance.Info, h.ToString() + " has no engine. Aborting this one.");
+                return;
+            }
+            string name = "text";
+            name = h.ToString(); // Function.Call<string>(Hash.GET_DISPLAY_NAME_FROM_VEHICLE_MODEL, (int)h);
+
+            string filePath = @"Scripts\ARS\Vehicles\" + name + ".xml";
+
+
+            if (File.Exists(filePath))
+            {
+                name += " (" + DateTime.Now.GetHashCode() + ")";
+            }
+
+
+            File.AppendAllText(filePath, "");
+
+
+            XmlDocument XMLFile = new XmlDocument();
+
+
+            XmlNode Data = XMLFile.CreateNode(XmlNodeType.Element, "Data", null);
+            XMLFile.AppendChild(Data);
+
+            XmlNode Vehicle = XMLFile.CreateNode(XmlNodeType.Element, "Vehicle", null);
+
+
+            XmlNode temp = XMLFile.CreateElement("Name");
+            temp.InnerText = name;
+            Vehicle.AppendChild(temp);
+
+            XmlNode Class = XMLFile.CreateElement("Class");
+            Class.InnerText = ((VehicleClass)Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, (int)h)).ToString();
+            Vehicle.AppendChild(Class);
+
+            List<string> keywords = new List<string>();
+            string nameAutotag = name;
+
+            nameAutotag = nameAutotag.Replace(@"-", "");
+            nameAutotag = nameAutotag.Replace(@"/", "");
+            nameAutotag = nameAutotag.Replace(@" ", "");
+            nameAutotag = nameAutotag.Replace(@"+", "");
+
+
+            keywords.Add(Class.InnerText);
+            keywords.Add(name);
+            keywords.Add(nameAutotag);
+
+            XmlNode keyw = XMLFile.CreateElement("Disciplines");
+            foreach (string keyword in keywords)
+            {
+                XmlNode ktoadd = XMLFile.CreateElement("Discipline");
+                ktoadd.InnerText = keyword.ToLowerInvariant();
+                keyw.AppendChild(ktoadd);
+            }
+
+            Vehicle.AppendChild(keyw);
+            temp = XMLFile.CreateElement("Model");
+            temp.InnerText = ((int)h).ToString();
+            Vehicle.AppendChild(temp);
+
+
+
+            XmlAttribute vname = XMLFile.CreateAttribute("ModelName");
+            vname.InnerText = h.ToString();
+            temp.Attributes.Append(vname);
+
+
+            Data.AppendChild(Vehicle);
+
+
+
+
+            XMLFile.AppendChild(Data);
+
+            XMLFile.Save(@"scripts\\ARS\Vehicles\" + name + ".xml");
+            UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
+        }
+        public static bool IsBetweenRange(float n, float a, float b)
+        {
+            return n > a && n < b;
+        }
+        public static Vector3 Project(Vector3 pos, Vector3 dir, float mod, int m)
+        {
+            return Quaternion.RotationAxis(Vector3.WorldUp, (float)(System.Math.PI / 180f) * (mod * m)) * (dir * m);
+
+            /*
+             * List<Vector3> r = new List<Vector3>();
+            for (int i = 0; i < m; i++)
+            {
+                Vector3 v = Quaternion.RotationAxis(Vector3.WorldUp, (float)(System.Math.PI / 180f) * (mod*i)) * (dir*i);
+                r.Add(v);
+            }
+            return r;
+            */
+
+        }
+    }
+
+}
