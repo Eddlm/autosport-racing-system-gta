@@ -36,7 +36,6 @@ namespace ARS
         public List<string> DebugText = new List<string>();
         public List<Vector3> trail = new List<Vector3>();
         List<float> trailInput = new List<float>();
-        public Vector3 LastStuckPlace = Vector3.Zero;
         public RacerBaseBehavior BaseBehavior = RacerBaseBehavior.GridWait;
         public RaceState RCStatus = RaceState.NotInitiated;
 
@@ -55,12 +54,16 @@ namespace ARS
         PID SteerPID = new PID(6, 12f, 0);
         PID LanePID = new PID(0.2f, 0.5f, 0);
 
-        //Stuck stuff
-        int StuckGameTimeRef = 0;
-        public bool StuckRecover = false;
-        int GameTimeOutOfTrack = 0;
-        const int StuckDetectTimeMs = 2000;
-        const int StuckReverseTimeMs = 2000;
+        // Minimal stuck detector state: throttle command present + almost no movement for 2s.
+        int StuckCheckStartTime = 0;
+        public bool IsStuckByThrottle = false;
+        const int StuckCheckTimeMs = 2000;
+        bool IsRecoveringFromStuck = false;
+        int StuckRecoveryEndTime = 0;
+        const int StuckRecoveryTimeMs = 2000;
+        bool ForceStuckTestRequested = false;
+        public bool IsRecoveringFromStuckNow => IsRecoveringFromStuck;
+
 
         //Handling stuff
         public float GroundGripMultiplier = 1f;
@@ -425,12 +428,14 @@ namespace ARS
 
             mem.Corner.Valid = false;
             vData.AvgGroundStability = 1;
-            StuckRecover = false;
-            StuckGameTimeRef = 0;
             BaseBehavior = RacerBaseBehavior.Race;
             LapStartTime = Game.GameTime;
             vControl.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             vControl.MaxThrottle = 1f;
+            IsStuckByThrottle = false;
+            StuckCheckStartTime = 0;
+            IsRecoveringFromStuck = false;
+            StuckRecoveryEndTime = 0;
             if (team == Team.Cop) Car.SirenActive = true;
 
         }
@@ -613,10 +618,8 @@ namespace ARS
 
             float wheelspin = ARS.GetWheelsMaxWheelspin(Car);
             bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
-            bool outOfTrackForAWhile = GameTimeOutOfTrack != 0 && (Game.GameTime - GameTimeOutOfTrack) > 500;
 
             float allowedWheelspin = lowGripOrLowGear ? 0.8f : 0.2f;
-            if (outOfTrackForAWhile) allowedWheelspin = lowGripOrLowGear ? 0.8f : 0.4f;
 
             float TCSValue = ARS.map(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 4;
             float change = TCSValue * TickScale;
@@ -656,6 +659,7 @@ namespace ARS
             {
                 TorqueMult = ARS.map(Math.Abs(vData.SlideAngle), 5f, 90f, 1f, 10);
 
+                ApplyStuckRecoveryOverride();
                 ApplyInputs();
 
 
@@ -758,20 +762,6 @@ namespace ARS
                 }
             }
 
-
-            if ((Car.IsUpsideDown || Math.Abs(mem.data.DeviationFromCenter) > CurrentTrackPoint.TrackWide) && !ControlledByPlayer && BaseBehavior == RacerBaseBehavior.Race)
-            {
-                if (GameTimeOutOfTrack == 0) GameTimeOutOfTrack = Game.GameTime;
-                else if (Game.GameTime - GameTimeOutOfTrack > 5000 && Car.Velocity.Length() < 5f)
-                {
-                    GameTimeOutOfTrack = 0;
-                    //ResetIntoTrack();
-                }
-            }
-            else
-            {
-                if (GameTimeOutOfTrack != 0) GameTimeOutOfTrack = 0;
-            }
         }
 
         public void ApplyInputs()
@@ -1227,7 +1217,6 @@ namespace ARS
         public void ProcessAI()
         {
             ProcessTimedAI();
-            UpdateStuckState();
 
             if (BaseBehavior == RacerBaseBehavior.GridWait && vControl.HandBrakeTime < Game.GameTime) vControl.HandBrakeTime = Game.GameTime + (100 * ARS.GetRandomInt(2, 6));
 
@@ -1241,93 +1230,113 @@ namespace ARS
 
                 SpeedToThrottleBrake();
                 TranslateSteer();
+                UpdateStuckCheck();
+                UpdateStuckRecovery();
                 TractionControl();
-                ApplyStuckRecoveryInputs();
+                ApplyStuckRecoveryOverride();
+
+            }
+            else
+            {
+                IsStuckByThrottle = false;
+                StuckCheckStartTime = 0;
+                IsRecoveringFromStuck = false;
+                StuckRecoveryEndTime = 0;
             }
         }
 
-        void UpdateStuckState()
+        void UpdateStuckCheck()
         {
-            bool canRecover =
-                !Driver.IsPlayer &&
-                BaseBehavior == RacerBaseBehavior.Race &&
-                Driver.IsSittingInVehicle(Car) &&
-                vControl.HandBrakeTime < Game.GameTime &&
-                !Car.Model.IsBike &&
-                !Car.IsInWater &&
-                Car.EngineHealth > 0;
-
-            if (!canRecover)
+            if (ForceStuckTestRequested)
             {
-                StuckRecover = false;
-                StuckGameTimeRef = 0;
+                ForceStuckTestRequested = false;
+                IsStuckByThrottle = true;
+                StuckCheckStartTime = Game.GameTime - StuckCheckTimeMs;
                 return;
             }
 
-            bool isStuck = vData.Gs.Length() < 0.1f && Car.Velocity.Length() < 1f;
-
-            if (StuckRecover)
+            if (IsRecoveringFromStuck)
             {
-                if (Game.GameTime - StuckGameTimeRef >= StuckReverseTimeMs)
-                {
-                    StuckRecover = false;
-                    StuckGameTimeRef = 0;
-                }
+                IsStuckByThrottle = false;
+                StuckCheckStartTime = 0;
                 return;
             }
 
-            if (!isStuck)
+            if (BaseBehavior != RacerBaseBehavior.Race || !Driver.IsSittingInVehicle(Car))
             {
-                StuckGameTimeRef = 0;
+                IsStuckByThrottle = false;
+                StuckCheckStartTime = 0;
                 return;
             }
 
-            if (StuckGameTimeRef == 0)
+            bool throttleApplied = Math.Abs(vControl.Throttle) > 0.01f;
+            bool almostStopped = Car.Velocity.Length() < 1.0f;
+            bool stuckCondition = throttleApplied && almostStopped;
+
+            if (!stuckCondition)
             {
-                StuckGameTimeRef = Game.GameTime;
+                IsStuckByThrottle = false;
+                StuckCheckStartTime = 0;
                 return;
             }
 
-            if (Game.GameTime - StuckGameTimeRef >= StuckDetectTimeMs)
+            if (StuckCheckStartTime == 0)
             {
-                StuckRecover = true;
-                StuckGameTimeRef = Game.GameTime;
-                LastStuckPlace = Car.Position;
-                if (ARS.DebugVisual > 0) UI.Notify("~b~" + Car.FriendlyName + " reversing to recover");
+                StuckCheckStartTime = Game.GameTime;
+            }
+
+            IsStuckByThrottle = (Game.GameTime - StuckCheckStartTime) >= StuckCheckTimeMs;
+        }
+
+        public void ForceStuckForTest()
+        {
+            if (ControlledByPlayer) return;
+            ForceStuckTestRequested = true;
+        }
+
+        void UpdateStuckRecovery()
+        {
+            if (BaseBehavior != RacerBaseBehavior.Race || !Driver.IsSittingInVehicle(Car))
+            {
+                IsRecoveringFromStuck = false;
+                StuckRecoveryEndTime = 0;
+                return;
+            }
+
+            if (!IsRecoveringFromStuck && IsStuckByThrottle)
+            {
+                IsRecoveringFromStuck = true;
+                StuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
+                IsStuckByThrottle = false;
+            }
+
+            if (!IsRecoveringFromStuck) return;
+
+            if (Game.GameTime >= StuckRecoveryEndTime)
+            {
+                IsRecoveringFromStuck = false;
+                StuckRecoveryEndTime = 0;
+                StuckCheckStartTime = 0;
+                return;
             }
         }
 
-        void ApplyStuckRecoveryInputs()
+        void ApplyStuckRecoveryOverride()
         {
-            if (!StuckRecover) return;
+            if (!IsRecoveringFromStuck) return;
 
-            float angleToTrack = Vector3.SignedAngle(Car.ForwardVector, CurrentTrackPoint.Direction, Vector3.WorldUp);
-            float steerFromAngle = ARS.map(angleToTrack, -45f, 45f, 1f, -1f, true);
-            float steerFromLane = 0f;
-            if (CurrentTrackPoint.TrackWide > 0.1f)
+            if (Game.GameTime >= StuckRecoveryEndTime)
             {
-                steerFromLane = ARS.Clamp(-mem.data.DeviationFromCenter / CurrentTrackPoint.TrackWide, -1f, 1f);
+                IsRecoveringFromStuck = false;
+                StuckRecoveryEndTime = 0;
+                StuckCheckStartTime = 0;
+                return;
             }
 
-            vControl.SteerInput = ARS.Clamp((steerFromAngle + steerFromLane) * 0.5f, -1f, 1f);
-            vControl.Throttle = -0.8f;
+            // Force reverse with centered steering during the whole recovery window.
+            vControl.SteerInput = 0f;
+            vControl.Throttle = -1f;
             vControl.Brake = 0f;
-        }
-
-
-        void ResetIntoTrack()
-        {
-            vControl.SteerTrackDegrees = 0f;
-
-            Car.Position = ARS.Path[CurrentTrackPoint.Node] + new Vector3(0, 0, 3);
-
-            Car.Heading = CurrentTrackPoint.Direction.ToHeading();
-
-            StuckRecover = false;
-            StuckGameTimeRef = 0;
-            LastStuckPlace = Vector3.Zero;
-
-            Car.Speed = ARS.MPHtoMS(15);
         }
 
         void UpdatePercievedGrip()
@@ -1351,8 +1360,7 @@ namespace ARS
             vData.BaseMechanicalGrip = HandlingGrip;
             vData.CurrentMechanicalGrip = ((vData.BaseMechanicalGrip) * GroundGripMultiplier);
             vData.CurrentMechanicalGrip *= hillGsLoss;
-            vData.CurrentMechanicalGrip += Math.Min(ARS.WouldLiftOffRoadAtSpeed(thisPoint, toMidpoint, toEndpoint, Car.Velocity.Length()),0.0f);
-            UI.ShowSubtitle(hillGsLoss.ToString("0.00"), 500);
+            //vData.CurrentMechanicalGrip += Math.Min(ARS.WouldLiftOffRoadAtSpeed(thisPoint, toMidpoint, toEndpoint, Car.Velocity.Length()),0.0f);
 
             if (Math.Abs(mem.data.DeviationFromCenter) < CurrentTrackPoint.TrackWide && RacePosition <= 2 && !ARS.MultiplierInTerrain.ContainsKey(CurrentTrackPoint.Node))
             {

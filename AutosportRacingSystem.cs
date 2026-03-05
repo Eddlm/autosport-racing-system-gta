@@ -1627,9 +1627,6 @@ namespace ARS
                 //Never really used
                 //if (Path.Count > 20 && MiniMap != Vector3.Zero) DrawMiniaturizedPath(MiniMap);
 
-
-
-
                 //Prevents the world from generating population. The AI cannot handle traffic yet            
                 if ((routeEditMode || Path.Count > 0) && DevSettingsFile.GetValue("GENERAL_SETTINGS", "Traffic", false) == false)
                 {
