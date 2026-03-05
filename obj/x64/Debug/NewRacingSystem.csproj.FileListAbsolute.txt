@@ -1,0 +1,8 @@
+F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\obj\x64\Debug\NewRacingSystem.csproj.AssemblyReference.cache
+F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\obj\x64\Debug\NewRacingSystem.csproj.CoreCompileInputs.cache
+F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\bin\x64\Debug\ARS.dll
+F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\bin\x64\Debug\ARS.pdb
+F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\bin\x64\Debug\ScriptHookVDotNet2.dll
+F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\obj\x64\Debug\NewRacin.36AAA071.Up2Date
+F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\obj\x64\Debug\ARS.dll
+F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\obj\x64\Debug\ARS.pdb

@@ -35,6 +35,7 @@ namespace ARS
         public Vehicle Car;
         public List<string> DebugText = new List<string>();
         public List<Vector3> trail = new List<Vector3>();
+        List<float> trailInput = new List<float>();
         public Vector3 LastStuckPlace = Vector3.Zero;
         public RacerBaseBehavior BaseBehavior = RacerBaseBehavior.GridWait;
         public RaceState RCStatus = RaceState.NotInitiated;
@@ -637,7 +638,11 @@ namespace ARS
             vData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
             mem.data.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
 
-            if (trail.Count > 50) trail.RemoveAt(0);
+            if (trail.Count > 50)
+            {
+                trail.RemoveAt(0);
+                if (trailInput.Count > 0) trailInput.RemoveAt(0);
+            }
         }
         /// <summary>
         /// Gathers and runs tick-sensitive stuff
@@ -760,7 +765,7 @@ namespace ARS
                 else if (Game.GameTime - GameTimeOutOfTrack > 5000 && Car.Velocity.Length() < 5f)
                 {
                     GameTimeOutOfTrack = 0;
-                    ResetIntoTrack();
+                    //ResetIntoTrack();
                 }
             }
             else
@@ -839,7 +844,12 @@ namespace ARS
                 }
 
                 if (trail.Count == 0) trail.Add(Car.Position);
-                else if (Car.Position.DistanceTo(trail[trail.Count - 1]) > 2f) trail.Add(Car.Position);
+                else if (Car.Position.DistanceTo(trail[trail.Count - 1]) > 1f) trail.Add(Car.Position);
+
+                // Keep input history aligned with the position trail: -1 full brake, 0 neutral, +1 full throttle.
+                float combinedInput = ARS.Clamp(vControl.Throttle - vControl.Brake, -1f, 1f);
+                while (trailInput.Count < trail.Count) trailInput.Add(combinedInput);
+                while (trailInput.Count > trail.Count) trailInput.RemoveAt(trailInput.Count - 1);
 
 
                 if (ARS.OptionValuesList[Options.ShowInputs])
@@ -893,6 +903,8 @@ namespace ARS
                         if (vControl.Brake > 0.05f) World.DrawMarker(MarkerType.ChevronUpx1, inputBrake, Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(dimension / 2, dimension / 4, -(dimension / 2)), Color.FromArgb(250, cBrake), false, false, 0, false, "", "", false);
 
                     }
+
+                    DrawInputTrails();
                 }
 
                 if (ARS.OptionValuesList[Options.ShowTrackAnalysis])
@@ -1004,6 +1016,33 @@ namespace ARS
                         World.DrawMarker(MarkerType.ChevronUpx1, left, tPoint.Direction, new Vector3(89, 0, -90), new Vector3(1, 1f, 2f), blue);
                     }
                 }
+            }
+        }
+
+        void DrawInputTrails()
+        {
+            if (trail.Count < 2) return;
+
+            for (int i = 1; i < trail.Count; i++)
+            {
+                Vector3 from = trail[i - 1];
+                Vector3 to = trail[i];
+                Vector3 segment = to - from;
+                if (segment.Length() < 0.05f) continue;
+
+                float inputFrom = (i - 1) < trailInput.Count ? trailInput[i - 1] : 0f;
+                float inputTo = i < trailInput.Count ? trailInput[i] : inputFrom;
+                float baseHeight = 0.15f;
+                Vector3 point = to + (Vector3.WorldUp * baseHeight);
+                Vector3 away = segment.Normalized;
+                float dimension = Car.Model.GetDimensions().Y + 1f;
+                Vector3 chevronScale = new Vector3(dimension / 2f, dimension / 4f, -(dimension / 2f));
+                float value = ARS.Clamp((inputFrom + inputTo) * 0.5f, -1f, 1f);
+                float colorPercent = ARS.map(value, -1f, 1f, 0f, 100f, true);
+                Color baseColor = ARS.GradientAtoBtoC(Color.Red, Color.White, Color.LimeGreen, colorPercent);
+                Color finalColor = Color.FromArgb(255, baseColor.R, baseColor.G, baseColor.B);
+
+                World.DrawMarker(MarkerType.ChevronUpx1, point, -away, new Vector3(90, 0, 0), chevronScale, finalColor, false, false, 0, false, "", "", false);
             }
         }
 
