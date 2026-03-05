@@ -58,6 +58,8 @@ namespace ARS
         int StuckGameTimeRef = 0;
         public bool StuckRecover = false;
         int GameTimeOutOfTrack = 0;
+        const int StuckDetectTimeMs = 2000;
+        const int StuckReverseTimeMs = 2000;
 
         //Handling stuff
         public float GroundGripMultiplier = 1f;
@@ -1177,40 +1179,6 @@ namespace ARS
                 {
                     Car.Repair();
                 }
-
-
-                //Stuck behavior
-                if (vData.Gs.Length() < 0.1f && Car.Velocity.Length() < 1f && BaseBehavior == RacerBaseBehavior.Race)
-                {
-                    if (StuckGameTimeRef == 0) StuckGameTimeRef = Game.GameTime;
-                    if (!Driver.IsPlayer && BaseBehavior == RacerBaseBehavior.Race && Driver.IsSittingInVehicle(Car) && vControl.HandBrakeTime < Game.GameTime)
-                    {
-                        if (Game.GameTime - StuckGameTimeRef >= 2)
-                        {
-                            if (Game.GameTime - StuckGameTimeRef >= 4)
-                            {
-                                if (Driver.IsSittingInVehicle(Car) && !Car.IsInWater && Car.EngineHealth > 0)
-                                {
-                                    StuckGameTimeRef = 0;
-                                    ResetIntoTrack();
-                                    StuckRecover = false;
-                                }
-                            }
-                            else if (!StuckRecover && !Car.Model.IsBike)
-                            {
-                                LastStuckPlace = Car.Position;
-                                if (ARS.DebugVisual > 0) UI.Notify("~b~" + Car.FriendlyName + " tries to recover");
-                                StuckRecover = true;
-                            }
-                        }
-                    }
-                }
-
-                if (StuckRecover && (!Car.IsInRangeOf(LastStuckPlace, 5f) || mem.data.SpeedVector.Y > 3f))
-                {
-                    StuckRecover = false;
-                    StuckGameTimeRef = 0;
-                }
             }
         }
 
@@ -1220,6 +1188,7 @@ namespace ARS
         public void ProcessAI()
         {
             ProcessTimedAI();
+            UpdateStuckState();
 
             if (BaseBehavior == RacerBaseBehavior.GridWait && vControl.HandBrakeTime < Game.GameTime) vControl.HandBrakeTime = Game.GameTime + (100 * ARS.GetRandomInt(2, 6));
 
@@ -1234,7 +1203,76 @@ namespace ARS
                 SpeedToThrottleBrake();
                 TranslateSteer();
                 TractionControl();
+                ApplyStuckRecoveryInputs();
             }
+        }
+
+        void UpdateStuckState()
+        {
+            bool canRecover =
+                !Driver.IsPlayer &&
+                BaseBehavior == RacerBaseBehavior.Race &&
+                Driver.IsSittingInVehicle(Car) &&
+                vControl.HandBrakeTime < Game.GameTime &&
+                !Car.Model.IsBike &&
+                !Car.IsInWater &&
+                Car.EngineHealth > 0;
+
+            if (!canRecover)
+            {
+                StuckRecover = false;
+                StuckGameTimeRef = 0;
+                return;
+            }
+
+            bool isStuck = vData.Gs.Length() < 0.1f && Car.Velocity.Length() < 1f;
+
+            if (StuckRecover)
+            {
+                if (Game.GameTime - StuckGameTimeRef >= StuckReverseTimeMs)
+                {
+                    StuckRecover = false;
+                    StuckGameTimeRef = 0;
+                }
+                return;
+            }
+
+            if (!isStuck)
+            {
+                StuckGameTimeRef = 0;
+                return;
+            }
+
+            if (StuckGameTimeRef == 0)
+            {
+                StuckGameTimeRef = Game.GameTime;
+                return;
+            }
+
+            if (Game.GameTime - StuckGameTimeRef >= StuckDetectTimeMs)
+            {
+                StuckRecover = true;
+                StuckGameTimeRef = Game.GameTime;
+                LastStuckPlace = Car.Position;
+                if (ARS.DebugVisual > 0) UI.Notify("~b~" + Car.FriendlyName + " reversing to recover");
+            }
+        }
+
+        void ApplyStuckRecoveryInputs()
+        {
+            if (!StuckRecover) return;
+
+            float angleToTrack = Vector3.SignedAngle(Car.ForwardVector, CurrentTrackPoint.Direction, Vector3.WorldUp);
+            float steerFromAngle = ARS.map(angleToTrack, -45f, 45f, 1f, -1f, true);
+            float steerFromLane = 0f;
+            if (CurrentTrackPoint.TrackWide > 0.1f)
+            {
+                steerFromLane = ARS.Clamp(-mem.data.DeviationFromCenter / CurrentTrackPoint.TrackWide, -1f, 1f);
+            }
+
+            vControl.SteerInput = ARS.Clamp((steerFromAngle + steerFromLane) * 0.5f, -1f, 1f);
+            vControl.Throttle = -0.8f;
+            vControl.Brake = 0f;
         }
 
 
@@ -1247,6 +1285,7 @@ namespace ARS
             Car.Heading = CurrentTrackPoint.Direction.ToHeading();
 
             StuckRecover = false;
+            StuckGameTimeRef = 0;
             LastStuckPlace = Vector3.Zero;
 
             Car.Speed = ARS.MPHtoMS(15);

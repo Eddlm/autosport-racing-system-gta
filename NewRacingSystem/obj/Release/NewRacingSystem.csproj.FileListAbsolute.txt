@@ -1,7 +1,0 @@
-D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\Release\NewRacingSystem.csproj.CoreCompileInputs.cache
-D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\bin\Release\NewRacingSystem.dll
-D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\bin\Release\NewRacingSystem.pdb
-D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\bin\Release\ScriptHookVDotNet2.dll
-D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\Release\NewRacingSystem.csproj.CopyComplete
-D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\Release\NewRacingSystem.dll
-D:\Mis Archivos\Documentos\Visual Studio 2015\Projects\NewRacingSystem\NewRacingSystem\obj\Release\NewRacingSystem.pdb
