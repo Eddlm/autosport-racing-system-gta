@@ -36,6 +36,8 @@ namespace ARS
         public List<string> DebugText = new List<string>();
         public List<Vector3> trail = new List<Vector3>();
         List<float> trailInput = new List<float>();
+        List<Vector3> followLaneTrail = new List<Vector3>();
+        int LastFollowLaneTrailNode = -1;
         public RacerBaseBehavior BaseBehavior = RacerBaseBehavior.GridWait;
         public RaceState RCStatus = RaceState.NotInitiated;
 
@@ -196,6 +198,8 @@ namespace ARS
             LapTimes.Clear();
             LapStartTime = 0;
             Lap = 0;
+            followLaneTrail.Clear();
+            LastFollowLaneTrailNode = -1;
 
             string flags = ARS.GetHandlingFlags(Car).ToString("X");
             int flagsHex = Convert.ToInt32(flags, 16);
@@ -436,6 +440,8 @@ namespace ARS
             StuckCheckStartTime = 0;
             IsRecoveringFromStuck = false;
             StuckRecoveryEndTime = 0;
+            followLaneTrail.Clear();
+            LastFollowLaneTrailNode = -1;
             if (team == Team.Cop) Car.SirenActive = true;
 
         }
@@ -827,6 +833,8 @@ namespace ARS
             {
 
                 if (!Car.IsInRangeOf(Game.Player.Character.Position, 500)) return;
+                UpdateFollowLaneTrail();
+                DrawFollowLaneTrail();
 
                 if (ARS.OptionValuesList[Options.ShowAggro])
                 {
@@ -934,6 +942,24 @@ namespace ARS
 
                             }
 
+                            // Draw configured node offsets for the active corner (from NodeScalarData), mapped onto the track.
+                            int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
+                            int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
+                            Vector3 oldOffsetPos = Vector3.Zero;
+                            for (int node = startNode; node <= endNode; node++)
+                            {
+                                TrackPoint tNode = ARS.TrackPoints[node];
+                                float laneOffset = 0f;
+                                if (ARS.NodeScalarData.ContainsKey(node)) laneOffset = ARS.NodeScalarData[node];
+
+                                float maxLane = Math.Max(0f, tNode.TrackWide - (vData.BoundingBox / 2f));
+                                laneOffset = ARS.Clamp(laneOffset, -maxLane, maxLane);
+
+                                Vector3 offsetPos = tNode.Position - (Vector3.Cross(Vector3.WorldUp, tNode.Direction) * laneOffset) + (Vector3.WorldUp * 0.35f);
+                                if (oldOffsetPos != Vector3.Zero) ARS.DrawLine(oldOffsetPos, offsetPos, Color.Blue);
+                                oldOffsetPos = offsetPos;
+                            }
+
 
                             World.DrawMarker(MarkerType.ChevronUpx1, wp, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2.5f, 5, 5), Color.FromArgb(50, gColor.R, gColor.G, gColor.B));
                             if (c.Node - c.LengthStart > 5)
@@ -1006,6 +1032,52 @@ namespace ARS
                         World.DrawMarker(MarkerType.ChevronUpx1, left, tPoint.Direction, new Vector3(89, 0, -90), new Vector3(1, 1f, 2f), blue);
                     }
                 }
+            }
+        }
+
+        void UpdateFollowLaneTrail()
+        {
+            if (ARS.TrackPoints == null || ARS.TrackPoints.Count == 0) return;
+
+            int node = (int)ARS.Clamp(CurrentTrackPoint.Node, 0, ARS.TrackPoints.Count - 1);
+            if (LastFollowLaneTrailNode < 0)
+            {
+                LastFollowLaneTrailNode = node;
+                followLaneTrail.Add(GetFollowLaneTrailPoint(node));
+                return;
+            }
+
+            if (node == LastFollowLaneTrailNode) return;
+
+            int safety = 0;
+            int cursor = LastFollowLaneTrailNode;
+            while (cursor != node && safety < ARS.TrackPoints.Count)
+            {
+                cursor++;
+                if (cursor >= ARS.TrackPoints.Count) cursor = 0;
+                followLaneTrail.Add(GetFollowLaneTrailPoint(cursor));
+                safety++;
+            }
+
+            LastFollowLaneTrailNode = node;
+
+            while (followLaneTrail.Count > 50) followLaneTrail.RemoveAt(0);
+        }
+
+        Vector3 GetFollowLaneTrailPoint(int node)
+        {
+            TrackPoint t = ARS.TrackPoints[node];
+            return t.Position - (Vector3.Cross(Vector3.WorldUp, t.Direction) * vControl.FollowLane) + (Vector3.WorldUp * 0.3f);
+        }
+
+        void DrawFollowLaneTrail()
+        {
+            if (followLaneTrail.Count < 2) return;
+
+            Color laneBlue = Color.Black;
+            for (int i = 1; i < followLaneTrail.Count; i++)
+            {
+                ARS.DrawLine(followLaneTrail[i - 1], followLaneTrail[i], laneBlue);
             }
         }
 

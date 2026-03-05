@@ -245,6 +245,7 @@ namespace ARS
         public static Dictionary<int, float> Angles = new Dictionary<int, float>(); //List of angles from node to node, on the path above.
         public static Dictionary<int, float> MultiplierInTerrain = new Dictionary<int, float>();  //Grip multiplier on each node. Initially empty, the first racer fills them as they pass.
         public static Dictionary<int, float> WideDict = new Dictionary<int, float>(); //How wide (meters) each node is.
+        public static Dictionary<int, float> NodeScalarData = new Dictionary<int, float>(); //Generic per-trackpoint float storage.
 
 
         public static Dictionary<int, float> EditWideDict = new Dictionary<int, float>();
@@ -4154,6 +4155,7 @@ namespace ARS
             Log(LogImportance.Info, "Generating route info...");
             TrackPoints.Clear();
             CornerPoints.Clear();
+            NodeScalarData.Clear();
 
 
             //Generate All base trackpoints, empty
@@ -4253,38 +4255,78 @@ namespace ARS
                 }
             }
 
-            CornerPoint lastC = CornerPoints.First();
-            foreach (CornerPoint c in CornerPoints)
+            // Compute key-corner spans and their lane bias profile.
+            var keyCorners = CornerPoints.Where(co => co.IsKey).OrderBy(co => co.Node).ToList();
+
+            const int minSpan = 25;
+            const int maxSpan = 320;
+
+            // 1) Compute a span for each key corner from local geometry.
+            foreach (CornerPoint c in keyCorners)
             {
+                float radius = c.GetPreciseRadius();
+                if (float.IsNaN(radius) || float.IsInfinity(radius) || radius <= 0f) radius = c.GetRadius();
+                radius = Clamp(radius, 10f, 300f);
 
-                TrackPoint refTrackpoint = TrackPoints[c.Node];
+                // Longer-radius corners need longer setup distance.
+                // Angle factor raises span for tighter corners so cars move earlier.
+                float absAngle = Math.Abs(c.Angle);
+                float angleFactor = map(absAngle, 5f, 120f, 0.9f, 1.7f, true);
+                int span = (int)Clamp(radius * angleFactor, minSpan, maxSpan);
 
-                if (lastC.IsKey)
+                c.LengthStart = span;
+                c.LenghtEnd = span;
+            }
+
+            // 2) Resolve overlap between adjacent key-corner spans.
+            for (int i = 1; i < keyCorners.Count; i++)
+            {
+                CornerPoint prev = keyCorners[i - 1];
+                CornerPoint curr = keyCorners[i];
+
+                int prevEnd = prev.Node + prev.LenghtEnd;
+                int currStart = curr.Node - curr.LengthStart;
+                if (currStart > prevEnd) continue;
+
+                int overlapSplit = (currStart + prevEnd) / 2;
+                int newPrevEnd = Math.Max(prev.Node + 1, overlapSplit);
+                int newCurrStart = Math.Min(curr.Node - 1, overlapSplit + 1);
+
+                prev.LenghtEnd = Math.Max(1, newPrevEnd - prev.Node);
+                curr.LengthStart = Math.Max(1, curr.Node - newCurrStart);
+            }
+
+            // 3) Build per-node lane bias: outside -> apex -> outside.
+            foreach (CornerPoint c in keyCorners)
+            {
+                int cornerSign = Math.Sign(c.Angle);
+                if (cornerSign == 0) continue;
+
+                int startNode = (int)Clamp(c.Node - c.LengthStart, 0, TrackPoints.Count - 1);
+                int endNode = (int)Clamp(c.Node + c.LenghtEnd, 0, TrackPoints.Count - 1);
+                if (endNode < startNode) continue;
+
+                for (int node = startNode; node <= endNode; node++)
                 {
-                    if (lastC.Node + c.LenghtEnd * 2 > c.Node) c.IsKey = false;
-                }
+                    float width = TrackPoints[node].TrackWide;
+                    float outsideOffset = cornerSign * width;
+                    float apexOffset = -outsideOffset;
+                    float t;
+                    float offset;
 
-                int radiusToDistance = (int)(TrackPoints[c.Node].TrackWide * 4);
-                c.LengthStart = radiusToDistance;
-                c.LenghtEnd = radiusToDistance;
-
-                for (int nodeID = c.Node - 250; nodeID < c.Node + 250; nodeID++)
-                {
-                    if (nodeID > 10 && nodeID < TrackPoints.Count - 11)
+                    if (node <= c.Node)
                     {
-                        TrackPoint checkedTrackpoint = TrackPoints[nodeID];
-                        float refRadius = checkedTrackpoint.GeneralCurveRadius;
-                        if (checkedTrackpoint.Node < c.Node)
-                        {
-                            if (checkedTrackpoint.PreciseCurveRadius > c.GetPreciseRadius() * 4) { c.LengthStart = c.Node - nodeID; }
-                        }
-                        else
-                        {
-                            if (checkedTrackpoint.PreciseCurveRadius > c.GetPreciseRadius() * 4) { c.LenghtEnd = nodeID - c.Node; break; }
-                        }
+                        t = c.Node <= startNode ? 1f : Clamp((float)(node - startNode) / (c.Node - startNode), 0f, 1f);
+                        offset = Lerp(outsideOffset, apexOffset, t);
                     }
+                    else
+                    {
+                        t = endNode <= c.Node ? 1f : Clamp((float)(node - c.Node) / (endNode - c.Node), 0f, 1f);
+                        offset = Lerp(apexOffset, outsideOffset, t);
+                    }
+
+                    NodeScalarData[node] = offset;
                 }
-                lastC = c;
             }
 
             Log(LogImportance.Info, "Route generated");
