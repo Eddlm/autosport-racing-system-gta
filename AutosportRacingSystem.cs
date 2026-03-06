@@ -73,8 +73,8 @@ namespace ARS
             float kP = 1.0f,
             float kD = 0.1f,
             float kI = 0.0f,
-            float maxSpeed = 99,
-            float maxAccel = 99)
+            float maxSpeed = 999,
+            float maxAccel = 999)
         {
             this.kP = kP;
             this.kD = kD;
@@ -4272,6 +4272,10 @@ namespace ARS
 
                 c.LengthStart = Math.Max(minSpan, c.Node - foundStartNode);
                 c.LenghtEnd = c.LengthStart;
+
+                int maxSpanFromTrackWide = Math.Max(minSpan, (int)Math.Round(TrackPoints[c.Node].TrackWide * 4f));
+                c.LengthStart = Math.Min(c.LengthStart, maxSpanFromTrackWide);
+                c.LenghtEnd = Math.Min(c.LenghtEnd, maxSpanFromTrackWide);
             }
 
             // 2) Remove any key corner ahead that overlaps this corner's span.
@@ -4479,7 +4483,7 @@ namespace ARS
         /// Returns grip delta in Gs caused by vertical curvature at this speed.
         /// Negative = grip loss on crest, positive = grip gain in compression.
         /// </summary>
-        public static float WouldLiftOffRoadAtSpeed(Vector3 start, Vector3 midpoint, Vector3 end, float velocity)
+        public static float GripGainLossElChange(Vector3 start, Vector3 midpoint, Vector3 end, float velocity)
         {
             if (velocity <= 0f) return 0f;
 

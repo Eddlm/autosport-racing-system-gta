@@ -6,7 +6,7 @@ namespace ARS
 {
     public static class AIData
     {
-        public static float MaxSpeed = ARS.MPHtoMS(500f);
+        public static float MaxSpeed = ARS.MPHtoMS(300f);
         public static float MinSpeed = ARS.MPHtoMS(15f);
 
         public static float SpeedToInput(float spd, float tSpd, float scale = 1f)
@@ -170,8 +170,8 @@ namespace ARS
         public float SteerManeuver = 0f;
         public float SteerMax = 0f;
         public float FollowLane = 0f;
-        public float SteerCurrent = 0f;
         public float SteerInput = 0f;
+        public float LastAppliedSteerTrackDegrees = 0f;
         public float Throttle = 1f;
         public float Brake = 1f;
         public float ThrottleOffset = 0f;

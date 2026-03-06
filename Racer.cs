@@ -34,9 +34,21 @@ namespace ARS
         public Ped Driver;
         public Vehicle Car;
         public List<string> DebugText = new List<string>();
-        public List<Vector3> trail = new List<Vector3>();
-        List<float> trailInput = new List<float>();
+        struct TrailSample
+        {
+            public Vector3 Position;
+            public float CombinedInput;
+
+            public TrailSample(Vector3 position, float combinedInput)
+            {
+                Position = position;
+                CombinedInput = combinedInput;
+            }
+        }
+
+        List<TrailSample> trailSamples = new List<TrailSample>();
         List<Vector3> followLaneTrail = new List<Vector3>();
+        List<Vector3> rawFollowLaneTrail = new List<Vector3>();
         int LastFollowLaneTrailNode = -1;
         public RacerBaseBehavior BaseBehavior = RacerBaseBehavior.GridWait;
         public RaceState RCStatus = RaceState.NotInitiated;
@@ -53,11 +65,10 @@ namespace ARS
         int HalfSecondTick = 0; //500ms
         int OneSecondTick = 0; //1000ms
 
-        PID SteerPID = new PID(6, 12f, 0);
-        PID LanePID = new PID(0.075f, 0.4f, 0);
+        PID LanePID = new PID(0.2f, 0.4f, 0);
 
         // Minimal stuck detector state: intent to move + low speed + no node progress for a short window.
-        int StuckCheckStartTime = 0;
+        int LastStuckGameTime = 0;
         public bool IsStuckByThrottle = false;
         const int StuckCheckTimeMs = 2000;
         int LastProgressNode = -1;
@@ -66,7 +77,8 @@ namespace ARS
         bool IsRecoveringFromStuck = false;
         int StuckRecoveryEndTime = 0;
         const int StuckRecoveryTimeMs = 2000;
-        bool ForceStuckTestRequested = false;
+        int StuckRecoveryAttempts = 0;
+        public int StuckRecoveryAttemptsNow => StuckRecoveryAttempts;
         public bool IsRecoveringFromStuckNow => IsRecoveringFromStuck;
 
 
@@ -90,7 +102,6 @@ namespace ARS
         float TargetLane = 0;
         public float MaxLeftLane = 0;
         public float MaxRightLane = 0;
-        float DEVGripExtra = 0;
 
         int LastCoreTick = 100;
         int TimeSinceLastCoreTick => (int)ARS.Clamp(Game.GameTime - LastCoreTick, 1, 9999);
@@ -202,6 +213,7 @@ namespace ARS
             LapStartTime = 0;
             Lap = 0;
             followLaneTrail.Clear();
+            rawFollowLaneTrail.Clear();
             LastFollowLaneTrailNode = -1;
 
             string flags = ARS.GetHandlingFlags(Car).ToString("X");
@@ -230,24 +242,25 @@ namespace ARS
         /// <summary>
         /// Neccesary calculations for the car to follow the track. The whole function results in vControl.SteerTrack.
         /// </summary>
-        public void SteerTrack()
+        public void OldSteerTrack()
         {
-            if (LookAheads[eLookAheads.OneSec] == null || BaseBehavior == RacerBaseBehavior.GridWait ||
+            if (LookAheads[eLookAheads.OneSec] == null || LookAheads[eLookAheads.HalfSec] == null || LookAheads[eLookAheads.OneHalfSec] == null || BaseBehavior == RacerBaseBehavior.GridWait ||
                 BaseBehavior == RacerBaseBehavior.FinishedStandStill || CurrentTrackPoint.Node < 3)
             {
                 vControl.SteerTrackDegrees = 0f;
                 return;
             }
 
+            TrackPoint laneCalcPoint = LookAheads[eLookAheads.HalfSec];
 
             float roadWide = LookAheads[eLookAheads.HalfSec].TrackWide;
-            float AngleOneSec = AngleToTrackDir(CurrentTrackPoint, LookAheads[eLookAheads.OneSec]);
+            float AngleOneSec = AngleToTrackDir(laneCalcPoint, LookAheads[eLookAheads.OneSec]);
 
 
             MaxLeftLane = -roadWide + vData.BoundingBox;
             MaxRightLane = roadWide - vData.BoundingBox;
 
-            float KeepInside = AngleToTrackDir(CurrentTrackPoint, LookAheads[eLookAheads.OneHalfSec]);
+            float KeepInside = AngleToTrackDir(laneCalcPoint, LookAheads[eLookAheads.OneHalfSec]);
             TargetLane = mem.data.DeviationFromCenter - (KeepInside / Handling.Grip);
 
 
@@ -257,7 +270,7 @@ namespace ARS
                 int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
                 int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
                 float speedMs = Math.Max(Car.Velocity.Length(), 1f);
-                float distToCornerEntrance = (ARS.TrackPoints[startNode].Position - ARS.TrackPoints[CurrentTrackPoint.Node].Position).Length();
+                float distToCornerEntrance = (ARS.TrackPoints[startNode].Position - laneCalcPoint.Position).Length();
                 float sToReachCornerStart = ARS.Clamp(distToCornerEntrance / speedMs, 0f, 99f);
                 mem.Corner.sToEntrance = sToReachCornerStart;
 
@@ -267,13 +280,13 @@ namespace ARS
                     entranceLane = Math.Sign(c.Angle) * ARS.TrackPoints[startNode].TrackWide;
                 }
 
-                if (CurrentTrackPoint.Node < startNode)
+                if (laneCalcPoint.Node < startNode)
                 {
                     TargetLane = entranceLane;
                 }
-                else if (CurrentTrackPoint.Node <= endNode)
+                else if (laneCalcPoint.Node <= endNode)
                 {
-                    int followNode = (int)ARS.Clamp(LookAheads[eLookAheads.OneSec].Node, startNode, endNode);
+                    int followNode = (int)ARS.Clamp(laneCalcPoint.Node, startNode, endNode);
                     float profileLane = entranceLane;
                     if (ARS.NodeScalarData.TryGetValue(followNode, out float laneFromProfile))
                     {
@@ -374,6 +387,134 @@ namespace ARS
             if (float.IsNaN(vControl.SteerTrackDegrees) || float.IsInfinity(vControl.SteerTrackDegrees)) vControl.SteerTrackDegrees = 0f;
         }
 
+        public void SteerTrack()
+        {
+            if (!TryBuildSteerTrackContext(
+                out TrackPoint laneCalcPoint,
+                out TrackPoint oneSecPoint,
+                out TrackPoint oneHalfSecPoint,
+                out TrackPoint steerRefPoint,
+                out float roadWide,
+                out float angleOneSec))
+            {
+                vControl.SteerTrackDegrees = 0f;
+                return;
+            }
+
+            float leftBound = -roadWide + vData.BoundingBox;
+            float rightBound = roadWide - vData.BoundingBox;
+
+            bool cornerFollowingAvailable = mem.Corner.Valid && Lap > 0;
+            bool inCornerSpan = IsInCurrentCornerSpan(laneCalcPoint);
+            float targetLane;
+            if (cornerFollowingAvailable)
+            {
+                targetLane = mem.data.DeviationFromCenter;
+                ApplyCornerLaneProfile(laneCalcPoint, laneCalcPoint.Node, ref targetLane);
+            }
+            else
+            {
+                float keepInside = AngleToTrackDir(laneCalcPoint, oneHalfSecPoint);
+                targetLane = mem.data.DeviationFromCenter - (keepInside / Handling.Grip);
+                
+            }
+            //ApplyRivalAvoidance(laneCalcPoint, roadWide, angleOneSec, !inCornerSpan, ref targetLane, ref leftBound, ref rightBound);
+
+            
+            
+            MaxLeftLane = leftBound;
+            MaxRightLane = rightBound;
+            vControl.FollowLane = ARS.Clamp(targetLane, leftBound, rightBound);
+
+            LanePID.SetTarget(vControl.FollowLane);
+            SteerTarget = steerRefPoint.Position - (Vector3.Cross(Vector3.WorldUp, steerRefPoint.Direction) * LanePID.GetValue());
+            vControl.SteerTrackDegrees = -Vector3.SignedAngle((SteerTarget - Car.Position).Normalized, Car.ForwardVector, Vector3.WorldUp);
+
+            if (float.IsNaN(vControl.SteerTrackDegrees) || float.IsInfinity(vControl.SteerTrackDegrees))
+            {
+                vControl.SteerTrackDegrees = 0f;
+            }
+
+            bool TryBuildSteerTrackContext(
+                out TrackPoint localLaneCalcPoint,
+                out TrackPoint localOneSecPoint,
+                out TrackPoint localOneHalfSecPoint,
+                out TrackPoint localSteerRefPoint,
+                out float localRoadWide,
+                out float localAngleOneSec)
+            {
+                localLaneCalcPoint = null;
+                localOneSecPoint = null;
+                localOneHalfSecPoint = null;
+                localSteerRefPoint = null;
+                localRoadWide = 0f;
+                localAngleOneSec = 0f;
+
+                if (BaseBehavior == RacerBaseBehavior.GridWait || BaseBehavior == RacerBaseBehavior.FinishedStandStill || CurrentTrackPoint.Node < 3)
+                {
+                    return false;
+                }
+
+                if (!LookAheads.TryGetValue(eLookAheads.HalfSec, out localLaneCalcPoint) || localLaneCalcPoint == null) return false;
+                if (!LookAheads.TryGetValue(eLookAheads.OneSec, out localOneSecPoint) || localOneSecPoint == null) return false;
+                if (!LookAheads.TryGetValue(eLookAheads.OneHalfSec, out localOneHalfSecPoint) || localOneHalfSecPoint == null) return false;
+                if (!LookAheads.TryGetValue(eLookAheads.SteerRef, out localSteerRefPoint) || localSteerRefPoint == null) return false;
+
+                localRoadWide = localLaneCalcPoint.TrackWide;
+                localAngleOneSec = AngleToTrackDir(localLaneCalcPoint, localOneSecPoint);
+                return true;
+            }
+
+            bool IsInCurrentCornerSpan(TrackPoint localLaneCalcPoint)
+            {
+                if (!mem.Corner.Valid || Lap <= 0 || mem.Corner.OG == null) return false;
+
+                CornerPoint c = mem.Corner.OG;
+                int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
+                int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
+                return localLaneCalcPoint.Node >= startNode && localLaneCalcPoint.Node <= endNode;
+            }
+
+            void ApplyCornerLaneProfile(TrackPoint localLaneCalcPoint, int followReferenceNode, ref float localTargetLane)
+            {
+                if (!mem.Corner.Valid || Lap <= 0) return;
+
+                CornerPoint c = mem.Corner.OG;
+                int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
+                int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
+
+                float speedMs = Math.Max(Car.Velocity.Length(), 1f);
+                float distToCornerEntrance = (ARS.TrackPoints[startNode].Position - localLaneCalcPoint.Position).Length();
+                mem.Corner.sToEntrance = ARS.Clamp(distToCornerEntrance / speedMs, 0f, 99f);
+
+                float entranceLane = 0f;
+                if (!ARS.NodeScalarData.TryGetValue(startNode, out entranceLane))
+                {
+                    entranceLane = Math.Sign(c.Angle) * ARS.TrackPoints[startNode].TrackWide;
+                }
+
+                int followBaseNode = (int)ARS.Clamp(followReferenceNode, 0, ARS.TrackPoints.Count - 1);
+
+                if (followBaseNode < startNode)
+                {
+                    localTargetLane = entranceLane;
+                    return;
+                }
+
+                if (followBaseNode <= endNode)
+                {
+                    int followNode = (int)ARS.Clamp(followBaseNode, startNode, endNode);
+                    float profileLane = entranceLane;
+                    if (ARS.NodeScalarData.TryGetValue(followNode, out float laneFromProfile))
+                    {
+                        profileLane = laneFromProfile;
+                    }
+                    localTargetLane = profileLane;
+                }
+            }
+
+        }
+
 
         void SteerCorrections()
         {
@@ -397,7 +538,8 @@ namespace ARS
 
             // Currently it stays registered as oversteer because it helps counter oversteer nicely, but it makes little sense.
             if (Math.Sign(expectedYawRate) != Math.Sign(actualYawRate) && Math.Abs(expectedYawRate) >=0.01f)
-            {                
+            {
+                
             }
             
             bool isOversteering = OversteerFactor > 0f;
@@ -420,7 +562,6 @@ namespace ARS
             if (Math.Sign((int)vData.SlideAngle) == Math.Sign((int)vData.YawRotationPerSecondDegrees)) vControl.SteerTrackDegrees -= SlideCounterSteer;
 
 
-            SteerPID.SetTarget(vControl.SteerTrackDegrees,90);
         }
 
         /// <summary>
@@ -449,12 +590,15 @@ namespace ARS
             vControl.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             vControl.MaxThrottle = 1f;
             IsStuckByThrottle = false;
-            StuckCheckStartTime = 0;
+            LastStuckGameTime = 0;
             LastProgressNode = -1;
             LastProgressTime = 0;
             IsRecoveringFromStuck = false;
             StuckRecoveryEndTime = 0;
+            StuckRecoveryAttempts = 0;
+            vControl.LastAppliedSteerTrackDegrees = 0f;
             followLaneTrail.Clear();
+            rawFollowLaneTrail.Clear();
             LastFollowLaneTrailNode = -1;
             if (team == Team.Cop) Car.SirenActive = true;
 
@@ -492,7 +636,13 @@ namespace ARS
             if (newThrottle > 0.0) newBrake = 0;
 
 
-            vControl.MaxThrottle = Math.Min(vControl.MaxThrottle, vData.AvgGroundStability);
+            float stabilityThrottleLimit = vData.AvgGroundStability;
+            if (OutOfTrackDistance() > 0.5f)
+            {
+                // Off-track recovery needs some minimum throttle authority.
+                stabilityThrottleLimit = Math.Max(stabilityThrottleLimit, 0.45f);
+            }
+            vControl.MaxThrottle = Math.Min(vControl.MaxThrottle, stabilityThrottleLimit);
 
             vControl.Brake += (newBrake - vControl.Brake) * 5 * TickScale;
             vControl.Throttle += (newThrottle - vControl.Throttle) * 5 * TickScale;
@@ -514,13 +664,18 @@ namespace ARS
             if (float.IsNaN(vControl.SteerTrackDegrees) || float.IsInfinity(vControl.SteerTrackDegrees)) vControl.SteerTrackDegrees = 0f;
             if (float.IsNaN(vControl.SteerManeuver) || float.IsInfinity(vControl.SteerManeuver)) vControl.SteerManeuver = 0f;
 
-            float finalSteer = SteerPID.GetValue();
+            
+            float maxDeltaPerTick = 90 * TickScale;
+            float deltaToTarget = ARS.Clamp(vControl.SteerTrackDegrees - vControl.LastAppliedSteerTrackDegrees, -maxDeltaPerTick, maxDeltaPerTick);
+             
+            vControl.SteerTrackDegrees = vControl.LastAppliedSteerTrackDegrees+ deltaToTarget;
 
+            vControl.LastAppliedSteerTrackDegrees = vControl.SteerTrackDegrees;
 
             if (float.IsNaN(vControl.SteerInput) || float.IsInfinity(vControl.SteerInput)) vControl.SteerInput = 0f;
 
-            vControl.SteerInput = ARS.map(finalSteer, -vData.SteeringLock, vData.SteeringLock, -1, 1, true);
-            vControl.SteerCurrent = finalSteer;
+            vControl.SteerInput = ARS.map(vControl.SteerTrackDegrees, -vData.SteeringLock, vData.SteeringLock, -1, 1, true);
+            UI.ShowSubtitle("Steer: " + vControl.SteerTrackDegrees.ToString("0.0") ,500);
         }
 
         /// <summary>
@@ -603,12 +758,12 @@ namespace ARS
             }
 
  
-            if (Math.Sign((int)SteerPID.GetValue()) == Math.Sign((int)vData.YawRotationPerSecondDegrees))
+            if (Math.Sign((int)vControl.SteerTrackDegrees) == Math.Sign((int)vData.YawRotationPerSecondDegrees))
             {
                 float velocity = Car.Velocity.Length();
 
                 // Simple approximation (angle must be in RADIANS)
-                float steeringAngleRad = Math.Abs(SteerPID.GetValue() * 1f) * (float)(Math.PI / 180);
+                float steeringAngleRad = Math.Abs(vControl.SteerTrackDegrees * 1f) * (float)(Math.PI / 180);
 
                 float intendedYawRate = (velocity * (float)Math.Tan(steeringAngleRad)) / vData.WheelBase;
                 intendedYawRate *= (180.0f / (float)Math.PI); // Convert to degrees/sec
@@ -647,7 +802,6 @@ namespace ARS
         }
         public void UpdateTickData()
         {
-            SteerPID.Update();
             LanePID.Update();
             vData.LocalGs = (Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true) - vData.SpeedVectorLocal) / Game.LastFrameTime;
             Vector3 cSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
@@ -661,11 +815,7 @@ namespace ARS
             vData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
             mem.data.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
 
-            if (trail.Count > 50)
-            {
-                trail.RemoveAt(0);
-                if (trailInput.Count > 0) trailInput.RemoveAt(0);
-            }
+            while (trailSamples.Count > 50) trailSamples.RemoveAt(0);
         }
         /// <summary>
         /// Gathers and runs tick-sensitive stuff
@@ -735,7 +885,8 @@ namespace ARS
 
             if (mem.Corner.Valid && Lap > 0)
             {
-                if (CurrentTrackPoint.Node > mem.Corner.OG.Node || (Math.Abs(CurrentTrackPoint.Node - mem.Corner.OG.Node) > 1000))
+                int cornerEndNode = (int)ARS.Clamp(mem.Corner.OG.Node + mem.Corner.OG.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
+                if (CurrentTrackPoint.Node > cornerEndNode || (Math.Abs(CurrentTrackPoint.Node - mem.Corner.OG.Node) > 1000))
                 {
                     mem.Corner.Valid = false;
                     BehaviorVariance[RandomVariance.SpeedAggroVariance] = Random.Next(80, 120) * 0.01f;
@@ -806,16 +957,23 @@ namespace ARS
         }
         void DrawStuff()
         {
+            bool showAggro = ARS.OptionValuesList[Options.ShowAggro];
+            bool showInputs = ARS.OptionValuesList[Options.ShowInputs];
+            bool showTrack = ARS.OptionValuesList[Options.ShowTrackAnalysis];
+            bool showPhysics = ARS.OptionValuesList[Options.ShowPhysics];
+            bool showAny = showAggro || showInputs || showTrack || showPhysics;
+            if (!showAny) return;
+
             if ((Car.Position - Game.Player.Character.Position).Length() > 50) return;
 
 
-            if (Driver.IsPlayer && Lap >= ARS.SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) && CanRegisterNewLap)
+            if (showTrack && Driver.IsPlayer && Lap >= ARS.SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) && CanRegisterNewLap)
             {
                 World.DrawMarker(MarkerType.CheckeredFlagRect, ARS.TrackPoints.First().Position + new Vector3(0, 0, 5f), ARS.TrackPoints.First().Direction, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);// DrawLine(vm,last, Color.Black);
             }
 
 
-            if (ARS.OptionValuesList[Options.ShowPhysics])
+            if (showPhysics)
             {
 
                 //Center of Gs
@@ -847,79 +1005,72 @@ namespace ARS
             {
 
                 if (!Car.IsInRangeOf(Game.Player.Character.Position, 500)) return;
-                UpdateFollowLaneTrail();
-                DrawFollowLaneTrail();
+                if (showTrack)
+                {
+                   
+                }
 
-                if (ARS.OptionValuesList[Options.ShowAggro])
+                if (showAggro)
                 {
                     World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + new Vector3(0, 0, 1.5f), Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.5f, 0.5f, -0.5f), ARS.GetColorFromRedYellowGreenGradient(100 - (mem.intention.Aggression * 100)), false, true, 0, false, "", "", false);
                 }
 
-                if (trail.Count == 0) trail.Add(Car.Position);
-                else if (Car.Position.DistanceTo(trail[trail.Count - 1]) > 1f) trail.Add(Car.Position);
-
-                // Keep input history aligned with the position trail: -1 full brake, 0 neutral, +1 full throttle.
-                float combinedInput = ARS.Clamp(vControl.Throttle - vControl.Brake, -1f, 1f);
-                while (trailInput.Count < trail.Count) trailInput.Add(combinedInput);
-                while (trailInput.Count > trail.Count) trailInput.RemoveAt(trailInput.Count - 1);
-
-
-                if (ARS.OptionValuesList[Options.ShowInputs])
+                if (showInputs)
                 {
-                    Vector3 nSteer = SteerTarget + Vector3.WorldUp;
-
-                    Vector3 dev = Car.Position + (Vector3.Cross(Car.ForwardVector, Vector3.WorldUp) * (LanePID.GetValue() - mem.data.DeviationFromCenter));
-                    ARS.DrawLine(Car.Position, dev + Vector3.WorldUp, Color.White);
-
-                    Color cc = Color.Green;
-                    if (vControl.Brake > 0.0f) cc = Color.Yellow;
-                    if (vControl.Brake > 0.5f) cc = Color.Orange;
-                    if (vControl.Brake > 0.9f) cc = Color.Red;
-
-                    Vector3 velocity = Car.Velocity.Normalized;
-                    Vector3 back = Car.ForwardVector;
-                    back.Z = velocity.Z;
-
-                    Vector3 Dimensions = Car.Model.GetDimensions();
-                    Vector3 inputplace = Car.Position + new Vector3(0, 0, -Car.HeightAboveGround);
-                    Vector3 strCurent = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * vControl.SteerCurrent) * (Car.ForwardVector * (Car.Position - SteerTarget).Length()); // Quaternion.RotationAxis takes radian angles
-
-
-                    Vector3 maxLeft = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * vControl.SteerMax) * (Car.ForwardVector * (Car.Position - SteerTarget).Length()); // Quaternion.RotationAxis takes radian angles
-                    Vector3 maxRight = Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -vControl.SteerMax) * (Car.ForwardVector * (Car.Position - SteerTarget).Length()); // Quaternion.RotationAxis takes radian angles
-
-
-
-                    float dimension = Car.Model.GetDimensions().Y + 1f;
-
-                    Vector3 steerAim = Car.Position + strCurent;
-                    steerAim.Z = nSteer.Z;
-
-
-                    steerAim = Car.Position + maxLeft;
-                    steerAim.Z = nSteer.Z;
-
-                    steerAim = Car.Position + maxRight;
-                    steerAim.Z = nSteer.Z;
-
-
-                    if (1 == 1)
+                    float combinedInput = ARS.Clamp(vControl.Throttle - vControl.Brake, -1f, 1f);
+                    if (trailSamples.Count == 0)
                     {
-                        Vector3 inputThrottle = inputplace + (Car.ForwardVector * (Dimensions.Y * 0.5f) * vControl.Throttle);
-                        Vector3 inputBrake = inputplace - (Car.ForwardVector * (Dimensions.Y * 0.5f) * vControl.Brake);
-
-                        Color cThrottle = ARS.GradientAtoB(Color.White, Color.Green, vControl.Throttle * 100);
-                        Color cBrake = ARS.GradientAtoB(Color.White, Color.Red, vControl.Brake * 100);
-
-                        if (vControl.Throttle > 0.05f) World.DrawMarker(MarkerType.ChevronUpx1, inputThrottle, -Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(dimension / 2, dimension / 4, -(dimension / 2)), Color.FromArgb(250, cThrottle), false, false, 0, false, "", "", false);
-                        if (vControl.Brake > 0.05f) World.DrawMarker(MarkerType.ChevronUpx1, inputBrake, Car.ForwardVector, new Vector3(90, 0, 0), new Vector3(dimension / 2, dimension / 4, -(dimension / 2)), Color.FromArgb(250, cBrake), false, false, 0, false, "", "", false);
-
+                        trailSamples.Add(new TrailSample(Car.Position, combinedInput));
                     }
+                    else if (Car.Position.DistanceTo(trailSamples[trailSamples.Count - 1].Position) > 1f)
+                    {
+                        trailSamples.Add(new TrailSample(Car.Position, combinedInput));
+                    }
+
+                    UpdateFollowLaneTrail();
+                    DrawFollowLaneTrail();
+                    DrawRawFollowLaneTrail();
+
+                    if (LookAheads.ContainsKey(eLookAheads.OneSec))
+                    {
+                        TrackPoint laneTargetNode = LookAheads[eLookAheads.OneSec];
+                        float laneOffset = LanePID.GetValue();
+                        Vector3 laneTarget = laneTargetNode.Position - (Vector3.Cross(Vector3.WorldUp, laneTargetNode.Direction) * laneOffset);
+
+                        Vector3 roofPos = Car.Position + new Vector3(0f, 0f, Car.Model.GetDimensions().Z + 0.05f);
+                        
+                        Vector3 arrowDir = (laneTarget - roofPos);
+                        
+                        if (arrowDir.Length() > 0.001f)
+                        {
+                            World.DrawMarker(
+                                MarkerType.ChevronUpx3,
+                                roofPos,
+                                arrowDir.Normalized,
+                                new Vector3(90, 0, 0),
+                                new Vector3(2.4f, 1.05f, 2.4f),
+                                Color.Blue,
+                                false,
+                                false,
+                                0,
+                                false,
+                                "",
+                                "",
+                                false
+                            );
+                        }
+                    }
+                }
+
+
+                if (showInputs)
+                {
+
 
                     DrawInputTrails();
                 }
 
-                if (ARS.OptionValuesList[Options.ShowTrackAnalysis])
+                if (showTrack)
                 {
                     Vector3 source = Car.Position + new Vector3(0, 0, 0.5f + (Car.Model.GetDimensions().Z * 0.6f));
 
@@ -1004,24 +1155,22 @@ namespace ARS
             }
             else
             {
-
-
-
-                //Line showing track direction
-
-                //Track limits display
-                Color blue = Color.FromArgb(50, Color.LightSkyBlue);
-                int fNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 500, 0, ARS.TrackPoints.Count() - 1);
-                for (int i = CurrentTrackPoint.Node; i < fNode; i++)
+                if (showTrack)
                 {
-                    if (i % 2 == 1)
+                    // Track limits display
+                    Color blue = Color.FromArgb(50, Color.LightSkyBlue);
+                    int fNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 500, 0, ARS.TrackPoints.Count() - 1);
+                    for (int i = CurrentTrackPoint.Node; i < fNode; i++)
                     {
-                        TrackPoint tPoint = ARS.TrackPoints[i];
-                        Vector3 right = tPoint.Position + (Vector3.Cross(tPoint.Direction, Vector3.WorldUp) * tPoint.TrackWide) + (Vector3.WorldUp * 0.5f);
-                        Vector3 left = tPoint.Position + (Vector3.Cross(tPoint.Direction, Vector3.WorldUp) * -tPoint.TrackWide) + (Vector3.WorldUp * 0.5f);
+                        if (i % 2 == 1)
+                        {
+                            TrackPoint tPoint = ARS.TrackPoints[i];
+                            Vector3 right = tPoint.Position + (Vector3.Cross(tPoint.Direction, Vector3.WorldUp) * tPoint.TrackWide) + (Vector3.WorldUp * 0.5f);
+                            Vector3 left = tPoint.Position + (Vector3.Cross(tPoint.Direction, Vector3.WorldUp) * -tPoint.TrackWide) + (Vector3.WorldUp * 0.5f);
 
-                        World.DrawMarker(MarkerType.ChevronUpx1, right, tPoint.Direction, new Vector3(89, 0, -90), new Vector3(1, 1f, 2f), blue);
-                        World.DrawMarker(MarkerType.ChevronUpx1, left, tPoint.Direction, new Vector3(89, 0, -90), new Vector3(1, 1f, 2f), blue);
+                            World.DrawMarker(MarkerType.ChevronUpx1, right, tPoint.Direction, new Vector3(89, 0, -90), new Vector3(1, 1f, 2f), blue);
+                            World.DrawMarker(MarkerType.ChevronUpx1, left, tPoint.Direction, new Vector3(89, 0, -90), new Vector3(1, 1f, 2f), blue);
+                        }
                     }
                 }
             }
@@ -1031,35 +1180,51 @@ namespace ARS
         {
             if (ARS.TrackPoints == null || ARS.TrackPoints.Count == 0) return;
 
-            int node = (int)ARS.Clamp(CurrentTrackPoint.Node, 0, ARS.TrackPoints.Count - 1);
+            int pidNode = (int)ARS.Clamp(CurrentTrackPoint.Node, 0, ARS.TrackPoints.Count - 1);
+            if (LookAheads.TryGetValue(eLookAheads.SteerRef, out TrackPoint steerRefPoint) && steerRefPoint != null)
+            {
+                pidNode = (int)ARS.Clamp(steerRefPoint.Node, 0, ARS.TrackPoints.Count - 1);
+            }
+
+            int rawNode = pidNode;
+
+            float pidLaneOffset = LanePID.GetValue();
+            float rawLaneOffset = vControl.FollowLane;
+            Vector3 pidPoint = GetFollowLaneTrailPoint(pidNode, pidLaneOffset);
+            Vector3 rawPoint = GetRawFollowLaneTrailPoint(rawNode, rawLaneOffset);
+
             if (LastFollowLaneTrailNode < 0)
             {
-                LastFollowLaneTrailNode = node;
-                followLaneTrail.Add(GetFollowLaneTrailPoint(node));
+                LastFollowLaneTrailNode = pidNode;
+                followLaneTrail.Add(pidPoint);
+                rawFollowLaneTrail.Add(rawPoint);
                 return;
             }
 
-            if (node == LastFollowLaneTrailNode) return;
-
-            int safety = 0;
-            int cursor = LastFollowLaneTrailNode;
-            while (cursor != node && safety < ARS.TrackPoints.Count)
+            if (pidNode == LastFollowLaneTrailNode)
             {
-                cursor++;
-                if (cursor >= ARS.TrackPoints.Count) cursor = 0;
-                followLaneTrail.Add(GetFollowLaneTrailPoint(cursor));
-                safety++;
+                bool pidUnchanged = followLaneTrail.Count > 0 && followLaneTrail.Last().DistanceTo(pidPoint) < 0.05f;
+                bool rawUnchanged = rawFollowLaneTrail.Count > 0 && rawFollowLaneTrail.Last().DistanceTo(rawPoint) < 0.05f;
+                if (pidUnchanged && rawUnchanged) return;
             }
 
-            LastFollowLaneTrailNode = node;
+            LastFollowLaneTrailNode = pidNode;
+            followLaneTrail.Add(pidPoint);
+            rawFollowLaneTrail.Add(rawPoint);
 
             while (followLaneTrail.Count > 50) followLaneTrail.RemoveAt(0);
+            while (rawFollowLaneTrail.Count > 50) rawFollowLaneTrail.RemoveAt(0);
         }
 
-        Vector3 GetFollowLaneTrailPoint(int node)
+        Vector3 GetFollowLaneTrailPoint(int node, float laneOffset)
         {
             TrackPoint t = ARS.TrackPoints[node];
-            return t.Position - (Vector3.Cross(Vector3.WorldUp, t.Direction) * LanePID.GetValue()) + (Vector3.WorldUp * 0.3f);
+            return t.Position - (Vector3.Cross(Vector3.WorldUp, t.Direction) * laneOffset) + (Vector3.WorldUp * 0.3f);
+        }
+        Vector3 GetRawFollowLaneTrailPoint(int node, float laneOffset)
+        {
+            TrackPoint t = ARS.TrackPoints[node];
+            return t.Position - (Vector3.Cross(Vector3.WorldUp, t.Direction) * laneOffset) + (Vector3.WorldUp * 0.35f);
         }
 
         void DrawFollowLaneTrail()
@@ -1072,28 +1237,49 @@ namespace ARS
                 ARS.DrawLine(followLaneTrail[i - 1], followLaneTrail[i], laneBlue);
             }
         }
+        void DrawRawFollowLaneTrail()
+        {
+            if (rawFollowLaneTrail.Count < 2) return;
+
+            Color rawLaneColor = Color.White;
+            for (int i = 1; i < rawFollowLaneTrail.Count; i++)
+            {
+                ARS.DrawLine(rawFollowLaneTrail[i - 1], rawFollowLaneTrail[i], rawLaneColor);
+            }
+        }
 
         void DrawInputTrails()
         {
-            if (trail.Count < 2) return;
+            if (trailSamples.Count < 2) return;
 
-            for (int i = 1; i < trail.Count; i++)
+            for (int i = 1; i < trailSamples.Count; i++)
             {
-                Vector3 from = trail[i - 1];
-                Vector3 to = trail[i];
+                TrailSample fromSample = trailSamples[i - 1];
+                TrailSample toSample = trailSamples[i];
+                Vector3 from = fromSample.Position;
+                Vector3 to = toSample.Position;
                 Vector3 segment = to - from;
                 if (segment.Length() < 0.05f) continue;
 
-                float inputFrom = (i - 1) < trailInput.Count ? trailInput[i - 1] : 0f;
-                float inputTo = i < trailInput.Count ? trailInput[i] : inputFrom;
-                float baseHeight = 0.15f;
-                Vector3 point = to + (Vector3.WorldUp * baseHeight);
+                float inputFrom = fromSample.CombinedInput;
+                float inputTo = toSample.CombinedInput;
+                 Vector3 point = to;
                 Vector3 away = segment.Normalized;
                 float dimension = Car.Model.GetDimensions().Y + 1f;
                 Vector3 chevronScale = new Vector3(dimension / 2f, dimension / 4f, -(dimension / 2f));
                 float value = ARS.Clamp((inputFrom + inputTo) * 0.5f, -1f, 1f);
-                float colorPercent = ARS.map(value, -1f, 1f, 0f, 100f, true);
-                Color baseColor = ARS.GradientAtoBtoC(Color.Red, Color.White, Color.LimeGreen, colorPercent);
+                Color baseColor;
+                if (value >= 0f)
+                {
+                    // Throttle side: yellow -> lime green -> blue.
+                    baseColor = ARS.GradientAtoBtoC(Color.White, Color.GreenYellow, Color.Green, value * 100f);
+                }
+                else
+                {
+                    // Brake side: yellow -> orange (half) -> red.
+                    float brake = -value;
+                    baseColor = ARS.GradientAtoBtoC(Color.White, Color.Orange, Color.Red, brake * 100f);
+                }
                 Color finalColor = Color.FromArgb(255, baseColor.R, baseColor.G, baseColor.B);
 
                 World.DrawMarker(MarkerType.ChevronUpx1, point, -away, new Vector3(90, 0, 0), chevronScale, finalColor, false, false, 0, false, "", "", false);
@@ -1303,7 +1489,7 @@ namespace ARS
             else
             {
                 IsStuckByThrottle = false;
-                StuckCheckStartTime = 0;
+                LastStuckGameTime = 0;
                 LastProgressNode = -1;
                 LastProgressTime = 0;
                 IsRecoveringFromStuck = false;
@@ -1313,25 +1499,22 @@ namespace ARS
 
         void UpdateStuckCheck()
         {
-            if (ForceStuckTestRequested)
+            if (ARS.MStoMPH(Car.Velocity.Length()) > 10f && Math.Abs(mem.data.DeviationFromCenter) < CurrentTrackPoint.TrackWide)
             {
-                ForceStuckTestRequested = false;
-                IsStuckByThrottle = true;
-                StuckCheckStartTime = Game.GameTime - StuckCheckTimeMs;
-                return;
+                StuckRecoveryAttempts = 0;
             }
 
             if (IsRecoveringFromStuck)
             {
                 IsStuckByThrottle = false;
-                StuckCheckStartTime = 0;
+                LastStuckGameTime = 0;
                 return;
             }
 
             if (BaseBehavior != RacerBaseBehavior.Race || !Driver.IsSittingInVehicle(Car))
             {
                 IsStuckByThrottle = false;
-                StuckCheckStartTime = 0;
+                LastStuckGameTime = 0;
                 LastProgressNode = -1;
                 LastProgressTime = 0;
                 return;
@@ -1348,30 +1531,33 @@ namespace ARS
                 LastProgressTime = Game.GameTime;
             }
 
-            bool wantsToMoveForward = vControl.Throttle > 0.15f && mem.intention.Speed > 2f;
-            bool almostStopped = Car.Velocity.Length() < 1.2f;
-            bool noNodeProgress = (Game.GameTime - LastProgressTime) >= StuckNoProgressTimeMs;
-            bool stuckCondition = wantsToMoveForward && almostStopped && noNodeProgress;
+            bool lowLongitudinalGs = Math.Abs(vData.LongitudinalGs) < 0.25f;
+            bool stuckCondition = lowLongitudinalGs && ARS.MStoMPH(Car.Velocity.Length()) < 5f;
 
             if (!stuckCondition)
             {
                 IsStuckByThrottle = false;
-                StuckCheckStartTime = 0;
+                LastStuckGameTime = 0;
                 return;
             }
 
-            if (StuckCheckStartTime == 0)
+            if (LastStuckGameTime == 0)
             {
-                StuckCheckStartTime = Game.GameTime;
+                LastStuckGameTime = Game.GameTime;
             }
 
-            IsStuckByThrottle = (Game.GameTime - StuckCheckStartTime) >= StuckCheckTimeMs;
-        }
+            bool stuckForLongEnough = (Game.GameTime - LastStuckGameTime) >= StuckCheckTimeMs;
+            IsStuckByThrottle = stuckForLongEnough;
 
-        public void ForceStuckForTest()
-        {
-            if (ControlledByPlayer) return;
-            ForceStuckTestRequested = true;
+            if (stuckForLongEnough && !IsRecoveringFromStuck)
+            {
+                IsRecoveringFromStuck = true;
+                StuckRecoveryAttempts++;
+                HandleRecoveryAttemptEscalation();
+                StuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
+                IsStuckByThrottle = false;
+                LastStuckGameTime = 0;
+            }
         }
 
         void UpdateStuckRecovery()
@@ -1386,6 +1572,8 @@ namespace ARS
             if (!IsRecoveringFromStuck && IsStuckByThrottle)
             {
                 IsRecoveringFromStuck = true;
+                StuckRecoveryAttempts++;
+                HandleRecoveryAttemptEscalation();
                 StuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
                 IsStuckByThrottle = false;
             }
@@ -1396,7 +1584,7 @@ namespace ARS
             {
                 IsRecoveringFromStuck = false;
                 StuckRecoveryEndTime = 0;
-                StuckCheckStartTime = 0;
+                LastStuckGameTime = 0;
                 LastProgressNode = CurrentTrackPoint.Node;
                 LastProgressTime = Game.GameTime;
                 return;
@@ -1411,7 +1599,7 @@ namespace ARS
             {
                 IsRecoveringFromStuck = false;
                 StuckRecoveryEndTime = 0;
-                StuckCheckStartTime = 0;
+                LastStuckGameTime = 0;
                 LastProgressNode = CurrentTrackPoint.Node;
                 LastProgressTime = Game.GameTime;
                 return;
@@ -1421,6 +1609,20 @@ namespace ARS
             vControl.SteerInput = 0f;
             vControl.Throttle = -1f;
             vControl.Brake = 0f;
+        }
+
+        void HandleRecoveryAttemptEscalation()
+        {
+            if (StuckRecoveryAttempts < 2) return;
+
+            Vector3 toTrack = CurrentTrackPoint.Position - Car.Position;
+            if (toTrack.Length() < 0.01f) toTrack = Car.ForwardVector;
+
+            Vector3 nudgedVelocity = toTrack.Normalized * ARS.MPHtoMS(15f);
+            nudgedVelocity.Z += 1.5f;
+            Car.Velocity = nudgedVelocity;
+
+            StuckRecoveryAttempts = 0;
         }
 
         void UpdatePercievedGrip()
@@ -1444,7 +1646,7 @@ namespace ARS
             vData.BaseMechanicalGrip = HandlingGrip;
             vData.CurrentMechanicalGrip = ((vData.BaseMechanicalGrip) * GroundGripMultiplier);
             vData.CurrentMechanicalGrip *= hillGsLoss;
-            //vData.CurrentMechanicalGrip += Math.Min(ARS.WouldLiftOffRoadAtSpeed(thisPoint, toMidpoint, toEndpoint, Car.Velocity.Length()),0.0f);
+            vData.CurrentMechanicalGrip += 0.05f * Math.Min(ARS.GripGainLossElChange(thisPoint, toMidpoint, toEndpoint, Car.Velocity.Length()),0.0f);
 
             if (Math.Abs(mem.data.DeviationFromCenter) < CurrentTrackPoint.TrackWide && RacePosition <= 2 && !ARS.MultiplierInTerrain.ContainsKey(CurrentTrackPoint.Node))
             {
@@ -1512,12 +1714,10 @@ namespace ARS
         public float RiskFactorForGrip()
         {
             return 1.025f;
-            return ARS.map(mem.intention.Aggression, 0, 1, mem.personality.Stability.SpeedRiskFactorBase, mem.personality.Stability.SpeedRiskFactorAggro, true);
         }
         public float RiskFactorForBrake()
         {
             return 1;
-            return ARS.map(mem.intention.Aggression, 0, 1, mem.personality.Stability.BrakeRiskFactorBase, mem.personality.Stability.BrakeRiskFactorAggro, true);
         }
     }
 }
