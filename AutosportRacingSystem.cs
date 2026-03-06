@@ -1029,12 +1029,12 @@ namespace ARS
             {
                 for (int i = 0; i < Racers.Count; i++)
                 {
-                    Racers[i].mem.personality = personalitySets.Find(s => s.ProbToUse >= 100);
+                    Racers[i].Brain.personality = personalitySets.Find(s => s.ProbToUse >= 100);
 
                     PersonalitySet p = personalitySets.Find(ps => ps.Model != "" && ps.Model.ToLowerInvariant() == Racers[i].Car.DisplayName.ToLowerInvariant());
                     if (p != null)
                     {
-                        Racers[i].mem.personality = p;
+                        Racers[i].Brain.personality = p;
                         continue;
                     }
 
@@ -1053,7 +1053,7 @@ namespace ARS
                                 p.Stability.Skill = skill;
                             }
 
-                            Racers[i].mem.personality = p;
+                            Racers[i].Brain.personality = p;
                             break;
                         }
                     }
@@ -1818,7 +1818,7 @@ namespace ARS
 
                             string text = "";
                             if (r.Driver.IsPlayer) text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " T" + fTime + "~n~";
-                            else text = "~b~" + r.RacePosition + "º~w~ " + r.mem.personality.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
+                            else text = "~b~" + r.RacePosition + "º~w~ " + r.Brain.personality.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
 
 
                             positions.Add(text);
@@ -1832,15 +1832,15 @@ namespace ARS
                         foreach (Racer r in Racers)
                         {
                             string text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                            //text = "~b~" + r.Pos + "º~g~ " + r.mem.personality.Name + " (~y~" + (Math.Round(r.mem.intention.Aggression * 100)) + "~g~%) ~w~" + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            //text = "~b~" + r.Pos + "º~g~ " + r.Brain.personality.Name + " (~y~" + (Math.Round(r.Brain.intention.Aggression * 100)) + "~g~%) ~w~" + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
                             //text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                            text = "~b~" + r.vData.TextPerformanceIndex + " - ~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            text = "~b~" + r.VehicleData.TextPerformanceIndex + " - ~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
 
 
                             if (r.Driver.IsPlayer)
                             {
                                 //text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                                text = "~b~" + r.vData.TextPerformanceIndex + " - ~y~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                                text = "~b~" + r.VehicleData.TextPerformanceIndex + " - ~y~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
                             }
 
                             positions.Add(text);
@@ -2680,10 +2680,10 @@ namespace ARS
                 }
 
             }
-            if (Racers.Any(r => r.team == Team.Cop))
+            if (Racers.Any(r => r.TeamRole == Team.Cop))
             {
                 UI.Notify("Cops 'n' Crooks detected");
-                Racers = Racers.OrderBy(v => (int)v.team).ToList();
+                Racers = Racers.OrderBy(v => (int)v.TeamRole).ToList();
             }
 
             Racer p = null;
@@ -4420,7 +4420,7 @@ namespace ARS
             Log(LogImportance.Info, "Route generated");
 
             CornerPoint corner = CornerPoints.FirstOrDefault(co => co.IsKey);
-            foreach (Racer r in ARS.Racers) r.mem.Corner = new Corner(GetSpeedForCorner(corner, r), corner);
+            foreach (Racer r in ARS.Racers) r.Brain.Corner = new Corner(GetSpeedForCorner(corner, r), corner);
         }
 
         public static float GetCurveRadius(Vector3 a, Vector3 b, Vector3 midpoint)
@@ -4629,7 +4629,7 @@ namespace ARS
             if (float.IsInfinity(c.GetRadius()) || float.IsNaN(c.GetRadius()) || c.GetRadius() == 0f) return AIData.MaxSpeed;
 
             //Base percieved grip
-            float vehicleGripGs = r.vData.CurrentMechanicalGrip;
+            float vehicleGripGs = r.VehicleData.CurrentMechanicalGrip;
 
             if (vehicleGripGs < 0.2f) vehicleGripGs = 0.2f;
             float spd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * c.GetRadius());
@@ -4806,8 +4806,8 @@ namespace ARS
 
         static public void DrawStats(Racer r)
         {
-            float diff = (r.Car.Velocity.Length() - r.mem.intention.Speed) * 10;
-            float acc = (r.vControl.Throttle * 100f);
+            float diff = (r.Car.Velocity.Length() - r.Brain.intention.Speed) * 10;
+            float acc = (r.Control.Throttle * 100f);
 
             string percent = "";
 
@@ -4957,7 +4957,7 @@ namespace ARS
 
             if (possiblyNext != null)
             {
-                r.mem.Corner = new Corner(GetSpeedForCorner(possiblyNext, r), possiblyNext);
+                r.Brain.Corner = new Corner(GetSpeedForCorner(possiblyNext, r), possiblyNext);
             }
 
         }
@@ -5001,12 +5001,12 @@ namespace ARS
             float targetDistance = (c.Node - c.LengthStart - r.CurrentTrackPoint.Node) - 25 - r.Car.Velocity.Length();
 
             float velCurrent = r.Car.Velocity.Length();
-            float velTarget = r.mem.Corner.Speed;// * r.BehaviorVariance[RandomVariance.SpeedAggroVariance];
+            float velTarget = r.Brain.Corner.Speed;// * r.BehaviorVariance[RandomVariance.SpeedAggroVariance];
             float timeToReachTarget = Math.Max((targetDistance / velCurrent), 0.01f);
 
             //Braking ability has to account for at least 25% of the wheel grip to count as fully taking advantage of the grip. Else, braking Gs are less than grip Gs
             //float brakingAbility = (r.vehData.CurrentGrip * (float)Math.Round(ARS.map(ARS.GetPercent(r.handlingData.BrakingAbility, r.vehData.CurrentGrip), 0f, 25f, 0f, 1f, true), 3));
-            float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.vData.CurrentMechanicalGrip) * r.RiskFactorForBrake();
+            float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip) * r.RiskFactorForBrake();
 
 
             //Late brake reduces the safety distance    
@@ -6478,3 +6478,4 @@ namespace ARS
     }
 
 }
+

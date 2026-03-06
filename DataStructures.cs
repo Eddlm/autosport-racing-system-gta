@@ -123,9 +123,9 @@ namespace ARS
 
             rPos = ARS.GetOffset(me.Car, RivalRacer.Car);
             BoundingBoxTotal.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2));
-            BoundingBoxTotal.X = (me.vData.BoundingBox + RivalRacer.vData.BoundingBox) / 2;
+            BoundingBoxTotal.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
             OccupiedLaneWidth = BoundingBoxTotal.X;
-            OccupiedLane = RivalRacer.mem.data.DeviationFromCenter;
+            OccupiedLane = RivalRacer.Brain.data.DeviationFromCenter;
             Distance =  (me.Car.Position -RivalRacer.Car.Position).Length();// me.Car.Position.DistanceTo2D(RivalRacer.Car.Position);// -BoundingBoxTotal.Y;
 
             float SpeedDiff = (float)Math.Round(me.Car.Velocity.Length()- RivalRacer.Car.Velocity.Length(), 4);
@@ -278,6 +278,7 @@ namespace ARS
         public PersonalityStability Stability = new PersonalityStability();
     }
 }
+
 
 
 

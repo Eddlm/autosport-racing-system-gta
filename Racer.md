@@ -1,39 +1,13 @@
-# Racer Refactor TODO
+ï»¿# Racer Refactor TODO
 
 Goal: simplify `Racer.cs`, reduce hidden state, and make behavior readable top-to-bottom.
 Scope in this file only for now. No behavior rewrite in this list unless explicitly noted.
 
-## 0) Immediate Cleanups (before structural refactor)
-
-1. Remove/disable dead debug paths currently left in active flow.
-- `SteerTrack()` currently hard-sets `targetLane = 0` and comments out rival logic.
-- Decide if this is temporary test mode or intended baseline.
-- If temporary, move to a feature flag (`DEV`) to avoid accidental commit of broken flow.
-
-2. Remove stale fields no longer used in active path.
-- `TargetLane` field is legacy from `OldSteerTrack()` and not needed as class state.
-- Keep lane targets as method locals unless another method truly consumes them.
-
-3. Remove unused constants/state.
-- `StuckNoProgressTimeMs`, `LastProgressNode`, `LastProgressTime` are mostly vestigial with current stuck condition.
-- Either reintroduce no-progress logic fully, or delete these.
-
 ## 1) Top of File: Data Layout and State Ownership
 
-4. Group fields by domain and make intent explicit.
-- Identity/runtime refs (`Car`, `Driver`, `Name`, team)
-- Navigation/control (`CurrentTrackPoint`, `LookAheads`, lane bounds)
-- Dynamics (`vData`, `Handling`)
-- Recovery/stuck state
-- Debug draw caches (`trailSamples`, lane trails)
-
-5. Move `TrailSample` to `DataStructures.cs` (or keep private but at end of class fields).
-- If private here: keep near debug-trail fields only.
-- If shared later: promote to common data file.
-
-6. Normalize naming style.
-- Fix mixed casing in locals: `AngleOneSec`, `KeepInside`, `DistToRear` (legacy style).
-- Use one style consistently (`angleOneSec`, `keepInside`, `distToRear`).
+6. Naming pass follow-up only.
+- Main local-casing cleanup is already done.
+- Keep enforcing camelCase for new locals during future edits.
 
 ## 2) Constructor + Initialize + Launch
 
@@ -41,7 +15,7 @@ Scope in this file only for now. No behavior rewrite in this list unless explici
 - Split into private helpers called from constructor:
   - `SetupDriverDefaults()`
   - `SetupVehicleSafety()`
-  - `SetupBlip()`
+  - `SetupBlip()` 
   - `SetupBehaviorVariance()`
 
 8. `Initialize()` + `Launch()` overlap in reset responsibilities.
@@ -51,9 +25,8 @@ Scope in this file only for now. No behavior rewrite in this list unless explici
 
 ## 3) Steering Section (main readability win)
 
-9. Delete `OldSteerTrack()` after confidence period.
-- It doubles cognitive load and still carries many stale branches.
-- If needed for rollback, keep in branch history, not in active file.
+9. Keep `SteerTrack()` as the only steering planner (already done).
+- `OldSteerTrack()` was removed from active code.
 
 10. Keep `SteerTrack()` as a single readable pipeline.
 - Context gather
@@ -71,20 +44,18 @@ Scope in this file only for now. No behavior rewrite in this list unless explici
 - Decide and document one planning node (`HalfSec` or `SteerRef`) for profile lookup.
 - Keep trail visualization and lane lookup using the same node basis when comparing overlays.
 
-13. Remove silent behavior toggles in-line.
-- Commented code inside `SteerTrack()` should become explicit `if (devFlag)` blocks or be removed.
+13. Keep `SteerTrack()` free of commented behavior toggles (already true right now).
 
 ## 4) Steer post-processing and input mapping
 
-14. `SteerCorrections()` currently has an early `return`.
-- If intentionally disabled, remove body and keep stub with clear comment.
-- Or re-enable fully and remove dead code warnings/branches.
+14. `SteerCorrections()` has no early return now; keep it intentional and trimmed.
+- Remove placeholder/unused calculations (`isUndersteering`, physics temp vars) if they stay unused.
 
 15. Keep rate limiting in one place only.
 - Current limiter in `TranslateSteer()` is good; document it as "final actuator limiter".
 - Avoid adding additional hidden steer rate limits elsewhere.
 
-16. `TranslateSteer()` should be pure “degrees -> input”.
+16. `TranslateSteer()` should be pure â€œdegrees -> inputâ€.
 - It should only sanitize, rate-limit, map, and set `SteerInput`.
 - No navigation policy should leak in.
 
@@ -173,7 +144,7 @@ Scope in this file only for now. No behavior rewrite in this list unless explici
 31. Methods currently called once and good candidates to inline/merge into caller sections:
 - `UpdateDynamicBoundingBox()` -> inline into `RunTimedCore()` perception block.
 - `UpdateCornerInfo()` -> merge into timed update block (or keep as module if continuing to grow).
-- `HandleRecoveryAttemptEscalation()` -> merge into stuck transition method if it stays tiny.
+- `HandleRecoveryAttemptEscalation()` is currently called from two places, so treat it as shared unless transitions are consolidated first.
 
 32. Methods to keep separate even if single-caller (for clarity):
 - `TranslateSteer()`
@@ -184,12 +155,10 @@ Scope in this file only for now. No behavior rewrite in this list unless explici
 
 ## 12) Suggested refactor order (safe and incremental)
 
-1. Remove test/debug hardcoded branches in `SteerTrack()`.
-2. Delete `OldSteerTrack()` and `TargetLane` field.
-3. Split `DrawStuff()` into helper methods with same gating.
-4. Split `UpdateFollowTrack()` concerns.
-5. Consolidate stuck/recovery transitions.
-6. Final pass: naming cleanup + dead code removal.
+1. Split `DrawStuff()` into helper methods with same gating.
+2. Split `UpdateFollowTrack()` concerns.
+3. Consolidate stuck/recovery transitions.
+4. Final pass: naming cleanup + dead code removal.
 
 ## Notes
 
