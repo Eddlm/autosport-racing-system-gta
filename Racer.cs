@@ -32,7 +32,7 @@ namespace ARS
         // Core controller/memory.
         public VehicleControl Control = new VehicleControl();
         public Memory Brain = new Memory();
-        PID LanePID = new PID(0.2f, 0.4f, 0);
+        PID HeadingPID = new PID(1.0f, 0.6f, 0);
         public Dictionary<RandomVariance, float> BehaviorVariance = new Dictionary<RandomVariance, float>();
 
         // Vehicle dynamics/perception state.
@@ -231,121 +231,80 @@ namespace ARS
             Car.Repair();
         }
 
-        float AngleToTrackDir(TrackPoint first, TrackPoint second)
-        {
-            float a = Vector3.SignedAngle(first.Direction, second.Direction, Vector3.WorldUp);
-            if (float.IsNaN(a)) a = 0;
-            return a;
-        }
-
         public void SteerTrack()
         {
-            if (!TryBuildSteerTrackContext(
-                out TrackPoint laneCalcPoint,
-                out TrackPoint oneHalfSecPoint,
-                out TrackPoint steerRefPoint,
-                out float roadWide))
+            if (!TryGetSteerContext(out TrackPoint steerRefPoint, out float roadWide))
             {
                 Control.SteerTrackDegrees = 0f;
                 return;
             }
 
-            float leftBound = -roadWide + VehicleData.BoundingBox;
-            float rightBound = roadWide - VehicleData.BoundingBox;
+            // 1) Heading error: match old convention.
+            // Old code: -SignedAngle(targetDir, carForward, up)
+            // Here targetDir = track direction, so:
+            float headingErrorDeg = -Vector3.SignedAngle(
+                steerRefPoint.Direction, Car.ForwardVector, Vector3.WorldUp);
+            if (float.IsNaN(headingErrorDeg) || float.IsInfinity(headingErrorDeg))
+                headingErrorDeg = 0f;
 
-            bool cornerFollowingAvailable = Brain.Corner.Valid && Lap > 0;
-            float targetLane;
-            if (cornerFollowingAvailable)
+            // 2) Centering: steer toward track center proportional to lateral deviation.
+            // Constant gain, gentle enough to not oscillate at any speed.
+            float centerDeg = 0f;
+            float deviation = Brain.data.DeviationFromCenter;
+            float absDev = Math.Abs(deviation);
+            float speedMps = Math.Max(Car.Velocity.Length(), 1f);
+            const float centeringGain = 0.15f;
+            centerDeg = deviation * centeringGain;
+
+            // 3) Off-track recovery: when outside track width, add stronger steer
+            // back toward center (opposite the deviation sign).
+            float recoveryDeg = 0f;
+            float overshoot = absDev - roadWide;
+            if (overshoot > 0f)
             {
-                targetLane = Brain.data.DeviationFromCenter;
-                ApplyCornerLaneProfile(laneCalcPoint, laneCalcPoint.Node, ref targetLane);
+                float maxRecoveryDeg = ARS.map(speedMps, 10f, 50f, 10f, 2f);
+                float severity = Math.Min(overshoot / Math.Max(roadWide, 1f), 1f);
+                recoveryDeg = Math.Sign(deviation) * maxRecoveryDeg * severity;
             }
-            else
+
+            // 4) Total heading target = track error + centering + recovery.
+            float totalTargetDeg = headingErrorDeg + centerDeg + recoveryDeg;
+
+            // 4) Direct steer: no PID smoothing for now.
+            Control.SteerTrackDegrees = totalTargetDeg;
+
+            // Keep SteerTarget valid for debug drawing.
+            SteerTarget = steerRefPoint.Position;
+
+            // ── Local helpers ──────────────────────────────────────────────
+            bool TryGetSteerContext(out TrackPoint localSteerRef, out float localRoadWide)
             {
-                float keepInside = AngleToTrackDir(laneCalcPoint, oneHalfSecPoint);
-                targetLane = Brain.data.DeviationFromCenter - (keepInside / Handling.Grip);
-            }
-
-            MaxLeftLane = leftBound;
-            MaxRightLane = rightBound;
-            Control.FollowLane = ARS.Clamp(targetLane, leftBound, rightBound);
-
-            LanePID.SetTarget(Control.FollowLane);
-            SteerTarget = steerRefPoint.Position - (Vector3.Cross(Vector3.WorldUp, steerRefPoint.Direction) * LanePID.GetValue());
-            Control.SteerTrackDegrees = -Vector3.SignedAngle((SteerTarget - Car.Position).Normalized, Car.ForwardVector, Vector3.WorldUp);
-
-            if (float.IsNaN(Control.SteerTrackDegrees) || float.IsInfinity(Control.SteerTrackDegrees))
-            {
-                Control.SteerTrackDegrees = 0f;
-            }
-
-            bool TryBuildSteerTrackContext(
-                out TrackPoint localLaneCalcPoint,
-                out TrackPoint localOneHalfSecPoint,
-                out TrackPoint localSteerRefPoint,
-                out float localRoadWide)
-            {
-                localLaneCalcPoint = null;
-                localOneHalfSecPoint = null;
-                localSteerRefPoint = null;
+                localSteerRef = null;
                 localRoadWide = 0f;
 
-                if (BaseBehavior == RacerBaseBehavior.GridWait || BaseBehavior == RacerBaseBehavior.FinishedStandStill || CurrentTrackPoint.Node < 3)
+                if (BaseBehavior == RacerBaseBehavior.GridWait
+                    || BaseBehavior == RacerBaseBehavior.FinishedStandStill
+                    || CurrentTrackPoint.Node < 3)
                 {
                     return false;
                 }
 
-                if (!LookAheads.TryGetValue(eLookAheads.HalfSec, out localLaneCalcPoint) || localLaneCalcPoint == null) return false;
-                if (!LookAheads.TryGetValue(eLookAheads.OneHalfSec, out localOneHalfSecPoint) || localOneHalfSecPoint == null) return false;
-                if (!LookAheads.TryGetValue(eLookAheads.SteerRef, out localSteerRefPoint) || localSteerRefPoint == null) return false;
+                if (!LookAheads.TryGetValue(eLookAheads.SteerRef, out localSteerRef)
+                    || localSteerRef == null)
+                {
+                    return false;
+                }
 
-                localRoadWide = localLaneCalcPoint.TrackWide;
+                localRoadWide = localSteerRef.TrackWide;
                 return true;
             }
-
-            void ApplyCornerLaneProfile(TrackPoint localLaneCalcPoint, int followReferenceNode, ref float localTargetLane)
-            {
-                if (!Brain.Corner.Valid || Lap <= 0) return;
-
-                CornerPoint c = Brain.Corner.OG;
-                int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
-                int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
-
-                float speedMs = Math.Max(Car.Velocity.Length(), 1f);
-                float distToCornerEntrance = (ARS.TrackPoints[startNode].Position - localLaneCalcPoint.Position).Length();
-                Brain.Corner.sToEntrance = ARS.Clamp(distToCornerEntrance / speedMs, 0f, 99f);
-
-                float entranceLane = 0f;
-                if (!ARS.NodeScalarData.TryGetValue(startNode, out entranceLane))
-                {
-                    entranceLane = Math.Sign(c.Angle) * ARS.TrackPoints[startNode].TrackWide;
-                }
-
-                int followBaseNode = (int)ARS.Clamp(followReferenceNode, 0, ARS.TrackPoints.Count - 1);
-
-                if (followBaseNode < startNode)
-                {
-                    localTargetLane = entranceLane;
-                    return;
-                }
-
-                if (followBaseNode <= endNode)
-                {
-                    int followNode = (int)ARS.Clamp(followBaseNode, startNode, endNode);
-                    float profileLane = entranceLane;
-                    if (ARS.NodeScalarData.TryGetValue(followNode, out float laneFromProfile))
-                    {
-                        profileLane = laneFromProfile;
-                    }
-                    localTargetLane = profileLane;
-                }
-            }
-
         }
 
 
         void SteerApplyCorrections()
         {
+            // DISABLED for tuning. Restore when ready.
+#if false
             float currentSpeed = Car.Velocity.Length();
             float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length()+0.01f, 2.01f));            
             speedBasedSteeringLimit = Math.Max(ARS.rad2deg(speedBasedSteeringLimit), 3f);
@@ -388,8 +347,7 @@ namespace ARS
             //Correct slides gradually. If we are already centering ourselves, don't correct as much, we good.
             float slideCounterSteer = VehicleData.SlideAngle* ARS.map(Math.Abs(VehicleData.SlideAngle), 0, Handling.TRlateral*1.2f, 0.5f, 1.2f, true);
             if (Math.Sign((int)VehicleData.SlideAngle) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees)) Control.SteerTrackDegrees -= slideCounterSteer;
-
-
+#endif
         }
 
         /// <summary>
@@ -423,6 +381,7 @@ namespace ARS
             StuckRecoveryEndTime = 0;
             StuckRecoveryAttempts = 0;
             Control.LastAppliedSteerTrackDegrees = 0f;
+            HeadingPID.SetValue(0f);
             FollowLaneTrail.Clear();
             RawFollowLaneTrail.Clear();
             LastFollowLaneTrailNode = -1;
@@ -592,7 +551,7 @@ namespace ARS
             if (cornerSpd <= 5) cornerSpd = ARS.GetSpeedForCorner(Brain.Corner.OG, this);
              
             Brain.intention.Speed = Math.Min(Math.Min(cornerSpd, followTrackSpd), maxSpeedForSteerAngle);
-            UI.ShowSubtitle(maxSpeedForSteerAngle.ToString("0.0") + "", 1000);
+            UI.ShowSubtitle("steer: " + Control.SteerTrackDegrees.ToString("0.0") + "°  input: " + Control.SteerInput.ToString("0.00"), 1000);
             // Extra limiter for cars pointing outward in a corner.
             if (Brain.Corner.Valid &&1==2)
             {           
@@ -652,7 +611,6 @@ namespace ARS
         }
         public void UpdateTickData()
         {
-            LanePID.Update();
             VehicleData.LocalGs = (Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true) - VehicleData.SpeedVectorLocal) / Game.LastFrameTime;
             Vector3 cSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
 
@@ -883,7 +841,7 @@ namespace ARS
                     if (LookAheads.ContainsKey(eLookAheads.OneSec))
                     {
                         TrackPoint laneTargetNode = LookAheads[eLookAheads.OneSec];
-                        float laneOffset = LanePID.GetValue();
+                        float laneOffset = 0f; // TODO: restore debug arrow from heading error once racing line bias is added
                         Vector3 laneTarget = laneTargetNode.Position - (Vector3.Cross(Vector3.WorldUp, laneTargetNode.Direction) * laneOffset);
 
                         Vector3 roofPos = Car.Position + new Vector3(0f, 0f, Car.Model.GetDimensions().Z + 0.05f);
@@ -1037,8 +995,11 @@ namespace ARS
 
             int rawNode = pidNode;
 
-            float pidLaneOffset = LanePID.GetValue();
-            float rawLaneOffset = Control.FollowLane;
+            // With angle-based steering there is no lane-offset PID output.
+            // Draw centerline trail for now; restore lane-offset trail when
+            // racing line bias is added.
+            float pidLaneOffset = 0f;
+            float rawLaneOffset = 0f;
             Vector3 pidPoint = GetFollowLaneTrailPoint(pidNode, pidLaneOffset);
             Vector3 rawPoint = GetRawFollowLaneTrailPoint(rawNode, rawLaneOffset);
 
@@ -1189,7 +1150,7 @@ namespace ARS
             LookAheads.Clear();
             float speed = Car.Velocity.Length();
 
-            int steerRef = (int)ARS.Clamp((int)((speed * 1.8f / VehicleData.CurrentMechanicalGrip)), 1, 500);
+            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f)), 1, 500);
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
             int threeQuarterSec = (int)(speed * 0.75f);

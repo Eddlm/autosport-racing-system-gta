@@ -90,13 +90,22 @@ namespace ARS
         // Update method - advances the controller by dt seconds
         public float Update()
         {
+            return Update(0f);
+        }
+
+        // Update with external derivative input (e.g. yaw rate).
+        // When externalD is non-zero, it replaces the internal velocity derivative.
+        // Sign convention: positive externalD = turning left, which should reduce
+        // right-steering error, so derivative = -externalD * kD.
+        public float Update(float externalD)
+        {
             float dt = (Game.GameTime - lastTick) * 0.01f;
             lastTick = Game.GameTime;
             if (dt <= 0.0) return value;
 
             float error = target - value;
             float proportional = error * kP;
-            float derivative = -velocity * kD;
+            float derivative = externalD != 0f ? -externalD * kD : -velocity * kD;
             integral += error * dt;
             float integralTerm = integral * kI;
 
