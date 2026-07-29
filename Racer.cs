@@ -728,9 +728,6 @@ namespace ARS
                 if (float.IsNaN(speedAdjust)) speedAdjust = 1;
             }
 
-            //Aggro buildup
-            float aggroDiffToTarget = Brain.intention.AggroToReach - Brain.intention.Aggression;
-            if (aggroDiffToTarget > 0.0f) Brain.intention.Aggression += Brain.personality.Rivals.AggressionBuildup * TickScale; else Brain.intention.Aggression -= Brain.personality.Rivals.AggressionBuildup * TickScale * 2;
         }
 
         /// <summary>
@@ -842,45 +839,7 @@ namespace ARS
                  }
             }
 
-            //To avoid vanilla contact-swerves, sit the driver on the passenger seat if there's a potential colission. Also try and fix the helmet
-            if (Car.Model.IsCar && !Driver.IsPlayer)
-            {
-                if (Brain.Rivals.Any(v => v.Distance < v.BoundingBoxTotal.Y + 1))
-                {
-                    if (Driver.IsInVehicle(Car) && Car.IsSeatFree(VehicleSeat.RightFront))
-                    {
-                        Driver.Alpha = 0;
-                        Driver.SetIntoVehicle(Car, VehicleSeat.RightFront);
-                    }
-                }
-                else
-                {
-                    if (Driver.IsInVehicle(Car) && Car.IsSeatFree(VehicleSeat.Driver))
-                    {
-                        Driver.Alpha = 255;
-                        Driver.SetIntoVehicle(Car, VehicleSeat.Driver);
-
-                        Driver.CanWearHelmet = true;
-                        Driver.GiveHelmet(true, HelmetType.RegularMotorcycleHelmet, 0);
-                        Driver.RemoveHelmet(true);
-                    }
-                }
-            }
-
-            //Ghosting
-            if (Car.Alpha != 255) Car.ResetAlpha();
-            if (ARS.SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "Ghosts", false) && Brain.Rivals.Any(v => v.Distance < 50))
-            {
-                foreach (Rival r in Brain.Rivals)
-                {
-                    if (Car.IsInRangeOf(r.RivalRacer.Car.Position, 6))
-                    {
-                        Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, r.RivalRacer.Car, Car, true);
-                        Car.Alpha = 150;
-                    }
-                }
-            }
-
+            // Rival detection only — no avoidance actions.
         }
 
         public void ApplyInputs()
@@ -1248,25 +1207,6 @@ namespace ARS
         void UpdateRivalInfo()
         {
             foreach (Rival r in Brain.Rivals) r.Update(this);
-            if (Car.Driver.IsPlayer || ARS.SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "Ghosts", false)) return;
-            Brain.intention.AggroToReach = 0f;
-
-            //AI shouldn't be aggresive while crowded
-            if (Brain.Rivals.Where(r => r.Distance < 50).Count() < 3)
-            {
-                Rival closestRival = Brain.Rivals.OrderBy(v => v.Distance).FirstOrDefault();
-                if (closestRival.RivalRacer != null)
-                {
-                    float aggroDist = closestRival.Distance;
-
-                    float closest = 100;
-                    float furthest = 200;
-
-                    if (closestRival.RivalRacer.RacePosition > RacePosition) { closest = 15; furthest = 30; }
-
-                    Brain.intention.AggroToReach = ARS.map(aggroDist, furthest, closest, 0f, 1f, true);
-                }
-            }
         }
 
         /// <summary>
