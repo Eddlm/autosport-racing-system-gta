@@ -111,8 +111,8 @@ namespace ARS
             if (!ControlledByPlayer)
             {
 
-                Driver.BlockPermanentEvents = true;
-                Driver.AlwaysKeepTask = true;
+                try { Driver.BlockPermanentEvents = true; } catch (Exception) { }
+                try { Driver.AlwaysKeepTask = true; } catch (Exception) { }
                 Function.Call(GTA.Native.Hash.SET_DRIVER_ABILITY, Driver, 0f);
                 Function.Call(GTA.Native.Hash.SET_DRIVER_AGGRESSIVENESS, Driver, 0f);
 
@@ -146,10 +146,10 @@ namespace ARS
                 ARS.SetThrottle(Car, 0f);
                 ARS.SetBrakes(Car, 0f);
 
-                Car.IsRadioEnabled = false;
+                try { Car.IsRadioEnabled = false; } catch (Exception) { }
             }
 
-            Car.IsPersistent = true;
+            try { Car.IsPersistent = true; } catch (Exception) { }
             if (!Driver.IsPlayer)
             {
                 try

@@ -6145,7 +6145,10 @@ namespace ARS
                 Ped driverPed = null;
                 try
                 {
-                    driverPed = World.CreatePed(driverModel, car.Position.Around(5));
+                    Vector3 spawnPos = car.Position + car.RightVector * 5f + car.ForwardVector * 3f;
+                    driverModel.Request(500);
+                    int pedHandle = Function.Call<int>(Hash.CREATE_PED, 26, (int)driverModel.Hash, spawnPos.X, spawnPos.Y, spawnPos.Z, car.Heading, false, false);
+                    driverPed = pedHandle > 0 ? new Ped(pedHandle) : null;
                 }
                 catch (Exception ex)
                 {
@@ -6154,11 +6157,19 @@ namespace ARS
                 }
 
                 int p = 0;
-                while (!CanWeUse(driverPed) && p < 3000)
+                while (!CanWeUse(driverPed) && p < 500)
                 {
-                    Log(LogImportance.Fatal, "Driver ped is not spawning, requesting again.");
                     Script.Wait(10);
-                    driverPed = World.CreatePed(driverModel, car.Position.Around(5));
+                    try
+                    {
+                        Vector3 retryPos = car.Position + car.RightVector * (5f + p * 0.1f) + car.ForwardVector * 3f;
+                        int retryHandle = Function.Call<int>(Hash.CREATE_PED, 26, (int)driverModel.Hash, retryPos.X, retryPos.Y, retryPos.Z, car.Heading, false, false);
+                        driverPed = retryHandle > 0 ? new Ped(retryHandle) : null;
+                    }
+                    catch (Exception)
+                    {
+                        // keep trying
+                    }
                     p++;
                 }
 
@@ -6209,6 +6220,8 @@ namespace ARS
 
             foreach (XmlDocument file in CachedCandidates)
             {
+                Vehicle car = null;
+                Ped driverPed = null;
                 try
                 {
                     string modelName = file.SelectSingleNode("//Model").InnerText;
@@ -6219,7 +6232,7 @@ namespace ARS
                         continue;
                     }
 
-                    Vehicle car = World.CreateVehicle(vehicleModel, Path[(Racers.Count + 1) * 10]);
+                    car = World.CreateVehicle(vehicleModel, Path[(Racers.Count + 1) * 10]);
                     car.Heading = (Path[2] - Path[0]).ToHeading();
                     car.InstallModKit();
 
@@ -6228,7 +6241,7 @@ namespace ARS
                     ApplyAccelerationOverride(file, car);
 
                     XmlDocument driverXml;
-                    Ped driverPed = CreateDriverPed(file, car, tags, out driverXml);
+                    driverPed = CreateDriverPed(file, car, tags, out driverXml);
                     if (driverPed == null)
                     {
                         Log(LogImportance.Error, "Skipping " + modelName + " - no driver ped.", true);
@@ -6243,6 +6256,8 @@ namespace ARS
                 catch (Exception ex)
                 {
                     Log(LogImportance.Error, "Failed to load racer: " + ex.Message, true);
+                    try { if (driverPed != null) driverPed.Delete(); } catch (Exception) { }
+                    try { if (car != null) car.Delete(); } catch (Exception) { }
                 }
             }
 
