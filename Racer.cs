@@ -17,6 +17,10 @@ namespace ARS
     {
         BrakeDistance, SteeringStrictness, SpeedAggroVariance, SpeedBaseVariance,
     }
+    enum CornerPhase
+    {
+        None, Approach, TurnIn, Hold
+    }
     public class Racer
     {
 
@@ -97,6 +101,9 @@ namespace ARS
         // Misc tuning/runtime helpers.
         float TorqueMult = 1.0f;
         Random Random = new Random();
+
+        // Corner racing line state.
+        CornerPhase _cornerPhase = CornerPhase.None;
 
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
@@ -247,28 +254,42 @@ namespace ARS
             if (float.IsNaN(headingErrorDeg) || float.IsInfinity(headingErrorDeg))
                 headingErrorDeg = 0f;
 
-            // 2) Centering: steer toward track center proportional to lateral deviation.
-            // Constant gain, gentle enough to not oscillate at any speed.
-            float centerDeg = 0f;
-            float deviation = Brain.data.DeviationFromCenter;
-            float absDev = Math.Abs(deviation);
-            float speedMps = Math.Max(Car.Velocity.Length(), 1f);
-            const float centeringGain = 0.15f;
-            centerDeg = deviation * centeringGain;
+            // Scale down the heading error so steering response is gentler.
+            headingErrorDeg *= 0.5f;
 
-            // 3) Off-track recovery: when outside track width, add stronger steer
+            float speedMps = Math.Max(Car.Velocity.Length(), 1f);
+
+            // 2) Corner racing line bias (overrides centering when active).
+            float cornerBiasDeg = 0f;
+            bool cornerActive = Brain.Corner != null && Brain.Corner.Valid && Lap > 0;
+            if (cornerActive)
+            {
+                cornerBiasDeg = ComputeCornerBiasDeg(steerRefPoint, speedMps);
+            }
+
+            // 3) Centering: steer toward track center (only when no corner bias).
+            float centerDeg = 0f;
+            if (!cornerActive)
+            {
+                float deviation = Brain.data.DeviationFromCenter;
+                const float centeringGain = 0.15f;
+                centerDeg = deviation * centeringGain;
+            }
+
+            // 4) Off-track recovery: when outside track width, add stronger steer
             // back toward center (opposite the deviation sign).
             float recoveryDeg = 0f;
+            float absDev = Math.Abs(Brain.data.DeviationFromCenter);
             float overshoot = absDev - roadWide;
             if (overshoot > 0f)
             {
                 float maxRecoveryDeg = ARS.map(speedMps, 10f, 50f, 10f, 2f);
                 float severity = Math.Min(overshoot / Math.Max(roadWide, 1f), 1f);
-                recoveryDeg = Math.Sign(deviation) * maxRecoveryDeg * severity;
+                recoveryDeg = Math.Sign(Brain.data.DeviationFromCenter) * maxRecoveryDeg * severity;
             }
 
-            // 4) Total heading target = track error + centering + recovery.
-            float totalTargetDeg = headingErrorDeg + centerDeg + recoveryDeg;
+            // 5) Total heading target = track error + bias/centering + recovery.
+            float totalTargetDeg = headingErrorDeg + cornerBiasDeg + centerDeg + recoveryDeg;
 
             // 4) Direct steer: no PID smoothing for now.
             Control.SteerTrackDegrees = totalTargetDeg;
@@ -300,6 +321,79 @@ namespace ARS
             }
         }
 
+        /// <summary>
+        /// Computes a steering bias (degrees) to follow the racing line through a corner.
+        /// Three phases: Approach (outside) → TurnIn (apex) → Hold (keep apex).
+        /// Uses a fixed 1.5s lookahead to offset the target lane, producing a gentle
+        /// heading correction rather than a hard lane-aim pull.
+        /// </summary>
+        float ComputeCornerBiasDeg(TrackPoint steerRefPoint, float speedMps)
+        {
+            CornerPoint c = Brain.Corner.OG;
+            int apexNode = c.Node;
+
+            // Corner direction: SignedAngle(pre, fut, up) is negative for right turns.
+            // cornerDir = -1 for right turn, +1 for left turn.
+            float cornerDir = Math.Sign(c.Angle);
+
+            // For a right turn (cornerDir = -1):
+            //   Outside = left  = -halfWidth =  cornerDir * halfWidth
+            //   Apex    = right = +halfWidth = -cornerDir * halfWidth
+            // For a left turn (cornerDir = +1):
+            //   Outside = right = +halfWidth =  cornerDir * halfWidth
+            //   Apex    = left  = -halfWidth = -cornerDir * halfWidth
+            if (cornerDir == 0f) return 0f;
+
+            // Distance from car to apex along the track (in nodes, ~1m each).
+            float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
+            float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
+
+            // Current lateral position: positive = right of center.
+            float currentLateral = Brain.data.DeviationFromCenter;
+            float halfWidth = steerRefPoint.TrackWide;
+
+            // Determine phase and target lane.
+            float targetLane = 0f;
+            const float turnInTime = 1.0f;
+
+            if (CurrentTrackPoint.Node >= apexNode)
+            {
+                // Past apex: HOLD phase — keep aiming at apex (inside edge).
+                _cornerPhase = CornerPhase.Hold;
+                targetLane = -cornerDir * halfWidth;
+            }
+            else if (timeToApex <= turnInTime)
+            {
+                // Within 1s of apex: TURN_IN phase — aim at apex (inside edge).
+                _cornerPhase = CornerPhase.TurnIn;
+                targetLane = -cornerDir * halfWidth;
+            }
+            else
+            {
+                // Before corner: APPROACH phase — aim at outside edge.
+                _cornerPhase = CornerPhase.Approach;
+                targetLane = cornerDir * halfWidth;
+            }
+
+            // Compute bias using a fixed 1.5s lookahead point offset by target lane.
+            int laneAimOffset = (int)(speedMps * 1.5f);
+            int laneAimNode = (int)ARS.Clamp(CurrentTrackPoint.Node + laneAimOffset, 0, ARS.TrackPoints.Count - 1);
+            TrackPoint laneAimPoint = ARS.TrackPoints[laneAimNode];
+
+            // World target: track point offset by target lane to the side.
+            // Positive targetLane = right of center → add right vector.
+            Vector3 trackRight = Vector3.Cross(Vector3.WorldUp, laneAimPoint.Direction);
+            Vector3 offsetTarget = laneAimPoint.Position + trackRight * targetLane;
+
+            // Bias = atan2 of lateral error at a fixed 1.5s lookahead.
+            // This measures "how much do I need to steer to reach the target lane."
+            float lateralError = targetLane - currentLateral;
+            float laneLookaheadDist = speedMps * 1.5f;
+            float biasDeg = -(float)(Math.Atan2(lateralError, laneLookaheadDist) * (180.0 / Math.PI));
+            biasDeg *= 0.5f;
+
+            return biasDeg;
+        }
 
         void SteerApplyCorrections()
         {
