@@ -104,6 +104,7 @@ namespace ARS
 
         // Corner racing line state.
         CornerPhase _cornerPhase = CornerPhase.None;
+        const float CornerOverDrive = 1.2f;
 
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
@@ -276,15 +277,16 @@ namespace ARS
                 centerDeg = deviation * centeringGain;
             }
 
-            // 4) Off-track recovery: when outside track width, add stronger steer
-            // back toward center (opposite the deviation sign).
+            // 4) Off-track recovery: when car's edge exceeds track width, steer back.
             float recoveryDeg = 0f;
             float absDev = Math.Abs(Brain.data.DeviationFromCenter);
-            float overshoot = absDev - roadWide;
+            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
+            float safeEdge = roadWide - carHalfWidth;
+            float overshoot = absDev - safeEdge;
             if (overshoot > 0f)
             {
                 float maxRecoveryDeg = ARS.map(speedMps, 10f, 50f, 10f, 2f);
-                float severity = Math.Min(overshoot / Math.Max(roadWide, 1f), 1f);
+                float severity = Math.Min(overshoot / Math.Max(safeEdge, 1f), 1f);
                 recoveryDeg = Math.Sign(Brain.data.DeviationFromCenter) * maxRecoveryDeg * severity;
             }
 
@@ -351,6 +353,8 @@ namespace ARS
             // Current lateral position: positive = right of center.
             float currentLateral = Brain.data.DeviationFromCenter;
             float halfWidth = steerRefPoint.TrackWide;
+            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
+            float safeBound = halfWidth - carHalfWidth;
 
             // Determine phase and target lane.
             float targetLane = 0f;
@@ -360,19 +364,19 @@ namespace ARS
             {
                 // Past apex: HOLD phase — keep aiming at apex (inside edge).
                 _cornerPhase = CornerPhase.Hold;
-                targetLane = -cornerDir * halfWidth;
+                targetLane = -cornerDir * safeBound;
             }
             else if (timeToApex <= turnInTime)
             {
                 // Within 1s of apex: TURN_IN phase — aim at apex (inside edge).
                 _cornerPhase = CornerPhase.TurnIn;
-                targetLane = -cornerDir * halfWidth;
+                targetLane = -cornerDir * safeBound;
             }
             else
             {
                 // Before corner: APPROACH phase — aim at outside edge.
                 _cornerPhase = CornerPhase.Approach;
-                targetLane = cornerDir * halfWidth;
+                targetLane = cornerDir * safeBound;
             }
 
             // Compute bias using a fixed 1.5s lookahead point offset by target lane.
@@ -609,7 +613,7 @@ namespace ARS
             Brain.intention.Speed = AIData.MaxSpeed;
 
             float cornerSpd = 999f;
-            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MapIdealSpeedForDistance(Brain.Corner.OG, this) * 1.2f);
+            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MapIdealSpeedForDistance(Brain.Corner.OG, this) * CornerOverDrive);
 
             float followRadius = Math.Max(Brain.data.CurveRadiusToFollowPoint, 0.1f);
             float followTrackSpd =(float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * followRadius);            
@@ -621,6 +625,13 @@ namespace ARS
             float adjustedFollowGrip = Math.Max(0.1f, VehicleData.CurrentMechanicalGrip + hillGsDelta);
             followTrackSpd=(float)Math.Sqrt((adjustedFollowGrip * Handling.Gravity) * followRadius);
 
+            if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
+            if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
+            if (cornerSpd <= 5) cornerSpd = ARS.GetSpeedForCorner(Brain.Corner.OG, this);
+              
+            Brain.intention.Speed = Math.Min(cornerSpd, followTrackSpd);
+#if false
+            // Steer-angle speed limiter — disabled. Kept for reference.
             float maxSpeedForSteerAngle = AIData.MaxSpeed;
             float steerAngleDegAbs = Math.Abs(Control.SteerTrackDegrees);
             float steerAngleDegClamped = ARS.Clamp(steerAngleDegAbs, 0f, Math.Max(VehicleData.SteeringLock, 1f));
@@ -638,13 +649,9 @@ namespace ARS
                     }
                 }
             }
-
-            if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
-            if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (float.IsNaN(maxSpeedForSteerAngle) || float.IsInfinity(maxSpeedForSteerAngle)) maxSpeedForSteerAngle = AIData.MaxSpeed;
-            if (cornerSpd <= 5) cornerSpd = ARS.GetSpeedForCorner(Brain.Corner.OG, this);
-             
-            Brain.intention.Speed = Math.Min(Math.Min(cornerSpd, followTrackSpd), maxSpeedForSteerAngle);
+            Brain.intention.Speed = Math.Min(Brain.intention.Speed, maxSpeedForSteerAngle);
+#endif
             UI.ShowSubtitle("steer: " + Control.SteerTrackDegrees.ToString("0.0") + "°  input: " + Control.SteerInput.ToString("0.00"), 1000);
             // Extra limiter for cars pointing outward in a corner.
             if (Brain.Corner.Valid &&1==2)
