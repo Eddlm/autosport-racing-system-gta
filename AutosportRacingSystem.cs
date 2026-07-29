@@ -1004,26 +1004,40 @@ namespace ARS
                 foreach (Vehicle v in GetNearbyCandidates())
                 {
                     Script.Wait(100);
-                    Log(LogImportance.Info, "Added " + v.FriendlyName);
+                    Log(LogImportance.Info, "Added nearby car");
                     v.IsPersistent = true;
-                    Ped p = World.CreatePed(RacerModels[GetRandomInt(0, RacerModels.Count - 1)], v.Position + (v.ForwardVector * 5));
-
-                    Racer RandomRacer = new Racer(v, p);
-
-                    if (v.ColorCombinationCount < 2 && v.ClassType != VehicleClass.Emergency)
+                    try
                     {
-                        VehicleColor c = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
-                        v.PrimaryColor = c;
-                        v.SecondaryColor = c;
-                        v.PearlescentColor = c;
+                        Ped p = World.CreatePed(RacerModels[GetRandomInt(0, RacerModels.Count - 1)], v.Position + (v.ForwardVector * 5));
+                        Racer RandomRacer = new Racer(v, p);
+
+                        if (v.ColorCombinationCount < 2 && v.ClassType != VehicleClass.Emergency)
+                        {
+                            VehicleColor c = randomcolors[GetRandomInt(0, randomcolors.Length - 1)];
+                            v.PrimaryColor = c;
+                            v.SecondaryColor = c;
+                            v.PearlescentColor = c;
+                        }
+                        Racers.Add(RandomRacer);
                     }
-                    Racers.Add(RandomRacer);
+                    catch (Exception ex)
+                    {
+                        Log(LogImportance.Error, "Failed to add nearby car: " + ex.Message, true);
+                    }
                 }
             }
 
             LoadTrack(f);
             Log(LogImportance.Info, "Loading grid");
-            LoadGrid(DisciplineFilter, (int)Clamp(intendedOpponents - Racers.Count, 0, GridPositions.Count));
+            try
+            {
+                LoadGrid(DisciplineFilter, (int)Clamp(intendedOpponents - Racers.Count, 0, GridPositions.Count));
+            }
+            catch (Exception ex)
+            {
+                Log(LogImportance.Error, "LoadGrid failed: " + ex.Message, true);
+            }
+            Log(LogImportance.Info, "Grid loaded, assigning personalities");
 
             if (DevSettingsFile.GetValue("RACERS", "UsePersonalities", true))
             {
@@ -5985,13 +5999,18 @@ namespace ARS
                     vehicleModel = hashVehicleModel;
                 }
 
-                Model raceModel = new Model("mp_m_freemode_01");
-                raceModel.Request();
-
-                while (!vehicleModel.IsLoaded)
+                int loadTries = 0;
+                while (!vehicleModel.IsLoaded && loadTries < 500)
                 {
                     vehicleModel.Request();
                     Script.Wait(10);
+                    loadTries++;
+                }
+                
+                if (!vehicleModel.IsLoaded)
+                {
+                    Log(LogImportance.Error, "Model " + modelName + " failed to load after 5s, skipping.", true);
+                    return vehicleModel;
                 }
 
                 return vehicleModel;
@@ -6155,23 +6174,35 @@ namespace ARS
 
             foreach (XmlDocument file in CachedCandidates)
             {
-                string modelName = file.SelectSingleNode("//Model").InnerText;
-                Model vehicleModel = LoadVehicleModel(modelName);
+                try
+                {
+                    string modelName = file.SelectSingleNode("//Model").InnerText;
+                    Model vehicleModel = LoadVehicleModel(modelName);
+                    if (!vehicleModel.IsLoaded)
+                    {
+                        Log(LogImportance.Error, "Skipping " + modelName + " - model not loaded", true);
+                        continue;
+                    }
 
-                Vehicle car = World.CreateVehicle(vehicleModel, Path[(Racers.Count + 1) * 10]);
-                car.Heading = (Path[2] - Path[0]).ToHeading();
-                car.InstallModKit();
+                    Vehicle car = World.CreateVehicle(vehicleModel, Path[(Racers.Count + 1) * 10]);
+                    car.Heading = (Path[2] - Path[0]).ToHeading();
+                    car.InstallModKit();
 
-                List<string> tags = GetVehicleTags(file);
-                ApplyCarAppearance(file, car, tags);
-                ApplyAccelerationOverride(file, car);
+                    List<string> tags = GetVehicleTags(file);
+                    ApplyCarAppearance(file, car, tags);
+                    ApplyAccelerationOverride(file, car);
 
-                XmlDocument driverXml;
-                Ped driverPed = CreateDriverPed(file, car, tags, out driverXml);
-                ApplyDriverClothes(driverPed, driverXml, tags);
-                AddRacer(file, car, driverPed);
+                    XmlDocument driverXml;
+                    Ped driverPed = CreateDriverPed(file, car, tags, out driverXml);
+                    ApplyDriverClothes(driverPed, driverXml, tags);
+                    AddRacer(file, car, driverPed);
 
-                lastCar = car;
+                    lastCar = car;
+                }
+                catch (Exception ex)
+                {
+                    Log(LogImportance.Error, "Failed to load racer: " + ex.Message, true);
+                }
             }
 
             result.Add(lastCar);
