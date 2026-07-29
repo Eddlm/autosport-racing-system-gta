@@ -1,0 +1,54 @@
+# Build output / caches
+bin/
+obj/
+.vs/
+
+# Git + editor noise
+.git/
+.vscode/
+.idea/
+*.user
+*.suo
+*.tmp
+*.temp
+*.cache
+
+# Runtime logs / dumps
+*.log
+*.dmp
+ScriptHookV.log
+
+# Compiled / packaged binaries
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.nupkg
+*.zip
+*.7z
+*.rar
+
+# Media / large assets (usually not needed for coding context)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tga
+*.dds
+*.mp3
+*.wav
+*.ogg
+*.mp4
+*.mov
+*.avi
+
+# Temporary or generated backups
+*.bak
+*.old
+*.orig
+*.rej
+
+# Large reverse-engineering / scratch areas:
+# remove this if you actively want Cline to use those files as context
+decomp/

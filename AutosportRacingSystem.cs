@@ -1873,7 +1873,7 @@ namespace ARS
                     GametimerefLong = Game.GameTime + 3000;
 
                     Vehicle playerVeh = Game.Player.Character.CurrentVehicle;
-                    if (CanWeUse(playerVeh) && !KnownVehicleModels.Contains(playerVeh.Model))
+                    if (1==2 && CanWeUse(playerVeh) && !KnownVehicleModels.Contains(playerVeh.Model))
                     {
                         KnownVehicleModels.Add(playerVeh.Model);
 
@@ -4631,11 +4631,34 @@ namespace ARS
             //Base percieved grip
             float vehicleGripGs = r.VehicleData.CurrentMechanicalGrip;
 
-            if (vehicleGripGs < 0.2f) vehicleGripGs = 0.2f;
-            float spd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * c.GetRadius());
+            
+            float baseSpd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * c.GetRadius());
+            if (float.IsNaN(baseSpd) || float.IsInfinity(baseSpd)) return AIData.MaxSpeed;
 
+            // Adjust grip from vertical profile of this corner (crest/compression),
+            // then recompute expected cornering speed with the adjusted grip.
+            float adjustedGripGs = vehicleGripGs;
+            if (TrackPoints != null && TrackPoints.Count > 2)
+            {
+                int startNode = (int)Clamp(c.Node - c.LengthStart, 0, TrackPoints.Count - 1);
+                int midNode = (int)Clamp(c.Node, 0, TrackPoints.Count - 1);
+                int endNode = (int)Clamp(c.Node + c.LenghtEnd, 0, TrackPoints.Count - 1);
 
-            return ARS.Clamp(spd, AIData.MinSpeed, AIData.MaxSpeed);
+                Vector3 start = TrackPoints[startNode].Position;
+                Vector3 mid = TrackPoints[midNode].Position;
+                Vector3 end = TrackPoints[endNode].Position;
+
+                float elDeltaGs = GripGainLossElChange(start, mid, end, baseSpd);
+                if (!float.IsNaN(elDeltaGs) && !float.IsInfinity(elDeltaGs))
+                {
+                    //adjustedGripGs = Clamp(vehicleGripGs + elDeltaGs, 0.2f, 2f);
+                }
+            }
+
+            float finalSpd = (float)Math.Sqrt((adjustedGripGs * r.Handling.Gravity) * c.GetRadius());
+            if (float.IsNaN(finalSpd) || float.IsInfinity(finalSpd)) finalSpd = baseSpd;
+
+            return ARS.Clamp(finalSpd, AIData.MinSpeed, AIData.MaxSpeed);
         }
 
         //Asumes the entity is going forward, at most, 90º sideways. Not backwards

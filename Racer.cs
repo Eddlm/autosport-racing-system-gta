@@ -42,7 +42,7 @@ namespace ARS
         Vector3 LastSpeed;
 
         // Navigation and lane-following state.
-        public enum eLookAheads { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, SteerInRef };
+        public enum eLookAheads { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec, SteerInRef };
         public TrackPoint CurrentTrackPoint = new TrackPoint();
         public Dictionary<eLookAheads, TrackPoint> LookAheads = new Dictionary<eLookAheads, TrackPoint>();
         public List<Vehicle> Traffic = new List<Vehicle>();
@@ -427,6 +427,8 @@ namespace ARS
         {
             float newThrottle = 0f;
             float newBrake = 0f;
+            float throttleCap = Math.Min(Control.TCSThrottle, 1f);
+            float dirSwitchSpeed = ARS.MPHtoMS(5f);
 
             //Keep still with throttle up when waiting for the launch
             if (BaseBehavior == RacerBaseBehavior.GridWait)
@@ -437,23 +439,50 @@ namespace ARS
 
 
             //Limit the th the input to the car's top speed. Cars can surpass defined engine top speed in V
-            Brain.intention.Speed = Math.Min(Brain.intention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
-            Brain.intention.Speed = Math.Min(Brain.intention.Speed, Brain.intention.MaxSpeed);
+            if (Brain.intention.Speed >= 0f)
+            {
+                Brain.intention.Speed = Math.Min(Brain.intention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
+                Brain.intention.Speed = Math.Min(Brain.intention.Speed, Brain.intention.MaxSpeed);
+            }
 
             if ((Game.GameTime - LapStartTime) < 3000) Brain.intention.IntendedSpdChangeGs = 999;
             else
             {
-                Brain.intention.IntendedSpdChangeGs = (Brain.intention.Speed - Car.Velocity.Length()) / 9.8f;
-            }
+                float currentLongitudinalSpeed = VehicleData.SpeedVectorLocal.Y;
+                Brain.intention.IntendedSpdChangeGs = (Brain.intention.Speed - currentLongitudinalSpeed) / 9.8f;
+            }            
 
-            
-            if (Brain.intention.IntendedSpdChangeGs > 0.0f) newThrottle = ARS.Clamp((Brain.intention.IntendedSpdChangeGs) * 2, 0, Math.Min(Control.TCSThrottle, 1)); else newThrottle = 0f;
-            if (Brain.intention.IntendedSpdChangeGs < -0.0f) newBrake = ARS.Clamp(-(Brain.intention.IntendedSpdChangeGs) * 2, 0, 1); else newBrake = 0f;
+            float currentForwardSpeed = VehicleData.SpeedVectorLocal.Y;
+            float speedErrorGs = Brain.intention.IntendedSpdChangeGs;
+            bool wantsReverse = Brain.intention.Speed < -0.1f;
+
+            if (speedErrorGs > 0.0f)
+            {
+                // If the car is still rolling backward, stop it first before applying forward throttle.
+                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 2f, 0f, 1f);
+                else newThrottle = ARS.Clamp(speedErrorGs * 2f, 0f, throttleCap);
+            }
+            else if (speedErrorGs < 0.0f)
+            {
+                float reverseDemand = ARS.Clamp((-speedErrorGs) * 2f, 0f, throttleCap);
+                float brakeDemand = ARS.Clamp((-speedErrorGs) * 2f, 0f, 1f);
+
+                if (wantsReverse)
+                {
+                    // Transition to reverse: brake while moving forward, then release brake and apply negative throttle.
+                    if (currentForwardSpeed > dirSwitchSpeed) newBrake = brakeDemand;
+                    else newThrottle = -reverseDemand;
+                }
+                else
+                {
+                    newBrake = brakeDemand;
+                }
+            }
 
 
  
             if (newBrake > 0.0) newThrottle = 0;
-            if (newThrottle > 0.0) newBrake = 0;
+            if (Math.Abs(newThrottle) > 0.0f) newBrake = 0;
 
 
             float stabilityThrottleLimit = VehicleData.AvgGroundStability;
@@ -462,7 +491,7 @@ namespace ARS
                 // Off-track recovery needs some minimum throttle authority.
                 stabilityThrottleLimit = Math.Max(stabilityThrottleLimit, 0.45f);
             }
-            Control.MaxThrottle = Math.Min(Control.MaxThrottle, stabilityThrottleLimit);
+            //Control.MaxThrottle = Math.Min(Control.MaxThrottle, stabilityThrottleLimit);
 
             Control.Brake += (newBrake - Control.Brake) * 5 * TickScale;
             Control.Throttle += (newThrottle - Control.Throttle) * 5 * TickScale;
@@ -470,7 +499,6 @@ namespace ARS
             if (Control.MaxThrottle < 1.00f) Control.MaxThrottle += 2 * TickScale;
 
             if (Brain.intention.MaxSpeed < AIData.MaxSpeed) Brain.intention.MaxSpeed += 15 * TickScale;
-
 
         }
         float TickScale => (0.001f * TimeSinceLastCoreTick);
@@ -495,7 +523,7 @@ namespace ARS
             if (float.IsNaN(Control.SteerInput) || float.IsInfinity(Control.SteerInput)) Control.SteerInput = 0f;
 
             Control.SteerInput = ARS.map(Control.SteerTrackDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1, 1, true);
-            UI.ShowSubtitle("Steer: " + Control.SteerTrackDegrees.ToString("0.0") ,500);
+            
         }
 
         /// <summary>
@@ -523,13 +551,41 @@ namespace ARS
             float cornerSpd = 999f;
             if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MapIdealSpeedForDistance(Brain.Corner.OG, this) * 1.2f);
 
-            float followTrackSpd=(float)Math.Sqrt(((VehicleData.CurrentMechanicalGrip) * Handling.Gravity) * Brain.data.CurveRadiusToFollowPoint);
-            followTrackSpd*= 1.1f;
+            float followRadius = Math.Max(Brain.data.CurveRadiusToFollowPoint, 0.1f);
+            float followTrackSpd =(float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * followRadius);            
 
-            if (cornerSpd <= 5) cornerSpd = ARS.GetSpeedForCorner(Brain.Corner.OG, this);
             
-            Brain.intention.Speed = Math.Min(cornerSpd, followTrackSpd);
+            TrackPoint followMidpoint = ARS.TrackPoints[(int)((CurrentTrackPoint.Node + Brain.data.FollowPoint.Node) * 0.5f)];
+            float hillGsDelta = ARS.GripGainLossElChange(CurrentTrackPoint.Position, followMidpoint.Position,  Brain.data.FollowPoint.Position, followTrackSpd);
+            hillGsDelta= ARS.Clamp(hillGsDelta*0.5f, -0.3f, 0.3f);
+            float adjustedFollowGrip = Math.Max(0.1f, VehicleData.CurrentMechanicalGrip + hillGsDelta);
+            followTrackSpd=(float)Math.Sqrt((adjustedFollowGrip * Handling.Gravity) * followRadius);
 
+            float maxSpeedForSteerAngle = AIData.MaxSpeed;
+            float steerAngleDegAbs = Math.Abs(Control.SteerTrackDegrees);
+            float steerAngleDegClamped = ARS.Clamp(steerAngleDegAbs, 0f, Math.Max(VehicleData.SteeringLock, 1f));
+            float steerAngleRadAbs = Math.Abs(ARS.deg2rad(steerAngleDegClamped));
+            bool steerAndSlideSameSign = Math.Sign(Control.SteerTrackDegrees) == Math.Sign(VehicleData.SlideAngle);
+            if (steerAndSlideSameSign && steerAngleRadAbs > ARS.deg2rad(0.5f) && VehicleData.WheelBase > 0)
+            {
+                float tanSteer = (float)Math.Tan(steerAngleRadAbs);
+                if (Math.Abs(tanSteer) > 0.0001f)
+                {
+                    float steerCurveRadius = Math.Abs(VehicleData.WheelBase / tanSteer);
+                    if (!float.IsNaN(steerCurveRadius) && !float.IsInfinity(steerCurveRadius) && steerCurveRadius > 0f)
+                    {
+                        maxSpeedForSteerAngle = (float)Math.Sqrt((adjustedFollowGrip * Handling.Gravity) * steerCurveRadius);
+                    }
+                }
+            }
+
+            if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
+            if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
+            if (float.IsNaN(maxSpeedForSteerAngle) || float.IsInfinity(maxSpeedForSteerAngle)) maxSpeedForSteerAngle = AIData.MaxSpeed;
+            if (cornerSpd <= 5) cornerSpd = ARS.GetSpeedForCorner(Brain.Corner.OG, this);
+             
+            Brain.intention.Speed = Math.Min(Math.Min(cornerSpd, followTrackSpd), maxSpeedForSteerAngle);
+            UI.ShowSubtitle(maxSpeedForSteerAngle.ToString("0.0") + "", 1000);
             // Extra limiter for cars pointing outward in a corner.
             if (Brain.Corner.Valid &&1==2)
             {           
@@ -583,9 +639,9 @@ namespace ARS
             //float allowedWheelspin = lowGripOrLowGear ? 0.8f : 0.2f;
             float allowedWheelspin = 0.5f;
 
-            float tcsValue = ARS.map(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 4;
+            float tcsValue = ARS.map(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 8;
             float change = tcsValue * TickScale;
-            Control.TCSThrottle = ARS.Clamp(Control.TCSThrottle + change, 0.4f, 1);
+            Control.TCSThrottle = ARS.Clamp(Control.TCSThrottle + change, 0.2f, 1);
         }
         public void UpdateTickData()
         {
@@ -1132,6 +1188,7 @@ namespace ARS
             int threeQuarterSec = (int)(speed * 0.75f);
             int oneSec = (int)(speed);
             int oneHalfSec = (int)(speed * 1.5f);
+            int twoSec = (int)(speed * 2f);
 
             TrackPoint ResolveLookAhead(int offset)
             {
@@ -1145,6 +1202,7 @@ namespace ARS
             LookAheads.Add(eLookAheads.ThreeQuarterSec, ResolveLookAhead(threeQuarterSec));
             LookAheads.Add(eLookAheads.OneSec, ResolveLookAhead(oneSec));
             LookAheads.Add(eLookAheads.OneHalfSec, ResolveLookAhead(oneHalfSec));
+            LookAheads.Add(eLookAheads.TwoSec, ResolveLookAhead(twoSec));
 
 
 
@@ -1176,14 +1234,16 @@ namespace ARS
             int follow = CurrentTrackPoint.Node + (int)Car.Velocity.Length();
             if (follow < ARS.TrackPoints.Count - 1)
             {
-                TrackPoint end = ARS.TrackPoints[CurrentTrackPoint.Node + (int)Car.Velocity.Length()];
-                TrackPoint midpoint = ARS.TrackPoints[CurrentTrackPoint.Node + (int)Car.Velocity.Length() / 2];
-                Brain.data.CurveRadiusToFollowPoint = ARS.GetCurveRadius(CurrentTrackPoint.Position, end.Position, midpoint.Position) / 2;
+                TrackPoint end = ARS.TrackPoints[CurrentTrackPoint.Node + (int)Car.Velocity.Length()*2];
+                TrackPoint midpoint = ARS.TrackPoints[CurrentTrackPoint.Node + (int)Car.Velocity.Length() ];
+                Brain.data.FollowPoint = end;
+                Brain.data.CurveRadiusToFollowPoint = ARS.GetCurveRadius(CurrentTrackPoint.Position, end.Position, midpoint.Position)/2;
             }
-            else Brain.data.CurveRadiusToFollowPoint = 999;
-
-
-
+            else
+            {
+                Brain.data.FollowPoint = CurrentTrackPoint;
+                Brain.data.CurveRadiusToFollowPoint = 999;
+            }
         }
 
         public void AddDebugText(string s)
@@ -1388,11 +1448,10 @@ namespace ARS
             Vector3 toTrack = CurrentTrackPoint.Position - Car.Position;
             if (toTrack.Length() < 0.01f) toTrack = Car.ForwardVector;
 
-            Vector3 nudgedVelocity = toTrack.Normalized * ARS.MPHtoMS(15f);
-            nudgedVelocity.Z += 1.5f;
+            Vector3 nudgedVelocity = toTrack.Normalized * ARS.MPHtoMS(30f);
+            nudgedVelocity.Z += 30f;
             Car.Velocity = nudgedVelocity;
 
-            StuckRecoveryAttempts = 0;
         }
 
         void UpdatePercievedGrip()
@@ -1416,8 +1475,9 @@ namespace ARS
             VehicleData.BaseMechanicalGrip = handlingGrip;
             VehicleData.CurrentMechanicalGrip = ((VehicleData.BaseMechanicalGrip) * GroundGripMultiplier);
             VehicleData.CurrentMechanicalGrip *= hillGsLoss;
-            VehicleData.CurrentMechanicalGrip += 0.05f * Math.Min(ARS.GripGainLossElChange(thisPoint, toMidpoint, toEndpoint, Car.Velocity.Length()),0.0f);
-
+            float GsLoss=ARS.GripGainLossElChange(thisPoint, toMidpoint, toEndpoint, Car.Velocity.Length());
+            //VehicleData.CurrentMechanicalGrip += GsLoss;
+        
             if (Math.Abs(Brain.data.DeviationFromCenter) < CurrentTrackPoint.TrackWide && RacePosition <= 2 && !ARS.MultiplierInTerrain.ContainsKey(CurrentTrackPoint.Node))
             {
                 ARS.MultiplierInTerrain.Add(CurrentTrackPoint.Node, GroundGripMultiplier);

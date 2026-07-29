@@ -1,0 +1,3 @@
+{"ts":"2026-07-08T19:32:50.165Z","v":"8.9.1","op":"generate","baselineTokens":18120,"actualTokens":660,"savedTokens":17460,"savedPct":96.4,"durationMs":48,"model":null,"ok":true}
+{"ts":"2026-07-08T19:32:52.951Z","v":"8.9.1","op":"ask","baselineTokens":12627,"actualTokens":109,"savedTokens":12518,"savedPct":99.1,"durationMs":26,"model":"ask","ok":true}
+{"ts":"2026-07-08T19:37:02.005Z","v":"8.9.1","op":"ask","baselineTokens":12627,"actualTokens":109,"savedTokens":12518,"savedPct":99.1,"durationMs":28,"model":"ask","ok":true}
