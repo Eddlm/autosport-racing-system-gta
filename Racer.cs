@@ -370,37 +370,53 @@ namespace ARS
             //   Apex    = left  = -halfWidth = -cornerDir * halfWidth
             if (cornerDir == 0f) return 0f;
 
-            // Distance from car to apex along the track (in nodes, ~1m each).
-            float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
-            float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
-
-            // Current lateral position: positive = right of center.
             float currentLateral = Brain.data.DeviationFromCenter;
             float halfWidth = steerRefPoint.TrackWide;
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-            // Determine phase and target lane.
-            float targetLane = 0f;
+            // Always-on inside pull: intensity mapped from curve radius.
+            float curveRadius = Math.Abs(CurrentTrackPoint.PreciseCurveRadius);
+            float insideIntensity = ARS.map(curveRadius, 50f, 300f, 1f, 0.1f, true);
+            insideIntensity = ARS.Clamp(insideIntensity, 0f, 1f);
+            float insideTarget = -cornerDir * safeBound * insideIntensity;
+
+            float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
+            float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
+
+            float targetLane;
+            const float approachStartTime = 5.0f;
+            const float lerpStartTime = 2.0f;
             const float turnInTime = 1.0f;
 
             if (CurrentTrackPoint.Node >= apexNode)
             {
-                // Past apex: HOLD phase — keep aiming at apex (inside edge).
                 _cornerPhase = CornerPhase.Hold;
-                targetLane = -cornerDir * safeBound;
+                targetLane = insideTarget;
             }
             else if (timeToApex <= turnInTime)
             {
-                // Within 1s of apex: TURN_IN phase — aim at apex (inside edge).
                 _cornerPhase = CornerPhase.TurnIn;
-                targetLane = -cornerDir * safeBound;
+                targetLane = insideTarget;
+            }
+            else if (timeToApex <= lerpStartTime)
+            {
+                // 2s→1s before apex: lerp from outside to inside.
+                _cornerPhase = CornerPhase.Approach;
+                float outsideTarget = cornerDir * safeBound;
+                float t = (timeToApex - turnInTime) / (lerpStartTime - turnInTime);
+                targetLane = insideTarget + (outsideTarget - insideTarget) * t;
+            }
+            else if (timeToApex <= approachStartTime)
+            {
+                // 5s→2s before apex: hold outside.
+                _cornerPhase = CornerPhase.Approach;
+                targetLane = cornerDir * safeBound;
             }
             else
             {
-                // Before corner: APPROACH phase — aim at outside edge.
-                _cornerPhase = CornerPhase.Approach;
-                targetLane = cornerDir * safeBound;
+                _cornerPhase = CornerPhase.None;
+                targetLane = insideTarget;
             }
 
             // Compute bias using a fixed 1.5s lookahead point offset by target lane.
@@ -1275,7 +1291,7 @@ namespace ARS
             LookAheads.Clear();
             float speed = Car.Velocity.Length();
 
-            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f)), 1, 500);
+            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f)), (int)(CurrentTrackPoint.TrackWide * 2f), 500);
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
             int threeQuarterSec = (int)(speed * 0.75f);
