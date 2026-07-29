@@ -102,8 +102,8 @@ namespace ARS
         {
             Car = RacerCar;
             Driver = RacerPed;
-            Name = RacerCar.FriendlyName;
-            if (Name == "NULL" || Name == null) Name = Car.DisplayName.ToString()[0].ToString().ToUpper() + Car.DisplayName.ToString().Substring(1).ToLowerInvariant();
+            try { Name = RacerCar.FriendlyName; } catch (Exception) { Name = "Racer"; }
+            if (Name == "NULL" || Name == null) { try { Name = Car.DisplayName.ToString()[0].ToString().ToUpper() + Car.DisplayName.ToString().Substring(1).ToLowerInvariant(); } catch (Exception) { Name = "Racer"; } }
 
             if (Driver.IsPlayer) ControlledByPlayer = true;
             HalfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));
@@ -126,13 +126,13 @@ namespace ARS
                     Car.IsOnlyDamagedByPlayer = true;
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_STRONG, Car, true);
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_HAS_STRONG_AXLES, Car, true);
-                    Car.EngineCanDegrade = false;
+                    try { Car.EngineCanDegrade = false; } catch (Exception) { }
                 }
                 else if (ARS.DevSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1) == 1)
                 {
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_STRONG, Car, true);
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_HAS_STRONG_AXLES, Car, true);
-                    Car.EngineCanDegrade = false;
+                    try { Car.EngineCanDegrade = false; } catch (Exception) { }
                 }
                 else
                 {
@@ -150,14 +150,21 @@ namespace ARS
             }
 
             Car.IsPersistent = true;
-            if ((Car.CurrentBlip == null || Car.CurrentBlip.Exists() == false) && !Driver.IsPlayer)
+            if (!Driver.IsPlayer)
             {
-                Car.AddBlip();
-                Car.CurrentBlip.Color = BlipColor.Blue;
-                Car.CurrentBlip.Scale = 0.75f;
-                Function.Call(Hash._SET_BLIP_SHOW_HEADING_INDICATOR, Car.CurrentBlip, true);
-                Function.Call(Hash._0x2B6D467DAB714E8D, Car.CurrentBlip, true);
-                Car.CurrentBlip.Name = Name;
+                try
+                {
+                    if (Car.CurrentBlip == null || Car.CurrentBlip.Exists() == false)
+                    {
+                        Car.AddBlip();
+                        Car.CurrentBlip.Color = BlipColor.Blue;
+                        Car.CurrentBlip.Scale = 0.75f;
+                        Function.Call(Hash._SET_BLIP_SHOW_HEADING_INDICATOR, Car.CurrentBlip, true);
+                        Function.Call(Hash._0x2B6D467DAB714E8D, Car.CurrentBlip, true);
+                        Car.CurrentBlip.Name = Name;
+                    }
+                }
+                catch (Exception) { /* blip creation failed, non-critical */ }
             }
 
             Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Car, true, 1); //load collision

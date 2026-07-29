@@ -6115,18 +6115,44 @@ namespace ARS
 
             Ped CreateDriverPed(XmlDocument file, Vehicle car, List<string> tags, out XmlDocument driverXml)
             {
-                string driverChosen = "default";
-                if (file.SelectSingleNode("DriverName") != null) driverChosen = file.SelectSingleNode("DriverName").InnerText;
-
                 driverXml = new XmlDocument();
-                driverXml = LoadDriver(driverChosen);
-                Model driverModel = int.Parse(driverXml.SelectSingleNode("//Model").InnerText);
+                Model driverModel;
+                string driverChosen = null;
+                try
+                {
+                    if (file.SelectSingleNode("//DriverName") != null) driverChosen = file.SelectSingleNode("//DriverName").InnerText;
+                    if (!string.IsNullOrEmpty(driverChosen))
+                    {
+                        driverXml = LoadDriver(driverChosen);
+                        driverModel = int.Parse(driverXml.SelectSingleNode("//Model").InnerText);
+                    }
+                    else
+                    {
+                        driverModel = PedHash.Car3Guy2;
+                    }
+                }
+                catch (Exception)
+                {
+                    Log(LogImportance.Info, "Driver XML not found, using fallback ped.", true);
+                    driverModel = PedHash.Car3Guy2;
+                }
+
                 if (tags.Contains("street"))
                 {
                     driverModel = StreetRacerModels[GetRandomInt(0, StreetRacerModels.Length - 1)];
                 }
 
-                Ped driverPed = World.CreatePed(driverModel, car.Position.Around(5));
+                Ped driverPed = null;
+                try
+                {
+                    driverPed = World.CreatePed(driverModel, car.Position.Around(5));
+                }
+                catch (Exception ex)
+                {
+                    Log(LogImportance.Error, "Failed to create ped: " + ex.Message, true);
+                    return null;
+                }
+
                 int p = 0;
                 while (!CanWeUse(driverPed) && p < 3000)
                 {
@@ -6198,11 +6224,17 @@ namespace ARS
                     car.InstallModKit();
 
                     List<string> tags = GetVehicleTags(file);
-                    ApplyCarAppearance(file, car, tags);
+                    try { ApplyCarAppearance(file, car, tags); } catch (Exception ex) { Log(LogImportance.Info, "Appearance skipped: " + ex.Message); }
                     ApplyAccelerationOverride(file, car);
 
                     XmlDocument driverXml;
                     Ped driverPed = CreateDriverPed(file, car, tags, out driverXml);
+                    if (driverPed == null)
+                    {
+                        Log(LogImportance.Error, "Skipping " + modelName + " - no driver ped.", true);
+                        car.Delete();
+                        continue;
+                    }
                     ApplyDriverClothes(driverPed, driverXml, tags);
                     AddRacer(file, car, driverPed);
 
