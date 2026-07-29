@@ -123,7 +123,7 @@ namespace ARS
             if (RivalRacer == null) return;
 
             rPos = ARS.GetOffset(me.Car, RivalRacer.Car);
-            BoundingBoxTotal.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2));
+            BoundingBoxTotal.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2)) + 2f;
             BoundingBoxTotal.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
             OccupiedLaneWidth = BoundingBoxTotal.X;
             OccupiedLane = RivalRacer.Brain.data.DeviationFromCenter;
