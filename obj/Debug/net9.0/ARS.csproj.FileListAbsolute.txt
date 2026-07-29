@@ -1,5 +1,0 @@
-F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\obj\Debug\net9.0\ARS.GeneratedMSBuildEditorConfig.editorconfig
-F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\obj\Debug\net9.0\ARS.AssemblyInfoInputs.cache
-F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\obj\Debug\net9.0\ARS.AssemblyInfo.cs
-F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\obj\Debug\net9.0\ARS.csproj.CoreCompileInputs.cache
-F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\ARS\obj\Debug\net9.0\ARS.sourcelink.json

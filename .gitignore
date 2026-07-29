@@ -1,0 +1,27 @@
+# Build outputs
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Other AI / editor harnesses
+.clineignore
+.context/
+.continue/
+.github/
+
+# GTA runtime logs
+ScriptHookV.log
+
+# OS files
+Thumbs.db
+.DS_Store
