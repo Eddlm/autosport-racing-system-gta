@@ -1753,7 +1753,7 @@ namespace ARS
                 if (GameTimeRef < Game.GameTime)
                 {
                     GameTimeRef = Game.GameTime + 200;
-                    GlobalTraffic = World.GetAllVehicles().ToList();
+                    try { GlobalTraffic = World.GetAllVehicles().ToList(); } catch (Exception) { GlobalTraffic = new List<Vehicle>(); }
                     foreach (Racer r in ARS.Racers) if (GlobalTraffic.Contains(r.Car)) GlobalTraffic.Remove(r.Car);
 
                     List<Racer> LapPos = new List<Racer>();
