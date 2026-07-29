@@ -1073,7 +1073,15 @@ namespace ARS
                     }
                 }
             }
-            StartRace();
+            try
+            {
+                StartRace();
+            }
+            catch (Exception ex)
+            {
+                Log(LogImportance.Error, "StartRace failed: " + ex.Message, true);
+                Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+            }
 
             if (CanWeUse(Game.Player.Character.CurrentVehicle)) HelpMessages.Add("Rev up your engine to start the countdown.");
         }
@@ -1923,12 +1931,12 @@ namespace ARS
         }
         public void ToggleSPLVisibility()
         {
-            foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (p.Alpha == 0) p.Alpha = 255; else p.Alpha = 0;
+            try { foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (p.Alpha == 0) p.Alpha = 255; else p.Alpha = 0; } catch (Exception) { }
         }
 
         public void SetSPLVisibility(bool state)
         {
-            foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (state) p.Alpha = 255; else p.Alpha = 0;
+            try { foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (state) p.Alpha = 255; else p.Alpha = 0; } catch (Exception) { }
         }
         bool InFreeCam = false;
         void HandleTrackCreator()
@@ -2537,6 +2545,7 @@ namespace ARS
             if (Racers.Count == 0)
             {
                 UI.Notify("~r~No vehicles found with those tags.");
+                if (!InFreeCam) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
                 return;
             }
 
