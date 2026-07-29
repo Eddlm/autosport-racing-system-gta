@@ -106,6 +106,11 @@ namespace ARS
         CornerPhase _cornerPhase = CornerPhase.None;
         const float CornerOverDrive = 1.2f;
 
+        // Countersteer state (GodotRace-style).
+        float _countersteerBlend = 0f;
+        const float CountersteerFullSeverityMult = 3f;
+        const float CountersteerRecoveryRate = 3f;
+
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
             Car = RacerCar;
@@ -247,11 +252,14 @@ namespace ARS
                 return;
             }
 
-            // 1) Heading error: match old convention.
+            // 1) Heading error: use velocity vector (where car is actually going),
+            // not model forward (where car is pointing). Matches GodotRace.
             // Old code: -SignedAngle(targetDir, carForward, up)
-            // Here targetDir = track direction, so:
+            Vector3 carForward = Car.Velocity.LengthSquared() > 0.01f
+                ? Car.Velocity.Normalized
+                : Car.ForwardVector;
             float headingErrorDeg = -Vector3.SignedAngle(
-                steerRefPoint.Direction, Car.ForwardVector, Vector3.WorldUp);
+                steerRefPoint.Direction, carForward, Vector3.WorldUp);
             if (float.IsNaN(headingErrorDeg) || float.IsInfinity(headingErrorDeg))
                 headingErrorDeg = 0f;
 
@@ -293,8 +301,24 @@ namespace ARS
             // 5) Total heading target = track error + bias/centering + recovery.
             float totalTargetDeg = headingErrorDeg + cornerBiasDeg + centerDeg + recoveryDeg;
 
-            // 4) Direct steer: no PID smoothing for now.
-            Control.SteerTrackDegrees = totalTargetDeg;
+            // 6) GodotRace-style PD: P on heading error, D on yaw rate (subtracted).
+            // Output is in degrees — SteerTranslateInput maps to [-1, 1] later.
+            // TODO: investigate if D should be divided by grip — high-grip cars
+            // naturally resist rotation and need less damping, low-grip cars need more.
+            const float steerKP = 1.0f;
+            const float steerKD = 0.05f;
+            float pTerm = steerKP * totalTargetDeg;
+            float dTerm = steerKD * VehicleData.YawRotationPerSecondDegrees;
+            Control.SteerTrackDegrees = pTerm - dTerm;
+
+            // 7) Slide countersteer: when sliding and yawing in the same direction,
+            // steer opposite the slide to catch it. Same logic as old SteerApplyCorrections.
+            if (Math.Sign((int)VehicleData.SlideAngle) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
+            {
+                float slideCounterSteer = VehicleData.SlideAngle * ARS.map(
+                    Math.Abs(VehicleData.SlideAngle), 0, Handling.TRlateral * 1.2f, 0.5f, 1.2f, true);
+                Control.SteerTrackDegrees -= slideCounterSteer;
+            }
 
             // Keep SteerTarget valid for debug drawing.
             SteerTarget = steerRefPoint.Position;
@@ -704,7 +728,7 @@ namespace ARS
             bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
 
             //float allowedWheelspin = lowGripOrLowGear ? 0.8f : 0.2f;
-            float allowedWheelspin = 0.5f;
+            float allowedWheelspin = 5.0f;
 
             float tcsValue = ARS.map(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 8;
             float change = tcsValue * TickScale;
