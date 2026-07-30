@@ -303,14 +303,23 @@ namespace ARS
             }
 
             // 5) Convert target lane to a steering bias using the steering lookahead.
-            float currentLane = Brain.data.DeviationFromCenter;
-            float lookaheadDist = steerRefPoint.Position.DistanceTo(Car.Position);
-            if (lookaheadDist < 1f) lookaheadDist = speedMps * 1.5f;
+            // Only active when a corner or avoidance wall is constraining the lane.
+            float laneBiasDeg = 0f;
+            float trackBound = roadWide - carHalfWidth;
+            bool hasActiveGuidance = cornerActive
+                || _avoidLeftWall > -trackBound
+                || _avoidRightWall < trackBound;
+            if (hasActiveGuidance)
+            {
+                float currentLane = Brain.data.DeviationFromCenter;
+                float lookaheadDist = steerRefPoint.Position.DistanceTo(Car.Position);
+                if (lookaheadDist < 1f) lookaheadDist = speedMps * 1.5f;
 
-            // Single bias from the clamped lane (respects walls).
-            float laneError = clampedLane - currentLane;
-            float laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
-            laneBiasDeg *= 0.5f;
+                // Single bias from the clamped lane (respects walls).
+                float laneError = clampedLane - currentLane;
+                laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
+                laneBiasDeg *= 0.25f;
+            }
 
             // 6) Total heading target = heading error + lane bias + recovery.
             float totalTargetDeg = headingErrorDeg + laneBiasDeg + recoveryDeg;
@@ -479,15 +488,16 @@ namespace ARS
                 if (!isRelevant) continue;
 
                 float rivalBuffer = r.OccupiedLaneWidth * 0.5f + 1.0f;
+                float ourLane = Brain.data.DeviationFromCenter;
 
                 if (rivalIsLeft)
                 {
-                    float wall = r.OccupiedLane + rivalBuffer;
+                    float wall = r.OccupiedLane + rivalBuffer + (r.OccupiedLane - ourLane) / 2f;
                     if (wall > targetLeftWall) targetLeftWall = wall;
                 }
                 else
                 {
-                    float wall = r.OccupiedLane - rivalBuffer;
+                    float wall = r.OccupiedLane - rivalBuffer + (r.OccupiedLane - ourLane) / 2f;
                     if (wall < targetRightWall) targetRightWall = wall;
                 }
             }
@@ -741,7 +751,6 @@ namespace ARS
             if (float.IsNaN(maxSpeedForSteerAngle) || float.IsInfinity(maxSpeedForSteerAngle)) maxSpeedForSteerAngle = AIData.MaxSpeed;
             Brain.intention.Speed = Math.Min(Brain.intention.Speed, maxSpeedForSteerAngle);
 #endif
-            UI.ShowSubtitle("steer: " + Control.SteerTrackDegrees.ToString("0.0") + "°  input: " + Control.SteerInput.ToString("0.00"), 1000);
             // Extra limiter for cars pointing outward in a corner.
             if (Brain.Corner.Valid &&1==2)
             {           
@@ -917,7 +926,7 @@ namespace ARS
             bool showInputs = ARS.OptionValuesList[Options.ShowInputs];
             bool showTrack = ARS.OptionValuesList[Options.ShowTrackAnalysis];
             bool showPhysics = ARS.OptionValuesList[Options.ShowPhysics];
-            bool showAny = showAggro || showInputs || showTrack || showPhysics;
+            bool showAny = showAggro || showTrack || showPhysics;
             if (!showAny) return;
 
             if ((Car.Position - Game.Player.Character.Position).Length() > 50) return;
@@ -968,11 +977,11 @@ namespace ARS
 
                 if (showAggro)
                 {
-                    // Draw avoidance walls on the ground.
-                    Vector3 carPos = Car.Position;
+                    // Draw avoidance walls on the ground, relative to track center.
+                    Vector3 trackCenter = CurrentTrackPoint.Position;
                     Vector3 trackRight = Vector3.Cross(CurrentTrackPoint.Direction, Vector3.WorldUp);
-                    Vector3 leftWallPos = carPos + trackRight * _avoidLeftWall;
-                    Vector3 rightWallPos = carPos + trackRight * _avoidRightWall;
+                    Vector3 leftWallPos = trackCenter + trackRight * _avoidLeftWall;
+                    Vector3 rightWallPos = trackCenter + trackRight * _avoidRightWall;
                     Vector3 up = new Vector3(0, 0, 0.1f);
                     ARS.DrawLine(leftWallPos + up, leftWallPos + up + new Vector3(0, 0, 2f), Color.Blue);
                     ARS.DrawLine(rightWallPos + up, rightWallPos + up + new Vector3(0, 0, 2f), Color.Red);
@@ -989,59 +998,6 @@ namespace ARS
                         ARS.DrawText(rTextPos, "~w~R" + ri + "(" + side + ") lane: ~r~" + r.OccupiedLane.ToString("0.0") + " s: ~y~" + r.sToReach.ToString("0.0"), Color.White, 0.4f);
                         ri++;
                     }
-                }
-
-                if (showInputs)
-                {
-                    float combinedInput = ARS.Clamp(Control.Throttle - Control.Brake, -1f, 1f);
-                    if (TrailSamples.Count == 0)
-                    {
-                        TrailSamples.Add(new TrailSample(Car.Position, combinedInput));
-                    }
-                    else if (Car.Position.DistanceTo(TrailSamples[TrailSamples.Count - 1].Position) > 1f)
-                    {
-                        TrailSamples.Add(new TrailSample(Car.Position, combinedInput));
-                    }
-
-                    UpdateFollowLaneTrail();
-
-                    if (LookAheads.ContainsKey(eLookAheads.OneSec))
-                    {
-                        TrackPoint laneTargetNode = LookAheads[eLookAheads.OneSec];
-                        float laneOffset = 0f; // TODO: restore debug arrow from heading error once racing line bias is added
-                        Vector3 laneTarget = laneTargetNode.Position - (Vector3.Cross(Vector3.WorldUp, laneTargetNode.Direction) * laneOffset);
-
-                        Vector3 roofPos = Car.Position + new Vector3(0f, 0f, Car.Model.GetDimensions().Z + 0.05f);
-                        
-                        Vector3 arrowDir = (laneTarget - roofPos);
-                        
-                        if (arrowDir.Length() > 0.001f)
-                        {
-                            World.DrawMarker(
-                                MarkerType.ChevronUpx3,
-                                roofPos,
-                                arrowDir.Normalized,
-                                new Vector3(90, 0, 0),
-                                new Vector3(2.4f, 1.05f, 2.4f),
-                                Color.Blue,
-                                false,
-                                false,
-                                0,
-                                false,
-                                "",
-                                "",
-                                false
-                            );
-                        }
-                    }
-                }
-
-
-                if (showInputs)
-                {
-
-
-                    DrawInputTrails();
                 }
 
                 if (showTrack)

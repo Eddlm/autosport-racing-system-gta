@@ -130,7 +130,7 @@ namespace ARS
             Distance =  (me.Car.Position -RivalRacer.Car.Position).Length();// me.Car.Position.DistanceTo2D(RivalRacer.Car.Position);// -BoundingBoxTotal.Y;
 
             float SpeedDiff = (float)Math.Round(me.Car.Velocity.Length()- RivalRacer.Car.Velocity.Length(), 4);
-            if (SpeedDiff < 0.001f)
+            if (SpeedDiff <= 0.001f)
             {
                 sToReach = 909f;
                 sToRear = 909f;

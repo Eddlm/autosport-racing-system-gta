@@ -198,7 +198,7 @@ namespace ARS
 
         public static Dictionary<Options, bool> OptionValuesList = new Dictionary<Options, bool>()
     {
-        { Options.ShowAggro, false },
+        { Options.ShowAggro, true },
         { Options.ShowInputs, false },
         { Options.ShowTrackAnalysis, false },
         { Options.ShowPhysics, false },
