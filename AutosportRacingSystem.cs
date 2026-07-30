@@ -252,19 +252,17 @@ namespace ARS
             Log(LogImportance.Info, "-------------");
         }
 
-        public static List<string> GetTrackTags(string _routeNodes)
+        static XmlDocument LoadXmlOrThrow(string path)
         {
             XmlDocument document = new XmlDocument();
-            document.Load(_routeNodes);
-            int pat = 0;
+            document.Load(path);
+            return document;
+        }
 
-            while (document == null && pat < 1000)
-            {
-                pat++;
-                document.Load(_routeNodes);
-            }
+        public static List<string> GetTrackTags(string _routeNodes)
+        {
+            XmlDocument document = LoadXmlOrThrow(_routeNodes);
 
-            
             List<string> tags = new List<string>();
             tags.Add(System.IO.Path.GetFileName(_routeNodes).ToLowerInvariant());
             XmlNodeList nl = document.SelectNodes("//Tags/*");
@@ -278,17 +276,8 @@ namespace ARS
 
         public static Vector3 GetTrackStartPos(string _routeNodes)
         {
-            XmlDocument document = new XmlDocument();
-            document.Load(_routeNodes);
-            int pat = 0;
+            XmlDocument document = LoadXmlOrThrow(_routeNodes);
 
-            while (document == null && pat < 1000)
-            {
-                pat++;
-                document.Load(_routeNodes);
-            }
-
-            
             List<string> tags = new List<string>();
             tags.Add(System.IO.Path.GetFileName(_routeNodes).ToLowerInvariant());
             XmlNode point = document.SelectNodes("//Route/Point")[0];
@@ -315,15 +304,7 @@ namespace ARS
 
         public static List<string> GetRacerTags(string _routeNodes)
         {
-            XmlDocument document = new XmlDocument();
-            document.Load(_routeNodes);
-            int pat = 0;
-
-            while (document == null && pat < 1000)
-            {
-                pat++;
-                document.Load(_routeNodes);
-            }
+            XmlDocument document = LoadXmlOrThrow(_routeNodes);
 
             List<string> tags = new List<string>();
             string dir = System.IO.Path.GetDirectoryName(_routeNodes);
