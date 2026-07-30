@@ -198,8 +198,8 @@ namespace ARS
 
         public static Dictionary<Options, bool> OptionValuesList = new Dictionary<Options, bool>()
     {
-        { Options.ShowAggro, true },
-        { Options.ShowInputs, false },
+        { Options.ShowAggro, false },
+        { Options.ShowInputs, true },
         { Options.ShowTrackAnalysis, false },
         { Options.ShowPhysics, false },
         { Options.UseNearbyCars, false },
@@ -1581,7 +1581,7 @@ namespace ARS
 
                             string text = "";
                             if (r.Driver.IsPlayer) text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " T" + fTime + "~n~";
-                            else text = "~b~" + r.RacePosition + "º~w~ " + r.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
+                            else text = "~b~" + r.RacePosition + "º~w~ " + r.Name + "~p~(" + r.Aggression.ToString("0") + ")~w~ " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
 
 
                             positions.Add(text);
@@ -1594,9 +1594,9 @@ namespace ARS
                     {
                         foreach (Racer r in Racers)
                         {
-                            string text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            string text = "~b~" + r.RacePosition + "º~g~ " + r.Name + "~p~(" + r.Aggression.ToString("0") + ")~w~ L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
                             //text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                            text = "~b~" + r.VehicleData.TextPerformanceIndex + " - ~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            text = "~b~" + r.VehicleData.TextPerformanceIndex + " - ~g~ " + r.Name + "~p~(" + r.Aggression.ToString("0") + ")~w~ L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
 
 
                             if (r.Driver.IsPlayer)
@@ -2608,6 +2608,19 @@ namespace ARS
         public void StartCoundown()
         {
             HelpMessages.Add("The prize is: ~g~" + RaceReward.ToString() + "~w~$.");
+
+            // Assign aggression by grid position: first = 0 (safe), last = 100 (reckless).
+            // Player stays at 50. Rounded to nearest 10.
+            int aiCount = Racers.Count - 1; // exclude player
+            int aiIndex = 0;
+            foreach (Racer r in Racers)
+            {
+                if (r.Driver.IsPlayer) continue;
+                float t = aiCount <= 0 ? 0.5f : (float)aiIndex / aiCount;
+                r.Aggression = (float)Math.Round(ARS.map(t, 0f, 1f, 0f, 100f, true) / 10f) * 10f;
+                aiIndex++;
+            }
+
             RaceStatus = RaceState.Countdown;
             GametimeCountDown = Game.GameTime;
             CountDown = MaxCountDown;

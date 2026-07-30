@@ -99,7 +99,7 @@ namespace ARS
 
         // Corner racing line state.
         CornerPhase _cornerPhase = CornerPhase.None;
-        const float CornerOverDrive = 1.2f;
+
 
         // Countersteer state (GodotRace-style).
         float _countersteerBlend = 0f;
@@ -114,6 +114,9 @@ namespace ARS
         // Passengerize state: move AI driver to passenger seat when a rival is
         // too close, so GTA V doesn't force an uncontrollable swerve on contact.
         bool _isPassengerized = false;
+
+        // Personality: 0-100. 50 = gentleman, 0 = coward, 100 = dickhead.
+        public float Aggression = 50f;
 
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
@@ -384,8 +387,8 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-            // Always-on inside pull: intensity mapped from curve radius.
-            float curveRadius = Math.Abs(CurrentTrackPoint.PreciseCurveRadius);
+            // Inside pull intensity from the 1-second lookahead route radius.
+            float curveRadius = Math.Abs(Brain.data.CurveRadiusToFollowPoint);
             float insideIntensity = ARS.map(curveRadius, 50f, 300f, 1f, 0.1f, true);
             insideIntensity = ARS.Clamp(insideIntensity, 0f, 1f);
             float insideTarget = -cornerDir * safeBound * insideIntensity;
@@ -425,7 +428,7 @@ namespace ARS
             else
             {
                 _cornerPhase = CornerPhase.None;
-                targetLane = insideTarget;
+                targetLane = 0f;
             }
 
             return targetLane;
@@ -472,7 +475,7 @@ namespace ARS
                     isRelevant = true;
                     rivalIsLeft = false;
                 }
-                else if (r.relativePos == RelativePos.Ahead && r.sToReach >= 0f && r.sToReach <= 4f)
+                else if (r.relativePos == RelativePos.Ahead && r.sToReach >= 0f && r.sToReach <= 4f && Math.Abs(r.DirectionDiff) <= 20f)
                 {
                     isRelevant = true;
                     rivalIsLeft = r.OccupiedLane < Brain.data.DeviationFromCenter;
@@ -480,7 +483,9 @@ namespace ARS
 
                 if (!isRelevant) continue;
 
-                float rivalBuffer = r.OccupiedLaneWidth * 0.5f;
+                // Aggression-scaled buffer: 0 aggro = 2m gap, 100 aggro = 0.25m gap.
+                float aggroBuffer = ARS.map(Aggression, 0f, 100f, 2f, 0.25f, true);
+                float rivalBuffer = r.OccupiedLaneWidth * 0.5f + aggroBuffer;
 
                 if (rivalIsLeft)
                 {
@@ -526,7 +531,7 @@ namespace ARS
             if (Math.Sign(Control.SteerTrackDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.01f));
-                speedBasedSteeringLimit = Math.Max(ARS.rad2deg(speedBasedSteeringLimit), 3f);
+                speedBasedSteeringLimit = Math.Max(ARS.rad2deg(speedBasedSteeringLimit) * 0.9f, 1f);
                 Control.SteerTrackDegrees = ARS.Clamp(Control.SteerTrackDegrees, -speedBasedSteeringLimit, speedBasedSteeringLimit);
             }
         }
@@ -695,7 +700,7 @@ namespace ARS
             Brain.intention.Speed = AIData.MaxSpeed;
 
             float cornerSpd = 999f;
-            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MapIdealSpeedForDistance(Brain.Corner.OG, this) * CornerOverDrive);
+            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MapIdealSpeedForDistance(Brain.Corner.OG, this) + 10f);
 
             float followRadius = Math.Max(Brain.data.CurveRadiusToFollowPoint, 0.1f);
             float followTrackSpd =(float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * followRadius);            
@@ -713,7 +718,8 @@ namespace ARS
               
             Brain.intention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
-            // Avoidance lift-off: if there's no room to pass, match rival's speed.
+            // Avoidance lift-off: if there's no room to pass, cap to rival's speed
+            // but only if it's slower than what we're already targeting.
             if (_avoidLiftOff)
             {
                 Rival threat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.relativePos == RelativePos.Ahead);
@@ -793,7 +799,7 @@ namespace ARS
             bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
 
             //float allowedWheelspin = lowGripOrLowGear ? 0.8f : 0.2f;
-            float allowedWheelspin = 0.4f;
+            float allowedWheelspin = 0.4f + ARS.map(Aggression, 0f, 100f, -0.2f, 0.2f, true);
 
             float tcsValue = ARS.map(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 8;
             float change = tcsValue * TickScale;
@@ -812,6 +818,20 @@ namespace ARS
             VehicleData.SpeedVectorGlobal = cSpeed;
             VehicleData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
             Brain.data.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
+
+            // Sample trail for input visualization (only when ShowInputs is on).
+            if (ARS.OptionValuesList[Options.ShowInputs] && !Driver.IsPlayer)
+            {
+                float combinedInput = ARS.Clamp(Control.Throttle - Control.Brake, -1f, 1f);
+                if (TrailSamples.Count == 0)
+                {
+                    TrailSamples.Add(new TrailSample(Car.Position, combinedInput));
+                }
+                else if (Car.Position.DistanceTo(TrailSamples[TrailSamples.Count - 1].Position) > 1f)
+                {
+                    TrailSamples.Add(new TrailSample(Car.Position, combinedInput));
+                }
+            }
 
             while (TrailSamples.Count > 50) TrailSamples.RemoveAt(0);
         }
@@ -955,7 +975,7 @@ namespace ARS
             bool showInputs = ARS.OptionValuesList[Options.ShowInputs];
             bool showTrack = ARS.OptionValuesList[Options.ShowTrackAnalysis];
             bool showPhysics = ARS.OptionValuesList[Options.ShowPhysics];
-            bool showAny = showAggro || showTrack || showPhysics;
+            bool showAny = showAggro || showInputs || showTrack || showPhysics;
             if (!showAny) return;
 
             if ((Car.Position - Game.Player.Character.Position).Length() > 50) return;
@@ -999,6 +1019,10 @@ namespace ARS
             {
 
                 if (!Car.IsInRangeOf(Game.Player.Character.Position, 500)) return;
+                if (showInputs)
+                {
+                    DrawInputTrails();
+                }
                 if (showTrack)
                 {
                    
@@ -1332,17 +1356,20 @@ namespace ARS
 
 
 
-            int follow = CurrentTrackPoint.Node + (int)Car.Velocity.Length();
-            if (follow < ARS.TrackPoints.Count - 1)
+            // Local curvature from 1-second lookahead (raw speed, not grip-scaled).
+            TrackPoint routePoint = LookAheads[eLookAheads.OneSec];
+            int routeNode = (int)ARS.Clamp(routePoint.Node, 0, ARS.TrackPoints.Count - 1);
+            int routeMidNode = (int)((CurrentTrackPoint.Node + routeNode) * 0.5f);
+            if (routeMidNode < 0) routeMidNode = 0;
+            if (routeMidNode >= ARS.TrackPoints.Count) routeMidNode = ARS.TrackPoints.Count - 1;
+
+            Brain.data.FollowPoint = routePoint;
+            if (routeNode != CurrentTrackPoint.Node)
             {
-                TrackPoint end = ARS.TrackPoints[CurrentTrackPoint.Node + (int)Car.Velocity.Length()*2];
-                TrackPoint midpoint = ARS.TrackPoints[CurrentTrackPoint.Node + (int)Car.Velocity.Length() ];
-                Brain.data.FollowPoint = end;
-                Brain.data.CurveRadiusToFollowPoint = ARS.GetCurveRadius(CurrentTrackPoint.Position, end.Position, midpoint.Position)/2;
+                Brain.data.CurveRadiusToFollowPoint = ARS.GetCurveRadius(CurrentTrackPoint.Position, routePoint.Position, ARS.TrackPoints[routeMidNode].Position) / 2;
             }
             else
             {
-                Brain.data.FollowPoint = CurrentTrackPoint;
                 Brain.data.CurveRadiusToFollowPoint = 999;
             }
         }
