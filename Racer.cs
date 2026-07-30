@@ -720,8 +720,9 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             }
 
             bool straightEnough = CurrentTrackPoint.PreciseCurveRadius > 500f;
+            bool fastEnough = Car.Velocity.Length() > 10f;
 
-            if ((noCornerAhead || cornerFarEnough) && straightEnough)
+            if ((noCornerAhead || cornerFarEnough) && straightEnough && fastEnough)
             {
                 Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, "veh_xs_vehicle_mods");
                 if (!Function.Call<bool>(Hash.HAS_NAMED_PTFX_ASSET_LOADED, "veh_xs_vehicle_mods")) return;
