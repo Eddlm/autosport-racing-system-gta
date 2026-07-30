@@ -116,6 +116,10 @@ namespace ARS
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
 
+        // Passengerize state: move AI driver to passenger seat when a rival is
+        // too close, so GTA V doesn't force an uncontrollable swerve on contact.
+        bool _isPassengerized = false;
+
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
             Car = RacerCar;
@@ -490,17 +494,16 @@ namespace ARS
                 if (!isRelevant) continue;
 
                 float rivalBuffer = r.OccupiedLaneWidth * 0.5f;
-                float ourLane = Brain.data.DeviationFromCenter;
 
                 if (rivalIsLeft)
                 {
-                    float wall = (r.OccupiedLane + ourLane) / 2f + rivalBuffer;
+                    float wall = r.OccupiedLane + rivalBuffer;
                     if (wall > targetLeftWall) targetLeftWall = wall;
                     leftConstrained = true;
                 }
                 else
                 {
-                    float wall = (r.OccupiedLane + ourLane) / 2f - rivalBuffer;
+                    float wall = r.OccupiedLane - rivalBuffer;
                     if (wall < targetRightWall) targetRightWall = wall;
                     rightConstrained = true;
                 }
@@ -904,12 +907,49 @@ namespace ARS
             // Rival detection only — no avoidance actions.
         }
 
+        /// <summary>
+        /// Moves the AI driver to the passenger seat when a rival is within
+        /// combined half-length + 0.5m, preventing GTA V's forced swerve on
+        /// contact. Returns the driver to the driver seat once clear.
+        /// Never touches the player.
+        /// </summary>
+        void UpdatePassengerize()
+        {
+            if (Driver.IsPlayer) return;
+
+            float myHalfLen = Math.Abs(Car.Model.GetDimensions().Y) * 0.5f;
+
+            bool shouldPassengerize = false;
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null) continue;
+                float rivalHalfLen = Math.Abs(r.RivalRacer.Car.Model.GetDimensions().Y) * 0.5f;
+                float threshold = myHalfLen + rivalHalfLen + 0.5f;
+                if (r.Distance < threshold)
+                {
+                    shouldPassengerize = true;
+                    break;
+                }
+            }
+
+            if (shouldPassengerize && !_isPassengerized)
+            {
+                try { Driver.SetIntoVehicle(Car, VehicleSeat.Passenger); _isPassengerized = true; } catch (Exception) { }
+            }
+            else if (!shouldPassengerize && _isPassengerized)
+            {
+                try { Driver.SetIntoVehicle(Car, VehicleSeat.Driver); _isPassengerized = false; } catch (Exception) { }
+            }
+        }
+
         public void ApplyInputs()
         {
 
             //AI Inputs
             if (Driver.IsSittingInVehicle(Car) && !Driver.IsPlayer)
             {
+                UpdatePassengerize();
+
                 if (Control.HandBrakeTime > Game.GameTime) Car.HandbrakeOn = true; else Car.HandbrakeOn = false;
 
                 ARS.SetThrottle(Car, ARS.Clamp(Control.Throttle, -1, 1));
