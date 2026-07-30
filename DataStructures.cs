@@ -15,14 +15,8 @@ namespace ARS
         public Vector3 SpeedVectorGlobal = Vector3.Zero;
         public Vector3 SpeedVectorLocal = Vector3.Zero;
         public int WheelBase = 2;
-        /// <summary>
-        /// </summary>
         public float YawRotationPerSecondDegrees = 1f;        
         public float SlideAngle = 22f;
-         /// <summary>
-        /// Scales up percieved braking ability to brake as late as possible. 
-        /// Hardcoded to reach an equilibrium of spending no more than 0.5s at full brake to approach corners.
-        /// </summary>
         public float BaseMechanicalGrip = 1f;
         public float CurrentMechanicalGrip = 1f;
         public float AvgGroundStability = 1;
@@ -46,9 +40,6 @@ namespace ARS
         public float Power = 1;
     }
 
-    /// <summary>
-    /// The AI brain.
-    /// </summary>
     public class Memory
     {
         public Data data = new Data();
@@ -103,7 +94,7 @@ namespace ARS
             BoundingBoxTotal.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
             OccupiedLaneWidth = BoundingBoxTotal.X;
             OccupiedLane = RivalRacer.Brain.data.DeviationFromCenter;
-            Distance =  (me.Car.Position -RivalRacer.Car.Position).Length();// me.Car.Position.DistanceTo2D(RivalRacer.Car.Position);// -BoundingBoxTotal.Y;
+            Distance =  (me.Car.Position -RivalRacer.Car.Position).Length();
 
             float SpeedDiff = (float)Math.Round(me.Car.Velocity.Length()- RivalRacer.Car.Velocity.Length(), 4);
             if (SpeedDiff <= 0.001f)
@@ -152,9 +143,6 @@ namespace ARS
 
     }
 
-    /// <summary>
-    /// Pure, precise data
-    /// </summary>
     public class TrackPoint
     {
         public int Node = 0;
@@ -167,9 +155,6 @@ namespace ARS
         public float TrackWide = 5f;
     }
 
-    /// <summary>
-    /// Context aware data
-    /// </summary>
     public class CornerPoint
     {
         public int Node = 0;

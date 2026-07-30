@@ -16,7 +16,7 @@ namespace ARS
     public class Racer
     {
 
-        // Identity and runtime references.
+
         public string Name = "Racer";
         public Ped Driver;
         public Vehicle Car;
@@ -25,22 +25,22 @@ namespace ARS
         public RacerBaseBehavior BaseBehavior = RacerBaseBehavior.GridWait;
         public RaceState RCStatus = RaceState.NotInitiated;
 
-        // Core controller/memory.
+
         public VehicleControl Control = new VehicleControl();
         public Memory Brain = new Memory();
 
-        // Vehicle dynamics/perception state.
+
         public VehData VehicleData = new VehData();
         public HandlingData Handling = new HandlingData();
         public float GroundGripMultiplier = 1f;
         Vector3 LastSpeed;
 
-        // Navigation and lane-following state.
+
         public enum eLookAheads { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
         public TrackPoint CurrentTrackPoint = new TrackPoint();
         public Dictionary<eLookAheads, TrackPoint> LookAheads = new Dictionary<eLookAheads, TrackPoint>();
 
-        // Race lifecycle and position.
+
         public List<TimeSpan> LapTimes = new List<TimeSpan>();
         public int LapStartTime = 0;
         public int Lap = 0;
@@ -48,13 +48,13 @@ namespace ARS
         public bool CanRegisterNewLap = true;
         public bool FinishedPointToPoint = false;
 
-        // Timers/ticks.
-        int HalfSecondTick = 0; //500ms
-        int OneSecondTick = 0; //1000ms
+
+        int HalfSecondTick = 0;
+        int OneSecondTick = 0;
         int LastCoreTick = 100;
         int TimeSinceLastCoreTick => (int)ARS.Clamp(Game.GameTime - LastCoreTick, 1, 9999);
 
-        // Stuck/recovery state.
+
         int LastStuckGameTime = 0;
         public bool IsStuckByThrottle = false;
         const int StuckCheckTimeMs = 2000;
@@ -65,7 +65,7 @@ namespace ARS
         public int StuckRecoveryAttemptsNow => StuckRecoveryAttempts;
         public bool IsRecoveringFromStuckNow => IsRecoveringFromStuck;
 
-        // Debug and draw caches.
+
         struct TrailSample
         {
             public Vector3 Position;
@@ -79,20 +79,20 @@ namespace ARS
         }
         List<TrailSample> TrailSamples = new List<TrailSample>();
 
-        // Route curvature window: start offset (seconds ahead) and window size (seconds).
+
         public float RouteWindowStart = 1.0f;
         public float RouteWindowSize = 1.0f;
 
-        // Avoidance state.
+
         bool _avoidLiftOff = false;
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
 
-        // Passengerize state: move AI driver to passenger seat when a rival is
-        // too close, so GTA V doesn't force an uncontrollable swerve on contact.
+
+
         bool _isPassengerized = false;
 
-        // Personality: 0-100. 50 = gentleman, 0 = coward, 100 = dickhead.
+
         public float Aggression = 50f;
 
         public Racer(Vehicle RacerCar, Ped RacerPed)
@@ -161,10 +161,10 @@ namespace ARS
                         Car.CurrentBlip.Name = Name;
                     }
                 }
-                catch (Exception) { /* blip creation failed, non-critical */ }
+                catch (Exception) {  }
             }
 
-            Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Car, true, 1); //load collision
+            Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Car, true, 1);
             Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Driver, true, 1);
             Function.Call(GTA.Native.Hash.SET_ENTITY_PROOFS, Driver, true, true, true, false, true, true, 1, true);
 
@@ -225,8 +225,8 @@ namespace ARS
                 return;
             }
 
-            // 1) Heading error: use velocity vector (where car is actually going),
-            // not model forward (where car is pointing). Matches GodotRace.
+
+
             Vector3 carForward = Car.Velocity.LengthSquared() > 0.01f
                 ? Car.Velocity.Normalized
                 : Car.ForwardVector;
@@ -235,13 +235,13 @@ namespace ARS
             if (float.IsNaN(headingErrorDeg) || float.IsInfinity(headingErrorDeg))
                 headingErrorDeg = 0f;
 
-            // Scale down the heading error so steering response is gentler.
+
             headingErrorDeg *= 0.5f;
 
             float speedMps = Math.Max(Car.Velocity.Length(), 1f);
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
 
-            // 2) Compute target lane from corner bias or zero (no centering).
+
             float naturalLane;
             bool cornerActive = Brain.Corner != null && Brain.Corner.Valid && Lap > 0;
             if (cornerActive)
@@ -250,15 +250,15 @@ namespace ARS
             }
             else
             {
-                // No centering nudge — car follows heading error and avoidance only.
+
                 naturalLane = 0f;
             }
 
-            // 3) Rival avoidance: clamp target lane away from rival's forbidden zone.
-            // Only acts if the natural lane falls inside the zone.
+
+
             float clampedLane = ClampTargetLaneForAvoidance(naturalLane, roadWide, carHalfWidth);
 
-            // 4) Off-track recovery: when car's edge exceeds track width, steer back.
+
             float recoveryDeg = 0f;
             float absDev = Math.Abs(Brain.data.DeviationFromCenter);
             float safeEdge = roadWide - carHalfWidth;
@@ -270,8 +270,8 @@ namespace ARS
                 recoveryDeg = Math.Sign(Brain.data.DeviationFromCenter) * maxRecoveryDeg * severity;
             }
 
-            // 5) Convert target lane to a steering bias using the steering lookahead.
-            // Only active when a corner or avoidance wall is constraining the lane.
+
+
             float laneBiasDeg = 0f;
             float trackBound = roadWide - carHalfWidth;
             bool hasActiveGuidance = cornerActive
@@ -283,24 +283,24 @@ namespace ARS
                 float lookaheadDist = steerRefPoint.Position.DistanceTo(Car.Position);
                 if (lookaheadDist < 1f) lookaheadDist = speedMps * 1.5f;
 
-                // Single bias from the clamped lane (respects walls).
+
                 float laneError = clampedLane - currentLane;
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
                 laneBiasDeg *= 0.25f;
             }
 
-            // 6) Total heading target = heading error + lane bias + recovery.
+
             float totalTargetDeg = headingErrorDeg + laneBiasDeg + recoveryDeg;
 
-            // 7) GodotRace-style PD: P on heading error, D on yaw rate (subtracted).
+
             const float steerKP = 1.0f;
             float steerKD = 0.35f / VehicleData.CurrentMechanicalGrip;
             float pTerm = steerKP * totalTargetDeg;
             float dTerm = steerKD * VehicleData.YawRotationPerSecondDegrees;
             Control.SteerTrackDegrees = pTerm - dTerm;
 
-            // 8) Slide countersteer: when sliding and yawing in the same direction,
-            // steer opposite the slide to catch it.
+
+
             if (Math.Sign((int)VehicleData.SlideAngle) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float slideCounterSteer = VehicleData.SlideAngle * ARS.map(
@@ -309,7 +309,7 @@ namespace ARS
             }
 
 
-            // ── Local helpers ──────────────────────────────────────────────
+
             bool TryGetSteerContext(out TrackPoint localSteerRef, out float localRoadWide)
             {
                 localSteerRef = null;
@@ -333,33 +333,33 @@ namespace ARS
             }
         }
 
-        /// <summary>
-        /// Computes the target lane offset (meters from center) for the racing line.
-        /// Three phases: Approach (outside) → TurnIn (apex) → Hold (keep apex).
-        /// Positive = right of center, negative = left of center.
-        /// </summary>
+
+
+
+
+
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
         {
             CornerPoint c = Brain.Corner.OG;
             int apexNode = c.Node;
 
-            // Corner direction: SignedAngle(pre, fut, up) is negative for right turns.
-            // cornerDir = -1 for right turn, +1 for left turn.
+
+
             float cornerDir = Math.Sign(c.Angle);
 
-            // For a right turn (cornerDir = -1):
-            //   Outside = left  = -halfWidth =  cornerDir * halfWidth
-            //   Apex    = right = +halfWidth = -cornerDir * halfWidth
-            // For a left turn (cornerDir = +1):
-            //   Outside = right = +halfWidth =  cornerDir * halfWidth
-            //   Apex    = left  = -halfWidth = -cornerDir * halfWidth
+
+
+
+
+
+
             if (cornerDir == 0f) return 0f;
 
             float halfWidth = steerRefPoint.TrackWide;
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-            // Inside pull intensity from the 1-second lookahead route radius.
+
             float curveRadius = Math.Abs(Brain.data.CurveRadiusToFollowPoint);
             float insideIntensity = ARS.map(curveRadius, 50f, 300f, 1f, 0.1f, true);
             insideIntensity = ARS.Clamp(insideIntensity, 0f, 1f);
@@ -399,25 +399,25 @@ namespace ARS
             return targetLane;
         }
 
-        /// <summary>
-        /// Clamps a target lane offset to avoid rivals.
-        /// Maintains independent left and right walls from all nearby rivals.
-        /// Left wall = highest (most restrictive) from all left-side rivals.
-        /// Right wall = lowest (most restrictive) from all right-side rivals.
-        ///
-        /// Walls slowly open toward track edges at 2m/s when not constrained,
-        /// preventing snap-back when a rival moves away.
-        ///
-        /// If the resulting range is narrower than our car width + 1m,
-        /// sets _avoidLiftOff to true so SpeedTrack can lift off.
-        /// </summary>
+
+
+
+
+
+
+
+
+
+
+
+
         float ClampTargetLaneForAvoidance(float targetLane, float roadWide, float carHalfWidth)
         {
             _avoidLiftOff = false;
 
             float trackBound = roadWide - carHalfWidth;
 
-            // Compute target walls from all rivals.
+
             float targetLeftWall = -trackBound;
             float targetRightWall = trackBound;
             bool leftConstrained = false;
@@ -448,7 +448,7 @@ namespace ARS
 
                 if (!isRelevant) continue;
 
-                // Aggression-scaled buffer: 0 aggro = 2m gap, 100 aggro = 0.25m gap.
+
                 float aggroBuffer = ARS.map(Aggression, 0f, 100f, 2f, 0.25f, true);
                 float rivalBuffer = r.OccupiedLaneWidth * 0.5f + aggroBuffer;
 
@@ -466,8 +466,8 @@ namespace ARS
                 }
             }
 
-            // Each side independently: snap when constrained, decay to track edge when clear.
-            float openRate = 2f * TickScale; // 2m/s, framerate independent
+
+            float openRate = 2f * TickScale;
             if (leftConstrained)
                 _avoidLeftWall = targetLeftWall;
             else
@@ -478,12 +478,12 @@ namespace ARS
             else
                 _avoidRightWall = Math.Min(_avoidRightWall + openRate, trackBound);
 
-            // Check if there's room for our car.
+
             float carTotalWidth = carHalfWidth * 2f + 1f;
             if (_avoidRightWall - _avoidLeftWall < carTotalWidth)
                 _avoidLiftOff = true;
 
-            // Clamp target lane so our car's edge (not center) stays at the wall.
+
             float clampLeft = _avoidLeftWall + carHalfWidth;
             float clampRight = _avoidRightWall - carHalfWidth;
             return ARS.Clamp(targetLane, clampLeft, clampRight);
@@ -491,8 +491,8 @@ namespace ARS
 
         void SteerApplyCorrections()
         {
-            // Speed-based steering limiter: only when turning in (steer and yaw same sign),
-            // not when countersteering (opposite signs).
+
+
             if (Math.Sign(Control.SteerTrackDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.01f));
@@ -501,7 +501,7 @@ namespace ARS
             }
         }
 
-        /// <summary>
+
         public void Launch()
         {
             Brain.Corner = new Corner(5, ARS.CornerPoints.FirstOrDefault(c => c.IsKey));
@@ -528,7 +528,7 @@ namespace ARS
             float throttleCap = Math.Min(Control.TCSThrottle, 1f);
             float dirSwitchSpeed = ARS.MPHtoMS(5f);
 
-            //Keep still with throttle up when waiting for the launch
+
             if (BaseBehavior == RacerBaseBehavior.GridWait)
             {
                 Brain.intention.Speed = 99f;
@@ -536,7 +536,7 @@ namespace ARS
             }
 
 
-            //Limit the th the input to the car's top speed. Cars can surpass defined engine top speed in V
+
             if (Brain.intention.Speed >= 0f)
             {
                 Brain.intention.Speed = Math.Min(Brain.intention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
@@ -556,7 +556,7 @@ namespace ARS
 
             if (speedErrorGs > 0.0f)
             {
-                // If the car is still rolling backward, stop it first before applying forward throttle.
+
                 if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 2f, 0f, 1f);
                 else newThrottle = ARS.Clamp(speedErrorGs * 2f, 0f, throttleCap);
             }
@@ -567,7 +567,7 @@ namespace ARS
 
                 if (wantsReverse)
                 {
-                    // Transition to reverse: brake while moving forward, then release brake and apply negative throttle.
+
                     if (currentForwardSpeed > dirSwitchSpeed) newBrake = brakeDemand;
                     else newThrottle = -reverseDemand;
                 }
@@ -586,10 +586,10 @@ namespace ARS
             float stabilityThrottleLimit = VehicleData.AvgGroundStability;
             if (OutOfTrackDistance() > 0.5f)
             {
-                // Off-track recovery needs some minimum throttle authority.
+
                 stabilityThrottleLimit = Math.Max(stabilityThrottleLimit, 0.45f);
             }
-            //Control.MaxThrottle = Math.Min(Control.MaxThrottle, stabilityThrottleLimit);
+
 
             Control.Brake += (newBrake - Control.Brake) * 5 * TickScale;
             Control.Throttle += (newThrottle - Control.Throttle) * 5 * TickScale;
@@ -602,8 +602,8 @@ namespace ARS
         float TickScale => (0.001f * TimeSinceLastCoreTick);
 
 
-        /// <summary>
-        /// </summary>
+
+
         void SteerTranslateInput()
         {
 
@@ -622,9 +622,9 @@ namespace ARS
             
         }
 
-        /// <summary>
-        /// Figures out the ideal speed to be at at the moment
-        /// </summary>
+
+
+
         public void SpeedTrack()
         {
             if (BaseBehavior == RacerBaseBehavior.GridWait)
@@ -651,7 +651,7 @@ namespace ARS
             float followTrackSpd =(float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * followRadius);            
 
             
-            // Hill grip calc uses the same route window.
+
             float hillSpeed = Car.Velocity.Length();
             int hillStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * RouteWindowStart), 0, ARS.TrackPoints.Count - 1);
             int hillEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * (RouteWindowStart + RouteWindowSize)), 0, ARS.TrackPoints.Count - 1);
@@ -670,8 +670,8 @@ namespace ARS
               
             Brain.intention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
-            // Avoidance lift-off: if there's no room to pass, cap to rival's speed
-            // but only if it's slower than what we're already targeting.
+
+
             if (_avoidLiftOff)
             {
                 Rival threat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.relativePos == RelativePos.Ahead);
@@ -684,9 +684,9 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
         }
 
-        /// <summary>
-        /// Limits Control.Throttle and Control.Brake inputs to avoid wheelspin and lockups.
-        /// </summary>
+
+
+
         void TractionControl()
         {
             if (Control.Throttle <= 0.0f) return;
@@ -694,7 +694,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             float wheelspin = ARS.GetWheelsMaxWheelspin(Car);
             bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
 
-            //float allowedWheelspin = lowGripOrLowGear ? 0.8f : 0.2f;
+
             float allowedWheelspin = 2.0f + ARS.map(Aggression, 0f, 100f, -0.2f, 0.2f, true);
 
             float tcsValue = ARS.map(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 8;
@@ -715,7 +715,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             VehicleData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
             Brain.data.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
 
-            // Sample trail for input visualization (only when ShowInputs is on).
+
             if (ARS.OptionValuesList[Options.ShowInputs] && !Driver.IsPlayer)
             {
                 float combinedInput = ARS.Clamp(Control.Throttle - Control.Brake, -1f, 1f);
@@ -731,9 +731,9 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
             while (TrailSamples.Count > 50) TrailSamples.RemoveAt(0);
         }
-        /// <summary>
-        /// Gathers and runs tick-sensitive stuff
-        /// </summary>
+
+
+
         public void ProcessTick()
         {
             UpdateTickData();
@@ -756,9 +756,9 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
             LastCoreTick = Game.GameTime;
         }
-        /// <summary>
-        /// Widens this car's percieved boundingbox if its sliding, to cover its length instead of width.
-        /// </summary>
+
+
+
         void UpdateDynamicBoundingBox()
         {
             VehicleData.BoundingBox = ARS.GetDirectionalBoundingBox(Car);
@@ -771,22 +771,22 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             if (Brain.Corner.Valid && Lap > 0)
             {
                 int apexNode = Brain.Corner.OG.Node;
-                // Invalidate once we reach the apex.
+
                 if (CurrentTrackPoint.Node >= apexNode || (Math.Abs(CurrentTrackPoint.Node - apexNode) > 1000))
                 {
                     Brain.Corner.Valid = false;
                  }
             }
 
-            // Rival detection only — no avoidance actions.
+
         }
 
-        /// <summary>
-        /// Moves the AI driver to the passenger seat when a rival is within
-        /// combined half-length + 0.5m, preventing GTA V's forced swerve on
-        /// contact. Returns the driver to the driver seat once clear.
-        /// Never touches the player.
-        /// </summary>
+
+
+
+
+
+
         void UpdatePassengerize()
         {
             if (Driver.IsPlayer) return;
@@ -819,7 +819,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
         public void ApplyInputs()
         {
 
-            //AI Inputs
+
             if (Driver.IsSittingInVehicle(Car) && !Driver.IsPlayer)
             {
                 UpdatePassengerize();
@@ -852,17 +852,17 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
             if (showTrack && Driver.IsPlayer && Lap >= ARS.SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) && CanRegisterNewLap)
             {
-                World.DrawMarker(MarkerType.CheckeredFlagRect, ARS.TrackPoints.First().Position + new Vector3(0, 0, 5f), ARS.TrackPoints.First().Direction, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);// DrawLine(vm,last, Color.Black);
+                World.DrawMarker(MarkerType.CheckeredFlagRect, ARS.TrackPoints.First().Position + new Vector3(0, 0, 5f), ARS.TrackPoints.First().Direction, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);
             }
 
 
             if (showPhysics)
             {
 
-                //Center of Gs
+
                 World.DrawMarker(MarkerType.DebugSphere, Car.Position + new Vector3(0, 0, (Car.Model.GetDimensions().Z * 0.6f)), Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.1f, 0.1f, 0.1f), Color.Green, false, false, 0, false, "", "", false);
 
-                //Gs
+
                 Vector3 avgGs = VehicleData.AccelerationVector.Aggregate(new Vector3(0, 0, 0), (s, v) => s + v) / (float)VehicleData.AccelerationVector.Count;
                 avgGs.Z = 0f;
 
@@ -899,7 +899,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
                 if (showAggro)
                 {
-                    // Draw avoidance walls on the ground, relative to track center.
+
                     Vector3 trackCenter = CurrentTrackPoint.Position;
                     Vector3 trackRight = Vector3.Cross(CurrentTrackPoint.Direction, Vector3.WorldUp);
                     Vector3 leftWallPos = trackCenter + trackRight * _avoidLeftWall;
@@ -908,7 +908,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
                     ARS.DrawLine(leftWallPos + up, leftWallPos + up + new Vector3(0, 0, 2f), Color.Blue);
                     ARS.DrawLine(rightWallPos + up, rightWallPos + up + new Vector3(0, 0, 2f), Color.Red);
 
-                    // Debug: show wall values and lane info.
+
                     Vector3 textPos = Car.Position + new Vector3(0, 0, 2f);
                     ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.data.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
                     int ri = 0;
@@ -932,11 +932,11 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
                         Vector3 chevScale = new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2.5f, 5, 5);
 
-                        // Start chevron
+
                         World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[startNode].Position, ARS.TrackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-                        // Middle (apex) chevron
+
                         World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node].Position, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-                        // End chevron
+
                         World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[endNode].Position, ARS.TrackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
                     }
                 }
@@ -985,12 +985,12 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
                 Color baseColor;
                 if (value >= 0f)
                 {
-                    // Throttle side: yellow -> lime green -> blue.
+
                     baseColor = ARS.GradientAtoBtoC(Color.White, Color.GreenYellow, Color.Green, value * 100f);
                 }
                 else
                 {
-                    // Brake side: yellow -> orange (half) -> red.
+
                     float brake = -value;
                     baseColor = ARS.GradientAtoBtoC(Color.White, Color.Orange, Color.Red, brake * 100f);
                 }
@@ -1000,9 +1000,9 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             }
         }
 
-        /// <summary>
-        /// </summary>
-        /// <returns>Distance in meters</returns>
+
+
+
         float OutOfTrackDistance()
         {
             return (Math.Abs(Brain.data.DeviationFromCenter) + (VehicleData.BoundingBox / 2)) - CurrentTrackPoint.TrackWide;
@@ -1013,13 +1013,13 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             foreach (Rival r in Brain.Rivals) r.Update(this);
         }
 
-        /// <summary>
-        /// Figure out our point in the track.
-        /// </summary>
+
+
+
         public void UpdateFollowTrack()
         {
 
-            //Get our current track point data
+
             int refTrackpoint = (int)ARS.Clamp(CurrentTrackPoint.Node, 0, ARS.TrackPoints.Count - 1);
 
             List<TrackPoint> points = new List<TrackPoint>();
@@ -1059,7 +1059,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
 
 
-            //Lap counting
+
             if (CanRegisterNewLap)
             {
                 if (ARS.GetPercent(CurrentTrackPoint.Node, ARS.TrackPoints.Count) < 10 || (ARS.IsPointToPoint && ARS.GetPercent(CurrentTrackPoint.Node, ARS.TrackPoints.Count) > 99 && ARS.GetOffset(Car, ARS.TrackPoints.Last().Position).Y < 0f))
@@ -1084,9 +1084,9 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
 
 
-            // Local curvature from a configurable speed-based window (raw speed, not grip-scaled).
-            // RouteWindowStart = seconds ahead to start the window.
-            // RouteWindowSize = window length in seconds.
+
+
+
             float routeSpeed = Car.Velocity.Length();
             int routeStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * RouteWindowStart), 0, ARS.TrackPoints.Count - 1);
             int routeEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * (RouteWindowStart + RouteWindowSize)), 0, ARS.TrackPoints.Count - 1);
@@ -1104,9 +1104,9 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             }
         }
 
-        /// <summary>
-        /// Processes AI logic that works on slow (500ms - 2000ms) cycles.
-        /// </summary>
+
+
+
         void ProcessTimedAI()
         {
             if (Brain.Corner == null) return;
@@ -1118,7 +1118,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             }
 
 
-            //Slow checks
+
             if (OneSecondTick < Game.GameTime)
             {
                 OneSecondTick = Game.GameTime + 1000;
@@ -1155,9 +1155,9 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             }
         }
 
-        /// <summary>
-        /// Runs Speeding and Steering logic.
-        /// </summary>
+
+
+
         public void ProcessAI()
         {
             ProcessTimedAI();
@@ -1283,7 +1283,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
                 return;
             }
 
-            // Force reverse with centered steering during the whole recovery window.
+
             Control.SteerInput = 0f;
             Control.Throttle = -1f;
             Control.Brake = 0f;
@@ -1305,11 +1305,11 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
         void UpdatePercievedGrip()
         {
 
-            //Base vehicle grip GetVehicleMaxTraction
+
             float handlingGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
             handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 5f);
 
-            GroundGripMultiplier = ARS.GetWheelsGrip(Car).Average(); //Surface grip
+            GroundGripMultiplier = ARS.GetWheelsGrip(Car).Average();
             Vector3 thisPoint = CurrentTrackPoint.Position;
             Vector3 toMidpoint = LookAheads[eLookAheads.HalfSec].Position;
             Vector3 toEndpoint = LookAheads[eLookAheads.OneSec].Position;
@@ -1324,7 +1324,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             VehicleData.CurrentMechanicalGrip = ((VehicleData.BaseMechanicalGrip) * GroundGripMultiplier);
             VehicleData.CurrentMechanicalGrip *= hillGsLoss;
             float GsLoss=ARS.GripGainLossElChange(thisPoint, toMidpoint, toEndpoint, Car.Velocity.Length());
-            //VehicleData.CurrentMechanicalGrip += GsLoss;
+
         
             if (Math.Abs(Brain.data.DeviationFromCenter) < CurrentTrackPoint.TrackWide && RacePosition <= 2 && !ARS.MultiplierInTerrain.ContainsKey(CurrentTrackPoint.Node))
             {
@@ -1333,7 +1333,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
             float zSpeedDegreesFromHoriz = (Math.Abs(VehicleData.SpeedVectorLocal.Normalized.Z) * 90);
 
-            //Checks for Z movement to judge wether the car is stable or not. Usually implies the vehicle is mid-air
+
             if (zSpeedDegreesFromHoriz > 5f)
             {
                 if (VehicleData.AvgGroundStability >= 0.1f) VehicleData.AvgGroundStability -= zSpeedDegreesFromHoriz * TickScale * 0.1f;
@@ -1387,6 +1387,5 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
         }
     }
 }
-
 
 
