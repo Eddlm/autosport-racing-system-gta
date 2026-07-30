@@ -489,7 +489,7 @@ namespace ARS
 
                 if (!isRelevant) continue;
 
-                float rivalBuffer = r.OccupiedLaneWidth * 0.5f + 1.0f;
+                float rivalBuffer = r.OccupiedLaneWidth * 0.5f;
                 float ourLane = Brain.data.DeviationFromCenter;
 
                 if (rivalIsLeft)
@@ -523,8 +523,10 @@ namespace ARS
             if (_avoidRightWall - _avoidLeftWall < carTotalWidth)
                 _avoidLiftOff = true;
 
-            // Clamp target lane between both walls (always, for smooth decay).
-            return ARS.Clamp(targetLane, _avoidLeftWall, _avoidRightWall);
+            // Clamp target lane so our car's edge (not center) stays at the wall.
+            float clampLeft = _avoidLeftWall + carHalfWidth;
+            float clampRight = _avoidRightWall - carHalfWidth;
+            return ARS.Clamp(targetLane, clampLeft, clampRight);
         }
 
         void SteerApplyCorrections()
