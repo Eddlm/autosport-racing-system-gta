@@ -200,7 +200,7 @@ namespace ARS
     {
         { Options.ShowAggro, false },
         { Options.ShowInputs, true },
-        { Options.ShowTrackAnalysis, false },
+        { Options.ShowTrackAnalysis, true },
         { Options.ShowPhysics, false },
         { Options.UseNearbyCars, false },
         { Options.ReverseRoute, false }
@@ -3964,8 +3964,8 @@ namespace ARS
                     if (float.IsNaN(Angle) || float.IsInfinity(Angle)) Angle = 0;
                     t.Angle = Angle;
 
-                    int LongAF = 20;
-                    int PreciseAF = 10;
+                    int LongAF = 10;
+                    int PreciseAF = 4;
 
                     t.GeneralCurveRadius = GetCurveRadius(Path[t.Node - LongAF], Path[t.Node + LongAF], Path[t.Node]); //* (GetCurveRadius(Path[t.Node - Average], Path[t.Node + Average], t.BezierMidPoint)+
                     t.PreciseCurveRadius = GetCurveRadius(Path[t.Node - PreciseAF], Path[t.Node + PreciseAF], Path[t.Node]); //* (GetCurveRadius(Path[t.Node - Average], Path[t.Node + Average], t.BezierMidPoint)+
@@ -4401,40 +4401,27 @@ namespace ARS
 
         public static float GetSpeedForCorner(CornerPoint c, Racer r)
         {
+            // Find the tightest radius across all nodes in the corner.
+            float radius = float.MaxValue;
+            int startNode = (int)Clamp(c.Node - c.LengthStart, 0, TrackPoints.Count - 1);
+            int endNode = (int)Clamp(c.Node + c.LenghtEnd, 0, TrackPoints.Count - 1);
+            for (int n = startNode; n <= endNode; n++)
+            {
+                float rN = TrackPoints[n].PreciseCurveRadius;
+                if (rN > 0f && rN < radius) radius = rN;
+            }
+            if (radius == float.MaxValue) radius = c.GetPreciseRadius();
+
             //Error handling - return max and be done with it
-            if (float.IsInfinity(c.GetRadius()) || float.IsNaN(c.GetRadius()) || c.GetRadius() == 0f) return AIData.MaxSpeed;
+            if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AIData.MaxSpeed;
 
             //Base percieved grip
             float vehicleGripGs = r.VehicleData.CurrentMechanicalGrip;
 
-            
-            float baseSpd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * c.GetRadius());
+            float baseSpd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * radius);
             if (float.IsNaN(baseSpd) || float.IsInfinity(baseSpd)) return AIData.MaxSpeed;
 
-            // Adjust grip from vertical profile of this corner (crest/compression),
-            // then recompute expected cornering speed with the adjusted grip.
-            float adjustedGripGs = vehicleGripGs;
-            if (TrackPoints != null && TrackPoints.Count > 2)
-            {
-                int startNode = (int)Clamp(c.Node - c.LengthStart, 0, TrackPoints.Count - 1);
-                int midNode = (int)Clamp(c.Node, 0, TrackPoints.Count - 1);
-                int endNode = (int)Clamp(c.Node + c.LenghtEnd, 0, TrackPoints.Count - 1);
-
-                Vector3 start = TrackPoints[startNode].Position;
-                Vector3 mid = TrackPoints[midNode].Position;
-                Vector3 end = TrackPoints[endNode].Position;
-
-                float elDeltaGs = GripGainLossElChange(start, mid, end, baseSpd);
-                if (!float.IsNaN(elDeltaGs) && !float.IsInfinity(elDeltaGs))
-                {
-                    //adjustedGripGs = Clamp(vehicleGripGs + elDeltaGs, 0.2f, 2f);
-                }
-            }
-
-            float finalSpd = (float)Math.Sqrt((adjustedGripGs * r.Handling.Gravity) * c.GetRadius());
-            if (float.IsNaN(finalSpd) || float.IsInfinity(finalSpd)) finalSpd = baseSpd;
-
-            return ARS.Clamp(finalSpd, AIData.MinSpeed, AIData.MaxSpeed);
+            return ARS.Clamp(baseSpd, AIData.MinSpeed, AIData.MaxSpeed);
         }
 
         //Asumes the entity is going forward, at most, 90º sideways. Not backwards
@@ -4790,26 +4777,22 @@ namespace ARS
             return false;
         }
 
-        //Returns the speed (m/s) you should be going at, given a distance (m) to the target, 
-        //the target speed (m/s) at distance Zero and a theoretical max deceleration (m/s^2)
+        //Returns the max speed (m/s) the car can be doing now and still brake
+        //down to the corner speed by the time it reaches the corner entry.
+        //Uses the kinematic braking equation: v₀ = √(vTarget² + 2·decel·distance)
         public static float MapIdealSpeedForDistance(CornerPoint c, Racer r)
         {
-            //Distance before the corner node to achieve the expected speed
+            // Distance to corner node, with 30m safety margin before the apex.
+            float distance = c.Node - r.CurrentTrackPoint.Node - 30f;
+            if (distance < 0f) distance = 0f;
 
-            //Math variables
-            float targetDistance = (c.Node - c.LengthStart - r.CurrentTrackPoint.Node) - 25 - r.Car.Velocity.Length();
-
-            float velCurrent = r.Car.Velocity.Length();
             float velTarget = r.Brain.Corner.Speed;
-            float timeToReachTarget = Math.Max((targetDistance / velCurrent), 0.01f);
+            float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip);
+            // 90% of max decel as safety margin (aggression-tunable later).
+            float decel = brakingAbility * r.Handling.Gravity * 0.5f;
 
-            //Braking ability has to account for at least 25% of the wheel grip to count as fully taking advantage of the grip. Else, braking Gs are less than grip Gs
-            //float brakingAbility = (r.vehData.CurrentGrip * (float)Math.Round(ARS.map(ARS.GetPercent(r.handlingData.BrakingAbility, r.vehData.CurrentGrip), 0f, 25f, 0f, 1f, true), 3));
-            float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip) * r.RiskFactorForBrake();
-
-
-            //Late brake reduces the safety distance    
-            float spd = velTarget + (float)((brakingAbility * r.Handling.Gravity) * timeToReachTarget);
+            float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
+            if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
             return spd;
         }
 

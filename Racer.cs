@@ -700,7 +700,7 @@ namespace ARS
             Brain.intention.Speed = AIData.MaxSpeed;
 
             float cornerSpd = 999f;
-            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MapIdealSpeedForDistance(Brain.Corner.OG, this) + 10f);
+            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MapIdealSpeedForDistance(Brain.Corner.OG, this) + 1f);
 
             float followRadius = Math.Max(Brain.data.CurveRadiusToFollowPoint, 0.1f);
             float followTrackSpd =(float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * followRadius);            
@@ -716,7 +716,7 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5) cornerSpd = ARS.GetSpeedForCorner(Brain.Corner.OG, this);
               
-            Brain.intention.Speed = Math.Min(cornerSpd, followTrackSpd);
+            Brain.intention.Speed = cornerSpd;
 
             // Avoidance lift-off: if there's no room to pass, cap to rival's speed
             // but only if it's slower than what we're already targeting.
@@ -902,8 +902,9 @@ namespace ARS
 
             if (Brain.Corner.Valid && Lap > 0)
             {
-                int cornerEndNode = (int)ARS.Clamp(Brain.Corner.OG.Node + Brain.Corner.OG.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
-                if (CurrentTrackPoint.Node > cornerEndNode || (Math.Abs(CurrentTrackPoint.Node - Brain.Corner.OG.Node) > 1000))
+                int apexNode = Brain.Corner.OG.Node;
+                // Keep corner active until 20m past the apex node.
+                if (CurrentTrackPoint.Node > apexNode + 20 || (Math.Abs(CurrentTrackPoint.Node - apexNode) > 1000))
                 {
                     Brain.Corner.Valid = false;
                  }
