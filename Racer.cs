@@ -579,8 +579,7 @@ namespace ARS
 
 
  
-            if (newBrake > 0.0) newThrottle = 0;
-            if (Math.Abs(newThrottle) > 0.0f) newBrake = 0;
+            if (newBrake > 0.0) newThrottle = 0; else newBrake = 0;
 
 
             float stabilityThrottleLimit = VehicleData.AvgGroundStability;
