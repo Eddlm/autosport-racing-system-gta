@@ -733,10 +733,11 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 cornerFarEnough = timeToCorner > 6f;
             }
 
-            bool straightEnough = CurrentTrackPoint.PreciseCurveRadius > 500f;
+            bool straightEnough = CurrentTrackPoint.PreciseCurveRadius > 2000f;
             bool fastEnough = Car.Velocity.Length() > 10f;
+            bool onThrottle = Control.Throttle >= 0.95f;
 
-            if ((noCornerAhead || cornerFarEnough) && straightEnough && fastEnough)
+            if ((noCornerAhead || cornerFarEnough) && straightEnough && fastEnough && onThrottle)
             {
                 Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, "veh_xs_vehicle_mods");
                 Function.Call((Hash)0x1A2BCC8C636F9226, Car);
