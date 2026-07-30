@@ -709,11 +709,12 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
             if (Game.GameTime < _nitrousActiveUntil)
             {
+                Function.Call((Hash)0xB59E4BD37AE292DB, Car, 2.5f);
                 return;
             }
             if (_nitrousActiveUntil > 0)
             {
-                Function.Call((Hash)0xC8E9B6B71B8E660D, Car, false, 10.0f, 0.0f, 100.0f, true);
+                Function.Call((Hash)0xB59E4BD37AE292DB, Car, 1.0f);
                 _nitrousActiveUntil = 0;
             }
 
@@ -736,10 +737,6 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
             if ((noCornerAhead || cornerFarEnough) && straightEnough && fastEnough)
             {
-                Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, "veh_xs_vehicle_mods");
-
-                Function.Call((Hash)0x1A2BCC8C636F9226, Car);
-                Function.Call((Hash)0xC8E9B6B71B8E660D, Car, true, 1.0f, 50.0f, 100.0f, false);
                 _nitrousActiveUntil = Game.GameTime + 3000;
                 _nitrousCooldownUntil = Game.GameTime + 10000;
                 UI.Notify("~b~" + Name + "~w~ fires nitrous!");
