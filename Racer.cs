@@ -715,6 +715,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             if (_nitrousActiveUntil > 0)
             {
                 Function.Call((Hash)0xB59E4BD37AE292DB, Car, 1.0f);
+                Function.Call((Hash)0xC8E9B6B71B8E660D, Car, false, 10.0f, 0.0f, 100.0f, true);
                 _nitrousActiveUntil = 0;
             }
 
