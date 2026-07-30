@@ -33,12 +33,12 @@ namespace ARS
         public VehicleState VehicleData = new VehicleState();
         public HandlingData Handling = new HandlingData();
         public float GroundGripMultiplier = 1f;
-        Vector3 LastSpeed;
+        Vector3 _lastSpeed;
 
 
-        public enum eLookAheads { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
+        public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
         public TrackPoint CurrentTrackPoint = new TrackPoint();
-        public Dictionary<eLookAheads, TrackPoint> LookAheads = new Dictionary<eLookAheads, TrackPoint>();
+        public Dictionary<LookAhead, TrackPoint> LookAheads = new Dictionary<LookAhead, TrackPoint>();
 
 
         public List<TimeSpan> LapTimes = new List<TimeSpan>();
@@ -49,21 +49,21 @@ namespace ARS
         public bool FinishedPointToPoint = false;
 
 
-        int HalfSecondTick = 0;
-        int OneSecondTick = 0;
-        int LastCoreTick = 100;
-        int TimeSinceLastCoreTick => (int)ARS.Clamp(Game.GameTime - LastCoreTick, 1, 9999);
+        int _halfSecondTick = 0;
+        int _oneSecondTick = 0;
+        int _lastCoreTick = 100;
+        int TimeSince_lastCoreTick => (int)ARS.Clamp(Game.GameTime - _lastCoreTick, 1, 9999);
 
 
-        int LastStuckGameTime = 0;
+        int _lastStuckGameTime = 0;
         public bool IsStuckByThrottle = false;
         const int StuckCheckTimeMs = 2000;
-        bool IsRecoveringFromStuck = false;
-        int StuckRecoveryEndTime = 0;
+        bool _isRecoveringFromStuck = false;
+        int _stuckRecoveryEndTime = 0;
         const int StuckRecoveryTimeMs = 2000;
-        int StuckRecoveryAttempts = 0;
-        public int StuckRecoveryAttemptsNow => StuckRecoveryAttempts;
-        public bool IsRecoveringFromStuckNow => IsRecoveringFromStuck;
+        int _stuckRecoveryAttempts = 0;
+        public int _stuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
+        public bool _isRecoveringFromStuckNow => _isRecoveringFromStuck;
 
 
         struct TrailSample
@@ -77,7 +77,7 @@ namespace ARS
                 CombinedInput = combinedInput;
             }
         }
-        List<TrailSample> TrailSamples = new List<TrailSample>();
+        List<TrailSample> _trailSamples = new List<TrailSample>();
 
 
         public float RouteWindowStart = 1.0f;
@@ -103,7 +103,7 @@ namespace ARS
             if (Name == "NULL" || Name == null) { try { Name = Car.DisplayName.ToString()[0].ToString().ToUpper() + Car.DisplayName.ToString().Substring(1).ToLowerInvariant(); } catch (Exception) { Name = "Racer"; } }
 
             if (Driver.IsPlayer) ControlledByPlayer = true;
-            HalfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));
+            _halfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));
 
             if (!ControlledByPlayer)
             {
@@ -217,7 +217,7 @@ namespace ARS
             Car.Repair();
         }
 
-        public void SteerTrack()
+        public void ComputeSteering()
         {
             if (!TryGetSteerContext(out TrackPoint steerRefPoint, out float roadWide))
             {
@@ -256,7 +256,7 @@ namespace ARS
 
 
 
-            float clampedLane = ClampTargetLaneForAvoidance(naturalLane, roadWide, carHalfWidth);
+            float clampedLane = ApplyRivalWalls(naturalLane, roadWide, carHalfWidth);
 
 
             float recoveryDeg = 0f;
@@ -322,7 +322,7 @@ namespace ARS
                     return false;
                 }
 
-                if (!LookAheads.TryGetValue(eLookAheads.SteerRef, out localSteerRef)
+                if (!LookAheads.TryGetValue(LookAhead.SteerRef, out localSteerRef)
                     || localSteerRef == null)
                 {
                     return false;
@@ -411,7 +411,7 @@ namespace ARS
 
 
 
-        float ClampTargetLaneForAvoidance(float targetLane, float roadWide, float carHalfWidth)
+        float ApplyRivalWalls(float targetLane, float roadWide, float carHalfWidth)
         {
             _avoidLiftOff = false;
 
@@ -489,7 +489,7 @@ namespace ARS
             return ARS.Clamp(targetLane, clampLeft, clampRight);
         }
 
-        void SteerApplyCorrections()
+        void ApplySteerLimits()
         {
 
 
@@ -512,16 +512,16 @@ namespace ARS
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             Control.MaxThrottle = 1f;
             IsStuckByThrottle = false;
-            LastStuckGameTime = 0;
-            IsRecoveringFromStuck = false;
-            StuckRecoveryEndTime = 0;
-            StuckRecoveryAttempts = 0;
+            _lastStuckGameTime = 0;
+            _isRecoveringFromStuck = false;
+            _stuckRecoveryEndTime = 0;
+            _stuckRecoveryAttempts = 0;
             Control.LastAppliedSteerDegrees = 0f;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
         }
 
-        void SpeedToThrottleBrake()
+        void ConvertSpeedToPedals()
         {
             float newThrottle = 0f;
             float newBrake = 0f;
@@ -599,12 +599,12 @@ namespace ARS
             if (Brain.CurrentIntention.MaxSpeed < AiConstants.MaxSpeed) Brain.CurrentIntention.MaxSpeed += 15 * TickScale;
 
         }
-        float TickScale => (0.001f * TimeSinceLastCoreTick);
+        float TickScale => (0.001f * TimeSince_lastCoreTick);
 
 
 
 
-        void SteerTranslateInput()
+        void TranslateSteerToInput()
         {
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees)) Control.SteerDegrees = 0f;
@@ -625,7 +625,7 @@ namespace ARS
 
 
 
-        public void SpeedTrack()
+        public void ComputeTargetSpeed()
         {
             if (BaseBehavior == RacerBaseBehavior.GridWait)
             {
@@ -706,11 +706,11 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             VehicleData.LocalGs = (Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true) - VehicleData.SpeedVectorLocal) / Game.LastFrameTime;
             Vector3 cSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
 
-            VehicleData.AccelerationVector.Add((cSpeed - LastSpeed) / Game.LastFrameTime);
+            VehicleData.AccelerationVector.Add((cSpeed - _lastSpeed) / Game.LastFrameTime);
 
             if (VehicleData.AccelerationVector.Count > 10) VehicleData.AccelerationVector.RemoveAt(0);
 
-            LastSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
+            _lastSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
             VehicleData.SpeedVectorGlobal = cSpeed;
             VehicleData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
             Brain.CurrentPerception.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
@@ -719,17 +719,17 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             if (ARS.OptionValuesList[Options.ShowInputs] && !Driver.IsPlayer)
             {
                 float combinedInput = ARS.Clamp(Control.Throttle - Control.Brake, -1f, 1f);
-                if (TrailSamples.Count == 0)
+                if (_trailSamples.Count == 0)
                 {
-                    TrailSamples.Add(new TrailSample(Car.Position, combinedInput));
+                    _trailSamples.Add(new TrailSample(Car.Position, combinedInput));
                 }
-                else if (Car.Position.DistanceTo(TrailSamples[TrailSamples.Count - 1].Position) > 1f)
+                else if (Car.Position.DistanceTo(_trailSamples[_trailSamples.Count - 1].Position) > 1f)
                 {
-                    TrailSamples.Add(new TrailSample(Car.Position, combinedInput));
+                    _trailSamples.Add(new TrailSample(Car.Position, combinedInput));
                 }
             }
 
-            while (TrailSamples.Count > 50) TrailSamples.RemoveAt(0);
+            while (_trailSamples.Count > 50) _trailSamples.RemoveAt(0);
         }
 
 
@@ -737,7 +737,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
         public void ProcessTick()
         {
             UpdateTickData();
-            DrawStuff();
+            DrawRacerDebug();
 
             if (!Driver.IsPlayer)
             {
@@ -746,25 +746,25 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
         }
         public void RunTimedCore()
         {
-            UpdateFollowTrack();
-            UpdateDynamicBoundingBox();
-            UpdatePercievedGrip();
-            UpdateCornerInfo();
+            UpdateTrackPosition();
+            UpdateSlideAndBoundingBox();
+            UpdatePerceivedGrip();
+            UpdateCornerValidity();
 
             ProcessAI();
             if (Driver.IsPlayer && ARS.SettingsFile.GetValue("CATCHUP", "OnlyBehindPlayer", true)) ARS.catchupPos = RacePosition;
 
-            LastCoreTick = Game.GameTime;
+            _lastCoreTick = Game.GameTime;
         }
 
 
 
-        void UpdateDynamicBoundingBox()
+        void UpdateSlideAndBoundingBox()
         {
             VehicleData.BoundingBox = ARS.GetDirectionalBoundingBox(Car);
             VehicleData.SlideAngle = (float)Math.Round(Vector3.SignedAngle(Car.Velocity.Normalized, Car.ForwardVector, Car.UpVector), 3);
         }
-        void UpdateCornerInfo()
+        void UpdateCornerValidity()
         {
             if (Brain.Corner == null) return;
 
@@ -787,7 +787,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
 
 
-        void UpdatePassengerize()
+        void UpdatePassengerSeat()
         {
             if (Driver.IsPlayer) return;
 
@@ -822,7 +822,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
             if (Driver.IsSittingInVehicle(Car) && !Driver.IsPlayer)
             {
-                UpdatePassengerize();
+                UpdatePassengerSeat();
 
                 if (Control.HandBrakeTime > Game.GameTime) Car.HandbrakeOn = true; else Car.HandbrakeOn = false;
 
@@ -838,7 +838,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 ARS.SetSteerInput(Car, 0f);
             }
         }
-        void DrawStuff()
+        void DrawRacerDebug()
         {
             bool showAggro = ARS.OptionValuesList[Options.ShowAggro];
             bool showInputs = ARS.OptionValuesList[Options.ShowInputs];
@@ -964,12 +964,12 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
         void DrawInputTrails()
         {
-            if (TrailSamples.Count < 2) return;
+            if (_trailSamples.Count < 2) return;
 
-            for (int i = 1; i < TrailSamples.Count; i++)
+            for (int i = 1; i < _trailSamples.Count; i++)
             {
-                TrailSample fromSample = TrailSamples[i - 1];
-                TrailSample toSample = TrailSamples[i];
+                TrailSample fromSample = _trailSamples[i - 1];
+                TrailSample toSample = _trailSamples[i];
                 Vector3 from = fromSample.Position;
                 Vector3 to = toSample.Position;
                 Vector3 segment = to - from;
@@ -1016,7 +1016,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
 
 
-        public void UpdateFollowTrack()
+        public void UpdateTrackPosition()
         {
 
 
@@ -1049,13 +1049,13 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 return ARS.TrackPoints[CurrentTrackPoint.Node + offset];
             }
 
-            LookAheads.Add(eLookAheads.SteerRef, ResolveLookAhead(steerRef));
-            LookAheads.Add(eLookAheads.QuarterSec, ResolveLookAhead(quarterSec));
-            LookAheads.Add(eLookAheads.HalfSec, ResolveLookAhead(halfSec));
-            LookAheads.Add(eLookAheads.ThreeQuarterSec, ResolveLookAhead(threeQuarterSec));
-            LookAheads.Add(eLookAheads.OneSec, ResolveLookAhead(oneSec));
-            LookAheads.Add(eLookAheads.OneHalfSec, ResolveLookAhead(oneHalfSec));
-            LookAheads.Add(eLookAheads.TwoSec, ResolveLookAhead(twoSec));
+            LookAheads.Add(LookAhead.SteerRef, ResolveLookAhead(steerRef));
+            LookAheads.Add(LookAhead.QuarterSec, ResolveLookAhead(quarterSec));
+            LookAheads.Add(LookAhead.HalfSec, ResolveLookAhead(halfSec));
+            LookAheads.Add(LookAhead.ThreeQuarterSec, ResolveLookAhead(threeQuarterSec));
+            LookAheads.Add(LookAhead.OneSec, ResolveLookAhead(oneSec));
+            LookAheads.Add(LookAhead.OneHalfSec, ResolveLookAhead(oneHalfSec));
+            LookAheads.Add(LookAhead.TwoSec, ResolveLookAhead(twoSec));
 
 
 
@@ -1110,18 +1110,18 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
         void ProcessTimedAI()
         {
             if (Brain.Corner == null) return;
-            if (HalfSecondTick < Game.GameTime)
+            if (_halfSecondTick < Game.GameTime)
             {
-                HalfSecondTick = Game.GameTime + 500 + (int)ARS.map(Car.Velocity.Length(), 0, 100, -250, 250, true);
+                _halfSecondTick = Game.GameTime + 500 + (int)ARS.map(Car.Velocity.Length(), 0, 100, -250, 250, true);
                 if (!Brain.Corner.Valid && ARS.MStoMPH(Car.Velocity.Length()) > 10) ARS.LookForCornerAhead(this);
 
             }
 
 
 
-            if (OneSecondTick < Game.GameTime)
+            if (_oneSecondTick < Game.GameTime)
             {
-                OneSecondTick = Game.GameTime + 1000;
+                _oneSecondTick = Game.GameTime + 1000;
 
                 if (!ControlledByPlayer)
                 {
@@ -1168,12 +1168,12 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             {
                 UpdateRivalInfo();
                 
-                SteerTrack();
-                SteerApplyCorrections();
+                ComputeSteering();
+                ApplySteerLimits();
                 
-                SpeedTrack(); 
-                SpeedToThrottleBrake();
-                SteerTranslateInput();
+                ComputeTargetSpeed(); 
+                ConvertSpeedToPedals();
+                TranslateSteerToInput();
 
                 UpdateStuckCheck();
                 UpdateStuckRecovery();
@@ -1185,9 +1185,9 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             else
             {
                 IsStuckByThrottle = false;
-                LastStuckGameTime = 0;
-                IsRecoveringFromStuck = false;
-                StuckRecoveryEndTime = 0;
+                _lastStuckGameTime = 0;
+                _isRecoveringFromStuck = false;
+                _stuckRecoveryEndTime = 0;
             }
         }
  
@@ -1196,20 +1196,20 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
         {
             if (ARS.MStoMPH(Car.Velocity.Length()) > 10f && Math.Abs(Brain.CurrentPerception.DeviationFromCenter) < CurrentTrackPoint.TrackHalfWidth)
             {
-                StuckRecoveryAttempts = 0;
+                _stuckRecoveryAttempts = 0;
             }
 
-            if (IsRecoveringFromStuck)
+            if (_isRecoveringFromStuck)
             {
                 IsStuckByThrottle = false;
-                LastStuckGameTime = 0;
+                _lastStuckGameTime = 0;
                 return;
             }
 
             if (BaseBehavior != RacerBaseBehavior.Race || !Driver.IsSittingInVehicle(Car))
             {
                 IsStuckByThrottle = false;
-                LastStuckGameTime = 0;
+                _lastStuckGameTime = 0;
                 return;
             }
 
@@ -1219,26 +1219,26 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             if (!stuckCondition)
             {
                 IsStuckByThrottle = false;
-                LastStuckGameTime = 0;
+                _lastStuckGameTime = 0;
                 return;
             }
 
-            if (LastStuckGameTime == 0)
+            if (_lastStuckGameTime == 0)
             {
-                LastStuckGameTime = Game.GameTime;
+                _lastStuckGameTime = Game.GameTime;
             }
 
-            bool stuckForLongEnough = (Game.GameTime - LastStuckGameTime) >= StuckCheckTimeMs;
+            bool stuckForLongEnough = (Game.GameTime - _lastStuckGameTime) >= StuckCheckTimeMs;
             IsStuckByThrottle = stuckForLongEnough;
 
-            if (stuckForLongEnough && !IsRecoveringFromStuck)
+            if (stuckForLongEnough && !_isRecoveringFromStuck)
             {
-                IsRecoveringFromStuck = true;
-                StuckRecoveryAttempts++;
+                _isRecoveringFromStuck = true;
+                _stuckRecoveryAttempts++;
                 HandleRecoveryAttemptEscalation();
-                StuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
+                _stuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
                 IsStuckByThrottle = false;
-                LastStuckGameTime = 0;
+                _lastStuckGameTime = 0;
             }
         }
 
@@ -1246,40 +1246,40 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
         {
             if (BaseBehavior != RacerBaseBehavior.Race || !Driver.IsSittingInVehicle(Car))
             {
-                IsRecoveringFromStuck = false;
-                StuckRecoveryEndTime = 0;
+                _isRecoveringFromStuck = false;
+                _stuckRecoveryEndTime = 0;
                 return;
             }
 
-            if (!IsRecoveringFromStuck && IsStuckByThrottle)
+            if (!_isRecoveringFromStuck && IsStuckByThrottle)
             {
-                IsRecoveringFromStuck = true;
-                StuckRecoveryAttempts++;
+                _isRecoveringFromStuck = true;
+                _stuckRecoveryAttempts++;
                 HandleRecoveryAttemptEscalation();
-                StuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
+                _stuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
                 IsStuckByThrottle = false;
             }
 
-            if (!IsRecoveringFromStuck) return;
+            if (!_isRecoveringFromStuck) return;
 
-            if (Game.GameTime >= StuckRecoveryEndTime)
+            if (Game.GameTime >= _stuckRecoveryEndTime)
             {
-                IsRecoveringFromStuck = false;
-                StuckRecoveryEndTime = 0;
-                LastStuckGameTime = 0;
+                _isRecoveringFromStuck = false;
+                _stuckRecoveryEndTime = 0;
+                _lastStuckGameTime = 0;
                 return;
             }
         }
 
         void ApplyStuckRecoveryOverride()
         {
-            if (!IsRecoveringFromStuck) return;
+            if (!_isRecoveringFromStuck) return;
 
-            if (Game.GameTime >= StuckRecoveryEndTime)
+            if (Game.GameTime >= _stuckRecoveryEndTime)
             {
-                IsRecoveringFromStuck = false;
-                StuckRecoveryEndTime = 0;
-                LastStuckGameTime = 0;
+                _isRecoveringFromStuck = false;
+                _stuckRecoveryEndTime = 0;
+                _lastStuckGameTime = 0;
                 return;
             }
 
@@ -1291,7 +1291,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
         void HandleRecoveryAttemptEscalation()
         {
-            if (StuckRecoveryAttempts < 2) return;
+            if (_stuckRecoveryAttempts < 2) return;
 
             Vector3 toTrack = CurrentTrackPoint.Position - Car.Position;
             if (toTrack.Length() < 0.01f) toTrack = Car.ForwardVector;
@@ -1302,7 +1302,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
         }
 
-        void UpdatePercievedGrip()
+        void UpdatePerceivedGrip()
         {
 
 
@@ -1311,8 +1311,8 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
             GroundGripMultiplier = ARS.GetWheelsGrip(Car).Average();
             Vector3 thisPoint = CurrentTrackPoint.Position;
-            Vector3 toMidpoint = LookAheads[eLookAheads.HalfSec].Position;
-            Vector3 toEndpoint = LookAheads[eLookAheads.OneSec].Position;
+            Vector3 toMidpoint = LookAheads[LookAhead.HalfSec].Position;
+            Vector3 toEndpoint = LookAheads[LookAhead.OneSec].Position;
 
             float elChangeDegrees = (toEndpoint.Normalized.Z - toMidpoint.Normalized.Z) * 90;
 
