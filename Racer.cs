@@ -492,12 +492,12 @@ namespace ARS
 
                 if (rivalIsLeft)
                 {
-                    float wall = r.OccupiedLane + rivalBuffer + (r.OccupiedLane - ourLane) / 2f;
+                    float wall = (r.OccupiedLane + ourLane) / 2f + rivalBuffer;
                     if (wall > targetLeftWall) targetLeftWall = wall;
                 }
                 else
                 {
-                    float wall = r.OccupiedLane - rivalBuffer + (r.OccupiedLane - ourLane) / 2f;
+                    float wall = (r.OccupiedLane + ourLane) / 2f - rivalBuffer;
                     if (wall < targetRightWall) targetRightWall = wall;
                 }
             }
