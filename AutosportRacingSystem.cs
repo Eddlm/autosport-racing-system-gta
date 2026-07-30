@@ -4076,7 +4076,7 @@ namespace ARS
 
 
                 _intendedOpponents = _settingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 5);
-                _trackFilter = _settingsFile.GetValue<string>("GENERAL_SETTINGS", "_trackFilter", "city");
+                _trackFilter = _settingsFile.GetValue<string>("GENERAL_SETTINGS", "TrackFilter", "city");
                 _disciplineFilter = _settingsFile.GetValue<string>("GENERAL_SETTINGS", "Disciplines", "muscle");
                 Log(LogImportance.Info, "Loaded Options.");
             }
