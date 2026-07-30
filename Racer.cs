@@ -1067,83 +1067,20 @@ namespace ARS
 
                 if (showTrack)
                 {
-                    Vector3 source = Car.Position + new Vector3(0, 0, 0.5f + (Car.Model.GetDimensions().Z * 0.6f));
-
-
                     if (Brain.Corner.Valid && Lap > 0)
                     {
                         CornerPoint c = Brain.Corner.OG;
-                        {
+                        int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
+                        int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
 
-                            Vector3 wp = ARS.Path[c.Node];
-                            float expectedSpeed = c.Speed;
-                            Color gColor = ARS.GetColorFromRedYellowGreenGradient(ARS.map(expectedSpeed - Car.Velocity.Length(), -1, 1, 0, 100, true));
+                        Vector3 chevScale = new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2.5f, 5, 5);
 
-
-                            // Draw configured node offsets for the active corner (from NodeScalarData), mapped onto the track.
-                            int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
-                            int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
-                            Vector3 oldOffsetPos = Vector3.Zero;
-                            for (int node = startNode; node <= endNode; node++)
-                            {
-                                TrackPoint tNode = ARS.TrackPoints[node];
-                                float laneOffset = 0f;
-                                if (ARS.NodeScalarData.ContainsKey(node)) laneOffset = ARS.NodeScalarData[node];
-
-                                float maxLane = Math.Max(0f, tNode.TrackWide - (VehicleData.BoundingBox / 2f));
-                                laneOffset = ARS.Clamp(laneOffset, -maxLane, maxLane);
-
-                                Vector3 offsetPos = tNode.Position - (Vector3.Cross(Vector3.WorldUp, tNode.Direction) * laneOffset) + (Vector3.WorldUp * 0.35f);
-                                if (oldOffsetPos != Vector3.Zero) ARS.DrawLine(oldOffsetPos, offsetPos, Color.Blue);
-                                oldOffsetPos = offsetPos;
-                            }
-
-
-                            World.DrawMarker(MarkerType.ChevronUpx1, wp, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2.5f, 5, 5), Color.FromArgb(50, gColor.R, gColor.G, gColor.B));
-                            if (c.Node - c.LengthStart > 5)
-                            {
-                                World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node - c.LengthStart].Position, ARS.TrackPoints[c.Node - c.LengthStart].Direction, new Vector3(90, 0, 0), new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2.5f, 5, 5), Color.FromArgb(50, gColor.R, gColor.G, gColor.B));
-                                ARS.DrawLine(ARS.TrackPoints[c.Node - c.LengthStart].Position, ARS.TrackPoints[c.Node].Position, gColor);
-                            }
-                            if (c.Node + c.LenghtEnd < ARS.TrackPoints.Count - 5)
-                            {
-                                ARS.DrawLine(ARS.TrackPoints[c.Node + c.LenghtEnd].Position, ARS.TrackPoints[c.Node].Position, gColor);
-                                World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node + c.LenghtEnd].Position, ARS.TrackPoints[c.Node + c.LenghtEnd].Direction, new Vector3(90, 0, 0), new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2.5f, 5, 5), Color.FromArgb(50, gColor.R, gColor.G, gColor.B));
-                            }
-
-                            float followSpd = c.Speed;
-                            float percent = ARS.map(ARS.MStoMPH(followSpd - Car.Velocity.Length()), -10, 10, 0, 100, true);
-                            Color color = ARS.GradientAtoBtoC(Color.Red, Color.Yellow, Color.White, percent);
-                            World.DrawMarker(MarkerType.DebugSphere, ARS.TrackPoints[c.Node].Position + Vector3.WorldUp * 2, Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.5f, 0.5f, 0.5f), color);
-
-                        }
-                    }
-
-
-                    for (int i = 0; i < 1; i++)
-                    {
-                        if (i % 2 == 1) continue;
-                        int nodeOffset = CurrentTrackPoint.Node + i;
-
-                        if (CurrentTrackPoint.Node % 2 == 1) nodeOffset++;
-
-                        if (nodeOffset < 0) continue;
-                        if (nodeOffset >= ARS.TrackPoints.Count - 1) continue;
-
-
-                        TrackPoint t = ARS.TrackPoints[nodeOffset];
-
-                        float followSpd = (float)Math.Sqrt(VehicleData.CurrentMechanicalGrip * 9.8f * t.GeneralCurveRadius);
-                        float percent = ARS.map(ARS.MStoMPH(followSpd - Car.Velocity.Length()), -10, 10, 0, 100, true);
-                        Color c = ARS.GradientAtoBtoC(Color.Red, Color.Yellow, Color.White, percent);
-
-                        Vector3 l = t.Position - (Vector3.Cross(Vector3.WorldUp, t.Direction) * t.TrackWide);
-                        Vector3 r = t.Position + (Vector3.Cross(Vector3.WorldUp, t.Direction) * t.TrackWide);
-
-                        World.DrawMarker(MarkerType.DebugSphere, l, Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), c);
-                        World.DrawMarker(MarkerType.DebugSphere, r, Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), c);
-
-
+                        // Start chevron
+                        World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[startNode].Position, ARS.TrackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+                        // Middle (apex) chevron
+                        World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node].Position, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+                        // End chevron
+                        World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[endNode].Position, ARS.TrackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
                     }
                 }
 
@@ -1152,20 +1089,17 @@ namespace ARS
             {
                 if (showTrack)
                 {
-                    // Track limits display
-                    Color blue = Color.FromArgb(50, Color.LightSkyBlue);
-                    int fNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 500, 0, ARS.TrackPoints.Count() - 1);
-                    for (int i = CurrentTrackPoint.Node; i < fNode; i++)
+                    if (Brain.Corner.Valid && Lap > 0)
                     {
-                        if (i % 2 == 1)
-                        {
-                            TrackPoint tPoint = ARS.TrackPoints[i];
-                            Vector3 right = tPoint.Position + (Vector3.Cross(tPoint.Direction, Vector3.WorldUp) * tPoint.TrackWide) + (Vector3.WorldUp * 0.5f);
-                            Vector3 left = tPoint.Position + (Vector3.Cross(tPoint.Direction, Vector3.WorldUp) * -tPoint.TrackWide) + (Vector3.WorldUp * 0.5f);
+                        CornerPoint c = Brain.Corner.OG;
+                        int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
+                        int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
 
-                            World.DrawMarker(MarkerType.ChevronUpx1, right, tPoint.Direction, new Vector3(89, 0, -90), new Vector3(1, 1f, 2f), blue);
-                            World.DrawMarker(MarkerType.ChevronUpx1, left, tPoint.Direction, new Vector3(89, 0, -90), new Vector3(1, 1f, 2f), blue);
-                        }
+                        Vector3 chevScale = new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2.5f, 5, 5);
+
+                        World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[startNode].Position, ARS.TrackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+                        World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node].Position, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+                        World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[endNode].Position, ARS.TrackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
                     }
                 }
             }
