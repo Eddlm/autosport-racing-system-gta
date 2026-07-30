@@ -924,21 +924,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
                 if (showTrack)
                 {
-                    if (Brain.Corner.Valid && Lap > 0)
-                    {
-                        CornerPoint c = Brain.Corner.Point;
-                        int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS._trackPoints.Count - 1);
-                        int endNode = (int)ARS.Clamp(c.Node + c.LengthEnd, 0, ARS._trackPoints.Count - 1);
-
-                        Vector3 chevScale = new Vector3(ARS._trackPoints[c.Node].TrackHalfWidth * 2.5f, 5, 5);
-
-
-                        World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[startNode].Position, ARS._trackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-
-                        World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[c.Node].Position, ARS._trackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-
-                        World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[endNode].Position, ARS._trackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-                    }
+                    DrawCornerChevrons(Brain.Corner);
                 }
 
             }
@@ -946,20 +932,23 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             {
                 if (showTrack)
                 {
-                    if (Brain.Corner.Valid && Lap > 0)
-                    {
-                        CornerPoint c = Brain.Corner.Point;
-                        int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS._trackPoints.Count - 1);
-                        int endNode = (int)ARS.Clamp(c.Node + c.LengthEnd, 0, ARS._trackPoints.Count - 1);
-
-                        Vector3 chevScale = new Vector3(ARS._trackPoints[c.Node].TrackHalfWidth * 2.5f, 5, 5);
-
-                        World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[startNode].Position, ARS._trackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-                        World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[c.Node].Position, ARS._trackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-                        World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[endNode].Position, ARS._trackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-                    }
+                    DrawCornerChevrons(Brain.Corner);
                 }
             }
+        }
+
+        void DrawCornerChevrons(Corner corner)
+        {
+            if (corner == null || !corner.Valid || Lap <= 0) return;
+            CornerPoint c = corner.Point;
+            int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS._trackPoints.Count - 1);
+            int endNode = (int)ARS.Clamp(c.Node + c.LengthEnd, 0, ARS._trackPoints.Count - 1);
+
+            Vector3 chevScale = new Vector3(ARS._trackPoints[c.Node].TrackHalfWidth * 2.5f, 5, 5);
+
+            World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[startNode].Position, ARS._trackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+            World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[c.Node].Position, ARS._trackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+            World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[endNode].Position, ARS._trackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
         }
 
         void DrawInputTrails()
