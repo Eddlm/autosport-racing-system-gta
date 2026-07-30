@@ -43,14 +43,8 @@ namespace ARS
     public class RacerBrain
     {
         public Perception CurrentPerception = new Perception();
-        public List<Rival> Rivals = new List<Rival>();
+        public List<Rival> Rivals = new List<Rival> { new Rival(), new Rival(), new Rival() };
         public Corner Corner =null;
-        public RacerBrain()
-        {
-            Rivals.Add(new Rival());
-            Rivals.Add(new Rival());
-            Rivals.Add(new Rival());
-        }
 
 
         public class Perception

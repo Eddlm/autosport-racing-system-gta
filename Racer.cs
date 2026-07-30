@@ -1037,13 +1037,18 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 return ARS._trackPoints[CurrentTrackPoint.Node + offset];
             }
 
-            LookAheads.Add(LookAhead.SteerRef, ResolveLookAhead(steerRef));
-            LookAheads.Add(LookAhead.QuarterSec, ResolveLookAhead(quarterSec));
-            LookAheads.Add(LookAhead.HalfSec, ResolveLookAhead(halfSec));
-            LookAheads.Add(LookAhead.ThreeQuarterSec, ResolveLookAhead(threeQuarterSec));
-            LookAheads.Add(LookAhead.OneSec, ResolveLookAhead(oneSec));
-            LookAheads.Add(LookAhead.OneHalfSec, ResolveLookAhead(oneHalfSec));
-            LookAheads.Add(LookAhead.TwoSec, ResolveLookAhead(twoSec));
+            var lookAheadOffsets = new (LookAhead key, int offset)[]
+            {
+                (LookAhead.SteerRef, steerRef),
+                (LookAhead.QuarterSec, quarterSec),
+                (LookAhead.HalfSec, halfSec),
+                (LookAhead.ThreeQuarterSec, threeQuarterSec),
+                (LookAhead.OneSec, oneSec),
+                (LookAhead.OneHalfSec, oneHalfSec),
+                (LookAhead.TwoSec, twoSec),
+            };
+            foreach (var (key, offset) in lookAheadOffsets)
+                LookAheads.Add(key, ResolveLookAhead(offset));
 
 
 
