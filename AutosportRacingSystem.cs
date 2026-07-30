@@ -22,17 +22,9 @@ namespace ARS
     {
         None, Red, Blue, Cop, Crook
     }
-    public enum Decision
-    {
-        LateBrake, Flatout, NoOvertake, FastCorner, EarlyExit, AttackInside
-    }
-    public enum Mistake
-    {
-        ForgetSteeringLimiter, ForgetTCS, ForgetABS, ForgetCounterSteer, ForgetSpinoutPrevention
-    }
     public enum RaceState
     {
-        None, NotInitiated, Countdown, InProgress, PostRace, Finished,
+        None, NotInitiated, Countdown, InProgress, Finished,
     }
 
     public enum Options
@@ -41,147 +33,14 @@ namespace ARS
         SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute
     }
 
-    public enum OptionValues
-    {
-        ShowAggression,
-    }
-
-
     public enum DebugDisplay
     {
         None, Inputs, Speed, Positioning, PropEdit
     }
-    public enum CameraTransition
-    {
-        None, ToAir, AirToAir, AirToPlayer
-    }
-    public class PID
-    {
-        // Fields
-        private float value;
-        private float target;
-        private float velocity;
-        private float maxSpeed;
-        private float maxAccel;
-        private float kP;
-        private float kD;
-        private float kI;
-        private float integral;
-        private int lastTick = Game.GameTime;
-        // Constructor
-        public PID(
-            float kP = 1.0f,
-            float kD = 0.1f,
-            float kI = 0.0f,
-            float maxSpeed = 999,
-            float maxAccel = 999)
-        {
-            this.kP = kP;
-            this.kD = kD;
-            this.kI = kI;
-            this.maxSpeed = maxSpeed;
-            this.maxAccel = maxAccel;
-            this.value = 0.0f;
-            this.target = 0.0f;
-            this.velocity = 0.0f;
-            this.integral = 0.0f;
-        }
-
-        // Update method - advances the controller by dt seconds
-        public float Update()
-        {
-            return Update(0f);
-        }
-
-        // Update with external derivative input (e.g. yaw rate).
-        // When externalD is non-zero, it replaces the internal velocity derivative.
-        // Sign convention: positive externalD = turning left, which should reduce
-        // right-steering error, so derivative = -externalD * kD.
-        public float Update(float externalD)
-        {
-            float dt = (Game.GameTime - lastTick) * 0.01f;
-            lastTick = Game.GameTime;
-            if (dt <= 0.0) return value;
-
-            float error = target - value;
-            float proportional = error * kP;
-            float derivative = externalD != 0f ? -externalD * kD : -velocity * kD;
-            integral += error * dt;
-            float integralTerm = integral * kI;
-
-            float acceleration = proportional + derivative + integralTerm;
-
-            // Clamp acceleration to maxAccel
-            if (Math.Abs(acceleration) > maxAccel)
-            {
-                acceleration = maxAccel * (acceleration > 0 ? 1 : -1);
-            }
-
-            velocity += acceleration * dt;
-
-            // Clamp velocity to maxSpeed
-            if (Math.Abs(velocity) > maxSpeed)
-            {
-                velocity = maxSpeed * (velocity > 0 ? 1 : -1);
-            }
-
-            value += velocity * dt;
-
-            // Snap to target if close enough
-            if (float.IsNaN(value) || (Math.Abs(error) < 0.1 && Math.Abs(velocity) < 0.1f))
-            {
-                value = target;
-                velocity = 0;
-            }
-
-            return value;
-        }
-
-        // Set target value with clamping
-        public void SetTarget(float target, float maxVal = 90.0f)
-        {
-            this.target = ARS.Clamp(target, -maxVal, maxVal);
-        }
-
-        // Set current value and reset velocity and integral
-        public void SetValue(float value)
-        {
-            this.value = value;
-            velocity = 0;
-            integral = 0;
-        }
-
-        // Get current value
-        public float GetValue()
-        {
-            return value;
-        }
-
-        // Get target value
-        public float GetTarget()
-        {
-            return target;
-        }
-
-        // Modify target value with clamping
-        public void ModifyTarget(float delta, float maxVal = 20.0f)
-        {
-            target = ARS.Clamp(target + delta, -maxVal, maxVal);
-        }
-
-        // Check if close to target within threshold
-        public bool IsClose(float threshold = 0.01f)
-        {
-            return Math.Abs(target - value) < threshold;
-        }
-    }
-
     public class ARS : Script
     {
 
         public static Dictionary<Vector3, string> ImmersiveJoins = new Dictionary<Vector3, string>();
-
-        public static float TracjectoryProjectionSeconds = 1;
 
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
         public static List<CornerPoint> CornerPoints = new List<CornerPoint>();
@@ -564,10 +423,7 @@ namespace ARS
 
         }
 
-        public static Vector3 RotateDir(Vector3 d, float angle, Vector3 axis)
-        {
-            return Quaternion.RotationAxis(axis, (float)(Math.PI / 180f) * angle) * -d;
-        }
+        
         public static Vector3 GetOffset(Entity reference, Entity ent)
         {
             Vector3 pos = ent.Position;
@@ -681,28 +537,6 @@ namespace ARS
 
         }
 
-        static public unsafe float GetSteerInput(Vehicle handle)
-        {
-
-            if (!CanWeUse(handle)) return 0f;
-
-            if (steerAngle == 0x0)
-            {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
-                if (addr != null)
-                {
-                    steerAngle = *(uint*)(addr + 6) + 8;
-                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset:" + steerAngle);
-                }
-            }
-            else
-            {
-                var address = (ulong)handle.MemoryAddress;
-                return *((float*)(address + steerAngle));
-            }
-
-            return 0;
-        }
 
         static public unsafe void SetThrottle(Vehicle handle, float value)
         {
@@ -719,7 +553,7 @@ namespace ARS
 
                 }
             }
-            else if (1 == 1)
+            else
             {
                 var address = (ulong)handle.MemoryAddress;
 
@@ -747,7 +581,7 @@ namespace ARS
 
                 }
             }
-            else if (1 == 1)
+            else
             {
                 var address = (ulong)handle.MemoryAddress;
 
@@ -765,13 +599,7 @@ namespace ARS
             return (float)(Math.PI * angle / 180.0f);
         }
 
-        public static float LerpDelta(float current, float from, float to, float delta)
-        {
-            float r = from;
-            float percent = (float)Math.Round((current * 100f) / to, 2);
-            r = percent * map(percent, 0f, 50f, 0f, 1f, true);
-            return (float)Math.Round(r, 1);
-        }
+        
 
         //Route Creator active section
         List<Vector3> RouteSection = new List<Vector3>();
@@ -1099,196 +927,12 @@ namespace ARS
             CountDown = MaxCountDown;
         }
 
-        Vehicle debugTrailer;
-        Dictionary<int, Vector3> ExhaustOffsets = new Dictionary<int, Vector3>();
-        void HandlePlayerDebugStuff(Vehicle v)
-        {
-
-
-            if (!CanWeUse(v)) return;
-
-
-            if (CanWeUse(debugTrailer))
-            {
-                //debugTrailer.HandbrakeOn = true;
-                //Function.Call(Hash._0x9007A2F21DC108D4, debugTrailer, 0f);
-
-
-
-
-                if (debugTrailer.IsAttachedTo(v))
-                {
-
-                    //float str = Vector3.SignedAngle(debugTrailer.ForwardVector, v.ForwardVector, debugTrailer.UpVector) / 100;
-                    //if (Math.Abs(str) > 0.01f)  v.SteeringAngle = str;
-                    //Function.Call(Hash._0x42A8EC77D5150CBE, v, -1);
-                    //if (Math.Abs(str) > 1) debugTrailer.SteeringAngle = str; else debugTrailer.SteeringAngle = 0;
-
-
-                    //debugTrailer.SteeringAngle = v.SteeringAngle * -0.8f;
-                    //UI.ShowSubtitle(message: str + "-" + debugTrailer.FriendlyName, 100);
-
-                }
-                else
-                {
-
-                    if (!debugTrailer.IsInRangeOf(v.Position, 40)) debugTrailer = null;
-                }
-            }
-            else
-            {
-                debugTrailer = World.GetAllVehicles().Where(predicate: car => car.IsAttachedTo(v)).FirstOrDefault();
-                //Function.Call(Hash.SET_VEHICLE_OUT_OF_CONTROL, debugTrailer, true, false);
-
-            }
-
-
-
-
-            //if(Function.Call<bool>(Hash.GET_VEHICLE_TRAILER_VEHICLE, v, *t))
-            {
-
-            }
-            //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0xF417C2502FFFED43, v.Model.Hash) / 0.75f)+ " mph", 1000);
-            //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0x53AF99BAA671CA47, v)/0.75f)+" mph", 1000);
-
-            //UI.ShowSubtitle(GetDirVsHeading(v,1).ToString(), 200);
-            /*
-            List<Vector3> roads = new List<Vector3>();
-
-            roads.Add(GetRoadPos(v.Position) + new Vector3(0, 0, 0.2f));
-            roads.Add(GetRoadPos(v.Position + (v.Velocity * 1)) + new Vector3(0, 0, 0.2f));
-            roads.Add(GetRoadPos(v.Position + (v.Velocity * 2)) + new Vector3(0, 0, 0.2f));
-            roads.Add(GetRoadPos(v.Position + (v.Velocity * 3)) + new Vector3(0, 0, 0.2f));
-            roads.Add(GetRoadPos(v.Position + (v.Velocity * 4)) + new Vector3(0, 0, 0.2f));
-
-            if (roads.Count > 1)
-            {
-                for (int i = 0; i < roads.Count-1; i++)
-                {
-                    DrawLine(roads[i], roads[i+1], Color.Green);
-                    World.DrawMarker(MarkerType.DebugSphere, roads[i], Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), Color.Green);
-                }
-            }
-            */
-
-            //UI.ShowSubtitle("~g~" + Math.Round(ARS.GetWheelInternalDownforceMod(v).Sum(), 4).ToString() + "Gs", 500);
-            //UI.ShowSubtitle(Function.Call<float>(Hash._0x53AF99BAA671CA47, v)/0.75f+" m/s", 1000);
-            //UI.ShowSubtitle(MStoMPH(Function.Call<float>(Hash._0x53AF99BAA671CA47, v) / 0.75f) +" m/s", 1000);
-
-        }
-
-        static public Vector3 GetSpeedVector(Entity e, bool local)
-        {
-            if (!CanWeUse(e)) return Vector3.Zero;
-
-            return Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, e, local);
-        }
-
-        void DrawBlackBars(float intensity)
-        {
-            Function.Call(Hash.DRAW_RECT, 0.5f, 0f, 1f, intensity, 0f, 0f, 0f, 255, 0f);
-            Function.Call(Hash.DRAW_RECT, 0.5f, 1f, 1f, intensity, 0f, 0f, 0f, 255, 0f);
-        }
-
-
-        List<Vector3> MiniaturizedPath = new List<Vector3>();
-        void DrawMiniaturizedPath(Vector3 pos)
-        {
-            if (!Game.Player.Character.IsInRangeOf(pos, 20f)) return;
-            if (Path.Count > 0)
-            {
-                if (MiniaturizedPath.Count == 0)
-                {
-                    Vector3 middle = Vector3.Zero;
-                    foreach (Vector3 posp in Path) middle += posp;
-                    middle /= Path.Count;
-                    int c = (int)(Path.Count * 0.1f);
-                    Vector3 newpos = (Path[4]) - middle;
-                    foreach (Vector3 modded in Path)
-                    {
-                        c++;
-                        if (c >= 15)
-                        {
-                            c = 0;
-                            Vector3 lerped = Vector3.Lerp(middle, modded, 0.005f);
-                            MiniaturizedPath.Add(lerped);
-                        }
-                    }
-                }
-                else
-                {
-                    Vector3 modified = (pos - MiniaturizedPath[0]);
-                    Vector3 last = MiniaturizedPath[MiniaturizedPath.Count - 1];
-                    foreach (Vector3 vm in MiniaturizedPath)
-                    {
-                        if (vm == MiniaturizedPath[0])
-                        {
-                            World.DrawMarker(MarkerType.CheckeredFlagRect, vm + modified, (last - vm).Normalized, new Vector3(0, 0, 0), new Vector3(0.1f, 0.1f, 0.1f), Color.White);// DrawLine(vm,last, Color.Black);
-                        }
-                        else
-                        {
-                            DrawLine(vm + modified, last + modified, Color.SkyBlue);
-                        }
-                        last = vm;
-                    }
-                }
-            }
-        }
-
-        static public float Lerp(float a, float b, float t)
-        {
-            return (1f - t) * a + t * b;
-        }
         int GameTimeShort = Game.GameTime;
 
 
         //Immersive joins
-        int secInteval = 0;
-        Dictionary<Vector3, string> NeabyImmersiveJoins = new Dictionary<Vector3, string>();
-
-        void HandleImmersiveJoins()
-        {
-            if (secInteval < Game.GameTime)
-            {
-                secInteval = Game.GameTime + 1000;
-                NeabyImmersiveJoins.Clear();
-                if (RaceStatus == RaceState.None)
-                {
-                    for (int i = 0; i < ImmersiveJoins.Count; i++)
-                    {
-                        if (Game.Player.Character.IsInRangeOf(ImmersiveJoins.ElementAt(i).Key, 50f))
-                        {
-                            NeabyImmersiveJoins.Add(ImmersiveJoins.ElementAt(i).Key, ImmersiveJoins.ElementAt(i).Value);
-                            UI.Notify("added" + ImmersiveJoins.ElementAt(i).Value);
-                        }
-                    }
-                }
-            }
-
-
-            foreach (Vector3 ip in NeabyImmersiveJoins.Keys)
-            {
-                World.DrawMarker(MarkerType.VerticalCylinder, ip + new Vector3(0, 0, -25f), Vector3.Zero, -Vector3.WorldDown, new Vector3(10f, 10f, 30f), Color.Yellow);
-                if (Game.Player.Character.IsInRangeOf(ip, 3f) && Game.Player.Character.IsStopped)
-                {
-                    LoadRace(ImmersiveJoins[ip], null, intendedOpponents);
-                    return;
-                }
-            }
-        }
-
-
-        public List<Vector3> AccelerationVector = new List<Vector3>();
-        Vector3 lSpeed = Vector3.Zero;
-
-
-
         int NextInLine = 0;
         int GameTimeNextInLine = 0;
-
-        Vector3 GsClamp = new Vector3(1, 1, 1f);
-        Vector3 directionClamp = new Vector3(1, 1, 1f);
 
         void OnTick(object sender, EventArgs e)
         {
@@ -1567,7 +1211,7 @@ namespace ARS
                         CleanEverything();
                     }
                 }
-                else if (Function.Call<bool>(Hash._0xAF754F20EB5CD51A) || 1 == 1) //radar enabled
+                else
                 {
 
                     if (Game.IsControlPressed(2, GTA.Control.Sprint))
@@ -1613,7 +1257,7 @@ namespace ARS
 
 
                 //Draw the leaderboard positions
-                if (positions.Count > 0 && OptionsList.Count == 0 && (Function.Call<bool>(Hash._0xAF754F20EB5CD51A) || 1 == 1))  //radar enabled
+                if (positions.Count > 0 && OptionsList.Count == 0)
                 {
                     float z = 0.15f;
                     float scale = 0.4f;
@@ -1669,11 +1313,6 @@ namespace ARS
         {
             return (current / max) * 100;
         }
-        public void ToggleSPLVisibility()
-        {
-            try { foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (p.Alpha == 0) p.Alpha = 255; else p.Alpha = 0; } catch (Exception) { }
-        }
-
         public void SetSPLVisibility(bool state)
         {
             try { foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (state) p.Alpha = 255; else p.Alpha = 0; } catch (Exception) { }
@@ -1872,48 +1511,6 @@ namespace ARS
         }
 
 
-        public List<Vector3> GenerateCubicBezier(Vector3 sStart, Vector3 sControl1, Vector3 sControl2, Vector3 sEnd)
-        {
-            List<Vector3> points = new List<Vector3>();
-
-            float target = 1f;
-
-            float stepDist = 0f;
-            points.Add(sStart);
-
-            int pat = 0;
-            while (stepDist < 1.0f && pat < 1000)
-            {
-                pat++;
-                int tries = 0;
-                Vector3 p = Bezier3(stepDist, sStart, sControl1, sControl2, sEnd);
-                while (p.DistanceTo(points.Last()) < target - 0.001f && tries < 2000)
-                {
-                    tries++;
-
-                    stepDist += 0.001f;
-                    p = Bezier3(stepDist, sStart, sControl1, sControl2, sEnd);
-                }
-                tries = 0;
-                while (p.DistanceTo(points.Last()) > target + 0.001f && tries < 2000)
-                {
-                    tries++;
-
-                    stepDist -= 0.001f;
-                    p = Bezier3(stepDist, sStart, sControl1, sControl2, sEnd);
-                }
-                if (stepDist > 1.0f) break;
-
-                if (!Game.IsControlPressed(2, GTA.Control.Sprint))
-                {
-                    RaycastResult toGround = World.Raycast(p + new Vector3(0, 0, 2f), p + (Vector3.WorldDown * 30f), IntersectOptions.Map);
-                    if (toGround.DitHitAnything) p.Z = toGround.HitCoords.Z;
-                }
-                points.Add(p);
-            }
-            return points;
-        }
-
         //Generates a set of Vector3 points in a bezier curve shape, from a starting position to an end position.
         //The direction defines the starting direction of the points and generates a middlepoint. The end direction is not controlled.
         public static List<Vector3> GenerateBezier(Vector3 sStart, Vector3 sDirection, Vector3 sEnd, float sScale)
@@ -1982,28 +1579,9 @@ namespace ARS
             return ABC;
         }
 
-        public static Color GetColorFromRedYellowGreenGradient(float percentage)
-        {
-            percentage = ARS.Clamp((float)percentage, 0, 100);
+        
 
-            var red = (percentage > 50 ? 1 - 2 * (percentage - 50) / 100.0 : 1.0) * 255;
-            var green = (percentage > 50 ? 1.0 : 2 * percentage / 100.0) * 255;
-            var blue = 0.0;
-            Color result = Color.FromArgb((int)red, (int)green, (int)blue);
-            return result;
-        }
-
-        public static Color GradientAtoB(Color A, Color B, float percentage)
-        {
-            percentage = ARS.Clamp((float)percentage, 0, 100);
-
-            var red = ARS.map(percentage, 0, 100, A.R, B.R);
-            var green = ARS.map(percentage, 0, 100, A.G, B.G);
-            var blue = ARS.map(percentage, 0, 100, A.B, B.B);
-
-            Color result = Color.FromArgb((int)red, (int)green, (int)blue);
-            return result;
-        }
+        
 
         public static Color GradientAtoBtoC(Color A, Color B, Color C, float percentage)
         {
@@ -2068,8 +1646,6 @@ namespace ARS
 
 
                 //Instructional buttons
-                if (1 == 1)
-                {
                     if (scaleform == null || !scaleform.IsLoaded)
                     {
                         scaleform = new Scaleform("INSTRUCTIONAL_BUTTONS");
@@ -2080,9 +1656,7 @@ namespace ARS
                     scaleform.CallFunction("CLEAR_ALL", true);
                     scaleform.CallFunction("CREATE_CONTAINER");
 
-                    if (1 == 1)
-                    {
-                        if (routeEditMode)
+                    if (routeEditMode)
                         {
                             if (Path.Count() > 0)
                             {
@@ -2117,11 +1691,9 @@ namespace ARS
                             scaleform.CallFunction("SET_DATA_SLOT", 2, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Jump), "Slow Mo");
 
                         }
-                    }
                     scaleform.CallFunction("DRAW_INSTRUCTIONAL_BUTTONS", 0);
                     if (!HideHudMode) scaleform.Render2D();
 
-                }
                 Game.DisableControlThisFrame(0, GTA.Control.Attack);
                 Game.DisableControlThisFrame(0, GTA.Control.Aim);
                 Game.DisableControlThisFrame(0, GTA.Control.NextCamera);
@@ -2557,51 +2129,6 @@ namespace ARS
                 }
             }
 
-            if (SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "Ghosts", false) && 1 == 2)
-            {
-                DisplayHelpTextTimed("Ghosting cars...", 10000);
-                List<int> orig = new List<int>();
-                List<int> target = new List<int>();
-
-                foreach (Racer o in Racers)
-                {
-                    foreach (Racer t in Racers)
-                    {
-                        if (o.Car.Handle == t.Car.Handle) continue;
-
-                        Script.Wait(500);
-                        bool dupe = false;
-
-                        if (orig.Contains(t.Car.Handle))
-                        {
-
-                            for (int i = orig.IndexOf(t.Car.Handle); i < orig.Count; i++)
-                            {
-                                if (orig[i] != t.Car.Handle) break;
-                                if (target[i] == o.Car.Handle)
-                                {
-                                    dupe = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (!dupe)
-                        {
-
-                            Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, o.Car, t.Car, false);
-                            orig.Add(o.Car.Handle);
-                            target.Add(t.Car.Handle);
-                            Log(LogImportance.Info, o.Car.Handle + " " + t.Car.Handle);
-                        }
-                        else Log(LogImportance.Info, o.Car.Handle + "-" + t.Car.Handle);
-
-                    }
-                }
-                DisplayHelpTextTimed("Done.", 2000);
-            }
-
-
             foreach (Racer r in Racers) if (r.Car.CurrentBlip != null) r.Car.CurrentBlip.Color = BlipColor.Blue;
             RaceStatus = RaceState.NotInitiated;
         }
@@ -2645,10 +2172,7 @@ namespace ARS
 
             return materialhash.GetResult<int>();
         }
-        public void PlaceOnGround(Prop p)
-        {
-
-        }
+        
 
 
 
@@ -2887,9 +2411,7 @@ namespace ARS
                                 break;
                             }
                         }
-                        Script.Wait(0);
-                    }
-                }
+
                 oldpos = pos;
                 dd++;
             }
@@ -2960,15 +2482,6 @@ namespace ARS
 
             for (int ph = start; ph < end; ph += 1)
             {
-                count++;
-
-
-                if (count >= countmax || 1 == 1)//Math.Abs( ph-closestnode)>50
-                {
-                    bool IsClose = false;
-
-
-                    count = 0;
 
                     pos = nodes[ph];
                     float w = 0f;
@@ -2985,13 +2498,11 @@ namespace ARS
                     if (oldpos != Vector3.Zero && PlayerOrCameraNearPos(nodes[ph], 120))
                     {
 
-                        if (1 == 1)//Game.Player.Character.IsInRangeOf(pos, 30000f)
-                        {
-                            Vector3 rWidepos = GetPerpendicular(pos, oldpos, w, true); //Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * w);
-                            Vector3 lWidepos = GetPerpendicular(pos, oldpos, w, false); //Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * w);
+                            Vector3 rWidepos = GetPerpendicular(pos, oldpos, w, true);
+                            Vector3 lWidepos = GetPerpendicular(pos, oldpos, w, false);
 
-                            Vector3 oldrWidepos = GetPerpendicular(pos, oldpos, oldw, true) - (pos - oldpos); // oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * oldw);
-                            Vector3 oldlWidepos = GetPerpendicular(pos, oldpos, oldw, false) - (pos - oldpos);// oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * oldw);
+                            Vector3 oldrWidepos = GetPerpendicular(pos, oldpos, oldw, true) - (pos - oldpos);
+                            Vector3 oldlWidepos = GetPerpendicular(pos, oldpos, oldw, false) - (pos - oldpos);
 
 
 
@@ -3034,15 +2545,11 @@ namespace ARS
 
                                 Color chevcolor = Color.FromArgb(50, col);
 
-                                if (IsClose) World.DrawMarker(MarkerType.ChevronUpx1, pos, (oldpos - pos).Normalized, new Vector3(-90, 0, 0), new Vector3(4f, 2f, 2f), chevcolor);// DrawLine(vm,last, Color.Black);
-
                                 //       DrawLine(oldpos, pos, Color.Yellow);
 
 
                             }
                         }
-                    }
-                }
 
                 oldpos = pos;
 
@@ -3069,13 +2576,6 @@ namespace ARS
             dd = start;
             for (int ph = start; ph < end; ph += 1)
             {
-                count++;
-
-
-                if (count >= countmax || 1 == 1)//Math.Abs( ph-closestnode)>50
-                {
-
-                    count = 0;
 
                     pos = nodes[ph];
                     float w = 0f;
@@ -3092,13 +2592,11 @@ namespace ARS
                     if (oldpos != Vector3.Zero && PlayerOrCameraNearPos(nodes[ph], 120))
                     {
 
-                        if (1 == 1)//Game.Player.Character.IsInRangeOf(pos, 30000f)
-                        {
-                            Vector3 rWidepos = GetPerpendicular(pos, oldpos, w, true); //Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * w);
-                            Vector3 lWidepos = GetPerpendicular(pos, oldpos, w, false); //Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * w);
+                            Vector3 rWidepos = GetPerpendicular(pos, oldpos, w, true);
+                            Vector3 lWidepos = GetPerpendicular(pos, oldpos, w, false);
 
-                            Vector3 oldrWidepos = GetPerpendicular(pos, oldpos, oldw, true) - (pos - oldpos); // oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * 90f) * ((pos - oldpos).Normalized * oldw);
-                            Vector3 oldlWidepos = GetPerpendicular(pos, oldpos, oldw, false) - (pos - oldpos);// oldpos - Quaternion.RotationAxis(Vector3.WorldUp, (float)(Math.PI / 180f) * -90f) * ((pos - oldpos).Normalized * oldw);
+                            Vector3 oldrWidepos = GetPerpendicular(pos, oldpos, oldw, true) - (pos - oldpos);
+                            Vector3 oldlWidepos = GetPerpendicular(pos, oldpos, oldw, false) - (pos - oldpos);
 
 
                             Color col = Color.Green;
@@ -3118,8 +2616,8 @@ namespace ARS
                                     {
 
                                         DrawLine(lWidepos + new Vector3(0, 0, 0.5f), rWidepos + new Vector3(0, 0, 0.5f), Color.Blue);
-                                        World.DrawMarker(MarkerType.DebugSphere, lWidepos + new Vector3(0, 0, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.3f, 0.3f, 0.3f), Color.Blue);// DrawLine(vm,last, Color.Black);
-                                        World.DrawMarker(MarkerType.DebugSphere, rWidepos + new Vector3(0, 0, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.3f, 0.3f, 0.3f), Color.Blue);// DrawLine(vm,last, Color.Black);
+                                        World.DrawMarker(MarkerType.DebugSphere, lWidepos + new Vector3(0, 0, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.3f, 0.3f, 0.3f), Color.Blue);
+                                        World.DrawMarker(MarkerType.DebugSphere, rWidepos + new Vector3(0, 0, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.3f, 0.3f, 0.3f), Color.Blue);
 
                                     }
                                     else
@@ -3127,8 +2625,8 @@ namespace ARS
                                         {
 
 
-                                            World.DrawMarker(MarkerType.DebugSphere, lWidepos + new Vector3(0f, 0f, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Green);// DrawLine(vm,last, Color.Black);
-                                            World.DrawMarker(MarkerType.DebugSphere, rWidepos + new Vector3(0f, 0f, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Green);// DrawLine(vm,last, Color.Black);
+                                            World.DrawMarker(MarkerType.DebugSphere, lWidepos + new Vector3(0f, 0f, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Green);
+                                            World.DrawMarker(MarkerType.DebugSphere, rWidepos + new Vector3(0f, 0f, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Green);
                                             DrawLine(lWidepos + new Vector3(0f, 0f, 0.5f), rWidepos + new Vector3(0f, 0f, 0.5f), Color.Green);
 
 
@@ -3137,8 +2635,6 @@ namespace ARS
                                 }
                             }
                         }
-                    }
-                }
 
                 oldpos = pos;
 
@@ -3161,14 +2657,7 @@ namespace ARS
             }
             return a + abCw * length;
         }
-        public void Notify(string text, float timeMult)
-        {
-
-            GTA.Native.Function.Call(GTA.Native.Hash._SET_NOTIFICATION_TEXT_ENTRY, "STRING");
-            GTA.Native.Function.Call(GTA.Native.Hash._ADD_TEXT_COMPONENT_STRING, text);
-            GTA.Native.Function.Call(Hash._0x1E6611149DB3DB6B, "CHAR_DEFAULT", "CHAR_DEFAULT", false, 2, "", "", timeMult);
-
-        }
+        
 
         void ToggleFreeCam()
         {
@@ -3216,7 +2705,6 @@ namespace ARS
         }
 
         public bool listenmode = false;
-        public Dictionary<int, int> DistToPercent = new Dictionary<int, int>();
         public void Cheats()
         {
 
@@ -3298,10 +2786,7 @@ namespace ARS
                 CleanEverything();
             }
         }
-        public static bool IsBitSet(int number, int bit)
-        {
-            return (number & bit) != 0;
-        }
+        
 
         public static void FindCustomProps()
         {
@@ -3801,34 +3286,6 @@ namespace ARS
                         if (prop.SelectSingleNode("TextureVariation") != null) Function.Call(Hash._0x971DA0055324D033, myprop, int.Parse(prop.SelectSingleNode("TextureVariation").InnerText));
 
                         CustomProps.Add(myprop);
-
-                        if (hash == Game.GenerateHash("prop_mp_repair_01") && 1 == 2) //Garage stuff, never used
-                        {
-                            myprop.Alpha = 50;
-
-
-                            if (CanWeUse(Game.Player.Character.LastVehicle))
-                            {
-                                Game.Player.Character.LastVehicle.Position = myprop.Position + new Vector3(0, 0, 0);
-                                Game.Player.Character.LastVehicle.Heading = myprop.Heading;
-                                Game.Player.Character.LastVehicle.PlaceOnGround();
-                            }
-
-                            Prop autog = World.CreateProp("prop_gazebo_03", myprop.Position, myprop.Rotation, false, true);
-
-                            AutoGeneratedProps.Add(autog);
-
-                            Function.Call(Hash.FREEZE_ENTITY_POSITION, autog, true);
-                            Function.Call(Hash.SET_ENTITY_DYNAMIC, autog, false);
-
-                            autog = World.CreateProp("prop_table_04", myprop.Position -= (myprop.ForwardVector * 3), myprop.Rotation, false, true);
-                            AutoGeneratedProps.Add(autog);
-
-                            Function.Call(Hash.FREEZE_ENTITY_POSITION, autog, true);
-                            Function.Call(Hash.SET_ENTITY_DYNAMIC, autog, false);
-
-
-                        }
                     }
                 }
             }
@@ -4431,14 +3888,7 @@ namespace ARS
             return ARS.map(Vector3.Angle(e.ForwardVector, e.Velocity.Normalized), 0f, 90f, e.Model.GetDimensions().X, e.Model.GetDimensions().Y, true);
         }
 
-        static public void DrawDirectionalBoundingBox(Entity e, float lenght = 5f)
-        {
-            float w = GetDirectionalBoundingBox(e);
-            Vector3 direction = (Vector3.Cross(e.Velocity.Normalized, Vector3.WorldUp) * w);
-
-            ARS.DrawLine(e.Position + direction + (e.Velocity.Normalized * lenght), e.Position + direction + (e.Velocity.Normalized * -lenght), Color.Red);
-            ARS.DrawLine(e.Position - direction + (e.Velocity.Normalized * lenght), e.Position - direction + (e.Velocity.Normalized * -lenght), Color.Red);
-        }
+        
         static public unsafe ulong GetWheelsPtr(Vehicle handle)
         {
             GameVersion gameVersion = Game.Version;
@@ -4488,44 +3938,7 @@ namespace ARS
         }
 
 
-        static public unsafe List<float> GetWheelsPower(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            ulong offset = 0x1D4;
-            List<float> angle = new List<float>();
-            foreach (var wheel in wheelPtrs)
-            {
-                float pos = (float)Math.Round(*((float*)(wheel + offset)), 5);
-                angle.Add(pos);
-            }
-            return angle;
-        }
-
-
-        static public unsafe List<float> GetWheelInternalDownforceMod(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            ulong offset = 0x220;
-            List<float> angle = new List<float>();
-            foreach (var wheel in wheelPtrs)
-            {
-                float pos = (float)Math.Round(*((float*)(wheel + offset)), 5);
-                angle.Add(pos);
-            }
-            return angle;
-        }
-        static public unsafe List<float> GetMoreShit(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            ulong offset = 0x20A;
-            List<float> angle = new List<float>();
-            foreach (var wheel in wheelPtrs)
-            {
-                float pos = (float)Math.Round(*((float*)(wheel + offset)), 5);
-                angle.Add(pos);
-            }
-            return angle;
-        }
+        
 
         static public unsafe List<float> GetWheelsGrip(Vehicle handle)
         {
@@ -4539,18 +3952,7 @@ namespace ARS
             }
             return angle;
         }
-        static public unsafe List<float> GetWheelsWetgrip(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            ulong offset = 0x19C;
-            List<float> angle = new List<float>();
-            foreach (var wheel in wheelPtrs)
-            {
-                float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
-                angle.Add(pos);
-            }
-            return angle;
-        }
+        
 
         static public unsafe float GetWheelsMaxWheelspin(Vehicle handle)
         {
@@ -4564,159 +3966,19 @@ namespace ARS
             }
             return w;
         }
-        static public unsafe float GetWheelsAvgWheelspin(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            ulong offset = 0x174;
-            float w = 0f;
-            foreach (var wheel in wheelPtrs)
-            {
-                float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
-                w += pos;
-            }
-            return w / wheelPtrs.Count;
-        }
-        static public unsafe List<float> GetWheelSkidmark(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            ulong offset = 0x1B8;
-            if (Game.Version <= GameVersion.VER_1_0_1290_1_STEAM) offset = 0x1B8;
-            List<float> angle = new List<float>();
-            foreach (var wheel in wheelPtrs)
-            {
-                float pos = *((float*)(wheel + offset));
-                angle.Add(pos);
-            }
-            return angle;
-        }
+        
 
-        static public void DrawStats(Racer r)
-        {
-            float diff = (r.Car.Velocity.Length() - r.Brain.intention.Speed) * 10;
-            float acc = (r.Control.Throttle * 100f);
+        
 
-            string percent = "";
-
-            for (int i = 0; i < 100 - acc; i++) percent += " ";
-            for (int i = 0; i < acc; i++) percent += "<";
-            //       percent += "~w~";
-            if (diff < 0f) diff = 0f;
-            //
-            //    racertext.Unload();
-            //  
-            debugFrontend.CallFunction("CLEAR_ALL", true);
-            debugFrontend.CallFunction("CREATE_CONTAINER");
+        
 
 
-            debugFrontend.CallFunction("SET_DATA_SLOT", 0, Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)GTA.Control.Attack), percent + "%");
+        
 
-            debugFrontend.CallFunction("DRAW_INSTRUCTIONAL_BUTTONS", -1);
+        
 
-            debugFrontend.Render2D();
-
-
-        }
-
-        static public void DrawStats(string entity_name, string entity_desc, string first_name, string second_name, string third_name, string fourth_name, int first_value, int second_value, int third_value, int fourth_value, Vector3 position, int scaleformNumber = 1)
-        {
-            Scaleform sc = new Scaleform("mp_car_stats_0" + scaleformNumber + "");
-            if (sc == null || !sc.IsLoaded)
-            {
-                //sc = new Scaleform("mp_car_stats_01");
-
-
-            }
-            else
-            {
-                sc.CallFunction("SET_VEHICLE_INFOR_AND_STATS", entity_name, entity_desc, "MPCarHUD", "Pfister", first_name, second_name, third_name, fourth_name, first_value, second_value, third_value, fourth_value);
-
-
-                //racertext.CallFunction("setBars", 1, 1, 1); //(float)Math.Round((float)(first_value * 2))
-
-                sc.Render3D(position, GameplayCamera.Rotation, new Vector3(6f * 3f, 3f * 3f, 1f * 3f));
-            }
-        }
-
-        static public unsafe List<float> GetWheelSlippage(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            ulong offset = 0x1A8;
-            List<float> angle = new List<float>();
-            foreach (var wheel in wheelPtrs)
-            {
-                float pos = *((float*)(wheel + offset));
-                angle.Add(pos);
-            }
-            return angle;
-        }
-
-
-        public static float GetRoadHeading(Entity E, float ahead)
-        {
-            if (CanWeUse(E))
-            {
-                OutputArgument outArgA = new OutputArgument();
-                OutputArgument outArgB = new OutputArgument();
-                Vector3 p = E.Position + (E.ForwardVector * ahead);
-
-                if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING, p.X, p.Y, p.Z, outArgA, outArgB, 0, 1077936128, 0))
-                {
-                    Vector3 pos = outArgA.GetResult<Vector3>();
-
-                    return outArgB.GetResult<float>();
-                }
-            }
-            return 0;
-        }
-
-        public static float GetRoadOutOfBoundsX(Entity E, float ahead)
-        {
-            if (CanWeUse(E))
-            {
-                OutputArgument outArgA = new OutputArgument();
-                OutputArgument outArgB = new OutputArgument();
-                Vector3 p = E.Position + (E.ForwardVector * ahead);
-
-                if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING, p.X, p.Y, p.Z, outArgA, outArgB, 0, 1077936128, 0))
-                {
-                    Vector3 pos = outArgA.GetResult<Vector3>();
-
-                    return GetOffset(E, pos).X;
-                }
-            }
-            return 0;
-        }
-
-        public static Vector3 GetRoadPos(Vector3 pos)
-        {
-
-            OutputArgument outArgA = new OutputArgument();
-            OutputArgument outArgB = new OutputArgument();
-            Vector3 p = pos;
-
-            if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING, p.X, p.Y, p.Z, outArgA, outArgB, 0, 1077936128, 0))
-            {
-                Vector3 r = outArgA.GetResult<Vector3>();
-                return r;
-            }
-
-            return Vector3.Zero;
-        }
-        Vector3 Bezier3(float t, Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
-        {
-            float u = 1 - t;
-            float tt = t * t;
-            float uu = u * u;
-            float uuu = uu * u;
-            float ttt = tt * t;
-
-            Vector3 p = uuu * p0;
-            p += 3 * uu * t * p1;
-            p += 3 * u * tt * p2;
-            p += ttt * p3;
-
-            return p;
-        }
+        
+        
 
         public static Vector3 Bezier2(Vector3 Start, Vector3 End, float t)
         {
@@ -4729,10 +3991,7 @@ namespace ARS
             for (int i = 0; i < PathRoute.Count - 1; i++) if (PathRoute[i] == closest) return i;
             return 0;
         }
-        public static float LaneSelectionApproachCorner(Racer r, Corner c, bool draw = false)
-        {
-            return 0f;
-        }
+        
         public static void LookForCornerAhead(Racer r)
         {
 
@@ -4748,34 +4007,9 @@ namespace ARS
 
         }
 
-        public static Vector3 LerpByDistance(Vector3 A, Vector3 B, float x)
-        {
-            Vector3 P = x * Vector3.Normalize(B - A) + A;
-            return P;
-        }
-        public static Vector3 GetXfromPosInDirection(Vector3 mypos, Vector3 dir, Vector3 pos)
-        {
-
-            Vector3 newDir = mypos - pos;
-            Vector3 offset = Vector3.Cross(dir, newDir);
-            return offset;
-        }
-        public static bool IsRoadBusy(Vector3 pos, int carNum)
-        {
-            OutputArgument outArgA = new OutputArgument();
-            OutputArgument outArgB = new OutputArgument();
-            if (Function.Call<bool>(Hash.GET_VEHICLE_NODE_PROPERTIES, pos.X, pos.Y, pos.Z, outArgA, outArgB))
-            {
-                int busy = outArgA.GetResult<int>();
-                int flags = outArgB.GetResult<int>();
-
-                //DisplayHelpTextThisFrame("Busy:" + busy + "~n~Flags:" + flags);
-                if (busy >= carNum) return true;
-
-                //BOOL GET_VEHICLE_NODE_PROPERTIES(float x, float y, float z, int *density, int* flags) // 0x0568566ACBB5DEDC 0xCC90110B
-            }
-            return false;
-        }
+        
+        
+        
 
         //Returns the max speed (m/s) the car can be doing now and still brake
         //down to the corner speed by the time it reaches the corner entry.
@@ -4796,31 +4030,7 @@ namespace ARS
             return spd;
         }
 
-        static Vector3 OffsetByAngle(Vehicle v, Vector3 refDir, Vector3 goal, float angle)
-        {
-            Vector3 outVec = Vector3.Zero;
-
-            float speed = v.Position.DistanceTo(goal);
-            Vector3 Position = v.Position;
-
-            Vector3 Goaltemp = goal; //Position + (v.ForwardVector * speed);
-            Vector3 Direction = (Goaltemp - Position).Normalized;
-            Vector3 Goal = Position + Direction * speed;
-
-            float Angle = angle;// Vector3.Angle(v.Velocity.Normalized, Direction);
-            if (Vector3.SignedAngle(Direction, refDir, Vector3.WorldUp) < 0) Angle = -Angle;
-
-            Vector3 offsetDirection = Quaternion.RotationAxis(Vector3.WorldUp, (float)(System.Math.PI / 180f) * Angle) * Direction; // Quaternion.RotationAxis takes radian angles
-
-            Vector3 physGoal = Position + offsetDirection * speed;
-
-            outVec = Vector3.Cross(Direction, (new Vector3(0, 0, (Goal.DistanceTo(physGoal)))));
-            if (Vector3.SignedAngle(Direction, offsetDirection, Vector3.WorldUp) > 0) outVec = -outVec;
-
-            DrawLine(Position, goal, Color.White);
-            DrawLine(Position, goal + outVec, Color.White);
-            return outVec;
-        }
+        
 
         static Random rnd = new Random();
         public static int GetRandomInt(int min, int max)
@@ -4871,15 +4081,9 @@ namespace ARS
             Game.Player.Character.HasGravity = true;
             //base.Dispose(dispose);
         }
-        public bool IsAhead(Vehicle v, Vector3 pos)
-        {
-            return Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS, v, pos.X, pos.Y, pos.Z).Y < 0;
-        }
+        
 
-        public bool HasArrived(Vehicle v, Vector3 pos, float range)
-        {
-            return v.IsInRangeOf(pos, range) || (Function.Call<Vector3>(Hash.GET_OFFSET_FROM_ENTITY_GIVEN_WORLD_COORDS, v, pos.X, pos.Y, pos.Z).Y < range && v.IsInRangeOf(pos, range * 2));
-        }
+        
         public static bool WasCheatStringJustEntered(string cheat)
         {
             return Function.Call<bool>(Hash._0x557E43C447E700A8, Game.GenerateHash(cheat));
@@ -4952,12 +4156,7 @@ namespace ARS
             File.AppendAllText(@"scripts\ARS\Log.log", log);
         }
 
-        void WarnPlayer(string script_name, string title, string message)
-        {
-            Function.Call(Hash._SET_NOTIFICATION_TEXT_ENTRY, "STRING");
-            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, message);
-            Function.Call(Hash._SET_NOTIFICATION_MESSAGE, "CHAR_SOCIAL_CLUB", "CHAR_SOCIAL_CLUB", true, 0, title, "~b~" + script_name);
-        }
+        
 
         public static bool CanWeUse(Entity entity)
         {
@@ -5018,22 +4217,7 @@ namespace ARS
         }
 
 
-        public static float GetDownforceGsAtSpeed(Racer r, float ms)
-        {
-
-
-            float Gs = 0f;
-            int nwheels = ARS.GetNumWheels(r.Car);
-            float basedownf = 0.035f;
-
-            //Downforce at that speed
-            if (r.Car.HasBone("spoiler")) Gs = 0.035f * nwheels;
-            else if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) Gs = 0.035f * nwheels;
-            else Gs += map(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, basedownf, true) * r.Handling.Downforce * nwheels;
-            //UI.ShowSubtitle(Gs.ToString("0.000"), 500);
-            if (float.IsNaN(Gs) || Gs > 5f) return 0f;
-            else return Gs;
-        }
+        
 
 
         static public unsafe ulong GetHandlingPtr(Vehicle handle)
@@ -5063,17 +4247,7 @@ namespace ARS
             float result = *(float*)(handlingAddress + tractionCurveMaxOffset);
             return result;
         }
-        public static unsafe float GetTRCurveMax(Vehicle v)
-        {
-
-            if (!CanWeUse(v)) return 0f;
-            ulong handlingAddress = GetHandlingPtr(v);
-            if (handlingAddress == 0) return 0f;
-            ulong tractionCurveMaxOffset = 0x088;
-            if (handlingAddress < 1) return 0f;
-            float result = *(float*)(handlingAddress + tractionCurveMaxOffset);
-            return result;
-        }
+        
         public static unsafe float GetSteerLock(Vehicle v)
         {
 
@@ -5098,17 +4272,7 @@ namespace ARS
         }
 
 
-        public static unsafe int GetModelFlags(Vehicle v)
-        {
-
-            if (!CanWeUse(v)) return 0;
-            ulong handlingAddress = GetHandlingPtr(v);
-            if (handlingAddress == 0) return 0;
-            ulong modelflags = 0x124;
-            if (handlingAddress < 1) return 0;
-            int result = *(int*)(handlingAddress + modelflags);
-            return result;
-        }
+        
         public static unsafe int GetHandlingFlags(Vehicle v)
         {
 
@@ -5120,25 +4284,8 @@ namespace ARS
             int result = *(int*)(handlingAddress + modelflags);
             return result;
         }
-        public static unsafe void SetDefMultiplier(Vehicle v, float mult)
-        {
-            if (!CanWeUse(v)) return;
-
-            ulong handlingAddress = GetHandlingPtr(v);
-
-            ulong tractionCurveMaxOffset = 0x00D0;
-            *(float*)(handlingAddress + tractionCurveMaxOffset) = mult;
-        }
-        unsafe private void SetGearRatio(Vehicle v, uint gear, float ratio)
-        {
-            if (!CanWeUse(v)) return;
-
-            if (gear > 7) return;
-
-            if (!v.Exists()) return;
-
-            *(float*)(v.MemoryAddress + 0x838 + gear * sizeof(float)) = ratio;
-        }
+        
+        
 
         public static void RandomTuning(Vehicle veh, bool color, bool livery, bool parts, bool performance, bool horn)
         {
@@ -5361,72 +4508,6 @@ namespace ARS
             return "Finished";
 
         }
-        List<dynamic> LoadVehicle(string name, Vector3 place)
-        {
-            Vehicle car = null;
-            XmlDocument XMLFile = new XmlDocument();
-
-            List<dynamic> result = new List<dynamic>();
-            List<XmlDocument> files = new List<XmlDocument>();
-
-            foreach (string filename in Directory.GetFiles(@"Scripts\ARS\Vehicles\"))
-            {
-                XMLFile.Load(filename);
-                string vehiclename = XMLFile.SelectSingleNode("//Name").InnerText;
-
-                if (vehiclename == name)
-                {
-                    UI.Notify("Found");
-                    break;
-                }
-            }
-
-            car = World.CreateVehicle(int.Parse(XMLFile.SelectSingleNode("//Model").InnerText), place);
-            car.PrimaryColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Primary").InnerText);
-            car.SecondaryColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Secondary").InnerText);
-            car.PearlescentColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Pearl").InnerText);
-            car.RimColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Wheel").InnerText);
-            car.DashboardColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Dash").InnerText);
-            car.TrimColor = (VehicleColor)int.Parse(XMLFile.SelectSingleNode("//Trim").InnerText);
-
-            foreach (XmlElement modelement in XMLFile.SelectNodes("//Mods/Mod")) car.SetMod((VehicleMod)int.Parse(modelement.GetAttribute("ModID")), int.Parse(modelement.InnerText), false);
-
-
-
-            foreach (XmlElement modelement in XMLFile.SelectNodes("//Mods/ToggleMod")) car.ToggleMod((VehicleToggleMod)int.Parse(modelement.GetAttribute("ModID")), bool.Parse(modelement.InnerText));
-
-
-            foreach (XmlElement modelement in XMLFile.SelectNodes("//Extras/Extra")) car.ToggleExtra(int.Parse(modelement.InnerText), true);
-
-
-
-            /*
-
-            float acc = float.Parse(XMLFile.SelectSingleNode("//Acceleration").InnerText);
-
-            if (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc)
-            {
-                float mul = 10f;
-                while (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc)
-                {
-                    mul += 10;
-                    car.EnginePowerMultiplier = mul;
-                    Script.Wait(0);
-                }
-            }
-            */
-
-
-
-
-            car.IsPersistent = false;
-
-            result.Add(car);
-            result.Add(XMLFile);
-
-
-            return result;
-        }
         VehicleColor[] randomcolors = { VehicleColor.MetallicRed, VehicleColor.MetallicRaceYellow, VehicleColor.MetallicBlue, VehicleColor.MetallicOrange, VehicleColor.MetallicSteelGray };
 
         List<XmlDocument> CachedCandidates = new List<XmlDocument>();
@@ -5518,28 +4599,11 @@ namespace ARS
 
                 foreach (string filename in approved)
                 {
-                    XMLFile.Load(filename);
-
-                    if (1 == 1)
-                    {
+XMLFile.Load(filename);
 
                         string m = "";
                         if (GetChild(XMLFile, "//Model") != null) m = GetChild(XMLFile, "//Model").InnerText;
-                        if (1 == 2 && new Model(m).IsValid)
-                        {
 
-                            if (haspriority.Contains(filename))
-                            {
-                                Log(LogImportance.Info, "added priority reminder");
-
-                                XmlNode donot = XMLFile.CreateElement("priority");
-                                if (GetChild(XMLFile, "Vehicle") != null) GetChild(XMLFile, "Vehicle").AppendChild(donot);
-
-                            }
-                            candidates.Add(XMLFile);
-
-                        }
-                        else
                         {
 
                             int n = 0;
@@ -5558,6 +4622,7 @@ namespace ARS
                                     if (GetChild(XMLFile, "Vehicle") != null) GetChild(XMLFile, "Vehicle").AppendChild(donot);
                                 }
                                 candidates.Add(XMLFile);
+
                                 float stats = Function.Call<float>((Hash)0xF417C2502FFFED43, model) / 100;
                                 stats += Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model);
                                 stats += Function.Call<float>(Hash.GET_VEHICLE_MODEL_MAX_TRACTION, model) / 2;
@@ -5570,9 +4635,6 @@ namespace ARS
 
                             }
                         }
-
-                    }
-
                     XMLFile = new XmlDocument();
                 }
                 Log(LogImportance.Info, "Vehicles found: " + candidates.Count);
@@ -6255,25 +5317,8 @@ namespace ARS
             XMLFile.Save(@"scripts\\ARS\Vehicles\" + name + ".xml");
             UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
-        public static bool IsBetweenRange(float n, float a, float b)
-        {
-            return n > a && n < b;
-        }
-        public static Vector3 Project(Vector3 pos, Vector3 dir, float mod, int m)
-        {
-            return Quaternion.RotationAxis(Vector3.WorldUp, (float)(System.Math.PI / 180f) * (mod * m)) * (dir * m);
-
-            /*
-             * List<Vector3> r = new List<Vector3>();
-            for (int i = 0; i < m; i++)
-            {
-                Vector3 v = Quaternion.RotationAxis(Vector3.WorldUp, (float)(System.Math.PI / 180f) * (mod*i)) * (dir*i);
-                r.Add(v);
-            }
-            return r;
-            */
-
-        }
+        
+        
     }
 
 }

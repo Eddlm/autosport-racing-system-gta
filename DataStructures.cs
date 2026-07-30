@@ -8,13 +8,7 @@ namespace ARS
     {
         public static float MaxSpeed = ARS.MPHtoMS(300f);
         public static float MinSpeed = ARS.MPHtoMS(15f);
-
-        public static float SpeedToInput(float spd, float tSpd, float scale = 1f)
-        {
-            return (tSpd - spd) / scale;
-        }
     }
-    public enum BrakeStabilityStrat { Invalid, Checking, Checked }
     public class VehData
     {
         public List<Vector3> AccelerationVector = new List<Vector3> { Vector3.Zero};
@@ -31,13 +25,8 @@ namespace ARS
         /// </summary>
         public float BaseMechanicalGrip = 1f;
         public float CurrentMechanicalGrip = 1f;
-        public float CurrentDownforce = 0f;        
         public float AvgGroundStability = 1;
-        
-
-        public float Understeer = 0;
         public Vector3 LocalGs = Vector3.Zero;
-        public Vector3 Gs = Vector3.Zero;
         public float LongitudinalGs => LocalGs.Y/9.8f;
         
         
@@ -77,8 +66,6 @@ namespace ARS
         {
             public float DeviationFromCenter = 0f;
             public float CurveRadiusToFollowPoint = 0f;
-            public TrackPoint FollowPoint = null;
-            public float CurveRadiusPhysicalGs = 0f;
             public Vector3 SpeedVector = Vector3.Zero;
         }
 
@@ -87,7 +74,6 @@ namespace ARS
         {
             public float Speed;
             public float MaxSpeed;
-            public Vector3 Direction;
             public float IntendedSpdChangeGs;
 
         }
@@ -100,14 +86,11 @@ namespace ARS
 
         public float Distance = 99;
        public float sToReach = 99f;
-       public float sToRear = 99f;
         public float DirectionDiff = 99f;
         public Vector3 rPos = Vector3.Zero;
 
 
         public Vector2 BoundingBoxTotal = Vector2.Zero;
-        public float OvertakeLane = 0f;
-        public float AvoidStr = 0f;
         public float OccupiedLane=0f;
         public float OccupiedLaneWidth = 0f;
         public void Update(Racer me)
@@ -126,12 +109,10 @@ namespace ARS
             if (SpeedDiff <= 0.001f)
             {
                 sToReach = 909f;
-                sToRear = 909f;
             }
             else
             {
                 sToReach = Distance / SpeedDiff;
-                sToRear = (Distance - BoundingBoxTotal.Y) / SpeedDiff;
             }
 
             if (rPos.Y > BoundingBoxTotal.Y)
@@ -160,18 +141,12 @@ namespace ARS
     public class VehicleControl
     {
         public float SteerTrackDegrees = 0f;
-        public float SteerStabilityCorrection = 0f;
-        public float SteerManeuver = 0f;
-        public float SteerMax = 0f;
-        public float FollowLane = 0f;
         public float SteerInput = 0f;
         public float LastAppliedSteerTrackDegrees = 0f;
         public float Throttle = 1f;
         public float Brake = 1f;
-        public float ThrottleOffset = 0f;
         public float MaxThrottle = 1f;
         public float TCSThrottle = 1f;
-        public float CurrentLockupLimiter = 1f;
 
         public int HandBrakeTime = 0;
 
@@ -201,7 +176,6 @@ namespace ARS
         public float Angle = 0f;
         public int LengthStart = 5;
         public int LenghtEnd = 5;
-        public float FullAngle = 0f;
         public float Speed = 999;
         public float Elevation = 0f;
         public float ElevationChange = 0f;
@@ -211,25 +185,15 @@ namespace ARS
     }
     public class Corner
     {
-        public Approach Approach = new Approach();
         public float Speed = 0f;
         public CornerPoint OG;
         public bool Valid=true;
         public float sToEntrance;
-        public BrakeStabilityStrat stabilityStrat=BrakeStabilityStrat.Invalid;
         public Corner  (float speed, CornerPoint oG)
         {
             Speed = speed;
-            OG = oG;    
+            OG = oG;
         }
-    }
-     
-    public class Approach
-    {
-        public bool Valid = true;
-        public bool CheckedForImpediment = false;
-        public float HoldDeviation = 0;
-
     }
 }
 
