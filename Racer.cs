@@ -317,7 +317,7 @@ namespace ARS
 
             // 7) GodotRace-style PD: P on heading error, D on yaw rate (subtracted).
             const float steerKP = 1.0f;
-            const float steerKD = 0.05f;
+            float steerKD = 0.35f / VehicleData.CurrentMechanicalGrip;
             float pTerm = steerKP * totalTargetDeg;
             float dTerm = steerKD * VehicleData.YawRotationPerSecondDegrees;
             Control.SteerTrackDegrees = pTerm - dTerm;
