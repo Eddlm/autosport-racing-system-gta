@@ -777,11 +777,8 @@ namespace ARS
                 OnAccept = () =>
                 {
                     _routeEditorActive = true;
-                    if (_routeEditorActive)
-                    {
-                        if (!_inFreeCam) ToggleFreeCam();
-                        _droneMode = false;
-                    }
+                    if (!_inFreeCam) ToggleFreeCam();
+                    _droneMode = false;
                 }
             };
         }
