@@ -461,6 +461,8 @@ namespace ARS
             // Compute target walls from all rivals.
             float targetLeftWall = -trackBound;
             float targetRightWall = trackBound;
+            bool leftConstrained = false;
+            bool rightConstrained = false;
 
             foreach (Rival r in Brain.Rivals)
             {
@@ -494,27 +496,27 @@ namespace ARS
                 {
                     float wall = (r.OccupiedLane + ourLane) / 2f + rivalBuffer;
                     if (wall > targetLeftWall) targetLeftWall = wall;
+                    leftConstrained = true;
                 }
                 else
                 {
                     float wall = (r.OccupiedLane + ourLane) / 2f - rivalBuffer;
                     if (wall < targetRightWall) targetRightWall = wall;
+                    rightConstrained = true;
                 }
             }
 
-            // If no rivals constrained anything, slowly open walls to track edges.
-            if (targetLeftWall == -trackBound && targetRightWall == trackBound)
-            {
-                float openRate = 2f * TickScale; // 2m/s, framerate independent
-                _avoidLeftWall = Math.Max(_avoidLeftWall - openRate, -trackBound);
-                _avoidRightWall = Math.Min(_avoidRightWall + openRate, trackBound);
-            }
-            else
-            {
-                // Snap to target walls when rivals are active.
+            // Each side independently: snap when constrained, decay to track edge when clear.
+            float openRate = 2f * TickScale; // 2m/s, framerate independent
+            if (leftConstrained)
                 _avoidLeftWall = targetLeftWall;
+            else
+                _avoidLeftWall = Math.Max(_avoidLeftWall - openRate, -trackBound);
+
+            if (rightConstrained)
                 _avoidRightWall = targetRightWall;
-            }
+            else
+                _avoidRightWall = Math.Min(_avoidRightWall + openRate, trackBound);
 
             // Check if there's room for our car.
             float carTotalWidth = carHalfWidth * 2f + 1f;
