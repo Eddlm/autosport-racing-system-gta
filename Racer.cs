@@ -92,6 +92,8 @@ namespace ARS
 
         bool _isPassengerized = false;
 
+        int _nitrousCooldownUntil = 0;
+
 
         public float Aggression = 50f;
 
@@ -700,6 +702,31 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             float change = tcsValue * TickScale;
             Control.TCSThrottle = ARS.Clamp(Control.TCSThrottle + change, 0.2f, 1);
         }
+        void UpdateNitrous()
+        {
+            if (ControlledByPlayer) return;
+            if (Game.GameTime < _nitrousCooldownUntil) return;
+
+            bool isLast = RacePosition >= ARS._racers.Count;
+            if (!isLast) return;
+
+            bool noCornerAhead = Brain.Corner == null || !Brain.Corner.Valid;
+            bool cornerFarEnough = false;
+            if (!noCornerAhead)
+            {
+                float distToCorner = ((Brain.Corner.Point.Node - Brain.Corner.Point.LengthStart) - CurrentTrackPoint.Node) * 2f;
+                float timeToCorner = distToCorner / Math.Max(Car.Velocity.Length(), 1f);
+                cornerFarEnough = timeToCorner > 6f;
+            }
+
+            bool straightEnough = CurrentTrackPoint.PreciseCurveRadius > 500f;
+
+            if ((noCornerAhead || cornerFarEnough) && straightEnough)
+            {
+                Function.Call((Hash)0xC8E9B6B71B8E660D, Car, true, 1.0f, 50.0f, 100.0f, false);
+                _nitrousCooldownUntil = Game.GameTime + 10000;
+            }
+        }
         public void UpdateTickData()
         {
             VehicleData.LocalGs = (Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true) - VehicleData.SpeedVectorLocal) / Game.LastFrameTime;
@@ -1173,6 +1200,8 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 
                 TractionControl();
                 ApplyStuckRecoveryOverride();
+
+                UpdateNitrous();
 
             }
             else
