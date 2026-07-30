@@ -97,6 +97,10 @@ namespace ARS
         float TorqueMult = 1.0f;
         Random Random = new Random();
 
+        // Route curvature window: start offset (seconds ahead) and window size (seconds).
+        public float RouteWindowStart = 1.0f;
+        public float RouteWindowSize = 1.0f;
+
         // Corner racing line state.
         CornerPhase _cornerPhase = CornerPhase.None;
 
@@ -706,8 +710,15 @@ namespace ARS
             float followTrackSpd =(float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * followRadius);            
 
             
-            TrackPoint followMidpoint = ARS.TrackPoints[(int)((CurrentTrackPoint.Node + Brain.data.FollowPoint.Node) * 0.5f)];
-            float hillGsDelta = ARS.GripGainLossElChange(CurrentTrackPoint.Position, followMidpoint.Position,  Brain.data.FollowPoint.Position, followTrackSpd);
+            // Hill grip calc uses the same route window.
+            float hillSpeed = Car.Velocity.Length();
+            int hillStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * RouteWindowStart), 0, ARS.TrackPoints.Count - 1);
+            int hillEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * (RouteWindowStart + RouteWindowSize)), 0, ARS.TrackPoints.Count - 1);
+            int hillMidNode = (int)((hillStartNode + hillEndNode) * 0.5f);
+            if (hillMidNode < 0) hillMidNode = 0;
+            if (hillMidNode >= ARS.TrackPoints.Count) hillMidNode = ARS.TrackPoints.Count - 1;
+
+            float hillGsDelta = ARS.GripGainLossElChange(ARS.TrackPoints[hillStartNode].Position, ARS.TrackPoints[hillMidNode].Position, ARS.TrackPoints[hillEndNode].Position, followTrackSpd);
             hillGsDelta= ARS.Clamp(hillGsDelta*0.5f, -0.3f, 0.3f);
             float adjustedFollowGrip = Math.Max(0.1f, VehicleData.CurrentMechanicalGrip + hillGsDelta);
             followTrackSpd=(float)Math.Sqrt((adjustedFollowGrip * Handling.Gravity) * followRadius);
@@ -716,7 +727,7 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5) cornerSpd = ARS.GetSpeedForCorner(Brain.Corner.OG, this);
               
-            Brain.intention.Speed = cornerSpd;
+            Brain.intention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
             // Avoidance lift-off: if there's no room to pass, cap to rival's speed
             // but only if it's slower than what we're already targeting.
@@ -799,7 +810,7 @@ namespace ARS
             bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
 
             //float allowedWheelspin = lowGripOrLowGear ? 0.8f : 0.2f;
-            float allowedWheelspin = 0.4f + ARS.map(Aggression, 0f, 100f, -0.2f, 0.2f, true);
+            float allowedWheelspin = 2.0f + ARS.map(Aggression, 0f, 100f, -0.2f, 0.2f, true);
 
             float tcsValue = ARS.map(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 8;
             float change = tcsValue * TickScale;
@@ -903,8 +914,8 @@ namespace ARS
             if (Brain.Corner.Valid && Lap > 0)
             {
                 int apexNode = Brain.Corner.OG.Node;
-                // Keep corner active until 20m past the apex node.
-                if (CurrentTrackPoint.Node > apexNode + 20 || (Math.Abs(CurrentTrackPoint.Node - apexNode) > 1000))
+                // Invalidate once we reach the apex.
+                if (CurrentTrackPoint.Node >= apexNode || (Math.Abs(CurrentTrackPoint.Node - apexNode) > 1000))
                 {
                     Brain.Corner.Valid = false;
                  }
@@ -1357,17 +1368,20 @@ namespace ARS
 
 
 
-            // Local curvature from 1-second lookahead (raw speed, not grip-scaled).
-            TrackPoint routePoint = LookAheads[eLookAheads.OneSec];
-            int routeNode = (int)ARS.Clamp(routePoint.Node, 0, ARS.TrackPoints.Count - 1);
-            int routeMidNode = (int)((CurrentTrackPoint.Node + routeNode) * 0.5f);
+            // Local curvature from a configurable speed-based window (raw speed, not grip-scaled).
+            // RouteWindowStart = seconds ahead to start the window.
+            // RouteWindowSize = window length in seconds.
+            float routeSpeed = Car.Velocity.Length();
+            int routeStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * RouteWindowStart), 0, ARS.TrackPoints.Count - 1);
+            int routeEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * (RouteWindowStart + RouteWindowSize)), 0, ARS.TrackPoints.Count - 1);
+            int routeMidNode = (int)((routeStartNode + routeEndNode) * 0.5f);
             if (routeMidNode < 0) routeMidNode = 0;
             if (routeMidNode >= ARS.TrackPoints.Count) routeMidNode = ARS.TrackPoints.Count - 1;
 
-            Brain.data.FollowPoint = routePoint;
-            if (routeNode != CurrentTrackPoint.Node)
+            Brain.data.FollowPoint = ARS.TrackPoints[routeEndNode];
+            if (routeEndNode != routeStartNode)
             {
-                Brain.data.CurveRadiusToFollowPoint = ARS.GetCurveRadius(CurrentTrackPoint.Position, routePoint.Position, ARS.TrackPoints[routeMidNode].Position) / 2;
+                Brain.data.CurveRadiusToFollowPoint = ARS.GetCurveRadius(ARS.TrackPoints[routeStartNode].Position, ARS.TrackPoints[routeEndNode].Position, ARS.TrackPoints[routeMidNode].Position) / 2;
             }
             else
             {
