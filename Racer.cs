@@ -273,7 +273,7 @@ namespace ARS
             float speedMps = Math.Max(Car.Velocity.Length(), 1f);
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
 
-            // 2) Compute target lane from corner bias or centering.
+            // 2) Compute target lane from corner bias or zero (no centering).
             float naturalLane;
             bool cornerActive = Brain.Corner != null && Brain.Corner.Valid && Lap > 0;
             if (cornerActive)
@@ -282,8 +282,8 @@ namespace ARS
             }
             else
             {
-                // Centering: steer toward track center.
-                naturalLane = Brain.data.DeviationFromCenter * 0.5f;
+                // No centering nudge — car follows heading error and avoidance only.
+                naturalLane = 0f;
             }
 
             // 3) Rival avoidance: clamp target lane away from rival's forbidden zone.
