@@ -723,6 +723,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
             if ((noCornerAhead || cornerFarEnough) && straightEnough)
             {
+                Function.Call((Hash)0x4899D7C8F5A3B4C9, Car);
                 Function.Call((Hash)0xC8E9B6B71B8E660D, Car, true, 1.0f, 50.0f, 100.0f, false);
                 _nitrousCooldownUntil = Game.GameTime + 10000;
                 UI.Notify("~b~" + Name + "~w~ fires nitrous!");
