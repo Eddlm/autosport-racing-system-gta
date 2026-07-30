@@ -694,7 +694,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
 
 
-            float allowedWheelspin = 2.0f + ARS.Remap(Aggression, 0f, 100f, -0.2f, 0.2f, true);
+            float allowedWheelspin = 1.0f + ARS.Remap(Aggression, 0f, 100f, -0.5f, 0.5f, true);
 
             float tcsValue = ARS.Remap(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 8;
             float change = tcsValue * TickScale;
