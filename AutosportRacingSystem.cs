@@ -4782,8 +4782,8 @@ namespace ARS
         //Uses the kinematic braking equation: v₀ = √(vTarget² + 2·decel·distance)
         public static float MapIdealSpeedForDistance(CornerPoint c, Racer r)
         {
-            // Distance to corner node, with 30m safety margin before the apex.
-            float distance = c.Node - r.CurrentTrackPoint.Node - 30f;
+            // Distance to corner entry (apex node - LengthStart), plus 10m safety.
+            float distance = (c.Node - c.LengthStart) - r.CurrentTrackPoint.Node - 10f;
             if (distance < 0f) distance = 0f;
 
             float velTarget = r.Brain.Corner.Speed;
