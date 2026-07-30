@@ -88,16 +88,9 @@ namespace ARS
             public float Speed;
             public float MaxSpeed;
             public Vector3 Direction;
-            public float LookaheadDeviationFromCenter;
-            public float DeviationAvoidanceStrength;
             public float IntendedSpdChangeGs;
-            //Rivals
-            public float Aggression;
-            public bool NeedAggressionChange = true;
-            public float AggroToReach;
 
         }
-        public PersonalitySet personality = new PersonalitySet();
 
     }
     public class Rival
@@ -237,46 +230,6 @@ namespace ARS
         public bool CheckedForImpediment = false;
         public float HoldDeviation = 0;
 
-    }
-
-    public class PersonalityRivals
-    {
-        public float SideToSideMinDist = 1f;
-        public float BehindRivalMinDistance = 1f;
-        public float BehindRivalBrakeDeltaDare = 0f;
-        public float AggressionBuildup = 0.01f;
-        public float ManeuverRiskFactor = 0.2f;
-    }
-    public class PersonalityStability
-    {
-        //Overdrive
-        public float SpeedRiskFactorBase = 1f;
-        public float SpeedRiskFactorAggro = 1.2f;
-        public float BrakeRiskFactorBase = 1;
-        public float BrakeRiskFactorAggro = 1.2f;
-        
-        public int Skill = 100;
-        public float NoSlide = 0.5f;
-        public float MaxSlide = 1;
-
-        public float WheelspinOnMinSlide = 0.2f;
-        public float WheelspinOnMaxSlide = 0.2f;
-
-        //Slide
-        public float MinAlowedSlideToTRLat = 0f;
-        public float MaxAllowedSlideToTRLat = 1f;
-
-        public float UndersteerFactor = 0f;
-    }
-
-    public class PersonalitySet
-    {
-        public string Name = "Default";
-        public int ProbToUse = 25;
-        public string SkillRange = "80,100";
-        public string Model = "";
-        public PersonalityRivals Rivals = new PersonalityRivals();
-        public PersonalityStability Stability = new PersonalityStability();
     }
 }
 

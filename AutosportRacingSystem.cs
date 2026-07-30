@@ -904,42 +904,7 @@ namespace ARS
             {
                 Log(LogImportance.Error, "LoadGrid failed: " + ex.Message, true);
             }
-            Log(LogImportance.Info, "Grid loaded, assigning personalities");
 
-            if (DevSettingsFile.GetValue("RACERS", "UsePersonalities", true))
-            {
-                for (int i = 0; i < Racers.Count; i++)
-                {
-                    Racers[i].Brain.personality = personalitySets.Find(s => s.ProbToUse >= 100);
-
-                    PersonalitySet p = personalitySets.Find(ps => ps.Model != "" && ps.Model.ToLowerInvariant() == Racers[i].Car.DisplayName.ToLowerInvariant());
-                    if (p != null)
-                    {
-                        Racers[i].Brain.personality = p;
-                        continue;
-                    }
-
-                    for (int per = 0; per < personalitySets.Count; per++)
-                    {
-                        if (personalitySets[per].ProbToUse >= 100) continue;
-
-                        int chance = ARS.GetRandomInt(0, 100);
-                        if (chance < personalitySets[per].ProbToUse)
-                        {
-                            p = personalitySets[per];
-                            string[] skills = p.SkillRange.Split(',');
-                            if (skills.Count() >= 2)
-                            {
-                                int skill = GetRandomInt(int.Parse(skills.First()), int.Parse(skills.Last()));
-                                p.Stability.Skill = skill;
-                            }
-
-                            Racers[i].Brain.personality = p;
-                            break;
-                        }
-                    }
-                }
-            }
             try
             {
                 StartRace();
@@ -1616,7 +1581,7 @@ namespace ARS
 
                             string text = "";
                             if (r.Driver.IsPlayer) text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " T" + fTime + "~n~";
-                            else text = "~b~" + r.RacePosition + "º~w~ " + r.Brain.personality.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
+                            else text = "~b~" + r.RacePosition + "º~w~ " + r.Name + " " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
 
 
                             positions.Add(text);
@@ -1630,7 +1595,6 @@ namespace ARS
                         foreach (Racer r in Racers)
                         {
                             string text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                            //text = "~b~" + r.Pos + "º~g~ " + r.Brain.personality.Name + " (~y~" + (Math.Round(r.Brain.intention.Aggression * 100)) + "~g~%) ~w~" + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
                             //text = "~b~" + r.RacePosition + "º~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
                             text = "~b~" + r.VehicleData.TextPerformanceIndex + " - ~g~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
 
@@ -4823,7 +4787,7 @@ namespace ARS
             float targetDistance = (c.Node - c.LengthStart - r.CurrentTrackPoint.Node) - 25 - r.Car.Velocity.Length();
 
             float velCurrent = r.Car.Velocity.Length();
-            float velTarget = r.Brain.Corner.Speed;// * r.BehaviorVariance[RandomVariance.SpeedAggroVariance];
+            float velTarget = r.Brain.Corner.Speed;
             float timeToReachTarget = Math.Max((targetDistance / velCurrent), 0.01f);
 
             //Braking ability has to account for at least 25% of the wheel grip to count as fully taking advantage of the grip. Else, braking Gs are less than grip Gs
@@ -4983,54 +4947,7 @@ namespace ARS
                 UI.Notify("~o~Failed to load the MemoryOffsets file.~w~ Check you've installed ARS properly.");
             }
 
-
-            List<ScriptSettings> pFiles = new List<ScriptSettings>();
-            foreach (string file in Directory.EnumerateFiles(@"scripts\ARS\Personalities"))
-            {
-                pFiles.Add(ScriptSettings.Load(file));
-            }
-
-            personalitySets = new List<PersonalitySet>();
-            for (int per = 0; per < pFiles.Count; per++)
-            {
-                ScriptSettings pFile = pFiles[per];
-                PersonalitySet p = new PersonalitySet();
-
-                p.Name = pFile.GetValue<string>("GENERAL", "Name", "Normal");
-                p.ProbToUse = pFile.GetValue<int>("GENERAL", "ProbToUse", 50);
-                p.Model = pFile.GetValue<string>("GENERAL", "Model", "");
-
-                p.SkillRange = pFile.GetValue<string>("GENERAL", "SkillRange", "50,100");
-
-
-                p.Stability.WheelspinOnMinSlide = pFile.GetValue("WHEELSPIN", "Base", 100f) / 100f;
-                p.Stability.WheelspinOnMaxSlide = pFile.GetValue("WHEELSPIN", "FullSlide", 50f) / 100f;
-
-
-                p.Rivals.AggressionBuildup = pFile.GetValue("AGGRESSION_RIVAL", "AggroBuildup", 0.01f);
-
-
-                p.Rivals.BehindRivalMinDistance = pFile.GetValue("AGGRESSION_RIVAL", "BehindRivalMinDistance", 0.01f);
-                p.Rivals.SideToSideMinDist = pFile.GetValue("AGGRESSION_RIVAL", "SideToRivalMinDistance", 0.01f);
-
-                p.Stability.SpeedRiskFactorBase = pFile.GetValue("AGGRESSION_TRACK", "SpeedRiskFactorBase", 1);
-                p.Stability.SpeedRiskFactorAggro = pFile.GetValue("AGGRESSION_TRACK", "SpeedRiskFactorAggro", 1);
-
-                p.Stability.BrakeRiskFactorBase = pFile.GetValue("AGGRESSION_TRACK", "BrakeRiskFactorBase", 1);
-                p.Stability.BrakeRiskFactorAggro = pFile.GetValue("AGGRESSION_TRACK", "BrakeRiskFactorAggro", 1);
-
-                p.Rivals.ManeuverRiskFactor = pFile.GetValue("AGGRESSION_TRACK", "ManeuverRiskFactor", 1);
-
-                //Understeer
-                p.Stability.UndersteerFactor = pFile.GetValue("AGGRESSION_TRACK", "UndersteerFactor", 0f);
-
-                personalitySets.Add(p);
-            }
-
-            personalitySets = personalitySets.OrderBy(p => p.ProbToUse).Reverse().ToList();
-
         }
-        List<PersonalitySet> personalitySets = new List<PersonalitySet>();
         public enum LogImportance { Info, Error, Fatal }
         public static void Log(LogImportance i, string text, bool forced = false)
         {

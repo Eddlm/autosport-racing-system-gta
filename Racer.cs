@@ -13,10 +13,6 @@ namespace ARS
     {
         GridWait, Race, FinishedRace, FinishedStandStill
     }
-    public enum RandomVariance
-    {
-        BrakeDistance, SteeringStrictness, SpeedAggroVariance, SpeedBaseVariance,
-    }
     enum CornerPhase
     {
         None, Approach, TurnIn, Hold
@@ -37,7 +33,6 @@ namespace ARS
         public VehicleControl Control = new VehicleControl();
         public Memory Brain = new Memory();
         PID HeadingPID = new PID(1.0f, 0.6f, 0);
-        public Dictionary<RandomVariance, float> BehaviorVariance = new Dictionary<RandomVariance, float>();
 
         // Vehicle dynamics/perception state.
         public VehData VehicleData = new VehData();
@@ -199,14 +194,6 @@ namespace ARS
 
             if (Car.ClassType == VehicleClass.Emergency) TeamRole = Team.Cop;
 
-
-            Random _rand = new Random();
-            foreach (RandomVariance name in Enum.GetValues(typeof(RandomVariance)).Cast<RandomVariance>())
-            {
-                float r = _rand.Next(80, 120);
-                r *= 0.01f;
-                BehaviorVariance.Add(name, r);
-            }
         }
         public void Initialize()
         {
@@ -899,8 +886,6 @@ namespace ARS
                 if (CurrentTrackPoint.Node > cornerEndNode || (Math.Abs(CurrentTrackPoint.Node - Brain.Corner.OG.Node) > 1000))
                 {
                     Brain.Corner.Valid = false;
-                    BehaviorVariance[RandomVariance.SpeedAggroVariance] = Random.Next(80, 120) * 0.01f;
-                    BehaviorVariance[RandomVariance.BrakeDistance] = Random.Next(80, 120) * 0.01f;
                  }
             }
 
