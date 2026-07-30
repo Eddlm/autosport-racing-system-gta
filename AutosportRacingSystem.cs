@@ -3398,7 +3398,7 @@ namespace ARS
             
             foreach (TrackPoint t in TrackPoints)
             {
-                int Average = (int)(t.TrackWide * 2);
+                int Average = (int)(t.TrackHalfWidth * 2);
                 if (t.Node > 50 && t.Node < Path.Count - 50)
                 {
 
@@ -3435,7 +3435,7 @@ namespace ARS
                     t.Elevation = 0f;
                 }
 
-                if (ARS.WideDict.ContainsKey(t.Node)) t.TrackWide = ARS.WideDict[t.Node];
+                if (ARS.WideDict.ContainsKey(t.Node)) t.TrackHalfWidth = ARS.WideDict[t.Node];
             }
 
             
@@ -3459,7 +3459,7 @@ namespace ARS
                 }
 
                 c.LengthStart = 20;
-                c.LenghtEnd = 20;
+                c.LengthEnd = 20;
             }
 
 
@@ -3504,11 +3504,11 @@ namespace ARS
                 }
 
                 c.LengthStart = Math.Max(minSpan, c.Node - foundStartNode);
-                c.LenghtEnd = c.LengthStart;
+                c.LengthEnd = c.LengthStart;
 
-                int maxSpanFromTrackWide = Math.Max(minSpan, (int)Math.Round(TrackPoints[c.Node].TrackWide * 4f));
+                int maxSpanFromTrackWide = Math.Max(minSpan, (int)Math.Round(TrackPoints[c.Node].TrackHalfWidth * 4f));
                 c.LengthStart = Math.Min(c.LengthStart, maxSpanFromTrackWide);
-                c.LenghtEnd = Math.Min(c.LenghtEnd, maxSpanFromTrackWide);
+                c.LengthEnd = Math.Min(c.LengthEnd, maxSpanFromTrackWide);
             }
 
             
@@ -3518,7 +3518,7 @@ namespace ARS
                 CornerPoint prev = keyCorners[i - 1];
                 CornerPoint curr = keyCorners[i];
 
-                int prevEnd = prev.Node + prev.LenghtEnd;
+                int prevEnd = prev.Node + prev.LengthEnd;
                 int currStart = curr.Node - curr.LengthStart;
                 bool overlaps = currStart <= prevEnd;
 
@@ -3539,7 +3539,7 @@ namespace ARS
                 if (cornerSign == 0) continue;
 
                 int startNode = (int)Clamp(c.Node - c.LengthStart, 0, TrackPoints.Count - 1);
-                int endNode = (int)Clamp(c.Node + c.LenghtEnd, 0, TrackPoints.Count - 1);
+                int endNode = (int)Clamp(c.Node + c.LengthEnd, 0, TrackPoints.Count - 1);
                 if (endNode < startNode) continue;
 
                 
@@ -3567,9 +3567,9 @@ namespace ARS
                 List<Vector3> bezierPoints = null;
                 for (int attempt = 0; attempt < maxApexSolveTries; attempt++)
                 {
-                    float startOutsideOffset = cornerSign * startTrackPoint.TrackWide * outsideAnchorFactor;
-                    float apexInsideOffset = -cornerSign * apexTrackPoint.TrackWide * apexAnchorFactor;
-                    float endOutsideOffset = cornerSign * endTrackPoint.TrackWide * outsideAnchorFactor;
+                    float startOutsideOffset = cornerSign * startTrackPoint.TrackHalfWidth * outsideAnchorFactor;
+                    float apexInsideOffset = -cornerSign * apexTrackPoint.TrackHalfWidth * apexAnchorFactor;
+                    float endOutsideOffset = cornerSign * endTrackPoint.TrackHalfWidth * outsideAnchorFactor;
 
                     Vector3 bezierStart = startTrackPoint.Position - (Vector3.Cross(Vector3.WorldUp, startTrackPoint.Direction) * startOutsideOffset);
                     Vector3 bezierControl = apexTrackPoint.Position - (Vector3.Cross(Vector3.WorldUp, apexTrackPoint.Direction) * apexInsideOffset);
@@ -3603,9 +3603,9 @@ namespace ARS
                     }
 
                     float apexProjectedOffset = Vector3.Dot(apexPos - closestAtApex, apexRight);
-                    float apexProjectedBound = Math.Max(0.001f, apexTrackPoint.TrackWide * apexProjectedClampFactor);
+                    float apexProjectedBound = Math.Max(0.001f, apexTrackPoint.TrackHalfWidth * apexProjectedClampFactor);
                     float apexProjectedOffsetForError = Clamp(apexProjectedOffset, -apexProjectedBound, apexProjectedBound);
-                    float apexTargetOffset = -cornerSign * apexTrackPoint.TrackWide;
+                    float apexTargetOffset = -cornerSign * apexTrackPoint.TrackHalfWidth;
                     float insideSign = Math.Sign(apexTargetOffset);
                     if (insideSign == 0f) insideSign = 1f;
                     float apexProjectedInsideAxis = apexProjectedOffsetForError * insideSign;
@@ -3613,7 +3613,7 @@ namespace ARS
                     float apexError = apexTargetInsideAxis - apexProjectedInsideAxis;
                     if (Math.Abs(apexError) <= apexTargetTolerance) break;
 
-                    float normalizedError = apexError / Math.Max(0.001f, apexTrackPoint.TrackWide);
+                    float normalizedError = apexError / Math.Max(0.001f, apexTrackPoint.TrackHalfWidth);
                     float factorDelta = Clamp(Math.Abs(normalizedError) * apexAdjustGain, 0f, maxFactorDeltaPerTry);
                     apexAnchorFactor = Clamp(apexAnchorFactor - factorDelta, minApexAnchorFactor, maxApexAnchorFactor);
                 }
@@ -3861,7 +3861,7 @@ namespace ARS
             
             float radius = float.MaxValue;
             int startNode = (int)Clamp(c.Node - c.LengthStart, 0, TrackPoints.Count - 1);
-            int endNode = (int)Clamp(c.Node + c.LenghtEnd, 0, TrackPoints.Count - 1);
+            int endNode = (int)Clamp(c.Node + c.LengthEnd, 0, TrackPoints.Count - 1);
             for (int n = startNode; n <= endNode; n++)
             {
                 float rN = TrackPoints[n].PreciseCurveRadius;
@@ -3870,15 +3870,15 @@ namespace ARS
             if (radius == float.MaxValue) radius = c.GetPreciseRadius();
 
             
-            if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AIData.MaxSpeed;
+            if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AiConstants.MaxSpeed;
 
             
             float vehicleGripGs = r.VehicleData.CurrentMechanicalGrip;
 
             float baseSpd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * radius);
-            if (float.IsNaN(baseSpd) || float.IsInfinity(baseSpd)) return AIData.MaxSpeed;
+            if (float.IsNaN(baseSpd) || float.IsInfinity(baseSpd)) return AiConstants.MaxSpeed;
 
-            return ARS.Clamp(baseSpd, AIData.MinSpeed, AIData.MaxSpeed);
+            return ARS.Clamp(baseSpd, AiConstants.MinSpeed, AiConstants.MaxSpeed);
         }
 
         

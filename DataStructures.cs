@@ -4,12 +4,12 @@ using System.Collections.Generic;
 
 namespace ARS
 {
-    public static class AIData
+    public static class AiConstants
     {
         public static float MaxSpeed = ARS.MPHtoMS(300f);
         public static float MinSpeed = ARS.MPHtoMS(15f);
     }
-    public class VehData
+    public class VehicleState
     {
         public List<Vector3> AccelerationVector = new List<Vector3> { Vector3.Zero};
         public Vector3 SpeedVectorGlobal = Vector3.Zero;
@@ -31,21 +31,21 @@ namespace ARS
     }
     public class HandlingData
     {
-        public float TRlateral = 22f;
+        public float LateralTractionCurve = 22f;
         public float Downforce = 1f;
         public float BrakingAbility = 1f;
         public float TopSpeed = 1f;
         public float Grip = 1f;
         public float Gravity = 9.8f;
-        public float Power = 1;
+        public float Acceleration = 1;
     }
 
-    public class Memory
+    public class RacerBrain
     {
-        public Data data = new Data();
+        public Perception CurrentPerception = new Perception();
         public List<Rival> Rivals = new List<Rival>();
         public Corner Corner =null;
-        public Memory()
+        public RacerBrain()
         {
             Rivals.Add(new Rival());
             Rivals.Add(new Rival());
@@ -53,19 +53,19 @@ namespace ARS
         }
 
 
-        public class Data
+        public class Perception
         {
             public float DeviationFromCenter = 0f;
             public float CurveRadiusToFollowPoint = 0f;
             public Vector3 SpeedVector = Vector3.Zero;
         }
 
-        public Intention intention = new Intention();
+        public Intention CurrentIntention = new Intention();
         public class Intention
         {
             public float Speed;
             public float MaxSpeed;
-            public float IntendedSpdChangeGs;
+            public float IntendedSpeedChangeGs;
 
         }
 
@@ -73,54 +73,54 @@ namespace ARS
     public class Rival
     {
         public Racer RivalRacer = null;
-        public RelativePos relativePos = RelativePos.Unreachable;
+        public RelativePos RelativePosition = RelativePos.Unreachable;
 
         public float Distance = 99;
-       public float sToReach = 99f;
+        public float SecondsToReach = 99f;
         public float DirectionDiff = 99f;
-        public Vector3 rPos = Vector3.Zero;
+        public Vector3 RelativeOffset = Vector3.Zero;
 
 
-        public Vector2 BoundingBoxTotal = Vector2.Zero;
+        public Vector2 CombinedSize = Vector2.Zero;
         public float OccupiedLane=0f;
         public float OccupiedLaneWidth = 0f;
         public void Update(Racer me)
         {
-            relativePos = RelativePos.Unreachable;
+            RelativePosition = RelativePos.Unreachable;
             if (RivalRacer == null) return;
 
-            rPos = ARS.GetOffset(me.Car, RivalRacer.Car);
-            BoundingBoxTotal.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2)) + 2f;
-            BoundingBoxTotal.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
-            OccupiedLaneWidth = BoundingBoxTotal.X;
-            OccupiedLane = RivalRacer.Brain.data.DeviationFromCenter;
+            RelativeOffset = ARS.GetOffset(me.Car, RivalRacer.Car);
+            CombinedSize.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2)) + 2f;
+            CombinedSize.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
+            OccupiedLaneWidth = CombinedSize.X;
+            OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
             Distance =  (me.Car.Position -RivalRacer.Car.Position).Length();
 
             float SpeedDiff = (float)Math.Round(me.Car.Velocity.Length()- RivalRacer.Car.Velocity.Length(), 4);
             if (SpeedDiff <= 0.001f)
             {
-                sToReach = 909f;
+                SecondsToReach = 909f;
             }
             else
             {
-                sToReach = Distance / SpeedDiff;
+                SecondsToReach = Distance / SpeedDiff;
             }
 
-            if (rPos.Y > BoundingBoxTotal.Y)
+            if (RelativeOffset.Y > CombinedSize.Y)
             {
-                relativePos = RelativePos.Ahead;
+                RelativePosition = RelativePos.Ahead;
             }
             else
             {
 
-                if(rPos.Y < -BoundingBoxTotal.Y)
+                if(RelativeOffset.Y < -CombinedSize.Y)
                 {
-                    relativePos = RelativePos.Behind;
+                    RelativePosition = RelativePos.Behind;
                 }
                 else
                 {
-                    if (rPos.X > 0) relativePos = RelativePos.Right;
-                    else relativePos = RelativePos.Left;
+                    if (RelativeOffset.X > 0) RelativePosition = RelativePos.Right;
+                    else RelativePosition = RelativePos.Left;
                 }
             }
 
@@ -131,9 +131,9 @@ namespace ARS
 
     public class VehicleControl
     {
-        public float SteerTrackDegrees = 0f;
+        public float SteerDegrees = 0f;
         public float SteerInput = 0f;
-        public float LastAppliedSteerTrackDegrees = 0f;
+        public float LastAppliedSteerDegrees = 0f;
         public float Throttle = 1f;
         public float Brake = 1f;
         public float MaxThrottle = 1f;
@@ -152,7 +152,7 @@ namespace ARS
         public float GeneralCurveRadius = 999f;
         public float PreciseCurveRadius = 999f;
         public float Elevation = 0f;
-        public float TrackWide = 5f;
+        public float TrackHalfWidth = 5f;
     }
 
     public class CornerPoint
@@ -160,7 +160,7 @@ namespace ARS
         public int Node = 0;
         public float Angle = 0f;
         public int LengthStart = 5;
-        public int LenghtEnd = 5;
+        public int LengthEnd = 5;
         public float Speed = 999;
         public float Elevation = 0f;
         public float ElevationChange = 0f;
@@ -171,13 +171,13 @@ namespace ARS
     public class Corner
     {
         public float Speed = 0f;
-        public CornerPoint OG;
+        public CornerPoint Point;
         public bool Valid=true;
-        public float sToEntrance;
-        public Corner  (float speed, CornerPoint oG)
+        public float SecondsToEntrance;
+        public Corner  (float speed, CornerPoint point)
         {
             Speed = speed;
-            OG = oG;
+            Point = point;
         }
     }
 }

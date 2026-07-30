@@ -27,10 +27,10 @@ namespace ARS
 
 
         public VehicleControl Control = new VehicleControl();
-        public Memory Brain = new Memory();
+        public RacerBrain Brain = new RacerBrain();
 
 
-        public VehData VehicleData = new VehData();
+        public VehicleState VehicleData = new VehicleState();
         public HandlingData Handling = new HandlingData();
         public float GroundGripMultiplier = 1f;
         Vector3 LastSpeed;
@@ -180,19 +180,19 @@ namespace ARS
             Handling.Downforce = ARS.GetDownforce(Car);
             if (Handling.Downforce > 100) Handling.Downforce *= 0.1f;
 
-            Handling.TRlateral = ARS.rad2deg(ARS.GetTRCurveLat(Car));
-            if (Handling.TRlateral < 1 || Handling.TRlateral > 100) Handling.TRlateral = 22;
-            ARS.Log(ARS.LogImportance.Info, "TRlat for " + Car.DisplayName + ":" + Handling.TRlateral + "º");
+            Handling.LateralTractionCurve = ARS.rad2deg(ARS.GetTRCurveLat(Car));
+            if (Handling.LateralTractionCurve < 1 || Handling.LateralTractionCurve > 100) Handling.LateralTractionCurve = 22;
+            ARS.Log(ARS.LogImportance.Info, "TRlat for " + Car.DisplayName + ":" + Handling.LateralTractionCurve + "º");
 
             Handling.BrakingAbility = Car.MaxBraking;
             Handling.TopSpeed = ARS.EngineTopSpeed(Car);
-            Handling.Power = Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, Car);
+            Handling.Acceleration = Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, Car);
 
 
             VehicleData.SteeringLock = ARS.rad2deg(ARS.GetSteerLock(Car));
             if (VehicleData.SteeringLock < 1 || VehicleData.SteeringLock > 100) VehicleData.SteeringLock = 40;
             ARS.Log(ARS.LogImportance.Info, "Steerlock for " + Car.DisplayName + ":" + VehicleData.SteeringLock + "º");
-            Control.SteerTrackDegrees = 0f;
+            Control.SteerDegrees = 0f;
             CurrentTrackPoint = ARS.TrackPoints.Last();
             Control.Brake = 0f;
             Control.Throttle = 0f;
@@ -211,8 +211,8 @@ namespace ARS
 
             Handling.Grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
 
-            VehicleData.PerformanceIndex = (int)((Handling.TopSpeed * 5) + (Handling.Grip * 100) + (Handling.Power * 500));
-            VehicleData.TextPerformanceIndex = ((int)(Handling.TopSpeed / 1.2) + " | " + (int)(Handling.Power * 200) + " | " + (int)(Handling.Grip * 20));
+            VehicleData.PerformanceIndex = (int)((Handling.TopSpeed * 5) + (Handling.Grip * 100) + (Handling.Acceleration * 500));
+            VehicleData.TextPerformanceIndex = ((int)(Handling.TopSpeed / 1.2) + " | " + (int)(Handling.Acceleration * 200) + " | " + (int)(Handling.Grip * 20));
 
             Car.Repair();
         }
@@ -221,7 +221,7 @@ namespace ARS
         {
             if (!TryGetSteerContext(out TrackPoint steerRefPoint, out float roadWide))
             {
-                Control.SteerTrackDegrees = 0f;
+                Control.SteerDegrees = 0f;
                 return;
             }
 
@@ -260,14 +260,14 @@ namespace ARS
 
 
             float recoveryDeg = 0f;
-            float absDev = Math.Abs(Brain.data.DeviationFromCenter);
+            float absDev = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
             float safeEdge = roadWide - carHalfWidth;
             float overshoot = absDev - safeEdge;
             if (overshoot > 0f)
             {
                 float maxRecoveryDeg = ARS.map(speedMps, 10f, 50f, 10f, 2f);
                 float severity = Math.Min(overshoot / Math.Max(safeEdge, 1f), 1f);
-                recoveryDeg = Math.Sign(Brain.data.DeviationFromCenter) * maxRecoveryDeg * severity;
+                recoveryDeg = Math.Sign(Brain.CurrentPerception.DeviationFromCenter) * maxRecoveryDeg * severity;
             }
 
 
@@ -279,7 +279,7 @@ namespace ARS
                 || _avoidRightWall < trackBound;
             if (hasActiveGuidance)
             {
-                float currentLane = Brain.data.DeviationFromCenter;
+                float currentLane = Brain.CurrentPerception.DeviationFromCenter;
                 float lookaheadDist = steerRefPoint.Position.DistanceTo(Car.Position);
                 if (lookaheadDist < 1f) lookaheadDist = speedMps * 1.5f;
 
@@ -297,15 +297,15 @@ namespace ARS
             float steerKD = 0.35f / VehicleData.CurrentMechanicalGrip;
             float pTerm = steerKP * totalTargetDeg;
             float dTerm = steerKD * VehicleData.YawRotationPerSecondDegrees;
-            Control.SteerTrackDegrees = pTerm - dTerm;
+            Control.SteerDegrees = pTerm - dTerm;
 
 
 
             if (Math.Sign((int)VehicleData.SlideAngle) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float slideCounterSteer = VehicleData.SlideAngle * ARS.map(
-                    Math.Abs(VehicleData.SlideAngle), 0, Handling.TRlateral * 1.2f, 0.5f, 1.2f, true);
-                Control.SteerTrackDegrees -= slideCounterSteer;
+                    Math.Abs(VehicleData.SlideAngle), 0, Handling.LateralTractionCurve * 1.2f, 0.5f, 1.2f, true);
+                Control.SteerDegrees -= slideCounterSteer;
             }
 
 
@@ -328,7 +328,7 @@ namespace ARS
                     return false;
                 }
 
-                localRoadWide = localSteerRef.TrackWide;
+                localRoadWide = localSteerRef.TrackHalfWidth;
                 return true;
             }
         }
@@ -340,7 +340,7 @@ namespace ARS
 
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
         {
-            CornerPoint c = Brain.Corner.OG;
+            CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
 
@@ -355,12 +355,12 @@ namespace ARS
 
             if (cornerDir == 0f) return 0f;
 
-            float halfWidth = steerRefPoint.TrackWide;
+            float halfWidth = steerRefPoint.TrackHalfWidth;
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
 
-            float curveRadius = Math.Abs(Brain.data.CurveRadiusToFollowPoint);
+            float curveRadius = Math.Abs(Brain.CurrentPerception.CurveRadiusToFollowPoint);
             float insideIntensity = ARS.map(curveRadius, 50f, 300f, 1f, 0.1f, true);
             insideIntensity = ARS.Clamp(insideIntensity, 0f, 1f);
             float insideTarget = -cornerDir * safeBound * insideIntensity;
@@ -430,20 +430,20 @@ namespace ARS
                 bool isRelevant = false;
                 bool rivalIsLeft = false;
 
-                if (r.relativePos == RelativePos.Left)
+                if (r.RelativePosition == RelativePos.Left)
                 {
                     isRelevant = true;
                     rivalIsLeft = true;
                 }
-                else if (r.relativePos == RelativePos.Right)
+                else if (r.RelativePosition == RelativePos.Right)
                 {
                     isRelevant = true;
                     rivalIsLeft = false;
                 }
-                else if (r.relativePos == RelativePos.Ahead && r.sToReach >= 0f && r.sToReach <= 4f && Math.Abs(r.DirectionDiff) <= 20f)
+                else if (r.RelativePosition == RelativePos.Ahead && r.SecondsToReach >= 0f && r.SecondsToReach <= 4f && Math.Abs(r.DirectionDiff) <= 20f)
                 {
                     isRelevant = true;
-                    rivalIsLeft = r.OccupiedLane < Brain.data.DeviationFromCenter;
+                    rivalIsLeft = r.OccupiedLane < Brain.CurrentPerception.DeviationFromCenter;
                 }
 
                 if (!isRelevant) continue;
@@ -493,11 +493,11 @@ namespace ARS
         {
 
 
-            if (Math.Sign(Control.SteerTrackDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
+            if (Math.Sign(Control.SteerDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.01f));
                 speedBasedSteeringLimit = Math.Max(ARS.rad2deg(speedBasedSteeringLimit) * 0.9f, 1f);
-                Control.SteerTrackDegrees = ARS.Clamp(Control.SteerTrackDegrees, -speedBasedSteeringLimit, speedBasedSteeringLimit);
+                Control.SteerDegrees = ARS.Clamp(Control.SteerDegrees, -speedBasedSteeringLimit, speedBasedSteeringLimit);
             }
         }
 
@@ -516,7 +516,7 @@ namespace ARS
             IsRecoveringFromStuck = false;
             StuckRecoveryEndTime = 0;
             StuckRecoveryAttempts = 0;
-            Control.LastAppliedSteerTrackDegrees = 0f;
+            Control.LastAppliedSteerDegrees = 0f;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
         }
@@ -531,28 +531,28 @@ namespace ARS
 
             if (BaseBehavior == RacerBaseBehavior.GridWait)
             {
-                Brain.intention.Speed = 99f;
+                Brain.CurrentIntention.Speed = 99f;
                 Control.HandBrakeTime = Game.GameTime + 500;
             }
 
 
 
-            if (Brain.intention.Speed >= 0f)
+            if (Brain.CurrentIntention.Speed >= 0f)
             {
-                Brain.intention.Speed = Math.Min(Brain.intention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
-                Brain.intention.Speed = Math.Min(Brain.intention.Speed, Brain.intention.MaxSpeed);
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, Brain.CurrentIntention.MaxSpeed);
             }
 
-            if ((Game.GameTime - LapStartTime) < 3000) Brain.intention.IntendedSpdChangeGs = 999;
+            if ((Game.GameTime - LapStartTime) < 3000) Brain.CurrentIntention.IntendedSpeedChangeGs = 999;
             else
             {
                 float currentLongitudinalSpeed = VehicleData.SpeedVectorLocal.Y;
-                Brain.intention.IntendedSpdChangeGs = (Brain.intention.Speed - currentLongitudinalSpeed) / 9.8f;
+                Brain.CurrentIntention.IntendedSpeedChangeGs = (Brain.CurrentIntention.Speed - currentLongitudinalSpeed) / 9.8f;
             }            
 
             float currentForwardSpeed = VehicleData.SpeedVectorLocal.Y;
-            float speedErrorGs = Brain.intention.IntendedSpdChangeGs;
-            bool wantsReverse = Brain.intention.Speed < -0.1f;
+            float speedErrorGs = Brain.CurrentIntention.IntendedSpeedChangeGs;
+            bool wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
 
             if (speedErrorGs > 0.0f)
             {
@@ -596,7 +596,7 @@ namespace ARS
             Control.Throttle = Math.Min(Control.Throttle, Control.MaxThrottle);
             if (Control.MaxThrottle < 1.00f) Control.MaxThrottle += 2 * TickScale;
 
-            if (Brain.intention.MaxSpeed < AIData.MaxSpeed) Brain.intention.MaxSpeed += 15 * TickScale;
+            if (Brain.CurrentIntention.MaxSpeed < AiConstants.MaxSpeed) Brain.CurrentIntention.MaxSpeed += 15 * TickScale;
 
         }
         float TickScale => (0.001f * TimeSinceLastCoreTick);
@@ -607,18 +607,18 @@ namespace ARS
         void SteerTranslateInput()
         {
 
-            if (float.IsNaN(Control.SteerTrackDegrees) || float.IsInfinity(Control.SteerTrackDegrees)) Control.SteerTrackDegrees = 0f;
+            if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees)) Control.SteerDegrees = 0f;
 
             float maxDeltaPerTick = 90 * TickScale;
-            float deltaToTarget = ARS.Clamp(Control.SteerTrackDegrees - Control.LastAppliedSteerTrackDegrees, -maxDeltaPerTick, maxDeltaPerTick);
+            float deltaToTarget = ARS.Clamp(Control.SteerDegrees - Control.LastAppliedSteerDegrees, -maxDeltaPerTick, maxDeltaPerTick);
              
-            Control.SteerTrackDegrees = Control.LastAppliedSteerTrackDegrees+ deltaToTarget;
+            Control.SteerDegrees = Control.LastAppliedSteerDegrees+ deltaToTarget;
 
-            Control.LastAppliedSteerTrackDegrees = Control.SteerTrackDegrees;
+            Control.LastAppliedSteerDegrees = Control.SteerDegrees;
 
             if (float.IsNaN(Control.SteerInput) || float.IsInfinity(Control.SteerInput)) Control.SteerInput = 0f;
 
-            Control.SteerInput = ARS.map(Control.SteerTrackDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1, 1, true);
+            Control.SteerInput = ARS.map(Control.SteerDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1, 1, true);
             
         }
 
@@ -629,25 +629,25 @@ namespace ARS
         {
             if (BaseBehavior == RacerBaseBehavior.GridWait)
             {
-                Brain.intention.Speed = 200f;
+                Brain.CurrentIntention.Speed = 200f;
                 return;
             }
             if (BaseBehavior == RacerBaseBehavior.FinishedRace)
             {
-                Brain.intention.Speed = 20f;
+                Brain.CurrentIntention.Speed = 20f;
                 return;
             }
             if (BaseBehavior == RacerBaseBehavior.FinishedStandStill)
             {
-                Brain.intention.Speed = 0f;
+                Brain.CurrentIntention.Speed = 0f;
                 return;
             }
-            Brain.intention.Speed = AIData.MaxSpeed;
+            Brain.CurrentIntention.Speed = AiConstants.MaxSpeed;
 
             float cornerSpd = 999f;
-            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MapIdealSpeedForDistance(Brain.Corner.OG, this) + 1f);
+            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MapIdealSpeedForDistance(Brain.Corner.Point, this) + 1f);
 
-            float followRadius = Math.Max(Brain.data.CurveRadiusToFollowPoint, 0.1f);
+            float followRadius = Math.Max(Brain.CurrentPerception.CurveRadiusToFollowPoint, 0.1f);
             float followTrackSpd =(float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * followRadius);            
 
             
@@ -666,19 +666,19 @@ namespace ARS
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
-            if (cornerSpd <= 5) cornerSpd = ARS.GetSpeedForCorner(Brain.Corner.OG, this);
+            if (cornerSpd <= 5) cornerSpd = ARS.GetSpeedForCorner(Brain.Corner.Point, this);
               
-            Brain.intention.Speed = Math.Min(cornerSpd, followTrackSpd);
+            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
 
 
             if (_avoidLiftOff)
             {
-                Rival threat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.relativePos == RelativePos.Ahead);
+                Rival threat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead);
                 if (threat != null)
                 {
                     float rivalSpeed = threat.RivalRacer.Car.Velocity.Length();
-Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
+Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed);
                 }
             }
 
@@ -713,7 +713,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             LastSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
             VehicleData.SpeedVectorGlobal = cSpeed;
             VehicleData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
-            Brain.data.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
+            Brain.CurrentPerception.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
 
 
             if (ARS.OptionValuesList[Options.ShowInputs] && !Driver.IsPlayer)
@@ -770,7 +770,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
             if (Brain.Corner.Valid && Lap > 0)
             {
-                int apexNode = Brain.Corner.OG.Node;
+                int apexNode = Brain.Corner.Point.Node;
 
                 if (CurrentTrackPoint.Node >= apexNode || (Math.Abs(CurrentTrackPoint.Node - apexNode) > 1000))
                 {
@@ -910,14 +910,14 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
 
                     Vector3 textPos = Car.Position + new Vector3(0, 0, 2f);
-                    ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.data.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
+                    ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
                     int ri = 0;
                     foreach (Rival r in Brain.Rivals)
                     {
                         if (r.RivalRacer == null) continue;
                         Vector3 rTextPos = Car.Position + new Vector3(0, 0, 2.5f + ri * 0.4f);
-                        string side = r.relativePos == RelativePos.Left ? "L" : r.relativePos == RelativePos.Right ? "R" : r.relativePos == RelativePos.Ahead ? "A" : "?";
-                        ARS.DrawText(rTextPos, "~w~R" + ri + "(" + side + ") lane: ~r~" + r.OccupiedLane.ToString("0.0") + " s: ~y~" + r.sToReach.ToString("0.0"), Color.White, 0.4f);
+                        string side = r.RelativePosition == RelativePos.Left ? "L" : r.RelativePosition == RelativePos.Right ? "R" : r.RelativePosition == RelativePos.Ahead ? "A" : "?";
+                        ARS.DrawText(rTextPos, "~w~R" + ri + "(" + side + ") lane: ~r~" + r.OccupiedLane.ToString("0.0") + " s: ~y~" + r.SecondsToReach.ToString("0.0"), Color.White, 0.4f);
                         ri++;
                     }
                 }
@@ -926,11 +926,11 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
                 {
                     if (Brain.Corner.Valid && Lap > 0)
                     {
-                        CornerPoint c = Brain.Corner.OG;
+                        CornerPoint c = Brain.Corner.Point;
                         int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
-                        int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
+                        int endNode = (int)ARS.Clamp(c.Node + c.LengthEnd, 0, ARS.TrackPoints.Count - 1);
 
-                        Vector3 chevScale = new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2.5f, 5, 5);
+                        Vector3 chevScale = new Vector3(ARS.TrackPoints[c.Node].TrackHalfWidth * 2.5f, 5, 5);
 
 
                         World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[startNode].Position, ARS.TrackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
@@ -948,11 +948,11 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
                 {
                     if (Brain.Corner.Valid && Lap > 0)
                     {
-                        CornerPoint c = Brain.Corner.OG;
+                        CornerPoint c = Brain.Corner.Point;
                         int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
-                        int endNode = (int)ARS.Clamp(c.Node + c.LenghtEnd, 0, ARS.TrackPoints.Count - 1);
+                        int endNode = (int)ARS.Clamp(c.Node + c.LengthEnd, 0, ARS.TrackPoints.Count - 1);
 
-                        Vector3 chevScale = new Vector3(ARS.TrackPoints[c.Node].TrackWide * 2.5f, 5, 5);
+                        Vector3 chevScale = new Vector3(ARS.TrackPoints[c.Node].TrackHalfWidth * 2.5f, 5, 5);
 
                         World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[startNode].Position, ARS.TrackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
                         World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node].Position, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
@@ -1005,7 +1005,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
         float OutOfTrackDistance()
         {
-            return (Math.Abs(Brain.data.DeviationFromCenter) + (VehicleData.BoundingBox / 2)) - CurrentTrackPoint.TrackWide;
+            return (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) + (VehicleData.BoundingBox / 2)) - CurrentTrackPoint.TrackHalfWidth;
         }
 
         void UpdateRivalInfo()
@@ -1030,12 +1030,12 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             }
 
             CurrentTrackPoint = points.OrderBy(t => t.Position.DistanceTo(Car.Position)).First();
-            Brain.data.DeviationFromCenter = ARS.LeftOrRight(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
+            Brain.CurrentPerception.DeviationFromCenter = ARS.LeftOrRight(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
 
             LookAheads.Clear();
             float speed = Car.Velocity.Length();
 
-            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f)), (int)(CurrentTrackPoint.TrackWide * 2f), 500);
+            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f)), (int)(CurrentTrackPoint.TrackHalfWidth * 2f), 500);
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
             int threeQuarterSec = (int)(speed * 0.75f);
@@ -1096,11 +1096,11 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
 
             if (routeEndNode != routeStartNode)
             {
-                Brain.data.CurveRadiusToFollowPoint = ARS.GetCurveRadius(ARS.TrackPoints[routeStartNode].Position, ARS.TrackPoints[routeEndNode].Position, ARS.TrackPoints[routeMidNode].Position) / 2;
+                Brain.CurrentPerception.CurveRadiusToFollowPoint = ARS.GetCurveRadius(ARS.TrackPoints[routeStartNode].Position, ARS.TrackPoints[routeEndNode].Position, ARS.TrackPoints[routeMidNode].Position) / 2;
             }
             else
             {
-                Brain.data.CurveRadiusToFollowPoint = 999;
+                Brain.CurrentPerception.CurveRadiusToFollowPoint = 999;
             }
         }
 
@@ -1194,7 +1194,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
  
         void UpdateStuckCheck()
         {
-            if (ARS.MStoMPH(Car.Velocity.Length()) > 10f && Math.Abs(Brain.data.DeviationFromCenter) < CurrentTrackPoint.TrackWide)
+            if (ARS.MStoMPH(Car.Velocity.Length()) > 10f && Math.Abs(Brain.CurrentPerception.DeviationFromCenter) < CurrentTrackPoint.TrackHalfWidth)
             {
                 StuckRecoveryAttempts = 0;
             }
@@ -1326,7 +1326,7 @@ Brain.intention.Speed = Math.Min(Brain.intention.Speed, rivalSpeed);
             float GsLoss=ARS.GripGainLossElChange(thisPoint, toMidpoint, toEndpoint, Car.Velocity.Length());
 
         
-            if (Math.Abs(Brain.data.DeviationFromCenter) < CurrentTrackPoint.TrackWide && RacePosition <= 2 && !ARS.MultiplierInTerrain.ContainsKey(CurrentTrackPoint.Node))
+            if (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) < CurrentTrackPoint.TrackHalfWidth && RacePosition <= 2 && !ARS.MultiplierInTerrain.ContainsKey(CurrentTrackPoint.Node))
             {
                 ARS.MultiplierInTerrain.Add(CurrentTrackPoint.Node, GroundGripMultiplier);
             }
