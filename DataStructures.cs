@@ -6,8 +6,8 @@ namespace ARS
 {
     public static class AiConstants
     {
-        public static float MaxSpeed = ARS.MPHtoMS(300f);
-        public static float MinSpeed = ARS.MPHtoMS(15f);
+        public static float MaxSpeed = ARS.MphToMps(300f);
+        public static float MinSpeed = ARS.MphToMps(15f);
     }
     public class VehicleState
     {
@@ -89,7 +89,7 @@ namespace ARS
             RelativePosition = RelativePos.Unreachable;
             if (RivalRacer == null) return;
 
-            RelativeOffset = ARS.GetOffset(me.Car, RivalRacer.Car);
+            RelativeOffset = ARS.EntityRelativeOffset(me.Car, RivalRacer.Car);
             CombinedSize.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2)) + 2f;
             CombinedSize.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
             OccupiedLaneWidth = CombinedSize.X;
@@ -165,8 +165,8 @@ namespace ARS
         public float Elevation = 0f;
         public float ElevationChange = 0f;
         public bool IsKey = false;
-        public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
-        public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
+        public float GetRadius() => ARS._trackPoints[Node].GeneralCurveRadius;
+        public float GetPreciseRadius() => ARS._trackPoints[Node].PreciseCurveRadius;
     }
     public class Corner
     {
