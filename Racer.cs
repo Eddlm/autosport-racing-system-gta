@@ -793,7 +793,7 @@ namespace ARS
             bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
 
             //float allowedWheelspin = lowGripOrLowGear ? 0.8f : 0.2f;
-            float allowedWheelspin = 0.1f;
+            float allowedWheelspin = 0.4f;
 
             float tcsValue = ARS.map(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 8;
             float change = tcsValue * TickScale;
