@@ -634,9 +634,29 @@ namespace ARS
                 ToggleFreeCam();
             };
 
+            NativeMenu debugMenu = new NativeMenu("Debug", "OPTIONS", "Configure ARS debug and race setup options.")
+            {
+                UseMouse = false,
+                DisableControls = true
+            };
+            AddDebugCheckbox(debugMenu, Options.ShowAggro, "Show Aggression", "Show each racer's aggression on the leaderboard.");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
+            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
+            AddDebugCheckbox(debugMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
+            AddDebugCheckbox(debugMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
+            AddDebugCheckbox(debugMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.");
+
             _arsMenu.Add(startRaceItem);
             _arsMenu.Add(freecamItem);
+            _arsMenu.AddSubMenu(debugMenu);
             _menuPool.Add(_arsMenu);
+            _menuPool.Add(debugMenu);
+        }
+        void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description)
+        {
+            NativeCheckboxItem checkbox = new NativeCheckboxItem(title, description, _debugToggles[option]);
+            checkbox.CheckboxChanged += (sender, args) => _debugToggles[option] = checkbox.Checked;
+            menu.Add(checkbox);
         }
         void StartRaceFromMenu()
         {
