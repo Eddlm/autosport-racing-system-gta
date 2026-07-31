@@ -1102,8 +1102,11 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 points.Add(ARS._trackPoints[i]);
             }
 
-            bool hasPassedLastNode = !ARS._isPointToPoint && refTrackpoint == lastNode && ARS.EntityRelativeOffset(Car, ARS._trackPoints[lastNode].Position).Y < 0f;
-            if (hasPassedLastNode) points.Add(ARS._trackPoints[0]);
+            bool hasCrossedStartLine = !ARS._isPointToPoint
+                && CanRegisterNewLap
+                && refTrackpoint >= lastNode - 6
+                && Vector3.Dot(Car.Position - ARS._trackPoints[0].Position, ARS._trackPoints[0].Direction) > 0f;
+            if (hasCrossedStartLine) points.Add(ARS._trackPoints[0]);
 
             CurrentTrackPoint = points.OrderBy(t => t.Position.DistanceTo(Car.Position)).First();
             Brain.CurrentPerception.DeviationFromCenter = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
@@ -1144,7 +1147,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
             if (CanRegisterNewLap)
             {
-                if (ARS.GetPercent(CurrentTrackPoint.Node, ARS._trackPoints.Count) < 10 || (ARS._isPointToPoint && ARS.GetPercent(CurrentTrackPoint.Node, ARS._trackPoints.Count) > 99 && ARS.EntityRelativeOffset(Car, ARS._trackPoints.Last().Position).Y < 0f))
+                if (hasCrossedStartLine || (ARS._isPointToPoint && ARS.GetPercent(CurrentTrackPoint.Node, ARS._trackPoints.Count) > 99 && ARS.EntityRelativeOffset(Car, ARS._trackPoints.Last().Position).Y < 0f))
                 {
                     CanRegisterNewLap = false;
                     Lap++;
