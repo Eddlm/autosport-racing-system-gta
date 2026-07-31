@@ -92,6 +92,19 @@ namespace ARS
 
         bool _isPassengerized = false;
 
+        const bool AiNitrousEnabled = false;
+        const float NitrousPowerMultiplier = 2.5f;
+        const float NitrousMinSpeed = 10f;
+        const float NitrousMinRadius = 2000f;
+        const float NitrousMinThrottle = 0.95f;
+        const float NitrousCornerLookaheadSeconds = 6f;
+        const int NitrousDurationMs = 3000;
+        const int NitrousCooldownMs = 10000;
+        const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
+        const ulong CheatPowerIncreaseHash = 0xB59E4BD37AE292DB;
+        const ulong FullyChargeNitrousHash = 0x1A2BCC8C636F9226;
+        const ulong OverrideNitrousLevelHash = 0xC8E9B6B71B8E660D;
+
         int _nitrousCooldownUntil = 0;
         int _nitrousActiveUntil = 0;
 
@@ -705,47 +718,49 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
         }
         void UpdateNitrous()
         {
-            if (ControlledByPlayer) return;
+            if (ControlledByPlayer || !AiNitrousEnabled) return;
 
             if (Game.GameTime < _nitrousActiveUntil)
             {
-                Function.Call((Hash)0xB59E4BD37AE292DB, Car, 2.5f);
+                Function.Call((Hash)CheatPowerIncreaseHash, Car, NitrousPowerMultiplier);
                 return;
             }
             if (_nitrousActiveUntil > 0)
             {
-                Function.Call((Hash)0xB59E4BD37AE292DB, Car, 1.0f);
-                Function.Call((Hash)0xC8E9B6B71B8E660D, Car, false, 10.0f, 0.0f, 100.0f, true);
-                _nitrousActiveUntil = 0;
+                StopNitrous();
             }
 
             if (Game.GameTime < _nitrousCooldownUntil) return;
 
-            bool isLast = RacePosition >= ARS._racers.Count;
-            if (!isLast) return;
+            if (CanFireNitrous()) StartNitrous();
+        }
+        bool CanFireNitrous()
+        {
+            if (RacePosition < ARS._racers.Count) return false;
+            if (Car.Velocity.Length() <= NitrousMinSpeed) return false;
+            if (CurrentTrackPoint.PreciseCurveRadius <= NitrousMinRadius) return false;
+            if (Control.Throttle < NitrousMinThrottle) return false;
 
-            bool noCornerAhead = Brain.Corner == null || !Brain.Corner.Valid;
-            bool cornerFarEnough = false;
-            if (!noCornerAhead)
-            {
-                float distToCorner = ((Brain.Corner.Point.Node - Brain.Corner.Point.LengthStart) - CurrentTrackPoint.Node) * 2f;
-                float timeToCorner = distToCorner / Math.Max(Car.Velocity.Length(), 1f);
-                cornerFarEnough = timeToCorner > 6f;
-            }
+            if (Brain.Corner == null || !Brain.Corner.Valid) return true;
 
-            bool straightEnough = CurrentTrackPoint.PreciseCurveRadius > 2000f;
-            bool fastEnough = Car.Velocity.Length() > 10f;
-            bool onThrottle = Control.Throttle >= 0.95f;
-
-            if ((noCornerAhead || cornerFarEnough) && straightEnough && fastEnough && onThrottle)
-            {
-                Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, "veh_xs_vehicle_mods");
-                Function.Call((Hash)0x1A2BCC8C636F9226, Car);
-                Function.Call((Hash)0xC8E9B6B71B8E660D, Car, true, 1.0f, 50.0f, 100.0f, false);
-                _nitrousActiveUntil = Game.GameTime + 3000;
-                _nitrousCooldownUntil = Game.GameTime + 10000;
-                UI.Notify("~b~" + Name + "~w~ fires nitrous!");
-            }
+            float distanceToEntrance = (Brain.Corner.Point.Node - Brain.Corner.Point.LengthStart) - CurrentTrackPoint.Node;
+            float timeToEntrance = distanceToEntrance * 2f / Math.Max(Car.Velocity.Length(), 1f);
+            return timeToEntrance > NitrousCornerLookaheadSeconds;
+        }
+        void StartNitrous()
+        {
+            Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, NitrousPtfxAsset);
+            Function.Call((Hash)FullyChargeNitrousHash, Car);
+            Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 50.0f, 100.0f, false);
+            _nitrousActiveUntil = Game.GameTime + NitrousDurationMs;
+            _nitrousCooldownUntil = Game.GameTime + NitrousCooldownMs;
+            UI.Notify("~b~" + Name + "~w~ fires nitrous!");
+        }
+        void StopNitrous()
+        {
+            Function.Call((Hash)CheatPowerIncreaseHash, Car, 1.0f);
+            Function.Call((Hash)OverrideNitrousLevelHash, Car, false, 10.0f, 0.0f, 100.0f, true);
+            _nitrousActiveUntil = 0;
         }
         public void UpdateTickData()
         {
