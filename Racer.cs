@@ -1162,7 +1162,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                     }
                 }
             }
-            else if (BaseBehavior == RacerBaseBehavior.Race && ARS.GetPercent(CurrentTrackPoint.Node, ARS._trackPoints.Count) > 50) CanRegisterNewLap = true;
+            else if (BaseBehavior == RacerBaseBehavior.Race && CurrentTrackPoint.Node >= 100) CanRegisterNewLap = true;
 
 
 
