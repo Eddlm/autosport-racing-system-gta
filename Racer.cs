@@ -536,7 +536,6 @@ namespace ARS
             Lap = 1;
             CanRegisterNewLap = false;
             _hasLeftLapArmNode = false;
-            CurrentTrackPoint = ARS._trackPoints.First();
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             Control.MaxThrottle = 1f;
             IsStuckByThrottle = false;
@@ -1113,7 +1112,33 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 && Vector3.Dot(Car.Position - ARS._trackPoints[0].Position, ARS._trackPoints[0].Direction) > 0f;
             if (hasCrossedStartLine) points.Add(ARS._trackPoints[0]);
 
-            CurrentTrackPoint = points.OrderBy(t => t.Position.DistanceTo(Car.Position)).First();
+            TrackPoint closestPoint = points[0];
+            float closestDistance = closestPoint.Position.DistanceTo(Car.Position);
+            foreach (TrackPoint point in points)
+            {
+                float distance = point.Position.DistanceTo(Car.Position);
+                if (distance < closestDistance)
+                {
+                    closestPoint = point;
+                    closestDistance = distance;
+                }
+            }
+
+            float reacquireDistance = Math.Max(CurrentTrackPoint.TrackHalfWidth + 10f, 25f);
+            if (closestDistance > reacquireDistance)
+            {
+                foreach (TrackPoint point in ARS._trackPoints)
+                {
+                    float distance = point.Position.DistanceTo(Car.Position);
+                    if (distance < closestDistance)
+                    {
+                        closestPoint = point;
+                        closestDistance = distance;
+                    }
+                }
+            }
+
+            CurrentTrackPoint = closestPoint;
             Brain.CurrentPerception.DeviationFromCenter = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
 
             LookAheads.Clear();
