@@ -110,6 +110,11 @@ namespace ARS
 
 
         public float Aggression = 50f;
+        public float Pressure = 0f;
+        const float PressureRange = 100f;
+        const float PressureProximityRange = 100f;
+        const float PressureRisePerSecond = 15f;
+        const float PressureFallPerSecond = 30f;
 
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
@@ -1222,6 +1227,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
         public void ProcessAI()
         {
             ProcessTimedAI();
+            UpdatePressure();
 
             if (BaseBehavior == RacerBaseBehavior.GridWait && Control.HandBrakeTime < Game.GameTime) Control.HandBrakeTime = Game.GameTime + (100 * ARS.GetRandomInt(2, 6));
 
@@ -1252,6 +1258,33 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 _isRecoveringFromStuck = false;
                 _stuckRecoveryEndTime = 0;
             }
+        }
+
+        void UpdatePressure()
+        {
+            int nearbyRacers = 0;
+            if (BaseBehavior == RacerBaseBehavior.Race)
+            {
+                foreach (Racer racer in ARS._racers)
+                {
+                    if (racer == this || racer.Car == null || !racer.Car.Exists()) continue;
+                    if (racer.Car.Position.DistanceTo(Car.Position) <= PressureProximityRange)
+                        nearbyRacers++;
+                }
+            }
+
+            int extraRacers = Math.Max(0, nearbyRacers - 2);
+            float crowdPenalty = Math.Max(1f, (PressureRange - Aggression) / 10f);
+            float targetPressure = nearbyRacers == 0
+                ? 0f
+                : Math.Max(0f, Aggression - extraRacers * crowdPenalty);
+
+            if (targetPressure > Pressure)
+                Pressure = Math.Min(Pressure + PressureRisePerSecond * TickScale, targetPressure);
+            else
+                Pressure = Math.Max(Pressure - PressureFallPerSecond * TickScale, targetPressure);
+
+            Pressure = ARS.Clamp(Pressure, 0f, PressureRange);
         }
  
  
