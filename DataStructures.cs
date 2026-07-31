@@ -51,6 +51,7 @@ namespace ARS
         {
             public float DeviationFromCenter = 0f;
             public float CurveRadiusToFollowPoint = 0f;
+            public float CurveRadiusAfterFollowPoint = 0f;
             public Vector3 SpeedVector = Vector3.Zero;
         }
 

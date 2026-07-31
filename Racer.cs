@@ -667,27 +667,19 @@ namespace ARS
             float cornerSpd = 999f;
             if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this) + 1f);
 
-            float followRadius = Math.Max(Brain.CurrentPerception.CurveRadiusToFollowPoint, 0.1f);
-            float followTrackSpd =(float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * followRadius);            
-
-            
-
-            float hillSpeed = Car.Velocity.Length();
-            int hillStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * RouteWindowStart), 0, ARS._trackPoints.Count - 1);
-            int hillEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * (RouteWindowStart + RouteWindowSize)), 0, ARS._trackPoints.Count - 1);
-            int hillMidNode = (int)((hillStartNode + hillEndNode) * 0.5f);
-            if (hillMidNode < 0) hillMidNode = 0;
-            if (hillMidNode >= ARS._trackPoints.Count) hillMidNode = ARS._trackPoints.Count - 1;
-
-            float hillGsDelta = ARS.HillGripDeltaGs(ARS._trackPoints[hillStartNode].Position, ARS._trackPoints[hillMidNode].Position, ARS._trackPoints[hillEndNode].Position, followTrackSpd);
-            hillGsDelta= ARS.Clamp(hillGsDelta*0.5f, -0.3f, 0.3f);
-            float adjustedFollowGrip = Math.Max(0.1f, VehicleData.CurrentMechanicalGrip + hillGsDelta);
-            followTrackSpd=(float)Math.Sqrt((adjustedFollowGrip * Handling.Gravity) * followRadius);
+            float followTrackSpd = ComputeRouteSpeed(Brain.CurrentPerception.CurveRadiusToFollowPoint, RouteWindowStart);
+            float futureFollowTrackSpd = ComputeRouteSpeed(
+                Brain.CurrentPerception.CurveRadiusAfterFollowPoint,
+                RouteWindowStart + RouteWindowSize);
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
+            if (float.IsNaN(futureFollowTrackSpd) || float.IsInfinity(futureFollowTrackSpd)) futureFollowTrackSpd = 999f;
             if (cornerSpd <= 5) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
-              
+
+            if (futureFollowTrackSpd > followTrackSpd)
+                followTrackSpd += (futureFollowTrackSpd - followTrackSpd) * (Pressure / PressureRange);
+
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
 
@@ -702,6 +694,26 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 }
             }
 
+        }
+
+        float ComputeRouteSpeed(float radius, float windowStart)
+        {
+            radius = Math.Max(radius, 0.1f);
+            float routeSpeed = (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * radius);
+            float hillSpeed = Car.Velocity.Length();
+            int hillStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * windowStart), 0, ARS._trackPoints.Count - 1);
+            int hillEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * (windowStart + RouteWindowSize)), 0, ARS._trackPoints.Count - 1);
+            int hillMidNode = (int)((hillStartNode + hillEndNode) * 0.5f);
+            if (hillMidNode < 0) hillMidNode = 0;
+            if (hillMidNode >= ARS._trackPoints.Count) hillMidNode = ARS._trackPoints.Count - 1;
+
+            float hillGsDelta = ARS.HillGripDeltaGs(
+                ARS._trackPoints[hillStartNode].Position,
+                ARS._trackPoints[hillMidNode].Position,
+                ARS._trackPoints[hillEndNode].Position,
+                routeSpeed);
+            float adjustedGrip = Math.Max(0.1f, VehicleData.CurrentMechanicalGrip + ARS.Clamp(hillGsDelta * 0.5f, -0.3f, 0.3f));
+            return (float)Math.Sqrt((adjustedGrip * Handling.Gravity) * radius);
         }
 
 
@@ -1153,21 +1165,24 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
 
 
+            Brain.CurrentPerception.CurveRadiusToFollowPoint = ComputeRouteRadius(RouteWindowStart);
+            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius(RouteWindowStart + RouteWindowSize);
+        }
+
+        float ComputeRouteRadius(float windowStart)
+        {
             float routeSpeed = Car.Velocity.Length();
-            int routeStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * RouteWindowStart), 0, ARS._trackPoints.Count - 1);
-            int routeEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * (RouteWindowStart + RouteWindowSize)), 0, ARS._trackPoints.Count - 1);
+            int routeStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * windowStart), 0, ARS._trackPoints.Count - 1);
+            int routeEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * (windowStart + RouteWindowSize)), 0, ARS._trackPoints.Count - 1);
             int routeMidNode = (int)((routeStartNode + routeEndNode) * 0.5f);
             if (routeMidNode < 0) routeMidNode = 0;
             if (routeMidNode >= ARS._trackPoints.Count) routeMidNode = ARS._trackPoints.Count - 1;
 
-            if (routeEndNode != routeStartNode)
-            {
-                Brain.CurrentPerception.CurveRadiusToFollowPoint = ARS.Circumradius3D(ARS._trackPoints[routeStartNode].Position, ARS._trackPoints[routeEndNode].Position, ARS._trackPoints[routeMidNode].Position) / 2;
-            }
-            else
-            {
-                Brain.CurrentPerception.CurveRadiusToFollowPoint = 999;
-            }
+            if (routeEndNode == routeStartNode) return 999f;
+            return ARS.Circumradius3D(
+                ARS._trackPoints[routeStartNode].Position,
+                ARS._trackPoints[routeEndNode].Position,
+                ARS._trackPoints[routeMidNode].Position) / 2f;
         }
 
 
