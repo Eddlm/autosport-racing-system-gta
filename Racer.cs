@@ -46,6 +46,7 @@ namespace ARS
         public int Lap = 0;
         public int RacePosition = 0;
         public bool CanRegisterNewLap = true;
+        bool _hasLeftLapArmNode = false;
         public bool FinishedPointToPoint = false;
 
 
@@ -222,6 +223,7 @@ namespace ARS
             LapStartTime = 0;
             Lap = 0;
             CanRegisterNewLap = true;
+            _hasLeftLapArmNode = false;
 
             string flags = ARS.GetHandlingFlags(Car).ToString("X");
             int flagsHex = Convert.ToInt32(flags, 16);
@@ -533,6 +535,7 @@ namespace ARS
             LapStartTime = Game.GameTime;
             Lap = 1;
             CanRegisterNewLap = false;
+            _hasLeftLapArmNode = false;
             CurrentTrackPoint = ARS._trackPoints.First();
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             Control.MaxThrottle = 1f;
@@ -1150,6 +1153,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 if (hasCrossedStartLine || (ARS._isPointToPoint && ARS.GetPercent(CurrentTrackPoint.Node, ARS._trackPoints.Count) > 99 && ARS.EntityRelativeOffset(Car, ARS._trackPoints.Last().Position).Y < 0f))
                 {
                     CanRegisterNewLap = false;
+                    _hasLeftLapArmNode = false;
                     Lap++;
                     if (Lap > ARS._settingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5))
                     {
@@ -1165,7 +1169,11 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                     }
                 }
             }
-            else if (BaseBehavior == RacerBaseBehavior.Race && CurrentTrackPoint.Node >= 100) CanRegisterNewLap = true;
+            else if (BaseBehavior == RacerBaseBehavior.Race)
+            {
+                if (CurrentTrackPoint.Node < 100) _hasLeftLapArmNode = true;
+                else if (_hasLeftLapArmNode) CanRegisterNewLap = true;
+            }
 
 
 
