@@ -3760,17 +3760,28 @@ namespace ARS
         
         public static void FindNextCorner(Racer r)
         {
-
-            int spd = (int)(r.Car.Velocity.Length());
-            int refNode = (int)(r.CurrentTrackPoint.Node + (spd * 3));
-            CornerPoint possiblyNext = _cornerPoints.Skip(refNode).Take(spd * 5).FirstOrDefault(c => c.IsKey);
-
-
-            if (possiblyNext != null)
+            CornerPoint nextCorner = GetNextCorner(r.CurrentTrackPoint.Node);
+            if (nextCorner == null)
             {
-                r.Brain.Corner = new Corner(CornerApexSpeed(possiblyNext, r), possiblyNext);
+                if (r.Brain.Corner != null) r.Brain.Corner.Valid = false;
+                return;
             }
 
+            if (r.Brain.Corner == null || r.Brain.Corner.Point != nextCorner || !r.Brain.Corner.Valid)
+                r.Brain.Corner = new Corner(CornerApexSpeed(nextCorner, r), nextCorner);
+        }
+
+        public static CornerPoint GetNextCorner(int currentNode)
+        {
+            CornerPoint firstCorner = null;
+            foreach (CornerPoint corner in _cornerPoints)
+            {
+                if (!corner.IsKey) continue;
+                if (firstCorner == null) firstCorner = corner;
+                if (corner.Node > currentNode) return corner;
+            }
+
+            return _isPointToPoint ? null : firstCorner;
         }
 
         
@@ -3783,7 +3794,10 @@ namespace ARS
         public static float MaxSpeedForBrakingDistance(CornerPoint c, Racer r)
         {
             
-            float distance = (c.Node - c.LengthStart) - r.CurrentTrackPoint.Node - 10f;
+            int entryNode = c.Node - c.LengthStart;
+            if (!_isPointToPoint && entryNode < 0) entryNode += _trackPoints.Count;
+            float distance = entryNode - r.CurrentTrackPoint.Node - 10f;
+            if (!_isPointToPoint && distance < 0f) distance += _trackPoints.Count;
             if (distance < 0f) distance = 0f;
 
             float velTarget = r.Brain.Corner.Speed;

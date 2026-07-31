@@ -850,19 +850,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
         }
         void UpdateCornerValidity()
         {
-            if (Brain.Corner == null) return;
-
-            if (Brain.Corner.Valid && Lap > 0)
-            {
-                int apexNode = Brain.Corner.Point.Node;
-
-                if (CurrentTrackPoint.Node >= apexNode || (Math.Abs(CurrentTrackPoint.Node - apexNode) > 1000))
-                {
-                    Brain.Corner.Valid = false;
-                 }
-            }
-
-
+            ARS.FindNextCorner(this);
         }
 
 
@@ -1236,8 +1224,6 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             if (_halfSecondTick < Game.GameTime)
             {
                 _halfSecondTick = Game.GameTime + 500 + (int)ARS.Remap(Car.Velocity.Length(), 0, 100, -250, 250, true);
-                if (!Brain.Corner.Valid && ARS.MpsToMph(Car.Velocity.Length()) > 10) ARS.FindNextCorner(this);
-
             }
 
 
