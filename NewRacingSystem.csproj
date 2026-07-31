@@ -55,6 +55,10 @@
     <Reference Include="ScriptHookVDotNet2">
       <HintPath>D:\SteamLibrary\steamapps\common\Grand Theft Auto V\ScriptHookVDotNet2.dll</HintPath>
     </Reference>
+    <Reference Include="LemonUI.SHVDN2">
+      <HintPath>C:\Users\Usuario\Downloads\LemonUI\SHVDN2\LemonUI.SHVDN2.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
@@ -83,6 +87,7 @@
   <Target Name="CopyArsDll" AfterTargets="Build" Condition="Exists('$(GtaScriptsRoot)')">
     <MakeDir Directories="$(GtaArsScriptsDir)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GtaArsScriptsDir)" />
+    <Copy SourceFiles="$(TargetDir)LemonUI.SHVDN2.dll" DestinationFolder="$(GtaArsScriptsDir)" Condition="Exists('$(TargetDir)LemonUI.SHVDN2.dll')" />
   </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
