@@ -533,6 +533,7 @@ namespace ARS
             LapStartTime = Game.GameTime;
             Lap = 1;
             CanRegisterNewLap = false;
+            CurrentTrackPoint = ARS._trackPoints.First();
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             Control.MaxThrottle = 1f;
             IsStuckByThrottle = false;
