@@ -221,6 +221,7 @@ namespace ARS
             LapTimes.Clear();
             LapStartTime = 0;
             Lap = 0;
+            CanRegisterNewLap = true;
 
             string flags = ARS.GetHandlingFlags(Car).ToString("X");
             int flagsHex = Convert.ToInt32(flags, 16);
@@ -530,6 +531,8 @@ namespace ARS
             VehicleData.AvgGroundStability = 1;
             BaseBehavior = RacerBaseBehavior.Race;
             LapStartTime = Game.GameTime;
+            Lap = 1;
+            CanRegisterNewLap = false;
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             Control.MaxThrottle = 1f;
             IsStuckByThrottle = false;
