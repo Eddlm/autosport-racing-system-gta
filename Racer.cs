@@ -1073,11 +1073,16 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             int refTrackpoint = (int)ARS.Clamp(CurrentTrackPoint.Node, 0, ARS._trackPoints.Count - 1);
 
             List<TrackPoint> points = new List<TrackPoint>();
-            for (int i = refTrackpoint - 6; points.Count <= 12; i++)
+            int lastNode = ARS._trackPoints.Count - 1;
+            int firstCandidate = Math.Max(refTrackpoint - 6, 0);
+            int lastCandidate = Math.Min(refTrackpoint + 6, lastNode);
+            for (int i = firstCandidate; i <= lastCandidate; i++)
             {
-                if (i < 0 || i >= ARS._trackPoints.Count) i = 0;
                 points.Add(ARS._trackPoints[i]);
             }
+
+            bool hasPassedLastNode = !ARS._isPointToPoint && refTrackpoint == lastNode && ARS.EntityRelativeOffset(Car, ARS._trackPoints[lastNode].Position).Y < 0f;
+            if (hasPassedLastNode) points.Add(ARS._trackPoints[0]);
 
             CurrentTrackPoint = points.OrderBy(t => t.Position.DistanceTo(Car.Position)).First();
             Brain.CurrentPerception.DeviationFromCenter = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
@@ -1095,8 +1100,9 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
             TrackPoint ResolveLookAhead(int offset)
             {
-                if (CurrentTrackPoint.Node + offset >= ARS._trackPoints.Count) return ARS._trackPoints[offset];
-                return ARS._trackPoints[CurrentTrackPoint.Node + offset];
+                int node = CurrentTrackPoint.Node + offset;
+                if (ARS._isPointToPoint) return ARS._trackPoints[Math.Min(node, lastNode)];
+                return ARS._trackPoints[node % ARS._trackPoints.Count];
             }
 
             var lookAheadOffsets = new (LookAhead key, int offset)[]
