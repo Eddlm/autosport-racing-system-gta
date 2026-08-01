@@ -114,7 +114,7 @@ namespace ARS
         public float Pressure = 0f;
         const float PressureRange = 100f;
         const float PressureProximityRange = 100f;
-        const float PressureRisePerSecond = 15f;
+        const float PressureRisePerSecond = 2f;
         const float PressureFallPerSecond = 30f;
         const float PressureMaxSpeedOffset = 5f; // pressure overspeed at Pressure=100 (m/s)
 
@@ -687,6 +687,23 @@ namespace ARS
             cornerSpd *= slopeSpeedFactor;
             followTrackSpd *= slopeSpeedFactor;
 
+            // Vertical curvature (crest/dip) grip effect - route speed only.
+            // At a crest, the car needs centripetal acceleration v²/r. If that exceeds g, the car lifts off.
+            // At a dip, the car is loaded, increasing grip temporarily.
+            int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, ARS._trackPoints.Count - 1);
+            int crestStartNode = (int)ARS.Clamp(followNode - 3, 0, ARS._trackPoints.Count - 1);
+            int crestEndNode = (int)ARS.Clamp(followNode + 3, 0, ARS._trackPoints.Count - 1);
+            if (crestStartNode < crestEndNode && followNode > crestStartNode && followNode < crestEndNode)
+            {
+                Vector3 crestStart = ARS._trackPoints[crestStartNode].Position;
+                Vector3 crestMid = ARS._trackPoints[followNode].Position;
+                Vector3 crestEnd = ARS._trackPoints[crestEndNode].Position;
+                float deltaGs = ARS.HillGripDeltaGs(crestStart, crestMid, crestEnd, Car.Velocity.Length());
+                // deltaGs < 0 = crest (unloading), deltaGs > 0 = dip (loading)
+                float verticalGripFactor = Math.Max(1f + deltaGs, 0f); // clamp at 0 for liftoff
+                followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
+            }
+
             // Pressure overspeed: fixed offset (5 m/s at full pressure), applied only to route speed.
             followTrackSpd += PressureMaxSpeedOffset * (Pressure / PressureRange);
 
@@ -697,10 +714,10 @@ namespace ARS
             if (_avoidLiftOff)
             {
                 Rival threat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead);
-                if (threat != null)
+                if (threat != null && threat.Distance < 5f)
                 {
                     float rivalSpeed = threat.RivalRacer.Car.Velocity.Length();
-Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed);
+                    Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed);
                 }
             }
 
@@ -1316,22 +1333,25 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
         void UpdatePressure()
         {
-            int nearbyRacers = 0;
+            float closestDistance = float.MaxValue;
             if (BaseBehavior == RacerBaseBehavior.Race)
             {
                 foreach (Racer racer in ARS._racers)
                 {
                     if (racer == this || racer.Car == null || !racer.Car.Exists()) continue;
-                    if (racer.Car.Position.DistanceTo(Car.Position) <= PressureProximityRange)
-                        nearbyRacers++;
+                    float dist = racer.Car.Position.DistanceTo(Car.Position);
+                    if (dist < closestDistance)
+                        closestDistance = dist;
                 }
             }
 
-            int extraRacers = Math.Max(0, nearbyRacers - 2);
-            float crowdPenalty = Math.Max(1f, (PressureRange - Aggression) / 10f);
-            float targetPressure = nearbyRacers == 0
-                ? 0f
-                : Math.Max(0f, Aggression - extraRacers * crowdPenalty);
+            float targetPressure = 0f;
+            if (closestDistance <= PressureProximityRange)
+            {
+                // Map 100m→0, 20m→Aggression
+                float t = ARS.Clamp((PressureProximityRange - closestDistance) / (PressureProximityRange - 20f), 0f, 1f);
+                targetPressure = Aggression * t;
+            }
 
             if (targetPressure > Pressure)
                 Pressure = Math.Min(Pressure + PressureRisePerSecond * TickScale, targetPressure);
