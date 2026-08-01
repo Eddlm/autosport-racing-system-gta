@@ -89,6 +89,7 @@ namespace ARS
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
         bool _steerCapped = false;
+        float _steerOver = 0f;
 
 
 
@@ -387,8 +388,7 @@ namespace ARS
 
 
             float curveRadius = Math.Abs(Brain.CurrentPerception.CurveRadiusToFollowPoint);
-            float insideIntensity = ARS.Remap(curveRadius, 50f, 300f, 1f, 0.1f, true);
-            insideIntensity = ARS.Clamp(insideIntensity, 0f, 1f);
+            float insideIntensity = ARS.Remap(curveRadius, 100f, 1000f, 1f, 0.1f, true);
             float insideTarget = -cornerDir * safeBound * insideIntensity;
 
             float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
@@ -397,7 +397,7 @@ namespace ARS
             float targetLane;
             const float approachStartTime = 5.0f;
             const float lerpStartTime = 2.0f;
-            const float turnInTime = 1.0f;
+            const float turnInTime = 1.8f;
 
             if (CurrentTrackPoint.Node >= apexNode)
             {
@@ -518,6 +518,7 @@ namespace ARS
         void ApplySteerLimits()
         {
             _steerCapped = false;
+            _steerOver = 0f;
 
 
             if (Math.Sign(Control.SteerDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
@@ -526,7 +527,8 @@ namespace ARS
                 speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * 0.9f, Handling.LateralTractionCurve * 0.5f);
                 float requestedSteer = Control.SteerDegrees;
                 Control.SteerDegrees = ARS.Clamp(Control.SteerDegrees, -speedBasedSteeringLimit, speedBasedSteeringLimit);
-                if (Math.Abs(requestedSteer) > Math.Abs(Control.SteerDegrees) + 0.001f)
+                _steerOver = requestedSteer - Control.SteerDegrees;
+                if (Math.Abs(_steerOver) > 0.001f)
                 {
                     _steerCapped = true;
                 }
@@ -589,18 +591,19 @@ namespace ARS
             float speedErrorGs = Brain.CurrentIntention.IntendedSpeedChangeGs;
             bool wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
 
-            // Impede throttle if going over 10 m/s and steering was capped by the limiter
-            float steerImpediment = 1f;
+            // Understeer throttle cap: 1.0 (no impediment) at 5° under the steering limit,
+            // 0.0 at the limit, -1.0 (full brake) at 5° over. Signed by steering direction.
+            float understeerThrottleCap = 1f;
             if (currentForwardSpeed > 10f && _steerCapped)
             {
-                steerImpediment = 0f;
+                understeerThrottleCap = ARS.Clamp(-_steerOver / 5f, -1f, 1f);
             }
 
             if (speedErrorGs > 0.0f)
             {
 
                 if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 2f, 0f, 1f);
-                else newThrottle = ARS.Clamp(speedErrorGs * 2f, 0f, throttleCap) * steerImpediment;
+                else newThrottle = ARS.Clamp(speedErrorGs * 2f, 0f, throttleCap) * Math.Max(understeerThrottleCap, 0f);
             }
             else if (speedErrorGs < 0.0f)
             {
@@ -620,7 +623,14 @@ namespace ARS
             }
 
 
- 
+            // Understeer floor: when over the steering limit, the negative part of
+            // understeerThrottleCap (-1..0) becomes the MINIMUM brake input.
+            float understeerBrakeMin = -Math.Min(understeerThrottleCap, 0f);
+            if (understeerBrakeMin > 0f)
+            {
+                newBrake = Math.Max(newBrake, understeerBrakeMin);
+            }
+
             if (newBrake > 0.0) newThrottle = 0; else newBrake = 0;
 
 

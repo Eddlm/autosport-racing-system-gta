@@ -3829,7 +3829,7 @@ namespace ARS
             
             int entryNode = c.Node - c.LengthStart;
             if (!_isPointToPoint && entryNode < 0) entryNode += _trackPoints.Count;
-            float distance = entryNode - r.CurrentTrackPoint.Node - 10f;
+            float distance = entryNode - r.CurrentTrackPoint.Node - 1f;
             if (!_isPointToPoint && distance < 0f) distance += _trackPoints.Count;
             if (distance < 0f) distance = 0f;
 
