@@ -51,6 +51,7 @@ namespace ARS
         {
             public float DeviationFromCenter = 0f;
             public float CurveRadiusToFollowPoint = 0f;
+            // NEVER USED — kept for the future "two conflicting corners" work. Written in Racer.UpdateTrackPosition, never read.
             public float CurveRadiusAfterFollowPoint = 0f;
             public Vector3 SpeedVector = Vector3.Zero;
         }
@@ -157,6 +158,7 @@ namespace ARS
         public int LengthStart = 5;
         public int LengthEnd = 5;
         public float Speed = 999;
+        public float Radius = 999f;
         public float Elevation = 0f;
         public float ElevationChange = 0f;
         public bool IsKey = false;

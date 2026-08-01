@@ -116,6 +116,7 @@ namespace ARS
         const float PressureProximityRange = 100f;
         const float PressureRisePerSecond = 15f;
         const float PressureFallPerSecond = 30f;
+        const float PressureMaxSpeedOffset = 5f; // pressure overspeed at Pressure=100 (m/s)
 
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
@@ -671,20 +672,23 @@ namespace ARS
             Brain.CurrentIntention.Speed = AiConstants.MaxSpeed;
 
             float cornerSpd = 999f;
-            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this) + 1f);
+            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
 
-            float followTrackSpd = ComputeRouteSpeed(Brain.CurrentPerception.CurveRadiusToFollowPoint, RouteWindowStart);
-            float futureFollowTrackSpd = ComputeRouteSpeed(
-                Brain.CurrentPerception.CurveRadiusAfterFollowPoint,
-                RouteWindowStart + RouteWindowSize);
+            float followTrackSpd = ComputeRouteSpeed(Brain.CurrentPerception.CurveRadiusToFollowPoint);
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
-            if (float.IsNaN(futureFollowTrackSpd) || float.IsInfinity(futureFollowTrackSpd)) futureFollowTrackSpd = 999f;
             if (cornerSpd <= 5) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
-            if (futureFollowTrackSpd > followTrackSpd)
-                followTrackSpd += (futureFollowTrackSpd - followTrackSpd) * (Pressure / PressureRange);
+            // Slope grip loss: loss = k · θ^exp, applied to both corner and route speed.
+            float slopeAngle = GetFollowPointSlopeAngle();
+            float slopeGripFactor = Math.Max(1f - SlopeGripLossK * (float)Math.Pow(slopeAngle, SlopeGripLossExp), 0.1f);
+            float slopeSpeedFactor = (float)Math.Sqrt(slopeGripFactor);
+            cornerSpd *= slopeSpeedFactor;
+            followTrackSpd *= slopeSpeedFactor;
+
+            // Pressure overspeed: fixed offset (5 m/s at full pressure), applied only to route speed.
+            followTrackSpd += PressureMaxSpeedOffset * (Pressure / PressureRange);
 
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
@@ -702,28 +706,27 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
         }
 
-        float ComputeRouteSpeed(float radius, float windowStart)
+        float ComputeRouteSpeed(float radius)
         {
             radius = Math.Max(radius, 0.1f);
-            float routeSpeed = (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * radius);
-            float hillSpeed = Car.Velocity.Length();
-            int hillStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * windowStart), 0, ARS._trackPoints.Count - 1);
-            int hillEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(hillSpeed * (windowStart + RouteWindowSize)), 0, ARS._trackPoints.Count - 1);
-            int hillMidNode = (int)((hillStartNode + hillEndNode) * 0.5f);
-            if (hillMidNode < 0) hillMidNode = 0;
-            if (hillMidNode >= ARS._trackPoints.Count) hillMidNode = ARS._trackPoints.Count - 1;
-
-            float hillGsDelta = ARS.HillGripDeltaGs(
-                ARS._trackPoints[hillStartNode].Position,
-                ARS._trackPoints[hillMidNode].Position,
-                ARS._trackPoints[hillEndNode].Position,
-                routeSpeed);
-            float adjustedGrip = Math.Max(0.1f, VehicleData.CurrentMechanicalGrip + ARS.Clamp(hillGsDelta * 0.5f, -0.3f, 0.3f));
-            return (float)Math.Sqrt((adjustedGrip * Handling.Gravity) * radius);
+            return (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * radius);
         }
 
+        const float SlopeGripLossK = 3f;    // multiplier for slope grip loss: loss = k · θ²
+        const float SlopeGripLossExp = 2f;   // exponent
 
+        float GetFollowPointSlopeAngle()
+        {
+            int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, ARS._trackPoints.Count - 1);
+            int aheadNode = (int)ARS.Clamp(followNode + 5, 0, ARS._trackPoints.Count - 1);
+            if (aheadNode == followNode) return 0f;
 
+            Vector3 from = ARS._trackPoints[followNode].Position;
+            Vector3 to = ARS._trackPoints[aheadNode].Position;
+            float horizDist = Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y));
+            if (horizDist < 0.01f) return 0f;
+            return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
+        }
 
         void TractionControl()
         {
@@ -963,16 +966,6 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                 if (showInputs)
                 {
                     DrawInputTrails();
-                }
-                if (showTrack)
-                {
-                   
-                }
-
-                if (showAggro)
-                {
-                    Color pressureColor = ARS.GradientAtoBtoC(Color.Green, Color.Yellow, Color.Red, Pressure);
-                    World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + new Vector3(0f, 0f, 1.5f), Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, -0.5f), pressureColor, false, true, 0, false, "", "", false);
 
                     Vector3 trackCenter = CurrentTrackPoint.Position;
                     Vector3 trackRight = Vector3.Cross(CurrentTrackPoint.Direction, Vector3.WorldUp);
@@ -994,6 +987,18 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
                         ARS.DrawText(rTextPos, "~w~R" + ri + "(" + side + ") lane: ~r~" + r.OccupiedLane.ToString("0.0") + " s: ~y~" + r.SecondsToReach.ToString("0.0"), Color.White, 0.4f);
                         ri++;
                     }
+                }
+                if (showTrack)
+                {
+                   
+                }
+
+                if (showAggro)
+                {
+                    Color pressureColor = ARS.GradientAtoBtoC(Color.Green, Color.Yellow, Color.Red, Pressure);
+                    World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + new Vector3(0f, 0f, 1.5f), Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, -0.5f), pressureColor, false, true, 0, false, "", "", false);
+
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2f), ((int)Pressure).ToString(), Color.White, 0.4f);
                 }
 
                 if (showTrack)
@@ -1023,6 +1028,12 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[startNode].Position, ARS._trackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
             World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[c.Node].Position, ARS._trackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
             World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[endNode].Position, ARS._trackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+
+            // Text ~2m above the apex: corner radius + apex speed (single block, ~n~ newline)
+            Vector3 apexPos = ARS._trackPoints[c.Node].Position;
+            ARS.DrawText(apexPos + new Vector3(0f, 0f, 2f),
+                "R ~b~" + c.Radius.ToString("0.0") + "~n~~o~SPD " + corner.Speed.ToString("0.0"),
+                Color.Blue, 0.4f);
         }
 
         void DrawInputTrails()
@@ -1196,7 +1207,7 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
 
 
             Brain.CurrentPerception.CurveRadiusToFollowPoint = ComputeRouteRadius(RouteWindowStart);
-            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius(RouteWindowStart + RouteWindowSize);
+            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius(RouteWindowStart + RouteWindowSize); // NEVER USED — kept for future "two conflicting corners" work
         }
 
         float ComputeRouteRadius(float windowStart)
@@ -1449,20 +1460,9 @@ Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed
             handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 5f);
 
             GroundGripMultiplier = ARS.WheelGripMultipliers(Car).Average();
-            Vector3 thisPoint = CurrentTrackPoint.Position;
-            Vector3 toMidpoint = LookAheads[LookAhead.HalfSec].Position;
-            Vector3 toEndpoint = LookAheads[LookAhead.OneSec].Position;
-
-            float elChangeDegrees = (toEndpoint.Normalized.Z - toMidpoint.Normalized.Z) * 90;
-
-
-
-            float hillGsLoss = ARS.HillGripMultiplierFromVelocity(this,4);
 
             VehicleData.BaseMechanicalGrip = handlingGrip;
             VehicleData.CurrentMechanicalGrip = ((VehicleData.BaseMechanicalGrip) * GroundGripMultiplier);
-            VehicleData.CurrentMechanicalGrip *= hillGsLoss;
-            float GsLoss=ARS.HillGripDeltaGs(thisPoint, toMidpoint, toEndpoint, Car.Velocity.Length());
 
         
             if (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) < CurrentTrackPoint.TrackHalfWidth && RacePosition <= 2 && !ARS._terrainGripMultipliers.ContainsKey(CurrentTrackPoint.Node))

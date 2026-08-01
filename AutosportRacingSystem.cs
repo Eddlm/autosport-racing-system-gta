@@ -60,8 +60,8 @@ namespace ARS
         public static Dictionary<Options, bool> _debugToggles = new Dictionary<Options, bool>()
     {
         { Options.ShowAggro, false },
-        { Options.ShowInputs, true },
-        { Options.ShowTrackAnalysis, true },
+        { Options.ShowInputs, false },
+        { Options.ShowTrackAnalysis, false },
         { Options.ShowPhysics, false },
         { Options.UseNearbyCars, false },
         { Options.ReverseRoute, false }
@@ -3275,6 +3275,17 @@ namespace ARS
                 int maxSpanFromTrackWide = Math.Max(minSpan, (int)Math.Round(_trackPoints[c.Node].TrackHalfWidth * 4f));
                 c.LengthStart = Math.Min(c.LengthStart, maxSpanFromTrackWide);
                 c.LengthEnd = Math.Min(c.LengthEnd, maxSpanFromTrackWide);
+
+                // Store the minimum precise curve radius across the final corner span
+                int radiusStart = (int)Clamp(c.Node - c.LengthStart, 0, _trackPoints.Count - 1);
+                int radiusEnd = (int)Clamp(c.Node + c.LengthEnd, 0, _trackPoints.Count - 1);
+                float minRadius = float.MaxValue;
+                for (int n = radiusStart; n <= radiusEnd; n++)
+                {
+                    float rN = _trackPoints[n].PreciseCurveRadius;
+                    if (rN > 0f && rN < minRadius) minRadius = rN;
+                }
+                c.Radius = (minRadius == float.MaxValue) ? c.GetPreciseRadius() : minRadius;
             }
 
             
@@ -3625,15 +3636,8 @@ namespace ARS
         public static float CornerApexSpeed(CornerPoint c, Racer r)
         {
             
-            float radius = float.MaxValue;
-            int startNode = (int)Clamp(c.Node - c.LengthStart, 0, _trackPoints.Count - 1);
-            int endNode = (int)Clamp(c.Node + c.LengthEnd, 0, _trackPoints.Count - 1);
-            for (int n = startNode; n <= endNode; n++)
-            {
-                float rN = _trackPoints[n].PreciseCurveRadius;
-                if (rN > 0f && rN < radius) radius = rN;
-            }
-            if (radius == float.MaxValue) radius = c.GetPreciseRadius();
+            float radius = c.Radius;
+            if (radius <= 0f) radius = c.GetPreciseRadius();
 
             
             if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AiConstants.MaxSpeed;
