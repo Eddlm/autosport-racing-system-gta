@@ -88,6 +88,7 @@ namespace ARS
         bool _avoidLiftOff = false;
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
+        bool _steerCapped = false;
 
 
 
@@ -516,13 +517,19 @@ namespace ARS
 
         void ApplySteerLimits()
         {
+            _steerCapped = false;
 
 
             if (Math.Sign(Control.SteerDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
-                float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.01f));
-                speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * 0.9f, 1f);
+                float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.0f));
+                speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * 0.9f, Handling.LateralTractionCurve * 0.5f);
+                float requestedSteer = Control.SteerDegrees;
                 Control.SteerDegrees = ARS.Clamp(Control.SteerDegrees, -speedBasedSteeringLimit, speedBasedSteeringLimit);
+                if (Math.Abs(requestedSteer) > Math.Abs(Control.SteerDegrees) + 0.001f)
+                {
+                    _steerCapped = true;
+                }
             }
         }
 
@@ -582,11 +589,18 @@ namespace ARS
             float speedErrorGs = Brain.CurrentIntention.IntendedSpeedChangeGs;
             bool wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
 
+            // Impede throttle if going over 10 m/s and steering was capped by the limiter
+            float steerImpediment = 1f;
+            if (currentForwardSpeed > 10f && _steerCapped)
+            {
+                steerImpediment = 0f;
+            }
+
             if (speedErrorGs > 0.0f)
             {
 
                 if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 2f, 0f, 1f);
-                else newThrottle = ARS.Clamp(speedErrorGs * 2f, 0f, throttleCap);
+                else newThrottle = ARS.Clamp(speedErrorGs * 2f, 0f, throttleCap) * steerImpediment;
             }
             else if (speedErrorGs < 0.0f)
             {
@@ -686,6 +700,9 @@ namespace ARS
             float slopeSpeedFactor = (float)Math.Sqrt(slopeGripFactor);
             cornerSpd *= slopeSpeedFactor;
             followTrackSpd *= slopeSpeedFactor;
+
+            // 3 m/s offset to corner speed before hill (vertical curvature) computation
+            cornerSpd += 3f;
 
             // Vertical curvature (crest/dip) grip effect - route speed only.
             // At a crest, the car needs centripetal acceleration v²/r. If that exceeds g, the car lifts off.

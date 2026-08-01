@@ -639,7 +639,7 @@ namespace ARS
                 UseMouse = false,
                 DisableControls = true
             };
-            AddDebugCheckbox(debugMenu, Options.ShowAggro, "Show Aggression", "Show each racer's aggression on the leaderboard.");
+            AddDebugCheckbox(debugMenu, Options.ShowAggro, "Show Pressure", "Show each racer's pressure on the leaderboard and above their car.");
             AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
             AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
             AddDebugCheckbox(debugMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
@@ -991,7 +991,7 @@ namespace ARS
 
                             string text = "";
                             if (r.Driver.IsPlayer) text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " T" + fTime + "~n~";
-                            else text = "~b~" + r.RacePosition + "º~w~ " + r.Name + "~p~(" + r.Aggression.ToString("0") + ")~w~ " + r.Lap + "/" + _settingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
+                            else text = "~b~" + r.RacePosition + "º~w~ " + r.Name + "~p~(" + r.Pressure.ToString("0") + ")~w~ " + r.Lap + "/" + _settingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
 
 
                             positions.Add(text);
@@ -1004,9 +1004,9 @@ namespace ARS
                     {
                         foreach (Racer r in _racers)
                         {
-                            string text = "~b~" + r.RacePosition + "º~g~ " + r.Name + "~p~(" + r.Aggression.ToString("0") + ")~w~ L" + r.Lap + "/" + _settingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            string text = "~b~" + r.RacePosition + "º~g~ " + r.Name + "~p~(" + r.Pressure.ToString("0") + ")~w~ L" + r.Lap + "/" + _settingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
                             
-                            text = "~b~" + r.VehicleData.TextPerformanceIndex + " - ~g~ " + r.Name + "~p~(" + r.Aggression.ToString("0") + ")~w~ L" + r.Lap + "/" + _settingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
+                            text = "~b~" + r.VehicleData.TextPerformanceIndex + " - ~g~ " + r.Name + "~p~(" + r.Pressure.ToString("0") + ")~w~ L" + r.Lap + "/" + _settingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
 
 
                             if (r.Driver.IsPlayer)
@@ -2531,6 +2531,35 @@ namespace ARS
                     Script.Yield();
                 }
             }
+
+            if (WasCheatStringJustEntered("arsbuilddumpcarlist"))
+            {
+                UI.Notify("~b~[ARS]:~w~ Generating vehicle files from modeldump.txt.");
+
+                string dumpFilePath = @"Scripts\ARS\modeldump.txt";
+                if (File.Exists(dumpFilePath))
+                {
+                    string content = File.ReadAllText(dumpFilePath);
+                    string[] modelNames = content.Split(new[] { ',', '\n', '\r', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    foreach (string modelName in modelNames)
+                    {
+                        string trimmedName = modelName.Trim().ToLowerInvariant();
+                        if (!string.IsNullOrEmpty(trimmedName))
+                        {
+                            CreateVehicleFromName(trimmedName);
+                            Script.Yield();
+                        }
+                    }
+
+                    UI.Notify("~b~[ARS]:~w~ Processed " + modelNames.Length + " models from modeldump.txt.");
+                }
+                else
+                {
+                    UI.Notify("~r~[ARS]:~w~ modeldump.txt not found in Scripts\\ARS\\");
+                }
+            }
+
 
             if (WasCheatStringJustEntered("arssettings"))
             {
@@ -4431,8 +4460,24 @@ XMLFile.Load(filename);
                     candidates.Add(item.Key);
                 }
 
-                while (candidates.Count > maxcars) candidates.RemoveAt(0);
-                Log(LogImportance.Info, "Vehicles sorted by top speed.");
+                // Pick maxcars random candidates from the qualified pool instead of always the fastest
+                if (candidates.Count > maxcars)
+                {
+                    // Fisher-Yates shuffle
+                    for (int i = candidates.Count - 1; i > 0; i--)
+                    {
+                        int j = GetRandomInt(0, i);
+                        XmlDocument temp = candidates[i];
+                        candidates[i] = candidates[j];
+                        candidates[j] = temp;
+                    }
+                    candidates.RemoveRange(maxcars, candidates.Count - maxcars);
+                    Log(LogImportance.Info, "Vehicles shuffled and randomized.");
+                }
+                else
+                {
+                    Log(LogImportance.Info, "Vehicles sorted by top speed.");
+                }
 
 
             }
@@ -5002,6 +5047,103 @@ XMLFile.Load(filename);
 
             Data.AppendChild(Vehicle);
 
+
+            XMLFile.AppendChild(Data);
+
+            XMLFile.Save(@"scripts\\ARS\Vehicles\" + name + ".xml");
+            UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
+        }
+
+        void CreateVehicleFromName(string modelName)
+        {
+            Log(LogImportance.Info, "Creating item from model name: " + modelName);
+
+            // Convert model name to hash using natives
+            int hash = Function.Call<int>(Hash.GET_HASH_KEY, modelName);
+
+            // Check if model is valid using natives
+            if (!Function.Call<bool>(Hash.IS_MODEL_VALID, hash))
+            {
+                Log(LogImportance.Info, modelName + " is not a valid model hash. Skipping.");
+                return;
+            }
+
+            // Check if it's a vehicle model
+            if (!Function.Call<bool>(Hash.IS_MODEL_A_VEHICLE, hash))
+            {
+                Log(LogImportance.Info, modelName + " is not a vehicle model. Skipping.");
+                return;
+            }
+
+            // Check if it has seats (is a drivable vehicle)
+            if (Function.Call<int>(Hash._0x2AD93716F184EDA4, hash) == 0)
+            {
+                Log(LogImportance.Info, modelName + " has no seats. Aborting this one.");
+                return;
+            }
+
+            // Check if it has an engine
+            if (Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, hash) <= 0.01f)
+            {
+                Log(LogImportance.Info, modelName + " has no engine. Aborting this one.");
+                return;
+            }
+
+            string name = modelName;
+            string file_routeNodes = @"Scripts\ARS\Vehicles\" + name + ".xml";
+
+            if (File.Exists(file_routeNodes))
+            {
+                name += " (" + DateTime.Now.GetHashCode() + ")";
+            }
+
+            File.AppendAllText(file_routeNodes, "");
+
+            XmlDocument XMLFile = new XmlDocument();
+
+            XmlNode Data = XMLFile.CreateNode(XmlNodeType.Element, "Data", null);
+            XMLFile.AppendChild(Data);
+
+            XmlNode Vehicle = XMLFile.CreateNode(XmlNodeType.Element, "Vehicle", null);
+
+            XmlNode temp = XMLFile.CreateElement("Name");
+            temp.InnerText = name;
+            Vehicle.AppendChild(temp);
+
+            XmlNode Class = XMLFile.CreateElement("Class");
+            Class.InnerText = ((VehicleClass)Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, hash)).ToString();
+            Vehicle.AppendChild(Class);
+
+            List<string> keywords = new List<string>();
+            string nameAutotag = name;
+
+            nameAutotag = nameAutotag.Replace(@"-", "");
+            nameAutotag = nameAutotag.Replace(@"/", "");
+            nameAutotag = nameAutotag.Replace(@" ", "");
+            nameAutotag = nameAutotag.Replace(@"+", "");
+
+            keywords.Add(Class.InnerText);
+            keywords.Add(name);
+            keywords.Add(nameAutotag);
+
+            XmlNode keyw = XMLFile.CreateElement("Disciplines");
+            foreach (string keyword in keywords)
+            {
+                XmlNode ktoadd = XMLFile.CreateElement("Discipline");
+                ktoadd.InnerText = keyword.ToLowerInvariant();
+                keyw.AppendChild(ktoadd);
+            }
+
+            Vehicle.AppendChild(keyw);
+            temp = XMLFile.CreateElement("Model");
+            temp.InnerText = hash.ToString();
+            Vehicle.AppendChild(temp);
+
+            XmlAttribute vname = XMLFile.CreateAttribute("ModelName");
+            vname.InnerText = modelName;
+            temp.Attributes.Append(vname);
+
+            Data.AppendChild(Vehicle);
 
             XMLFile.AppendChild(Data);
 
