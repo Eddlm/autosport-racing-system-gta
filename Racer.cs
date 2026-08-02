@@ -760,6 +760,29 @@ namespace ARS
                 _accelerationCap = Math.Min(_accelerationCap, avoidScalar);
             }
 
+            // TODO: projection-based off-track source. Only the OUTSIDE of the upcoming corner matters.
+            // Uses the closest track node to the projected 1s position as the reference frame.
+            // distanceFromOutsideEdge: -3m (3m inside edge) → +1, 0 (at edge) → 0, +3m (past edge) → -1.
+            if (Brain.Corner.Valid)
+            {
+                float cornerDir = Math.Sign(Brain.Corner.Point.Angle);
+                if (cornerDir != 0f)
+                {
+                    Vector3 projected = ProjectAhead();
+                    TrackPoint projectedTrackPoint = ARS._trackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
+                    float outsideOffset = cornerDir * ARS.SignedLaneOffset(projected, projectedTrackPoint.Position, projectedTrackPoint.Direction);
+                    float distanceFromInside = outsideOffset + projectedTrackPoint.TrackHalfWidth;
+                    float trackWidth = projectedTrackPoint.TrackHalfWidth * 2f;
+
+                    float projectionScalar = 1f - 0.2f * Math.Max(0f, distanceFromInside - trackWidth);
+
+                    float projectionCapFloor = ARS.Remap(Car.Velocity.Length(), followTrackSpd, followTrackSpd - 20f, -1f, 1f, true);
+                    projectionScalar = Math.Max(projectionScalar, projectionCapFloor);
+
+                    _accelerationCap = Math.Min(_accelerationCap, projectionScalar);
+                }
+            }
+
         }
 
         float ComputeRouteSpeed(float radius)

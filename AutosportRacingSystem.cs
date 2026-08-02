@@ -3827,9 +3827,9 @@ namespace ARS
         public static float MaxSpeedForBrakingDistance(CornerPoint c, Racer r)
         {
             
-            int entryNode = c.Node - c.LengthStart;
-            if (!_isPointToPoint && entryNode < 0) entryNode += _trackPoints.Count;
-            float distance = entryNode - r.CurrentTrackPoint.Node - 1f;
+            int apexNode = c.Node;
+            if (!_isPointToPoint && apexNode < 0) apexNode += _trackPoints.Count;
+            float distance = apexNode - r.CurrentTrackPoint.Node - 1f;
             if (!_isPointToPoint && distance < 0f) distance += _trackPoints.Count;
             if (distance < 0f) distance = 0f;
 
