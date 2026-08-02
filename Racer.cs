@@ -85,11 +85,15 @@ namespace ARS
         public float RouteWindowSize = 1.0f;
 
 
-        bool _avoidLiftOff = false;
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
         bool _steerCapped = false;
         float _steerOver = 0f;
+        float _cornerSpd = 999f;
+        // TODO: unified max-acceleration scalar in [-1, +1]. +1 = full throttle, 0 = coast, -1 = full brake.
+        // Re-rises at 0.33/s toward +1 each frame (frame-independent via TickScale).
+        // Each "lift off" source lowers it via Math.Min; applied once in ConvertSpeedToPedals.
+        float _accelerationCap = 1f;
 
 
 
@@ -370,6 +374,11 @@ namespace ARS
             CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
+            // Skip the corner approach (outside/lerp/inside) if the corner's intended
+            // speed is at or above the car's current speed — the car can do the corner
+            // at current speed, no need to reposition.
+            if (_cornerSpd >= speedMps) return 0f;
+
 
 
             float cornerDir = Math.Sign(c.Angle);
@@ -439,7 +448,6 @@ namespace ARS
 
         float ApplyRivalWalls(float targetLane, float roadWide, float carHalfWidth)
         {
-            _avoidLiftOff = false;
 
             float trackBound = roadWide - carHalfWidth;
 
@@ -507,7 +515,9 @@ namespace ARS
 
             float carTotalWidth = carHalfWidth * 2f + 1f;
             if (_avoidRightWall - _avoidLeftWall < carTotalWidth)
-                _avoidLiftOff = true;
+            {
+                // TODO: collapsed walls — fold into _accelerationCap as a separate source (next pass).
+            }
 
 
             float clampLeft = _avoidLeftWall + carHalfWidth;
@@ -533,6 +543,12 @@ namespace ARS
                     _steerCapped = true;
                 }
             }
+
+            // TODO: steer-in source — lifts throttle as the steering limiter clamps harder.
+            // Scalar stays at +1 while under/at the cap, ramps to 0 at +5° over.
+            // Goes +1..0 (no brake) so the AI doesn't slam the brake mid-slide.
+            float steerInScalar = ARS.Clamp(1f - _steerOver / 5f, 0f, 1f);
+            _accelerationCap = Math.Min(_accelerationCap, steerInScalar);
         }
 
 
@@ -591,19 +607,13 @@ namespace ARS
             float speedErrorGs = Brain.CurrentIntention.IntendedSpeedChangeGs;
             bool wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
 
-            // Understeer throttle cap: 1.0 (no impediment) at 5° under the steering limit,
-            // 0.0 at the limit, -1.0 (full brake) at 5° over. Signed by steering direction.
-            float understeerThrottleCap = 1f;
-            if (currentForwardSpeed > 10f && _steerCapped)
-            {
-                understeerThrottleCap = ARS.Clamp(-_steerOver / 5f, -1f, 1f);
-            }
-
+            // TODO: apply the unified _accelerationCap (set by steer-in and avoidance sources).
+            // Positive part multiplies throttle; negative part's magnitude becomes a MINIMUM brake input.
             if (speedErrorGs > 0.0f)
             {
 
                 if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 2f, 0f, 1f);
-                else newThrottle = ARS.Clamp(speedErrorGs * 2f, 0f, throttleCap) * Math.Max(understeerThrottleCap, 0f);
+                else newThrottle = ARS.Clamp(speedErrorGs * 2f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
             }
             else if (speedErrorGs < 0.0f)
             {
@@ -623,12 +633,11 @@ namespace ARS
             }
 
 
-            // Understeer floor: when over the steering limit, the negative part of
-            // understeerThrottleCap (-1..0) becomes the MINIMUM brake input.
-            float understeerBrakeMin = -Math.Min(understeerThrottleCap, 0f);
-            if (understeerBrakeMin > 0f)
+            // TODO: brake floor from _accelerationCap (negative part = min brake).
+            float accelCapBrakeMin = -Math.Min(_accelerationCap, 0f);
+            if (accelCapBrakeMin > 0f)
             {
-                newBrake = Math.Max(newBrake, understeerBrakeMin);
+                newBrake = Math.Max(newBrake, accelCapBrakeMin);
             }
 
             if (newBrake > 0.0) newThrottle = 0; else newBrake = 0;
@@ -734,18 +743,21 @@ namespace ARS
             // Pressure overspeed: fixed offset (5 m/s at full pressure), applied only to route speed.
             followTrackSpd += PressureMaxSpeedOffset * (Pressure / PressureRange);
 
+            // Store the apex speed (the actual corner constraint) for the corner-approach gate.
+            // The braking-plan cornerSpd is the entry speed, which is naturally higher than the
+            // current speed and would always skip the approach.
+            _cornerSpd = Brain.Corner.Valid ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
 
 
-            if (_avoidLiftOff)
+            // TODO: avoidance source — distance-based scalar in [-1, +1] (5m → 0m, +1 → -1).
+            // Lowers _accelerationCap so the AI lifts off / brakes proportionally as a rival closes.
+            Rival avoidThreat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead);
+            if (avoidThreat != null)
             {
-                Rival threat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead);
-                if (threat != null && threat.Distance < 5f)
-                {
-                    float rivalSpeed = threat.RivalRacer.Car.Velocity.Length();
-                    Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, rivalSpeed);
-                }
+                float avoidScalar = ARS.Remap(avoidThreat.Distance, 0f, 5f, -1f, 1f, true);
+                _accelerationCap = Math.Min(_accelerationCap, avoidScalar);
             }
 
         }
@@ -861,6 +873,18 @@ namespace ARS
             }
 
             while (_trailSamples.Count > 50) _trailSamples.RemoveAt(0);
+        }
+
+
+        // 1-second kinematic projection of the car in world space.
+        // Uses pos + v*t + 0.5*a*t² with t=1, where a is the running average of
+        // the last ~10 frames' world-frame accelerations (m/s²) from UpdateTickData.
+        public Vector3 ProjectAhead()
+        {
+            Vector3 avgAccel = VehicleData.AccelerationVector.Aggregate(
+                new Vector3(0, 0, 0), (s, v) => s + v)
+                / (float)VehicleData.AccelerationVector.Count;
+            return Car.Position + Car.Velocity + 0.5f * avgAccel;
         }
 
 
@@ -1043,6 +1067,28 @@ namespace ARS
                     World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + new Vector3(0f, 0f, 1.5f), Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, -0.5f), pressureColor, false, true, 0, false, "", "", false);
 
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2f), ((int)Pressure).ToString(), Color.White, 0.4f);
+
+                    // TODO: projection debug — white line + sphere at the 1-second projected position.
+                    Vector3 projected = ProjectAhead();
+                    Vector3 lineStart = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.6f);
+                    ARS.DrawLine(lineStart, projected, Color.White);
+
+                    // Find the track point closest to the projected position and check if
+                    // it falls inside the safe bound. If the projection is off-track, the
+                    // car is going to leave the road in ~1 second.
+                    TrackPoint projectedTrackPoint = ARS._trackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
+                    float projectedLateralOffset = Math.Abs(ARS.SignedLaneOffset(projected, projectedTrackPoint.Position, projectedTrackPoint.Direction));
+                    float projectedSafeBound = projectedTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+                    bool willGoOffTrack = projectedLateralOffset > projectedSafeBound;
+
+                    Color projectionColor = willGoOffTrack ? Color.Red : Color.White;
+                    World.DrawMarker(MarkerType.DebugSphere, projected, Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), projectionColor, false, false, 0, false, "", "", false);
+
+                    // Draw the two track edges at the projected progress so the comparison is visible.
+                    Vector3 trackRight = Vector3.Cross(projectedTrackPoint.Direction, Vector3.WorldUp).Normalized;
+                    Vector3 leftEdge = projectedTrackPoint.Position - trackRight * projectedTrackPoint.TrackHalfWidth;
+                    Vector3 rightEdge = projectedTrackPoint.Position + trackRight * projectedTrackPoint.TrackHalfWidth;
+                    ARS.DrawLine(leftEdge, rightEdge, willGoOffTrack ? Color.Red : Color.Green);
                 }
 
                 if (showTrack)
@@ -1332,11 +1378,15 @@ namespace ARS
             if (!ControlledByPlayer)
             {
                 UpdateRivalInfo();
-                
+
+                // TODO: re-rise AccelerationCap at 0.33/s toward 1.0, frame-independent.
+                // Each "lift off" source below will lower it via Math.Min.
+                _accelerationCap = Math.Min(1f, _accelerationCap + 0.33f * TickScale);
+
+                ComputeTargetSpeed();
                 ComputeSteering();
                 ApplySteerLimits();
-                
-                ComputeTargetSpeed(); 
+
                 ConvertSpeedToPedals();
                 TranslateSteerToInput();
 
