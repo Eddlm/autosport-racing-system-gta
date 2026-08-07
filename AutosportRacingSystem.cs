@@ -3824,16 +3824,20 @@ namespace ARS
         
         
         
+        const float BrakingCoastSecondsBeforeApex = 1f; // reach corner speed this many seconds before the apex
+
         public static float MaxSpeedForBrakingDistance(CornerPoint c, Racer r)
         {
             
             int apexNode = c.Node;
             if (!_isPointToPoint && apexNode < 0) apexNode += _trackPoints.Count;
-            float distance = apexNode - r.CurrentTrackPoint.Node - 1f;
+            float velTarget = r.Brain.Corner.Speed;
+            // Reserve corner-speed × N seconds of distance so the car reaches corner speed
+            // N seconds before the apex, then coasts the rest at corner speed.
+            float distance = apexNode - r.CurrentTrackPoint.Node - velTarget * BrakingCoastSecondsBeforeApex;
             if (!_isPointToPoint && distance < 0f) distance += _trackPoints.Count;
             if (distance < 0f) distance = 0f;
 
-            float velTarget = r.Brain.Corner.Speed;
             float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip);
             
             float decel = brakingAbility * r.Handling.Gravity * 0.5f;

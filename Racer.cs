@@ -81,7 +81,7 @@ namespace ARS
         List<TrailSample> _trailSamples = new List<TrailSample>();
 
 
-        public float RouteWindowStart = 1.0f;
+        public float RouteWindowStart = 1.0f; // seconds of lookahead; driven by Pressure in UpdatePressure (0..1)
         public float RouteWindowSize = 1.0f;
 
 
@@ -381,10 +381,13 @@ namespace ARS
             CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
-            // Skip the corner approach (outside/lerp/inside) if the corner's intended
-            // speed is at or above the car's current speed — the car can do the corner
-            // at current speed, no need to reposition.
-            if (_cornerSpd >= speedMps) return 0f;
+            // Skip the corner approach only if we haven't entered the approach window yet
+            // and the car is already slow enough for the corner. Once committed to the
+            // approach, we stay on it regardless of speed.
+            float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
+            float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
+            const float approachStartTime = 5.0f;
+            if (_cornerSpd >= speedMps && timeToApex > approachStartTime) return 0f;
 
 
 
@@ -407,13 +410,9 @@ namespace ARS
             float insideIntensity = ARS.Remap(curveRadius, 100f, 1000f, 1f, 0.1f, true);
             float insideTarget = -cornerDir * safeBound * insideIntensity;
 
-            float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
-            float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
-
             float targetLane;
-            const float approachStartTime = 5.0f;
             const float lerpStartTime = 2.0f;
-            const float turnInTime = 1.8f;
+            const float turnInTime = 1.33f;
 
             if (CurrentTrackPoint.Node >= apexNode)
             {
@@ -1461,6 +1460,10 @@ namespace ARS
                 Pressure = Math.Max(Pressure - PressureFallPerSecond * TickScale, targetPressure);
 
             Pressure = ARS.Clamp(Pressure, 0f, PressureRange);
+
+            // Pressure-driven lookahead: calm racers plan off the road at the car
+            // (window start 0), pressured racers plan a full second ahead (start 1).
+            RouteWindowStart = Pressure / PressureRange;
         }
  
  
