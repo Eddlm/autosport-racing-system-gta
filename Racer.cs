@@ -382,13 +382,13 @@ namespace ARS
             CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
-            // Skip the corner approach only if we haven't entered the approach window yet
-            // and the car is already slow enough for the corner. Once committed to the
-            // approach, we stay on it regardless of speed.
             float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
             float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
             const float approachStartTime = 5.0f;
-            if (_cornerSpd >= speedMps && timeToApex > approachStartTime) return 0f;
+            // Slow enough to take the corner as-is: ignore the corner entirely, stay on the natural lane.
+            if (_cornerSpd >= speedMps) return 0f;
+            // Otherwise hold off positioning until we're inside the approach window (5s before the apex).
+            if (timeToApex > approachStartTime) return 0f;
 
 
 
