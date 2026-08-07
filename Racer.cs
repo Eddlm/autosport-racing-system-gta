@@ -409,6 +409,10 @@ namespace ARS
         // the corner generator, so inside/outside convention matches the corner system.
         float ComputeHighSpeedLane(float roadWide, float carHalfWidth)
         {
+            // Disabled on corners wider than 250 m — beyond that the inside-edge target is
+            // meaningless (corners are effectively straights), so the lane is explicitly off.
+            if (Brain.CurrentPerception.HighSpeedCurveRadius > 250f) return 0f;
+
             int backNode = (int)ARS.Clamp(CurrentTrackPoint.Node - 20, 0, ARS._trackPoints.Count - 1);
             int fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 20, 0, ARS._trackPoints.Count - 1);
             Vector3 backDir = ARS._trackPoints[backNode].Direction;
