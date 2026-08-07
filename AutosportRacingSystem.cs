@@ -3793,14 +3793,19 @@ namespace ARS
         
         public static void FindNextCorner(Racer r)
         {
+            // Don't advance past the current corner until we've passed its apex.
+            // The corner speed cap must remain active through the apex.
+            if (r.Brain.Corner != null && r.CurrentTrackPoint.Node <= r.Brain.Corner.Point.Node)
+                return;
+
             CornerPoint nextCorner = GetNextCorner(r.CurrentTrackPoint.Node);
             if (nextCorner == null)
             {
-                if (r.Brain.Corner != null) r.Brain.Corner.Valid = false;
+                r.Brain.Corner = null;
                 return;
             }
 
-            if (r.Brain.Corner == null || r.Brain.Corner.Point != nextCorner || !r.Brain.Corner.Valid)
+            if (r.Brain.Corner == null || r.Brain.Corner.Point != nextCorner)
                 r.Brain.Corner = new Corner(CornerApexSpeed(nextCorner, r), nextCorner);
         }
 
@@ -3824,7 +3829,7 @@ namespace ARS
         
         
         
-        const float BrakingCoastSecondsBeforeApex = 1f; // reach corner speed this many seconds before the apex
+        const float BrakingCoastSecondsBeforeApex = 2f; // reach corner speed this many seconds before the apex
 
         public static float MaxSpeedForBrakingDistance(CornerPoint c, Racer r)
         {
@@ -3834,7 +3839,7 @@ namespace ARS
             float velTarget = r.Brain.Corner.Speed;
             // Reserve corner-speed × N seconds of distance so the car reaches corner speed
             // N seconds before the apex, then coasts the rest at corner speed.
-            float distance = apexNode - r.CurrentTrackPoint.Node - velTarget * BrakingCoastSecondsBeforeApex;
+            float distance = apexNode - r.CurrentTrackPoint.Node - (velTarget * BrakingCoastSecondsBeforeApex);
             if (!_isPointToPoint && distance < 0f) distance += _trackPoints.Count;
             if (distance < 0f) distance = 0f;
 

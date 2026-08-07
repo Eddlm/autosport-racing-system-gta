@@ -281,7 +281,7 @@ namespace ARS
 
 
             float naturalLane;
-            bool cornerActive = Brain.Corner != null && Brain.Corner.Valid && Lap > 0;
+            bool cornerActive = Brain.Corner != null && Lap > 0;
             if (cornerActive)
             {
                 naturalLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
@@ -406,38 +406,18 @@ namespace ARS
             float safeBound = halfWidth - carHalfWidth;
 
 
+            const float holdOutsideUntil = 1.0f;
+
+            // Hold the outside line from 5s down to 1s before the apex.
+            if (timeToApex > holdOutsideUntil)
+            {
+                return cornerDir * safeBound;
+            }
+
+            // Turn in: inside line scaled by curve radius intensity.
             float curveRadius = Math.Abs(Brain.CurrentPerception.CurveRadiusToFollowPoint);
             float insideIntensity = ARS.Remap(curveRadius, 100f, 1000f, 1f, 0.1f, true);
-            float insideTarget = -cornerDir * safeBound * insideIntensity;
-
-            float targetLane;
-            const float lerpStartTime = 2.0f;
-            const float turnInTime = 1.33f;
-
-            if (CurrentTrackPoint.Node >= apexNode)
-            {
-                targetLane = insideTarget;
-            }
-            else if (timeToApex <= turnInTime)
-            {
-                targetLane = insideTarget;
-            }
-            else if (timeToApex <= lerpStartTime)
-            {
-                float outsideTarget = cornerDir * safeBound;
-                float t = (timeToApex - turnInTime) / (lerpStartTime - turnInTime);
-                targetLane = insideTarget + (outsideTarget - insideTarget) * t;
-            }
-            else if (timeToApex <= approachStartTime)
-            {
-                targetLane = cornerDir * safeBound;
-            }
-            else
-            {
-                targetLane = 0f;
-            }
-
-            return targetLane;
+            return -cornerDir * safeBound * insideIntensity;
         }
 
 
@@ -560,8 +540,7 @@ namespace ARS
 
         public void Launch()
         {
-            Brain.Corner = new Corner(5, ARS._cornerPoints.FirstOrDefault(c => c.IsKey));
-            Brain.Corner.Valid = false;
+            Brain.Corner = null;
             VehicleData.AvgGroundStability = 1;
             BaseBehavior = RacerBaseBehavior.Race;
             LapStartTime = Game.GameTime;
@@ -705,7 +684,7 @@ namespace ARS
             Brain.CurrentIntention.Speed = AiConstants.MaxSpeed;
 
             float cornerSpd = 999f;
-            if (Brain.Corner.Valid) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
+            if (Brain.Corner != null) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
 
             float followTrackSpd = ComputeRouteSpeed(Brain.CurrentPerception.CurveRadiusToFollowPoint);
 
@@ -719,9 +698,6 @@ namespace ARS
             float slopeSpeedFactor = (float)Math.Sqrt(slopeGripFactor);
             cornerSpd *= slopeSpeedFactor;
             followTrackSpd *= slopeSpeedFactor;
-
-            // 3 m/s offset to corner speed before hill (vertical curvature) computation
-            cornerSpd += 3f;
 
             // Vertical curvature (crest/dip) grip effect - route speed only.
             // At a crest, the car needs centripetal acceleration v²/r. If that exceeds g, the car lifts off.
@@ -746,7 +722,7 @@ namespace ARS
             // Store the apex speed (the actual corner constraint) for the corner-approach gate.
             // The braking-plan cornerSpd is the entry speed, which is naturally higher than the
             // current speed and would always skip the approach.
-            _cornerSpd = Brain.Corner.Valid ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f;
+            _cornerSpd = Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
 
@@ -766,7 +742,7 @@ namespace ARS
             // pinned 20 mph below the route speed, and the speed loop derives the
             // throttle/brake response from that. Skipped while steering sits inside the ±2°
             // deadzone — a straight-running car projecting wide is not a cornering concern.
-            if (Brain.Corner.Valid && Math.Abs(Control.SteerDegrees) > ProjectionSteerDeadzoneDegrees)
+            if (Brain.Corner != null && Math.Abs(Control.SteerDegrees) > ProjectionSteerDeadzoneDegrees)
             {
                 float cornerDir = Math.Sign(Brain.Corner.Point.Angle);
                 if (cornerDir != 0f)
@@ -779,7 +755,10 @@ namespace ARS
 
                     if (distanceFromInside > trackWidth * 0.75f)
                     {
-                        _speedCap = Math.Min(_speedCap, Math.Max(followTrackSpd - ARS.MphToMps(ProjectionSpeedMarginMph), 0f));
+                        float overshoot = distanceFromInside - trackWidth * 0.75f;
+                        float carSpeed = Car.Velocity.Length();
+                        float floor = Math.Max(followTrackSpd - ARS.MphToMps(ProjectionSpeedMarginMph), 0f);
+                        _speedCap = Math.Min(_speedCap, Math.Max(carSpeed - 0.5f * overshoot, floor));
                     }
                 }
             }
@@ -847,7 +826,7 @@ namespace ARS
             if (CurrentTrackPoint.PreciseCurveRadius <= NitrousMinRadius) return false;
             if (Control.Throttle < NitrousMinThrottle) return false;
 
-            if (Brain.Corner == null || !Brain.Corner.Valid) return true;
+            if (Brain.Corner == null) return true;
 
             float distanceToEntrance = (Brain.Corner.Point.Node - Brain.Corner.Point.LengthStart) - CurrentTrackPoint.Node;
             float timeToEntrance = distanceToEntrance * 2f / Math.Max(Car.Velocity.Length(), 1f);
@@ -1132,7 +1111,7 @@ namespace ARS
 
         void DrawCornerChevrons(Corner corner)
         {
-            if (corner == null || !corner.Valid || Lap <= 0) return;
+            if (corner == null || Lap <= 0) return;
             CornerPoint c = corner.Point;
             int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS._trackPoints.Count - 1);
             int endNode = (int)ARS.Clamp(c.Node + c.LengthEnd, 0, ARS._trackPoints.Count - 1);
@@ -1463,7 +1442,8 @@ namespace ARS
 
             // Pressure-driven lookahead: calm racers plan off the road at the car
             // (window start 0), pressured racers plan a full second ahead (start 1).
-            RouteWindowStart = Pressure / PressureRange;
+            // RouteWindowStart = Pressure / PressureRange;
+            RouteWindowStart = 1.0f;
         }
  
  

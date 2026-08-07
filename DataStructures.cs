@@ -169,7 +169,6 @@ namespace ARS
     {
         public float Speed = 0f;
         public CornerPoint Point;
-        public bool Valid=true;
         public float SecondsToEntrance;
         public Corner  (float speed, CornerPoint point)
         {
