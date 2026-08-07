@@ -87,8 +87,6 @@ namespace ARS
 
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
-        bool _steerCapped = false;
-        float _steerOver = 0f;
         float _targetLane = 0f; // final clamped lane target after all lane tweaks, set in ComputeSteering
         float _rawCornerLane = 0f; // System 1 corner lane (outside approach) before walls/avoidance, set in ComputeSteering (debug)
         float _highSpeedLaneValue = 0f; // System 2 high-speed lane (inside edge) before System 1 override, set in ComputeSteering (debug)
@@ -604,28 +602,12 @@ namespace ARS
 
         void ApplySteerLimits()
         {
-            _steerCapped = false;
-            _steerOver = 0f;
-
-
             if (Math.Sign(Control.SteerDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.0f));
                 speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * 0.8f, Handling.LateralTractionCurve * 0.33f);
-                float requestedSteer = Control.SteerDegrees;
                 Control.SteerDegrees = ARS.Clamp(Control.SteerDegrees, -speedBasedSteeringLimit, speedBasedSteeringLimit);
-                _steerOver = requestedSteer - Control.SteerDegrees;
-                if (Math.Abs(_steerOver) > 0.001f)
-                {
-                    _steerCapped = true;
-                }
             }
-
-            // TODO: steer-in source — lifts throttle as the steering limiter clamps harder.
-            // Scalar stays at +1 while under/at the cap, ramps to 0 at +5° over.
-            // Goes +1..0 (no brake) so the AI doesn't slam the brake mid-slide.
-            float steerInScalar = ARS.Clamp(1f - _steerOver / 5f, 0f, 1f);
-            _accelerationCap = Math.Min(_accelerationCap, steerInScalar);
         }
 
 
