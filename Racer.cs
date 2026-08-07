@@ -94,6 +94,12 @@ namespace ARS
         float _highSpeedLaneValue = 0f; // System 2 high-speed lane (inside edge) before System 1 override, set in ComputeSteering (debug)
         float _avoidAheadLaneValue = 0f; // avoid-ahead lane override, set in ComputeSteering (debug)
         float _cornerSpd = 999f;
+        // Outside-approach entry latch: decided once when the car enters the 5s window for a
+        // given corner. The outside hold only makes sense if the car needs to brake — entries
+        // below apex speed + 20 mph skip the outside line entirely (System 2 inside covers it).
+        bool _approachOutsideDecided = false;
+        bool _approachHoldsOutside = false;
+        int _approachCornerNode = -1;
         // Unified max-acceleration scalar in [-1, +1]. +1 = full throttle, 0 = coast, -1 = full brake.
         // Re-rises at 0.33/s toward +1 each frame (frame-independent via TickScale).
         // Each "lift off" source lowers it via Math.Min; applied once in ConvertSpeedToPedals.
@@ -419,6 +425,14 @@ namespace ARS
             CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
+            // New corner target — reset the outside-hold entry latch.
+            if (apexNode != _approachCornerNode)
+            {
+                _approachCornerNode = apexNode;
+                _approachOutsideDecided = false;
+                _approachHoldsOutside = false;
+            }
+
             float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
             float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
             const float approachStartTime = 5.0f;
@@ -426,6 +440,15 @@ namespace ARS
             // can take the corner at current speed, so there's no reason to commit early; and
             // once inside the window we're committed — hold the line regardless of speed.
             if (timeToApex > approachStartTime) return 0f;
+
+            // Entry decision: the outside hold only makes sense if the car needs to brake for
+            // this corner. Latched once at window entry — if the car entered below apex speed
+            // + 20 mph, skip the outside line entirely and let System 2's inside cover it.
+            if (!_approachOutsideDecided)
+            {
+                _approachHoldsOutside = speedMps >= _cornerSpd + ARS.MphToMps(20f);
+                _approachOutsideDecided = true;
+            }
 
             float cornerDir = Math.Sign(c.Angle);
             if (cornerDir == 0f) return 0f;
@@ -437,7 +460,7 @@ namespace ARS
             // Hold the outside line from 5s down to 2s before the apex, then let go — the
             // high-speed line (System 2) takes over the inside edge.
             const float holdOutsideUntil = 2.0f;
-            if (timeToApex > holdOutsideUntil)
+            if (_approachHoldsOutside && timeToApex > holdOutsideUntil)
             {
                 return cornerDir * safeBound;
             }
