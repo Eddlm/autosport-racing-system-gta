@@ -841,7 +841,8 @@ namespace ARS
                     float distToApex = Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node);
                     float timeToApex = distToApex / Math.Max(Car.Velocity.Length(), 1f);
 
-                    if (pressureDiff > 30f && inOverlap && timeToApex <= 5f)
+                    if (pressureDiff > 30f && inOverlap && timeToApex <= 5f
+                        && closestRival.RivalRacer.Car.Velocity.Length() > Car.Velocity.Length())
                     {
                         ActiveManeuver.Type = ManeuverType.Yield;
                         ActiveManeuver.Active = true;
