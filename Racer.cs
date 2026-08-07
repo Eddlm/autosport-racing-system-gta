@@ -336,17 +336,22 @@ namespace ARS
                 // System 2 (inside hug) is the committed one: 0.01 up to 0.5 on hairpins.
                 bool isAvoidance = avoidAheadLane != 0f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
                 float cornerGain;
+                // Non-finite radius (e.g. a degenerate circumradius on a straight) must fall
+                // through to the minimum gain, never NaN — a NaN gain corrupts steering every
+                // frame it appears.
+                float hsRadius = Brain.CurrentPerception.HighSpeedCurveRadius;
+                if (float.IsNaN(hsRadius) || float.IsInfinity(hsRadius)) hsRadius = 250f;
                 if (isAvoidance)
                 {
                     cornerGain = 0.5f;
                 }
                 else if (_rawCornerLane != 0f)
                 {
-                    cornerGain = ARS.Remap(Math.Abs(Brain.CurrentPerception.HighSpeedCurveRadius), 250f, 25f, 0.05f, 0.25f, true);
+                    cornerGain = ARS.Remap(Math.Abs(hsRadius), 250f, 25f, 0.05f, 0.25f, true);
                 }
                 else
                 {
-                    cornerGain = ARS.Remap(Math.Abs(Brain.CurrentPerception.HighSpeedCurveRadius), 250f, 25f, 0.01f, 0.5f, true);
+                    cornerGain = ARS.Remap(Math.Abs(hsRadius), 250f, 25f, 0.01f, 0.5f, true);
                 }
                 laneBiasDeg *= cornerGain;
             }
