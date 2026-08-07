@@ -332,13 +332,24 @@ namespace ARS
 
                 float laneError = clampedLane - currentLane;
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
-                // Avoidance (ahead/walls) uses a fixed snappy 0.5x; the corner line uses a
-                // radius-scaled gain — 0.01 on wide sweepers up to 0.5 on hairpins — so the
-                // inside-edge target is always set but how hard it's pursued scales with the corner.
+                // Avoidance (ahead/walls) uses a fixed snappy 0.5x. The corner systems scale by
+                // radius: System 1 (outside approach) is deliberately gentle — 0.05 on wide
+                // corners up to 0.25 on hairpins — aggressive steer-out is death in a corner.
+                // System 2 (inside hug) is the committed one: 0.01 up to 0.5 on hairpins.
                 bool isAvoidance = avoidAheadLane != 0f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
-                float cornerGain = isAvoidance
-                    ? 0.5f
-                    : ARS.Remap(Math.Abs(Brain.CurrentPerception.HighSpeedCurveRadius), 250f, 25f, 0.01f, 0.5f, true);
+                float cornerGain;
+                if (isAvoidance)
+                {
+                    cornerGain = 0.5f;
+                }
+                else if (_rawCornerLane != 0f)
+                {
+                    cornerGain = ARS.Remap(Math.Abs(Brain.CurrentPerception.HighSpeedCurveRadius), 250f, 25f, 0.05f, 0.25f, true);
+                }
+                else
+                {
+                    cornerGain = ARS.Remap(Math.Abs(Brain.CurrentPerception.HighSpeedCurveRadius), 250f, 25f, 0.01f, 0.5f, true);
+                }
                 laneBiasDeg *= cornerGain;
             }
 
