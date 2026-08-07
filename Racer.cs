@@ -434,9 +434,9 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-            // Hold the outside line from 5s down to 1s before the apex, then let go — the
+            // Hold the outside line from 5s down to 2s before the apex, then let go — the
             // high-speed line (System 2) takes over the inside edge.
-            const float holdOutsideUntil = 1.0f;
+            const float holdOutsideUntil = 2.0f;
             if (timeToApex > holdOutsideUntil)
             {
                 return cornerDir * safeBound;
