@@ -600,6 +600,13 @@ namespace ARS
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.25f, 2f, true);
                 float rivalBuffer = r.OccupiedLaneWidth * 0.5f + aggroBuffer;
+                // This car is ahead of the overlapping rival (rival behind in this car's frame):
+                // cap the buffer at 0.5 so a car that's past its rival can squeeze closer instead
+                // of keeping the full avoidance gap.
+                if (r.RelativeOffset.Y < 0f)
+                {
+                    rivalBuffer = Math.Min(rivalBuffer, 0.5f);
+                }
 
                 if (rivalIsLeft)
                 {
@@ -637,10 +644,15 @@ namespace ARS
 
             float clampLeft = _avoidLeftWall + carHalfWidth;
             float clampRight = _avoidRightWall - carHalfWidth;
+            // Full car-width safety: the inner wall can push the car toward the edge, but the
+            // car's center must never cross the track limit (carHalfWidth is already applied
+            // above, so its edges stay within roadWide). Clamp the window to the track bounds.
+            clampLeft = Math.Max(clampLeft, -trackBound);
+            clampRight = Math.Min(clampRight, trackBound);
             // Guard the collapsed-window case: if the walls have crossed (gap < 0 after car
-            // inset), Clamp(min>max) would invert and pin the lane to a bogus near-center 0.X.
-            // Fall back to the whole track so the lane system's own target is honored.
-            if (clampLeft > clampRight) return targetLane;
+            // inset), Clamp(min>max) would invert. Fall back to the track bound itself — never
+            // the raw lane target, which could be the off-track outside edge.
+            if (clampLeft > clampRight) return ARS.Clamp(targetLane, -trackBound, trackBound);
             return ARS.Clamp(targetLane, clampLeft, clampRight);
         }
 
