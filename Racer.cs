@@ -81,8 +81,8 @@ namespace ARS
         List<TrailSample> _trailSamples = new List<TrailSample>();
 
 
-        public float RouteWindowStart = 1.0f; // seconds of lookahead; driven by Pressure in UpdatePressure (0..1)
-        public float RouteWindowSize = 1.0f;
+        public float RouteWindowStart = 0.5f; // seconds of lookahead; driven by Pressure in UpdatePressure (0..1)
+        public float RouteWindowSize = 2.0f;
 
 
         float _avoidLeftWall = 0f;
@@ -723,6 +723,7 @@ namespace ARS
             // The braking-plan cornerSpd is the entry speed, which is naturally higher than the
             // current speed and would always skip the approach.
             _cornerSpd = Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f;
+            cornerSpd += 5f;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
 
@@ -1443,7 +1444,7 @@ namespace ARS
             // Pressure-driven lookahead: calm racers plan off the road at the car
             // (window start 0), pressured racers plan a full second ahead (start 1).
             // RouteWindowStart = Pressure / PressureRange;
-            RouteWindowStart = 1.0f;
+            RouteWindowStart = 0.5f;
         }
  
  
