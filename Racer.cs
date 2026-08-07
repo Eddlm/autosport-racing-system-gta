@@ -89,6 +89,7 @@ namespace ARS
         float _avoidRightWall = 0f;
         bool _steerCapped = false;
         float _steerOver = 0f;
+        float _targetLane = 0f; // final clamped lane target after all lane tweaks, set in ComputeSteering
         float _cornerSpd = 999f;
         // Unified max-acceleration scalar in [-1, +1]. +1 = full throttle, 0 = coast, -1 = full brake.
         // Re-rises at 0.33/s toward +1 each frame (frame-independent via TickScale).
@@ -294,6 +295,7 @@ namespace ARS
 
 
             float clampedLane = ApplyRivalWalls(naturalLane, roadWide, carHalfWidth);
+            _targetLane = clampedLane;
 
 
             float recoveryDeg = 0f;
@@ -1174,6 +1176,20 @@ namespace ARS
                 if (showInputs)
                 {
                     DrawInputTrails();
+
+                    // Lane aim: 10 white spheres from the car to the final clamped lane target
+                    // at the steer-ref distance. Shows where the car is steering (after all lane tweaks).
+                    if (LookAheads.TryGetValue(LookAhead.SteerRef, out TrackPoint laneRef) && laneRef != null)
+                    {
+                        Vector3 laneRight = Vector3.Cross(laneRef.Direction, Vector3.WorldUp).Normalized;
+                        Vector3 laneAim = laneRef.Position + laneRight * _targetLane;
+                        for (int s = 1; s <= 10; s++)
+                        {
+                            float t = s / 10f;
+                            Vector3 spherePos = Car.Position + (laneAim - Car.Position) * t;
+                            World.DrawMarker(MarkerType.DebugSphere, spherePos, Vector3.Zero, Vector3.Zero, new Vector3(0.2f, 0.2f, 0.2f), Color.White, false, false, 0, false, "", "", false);
+                        }
+                    }
 
                     Vector3 textPos = Car.Position + new Vector3(0, 0, 2f);
                     ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
