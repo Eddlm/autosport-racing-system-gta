@@ -419,7 +419,7 @@ namespace ARS
 
             // Turn in: inside line scaled by curve radius intensity.
             float curveRadius = Math.Abs(Brain.CurrentPerception.CurveRadiusToFollowPoint);
-            float insideIntensity = ARS.Remap(curveRadius, 100f, 1000f, 1f, 0.1f, true);
+            float insideIntensity = ARS.Remap(curveRadius, 1000f, 100f, 0.1f, 1f, true);
             return -cornerDir * safeBound * insideIntensity;
         }
 
