@@ -468,9 +468,12 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-            // Hold the outside line from 5s down to 1.2s before the apex, then let go — the
-            // high-speed line (System 2) takes over the inside edge.
-            const float holdOutsideUntil = 1.2f;
+            // Hold the outside line until we're this many seconds before the apex, then let go —
+            // the high-speed line (System 2) takes over the inside edge. The let-go time scales
+            // with full track width: crossing from the outside edge to the inside edge takes
+            // longer on a wide track, so the car must release earlier. 10 m full width → 1 s,
+            // 20 m → 2 s, etc.
+            float holdOutsideUntil = (steerRefPoint.TrackHalfWidth * 2f) / 10f;
             if (_approachHoldsOutside && timeToApex > holdOutsideUntil)
             {
                 return cornerDir * safeBound;
