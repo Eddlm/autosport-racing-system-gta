@@ -361,7 +361,7 @@ namespace ARS
 
 
             const float steerKP = 1.0f;
-            float steerKD = 0.35f / VehicleData.CurrentMechanicalGrip;
+            float steerKD = 0.5f / VehicleData.CurrentMechanicalGrip;
             float pTerm = steerKP * totalTargetDeg;
             float dTerm = steerKD * VehicleData.YawRotationPerSecondDegrees;
             Control.SteerDegrees = pTerm - dTerm;
