@@ -330,10 +330,10 @@ namespace ARS
 
                 float laneError = clampedLane - currentLane;
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
-                // Avoidance (ahead/walls) uses a fixed snappy 0.5x. The corner systems scale by
-                // radius: System 1 (outside approach) is deliberately gentle — 0.05 on wide
-                // corners up to 0.25 on hairpins — aggressive steer-out is death in a corner.
-                // System 2 (inside hug) is the committed one: 0.01 up to 0.5 on hairpins.
+                // Avoidance (ahead/walls) uses a fixed 0.3x — snappy but not violent. The corner
+                // systems scale by radius: System 1 (outside approach) is deliberately gentle —
+                // 0.05 on wide corners up to 0.25 on hairpins — aggressive steer-out is death in
+                // a corner. System 2 (inside hug) is the committed one: 0.01 up to 0.5 on hairpins.
                 bool isAvoidance = avoidAheadLane != 0f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
                 float cornerGain;
                 // Non-finite radius (e.g. a degenerate circumradius on a straight) must fall
@@ -343,7 +343,7 @@ namespace ARS
                 if (float.IsNaN(hsRadius) || float.IsInfinity(hsRadius)) hsRadius = 250f;
                 if (isAvoidance)
                 {
-                    cornerGain = 0.5f;
+                    cornerGain = 0.3f;
                 }
                 else if (_rawCornerLane != 0f)
                 {
