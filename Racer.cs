@@ -334,7 +334,7 @@ namespace ARS
                 bool isAvoidance = avoidAheadLane != 0f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
                 float cornerGain = isAvoidance
                     ? 0.5f
-                    : ARS.Remap(Math.Abs(Brain.CurrentPerception.CurveRadiusToFollowPoint), 2500f, 25f, 0.01f, 0.5f, true);
+                    : ARS.Remap(Math.Abs(Brain.CurrentPerception.HighSpeedCurveRadius), 2500f, 25f, 0.01f, 0.5f, true);
                 laneBiasDeg *= cornerGain;
             }
 
@@ -1216,7 +1216,7 @@ namespace ARS
                     Vector3 textPos = Car.Position + new Vector3(0, 0, 2f);
                     ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
                     // Track-ahead curve radius at the follow point (same value the inside intensity reads).
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~o~R: ~w~" + Brain.CurrentPerception.CurveRadiusToFollowPoint.ToString("0"), Color.White, 0.4f);
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~o~R: ~w~" + Brain.CurrentPerception.HighSpeedCurveRadius.ToString("0"), Color.White, 0.4f);
                     // Corner lane diagnostic: active?, time to apex, target lane at each stage.
                     string cornerState = Brain.Corner == null ? "N" : "A";
                     float tApex = Brain.Corner == null ? 0f : Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node) / Math.Max(Car.Velocity.Length(), 1f);
@@ -1477,15 +1477,18 @@ namespace ARS
 
 
 
-            Brain.CurrentPerception.CurveRadiusToFollowPoint = ComputeRouteRadius(RouteWindowStart);
-            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius(RouteWindowStart + RouteWindowSize); // NEVER USED — kept for future "two conflicting corners" work
+            Brain.CurrentPerception.CurveRadiusToFollowPoint = ComputeRouteRadius(RouteWindowStart, RouteWindowSize);
+            // High-speed lane radius: short 0.5s→1.0s window so the inside-edge pursuit gain
+            // reacts to the imminent corner, not the long approach.
+            Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius(RouteWindowStart, 0.5f);
+            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius(RouteWindowStart + RouteWindowSize, RouteWindowSize); // NEVER USED — kept for future "two conflicting corners" work
         }
 
-        float ComputeRouteRadius(float windowStart)
+        float ComputeRouteRadius(float windowStart, float windowSize)
         {
             float routeSpeed = Car.Velocity.Length();
             int routeStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * windowStart), 0, ARS._trackPoints.Count - 1);
-            int routeEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * (windowStart + RouteWindowSize)), 0, ARS._trackPoints.Count - 1);
+            int routeEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * (windowStart + windowSize)), 0, ARS._trackPoints.Count - 1);
             int routeMidNode = (int)((routeStartNode + routeEndNode) * 0.5f);
             if (routeMidNode < 0) routeMidNode = 0;
             if (routeMidNode >= ARS._trackPoints.Count) routeMidNode = ARS._trackPoints.Count - 1;

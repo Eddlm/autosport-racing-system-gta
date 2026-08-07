@@ -51,6 +51,10 @@ namespace ARS
         {
             public float DeviationFromCenter = 0f;
             public float CurveRadiusToFollowPoint = 0f;
+            // Short-window (0.5s→1.0s) radius for the System 2 high-speed lane pursuit gain.
+            // Shorter than CurveRadiusToFollowPoint (0.5s→2.5s) so the inside-edge commitment
+            // responds to the imminent corner instead of the long approach.
+            public float HighSpeedCurveRadius = 0f;
             // NEVER USED — kept for the future "two conflicting corners" work. Written in Racer.UpdateTrackPosition, never read.
             public float CurveRadiusAfterFollowPoint = 0f;
             public Vector3 SpeedVector = Vector3.Zero;
