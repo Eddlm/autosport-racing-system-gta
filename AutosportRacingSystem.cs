@@ -3317,18 +3317,16 @@ namespace ARS
                 c.Radius = (minRadius == float.MaxValue) ? c.GetPreciseRadius() : minRadius;
             }
 
-            
-            
+            // Second pass: disable any key corner that's too close to the corner behind it.
+            // Corners within 80 nodes (80 m) of the previous one fight over the same braking
+            // and line-planning window; the later one is dropped. (1 node = 1 m)
+            const int minCornerSeparationNodes = 80;
             for (int i = 1; i < keyCorners.Count;)
             {
                 CornerPoint prev = keyCorners[i - 1];
                 CornerPoint curr = keyCorners[i];
 
-                int prevEnd = prev.Node + prev.LengthEnd;
-                int currStart = curr.Node - curr.LengthStart;
-                bool overlaps = currStart <= prevEnd;
-
-                if (overlaps)
+                if (curr.Node - prev.Node < minCornerSeparationNodes)
                 {
                     curr.IsKey = false;
                     keyCorners.RemoveAt(i);
