@@ -176,6 +176,14 @@ namespace ARS
             Point = point;
         }
     }
+    public enum ManeuverType { None, Nitrous, DiveBomb, DefendLane, Yield }
+    public class Maneuver
+    {
+        public ManeuverType Type = ManeuverType.None;
+        public bool Active = false;
+        public int LastEnabled = 0;
+        public Racer Target = null;
+    }
 }
 
 

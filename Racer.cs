@@ -98,28 +98,23 @@ namespace ARS
         // Speed-based concern sources pull it down via Math.Min; ConvertSpeedToPedals clamps
         // the intended speed against it, so throttle/brake always come from the speed loop.
         float _speedCap = 999f;
-        const float SpeedCapRiseRate = 5f;             // m/s the cap recovers per second
-        const float ProjectionSpeedMarginMph = 20f;    // cap sits this far below route speed while the projection is wide
+        const float SpeedCapRiseRate = 30f;             // m/s the cap recovers per second
         const float ProjectionSteerDeadzoneDegrees = 2f; // projection cap ignored while |steer| is within this
 
 
 
         bool _isPassengerized = false;
 
-        const bool AiNitrousEnabled = false;
+        const bool AiNitrousEnabled = true;
         const float NitrousPowerMultiplier = 2.5f;
-        const float NitrousMinSpeed = 10f;
-        const float NitrousMinRadius = 2000f;
-        const float NitrousMinThrottle = 0.95f;
-        const float NitrousCornerLookaheadSeconds = 6f;
+        const float NitrousCornerLookaheadSeconds = 8f;
         const int NitrousDurationMs = 3000;
-        const int NitrousCooldownMs = 10000;
         const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
         const ulong CheatPowerIncreaseHash = 0xB59E4BD37AE292DB;
         const ulong FullyChargeNitrousHash = 0x1A2BCC8C636F9226;
         const ulong OverrideNitrousLevelHash = 0xC8E9B6B71B8E660D;
 
-        int _nitrousCooldownUntil = 0;
+        Maneuver ActiveManeuver = new Maneuver();
         int _nitrousActiveUntil = 0;
 
 
@@ -312,7 +307,7 @@ namespace ARS
 
             float laneBiasDeg = 0f;
             float trackBound = roadWide - carHalfWidth;
-            bool hasActiveGuidance = cornerActive
+            bool hasActiveGuidance = Math.Abs(clampedLane) > 0.01f
                 || _avoidLeftWall > -trackBound
                 || _avoidRightWall < trackBound;
             if (hasActiveGuidance)
@@ -726,15 +721,24 @@ namespace ARS
             cornerSpd += 5f;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
+            // Yield: cap speed to target's speed minus 2 m/s to actually yield
+            if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Active && ActiveManeuver.Target != null)
+            {
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ActiveManeuver.Target.Car.Velocity.Length() - 2f);
+            }
 
 
             // TODO: avoidance source — distance-based scalar in [-1, +1] (5m → 0m, +1 → -1).
             // Lowers _accelerationCap so the AI lifts off / brakes proportionally as a rival closes.
-            Rival avoidThreat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead);
-            if (avoidThreat != null)
+            // Suppressed while yielding — the yield speed cap handles staying behind.
+            if (ActiveManeuver.Type != ManeuverType.Yield || !ActiveManeuver.Active)
             {
-                float avoidScalar = ARS.Remap(avoidThreat.Distance, 0f, 5f, -1f, 1f, true);
-                _accelerationCap = Math.Min(_accelerationCap, avoidScalar);
+                Rival avoidThreat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead);
+                if (avoidThreat != null)
+                {
+                    float avoidScalar = ARS.Remap(avoidThreat.Distance, 0f, 5f, -1f, 1f, true);
+                    _accelerationCap = Math.Min(_accelerationCap, avoidScalar);
+                }
             }
 
             // Projection off-track source (speed-based). Only the OUTSIDE of the upcoming
@@ -758,7 +762,7 @@ namespace ARS
                     {
                         float overshoot = distanceFromInside - trackWidth * 0.75f;
                         float carSpeed = Car.Velocity.Length();
-                        float floor = Math.Max(followTrackSpd - ARS.MphToMps(ProjectionSpeedMarginMph), 0f);
+                        float floor = 15f;
                         _speedCap = Math.Min(_speedCap, Math.Max(carSpeed - 0.5f * overshoot, floor));
                     }
                 }
@@ -802,10 +806,57 @@ namespace ARS
             float change = tcsValue * TickScale;
             Control.TCSThrottle = ARS.Clamp(Control.TCSThrottle + change, 0.2f, 1);
         }
+        void ConsiderManeuvers()
+        {
+            if (ControlledByPlayer || !AiNitrousEnabled) return;
+
+            // Force-disable any maneuver that's been armed for >8s without firing
+            if (ActiveManeuver.Active && Game.GameTime - ActiveManeuver.LastEnabled > 8000)
+            {
+                ActiveManeuver.Type = ManeuverType.None;
+                ActiveManeuver.Active = false;
+                ActiveManeuver.Target = null;
+            }
+
+            // Nitrous: arm if nearby cars exist or position >= 3rd, and not recently used
+            if (ActiveManeuver.Type == ManeuverType.None && Game.GameTime - ActiveManeuver.LastEnabled > 20000)
+            {
+                bool hasNearbyCars = Brain.Rivals.Any(r => r.RivalRacer != null);
+                if (hasNearbyCars || RacePosition >= 3)
+                {
+                    ActiveManeuver.Type = ManeuverType.Nitrous;
+                    ActiveManeuver.Active = true;
+                    ActiveManeuver.LastEnabled = Game.GameTime;
+                }
+            }
+
+            // Yield: arm if pressure is much lower than closest rival, within 5s of corner, in overlap
+            if (ActiveManeuver.Type == ManeuverType.None && Brain.Corner != null)
+            {
+                Rival closestRival = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null);
+                if (closestRival != null)
+                {
+                    float pressureDiff = closestRival.RivalRacer.Pressure - Pressure;
+                    bool inOverlap = closestRival.RelativePosition == RelativePos.Left || closestRival.RelativePosition == RelativePos.Right;
+                    float distToApex = Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node);
+                    float timeToApex = distToApex / Math.Max(Car.Velocity.Length(), 1f);
+
+                    if (pressureDiff > 30f && inOverlap && timeToApex <= 5f)
+                    {
+                        ActiveManeuver.Type = ManeuverType.Yield;
+                        ActiveManeuver.Active = true;
+                        ActiveManeuver.Target = closestRival.RivalRacer;
+                        ActiveManeuver.LastEnabled = Game.GameTime;
+                    }
+                }
+            }
+        }
+
         void UpdateNitrous()
         {
             if (ControlledByPlayer || !AiNitrousEnabled) return;
 
+            // Apply power boost while nitrous is active
             if (Game.GameTime < _nitrousActiveUntil)
             {
                 Function.Call((Hash)CheatPowerIncreaseHash, Car, NitrousPowerMultiplier);
@@ -814,39 +865,68 @@ namespace ARS
             if (_nitrousActiveUntil > 0)
             {
                 StopNitrous();
+                ActiveManeuver.Type = ManeuverType.None;
             }
 
-            if (Game.GameTime < _nitrousCooldownUntil) return;
+            // Check if nitrous maneuver is armed and conditions are right to fire
+            if (ActiveManeuver.Type != ManeuverType.Nitrous || !ActiveManeuver.Active) return;
 
-            if (CanFireNitrous()) StartNitrous();
+            // Stability check: steering < 5°, rotation < 30°/s
+            if (Math.Abs(Control.SteerDegrees) >= 5f) return;
+            if (Math.Abs(VehicleData.YawRotationPerSecondDegrees) >= 30f) return;
+
+            // Corner check: > 8s away
+            if (Brain.Corner != null)
+            {
+                float distanceToEntrance = (Brain.Corner.Point.Node - Brain.Corner.Point.LengthStart) - CurrentTrackPoint.Node;
+                float timeToEntrance = distanceToEntrance * 2f / Math.Max(Car.Velocity.Length(), 1f);
+                if (timeToEntrance <= NitrousCornerLookaheadSeconds) return;
+            }
+
+            // Target check: closest rival must be faster
+            Rival closestRival = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null);
+            if (closestRival == null) return;
+            if (closestRival.RivalRacer.Car.Velocity.Length() <= Car.Velocity.Length()) return;
+
+            // All conditions met — fire!
+            StartNitrous();
+            ActiveManeuver.Active = false;
+            ActiveManeuver.Type = ManeuverType.None;
+            ActiveManeuver.LastEnabled = Game.GameTime;
         }
-        bool CanFireNitrous()
-        {
-            if (RacePosition < ARS._racers.Count) return false;
-            if (Car.Velocity.Length() <= NitrousMinSpeed) return false;
-            if (CurrentTrackPoint.PreciseCurveRadius <= NitrousMinRadius) return false;
-            if (Control.Throttle < NitrousMinThrottle) return false;
 
-            if (Brain.Corner == null) return true;
-
-            float distanceToEntrance = (Brain.Corner.Point.Node - Brain.Corner.Point.LengthStart) - CurrentTrackPoint.Node;
-            float timeToEntrance = distanceToEntrance * 2f / Math.Max(Car.Velocity.Length(), 1f);
-            return timeToEntrance > NitrousCornerLookaheadSeconds;
-        }
         void StartNitrous()
         {
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, NitrousPtfxAsset);
             Function.Call((Hash)FullyChargeNitrousHash, Car);
             Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 50.0f, 100.0f, false);
             _nitrousActiveUntil = Game.GameTime + NitrousDurationMs;
-            _nitrousCooldownUntil = Game.GameTime + NitrousCooldownMs;
             UI.Notify("~b~" + Name + "~w~ fires nitrous!");
         }
+
         void StopNitrous()
         {
             Function.Call((Hash)CheatPowerIncreaseHash, Car, 1.0f);
             Function.Call((Hash)OverrideNitrousLevelHash, Car, false, 10.0f, 0.0f, 100.0f, true);
             _nitrousActiveUntil = 0;
+        }
+
+        void UpdateYield()
+        {
+            if (ActiveManeuver.Type != ManeuverType.Yield || !ActiveManeuver.Active) return;
+
+            // Exit: >5s from next corner and at full throttle
+            if (Brain.Corner != null)
+            {
+                float distToApex = Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node);
+                float timeToApex = distToApex / Math.Max(Car.Velocity.Length(), 1f);
+                if (timeToApex > 5f && Control.Throttle > 0.95f)
+                {
+                    ActiveManeuver.Type = ManeuverType.None;
+                    ActiveManeuver.Active = false;
+                    ActiveManeuver.Target = null;
+                }
+            }
         }
         public void UpdateTickData()
         {
@@ -1039,15 +1119,6 @@ namespace ARS
                 {
                     DrawInputTrails();
 
-                    Vector3 trackCenter = CurrentTrackPoint.Position;
-                    Vector3 trackRight = Vector3.Cross(CurrentTrackPoint.Direction, Vector3.WorldUp);
-                    Vector3 leftWallPos = trackCenter + trackRight * _avoidLeftWall;
-                    Vector3 rightWallPos = trackCenter + trackRight * _avoidRightWall;
-                    Vector3 up = new Vector3(0, 0, 0.1f);
-                    ARS.DrawLine(leftWallPos + up, leftWallPos + up + new Vector3(0, 0, 2f), Color.Blue);
-                    ARS.DrawLine(rightWallPos + up, rightWallPos + up + new Vector3(0, 0, 2f), Color.Red);
-
-
                     Vector3 textPos = Car.Position + new Vector3(0, 0, 2f);
                     ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
                     int ri = 0;
@@ -1062,7 +1133,13 @@ namespace ARS
                 }
                 if (showTrack)
                 {
-                   
+                    Vector3 trackCenter = CurrentTrackPoint.Position;
+                    Vector3 trackRight = Vector3.Cross(CurrentTrackPoint.Direction, Vector3.WorldUp);
+                    Vector3 leftWallPos = trackCenter + trackRight * _avoidLeftWall;
+                    Vector3 rightWallPos = trackCenter + trackRight * _avoidRightWall;
+                    Vector3 up = new Vector3(0, 0, 0.1f);
+                    ARS.DrawLine(leftWallPos + up, leftWallPos + up + new Vector3(0, 0, 2f), Color.Blue);
+                    ARS.DrawLine(rightWallPos + up, rightWallPos + up + new Vector3(0, 0, 2f), Color.Red);
                 }
 
                 if (showAggro)
@@ -1342,6 +1419,7 @@ namespace ARS
                     if (BaseBehavior == RacerBaseBehavior.Race && ARS._racers.Count >= 1)
                     {
                         UpdateRivals();
+                        ConsiderManeuvers();
                     }
 
                     if (!Driver.IsSittingInVehicle(Car) && Car.IsStopped && Driver.IsStopped)
@@ -1401,6 +1479,7 @@ namespace ARS
                 ApplyStuckRecoveryOverride();
 
                 UpdateNitrous();
+                UpdateYield();
 
             }
             else
