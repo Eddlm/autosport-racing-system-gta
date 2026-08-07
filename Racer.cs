@@ -411,11 +411,13 @@ namespace ARS
 
             const float holdOutsideUntil = 1.0f;
 
-            // Hold the outside line from 5s down to 1s before the apex.
-            if (timeToApex > holdOutsideUntil)
-            {
-                return cornerDir * safeBound;
-            }
+            // TEMPORARILY DISABLED (7 Aug 2026): outside approach lane. Testing whether the
+            // car hugs the inside at all — with the outside hold off, the car runs the natural
+            // lane until the turn-in window and only the inside-line logic below acts.
+            // if (timeToApex > holdOutsideUntil)
+            // {
+            //     return cornerDir * safeBound;
+            // }
 
             // Turn in: inside line scaled by curve radius intensity.
             float curveRadius = Math.Abs(Brain.CurrentPerception.CurveRadiusToFollowPoint);
@@ -1193,6 +1195,8 @@ namespace ARS
 
                     Vector3 textPos = Car.Position + new Vector3(0, 0, 2f);
                     ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
+                    // Track-ahead curve radius at the follow point (same value the inside intensity reads).
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~o~R: ~w~" + Brain.CurrentPerception.CurveRadiusToFollowPoint.ToString("0"), Color.White, 0.4f);
                     int ri = 0;
                     foreach (Rival r in Brain.Rivals)
                     {
