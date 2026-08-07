@@ -1199,28 +1199,12 @@ namespace ARS
                 {
                     DrawInputTrails();
 
-                    // Lane aim: 10 white spheres from the car to the final clamped lane target
-                    // at the steer-ref distance. Shows where the car is steering (after all lane tweaks).
-                    if (LookAheads.TryGetValue(LookAhead.SteerRef, out TrackPoint laneRef) && laneRef != null)
-                    {
-                        Vector3 laneRight = Vector3.Cross(laneRef.Direction, Vector3.WorldUp).Normalized;
-                        Vector3 laneAim = laneRef.Position + laneRight * _targetLane;
-                        for (int s = 1; s <= 10; s++)
-                        {
-                            float t = s / 10f;
-                            Vector3 spherePos = Car.Position + (laneAim - Car.Position) * t;
-                            World.DrawMarker(MarkerType.DebugSphere, spherePos, Vector3.Zero, Vector3.Zero, new Vector3(0.2f, 0.2f, 0.2f), Color.White, false, false, 0, false, "", "", false);
-                        }
-                    }
-
                     Vector3 textPos = Car.Position + new Vector3(0, 0, 2f);
                     ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
-                    // Track-ahead curve radius at the follow point (same value the inside intensity reads).
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~o~R: ~w~" + Brain.CurrentPerception.HighSpeedCurveRadius.ToString("0"), Color.White, 0.4f);
                     // Corner lane diagnostic: active?, time to apex, target lane at each stage.
                     string cornerState = Brain.Corner == null ? "N" : "A";
                     float tApex = Brain.Corner == null ? 0f : Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node) / Math.Max(Car.Velocity.Length(), 1f);
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f), "~w~C:" + cornerState + " tA:" + tApex.ToString("0.0") + " ~b~hs:" + _highSpeedLaneValue.ToString("0.0") + " ~o~corner:" + _rawCornerLane.ToString("0.0") + " ~y~avoidA:" + _avoidAheadLaneValue.ToString("0.0") + " ~g~target:" + _targetLane.ToString("0.0"), Color.White, 0.4f);
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~w~C:" + cornerState + " tA:" + tApex.ToString("0.0") + " ~b~hs:" + _highSpeedLaneValue.ToString("0.0") + " ~o~corner:" + _rawCornerLane.ToString("0.0") + " ~y~avoidA:" + _avoidAheadLaneValue.ToString("0.0") + " ~g~target:" + _targetLane.ToString("0.0"), Color.White, 0.4f);
                     int ri = 0;
                     foreach (Rival r in Brain.Rivals)
                     {
@@ -1240,6 +1224,23 @@ namespace ARS
                     Vector3 up = new Vector3(0, 0, 0.1f);
                     ARS.DrawLine(leftWallPos + up, leftWallPos + up + new Vector3(0, 0, 2f), Color.Blue);
                     ARS.DrawLine(rightWallPos + up, rightWallPos + up + new Vector3(0, 0, 2f), Color.Red);
+
+                    // Lane aim: 10 white spheres from the car to the final clamped lane target
+                    // at the steer-ref distance. Shows where the car is steering (after all lane tweaks).
+                    if (LookAheads.TryGetValue(LookAhead.SteerRef, out TrackPoint laneRef) && laneRef != null)
+                    {
+                        Vector3 laneRight = Vector3.Cross(laneRef.Direction, Vector3.WorldUp).Normalized;
+                        Vector3 laneAim = laneRef.Position + laneRight * _targetLane;
+                        for (int s = 1; s <= 10; s++)
+                        {
+                            float t = s / 10f;
+                            Vector3 spherePos = Car.Position + (laneAim - Car.Position) * t;
+                            World.DrawMarker(MarkerType.DebugSphere, spherePos, Vector3.Zero, Vector3.Zero, new Vector3(0.2f, 0.2f, 0.2f), Color.White, false, false, 0, false, "", "", false);
+                        }
+                    }
+
+                    // Track-ahead high-speed curve radius (0.5s→1.0s window) — the value the pursuit gain reads.
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~o~R: ~w~" + Brain.CurrentPerception.HighSpeedCurveRadius.ToString("0"), Color.White, 0.4f);
                 }
 
                 if (showAggro)
