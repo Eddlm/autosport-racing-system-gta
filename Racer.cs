@@ -450,7 +450,7 @@ namespace ARS
             float trackBound = roadWide - carHalfWidth;
             float rivalLane = aheadRival.OccupiedLane;
             float rivalHalfWidth = aheadRival.OccupiedLaneWidth * 0.5f;
-            float aggroBuffer = ARS.Remap(Aggression, 0f, 100f, 2f, 0.25f, true);
+            float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.25f, 2f, true);
             float buffer = rivalHalfWidth + aggroBuffer;
             float currentLane = Brain.CurrentPerception.DeviationFromCenter;
 
@@ -516,7 +516,7 @@ namespace ARS
                 if (!isRelevant) continue;
 
 
-                float aggroBuffer = ARS.Remap(Aggression, 0f, 100f, 2f, 0.25f, true);
+                float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.25f, 2f, true);
                 float rivalBuffer = r.OccupiedLaneWidth * 0.5f + aggroBuffer;
 
                 if (rivalIsLeft)
