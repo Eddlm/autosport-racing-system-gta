@@ -323,7 +323,9 @@ namespace ARS
 
                 float laneError = clampedLane - currentLane;
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
-                laneBiasDeg *= 0.25f;
+                // Corner lines use a gentle 0.25x; avoidance (ahead/walls) uses 0.5x for snappier response.
+                bool isAvoidance = avoidAheadLane != 0f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
+                laneBiasDeg *= isAvoidance ? 0.5f : 0.25f;
             }
 
 
