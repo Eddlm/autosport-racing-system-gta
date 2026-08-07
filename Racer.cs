@@ -329,9 +329,14 @@ namespace ARS
 
                 float laneError = clampedLane - currentLane;
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
-                // Corner lines use a gentle 0.25x; avoidance (ahead/walls) uses 0.5x for snappier response.
+                // Avoidance (ahead/walls) uses a fixed snappy 0.5x; the corner line uses a
+                // radius-scaled gain — 0.01 on wide sweepers up to 0.5 on hairpins — so the
+                // inside-edge target is always set but how hard it's pursued scales with the corner.
                 bool isAvoidance = avoidAheadLane != 0f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
-                laneBiasDeg *= isAvoidance ? 0.5f : 0.25f;
+                float cornerGain = isAvoidance
+                    ? 0.5f
+                    : ARS.Remap(Math.Abs(Brain.CurrentPerception.CurveRadiusToFollowPoint), 2500f, 25f, 0.01f, 0.5f, true);
+                laneBiasDeg *= cornerGain;
             }
 
 
@@ -423,10 +428,9 @@ namespace ARS
             //     return cornerDir * safeBound;
             // }
 
-            // Turn in: inside line scaled by curve radius intensity.
-            float curveRadius = Math.Abs(Brain.CurrentPerception.CurveRadiusToFollowPoint);
-            float insideIntensity = ARS.Remap(curveRadius, 2500f, 25f, 0.1f, 1f, true);
-            return -cornerDir * safeBound * insideIntensity;
+            // Turn in: the inside edge is always the target; the pursuit gain in
+            // ComputeSteering scales how hard the car commits based on corner radius.
+            return -cornerDir * safeBound;
         }
 
 
