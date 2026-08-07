@@ -760,9 +760,10 @@ namespace ARS
                 _accelerationCap = Math.Min(_accelerationCap, avoidScalar);
             }
 
-            // TODO: projection-based off-track source. Only the OUTSIDE of the upcoming corner matters.
-            // Uses the closest track node to the projected 1s position as the reference frame.
-            // distanceFromOutsideEdge: -3m (3m inside edge) → +1, 0 (at edge) → 0, +3m (past edge) → -1.
+            // Projection off-track source. Only the OUTSIDE of the upcoming corner matters:
+            // uses the closest track node to the projected 1s position as the reference frame,
+            // penalizing 0.2 per meter past the outside edge. The scalar is floored by the
+            // speed-based cap so overspeed is left to the kinematic speed loop alone.
             if (Brain.Corner.Valid)
             {
                 float cornerDir = Math.Sign(Brain.Corner.Point.Angle);
