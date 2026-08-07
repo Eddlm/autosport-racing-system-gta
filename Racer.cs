@@ -361,7 +361,9 @@ namespace ARS
 
 
             const float steerKP = 1.0f;
-            float steerKD = 0.5f / VehicleData.CurrentMechanicalGrip;
+            float gripForKD = VehicleData.CurrentMechanicalGrip;
+            if (float.IsNaN(gripForKD) || float.IsInfinity(gripForKD) || gripForKD <= 0f) gripForKD = 1f;
+            float steerKD = 0.5f / gripForKD;
             float pTerm = steerKP * totalTargetDeg;
             float dTerm = steerKD * VehicleData.YawRotationPerSecondDegrees;
             Control.SteerDegrees = pTerm - dTerm;
@@ -374,6 +376,12 @@ namespace ARS
                     Math.Abs(VehicleData.SlideAngle), 0, Handling.LateralTractionCurve * 1.2f, 0.5f, 1.2f, true);
                 Control.SteerDegrees -= slideCounterSteer;
             }
+
+            // Any NaN/Inf in the steering output would be turned into full-lock by ApplySteerLimits
+            // (float.NaN.CompareTo(min) < 0 makes Clamp return the min bound). Kill it here, at the
+            // source, before any downstream clamp can corrupt it.
+            if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
+                Control.SteerDegrees = 0f;
 
 
 
@@ -623,6 +631,14 @@ namespace ARS
 
         void ApplySteerLimits()
         {
+            // NaN/Inf must never reach the clamp — float.NaN.CompareTo(min) < 0 makes Clamp
+            // return the min bound, i.e. instant full-lock. Zero it and bail.
+            if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
+            {
+                Control.SteerDegrees = 0f;
+                return;
+            }
+
             if (Math.Sign(Control.SteerDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.0f));
