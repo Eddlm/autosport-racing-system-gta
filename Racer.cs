@@ -287,6 +287,10 @@ namespace ARS
                 naturalLane = 0f;
             }
 
+            // Avoid-ahead: pick a lane to pass a rival ahead. Computed fresh each frame.
+            float avoidAheadLane = ComputeAvoidAheadLane(roadWide, carHalfWidth);
+            if (avoidAheadLane != 0f) naturalLane = avoidAheadLane;
+
 
 
             float clampedLane = ApplyRivalWalls(naturalLane, roadWide, carHalfWidth);
@@ -427,6 +431,45 @@ namespace ARS
 
 
 
+        float ComputeAvoidAheadLane(float roadWide, float carHalfWidth)
+        {
+            // Find the closest rival ahead within 4s reach and similar heading
+            Rival aheadRival = Brain.Rivals.FirstOrDefault(r =>
+                r.RivalRacer != null
+                && r.RelativePosition == RelativePos.Ahead
+                && r.SecondsToReach >= 0f
+                && r.SecondsToReach <= 4f
+                && Math.Abs(r.DirectionDiff) <= 20f);
+
+            if (aheadRival == null) return 0f;
+
+            float trackBound = roadWide - carHalfWidth;
+            float rivalLane = aheadRival.OccupiedLane;
+            float rivalHalfWidth = aheadRival.OccupiedLaneWidth * 0.5f;
+
+            // Pick the side with more room
+            float roomLeft = rivalLane - rivalHalfWidth + trackBound;
+            float roomRight = trackBound - (rivalLane + rivalHalfWidth);
+            bool goLeft = roomLeft > roomRight;
+
+            float targetLane = goLeft
+                ? rivalLane - rivalHalfWidth - carHalfWidth
+                : rivalLane + rivalHalfWidth + carHalfWidth;
+
+            // If the chosen side is off-track, flip to the other side
+            if (Math.Abs(targetLane) > trackBound)
+            {
+                targetLane = goLeft
+                    ? rivalLane + rivalHalfWidth + carHalfWidth
+                    : rivalLane - rivalHalfWidth - carHalfWidth;
+            }
+
+            // If both sides are off-track, just stay behind
+            if (Math.Abs(targetLane) > trackBound) return 0f;
+
+            return targetLane;
+        }
+
         float ApplyRivalWalls(float targetLane, float roadWide, float carHalfWidth)
         {
 
@@ -454,11 +497,6 @@ namespace ARS
                 {
                     isRelevant = true;
                     rivalIsLeft = false;
-                }
-                else if (r.RelativePosition == RelativePos.Ahead && r.SecondsToReach >= 0f && r.SecondsToReach <= 4f && Math.Abs(r.DirectionDiff) <= 20f)
-                {
-                    isRelevant = true;
-                    rivalIsLeft = r.OccupiedLane < Brain.CurrentPerception.DeviationFromCenter;
                 }
 
                 if (!isRelevant) continue;
