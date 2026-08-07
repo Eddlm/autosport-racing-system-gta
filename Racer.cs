@@ -446,22 +446,24 @@ namespace ARS
             float trackBound = roadWide - carHalfWidth;
             float rivalLane = aheadRival.OccupiedLane;
             float rivalHalfWidth = aheadRival.OccupiedLaneWidth * 0.5f;
+            float aggroBuffer = ARS.Remap(Aggression, 0f, 100f, 2f, 0.25f, true);
+            float buffer = rivalHalfWidth + aggroBuffer;
 
             // Pick the side with more room
-            float roomLeft = rivalLane - rivalHalfWidth + trackBound;
-            float roomRight = trackBound - (rivalLane + rivalHalfWidth);
+            float roomLeft = rivalLane - buffer + trackBound;
+            float roomRight = trackBound - (rivalLane + buffer);
             bool goLeft = roomLeft > roomRight;
 
             float targetLane = goLeft
-                ? rivalLane - rivalHalfWidth - carHalfWidth
-                : rivalLane + rivalHalfWidth + carHalfWidth;
+                ? rivalLane - buffer - carHalfWidth
+                : rivalLane + buffer + carHalfWidth;
 
             // If the chosen side is off-track, flip to the other side
             if (Math.Abs(targetLane) > trackBound)
             {
                 targetLane = goLeft
-                    ? rivalLane + rivalHalfWidth + carHalfWidth
-                    : rivalLane - rivalHalfWidth - carHalfWidth;
+                    ? rivalLane + buffer + carHalfWidth
+                    : rivalLane - buffer - carHalfWidth;
             }
 
             // If both sides are off-track, just stay behind
