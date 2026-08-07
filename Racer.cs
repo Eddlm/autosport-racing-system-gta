@@ -434,14 +434,13 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-            // TEMPORARILY DISABLED (7 Aug 2026): outside approach hold. Testing System 2's
-            // inside hug in isolation — with this off, System 1 never overrides and the car
-            // rides System 2's inside edge through the whole corner.
-            // const float holdOutsideUntil = 1.0f;
-            // if (timeToApex > holdOutsideUntil)
-            // {
-            //     return cornerDir * safeBound;
-            // }
+            // Hold the outside line from 5s down to 1s before the apex, then let go — the
+            // high-speed line (System 2) takes over the inside edge.
+            const float holdOutsideUntil = 1.0f;
+            if (timeToApex > holdOutsideUntil)
+            {
+                return cornerDir * safeBound;
+            }
             return 0f;
         }
 
