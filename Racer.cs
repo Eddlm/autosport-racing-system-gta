@@ -721,10 +721,10 @@ namespace ARS
             cornerSpd += 5f;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
-            // Yield: cap speed to target's speed minus 2 m/s to actually yield
+            // Yield: cap throttle to 0.5 to stay behind
             if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Active && ActiveManeuver.Target != null)
             {
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ActiveManeuver.Target.Car.Velocity.Length() - 2f);
+                Control.MaxThrottle = Math.Min(Control.MaxThrottle, 0.5f);
             }
 
 
@@ -847,6 +847,7 @@ namespace ARS
                         ActiveManeuver.Active = true;
                         ActiveManeuver.Target = closestRival.RivalRacer;
                         ActiveManeuver.LastEnabled = Game.GameTime;
+                        UI.Notify("~y~" + Name + "~w~ yields to ~y~" + closestRival.RivalRacer.Name);
                     }
                 }
             }
@@ -901,7 +902,6 @@ namespace ARS
             Function.Call((Hash)FullyChargeNitrousHash, Car);
             Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 50.0f, 100.0f, false);
             _nitrousActiveUntil = Game.GameTime + NitrousDurationMs;
-            UI.Notify("~b~" + Name + "~w~ fires nitrous!");
         }
 
         void StopNitrous()
@@ -915,17 +915,22 @@ namespace ARS
         {
             if (ActiveManeuver.Type != ManeuverType.Yield || !ActiveManeuver.Active) return;
 
-            // Exit: >5s from next corner and at full throttle
-            if (Brain.Corner != null)
+            // Exit: target is >10m away
+            if (ActiveManeuver.Target != null && ActiveManeuver.Target.Car.Exists())
             {
-                float distToApex = Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node);
-                float timeToApex = distToApex / Math.Max(Car.Velocity.Length(), 1f);
-                if (timeToApex > 5f && Control.Throttle > 0.95f)
+                float dist = Car.Position.DistanceTo(ActiveManeuver.Target.Car.Position);
+                if (dist > 10f)
                 {
                     ActiveManeuver.Type = ManeuverType.None;
                     ActiveManeuver.Active = false;
                     ActiveManeuver.Target = null;
                 }
+            }
+            else
+            {
+                ActiveManeuver.Type = ManeuverType.None;
+                ActiveManeuver.Active = false;
+                ActiveManeuver.Target = null;
             }
         }
         public void UpdateTickData()
