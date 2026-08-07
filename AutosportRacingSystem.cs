@@ -1755,10 +1755,10 @@ namespace ARS
 
 
 
-        enum GridSort
-        {
-            Power, PowerDescendent, TopSpeed, TopSpeedDescendent, Random
-        }
+                enum GridSort
+                {
+                    Power, PowerDescendent, EstimatedTopSpeed, EstimatedTopSpeedDescendent, Random
+                }
         void PlaceCars(bool sortbypower)
         {
             if (sortbypower)
@@ -1775,8 +1775,8 @@ namespace ARS
                 {
                     case GridSort.Power: { _racers = _racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList(); break; }
                     case GridSort.PowerDescendent: { _racers = _racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).Reverse().ToList(); break; }
-                    case GridSort.TopSpeed: { _racers = _racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).ToList(); break; }
-                    case GridSort.TopSpeedDescendent: { _racers = _racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).Reverse().ToList(); break; }
+                    case GridSort.EstimatedTopSpeed: { _racers = _racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).ToList(); break; }
+                    case GridSort.EstimatedTopSpeedDescendent: { _racers = _racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).Reverse().ToList(); break; }
                     case GridSort.Random: { _racers = _racers.OrderBy(v => v.Car.Model.Hash.ToString().Substring(0, 1) + (int)v.Car.PrimaryColor).ToList(); break; }
                 }
 
@@ -4798,13 +4798,14 @@ XMLFile.Load(filename);
                 }
             }
 
-            foreach (XmlDocument file in _cachedCandidates)
+            // DEBUG OVERRIDE: Hardcoded 4 cars
+            string[] debugCars = { "dominator2", "coquette", "comet2", "issi8" };
+            foreach (string modelName in debugCars)
             {
                 Vehicle car = null;
                 Ped driverPed = null;
                 try
                 {
-                    string modelName = file.SelectSingleNode("//Model").InnerText;
                     Model vehicleModel = LoadVehicleModel(modelName);
                     if (!vehicleModel.IsLoaded)
                     {
@@ -4816,26 +4817,25 @@ XMLFile.Load(filename);
                     car.Heading = (_routeNodes[2] - _routeNodes[0]).ToHeading();
                     car.InstallModKit();
 
-                    List<string> tags = GetVehicleTags(file);
-                    try { ApplyCarAppearance(file, car, tags); } catch (Exception ex) { Log(LogImportance.Info, "Appearance skipped: " + ex.Message); }
-                    ApplyAccelerationOverride(file, car);
-
-                    XmlDocument driverXml;
-                    driverPed = CreateDriverPed(file, car, tags, out driverXml);
+                    // Use generic tags/appearance since we disabled XML loading
+                    List<string> tags = new List<string>();
+                    
+                    XmlDocument dummyFile = new XmlDocument(); // To satisfy AddRacer signature
+                    
+                    driverPed = CreateDriverPed(dummyFile, car, tags, out XmlDocument driverXml);
                     if (driverPed == null)
                     {
                         Log(LogImportance.Error, "Skipping " + modelName + " - no driver ped.", true);
                         car.Delete();
                         continue;
                     }
-                    ApplyDriverClothes(driverPed, driverXml, tags);
-                    AddRacer(file, car, driverPed);
-
+                    
+                    AddRacer(dummyFile, car, driverPed);
                     lastCar = car;
                 }
                 catch (Exception ex)
                 {
-                    Log(LogImportance.Error, "Failed to load racer: " + ex.Message, true);
+                    Log(LogImportance.Error, "Failed to load debug racer: " + ex.Message, true);
                     try { if (driverPed != null) driverPed.Delete(); } catch (Exception) { }
                     try { if (car != null) car.Delete(); } catch (Exception) { }
                 }

@@ -90,10 +90,17 @@ namespace ARS
         bool _steerCapped = false;
         float _steerOver = 0f;
         float _cornerSpd = 999f;
-        // TODO: unified max-acceleration scalar in [-1, +1]. +1 = full throttle, 0 = coast, -1 = full brake.
+        // Unified max-acceleration scalar in [-1, +1]. +1 = full throttle, 0 = coast, -1 = full brake.
         // Re-rises at 0.33/s toward +1 each frame (frame-independent via TickScale).
         // Each "lift off" source lowers it via Math.Min; applied once in ConvertSpeedToPedals.
         float _accelerationCap = 1f;
+        // Unified speed ceiling (m/s). Self-rises at SpeedCapRiseRate toward 999 each tick.
+        // Speed-based concern sources pull it down via Math.Min; ConvertSpeedToPedals clamps
+        // the intended speed against it, so throttle/brake always come from the speed loop.
+        float _speedCap = 999f;
+        const float SpeedCapRiseRate = 5f;             // m/s the cap recovers per second
+        const float ProjectionSpeedMarginMph = 20f;    // cap sits this far below route speed while the projection is wide
+        const float ProjectionSteerDeadzoneDegrees = 2f; // projection cap ignored while |steer| is within this
 
 
 
@@ -214,7 +221,7 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Info, "TRlat for " + Car.DisplayName + ":" + Handling.LateralTractionCurve + "º");
 
             Handling.BrakingAbility = Car.MaxBraking;
-            Handling.TopSpeed = ARS.EngineTopSpeed(Car);
+            Handling.EstimatedTopSpeed = ARS.EngineTopSpeed(Car);
             Handling.Acceleration = Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, Car);
 
 
@@ -242,8 +249,8 @@ namespace ARS
 
             Handling.Grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
 
-            VehicleData.PerformanceIndex = (int)((Handling.TopSpeed * 5) + (Handling.Grip * 100) + (Handling.Acceleration * 500));
-            VehicleData.TextPerformanceIndex = ((int)(Handling.TopSpeed / 1.2) + " | " + (int)(Handling.Acceleration * 200) + " | " + (int)(Handling.Grip * 20));
+            VehicleData.PerformanceIndex = (int)((Handling.EstimatedTopSpeed * 5) + (Handling.Grip * 100) + (Handling.Acceleration * 500));
+            VehicleData.TextPerformanceIndex = ((int)(Handling.EstimatedTopSpeed / 1.2) + " | " + (int)(Handling.Acceleration * 200) + " | " + (int)(Handling.Grip * 20));
 
             Car.Repair();
         }
@@ -594,6 +601,8 @@ namespace ARS
             {
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, Brain.CurrentIntention.MaxSpeed);
+                // Unified speed ceiling (projection and other speed-based sources).
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, _speedCap);
             }
 
             if ((Game.GameTime - LapStartTime) < 3000) Brain.CurrentIntention.IntendedSpeedChangeGs = 999;
@@ -607,7 +616,7 @@ namespace ARS
             float speedErrorGs = Brain.CurrentIntention.IntendedSpeedChangeGs;
             bool wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
 
-            // TODO: apply the unified _accelerationCap (set by steer-in and avoidance sources).
+            // Apply the unified _accelerationCap (set by steer-in, avoidance and projection sources).
             // Positive part multiplies throttle; negative part's magnitude becomes a MINIMUM brake input.
             if (speedErrorGs > 0.0f)
             {
@@ -633,7 +642,7 @@ namespace ARS
             }
 
 
-            // TODO: brake floor from _accelerationCap (negative part = min brake).
+            // Brake floor from _accelerationCap (negative part = min brake).
             float accelCapBrakeMin = -Math.Min(_accelerationCap, 0f);
             if (accelCapBrakeMin > 0f)
             {
@@ -641,14 +650,6 @@ namespace ARS
             }
 
             if (newBrake > 0.0) newThrottle = 0; else newBrake = 0;
-
-
-            float stabilityThrottleLimit = VehicleData.AvgGroundStability;
-            if (OutOfTrackDistance() > 0.5f)
-            {
-
-                stabilityThrottleLimit = Math.Max(stabilityThrottleLimit, 0.45f);
-            }
 
 
             Control.Brake += (newBrake - Control.Brake) * 5 * TickScale;
@@ -760,11 +761,13 @@ namespace ARS
                 _accelerationCap = Math.Min(_accelerationCap, avoidScalar);
             }
 
-            // Projection off-track source. Only the OUTSIDE of the upcoming corner matters:
-            // uses the closest track node to the projected 1s position as the reference frame,
-            // penalizing 0.2 per meter past the outside edge. The scalar is floored by the
-            // speed-based cap so overspeed is left to the kinematic speed loop alone.
-            if (Brain.Corner.Valid)
+            // Projection off-track source (speed-based). Only the OUTSIDE of the upcoming
+            // corner matters: uses the closest track node to the projected 1s position as the
+            // reference frame. Past 75% of track width from the inside edge, the speed cap is
+            // pinned 20 mph below the route speed, and the speed loop derives the
+            // throttle/brake response from that. Skipped while steering sits inside the ±2°
+            // deadzone — a straight-running car projecting wide is not a cornering concern.
+            if (Brain.Corner.Valid && Math.Abs(Control.SteerDegrees) > ProjectionSteerDeadzoneDegrees)
             {
                 float cornerDir = Math.Sign(Brain.Corner.Point.Angle);
                 if (cornerDir != 0f)
@@ -775,12 +778,10 @@ namespace ARS
                     float distanceFromInside = outsideOffset + projectedTrackPoint.TrackHalfWidth;
                     float trackWidth = projectedTrackPoint.TrackHalfWidth * 2f;
 
-                    float projectionScalar = 1f - 0.2f * Math.Max(0f, distanceFromInside - trackWidth);
-
-                    float projectionCapFloor = ARS.Remap(Car.Velocity.Length(), followTrackSpd, followTrackSpd - 20f, -1f, 1f, true);
-                    projectionScalar = Math.Max(projectionScalar, projectionCapFloor);
-
-                    _accelerationCap = Math.Min(_accelerationCap, projectionScalar);
+                    if (distanceFromInside > trackWidth * 0.75f)
+                    {
+                        _speedCap = Math.Min(_speedCap, Math.Max(followTrackSpd - ARS.MphToMps(ProjectionSpeedMarginMph), 0f));
+                    }
                 }
             }
 
@@ -896,7 +897,7 @@ namespace ARS
                 }
             }
 
-            while (_trailSamples.Count > 50) _trailSamples.RemoveAt(0);
+            while (_trailSamples.Count > 10) _trailSamples.RemoveAt(0);
         }
 
 
@@ -1092,7 +1093,7 @@ namespace ARS
 
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2f), ((int)Pressure).ToString(), Color.White, 0.4f);
 
-                    // TODO: projection debug — white line + sphere at the 1-second projected position.
+                    // Projection debug — white line + sphere at the 1-second projected position.
                     Vector3 projected = ProjectAhead();
                     Vector3 lineStart = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.6f);
                     ARS.DrawLine(lineStart, projected, Color.White);
@@ -1403,9 +1404,9 @@ namespace ARS
             {
                 UpdateRivalInfo();
 
-                // TODO: re-rise AccelerationCap at 0.33/s toward 1.0, frame-independent.
-                // Each "lift off" source below will lower it via Math.Min.
+                // Re-rise the caps; each concern source below pulls them down via Math.Min.
                 _accelerationCap = Math.Min(1f, _accelerationCap + 0.33f * TickScale);
+                _speedCap = Math.Min(999f, _speedCap + SpeedCapRiseRate * TickScale);
 
                 ComputeTargetSpeed();
                 ComputeSteering();

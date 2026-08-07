@@ -34,7 +34,7 @@ namespace ARS
         public float LateralTractionCurve = 22f;
         public float Downforce = 1f;
         public float BrakingAbility = 1f;
-        public float TopSpeed = 1f;
+            public float EstimatedTopSpeed = 1f;
         public float Grip = 1f;
         public float Gravity = 9.8f;
         public float Acceleration = 1;
