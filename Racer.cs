@@ -440,7 +440,7 @@ namespace ARS
                 r.RivalRacer != null
                 && r.RelativePosition == RelativePos.Ahead
                 && r.SecondsToReach >= 0f
-                && r.SecondsToReach <= 4f
+                && r.SecondsToReach <= 1.5f
                 && Math.Abs(r.DirectionDiff) <= 20f);
 
             if (aheadRival == null) return 0f;
