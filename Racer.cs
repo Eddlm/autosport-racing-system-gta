@@ -87,6 +87,7 @@ namespace ARS
 
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
+        bool _avoidWallsInitialized = false; // walls start collapsed at center; snap fully open on first use
         float _targetLane = 0f; // final clamped lane target after all lane tweaks, set in ComputeSteering
         float _rawCornerLane = 0f; // System 1 corner lane (outside approach) before walls/avoidance, set in ComputeSteering (debug; also drives the outside-vs-inside gain split)
         float _cornerSpd = 999f;
@@ -560,6 +561,16 @@ namespace ARS
 
             float trackBound = roadWide - carHalfWidth;
 
+            // Walls start collapsed at 0 (center) and would clamp every lane to a 0.X near-center
+            // offset (Clamp with min>max inverts). Snap them fully open on first use so the clamp
+            // window is the whole track from the very first frame.
+            if (!_avoidWallsInitialized)
+            {
+                _avoidLeftWall = -trackBound;
+                _avoidRightWall = trackBound;
+                _avoidWallsInitialized = true;
+            }
+
 
             float targetLeftWall = -trackBound;
             float targetRightWall = trackBound;
@@ -626,6 +637,10 @@ namespace ARS
 
             float clampLeft = _avoidLeftWall + carHalfWidth;
             float clampRight = _avoidRightWall - carHalfWidth;
+            // Guard the collapsed-window case: if the walls have crossed (gap < 0 after car
+            // inset), Clamp(min>max) would invert and pin the lane to a bogus near-center 0.X.
+            // Fall back to the whole track so the lane system's own target is honored.
+            if (clampLeft > clampRight) return targetLane;
             return ARS.Clamp(targetLane, clampLeft, clampRight);
         }
 
