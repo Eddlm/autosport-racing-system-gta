@@ -90,6 +90,8 @@ namespace ARS
         bool _steerCapped = false;
         float _steerOver = 0f;
         float _targetLane = 0f; // final clamped lane target after all lane tweaks, set in ComputeSteering
+        float _rawCornerLane = 0f; // corner line lane before walls/avoidance, set in ComputeSteering (debug)
+        float _avoidAheadLaneValue = 0f; // avoid-ahead lane override, set in ComputeSteering (debug)
         float _cornerSpd = 999f;
         // Unified max-acceleration scalar in [-1, +1]. +1 = full throttle, 0 = coast, -1 = full brake.
         // Re-rises at 0.33/s toward +1 each frame (frame-independent via TickScale).
@@ -287,10 +289,12 @@ namespace ARS
 
                 naturalLane = 0f;
             }
+            _rawCornerLane = naturalLane;
 
             // Avoid-ahead: pick a lane to pass a rival ahead. Computed fresh each frame.
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide, carHalfWidth);
             if (avoidAheadLane != 0f) naturalLane = avoidAheadLane;
+            _avoidAheadLaneValue = avoidAheadLane;
 
 
 
@@ -1197,6 +1201,10 @@ namespace ARS
                     ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
                     // Track-ahead curve radius at the follow point (same value the inside intensity reads).
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~o~R: ~w~" + Brain.CurrentPerception.CurveRadiusToFollowPoint.ToString("0"), Color.White, 0.4f);
+                    // Corner lane diagnostic: active?, time to apex, target lane at each stage.
+                    string cornerState = Brain.Corner == null ? "N" : "A";
+                    float tApex = Brain.Corner == null ? 0f : Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node) / Math.Max(Car.Velocity.Length(), 1f);
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f), "~w~C:" + cornerState + " tA:" + tApex.ToString("0.0") + " ~b~cornerLane:" + _rawCornerLane.ToString("0.0") + " ~y~avoidA:" + _avoidAheadLaneValue.ToString("0.0") + " ~g~target:" + _targetLane.ToString("0.0"), Color.White, 0.4f);
                     int ri = 0;
                     foreach (Rival r in Brain.Rivals)
                     {
