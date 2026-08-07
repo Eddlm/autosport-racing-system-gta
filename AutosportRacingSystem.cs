@@ -4810,14 +4810,13 @@ XMLFile.Load(filename);
                 }
             }
 
-            // DEBUG OVERRIDE: Hardcoded 4 cars
-            string[] debugCars = { "dominator2", "coquette", "comet2", "issi8" };
-            foreach (string modelName in debugCars)
+            foreach (XmlDocument file in _cachedCandidates)
             {
                 Vehicle car = null;
                 Ped driverPed = null;
                 try
                 {
+                    string modelName = file.SelectSingleNode("//Model").InnerText;
                     Model vehicleModel = LoadVehicleModel(modelName);
                     if (!vehicleModel.IsLoaded)
                     {
@@ -4829,25 +4828,26 @@ XMLFile.Load(filename);
                     car.Heading = (_routeNodes[2] - _routeNodes[0]).ToHeading();
                     car.InstallModKit();
 
-                    // Use generic tags/appearance since we disabled XML loading
-                    List<string> tags = new List<string>();
-                    
-                    XmlDocument dummyFile = new XmlDocument(); // To satisfy AddRacer signature
-                    
-                    driverPed = CreateDriverPed(dummyFile, car, tags, out XmlDocument driverXml);
+                    List<string> tags = GetVehicleTags(file);
+                    try { ApplyCarAppearance(file, car, tags); } catch (Exception ex) { Log(LogImportance.Info, "Appearance skipped: " + ex.Message); }
+                    ApplyAccelerationOverride(file, car);
+
+                    XmlDocument driverXml;
+                    driverPed = CreateDriverPed(file, car, tags, out driverXml);
                     if (driverPed == null)
                     {
                         Log(LogImportance.Error, "Skipping " + modelName + " - no driver ped.", true);
                         car.Delete();
                         continue;
                     }
-                    
-                    AddRacer(dummyFile, car, driverPed);
+                    ApplyDriverClothes(driverPed, driverXml, tags);
+                    AddRacer(file, car, driverPed);
+
                     lastCar = car;
                 }
                 catch (Exception ex)
                 {
-                    Log(LogImportance.Error, "Failed to load debug racer: " + ex.Message, true);
+                    Log(LogImportance.Error, "Failed to load racer: " + ex.Message, true);
                     try { if (driverPed != null) driverPed.Delete(); } catch (Exception) { }
                     try { if (car != null) car.Delete(); } catch (Exception) { }
                 }
