@@ -3318,13 +3318,15 @@ namespace ARS
             }
 
             // Second pass: disable any key corner that's too close to the corner behind it.
-            // Corners within 300 nodes (300 m) of the previous one fight over the same braking
-            // and line-planning window; the later one is dropped. (1 node = 1 m)
-            const int minCornerSeparationNodes = 300;
+            // Separation scales with track width — full width (2× half-width) × 10, so a 16 m
+            // wide track demands corners at least 160 m apart. Uses the wider of the two corners.
             for (int i = 1; i < keyCorners.Count;)
             {
                 CornerPoint prev = keyCorners[i - 1];
                 CornerPoint curr = keyCorners[i];
+
+                float pairHalfWidth = Math.Max(_trackPoints[prev.Node].TrackHalfWidth, _trackPoints[curr.Node].TrackHalfWidth);
+                int minCornerSeparationNodes = (int)(pairHalfWidth * 20f);
 
                 if (curr.Node - prev.Node < minCornerSeparationNodes)
                 {
