@@ -88,10 +88,10 @@ namespace ARS
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
         float _targetLane = 0f; // final clamped lane target after all lane tweaks, set in ComputeSteering
-        float _rawCornerLane = 0f; // System 1 corner lane (outside approach) before walls/avoidance, set in ComputeSteering (debug)
-        float _highSpeedLaneValue = 0f; // System 2 high-speed lane (inside edge) before System 1 override, set in ComputeSteering (debug)
-        float _avoidAheadLaneValue = 0f; // avoid-ahead lane override, set in ComputeSteering (debug)
+        float _rawCornerLane = 0f; // System 1 corner lane (outside approach) before walls/avoidance, set in ComputeSteering (debug; also drives the outside-vs-inside gain split)
         float _cornerSpd = 999f;
+        float _debugCornerSpd = 999f; // final cornerSpd after slope/offset, captured in ComputeTargetSpeed (debug)
+        float _debugFollowTrackSpd = 999f; // final followTrackSpd after slope/pressure, captured in ComputeTargetSpeed (debug)
         // Outside-approach entry latch: decided once when the car enters the 5s window for a
         // given corner. The outside hold only makes sense if the car needs to brake — entries
         // below apex speed + 20 mph skip the outside line entirely (System 2 inside covers it).
@@ -284,7 +284,6 @@ namespace ARS
 
 
             float naturalLane = ComputeHighSpeedLane(roadWide, carHalfWidth);
-            _highSpeedLaneValue = naturalLane;
 
             // System 1: corner outside approach — temporarily overrides System 2's lane
             // while in its approach window. Returns 0f when it lets go, so System 2's
@@ -297,7 +296,6 @@ namespace ARS
             // Avoid-ahead: pick a lane to pass a rival ahead. Computed fresh each frame.
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide, carHalfWidth);
             if (avoidAheadLane != 0f) naturalLane = avoidAheadLane;
-            _avoidAheadLaneValue = avoidAheadLane;
 
 
 
@@ -812,6 +810,8 @@ namespace ARS
             // current speed and would always skip the approach.
             _cornerSpd = Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f;
             cornerSpd += 5f;
+            _debugCornerSpd = cornerSpd;
+            _debugFollowTrackSpd = followTrackSpd;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
             // Yield: cap throttle to 0.5 to stay behind
@@ -1218,21 +1218,19 @@ namespace ARS
                 {
                     DrawInputTrails();
 
-                    Vector3 textPos = Car.Position + new Vector3(0, 0, 2f);
-                    ARS.DrawText(textPos, "~w~My lane: ~b~" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.0") + " ~w~L: ~b~" + _avoidLeftWall.ToString("0.0") + " ~w~R: ~r~" + _avoidRightWall.ToString("0.0"), Color.White, 0.4f);
-                    // Corner lane diagnostic: active?, time to apex, target lane at each stage.
-                    string cornerState = Brain.Corner == null ? "N" : "A";
-                    float tApex = Brain.Corner == null ? 0f : Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node) / Math.Max(Car.Velocity.Length(), 1f);
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~w~C:" + cornerState + " tA:" + tApex.ToString("0.0") + " ~b~hs:" + _highSpeedLaneValue.ToString("0.0") + " ~o~corner:" + _rawCornerLane.ToString("0.0") + " ~y~avoidA:" + _avoidAheadLaneValue.ToString("0.0") + " ~g~target:" + _targetLane.ToString("0.0"), Color.White, 0.4f);
-                    int ri = 0;
-                    foreach (Rival r in Brain.Rivals)
-                    {
-                        if (r.RivalRacer == null) continue;
-                        Vector3 rTextPos = Car.Position + new Vector3(0, 0, 2.5f + ri * 0.4f);
-                        string side = r.RelativePosition == RelativePos.Left ? "L" : r.RelativePosition == RelativePos.Right ? "R" : r.RelativePosition == RelativePos.Ahead ? "A" : "?";
-                        ARS.DrawText(rTextPos, "~w~R" + ri + "(" + side + ") lane: ~r~" + r.OccupiedLane.ToString("0.0") + " s: ~y~" + r.SecondsToReach.ToString("0.0"), Color.White, 0.4f);
-                        ri++;
-                    }
+                    // Speed readout — everything that shapes this moment's speed, in mph.
+                    // Line 1: actual speed vs final intended speed.
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2f),
+                        "~w~SPD ~g~" + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + "~w~/~b~" + ARS.MpsToMph(Brain.CurrentIntention.Speed).ToString("0") + "mph",
+                        Color.White, 0.4f);
+                    // Line 2: braking-plan corner speed and route curvature speed.
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f),
+                        "~w~corn ~o~" + ARS.MpsToMph(_debugCornerSpd).ToString("0") + "~w~ rte ~c~" + ARS.MpsToMph(_debugFollowTrackSpd).ToString("0"),
+                        Color.White, 0.4f);
+                    // Line 3: the two caps the speed loop clamps against.
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f),
+                        "~w~spdCap ~p~" + ARS.MpsToMph(_speedCap).ToString("0") + "~w~ accCap ~r~" + _accelerationCap.ToString("0.00"),
+                        Color.White, 0.4f);
                 }
                 if (showTrack)
                 {
