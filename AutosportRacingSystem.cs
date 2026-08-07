@@ -3318,9 +3318,9 @@ namespace ARS
             }
 
             // Second pass: disable any key corner that's too close to the corner behind it.
-            // Corners within 80 nodes (80 m) of the previous one fight over the same braking
+            // Corners within 300 nodes (300 m) of the previous one fight over the same braking
             // and line-planning window; the later one is dropped. (1 node = 1 m)
-            const int minCornerSeparationNodes = 80;
+            const int minCornerSeparationNodes = 300;
             for (int i = 1; i < keyCorners.Count;)
             {
                 CornerPoint prev = keyCorners[i - 1];
