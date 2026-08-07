@@ -435,7 +435,7 @@ namespace ARS
 
         float ComputeAvoidAheadLane(float roadWide, float carHalfWidth)
         {
-            // Find the closest rival ahead within 4s reach and similar heading
+            // Find the closest rival ahead within 1.5s reach and similar heading
             Rival aheadRival = Brain.Rivals.FirstOrDefault(r =>
                 r.RivalRacer != null
                 && r.RelativePosition == RelativePos.Ahead
@@ -450,6 +450,7 @@ namespace ARS
             float rivalHalfWidth = aheadRival.OccupiedLaneWidth * 0.5f;
             float aggroBuffer = ARS.Remap(Aggression, 0f, 100f, 2f, 0.25f, true);
             float buffer = rivalHalfWidth + aggroBuffer;
+            float currentLane = Brain.CurrentPerception.DeviationFromCenter;
 
             // Pick the side with more room
             float roomLeft = rivalLane - buffer + trackBound;
@@ -466,10 +467,17 @@ namespace ARS
                 targetLane = goLeft
                     ? rivalLane + buffer + carHalfWidth
                     : rivalLane - buffer - carHalfWidth;
+                goLeft = !goLeft;
             }
 
             // If both sides are off-track, just stay behind
             if (Math.Abs(targetLane) > trackBound) return 0f;
+
+            // If this car is already on the far side of the target lane, the target
+            // lane sits between us and the rival — the rival is far off to the side
+            // and our current line clears it. No steering needed; stay on the natural lane.
+            if (goLeft && currentLane <= targetLane) return 0f;
+            if (!goLeft && currentLane >= targetLane) return 0f;
 
             return targetLane;
         }
