@@ -385,9 +385,9 @@ namespace ARS
             float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
             float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
             const float approachStartTime = 5.0f;
-            // Slow enough to take the corner as-is: ignore the corner entirely, stay on the natural lane.
-            if (_cornerSpd >= speedMps) return 0f;
-            // Otherwise hold off positioning until we're inside the approach window (5s before the apex).
+            // Wait for the approach window (5s before the apex) before positioning. A slow car
+            // can take the corner at current speed, so there's no reason to commit early; and
+            // once inside the window we're committed — hold the line regardless of speed.
             if (timeToApex > approachStartTime) return 0f;
 
 
