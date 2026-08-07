@@ -90,7 +90,8 @@ namespace ARS
         bool _steerCapped = false;
         float _steerOver = 0f;
         float _targetLane = 0f; // final clamped lane target after all lane tweaks, set in ComputeSteering
-        float _rawCornerLane = 0f; // corner line lane before walls/avoidance, set in ComputeSteering (debug)
+        float _rawCornerLane = 0f; // System 1 corner lane (outside approach) before walls/avoidance, set in ComputeSteering (debug)
+        float _highSpeedLaneValue = 0f; // System 2 high-speed lane (inside edge) before System 1 override, set in ComputeSteering (debug)
         float _avoidAheadLaneValue = 0f; // avoid-ahead lane override, set in ComputeSteering (debug)
         float _cornerSpd = 999f;
         // Unified max-acceleration scalar in [-1, +1]. +1 = full throttle, 0 = coast, -1 = full brake.
@@ -278,18 +279,16 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
 
 
-            float naturalLane;
-            bool cornerActive = Brain.Corner != null && Lap > 0;
-            if (cornerActive)
-            {
-                naturalLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
-            }
-            else
-            {
+            float naturalLane = ComputeHighSpeedLane(roadWide, carHalfWidth);
+            _highSpeedLaneValue = naturalLane;
 
-                naturalLane = 0f;
-            }
-            _rawCornerLane = naturalLane;
+            // System 1: corner outside approach — temporarily overrides System 2's lane
+            // while in its approach window. Returns 0f when it lets go, so System 2's
+            // inside edge takes over naturally.
+            bool cornerActive = Brain.Corner != null && Lap > 0;
+            float cornerLane = cornerActive ? ComputeCornerTargetLane(steerRefPoint, speedMps) : 0f;
+            if (cornerLane != 0f) naturalLane = cornerLane;
+            _rawCornerLane = cornerLane;
 
             // Avoid-ahead: pick a lane to pass a rival ahead. Computed fresh each frame.
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide, carHalfWidth);
@@ -388,6 +387,33 @@ namespace ARS
 
 
 
+        // System 2 — high-speed line. Positions the car on the inside edge of the track's
+        // curvature, driven entirely by the track geometry (NOT the corner system). Always
+        // evaluated; the corner system (System 1) only temporarily overrides this lane for
+        // its outside approach. Direction uses the same ±20-node SignedAngle construction as
+        // the corner generator, so inside/outside convention matches the corner system.
+        float ComputeHighSpeedLane(float roadWide, float carHalfWidth)
+        {
+            int backNode = (int)ARS.Clamp(CurrentTrackPoint.Node - 20, 0, ARS._trackPoints.Count - 1);
+            int fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 20, 0, ARS._trackPoints.Count - 1);
+            Vector3 backDir = ARS._trackPoints[backNode].Direction;
+            Vector3 fwdDir = ARS._trackPoints[fwdNode].Direction;
+
+            float signedAngle = Vector3.SignedAngle(backDir, fwdDir, Vector3.WorldUp);
+            if (float.IsNaN(signedAngle) || float.IsInfinity(signedAngle)) return 0f;
+
+            // Deadzone: ignore near-straight sections so track-direction noise can't flip the
+            // inside/outside target frame to frame.
+            if (Math.Abs(signedAngle) < 1f) return 0f;
+
+            float cornerDir = Math.Sign(signedAngle);
+            float safeBound = roadWide - carHalfWidth;
+            return -cornerDir * safeBound;
+        }
+        // System 1 — corner outside approach. Its only job: hold the outside line during the
+        // approach window (5s → 1s before the apex). It lets go within 1s of the apex so the
+        // high-speed line (System 2) takes over the inside naturally. Returns 0f (no override)
+        // outside the window.
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
         {
             CornerPoint c = Brain.Corner.Point;
@@ -401,36 +427,22 @@ namespace ARS
             // once inside the window we're committed — hold the line regardless of speed.
             if (timeToApex > approachStartTime) return 0f;
 
-
-
             float cornerDir = Math.Sign(c.Angle);
-
-
-
-
-
-
-
             if (cornerDir == 0f) return 0f;
 
             float halfWidth = steerRefPoint.TrackHalfWidth;
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-
+            // Hold the outside line from 5s down to 1s before the apex, then let go — the
+            // high-speed line (System 2) takes over the inside edge.
             const float holdOutsideUntil = 1.0f;
+            if (timeToApex > holdOutsideUntil)
+            {
+                return cornerDir * safeBound;
+            }
 
-            // TEMPORARILY DISABLED (7 Aug 2026): outside approach lane. Testing whether the
-            // car hugs the inside at all — with the outside hold off, the car runs the natural
-            // lane until the turn-in window and only the inside-line logic below acts.
-            // if (timeToApex > holdOutsideUntil)
-            // {
-            //     return cornerDir * safeBound;
-            // }
-
-            // Turn in: the inside edge is always the target; the pursuit gain in
-            // ComputeSteering scales how hard the car commits based on corner radius.
-            return -cornerDir * safeBound;
+            return 0f;
         }
 
 
@@ -1208,7 +1220,7 @@ namespace ARS
                     // Corner lane diagnostic: active?, time to apex, target lane at each stage.
                     string cornerState = Brain.Corner == null ? "N" : "A";
                     float tApex = Brain.Corner == null ? 0f : Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node) / Math.Max(Car.Velocity.Length(), 1f);
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f), "~w~C:" + cornerState + " tA:" + tApex.ToString("0.0") + " ~b~cornerLane:" + _rawCornerLane.ToString("0.0") + " ~y~avoidA:" + _avoidAheadLaneValue.ToString("0.0") + " ~g~target:" + _targetLane.ToString("0.0"), Color.White, 0.4f);
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f), "~w~C:" + cornerState + " tA:" + tApex.ToString("0.0") + " ~b~hs:" + _highSpeedLaneValue.ToString("0.0") + " ~o~corner:" + _rawCornerLane.ToString("0.0") + " ~y~avoidA:" + _avoidAheadLaneValue.ToString("0.0") + " ~g~target:" + _targetLane.ToString("0.0"), Color.White, 0.4f);
                     int ri = 0;
                     foreach (Rival r in Brain.Rivals)
                     {
