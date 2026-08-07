@@ -334,7 +334,7 @@ namespace ARS
                 bool isAvoidance = avoidAheadLane != 0f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
                 float cornerGain = isAvoidance
                     ? 0.5f
-                    : ARS.Remap(Math.Abs(Brain.CurrentPerception.HighSpeedCurveRadius), 2500f, 25f, 0.01f, 0.5f, true);
+                    : ARS.Remap(Math.Abs(Brain.CurrentPerception.HighSpeedCurveRadius), 250f, 25f, 0.01f, 0.5f, true);
                 laneBiasDeg *= cornerGain;
             }
 
