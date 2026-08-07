@@ -114,7 +114,7 @@ namespace ARS
         const ulong FullyChargeNitrousHash = 0x1A2BCC8C636F9226;
         const ulong OverrideNitrousLevelHash = 0xC8E9B6B71B8E660D;
 
-        Maneuver ActiveManeuver = new Maneuver();
+        public Maneuver ActiveManeuver = new Maneuver();
         int _nitrousActiveUntil = 0;
 
 

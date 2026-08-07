@@ -3839,7 +3839,10 @@ namespace ARS
             float velTarget = r.Brain.Corner.Speed;
             // Reserve corner-speed × N seconds of distance so the car reaches corner speed
             // N seconds before the apex, then coasts the rest at corner speed.
-            float distance = apexNode - r.CurrentTrackPoint.Node - (velTarget * BrakingCoastSecondsBeforeApex);
+            // Yielding cars brake earlier (larger buffer) to stay behind.
+            float coastSeconds = r.ActiveManeuver.Type == ManeuverType.Yield && r.ActiveManeuver.Active
+                ? BrakingCoastSecondsBeforeApex * 2f : BrakingCoastSecondsBeforeApex;
+            float distance = apexNode - r.CurrentTrackPoint.Node - (velTarget * coastSeconds);
             if (!_isPointToPoint && distance < 0f) distance += _trackPoints.Count;
             if (distance < 0f) distance = 0f;
 
