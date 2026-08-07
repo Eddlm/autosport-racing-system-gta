@@ -836,10 +836,11 @@ namespace ARS
 
             // Projection off-track source (speed-based). Only the OUTSIDE of the upcoming
             // corner matters: uses the closest track node to the projected 1s position as the
-            // reference frame. Past 75% of track width from the inside edge, the speed cap is
-            // pinned 20 mph below the route speed, and the speed loop derives the
-            // throttle/brake response from that. Skipped while steering sits inside the ±2°
-            // deadzone — a straight-running car projecting wide is not a cornering concern.
+            // reference frame. When the projection passes the actual track edge, the speed cap
+            // is pinned at most to the corner speed, then deducted incrementally — 1 m/s per
+            // meter of overshoot, per second — so a single frame of air/off-track projection
+            // only nudges the cap instead of slamming it. Skipped while steering sits inside
+            // the ±2° deadzone — a straight-running car projecting wide is not a cornering concern.
             if (Brain.Corner != null && Math.Abs(Control.SteerDegrees) > ProjectionSteerDeadzoneDegrees)
             {
                 float cornerDir = Math.Sign(Brain.Corner.Point.Angle);
@@ -851,12 +852,15 @@ namespace ARS
                     float distanceFromInside = outsideOffset + projectedTrackPoint.TrackHalfWidth;
                     float trackWidth = projectedTrackPoint.TrackHalfWidth * 2f;
 
-                    if (distanceFromInside > trackWidth * 0.75f)
+                    // Overshoot past the actual track edge (no 75% gate — the edge is the limit).
+                    float overshoot = distanceFromInside - trackWidth;
+                    if (overshoot > 0f)
                     {
-                        float overshoot = distanceFromInside - trackWidth * 0.75f;
-                        float carSpeed = Car.Velocity.Length();
                         float floor = 15f;
-                        _speedCap = Math.Min(_speedCap, Math.Max(carSpeed - 0.5f * overshoot, floor));
+                        // Cap never exceeds the corner speed while off-track.
+                        _speedCap = Math.Min(_speedCap, _cornerSpd);
+                        // Incremental deduction: 1 m/s per meter of overshoot, per second.
+                        _speedCap = Math.Max(_speedCap - overshoot * 1f * TickScale, floor);
                     }
                 }
             }
