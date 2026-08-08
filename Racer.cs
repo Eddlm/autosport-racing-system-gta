@@ -674,8 +674,8 @@ namespace ARS
             float squeezeThreshold = VehicleData.BoundingBox + 0.2f;
             if (_avoidRightWall - _avoidLeftWall < squeezeThreshold)
             {
-                // Squeezed walls (gap < car width + 0.2m): cap speed just below velocity to lift/brake; 0 floor keeps it from reversing.
-                _speedCap = Math.Min(_speedCap, Math.Max(Car.Velocity.Length() - 0.5f, 0f));
+                // Squeeze speedcap disabled — revisit (was: cap speed just below velocity to lift/brake).
+                // _speedCap = Math.Min(_speedCap, Math.Max(Car.Velocity.Length() - 0.5f, 0f));
             }
 
 
