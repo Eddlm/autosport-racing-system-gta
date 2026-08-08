@@ -446,8 +446,7 @@ namespace ARS
             if (Math.Abs(signedAngle) < 1f) return 0f;
 
             float cornerDir = Math.Sign(signedAngle);
-            float safeBound = roadWide - VehicleData.BoundingBox * 0.5f;
-            return -cornerDir * safeBound;
+            return -cornerDir * roadWide;
         }
         // System 1 — corner outside approach. Its only job: hold the outside line during the
         // approach window (5s → 1s before the apex). It lets go within 1s of the apex so the
