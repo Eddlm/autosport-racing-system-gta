@@ -675,7 +675,12 @@ namespace ARS
             float carTotalWidth = carHalfWidth * 2f + 1f;
             if (_avoidRightWall - _avoidLeftWall < carTotalWidth)
             {
-                // TODO: collapsed walls — fold into _accelerationCap as a separate source (next pass).
+                // Collapsed walls: the channel between the walls is narrower than the car, so there's
+                // nowhere to steer — squeeze the speed instead. Cap intended speed just below current
+                // velocity so the speed loop lifts/brakes while squeezed. Math.Min only (never raises —
+                // the per-frame re-rise at the top of Update owns recovery). Floored at 0: a negative
+                // cap would clamp the intended speed below zero, flipping the loop into reverse demand.
+                _speedCap = Math.Min(_speedCap, Math.Max(Car.Velocity.Length() - 0.5f, 0f));
             }
 
 
