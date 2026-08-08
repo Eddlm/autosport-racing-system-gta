@@ -1088,7 +1088,9 @@ namespace ARS
                     r.RivalRacer != null
                     && r.RelativePosition == RelativePos.Ahead
                     && ForwardNodeDistance(r.RivalRacer.CurrentTrackPoint.Node) < 30
-                    && r.RivalRacer.Car.Velocity.Length() - Car.Velocity.Length() <= ARS.MphToMps(5f));
+                    && r.RivalRacer.Car.Velocity.Length() - Car.Velocity.Length() <= ARS.MphToMps(5f)
+                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
+                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane);
 
                 if (diveTarget != null && Pressure > 30f)
                 {
@@ -1113,7 +1115,9 @@ namespace ARS
                 Rival defenderTarget = Brain.Rivals.FirstOrDefault(r =>
                     r.RivalRacer != null
                     && r.RelativePosition == RelativePos.Behind
-                    && BehindNodeDistance(r.RivalRacer.CurrentTrackPoint.Node) <= 50);
+                    && BehindNodeDistance(r.RivalRacer.CurrentTrackPoint.Node) <= 50
+                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
+                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane);
 
                 if (defenderTarget != null)
                 {
