@@ -524,7 +524,7 @@ namespace ARS
             // Buffer = average of both bounding boxes (OccupiedLaneWidth = (myBox+rivalBox)/2,
             // the exact edge-to-edge touch distance — mandatory floor, cars must never touch)
             // + the aggro extra.
-            float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.25f, 2f, true);
+            float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
             float buffer = aheadRival.OccupiedLaneWidth + aggroBuffer;
             float currentLane = Brain.CurrentPerception.DeviationFromCenter;
 
@@ -600,7 +600,7 @@ namespace ARS
                 if (!isRelevant) continue;
 
 
-                float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.25f, 2f, true);
+                float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
                 // Buffer = average of both bounding boxes (OccupiedLaneWidth = (myBox+rivalBox)/2,
                 // the exact edge-to-edge touch distance — mandatory floor, cars must never touch)
                 // + the aggro extra. When this car is ahead of the overlapping rival (rival behind
