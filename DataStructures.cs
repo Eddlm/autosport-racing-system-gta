@@ -187,7 +187,6 @@ namespace ARS
     public class Maneuver
     {
         public ManeuverType Type = ManeuverType.None;
-        public bool Active = false;
         public int LastEnabled = 0;
         public Racer Target = null;
     }

@@ -300,7 +300,7 @@ namespace ARS
             // During a divebomb the committed inside lane IS the pass — generic avoidance
             // would just re-pick "the side with more room" and cancel the maneuver.
             float avoidAheadLane = 0f;
-            if (ActiveManeuver.Type != ManeuverType.DiveBomb || !ActiveManeuver.Active)
+            if (ActiveManeuver.Type != ManeuverType.DiveBomb)
             {
                 avoidAheadLane = ComputeAvoidAheadLane(roadWide);
                 if (avoidAheadLane != 0f) naturalLane = avoidAheadLane;
@@ -502,8 +502,7 @@ namespace ARS
                 // sit right beside the target rival on the corner's inside (-cornerDir). The
                 // divebomber does it to out-brake an ahead rival; the defender to block a behind
                 // rival from diving, forcing them around the outside.
-                bool isCornerCommit = ActiveManeuver.Active
-                    && ActiveManeuver.Target != null
+                bool isCornerCommit = ActiveManeuver.Target != null
                     && (ActiveManeuver.Type == ManeuverType.DiveBomb || ActiveManeuver.Type == ManeuverType.DefendLane);
                 if (isCornerCommit)
                 {
@@ -906,7 +905,7 @@ namespace ARS
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
             // Yield: cap throttle to 0.5 to stay behind
-            if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Active && ActiveManeuver.Target != null)
+            if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
             {
                 Control.MaxThrottle = Math.Min(Control.MaxThrottle, 0.5f);
             }
@@ -915,7 +914,7 @@ namespace ARS
             // TODO: avoidance source — distance-based scalar in [-1, +1] (5m → 0m, +1 → -1).
             // Lowers _accelerationCap so the AI lifts off / brakes proportionally as a rival closes.
             // Suppressed while yielding — the yield speed cap handles staying behind.
-            if (ActiveManeuver.Type != ManeuverType.Yield || !ActiveManeuver.Active)
+            if (ActiveManeuver.Type != ManeuverType.Yield)
             {
                 Rival avoidThreat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead);
                 if (avoidThreat != null)
@@ -1004,22 +1003,20 @@ namespace ARS
             if (ControlledByPlayer) return;
 
             // Force-disable any maneuver that's been armed for >8s without firing
-            if (ActiveManeuver.Active && Game.GameTime - ActiveManeuver.LastEnabled > 8000)
+            if (ActiveManeuver.Type != ManeuverType.None && Game.GameTime - ActiveManeuver.LastEnabled > 8000)
             {
                 ActiveManeuver.Type = ManeuverType.None;
-                ActiveManeuver.Active = false;
                 ActiveManeuver.Target = null;
             }
 
             // Divebomb cleanup: off as soon as we pass the apex we armed for.
-            if (ActiveManeuver.Type == ManeuverType.DiveBomb && ActiveManeuver.Active && _divebombApexNode >= 0)
+            if (ActiveManeuver.Type == ManeuverType.DiveBomb && _divebombApexNode >= 0)
             {
                 int passed = CurrentTrackPoint.Node - _divebombApexNode;
                 if (!ARS._isPointToPoint && passed < 0) passed += ARS._trackPoints.Count;
                 if (passed >= 0)
                 {
                     ActiveManeuver.Type = ManeuverType.None;
-                    ActiveManeuver.Active = false;
                     ActiveManeuver.Target = null;
                     _divebombApexNode = -1;
                 }
@@ -1027,7 +1024,7 @@ namespace ARS
 
             // DefendLane cleanup: off once we pass the defended apex, or the target overtakes us
             // (flips to Ahead / leaves the grid / is no longer a rival we track).
-            if (ActiveManeuver.Type == ManeuverType.DefendLane && ActiveManeuver.Active)
+            if (ActiveManeuver.Type == ManeuverType.DefendLane)
             {
                 bool overtaken = ActiveManeuver.Target == null
                     || !ActiveManeuver.Target.Car.Exists()
@@ -1039,7 +1036,6 @@ namespace ARS
                 if (overtaken || (_defendApexNode >= 0 && passed >= 0))
                 {
                     ActiveManeuver.Type = ManeuverType.None;
-                    ActiveManeuver.Active = false;
                     ActiveManeuver.Target = null;
                     _defendApexNode = -1;
                 }
@@ -1052,7 +1048,6 @@ namespace ARS
                 if (hasNearbyCars || RacePosition >= 3)
                 {
                     ActiveManeuver.Type = ManeuverType.Nitrous;
-                    ActiveManeuver.Active = true;
                     ActiveManeuver.LastEnabled = Game.GameTime;
                 }
             }
@@ -1072,7 +1067,6 @@ namespace ARS
                         && closestRival.RivalRacer.Car.Velocity.Length() > Car.Velocity.Length())
                     {
                         ActiveManeuver.Type = ManeuverType.Yield;
-                        ActiveManeuver.Active = true;
                         ActiveManeuver.Target = closestRival.RivalRacer;
                         ActiveManeuver.LastEnabled = Game.GameTime;
                         UI.Notify("~y~" + Name + "~w~ yields to ~y~" + closestRival.RivalRacer.Name);
@@ -1099,7 +1093,6 @@ namespace ARS
                     if (timeToApex <= 8f)
                     {
                         ActiveManeuver.Type = ManeuverType.DiveBomb;
-                        ActiveManeuver.Active = true;
                         ActiveManeuver.Target = diveTarget.RivalRacer;
                         ActiveManeuver.LastEnabled = Game.GameTime;
                         _divebombApexNode = Brain.Corner.Point.Node;
@@ -1126,7 +1119,6 @@ namespace ARS
                     if (timeToApex <= 6f)
                     {
                         ActiveManeuver.Type = ManeuverType.DefendLane;
-                        ActiveManeuver.Active = true;
                         ActiveManeuver.Target = defenderTarget.RivalRacer;
                         ActiveManeuver.LastEnabled = Game.GameTime;
                         _defendApexNode = Brain.Corner.Point.Node;
@@ -1167,7 +1159,7 @@ namespace ARS
             }
 
             // Check if nitrous maneuver is armed and conditions are right to fire
-            if (ActiveManeuver.Type != ManeuverType.Nitrous || !ActiveManeuver.Active) return;
+            if (ActiveManeuver.Type != ManeuverType.Nitrous) return;
 
             // Stability check: steering < 5°, rotation < 30°/s
             if (Math.Abs(Control.SteerDegrees) >= 5f) return;
@@ -1188,7 +1180,6 @@ namespace ARS
 
             // All conditions met — fire!
             StartNitrous();
-            ActiveManeuver.Active = false;
             ActiveManeuver.Type = ManeuverType.None;
             ActiveManeuver.LastEnabled = Game.GameTime;
         }
@@ -1210,7 +1201,7 @@ namespace ARS
 
         void UpdateYield()
         {
-            if (ActiveManeuver.Type != ManeuverType.Yield || !ActiveManeuver.Active) return;
+            if (ActiveManeuver.Type != ManeuverType.Yield) return;
 
             // Exit: target is >10m away
             if (ActiveManeuver.Target != null && ActiveManeuver.Target.Car.Exists())
@@ -1219,14 +1210,12 @@ namespace ARS
                 if (dist > 10f)
                 {
                     ActiveManeuver.Type = ManeuverType.None;
-                    ActiveManeuver.Active = false;
                     ActiveManeuver.Target = null;
                 }
             }
             else
             {
                 ActiveManeuver.Type = ManeuverType.None;
-                ActiveManeuver.Active = false;
                 ActiveManeuver.Target = null;
             }
         }

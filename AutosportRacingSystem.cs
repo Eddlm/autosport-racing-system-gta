@@ -3843,7 +3843,7 @@ namespace ARS
             float coastReserve = velTarget * BrakingCoastSecondsBeforeApex;
             // Divebomb: halve the safe coast reserve so the car brakes later and carries more
             // entry speed into the corner — the whole point of the maneuver.
-            if (r.ActiveManeuver.Type == ManeuverType.DiveBomb && r.ActiveManeuver.Active)
+            if (r.ActiveManeuver.Type == ManeuverType.DiveBomb)
                 coastReserve *= 0.5f;
             float distance = apexNode - r.CurrentTrackPoint.Node - coastReserve;
             if (!_isPointToPoint && distance < 0f) distance += _trackPoints.Count;
@@ -3853,7 +3853,7 @@ namespace ARS
             
             float decel = brakingAbility * r.Handling.Gravity * 0.5f;
             // Yielding cars perceive half the deceleration, so they brake earlier.
-            if (r.ActiveManeuver.Type == ManeuverType.Yield && r.ActiveManeuver.Active)
+            if (r.ActiveManeuver.Type == ManeuverType.Yield)
                 decel *= 0.5f;
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
