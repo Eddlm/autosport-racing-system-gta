@@ -1107,12 +1107,17 @@ namespace ARS
 
                 if (defenderTarget != null)
                 {
-                    ActiveManeuver.Type = ManeuverType.DefendLane;
-                    ActiveManeuver.Active = true;
-                    ActiveManeuver.Target = defenderTarget.RivalRacer;
-                    ActiveManeuver.LastEnabled = Game.GameTime;
-                    _defendApexNode = Brain.Corner.Point.Node;
-                    UI.Notify("~y~" + Name + "~w~ defends the inside from ~y~" + defenderTarget.RivalRacer.Name);
+                    float distToApex = Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node);
+                    float timeToApex = distToApex / Math.Max(Car.Velocity.Length(), 1f);
+                    if (timeToApex <= 6f)
+                    {
+                        ActiveManeuver.Type = ManeuverType.DefendLane;
+                        ActiveManeuver.Active = true;
+                        ActiveManeuver.Target = defenderTarget.RivalRacer;
+                        ActiveManeuver.LastEnabled = Game.GameTime;
+                        _defendApexNode = Brain.Corner.Point.Node;
+                        UI.Notify("~y~" + Name + "~w~ defends the inside from ~y~" + defenderTarget.RivalRacer.Name);
+                    }
                 }
             }
         }
