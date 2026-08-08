@@ -516,7 +516,7 @@ namespace ARS
                         return ARS.Clamp(commitLane, -safeBound, safeBound);
                     }
                 }
-                return cornerDir * safeBound;
+                return cornerDir * halfWidth;
             }
             return 0f;
         }
