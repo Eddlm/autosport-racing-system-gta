@@ -1093,29 +1093,28 @@ namespace ARS
                 }
             }
 
-            // DefendLane: a rival behind within 50 nodes means we cover the corner's inside so
-            // they can't dive underneath — they're forced to take the corner on our outside.
+            // DefendLane: a rival behind would reach the corner alongside us (their time to apex
+            // is equal or lower than ours) — cover the corner's inside so they can't dive
+            // underneath. They're forced to take the corner on our outside.
             if (ActiveManeuver.Type == ManeuverType.None && Brain.Corner != null)
             {
+                int apexNode = Brain.Corner.Point.Node;
+                float myTimeToApex = ForwardNodeDistance(apexNode) / Math.Max(Car.Velocity.Length(), 1f);
+
                 Rival defenderTarget = Brain.Rivals.FirstOrDefault(r =>
                     r.RivalRacer != null
                     && r.RelativePosition == RelativePos.Behind
-                    && BehindNodeDistance(r.RivalRacer.CurrentTrackPoint.Node) <= 50
                     && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
-                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane);
+                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane
+                    && r.RivalRacer.ForwardNodeDistance(apexNode) / Math.Max(r.RivalRacer.Car.Velocity.Length(), 1f) <= myTimeToApex);
 
-                if (defenderTarget != null)
+                if (defenderTarget != null && myTimeToApex <= 6f)
                 {
-                    float distToApex = Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node);
-                    float timeToApex = distToApex / Math.Max(Car.Velocity.Length(), 1f);
-                    if (timeToApex <= 6f)
-                    {
-                        ActiveManeuver.Type = ManeuverType.DefendLane;
-                        ActiveManeuver.Target = defenderTarget.RivalRacer;
-                        ActiveManeuver.LastEnabled = Game.GameTime;
-                        _defendApexNode = Brain.Corner.Point.Node;
-                        UI.Notify("~y~" + Name + "~w~ defends the inside from ~y~" + defenderTarget.RivalRacer.Name);
-                    }
+                    ActiveManeuver.Type = ManeuverType.DefendLane;
+                    ActiveManeuver.Target = defenderTarget.RivalRacer;
+                    ActiveManeuver.LastEnabled = Game.GameTime;
+                    _defendApexNode = apexNode;
+                    UI.Notify("~y~" + Name + "~w~ defends the inside from ~y~" + defenderTarget.RivalRacer.Name);
                 }
             }
         }
