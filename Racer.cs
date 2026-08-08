@@ -131,6 +131,7 @@ namespace ARS
 
         public float Aggression = 50f;
         public float Pressure = 0f;
+        float _laneGainDivisor = 100f; // per-racer variation of the lane-pursuit gain curve scale
         const float PressureRange = 100f;
         const float PressureProximityRange = 100f;
         const float PressureRisePerSecond = 2f;
@@ -146,6 +147,7 @@ namespace ARS
 
             if (Driver.IsPlayer) ControlledByPlayer = true;
             _halfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));
+            _laneGainDivisor = (float)ARS.GetRandomInt(90, 110);
 
             if (!ControlledByPlayer)
             {
@@ -341,7 +343,7 @@ namespace ARS
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
                 // Gain from the degree error (atan2 output), not raw meters. Self-normalizes
                 // via the lookahead distance — same meters produce fewer degrees at high speed.
-                float expGain = (float)Math.Pow(Math.Min(Math.Abs(laneBiasDeg) / 100f, 1f), 0.66f);
+                float expGain = (float)Math.Pow(Math.Min(Math.Abs(laneBiasDeg) / _laneGainDivisor, 1f), 0.66f);
                 expGain = Math.Min(expGain, 0.3f);
                 laneBiasDeg *= expGain;
             }
