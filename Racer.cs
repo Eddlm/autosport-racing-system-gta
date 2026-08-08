@@ -416,8 +416,18 @@ namespace ARS
             // meaningless (corners are effectively straights), so the lane is explicitly off.
             if (Brain.CurrentPerception.HighSpeedCurveRadius > 250f) return 0f;
 
-            int backNode = (int)ARS.Clamp(CurrentTrackPoint.Node - 20, 0, ARS._trackPoints.Count - 1);
-            int fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 20, 0, ARS._trackPoints.Count - 1);
+            int count = ARS._trackPoints.Count;
+            int backNode, fwdNode;
+            if (ARS._isPointToPoint)
+            {
+                backNode = (int)ARS.Clamp(CurrentTrackPoint.Node - 20, 0, count - 1);
+                fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 20, 0, count - 1);
+            }
+            else
+            {
+                backNode = ((CurrentTrackPoint.Node - 20) % count + count) % count;
+                fwdNode = ((CurrentTrackPoint.Node + 20) % count + count) % count;
+            }
             Vector3 backDir = ARS._trackPoints[backNode].Direction;
             Vector3 fwdDir = ARS._trackPoints[fwdNode].Direction;
 
@@ -1683,11 +1693,24 @@ namespace ARS
         float ComputeRouteRadius(float windowStart, float windowSize)
         {
             float routeSpeed = Car.Velocity.Length();
-            int routeStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * windowStart), 0, ARS._trackPoints.Count - 1);
-            int routeEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(routeSpeed * (windowStart + windowSize)), 0, ARS._trackPoints.Count - 1);
-            int routeMidNode = (int)((routeStartNode + routeEndNode) * 0.5f);
-            if (routeMidNode < 0) routeMidNode = 0;
-            if (routeMidNode >= ARS._trackPoints.Count) routeMidNode = ARS._trackPoints.Count - 1;
+            int count = ARS._trackPoints.Count;
+            int startOffset = CurrentTrackPoint.Node + (int)(routeSpeed * windowStart);
+            int endOffset = CurrentTrackPoint.Node + (int)(routeSpeed * (windowStart + windowSize));
+            int routeStartNode, routeEndNode, routeMidNode;
+            if (ARS._isPointToPoint)
+            {
+                routeStartNode = (int)ARS.Clamp(startOffset, 0, count - 1);
+                routeEndNode = (int)ARS.Clamp(endOffset, 0, count - 1);
+                routeMidNode = (int)((routeStartNode + routeEndNode) * 0.5f);
+            }
+            else
+            {
+                routeStartNode = ((startOffset % count) + count) % count;
+                routeEndNode = ((endOffset % count) + count) % count;
+                int span = ((endOffset - startOffset) % count + count) % count;
+                if (span == 0) return 999f;
+                routeMidNode = (((startOffset + span / 2) % count) + count) % count;
+            }
 
             if (routeEndNode == routeStartNode) return 999f;
             return ARS.Circumradius3D(
