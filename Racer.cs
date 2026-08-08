@@ -630,11 +630,9 @@ namespace ARS
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
                 // Buffer = average of both bounding boxes (OccupiedLaneWidth = (myBox+rivalBox)/2,
                 // the exact edge-to-edge touch distance — mandatory floor, cars must never touch)
-                // + the aggro extra. When this car is ahead of the overlapping rival (rival behind
-                // in this car's frame), cap the EXTRA at 0.5 so it can squeeze closer — the
-                // average-of-boxes floor still guarantees no contact.
-                float extraBuffer = r.RelativeOffset.Y < 0f ? Math.Min(aggroBuffer, 0.5f) : aggroBuffer;
-                float rivalBuffer = r.OccupiedLaneWidth + extraBuffer;
+                // + the aggro extra. Same buffer whether this car is ahead or behind the rival —
+                // the ahead/behind cap was tried and removed (made overlap avoidance worse).
+                float rivalBuffer = r.OccupiedLaneWidth + aggroBuffer;
 
                 if (rivalIsLeft)
                 {
