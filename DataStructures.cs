@@ -90,7 +90,10 @@ namespace ARS
             if (RivalRacer == null) return;
 
             RelativeOffset = ARS.EntityRelativeOffset(me.Car, RivalRacer.Car);
-            CombinedSize.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2)) + 2f;
+            // Artificial longitudinal buffer on the overlap window: keep more margin from a
+            // rival ahead (+1m) than from one behind (+0.25m) — we can see the one ahead.
+            float yBuffer = RelativeOffset.Y >= 0f ? 1f : 0.25f;
+            CombinedSize.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2)) + yBuffer;
             CombinedSize.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
             OccupiedLaneWidth = CombinedSize.X;
             OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
