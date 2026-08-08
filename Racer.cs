@@ -670,7 +670,7 @@ namespace ARS
             if (Math.Sign(Control.SteerDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.0f));
-                speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * 0.8f, Handling.LateralTractionCurve * 0.33f);
+                speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * 1.0f, Handling.LateralTractionCurve * 0.33f);
                 Control.SteerDegrees = ARS.Clamp(Control.SteerDegrees, -speedBasedSteeringLimit, speedBasedSteeringLimit);
             }
         }
@@ -850,7 +850,9 @@ namespace ARS
                 Vector3 crestEnd = ARS._trackPoints[crestEndNode].Position;
                 float deltaGs = ARS.HillGripDeltaGs(crestStart, crestMid, crestEnd, Car.Velocity.Length());
                 // deltaGs < 0 = crest (unloading), deltaGs > 0 = dip (loading)
-                float verticalGripFactor = Math.Max(1f + deltaGs, 0f); // clamp at 0 for liftoff
+                float effectiveDeltaGs = deltaGs;
+                if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - CrestAggression); // scale only the unloading side
+                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0f); // clamp at 0 for liftoff
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
 
@@ -927,6 +929,11 @@ namespace ARS
 
         const float SlopeGripLossK = 3f;    // multiplier for slope grip loss: loss = k · θ²
         const float SlopeGripLossExp = 2f;   // exponent
+        // Crest aggression (route speed only): how hard the AI carries speed over crests. 0..1.
+        // 0   = safe, no lift-off (cut bottoms out exactly at the 1g liftoff threshold)
+        // 0.5 = a little lift-off (cut bottoms out beyond the liftoff threshold)
+        // 1   = careless blow-through (no crest correction, keeps speed, gets airborne)
+        const float CrestAggression = 0.5f;
 
         float GetFollowPointSlopeAngle()
         {
@@ -949,11 +956,11 @@ namespace ARS
             bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
 
 
-            float allowedWheelspin = 2.0f + ARS.Remap(Aggression, 0f, 100f, -0.5f, 0.5f, true);
+            float allowedWheelspin = ARS.Remap(Pressure, 20f, 100f, 0.2f,2f, true);
 
             float tcsValue = ARS.Remap(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 8;
             float change = tcsValue * TickScale;
-            Control.TCSThrottle = ARS.Clamp(Control.TCSThrottle + change, 0.2f, 1);
+            Control.TCSThrottle = ARS.Clamp(Control.TCSThrottle + change, 0.01f, 1);
         }
         void ConsiderManeuvers()
         {
