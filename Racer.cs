@@ -286,7 +286,7 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
 
 
-            float naturalLane = ComputeHighSpeedLane(roadWide, carHalfWidth);
+            float naturalLane = ComputeHighSpeedLane(roadWide);
 
             // System 1: corner outside approach — temporarily overrides System 2's lane
             // while in its approach window. Returns 0f when it lets go, so System 2's
@@ -302,13 +302,13 @@ namespace ARS
             float avoidAheadLane = 0f;
             if (ActiveManeuver.Type != ManeuverType.DiveBomb || !ActiveManeuver.Active)
             {
-                avoidAheadLane = ComputeAvoidAheadLane(roadWide, carHalfWidth);
+                avoidAheadLane = ComputeAvoidAheadLane(roadWide);
                 if (avoidAheadLane != 0f) naturalLane = avoidAheadLane;
             }
 
 
 
-            float clampedLane = ApplyRivalWalls(naturalLane, roadWide, carHalfWidth);
+            float clampedLane = ApplyRivalWalls(naturalLane, roadWide);
             _targetLane = clampedLane;
 
 
@@ -427,7 +427,7 @@ namespace ARS
         // evaluated; the corner system (System 1) only temporarily overrides this lane for
         // its outside approach. Direction uses the same ±20-node SignedAngle construction as
         // the corner generator, so inside/outside convention matches the corner system.
-        float ComputeHighSpeedLane(float roadWide, float carHalfWidth)
+        float ComputeHighSpeedLane(float roadWide)
         {
             // Disabled on corners wider than 250 m — beyond that the inside-edge target is
             // meaningless (corners are effectively straights), so the lane is explicitly off.
@@ -446,7 +446,7 @@ namespace ARS
             if (Math.Abs(signedAngle) < 1f) return 0f;
 
             float cornerDir = Math.Sign(signedAngle);
-            float safeBound = roadWide - carHalfWidth;
+            float safeBound = roadWide - VehicleData.BoundingBox * 0.5f;
             return -cornerDir * safeBound;
         }
         // System 1 — corner outside approach. Its only job: hold the outside line during the
@@ -534,8 +534,10 @@ namespace ARS
 
 
 
-        float ComputeAvoidAheadLane(float roadWide, float carHalfWidth)
+        float ComputeAvoidAheadLane(float roadWide)
         {
+            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
+
             // Find the closest rival ahead within 1.5s reach and similar heading
             Rival aheadRival = Brain.Rivals.FirstOrDefault(r =>
                 r.RivalRacer != null
@@ -585,8 +587,9 @@ namespace ARS
             return targetLane;
         }
 
-        float ApplyRivalWalls(float targetLane, float roadWide, float carHalfWidth)
+        float ApplyRivalWalls(float targetLane, float roadWide)
         {
+            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
 
             float trackBound = roadWide - carHalfWidth;
 
@@ -669,7 +672,7 @@ namespace ARS
             }
 
 
-            float squeezeThreshold = carHalfWidth * 2f + 0.2f;
+            float squeezeThreshold = VehicleData.BoundingBox + 0.2f;
             if (_avoidRightWall - _avoidLeftWall < squeezeThreshold)
             {
                 // Squeezed walls (gap < car width + 0.2m): cap speed just below velocity to lift/brake; 0 floor keeps it from reversing.
