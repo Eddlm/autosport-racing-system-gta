@@ -3,6 +3,9 @@
 Source: `F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem`
 Target: C# / .NET Framework 4.8 / ScriptHookVDotNet 2
 
+## Writing this file — no specific values
+Constants, thresholds, conditions, windows and knob names get tuned constantly and go stale. Keep this doc to **stable architecture**: structure, override order, invariants, and design intent (the *why*, not the *what number*). The code is the source of truth for specifics — describe behavior, don't enumerate current values.
+
 ## Workflow
 - Compile, test, then commit each logical change. Ask before pushing.
 - Build: `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" NewRacingSystem.csproj /v:minimal /nologo /p:Configuration=Release`
@@ -51,7 +54,7 @@ Design rules:
   - `_accelerationCap` (input domain, ±1): throttle/brake scalar from avoidance (rival-distance smooth map). Lifts/brakes proportionally; only lowers via `Math.Min`.
   - `_speedCap` (speed domain, m/s): the projection off-track source pins it at most to the corner speed, then deducts **incrementally** (per-second rate, not an instant pin) so a single frame of air/off-track doesn't slam the cap.
 - **Asymmetry is by design**: corner is the loose target, route is the tight one. Do not add flat offsets to `followTrackSpd` to "balance" them.
-- **High-grip cars make the braking plan moot**: their braking is so strong that `cornerSpd` rarely binds — `followTrackSpd` (route curvature) wins the `min()` almost always. So braking-side adjustments (divebomb's halved coast reserve, Yield's halved decel in `MaxSpeedForBrakingDistance`) barely register on high-grip cars; to affect them, tune the route-speed side instead.
+- **High-grip cars don't respond to braking-side tuning**: their braking is so strong that the braking plan rarely binds — route-curvature speed control wins. Adjustments that act on the braking plan barely register on them; tune the route-speed side instead.
 
 ## Corner lifecycle
 1. **Generation** (AutosportRacingSystem): scan nodes → radius below the candidate threshold marks key candidates → second pass demotes any key corner closer than **full track width × 10** to its predecessor (uses the wider of the pair) → spans + min precise radius computed per corner. Spans are for radius scan/raceline/debug only — not culling.
@@ -64,7 +67,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 ## Per-racer state
 - **Aggression** (0–100): grid-assigned (first=0 … last=100, rounded to 10); player stays 50. Scales avoidance extra buffer and allowed TCS wheelspin.
 - **Pressure** (0–100): pure proximity × aggression — target ramps from the nearest racer within 100 m; rises toward target, falls quickly. Adds a fixed overspeed to `followTrackSpd`.
-- **Maneuvers** (`Maneuver` on the racer): Nitrous (prototype, currently **temporarily disabled** — tune via `AiNitrousEnabled`/`NitrousPowerMultiplier`/`NitrousDurationMs`), Yield (throttle cap while trailing a faster rival near a corner), and Divebomb (pressure + rival ahead <30 nodes within 8s of a corner → commit inside beside them, halve braking coast reserve; off once the apex is passed).
+- **Maneuvers** (`Maneuver` on the racer): one-off tactical behaviors with a periodic arm check and a fixed lifecycle (arm → act → off). Nitrous (temporary speed boost), Yield (lift off while trailing a faster rival near a corner), and Divebomb (pressure-driven commit to the inside of a rival ahead at a corner).
 - **Passengerize**: AI drivers shift to the passenger seat while a rival overlaps within combined half-length + 0.5 m, preventing contact swerves. Never applied to the player.
 - Ghosting was removed during avoidance cleanup; rebuild later with the avoidance system.
 
