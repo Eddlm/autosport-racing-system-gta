@@ -529,24 +529,38 @@ namespace ARS
         {
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
 
-            // Find the closest rival ahead within 1.5s reach and similar heading
-            Rival aheadRival = Brain.Rivals.FirstOrDefault(r =>
+            // Rivals ahead within 3s reach and similar heading. Brain.Rivals is sorted by distance.
+            List<Rival> aheadRivals = Brain.Rivals.Where(r =>
                 r.RivalRacer != null
                 && r.RelativePosition == RelativePos.Ahead
                 && r.SecondsToReach >= 0f
-                && r.SecondsToReach <= 1.5f
-                && Math.Abs(r.DirectionDiff) <= 20f);
+                && r.SecondsToReach <= 3f
+                && Math.Abs(r.DirectionDiff) <= 20f).ToList();
 
-            if (aheadRival == null) return 0f;
+            if (aheadRivals.Count == 0) return 0f;
 
             float trackBound = roadWide - carHalfWidth;
-            float rivalLane = aheadRival.OccupiedLane;
-            // Buffer = average of both bounding boxes (OccupiedLaneWidth = (myBox+rivalBox)/2,
-            // the exact edge-to-edge touch distance — mandatory floor, cars must never touch)
-            // + the aggro extra.
             float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
-            float buffer = aheadRival.OccupiedLaneWidth + aggroBuffer;
             float currentLane = Brain.CurrentPerception.DeviationFromCenter;
+
+            // Use the two closest rivals: aim for the midpoint between their lanes so
+            // we thread between them instead of latching onto just the nearest one.
+            float rivalLane;
+            float buffer;
+            if (aheadRivals.Count >= 2)
+            {
+                float lane1 = aheadRivals[0].OccupiedLane;
+                float lane2 = aheadRivals[1].OccupiedLane;
+                rivalLane = (lane1 + lane2) * 0.5f;
+                float buffer1 = aheadRivals[0].OccupiedLaneWidth + aggroBuffer;
+                float buffer2 = aheadRivals[1].OccupiedLaneWidth + aggroBuffer;
+                buffer = Math.Max(buffer1, buffer2);
+            }
+            else
+            {
+                rivalLane = aheadRivals[0].OccupiedLane;
+                buffer = aheadRivals[0].OccupiedLaneWidth + aggroBuffer;
+            }
 
             // Pick the side with more room
             float roomLeft = rivalLane - buffer + trackBound;
