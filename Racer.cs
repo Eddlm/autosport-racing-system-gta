@@ -339,30 +339,11 @@ namespace ARS
 
                 float laneError = clampedLane - currentLane;
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
-                // Avoidance (ahead/walls) uses a fixed 0.3x — snappy but not violent. The corner
-                // systems scale by radius: System 1 (outside approach) is deliberately gentle —
-                // 0.05 on wide corners up to 0.25 on hairpins — aggressive steer-out is death in
-                // a corner. System 2 (inside hug) is the committed one: 0.01 up to 0.5 on hairpins.
-                bool isAvoidance = avoidAheadLane != 0f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
-                float cornerGain;
-                // Non-finite radius (e.g. a degenerate circumradius on a straight) must fall
-                // through to the minimum gain, never NaN — a NaN gain corrupts steering every
-                // frame it appears.
-                float hsRadius = Brain.CurrentPerception.HighSpeedCurveRadius;
-                if (float.IsNaN(hsRadius) || float.IsInfinity(hsRadius)) hsRadius = 250f;
-                if (isAvoidance)
-                {
-                    cornerGain = 0.3f;
-                }
-                else if (_rawCornerLane != 0f)
-                {
-                    cornerGain = ARS.Remap(Math.Abs(hsRadius), 250f, 25f, 0.05f, 0.25f, true);
-                }
-                else
-                {
-                    cornerGain = ARS.Remap(Math.Abs(hsRadius), 250f, 25f, 0.01f, 0.5f, true);
-                }
-                laneBiasDeg *= cornerGain;
+                // Gain from the degree error (atan2 output), not raw meters. Self-normalizes
+                // via the lookahead distance — same meters produce fewer degrees at high speed.
+                float expGain = (float)Math.Pow(Math.Min(Math.Abs(laneBiasDeg) / 100f, 1f), 0.66f);
+                expGain = Math.Min(expGain, 0.3f);
+                laneBiasDeg *= expGain;
             }
 
 
