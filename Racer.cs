@@ -660,12 +660,12 @@ namespace ARS
             else
                 _avoidRightWall = Math.Min(_avoidRightWall + openRate, trackBound);
 
-            // Walls must never switch sides: collapse crossed walls onto their midpoint, ±1m apart.
+            // Walls must never switch sides: collapse crossed walls onto their midpoint, ±0.1m.
             if (_avoidLeftWall > _avoidRightWall)
             {
                 float mid = (_avoidLeftWall + _avoidRightWall) * 0.5f;
-                _avoidLeftWall = mid - 1f;
-                _avoidRightWall = mid + 1f;
+                _avoidLeftWall = mid - 0.1f;
+                _avoidRightWall = mid + 0.1f;
             }
 
 
