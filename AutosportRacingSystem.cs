@@ -3840,7 +3840,12 @@ namespace ARS
             float velTarget = r.Brain.Corner.Speed;
             // Reserve corner-speed × N seconds of distance so the car reaches corner speed
             // N seconds before the apex, then coasts the rest at corner speed.
-            float distance = apexNode - r.CurrentTrackPoint.Node - (velTarget * BrakingCoastSecondsBeforeApex);
+            float coastReserve = velTarget * BrakingCoastSecondsBeforeApex;
+            // Divebomb: halve the safe coast reserve so the car brakes later and carries more
+            // entry speed into the corner — the whole point of the maneuver.
+            if (r.ActiveManeuver.Type == ManeuverType.DiveBomb && r.ActiveManeuver.Active)
+                coastReserve *= 0.5f;
+            float distance = apexNode - r.CurrentTrackPoint.Node - coastReserve;
             if (!_isPointToPoint && distance < 0f) distance += _trackPoints.Count;
             if (distance < 0f) distance = 0f;
 

@@ -99,6 +99,7 @@ namespace ARS
         bool _approachOutsideDecided = false;
         bool _approachHoldsOutside = false;
         int _approachCornerNode = -1;
+        int _divebombApexNode = -1; // apex the active divebomb armed against; off once passed
         // Unified max-acceleration scalar in [-1, +1]. +1 = full throttle, 0 = coast, -1 = full brake.
         // Re-rises at 0.33/s toward +1 each frame (frame-independent via TickScale).
         // Each "lift off" source lowers it via Math.Min; applied once in ConvertSpeedToPedals.
@@ -114,7 +115,7 @@ namespace ARS
 
         bool _isPassengerized = false;
 
-        const bool AiNitrousEnabled = true;
+        const bool AiNitrousEnabled = false;    // TEMP DISABLED - re-enable after tuning pass
         const float NitrousPowerMultiplier = 2.5f;
         const float NitrousCornerLookaheadSeconds = 8f;
         const int NitrousDurationMs = 3000;
@@ -295,8 +296,14 @@ namespace ARS
             _rawCornerLane = cornerLane;
 
             // Avoid-ahead: pick a lane to pass a rival ahead. Computed fresh each frame.
-            float avoidAheadLane = ComputeAvoidAheadLane(roadWide, carHalfWidth);
-            if (avoidAheadLane != 0f) naturalLane = avoidAheadLane;
+            // During a divebomb the committed inside lane IS the pass — generic avoidance
+            // would just re-pick "the side with more room" and cancel the maneuver.
+            float avoidAheadLane = 0f;
+            if (ActiveManeuver.Type != ManeuverType.DiveBomb || !ActiveManeuver.Active)
+            {
+                avoidAheadLane = ComputeAvoidAheadLane(roadWide, carHalfWidth);
+                if (avoidAheadLane != 0f) naturalLane = avoidAheadLane;
+            }
 
 
 
@@ -490,6 +497,20 @@ namespace ARS
             float holdOutsideUntil = (steerRefPoint.TrackHalfWidth * 2f) / 10f;
             if (_approachHoldsOutside && timeToApex > holdOutsideUntil)
             {
+                // Divebomb: instead of the outside line, sit right beside the target rival on
+                // the corner's inside (-cornerDir) so we can out-brake them into the apex.
+                if (ActiveManeuver.Type == ManeuverType.DiveBomb && ActiveManeuver.Active && ActiveManeuver.Target != null)
+                {
+                    Rival target = Brain.Rivals.FirstOrDefault(r => r.RivalRacer == ActiveManeuver.Target);
+                    if (target != null && target.RivalRacer.Car.Exists())
+                    {
+                        // OccupiedLaneWidth = (myBox+rivalBox)/2 = exact edge-to-edge gap;
+                        // small margin on top so we're beside, never touching.
+                        float gap = target.OccupiedLaneWidth + 0.3f;
+                        float diveLane = target.OccupiedLane + (-cornerDir) * gap;
+                        return ARS.Clamp(diveLane, -safeBound, safeBound);
+                    }
+                }
                 return cornerDir * safeBound;
             }
             return 0f;
@@ -964,7 +985,7 @@ namespace ARS
         }
         void ConsiderManeuvers()
         {
-            if (ControlledByPlayer || !AiNitrousEnabled) return;
+            if (ControlledByPlayer) return;
 
             // Force-disable any maneuver that's been armed for >8s without firing
             if (ActiveManeuver.Active && Game.GameTime - ActiveManeuver.LastEnabled > 8000)
@@ -974,8 +995,22 @@ namespace ARS
                 ActiveManeuver.Target = null;
             }
 
+            // Divebomb cleanup: off as soon as we pass the apex we armed for.
+            if (ActiveManeuver.Type == ManeuverType.DiveBomb && ActiveManeuver.Active && _divebombApexNode >= 0)
+            {
+                int passed = CurrentTrackPoint.Node - _divebombApexNode;
+                if (!ARS._isPointToPoint && passed < 0) passed += ARS._trackPoints.Count;
+                if (passed >= 0)
+                {
+                    ActiveManeuver.Type = ManeuverType.None;
+                    ActiveManeuver.Active = false;
+                    ActiveManeuver.Target = null;
+                    _divebombApexNode = -1;
+                }
+            }
+
             // Nitrous: arm if nearby cars exist or position >= 3rd, and not recently used
-            if (ActiveManeuver.Type == ManeuverType.None && Game.GameTime - ActiveManeuver.LastEnabled > 20000)
+            if (AiNitrousEnabled && ActiveManeuver.Type == ManeuverType.None && Game.GameTime - ActiveManeuver.LastEnabled > 20000)
             {
                 bool hasNearbyCars = Brain.Rivals.Any(r => r.RivalRacer != null);
                 if (hasNearbyCars || RacePosition >= 3)
@@ -1008,6 +1043,39 @@ namespace ARS
                     }
                 }
             }
+
+            // Divebomb: pressure high, a rival ahead within 30 nodes (not much faster than us),
+            // and a corner within 8s — commit to their inside and out-brake them at the apex.
+            if (ActiveManeuver.Type == ManeuverType.None && Brain.Corner != null)
+            {
+                Rival diveTarget = Brain.Rivals.FirstOrDefault(r =>
+                    r.RivalRacer != null
+                    && r.RelativePosition == RelativePos.Ahead
+                    && ForwardNodeDistance(r.RivalRacer.CurrentTrackPoint.Node) < 30
+                    && r.RivalRacer.Car.Velocity.Length() - Car.Velocity.Length() <= ARS.MphToMps(5f));
+
+                if (diveTarget != null && Pressure > 30f)
+                {
+                    float distToApex = Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node);
+                    float timeToApex = distToApex / Math.Max(Car.Velocity.Length(), 1f);
+                    if (timeToApex <= 8f)
+                    {
+                        ActiveManeuver.Type = ManeuverType.DiveBomb;
+                        ActiveManeuver.Active = true;
+                        ActiveManeuver.Target = diveTarget.RivalRacer;
+                        ActiveManeuver.LastEnabled = Game.GameTime;
+                        _divebombApexNode = Brain.Corner.Point.Node;
+                        UI.Notify("~y~" + Name + "~w~ divebombs ~y~" + diveTarget.RivalRacer.Name);
+                    }
+                }
+            }
+        }
+
+        int ForwardNodeDistance(int targetNode)
+        {
+            int fwd = targetNode - CurrentTrackPoint.Node;
+            if (!ARS._isPointToPoint && fwd < 0) fwd += ARS._trackPoints.Count;
+            return fwd;
         }
 
         void UpdateNitrous()
