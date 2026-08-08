@@ -660,19 +660,19 @@ namespace ARS
             else
                 _avoidRightWall = Math.Min(_avoidRightWall + openRate, trackBound);
 
-            // Walls must never switch sides: collapse crossed walls onto their midpoint, ±0.1m.
+            // Walls must never switch sides: collapse crossed walls onto their midpoint, ±1m.
             if (_avoidLeftWall > _avoidRightWall)
             {
                 float mid = (_avoidLeftWall + _avoidRightWall) * 0.5f;
-                _avoidLeftWall = mid - 0.1f;
-                _avoidRightWall = mid + 0.1f;
+                _avoidLeftWall = mid - 1f;
+                _avoidRightWall = mid + 1f;
             }
 
 
-            float carTotalWidth = carHalfWidth * 2f + 1f;
-            if (_avoidRightWall - _avoidLeftWall < carTotalWidth)
+            float squeezeThreshold = carHalfWidth * 2f + 0.2f;
+            if (_avoidRightWall - _avoidLeftWall < squeezeThreshold)
             {
-                // Squeezed walls (channel narrower than the car): cap speed just below velocity to lift/brake; 0 floor keeps it from reversing.
+                // Squeezed walls (gap < car width + 0.2m): cap speed just below velocity to lift/brake; 0 floor keeps it from reversing.
                 _speedCap = Math.Min(_speedCap, Math.Max(Car.Velocity.Length() - 0.5f, 0f));
             }
 
