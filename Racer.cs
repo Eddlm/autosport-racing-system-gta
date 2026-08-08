@@ -1430,8 +1430,12 @@ namespace ARS
                     Vector3 leftWallPos = trackCenter + trackRight * _avoidLeftWall;
                     Vector3 rightWallPos = trackCenter + trackRight * _avoidRightWall;
                     Vector3 up = new Vector3(0, 0, 0.1f);
-                    ARS.DrawLine(leftWallPos + up, leftWallPos + up + new Vector3(0, 0, 2f), Color.Blue);
-                    ARS.DrawLine(rightWallPos + up, rightWallPos + up + new Vector3(0, 0, 2f), Color.Red);
+                    float wallHeight = 1.5f;
+                    Vector3 leftTop = leftWallPos + up + new Vector3(0, 0, wallHeight);
+                    Vector3 rightTop = rightWallPos + up + new Vector3(0, 0, wallHeight);
+                    ARS.DrawLine(leftWallPos + up, leftTop, Color.Blue);
+                    ARS.DrawLine(rightWallPos + up, rightTop, Color.Red);
+                    ARS.DrawLine(leftTop, rightTop, Color.White);
 
                     // Lane aim: 10 white spheres from the car to the final clamped lane target
                     // at the steer-ref distance. Shows where the car is steering (after all lane tweaks).
