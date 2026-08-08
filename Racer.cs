@@ -528,68 +528,63 @@ namespace ARS
         float ComputeAvoidAheadLane(float roadWide)
         {
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-
-            // Rivals ahead within 3s reach and similar heading. Brain.Rivals is sorted by distance.
-            List<Rival> aheadRivals = Brain.Rivals.Where(r =>
-                r.RivalRacer != null
-                && r.RelativePosition == RelativePos.Ahead
-                && r.SecondsToReach >= 0f
-                && r.SecondsToReach <= 3f
-                && Math.Abs(r.DirectionDiff) <= 20f).ToList();
-
-            if (aheadRivals.Count == 0) return 0f;
-
             float trackBound = roadWide - carHalfWidth;
             float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
             float currentLane = Brain.CurrentPerception.DeviationFromCenter;
 
-            // Use the two closest rivals: aim for the midpoint between their lanes so
-            // we thread between them instead of latching onto just the nearest one.
-            float rivalLane;
-            float buffer;
-            if (aheadRivals.Count >= 2)
+            // Loop through rivals (sorted by distance). Compute avoidance for each
+            // qualifying rival. If a second one triggers, average the two results and stop.
+            float firstTarget = 0f;
+            bool foundFirst = false;
+            foreach (Rival r in Brain.Rivals)
             {
-                float lane1 = aheadRivals[0].OccupiedLane;
-                float lane2 = aheadRivals[1].OccupiedLane;
-                rivalLane = (lane1 + lane2) * 0.5f;
-                float buffer1 = aheadRivals[0].OccupiedLaneWidth + aggroBuffer;
-                float buffer2 = aheadRivals[1].OccupiedLaneWidth + aggroBuffer;
-                buffer = Math.Max(buffer1, buffer2);
+                if (r.RivalRacer == null) continue;
+                if (r.RelativePosition != RelativePos.Ahead) continue;
+                if (r.SecondsToReach < 0f || r.SecondsToReach > 3f) continue;
+                if (Math.Abs(r.DirectionDiff) > 20f) continue;
+
+                float rivalLane = r.OccupiedLane;
+                float buffer = r.OccupiedLaneWidth + aggroBuffer;
+
+                // Pick the side with more room
+                float roomLeft = rivalLane - buffer + trackBound;
+                float roomRight = trackBound - (rivalLane + buffer);
+                bool goLeft = roomLeft > roomRight;
+
+                float targetLane = goLeft
+                    ? rivalLane - buffer - carHalfWidth
+                    : rivalLane + buffer + carHalfWidth;
+
+                // If the chosen side is off-track, flip to the other side
+                if (Math.Abs(targetLane) > trackBound)
+                {
+                    targetLane = goLeft
+                        ? rivalLane + buffer + carHalfWidth
+                        : rivalLane - buffer - carHalfWidth;
+                    goLeft = !goLeft;
+                }
+
+                // If both sides are off-track, skip this rival
+                if (Math.Abs(targetLane) > trackBound) continue;
+
+                // If this car is already on the far side, the rival is far off to the
+                // side and our current line clears it — no avoidance needed for this one.
+                if (goLeft && currentLane <= targetLane) continue;
+                if (!goLeft && currentLane >= targetLane) continue;
+
+                if (!foundFirst)
+                {
+                    firstTarget = targetLane;
+                    foundFirst = true;
+                }
+                else
+                {
+                    // Second qualifying rival — average and we're done.
+                    return (firstTarget + targetLane) * 0.5f;
+                }
             }
-            else
-            {
-                rivalLane = aheadRivals[0].OccupiedLane;
-                buffer = aheadRivals[0].OccupiedLaneWidth + aggroBuffer;
-            }
 
-            // Pick the side with more room
-            float roomLeft = rivalLane - buffer + trackBound;
-            float roomRight = trackBound - (rivalLane + buffer);
-            bool goLeft = roomLeft > roomRight;
-
-            float targetLane = goLeft
-                ? rivalLane - buffer - carHalfWidth
-                : rivalLane + buffer + carHalfWidth;
-
-            // If the chosen side is off-track, flip to the other side
-            if (Math.Abs(targetLane) > trackBound)
-            {
-                targetLane = goLeft
-                    ? rivalLane + buffer + carHalfWidth
-                    : rivalLane - buffer - carHalfWidth;
-                goLeft = !goLeft;
-            }
-
-            // If both sides are off-track, just stay behind
-            if (Math.Abs(targetLane) > trackBound) return 0f;
-
-            // If this car is already on the far side of the target lane, the target
-            // lane sits between us and the rival — the rival is far off to the side
-            // and our current line clears it. No steering needed; stay on the natural lane.
-            if (goLeft && currentLane <= targetLane) return 0f;
-            if (!goLeft && currentLane >= targetLane) return 0f;
-
-            return targetLane;
+            return foundFirst ? firstTarget : 0f;
         }
 
         float ApplyRivalWalls(float targetLane, float roadWide)
