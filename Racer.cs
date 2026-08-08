@@ -100,6 +100,7 @@ namespace ARS
         bool _approachHoldsOutside = false;
         int _approachCornerNode = -1;
         int _divebombApexNode = -1; // apex the active divebomb armed against; off once passed
+        int _defendApexNode = -1; // apex the active defend armed against; off once passed or target overtakes
         // Unified max-acceleration scalar in [-1, +1]. +1 = full throttle, 0 = coast, -1 = full brake.
         // Re-rises at 0.33/s toward +1 each frame (frame-independent via TickScale).
         // Each "lift off" source lowers it via Math.Min; applied once in ConvertSpeedToPedals.
@@ -497,9 +498,14 @@ namespace ARS
             float holdOutsideUntil = (steerRefPoint.TrackHalfWidth * 2f) / 10f;
             if (_approachHoldsOutside && timeToApex > holdOutsideUntil)
             {
-                // Divebomb: instead of the outside line, sit right beside the target rival on
-                // the corner's inside (-cornerDir) so we can out-brake them into the apex.
-                if (ActiveManeuver.Type == ManeuverType.DiveBomb && ActiveManeuver.Active && ActiveManeuver.Target != null)
+                // Corner-commit maneuvers (Divebomb / DefendLane): instead of the outside line,
+                // sit right beside the target rival on the corner's inside (-cornerDir). The
+                // divebomber does it to out-brake an ahead rival; the defender to block a behind
+                // rival from diving, forcing them around the outside.
+                bool isCornerCommit = ActiveManeuver.Active
+                    && ActiveManeuver.Target != null
+                    && (ActiveManeuver.Type == ManeuverType.DiveBomb || ActiveManeuver.Type == ManeuverType.DefendLane);
+                if (isCornerCommit)
                 {
                     Rival target = Brain.Rivals.FirstOrDefault(r => r.RivalRacer == ActiveManeuver.Target);
                     if (target != null && target.RivalRacer.Car.Exists())
@@ -507,8 +513,8 @@ namespace ARS
                         // OccupiedLaneWidth = (myBox+rivalBox)/2 = exact edge-to-edge gap;
                         // small margin on top so we're beside, never touching.
                         float gap = target.OccupiedLaneWidth + 0.3f;
-                        float diveLane = target.OccupiedLane + (-cornerDir) * gap;
-                        return ARS.Clamp(diveLane, -safeBound, safeBound);
+                        float commitLane = target.OccupiedLane + (-cornerDir) * gap;
+                        return ARS.Clamp(commitLane, -safeBound, safeBound);
                     }
                 }
                 return cornerDir * safeBound;
@@ -1009,6 +1015,26 @@ namespace ARS
                 }
             }
 
+            // DefendLane cleanup: off once we pass the defended apex, or the target overtakes us
+            // (flips to Ahead / leaves the grid / is no longer a rival we track).
+            if (ActiveManeuver.Type == ManeuverType.DefendLane && ActiveManeuver.Active)
+            {
+                bool overtaken = ActiveManeuver.Target == null
+                    || !ActiveManeuver.Target.Car.Exists()
+                    || !Brain.Rivals.Any(r => r.RivalRacer == ActiveManeuver.Target && r.RelativePosition == RelativePos.Behind);
+
+                int passed = CurrentTrackPoint.Node - _defendApexNode;
+                if (!ARS._isPointToPoint && passed < 0) passed += ARS._trackPoints.Count;
+
+                if (overtaken || (_defendApexNode >= 0 && passed >= 0))
+                {
+                    ActiveManeuver.Type = ManeuverType.None;
+                    ActiveManeuver.Active = false;
+                    ActiveManeuver.Target = null;
+                    _defendApexNode = -1;
+                }
+            }
+
             // Nitrous: arm if nearby cars exist or position >= 3rd, and not recently used
             if (AiNitrousEnabled && ActiveManeuver.Type == ManeuverType.None && Game.GameTime - ActiveManeuver.LastEnabled > 20000)
             {
@@ -1069,6 +1095,26 @@ namespace ARS
                     }
                 }
             }
+
+            // DefendLane: a rival behind within 50 nodes means we cover the corner's inside so
+            // they can't dive underneath — they're forced to take the corner on our outside.
+            if (ActiveManeuver.Type == ManeuverType.None && Brain.Corner != null)
+            {
+                Rival defenderTarget = Brain.Rivals.FirstOrDefault(r =>
+                    r.RivalRacer != null
+                    && r.RelativePosition == RelativePos.Behind
+                    && BehindNodeDistance(r.RivalRacer.CurrentTrackPoint.Node) <= 50);
+
+                if (defenderTarget != null)
+                {
+                    ActiveManeuver.Type = ManeuverType.DefendLane;
+                    ActiveManeuver.Active = true;
+                    ActiveManeuver.Target = defenderTarget.RivalRacer;
+                    ActiveManeuver.LastEnabled = Game.GameTime;
+                    _defendApexNode = Brain.Corner.Point.Node;
+                    UI.Notify("~y~" + Name + "~w~ defends the inside from ~y~" + defenderTarget.RivalRacer.Name);
+                }
+            }
         }
 
         int ForwardNodeDistance(int targetNode)
@@ -1076,6 +1122,13 @@ namespace ARS
             int fwd = targetNode - CurrentTrackPoint.Node;
             if (!ARS._isPointToPoint && fwd < 0) fwd += ARS._trackPoints.Count;
             return fwd;
+        }
+
+        int BehindNodeDistance(int targetNode)
+        {
+            int behind = CurrentTrackPoint.Node - targetNode;
+            if (!ARS._isPointToPoint && behind < 0) behind += ARS._trackPoints.Count;
+            return behind;
         }
 
         void UpdateNitrous()
