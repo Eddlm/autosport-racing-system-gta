@@ -85,3 +85,5 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - Corner hugging (inside-line hold through the apex) still being evaluated.
 - Pressure-driven lookahead: reverted; hardcoded window pending investigation.
 - Grid car selection: see `grid_rework.md` (performance-bracket brainstorm, not implemented).
+- **Stability awareness**: wheels off the ground = unstable → the car should drive more carefully (lift-off/unweighting should bias speed down beyond the current crest/dip factor). No implementation yet.
+- **Prevent rear-ends**: cars need to brake before hitting the car ahead from behind, and avoid leaning on each other — specifically, the *inside* car should brake to close its own trajectory in (don't rely on the outside car to open up). No implementation yet.
