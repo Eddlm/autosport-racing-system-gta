@@ -39,11 +39,12 @@ Resolved in `ComputeSteering` in this override order (later overrides earlier):
 1. **System 2 — high-speed line (`ComputeHighSpeedLane`)**: always runs. Positions the car on the **inside edge of the track's own curvature**, derived purely from track geometry (signed angle over ±20 nodes, small deadzone) — fully independent of the corner system. Disabled past a radius ceiling (wider = effectively straight).
 2. **System 1 — corner outside approach (`ComputeCornerTargetLane`)**: temporary override. Holds the **outside line** only during the approach window before a key corner's apex, then lets go (`0f`) so System 2's inside takes over naturally.
 3. **Avoidance (`ComputeAvoidAheadLane`)**: overrides both when a rival ahead needs passing.
-4. **`ApplyRivalWalls`**: clamps the final lane between track bounds and rival walls. **Invariants: the car's full width always stays on track; the buffer always includes the average of both cars' bounding boxes (no physical contact possible) + an aggression extra.**
+4. **`ApplyRivalWalls`**: clamps the final lane between track bounds and rival walls. **Invariants: the car's full width always stays on track; the buffer always includes the average of both cars' bounding boxes (no physical contact possible) + an aggression extra.** Overlap classification uses an asymmetric longitudinal window by design: more margin from a rival ahead (the car moves off them earlier), nearly none from one just passed (it crosses back over to the racing line as soon as it's clear).
 
 Design rules:
 - **Gain discipline**: each system has a pursuit gain (avoidance fixed; corner systems radius-scaled). The gain scales how *hard* the target is pursued — the *target itself* is always a track edge. Aggressive steer-**out** is dangerous, so the outside approach is deliberately gentler than the inside commit.
 - **Corner approach**: only engages if the car entered the window needing to brake (entry latch); let-go time scales with track width (wider track → release earlier, more time to cross to the inside).
+- **Corner-commit maneuvers** (Divebomb / DefendLane): inside the outside-approach window they replace the outside hold with a lane right beside the target rival on the corner's inside — the divebomber to out-brake an ahead rival, the defender to block a behind rival from diving. Same lane formula, opposite target frame; both clean up when their armed apex is passed (defend also drops on overtake).
 - The corner line phases are a **hard switch** (outside → inside), no lerp.
 
 ## Speed pipeline — how fast the car goes
@@ -67,7 +68,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 ## Per-racer state
 - **Aggression** (0–100): grid-assigned (first=0 … last=100, rounded to 10); player stays 50. Scales avoidance extra buffer and allowed TCS wheelspin.
 - **Pressure** (0–100): pure proximity × aggression — target ramps from the nearest racer within 100 m; rises toward target, falls quickly. Adds a fixed overspeed to `followTrackSpd`.
-- **Maneuvers** (`Maneuver` on the racer): one-off tactical behaviors with a periodic arm check and a fixed lifecycle (arm → act → off). Nitrous (temporary speed boost), Yield (lift off while trailing a faster rival near a corner), and Divebomb (pressure-driven commit to the inside of a rival ahead at a corner).
+- **Maneuvers** (`Maneuver` on the racer): one-off tactical behaviors with a periodic arm check and a fixed lifecycle (arm → act → off). Nitrous (temporary speed boost), Yield (lift off while trailing a faster rival near a corner), Divebomb (pressure-driven commit to the inside of a rival ahead at a corner), and DefendLane (cover the inside against a rival behind so they can't dive — they take the corner wide).
 - **Passengerize**: AI drivers shift to the passenger seat while a rival overlaps within combined half-length + 0.5 m, preventing contact swerves. Never applied to the player.
 - Ghosting was removed during avoidance cleanup; rebuild later with the avoidance system.
 
