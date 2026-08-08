@@ -521,9 +521,11 @@ namespace ARS
 
             float trackBound = roadWide - carHalfWidth;
             float rivalLane = aheadRival.OccupiedLane;
-            float rivalHalfWidth = aheadRival.OccupiedLaneWidth * 0.5f;
+            // Buffer = average of both bounding boxes (OccupiedLaneWidth = (myBox+rivalBox)/2,
+            // the exact edge-to-edge touch distance — mandatory floor, cars must never touch)
+            // + the aggro extra.
             float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.25f, 2f, true);
-            float buffer = rivalHalfWidth + aggroBuffer;
+            float buffer = aheadRival.OccupiedLaneWidth + aggroBuffer;
             float currentLane = Brain.CurrentPerception.DeviationFromCenter;
 
             // Pick the side with more room
@@ -599,14 +601,13 @@ namespace ARS
 
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.25f, 2f, true);
-                float rivalBuffer = r.OccupiedLaneWidth * 0.5f + aggroBuffer;
-                // This car is ahead of the overlapping rival (rival behind in this car's frame):
-                // cap the buffer at 0.5 so a car that's past its rival can squeeze closer instead
-                // of keeping the full avoidance gap.
-                if (r.RelativeOffset.Y < 0f)
-                {
-                    rivalBuffer = Math.Min(rivalBuffer, 0.5f);
-                }
+                // Buffer = average of both bounding boxes (OccupiedLaneWidth = (myBox+rivalBox)/2,
+                // the exact edge-to-edge touch distance — mandatory floor, cars must never touch)
+                // + the aggro extra. When this car is ahead of the overlapping rival (rival behind
+                // in this car's frame), cap the EXTRA at 0.5 so it can squeeze closer — the
+                // average-of-boxes floor still guarantees no contact.
+                float extraBuffer = r.RelativeOffset.Y < 0f ? Math.Min(aggroBuffer, 0.5f) : aggroBuffer;
+                float rivalBuffer = r.OccupiedLaneWidth + extraBuffer;
 
                 if (rivalIsLeft)
                 {
