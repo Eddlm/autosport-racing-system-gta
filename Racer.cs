@@ -660,6 +660,17 @@ namespace ARS
             else
                 _avoidRightWall = Math.Min(_avoidRightWall + openRate, trackBound);
 
+            // Invariant: the walls must never switch sides (blue <= red). If they ever cross —
+            // e.g. a rival on the left pinning the left wall past a rival on the right — collapse
+            // them onto the midpoint of the crossed window: blue at mid - 1m, red at mid + 1m,
+            // leaving a 2m-wide center channel for the clamp.
+            if (_avoidLeftWall > _avoidRightWall)
+            {
+                float mid = (_avoidLeftWall + _avoidRightWall) * 0.5f;
+                _avoidLeftWall = mid - 1f;
+                _avoidRightWall = mid + 1f;
+            }
+
 
             float carTotalWidth = carHalfWidth * 2f + 1f;
             if (_avoidRightWall - _avoidLeftWall < carTotalWidth)
