@@ -660,10 +660,7 @@ namespace ARS
             else
                 _avoidRightWall = Math.Min(_avoidRightWall + openRate, trackBound);
 
-            // Invariant: the walls must never switch sides (blue <= red). If they ever cross —
-            // e.g. a rival on the left pinning the left wall past a rival on the right — collapse
-            // them onto the midpoint of the crossed window: blue at mid - 1m, red at mid + 1m,
-            // leaving a 2m-wide center channel for the clamp.
+            // Walls must never switch sides: collapse crossed walls onto their midpoint, ±1m apart.
             if (_avoidLeftWall > _avoidRightWall)
             {
                 float mid = (_avoidLeftWall + _avoidRightWall) * 0.5f;
@@ -675,11 +672,7 @@ namespace ARS
             float carTotalWidth = carHalfWidth * 2f + 1f;
             if (_avoidRightWall - _avoidLeftWall < carTotalWidth)
             {
-                // Collapsed walls: the channel between the walls is narrower than the car, so there's
-                // nowhere to steer — squeeze the speed instead. Cap intended speed just below current
-                // velocity so the speed loop lifts/brakes while squeezed. Math.Min only (never raises —
-                // the per-frame re-rise at the top of Update owns recovery). Floored at 0: a negative
-                // cap would clamp the intended speed below zero, flipping the loop into reverse demand.
+                // Squeezed walls (channel narrower than the car): cap speed just below velocity to lift/brake; 0 floor keeps it from reversing.
                 _speedCap = Math.Min(_speedCap, Math.Max(Car.Velocity.Length() - 0.5f, 0f));
             }
 
