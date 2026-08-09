@@ -962,10 +962,12 @@ namespace ARS
                     float overshoot = distanceFromInside - trackWidth;
                     if (overshoot > 0f)
                     {
-                        float floor = 4f;
-                        // Cap at whichever speed is lower (corner or route), minus 4 m/s.
-                        float capBase = Math.Min(_cornerSpd, followTrackSpd) - 4f;
-                        _speedCap = Math.Min(_speedCap, capBase);
+                        // The safe speed is whichever is lower (corner or route). The cap pins
+                        // to that, and the floor is safe speed - 4 m/s — the car can slow down
+                        // to 4 m/s below the safe speed, but no further. At the floor, coast only.
+                        float safeSpeed = Math.Min(_cornerSpd, followTrackSpd);
+                        float floor = safeSpeed - 4f;
+                        _speedCap = Math.Min(_speedCap, safeSpeed);
                         // Incremental deduction: 1 m/s per meter of overshoot, per second.
                         _speedCap = Math.Max(_speedCap - overshoot * 1f * TickScale, floor);
                         // If the floor was hit, kill throttle entirely — coast.
