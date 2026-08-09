@@ -869,12 +869,13 @@ namespace ARS
 
             float followTrackSpd = ComputeRouteSpeed(Brain.CurrentPerception.CurveRadiusToFollowPoint);
 
-            // Divebomb: ignore route speed when close to the apex (4s..0.5s before it) —
-            // the braking plan (cornerSpd) is the only speed authority during the commit.
-            if (ActiveManeuver.Type == ManeuverType.DiveBomb && Brain.Corner != null)
+            // Gate route speed off within 5s of the apex — the braking plan (cornerSpd) is
+            // the only speed authority on corner approach. Route curvature speed reacts to
+            // the corner too early and brakes sooner than the braking plan needs.
+            if (Brain.Corner != null)
             {
                 float timeToApex = ForwardNodeDistance(Brain.Corner.Point.Node) / Math.Max(Car.Velocity.Length(), 1f);
-                if (timeToApex <= 4f && timeToApex >= 0.5f)
+                if (timeToApex <= 5f)
                     followTrackSpd = 999f;
             }
 
