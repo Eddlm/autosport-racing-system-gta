@@ -503,7 +503,7 @@ namespace ARS
                     {
                         // OccupiedLaneWidth = (myBox+rivalBox)/2 = exact edge-to-edge gap;
                         // small margin on top so we're beside, never touching.
-                        float gap = target.OccupiedLaneWidth + 0.3f;
+                        float gap = target.OccupiedLaneWidth + 0.6f;
                         float commitLane = target.OccupiedLane + (-cornerDir) * gap;
                         return ARS.Clamp(commitLane, -safeBound, safeBound);
                     }
@@ -1081,30 +1081,27 @@ namespace ARS
                 }
             }
 
-            // Divebomb: pressure high, a rival ahead within 30 nodes (not much faster than us),
-            // and a corner within 8s — commit to their inside and out-brake them at the apex.
+            // Divebomb: pressure high, a rival ahead we'd reach the corner within 1s of —
+            // commit to their inside and out-brake them at the apex.
             if (ActiveManeuver.Type == ManeuverType.None && Brain.Corner != null)
             {
+                int apexNode = Brain.Corner.Point.Node;
+                float myTimeToApex = ForwardNodeDistance(apexNode) / Math.Max(Car.Velocity.Length(), 1f);
+
                 Rival diveTarget = Brain.Rivals.FirstOrDefault(r =>
                     r.RivalRacer != null
                     && r.RelativePosition == RelativePos.Ahead
-                    && ForwardNodeDistance(r.RivalRacer.CurrentTrackPoint.Node) < 30
-                    && r.RivalRacer.Car.Velocity.Length() - Car.Velocity.Length() <= ARS.MphToMps(5f)
                     && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
-                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane);
+                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane
+                    && Math.Abs(r.RivalRacer.ForwardNodeDistance(apexNode) / Math.Max(r.RivalRacer.Car.Velocity.Length(), 1f) - myTimeToApex) <= 1f);
 
-                if (diveTarget != null && Pressure > 30f)
+                if (diveTarget != null && Pressure > 30f && myTimeToApex <= 8f)
                 {
-                    float distToApex = Math.Abs(Brain.Corner.Point.Node - CurrentTrackPoint.Node);
-                    float timeToApex = distToApex / Math.Max(Car.Velocity.Length(), 1f);
-                    if (timeToApex <= 8f)
-                    {
-                        ActiveManeuver.Type = ManeuverType.DiveBomb;
-                        ActiveManeuver.Target = diveTarget.RivalRacer;
-                        ActiveManeuver.LastEnabled = Game.GameTime;
-                        _divebombApexNode = Brain.Corner.Point.Node;
-                        UI.Notify("~y~" + Name + "~w~ divebombs ~y~" + diveTarget.RivalRacer.Name);
-                    }
+                    ActiveManeuver.Type = ManeuverType.DiveBomb;
+                    ActiveManeuver.Target = diveTarget.RivalRacer;
+                    ActiveManeuver.LastEnabled = Game.GameTime;
+                    _divebombApexNode = apexNode;
+                    UI.Notify("~y~" + Name + "~w~ divebombs ~y~" + diveTarget.RivalRacer.Name);
                 }
             }
 
