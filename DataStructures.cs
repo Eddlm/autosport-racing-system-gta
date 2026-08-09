@@ -169,8 +169,8 @@ namespace ARS
         public float Elevation = 0f;
         public float ElevationChange = 0f;
         public bool IsKey = false;
-        public float GetRadius() => ARS._trackPoints[Node].GeneralCurveRadius;
-        public float GetPreciseRadius() => ARS._trackPoints[Node].PreciseCurveRadius;
+        public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
+        public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }
     public class Corner
     {

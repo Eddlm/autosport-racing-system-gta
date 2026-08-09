@@ -44,7 +44,7 @@ namespace ARS
 
         public static Dictionary<Vector3, string> _immersiveJoins = new Dictionary<Vector3, string>();
 
-        public static List<TrackPoint> _trackPoints = new List<TrackPoint>();
+        public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
         public static List<CornerPoint> _cornerPoints = new List<CornerPoint>();
         public static List<Vehicle> _globalTraffic = new List<Vehicle>();
 
@@ -3169,29 +3169,29 @@ namespace ARS
         public static void GenerateRouteInfo()
         {
             Log(LogImportance.Info, "Generating route info...");
-            _trackPoints.Clear();
+            TrackPoints.Clear();
             _cornerPoints.Clear();
             _nodeLaneOffsets.Clear();
 
 
             
-            while (_trackPoints.Count() < _routeNodes.Count())
+            while (TrackPoints.Count() < _routeNodes.Count())
             {
                 TrackPoint t = new TrackPoint();
-                t.Node = _trackPoints.Count();
+                t.Node = TrackPoints.Count();
                 t.Position = _routeNodes[t.Node];
 
                 CornerPoint c = new CornerPoint();
-                c.Node = _trackPoints.Count();
+                c.Node = TrackPoints.Count();
 
-                _trackPoints.Add(t);
+                TrackPoints.Add(t);
                 _cornerPoints.Add(c);
 
             }
 
 
             
-            foreach (TrackPoint t in _trackPoints)
+            foreach (TrackPoint t in TrackPoints)
             {
                 int Average = (int)(t.TrackHalfWidth * 2);
                 if (t.Node > 50 && t.Node < _routeNodes.Count - 50)
@@ -3240,11 +3240,11 @@ namespace ARS
 
                 if (c.Node > Average && c.Node < _routeNodes.Count - Average)
                 {
-                    Vector3 pre = _trackPoints[c.Node - Average].Direction;
-                    Vector3 fut = _trackPoints[c.Node + Average].Direction;
+                    Vector3 pre = TrackPoints[c.Node - Average].Direction;
+                    Vector3 fut = TrackPoints[c.Node + Average].Direction;
                     c.Angle = Vector3.SignedAngle(pre, fut, Vector3.WorldUp);
                     c.ElevationChange = ((fut - pre).Z * 90);
-                    c.Elevation = _trackPoints[c.Node].Elevation;
+                    c.Elevation = TrackPoints[c.Node].Elevation;
                 }
                 else
                 {
@@ -3281,17 +3281,17 @@ namespace ARS
             
             foreach (CornerPoint c in keyCorners)
             {
-                float radius = GetPreciseRadius(_trackPoints[c.Node], 3);
+                float radius = GetPreciseRadius(TrackPoints[c.Node], 3);
                 radius = Clamp(radius, 5f, 9999f);
                 float thresholdRadius = radius * radiusFactorForCornerBounds;
 
                 int startCandidates = Math.Max(10, c.Node - maxSpanSearch);
-                int endCandidates = Math.Min(_trackPoints.Count - 11, c.Node + maxSpanSearch);
+                int endCandidates = Math.Min(TrackPoints.Count - 11, c.Node + maxSpanSearch);
 
                 int foundStartNode = startCandidates;
                 for (int nodeID = c.Node - 1; nodeID >= startCandidates; nodeID--)
                 {
-                    if (_trackPoints[nodeID].PreciseCurveRadius >= thresholdRadius)
+                    if (TrackPoints[nodeID].PreciseCurveRadius >= thresholdRadius)
                     {
                         foundStartNode = nodeID;
                         break;
@@ -3301,17 +3301,17 @@ namespace ARS
                 c.LengthStart = Math.Max(minSpan, c.Node - foundStartNode);
                 c.LengthEnd = c.LengthStart;
 
-                int maxSpanFromTrackWide = Math.Max(minSpan, (int)Math.Round(_trackPoints[c.Node].TrackHalfWidth * 4f));
+                int maxSpanFromTrackWide = Math.Max(minSpan, (int)Math.Round(TrackPoints[c.Node].TrackHalfWidth * 4f));
                 c.LengthStart = Math.Min(c.LengthStart, maxSpanFromTrackWide);
                 c.LengthEnd = Math.Min(c.LengthEnd, maxSpanFromTrackWide);
 
                 // Store the minimum precise curve radius across the final corner span
-                int radiusStart = (int)Clamp(c.Node - c.LengthStart, 0, _trackPoints.Count - 1);
-                int radiusEnd = (int)Clamp(c.Node + c.LengthEnd, 0, _trackPoints.Count - 1);
+                int radiusStart = (int)Clamp(c.Node - c.LengthStart, 0, TrackPoints.Count - 1);
+                int radiusEnd = (int)Clamp(c.Node + c.LengthEnd, 0, TrackPoints.Count - 1);
                 float minRadius = float.MaxValue;
                 for (int n = radiusStart; n <= radiusEnd; n++)
                 {
-                    float rN = _trackPoints[n].PreciseCurveRadius;
+                    float rN = TrackPoints[n].PreciseCurveRadius;
                     if (rN > 0f && rN < minRadius) minRadius = rN;
                 }
                 c.Radius = (minRadius == float.MaxValue) ? c.GetPreciseRadius() : minRadius;
@@ -3325,7 +3325,7 @@ namespace ARS
                 CornerPoint prev = keyCorners[i - 1];
                 CornerPoint curr = keyCorners[i];
 
-                float pairHalfWidth = Math.Max(_trackPoints[prev.Node].TrackHalfWidth, _trackPoints[curr.Node].TrackHalfWidth);
+                float pairHalfWidth = Math.Max(TrackPoints[prev.Node].TrackHalfWidth, TrackPoints[curr.Node].TrackHalfWidth);
                 int minCornerSeparationNodes = (int)(pairHalfWidth * 20f);
 
                 if (curr.Node - prev.Node < minCornerSeparationNodes)
@@ -3344,15 +3344,15 @@ namespace ARS
                 int cornerSign = Math.Sign(c.Angle);
                 if (cornerSign == 0) continue;
 
-                int startNode = (int)Clamp(c.Node - c.LengthStart, 0, _trackPoints.Count - 1);
-                int endNode = (int)Clamp(c.Node + c.LengthEnd, 0, _trackPoints.Count - 1);
+                int startNode = (int)Clamp(c.Node - c.LengthStart, 0, TrackPoints.Count - 1);
+                int endNode = (int)Clamp(c.Node + c.LengthEnd, 0, TrackPoints.Count - 1);
                 if (endNode < startNode) continue;
 
                 
                 
-                TrackPoint startTrackPoint = _trackPoints[startNode];
-                TrackPoint apexTrackPoint = _trackPoints[c.Node];
-                TrackPoint endTrackPoint = _trackPoints[endNode];
+                TrackPoint startTrackPoint = TrackPoints[startNode];
+                TrackPoint apexTrackPoint = TrackPoints[c.Node];
+                TrackPoint endTrackPoint = TrackPoints[endNode];
 
                 const float outsideAnchorFactor = 0.9f;
                 int bezierSamples = Math.Max(24, (endNode - startNode) * 3);
@@ -3428,7 +3428,7 @@ namespace ARS
                 
                 for (int node = startNode; node <= endNode; node++)
                 {
-                    TrackPoint tNode = _trackPoints[node];
+                    TrackPoint tNode = TrackPoints[node];
                     Vector3 nodePos = tNode.Position;
 
                     Vector3 closestBezier = bezierPoints[0];
@@ -3502,17 +3502,17 @@ namespace ARS
 
         public static float GetPreciseRadius(TrackPoint trackPoint, int span)
         {
-            if (trackPoint == null || _trackPoints == null || _trackPoints.Count < 3) return 999f;
+            if (trackPoint == null || TrackPoints == null || TrackPoints.Count < 3) return 999f;
 
             int safeSpan = Math.Max(1, span);
-            int node = (int)Clamp(trackPoint.Node, 0, _trackPoints.Count - 1);
+            int node = (int)Clamp(trackPoint.Node, 0, TrackPoints.Count - 1);
             int minSafeNode = safeSpan;
-            int maxSafeNode = _trackPoints.Count - 1 - safeSpan;
+            int maxSafeNode = TrackPoints.Count - 1 - safeSpan;
             if (node < minSafeNode || node > maxSafeNode) return trackPoint.PreciseCurveRadius;
 
-            Vector3 prev = _trackPoints[node - safeSpan].Position;
-            Vector3 next = _trackPoints[node + safeSpan].Position;
-            Vector3 mid = _trackPoints[node].Position;
+            Vector3 prev = TrackPoints[node - safeSpan].Position;
+            Vector3 next = TrackPoints[node + safeSpan].Position;
+            Vector3 mid = TrackPoints[node].Position;
 
             float r = Circumradius3D(prev, next, mid);
             if (float.IsNaN(r) || float.IsInfinity(r) || r <= 0f) return trackPoint.PreciseCurveRadius;
@@ -3565,15 +3565,15 @@ namespace ARS
         
         public static float GetHillGsLossAtCurrentTrackPoint(Racer r)
         {
-            if (r == null || !CanWeUse(r.Car) || _trackPoints.Count < 2) return 0f;
+            if (r == null || !CanWeUse(r.Car) || TrackPoints.Count < 2) return 0f;
 
-            int node = (int)Clamp(r.CurrentTrackPoint.Node, 0, _trackPoints.Count - 1);
+            int node = (int)Clamp(r.CurrentTrackPoint.Node, 0, TrackPoints.Count - 1);
             int forwardOffset = (int)Clamp((int)(Math.Max(r.Car.Velocity.Length(), 5f) * 0.5f), 1, 50);
             int aheadNode = node + forwardOffset;
-            if (aheadNode >= _trackPoints.Count) aheadNode -= _trackPoints.Count;
+            if (aheadNode >= TrackPoints.Count) aheadNode -= TrackPoints.Count;
 
-            Vector3 from = _trackPoints[node].Position;
-            Vector3 to = _trackPoints[aheadNode].Position;
+            Vector3 from = TrackPoints[node].Position;
+            Vector3 to = TrackPoints[aheadNode].Position;
 
             float horizontalDistance = Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y));
             if (horizontalDistance <= 0.001f) return 0f;
@@ -3617,16 +3617,16 @@ namespace ARS
         
         public static float GetHillGripMultiplierAtCurrentTrackPoint(Racer r, float factor = 1f)
         {
-            if (r == null || !CanWeUse(r.Car) || _trackPoints.Count < 2) return 1f;
+            if (r == null || !CanWeUse(r.Car) || TrackPoints.Count < 2) return 1f;
             if (factor <= 0f) factor = 1f;
 
-            int node = (int)Clamp(r.CurrentTrackPoint.Node, 0, _trackPoints.Count - 1);
+            int node = (int)Clamp(r.CurrentTrackPoint.Node, 0, TrackPoints.Count - 1);
             int forwardOffset = (int)Clamp((int)(Math.Max(r.Car.Velocity.Length(), 5f) * 0.5f), 1, 50);
             int aheadNode = node + forwardOffset;
-            if (aheadNode >= _trackPoints.Count) aheadNode -= _trackPoints.Count;
+            if (aheadNode >= TrackPoints.Count) aheadNode -= TrackPoints.Count;
 
-            Vector3 from = _trackPoints[node].Position;
-            Vector3 to = _trackPoints[aheadNode].Position;
+            Vector3 from = TrackPoints[node].Position;
+            Vector3 to = TrackPoints[aheadNode].Position;
 
             float horizontalDistance = Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y));
             if (horizontalDistance <= 0.001f) return 1f;
@@ -3836,7 +3836,7 @@ namespace ARS
         {
             
             int apexNode = c.Node;
-            if (!_isPointToPoint && apexNode < 0) apexNode += _trackPoints.Count;
+            if (!_isPointToPoint && apexNode < 0) apexNode += TrackPoints.Count;
             float velTarget = r.Brain.Corner.Speed;
             // Reserve corner-speed × N seconds of distance so the car reaches corner speed
             // N seconds before the apex, then coasts the rest at corner speed.
@@ -3845,7 +3845,7 @@ namespace ARS
             // 100 pressure = x0.8 (brake later, aggressive). Applied before the divebomb reduction.
             coastReserve *= ARS.Remap(r.Pressure, 100f, 0f, 0.8f, 1.2f, true);
             float rawDistance = apexNode - r.CurrentTrackPoint.Node;
-            if (!_isPointToPoint && rawDistance < 0f) rawDistance += _trackPoints.Count;
+            if (!_isPointToPoint && rawDistance < 0f) rawDistance += TrackPoints.Count;
             if (rawDistance < 0f) rawDistance = 0f;
             // Divebomb: reduce the coast reserve so the car brakes later and carries
             // more entry speed into the corner — the whole point of the maneuver.

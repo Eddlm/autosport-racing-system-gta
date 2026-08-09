@@ -237,7 +237,7 @@ namespace ARS
             if (VehicleData.SteeringLock < 1 || VehicleData.SteeringLock > 100) VehicleData.SteeringLock = 40;
             ARS.Log(ARS.LogImportance.Info, "Steerlock for " + Car.DisplayName + ":" + VehicleData.SteeringLock + "º");
             Control.SteerDegrees = 0f;
-            CurrentTrackPoint = ARS._trackPoints.Last();
+            CurrentTrackPoint = ARS.TrackPoints.Last();
             Control.Brake = 0f;
             Control.Throttle = 0f;
 
@@ -416,7 +416,7 @@ namespace ARS
             // meaningless (corners are effectively straights), so the lane is explicitly off.
             if (Brain.CurrentPerception.HighSpeedCurveRadius > 250f) return 0f;
 
-            int count = ARS._trackPoints.Count;
+            int count = ARS.TrackPoints.Count;
             int backNode, fwdNode;
             if (ARS._isPointToPoint)
             {
@@ -428,8 +428,8 @@ namespace ARS
                 backNode = ((CurrentTrackPoint.Node - 20) % count + count) % count;
                 fwdNode = ((CurrentTrackPoint.Node + 20) % count + count) % count;
             }
-            Vector3 backDir = ARS._trackPoints[backNode].Direction;
-            Vector3 fwdDir = ARS._trackPoints[fwdNode].Direction;
+            Vector3 backDir = ARS.TrackPoints[backNode].Direction;
+            Vector3 fwdDir = ARS.TrackPoints[fwdNode].Direction;
 
             float signedAngle = Vector3.SignedAngle(backDir, fwdDir, Vector3.WorldUp);
             if (float.IsNaN(signedAngle) || float.IsInfinity(signedAngle)) return 0f;
@@ -893,7 +893,7 @@ namespace ARS
             // Vertical curvature (crest/dip) grip effect - route speed only.
             // At a crest, the car needs centripetal acceleration v²/r. If that exceeds g, the car lifts off.
             // At a dip, the car is loaded, increasing grip temporarily.
-            int count = ARS._trackPoints.Count;
+            int count = ARS.TrackPoints.Count;
             int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, count - 1);
             int crestStartNode, crestEndNode;
             if (ARS._isPointToPoint)
@@ -908,9 +908,9 @@ namespace ARS
             }
             if (crestStartNode != crestEndNode && crestStartNode != followNode && crestEndNode != followNode)
             {
-                Vector3 crestStart = ARS._trackPoints[crestStartNode].Position;
-                Vector3 crestMid = ARS._trackPoints[followNode].Position;
-                Vector3 crestEnd = ARS._trackPoints[crestEndNode].Position;
+                Vector3 crestStart = ARS.TrackPoints[crestStartNode].Position;
+                Vector3 crestMid = ARS.TrackPoints[followNode].Position;
+                Vector3 crestEnd = ARS.TrackPoints[crestEndNode].Position;
                 float deltaGs = ARS.HillGripDeltaGs(crestStart, crestMid, crestEnd, Car.Velocity.Length());
                 // deltaGs < 0 = crest (unloading), deltaGs > 0 = dip (loading)
                 float effectiveDeltaGs = deltaGs;
@@ -950,9 +950,9 @@ namespace ARS
                 }
                 if (cornerCrestStart != cornerCrestEnd && cornerCrestStart != apexNode && cornerCrestEnd != apexNode)
                 {
-                    Vector3 ccStart = ARS._trackPoints[cornerCrestStart].Position;
-                    Vector3 ccMid = ARS._trackPoints[apexNode].Position;
-                    Vector3 ccEnd = ARS._trackPoints[cornerCrestEnd].Position;
+                    Vector3 ccStart = ARS.TrackPoints[cornerCrestStart].Position;
+                    Vector3 ccMid = ARS.TrackPoints[apexNode].Position;
+                    Vector3 ccEnd = ARS.TrackPoints[cornerCrestEnd].Position;
                     float cornerDeltaGs = ARS.HillGripDeltaGs(ccStart, ccMid, ccEnd, _cornerSpd);
                     float cornerEffectiveDelta = cornerDeltaGs;
                     if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - CrestAggression);
@@ -1002,7 +1002,7 @@ namespace ARS
                 if (cornerDir != 0f)
                 {
                     Vector3 projected = ProjectAhead();
-                    TrackPoint projectedTrackPoint = ARS._trackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
+                    TrackPoint projectedTrackPoint = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
                     float outsideOffset = cornerDir * ARS.SignedLaneOffset(projected, projectedTrackPoint.Position, projectedTrackPoint.Direction);
                     float distanceFromInside = outsideOffset + projectedTrackPoint.TrackHalfWidth;
                     float trackWidth = projectedTrackPoint.TrackHalfWidth * 2f;
@@ -1044,12 +1044,12 @@ namespace ARS
 
         float GetFollowPointSlopeAngle()
         {
-            int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, ARS._trackPoints.Count - 1);
-            int aheadNode = (int)ARS.Clamp(followNode + 5, 0, ARS._trackPoints.Count - 1);
+            int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, ARS.TrackPoints.Count - 1);
+            int aheadNode = (int)ARS.Clamp(followNode + 5, 0, ARS.TrackPoints.Count - 1);
             if (aheadNode == followNode) return 0f;
 
-            Vector3 from = ARS._trackPoints[followNode].Position;
-            Vector3 to = ARS._trackPoints[aheadNode].Position;
+            Vector3 from = ARS.TrackPoints[followNode].Position;
+            Vector3 to = ARS.TrackPoints[aheadNode].Position;
             float horizDist = Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y));
             if (horizDist < 0.01f) return 0f;
             return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
@@ -1084,7 +1084,7 @@ namespace ARS
             if (ActiveManeuver.Type == ManeuverType.DiveBomb && _divebombApexNode >= 0)
             {
                 int passed = CurrentTrackPoint.Node - _divebombApexNode;
-                if (!ARS._isPointToPoint && passed < 0) passed += ARS._trackPoints.Count;
+                if (!ARS._isPointToPoint && passed < 0) passed += ARS.TrackPoints.Count;
                 if (passed >= 0)
                 {
                     ActiveManeuver.Type = ManeuverType.None;
@@ -1102,7 +1102,7 @@ namespace ARS
                     || !Brain.Rivals.Any(r => r.RivalRacer == ActiveManeuver.Target && r.RelativePosition == RelativePos.Behind);
 
                 int passed = CurrentTrackPoint.Node - _defendApexNode;
-                if (!ARS._isPointToPoint && passed < 0) passed += ARS._trackPoints.Count;
+                if (!ARS._isPointToPoint && passed < 0) passed += ARS.TrackPoints.Count;
 
                 if (overtaken || (_defendApexNode >= 0 && passed >= 0))
                 {
@@ -1198,14 +1198,14 @@ namespace ARS
         int ForwardNodeDistance(int targetNode)
         {
             int fwd = targetNode - CurrentTrackPoint.Node;
-            if (!ARS._isPointToPoint && fwd < 0) fwd += ARS._trackPoints.Count;
+            if (!ARS._isPointToPoint && fwd < 0) fwd += ARS.TrackPoints.Count;
             return fwd;
         }
 
         int BehindNodeDistance(int targetNode)
         {
             int behind = CurrentTrackPoint.Node - targetNode;
-            if (!ARS._isPointToPoint && behind < 0) behind += ARS._trackPoints.Count;
+            if (!ARS._isPointToPoint && behind < 0) behind += ARS.TrackPoints.Count;
             return behind;
         }
 
@@ -1437,7 +1437,7 @@ namespace ARS
 
             if (showTrack && Driver.IsPlayer && Lap >= ARS._settingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) && CanRegisterNewLap)
             {
-                World.DrawMarker(MarkerType.CheckeredFlagRect, ARS._trackPoints.First().Position + new Vector3(0, 0, 5f), ARS._trackPoints.First().Direction, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);
+                World.DrawMarker(MarkerType.CheckeredFlagRect, ARS.TrackPoints.First().Position + new Vector3(0, 0, 5f), ARS.TrackPoints.First().Direction, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);
             }
 
 
@@ -1538,7 +1538,7 @@ namespace ARS
                     // Find the track point closest to the projected position and check if
                     // it falls inside the safe bound. If the projection is off-track, the
                     // car is going to leave the road in ~1 second.
-                    TrackPoint projectedTrackPoint = ARS._trackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
+                    TrackPoint projectedTrackPoint = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
                     float projectedLateralOffset = Math.Abs(ARS.SignedLaneOffset(projected, projectedTrackPoint.Position, projectedTrackPoint.Direction));
                     float projectedSafeBound = projectedTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
                     bool willGoOffTrack = projectedLateralOffset > projectedSafeBound;
@@ -1572,17 +1572,17 @@ namespace ARS
         {
             if (corner == null || Lap <= 0) return;
             CornerPoint c = corner.Point;
-            int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS._trackPoints.Count - 1);
-            int endNode = (int)ARS.Clamp(c.Node + c.LengthEnd, 0, ARS._trackPoints.Count - 1);
+            int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
+            int endNode = (int)ARS.Clamp(c.Node + c.LengthEnd, 0, ARS.TrackPoints.Count - 1);
 
-            Vector3 chevScale = new Vector3(ARS._trackPoints[c.Node].TrackHalfWidth * 2.5f, 5, 5);
+            Vector3 chevScale = new Vector3(ARS.TrackPoints[c.Node].TrackHalfWidth * 2.5f, 5, 5);
 
-            World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[startNode].Position, ARS._trackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-            World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[c.Node].Position, ARS._trackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-            World.DrawMarker(MarkerType.ChevronUpx1, ARS._trackPoints[endNode].Position, ARS._trackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+            World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[startNode].Position, ARS.TrackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+            World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node].Position, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+            World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[endNode].Position, ARS.TrackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
 
             // Text ~2m above the apex: corner radius + apex speed (single block, ~n~ newline)
-            Vector3 apexPos = ARS._trackPoints[c.Node].Position;
+            Vector3 apexPos = ARS.TrackPoints[c.Node].Position;
             ARS.DrawText(apexPos + new Vector3(0f, 0f, 2f),
                 "R ~b~" + c.Radius.ToString("0.0") + "~n~~o~SPD " + corner.Speed.ToString("0.0"),
                 Color.Blue, 0.4f);
@@ -1646,22 +1646,22 @@ namespace ARS
         {
 
 
-            int refTrackpoint = (int)ARS.Clamp(CurrentTrackPoint.Node, 0, ARS._trackPoints.Count - 1);
+            int refTrackpoint = (int)ARS.Clamp(CurrentTrackPoint.Node, 0, ARS.TrackPoints.Count - 1);
 
             List<TrackPoint> points = new List<TrackPoint>();
-            int lastNode = ARS._trackPoints.Count - 1;
+            int lastNode = ARS.TrackPoints.Count - 1;
             int firstCandidate = Math.Max(refTrackpoint - 6, 0);
             int lastCandidate = Math.Min(refTrackpoint + 6, lastNode);
             for (int i = firstCandidate; i <= lastCandidate; i++)
             {
-                points.Add(ARS._trackPoints[i]);
+                points.Add(ARS.TrackPoints[i]);
             }
 
             bool hasCrossedStartLine = !ARS._isPointToPoint
                 && CanRegisterNewLap
                 && refTrackpoint >= lastNode - 6
-                && Vector3.Dot(Car.Position - ARS._trackPoints[0].Position, ARS._trackPoints[0].Direction) > 0f;
-            if (hasCrossedStartLine) points.Add(ARS._trackPoints[0]);
+                && Vector3.Dot(Car.Position - ARS.TrackPoints[0].Position, ARS.TrackPoints[0].Direction) > 0f;
+            if (hasCrossedStartLine) points.Add(ARS.TrackPoints[0]);
 
             TrackPoint closestPoint = points[0];
             float closestDistance = closestPoint.Position.DistanceTo(Car.Position);
@@ -1678,7 +1678,7 @@ namespace ARS
             float reacquireDistance = Math.Max(CurrentTrackPoint.TrackHalfWidth + 10f, 25f);
             if (closestDistance > reacquireDistance)
             {
-                foreach (TrackPoint point in ARS._trackPoints)
+                foreach (TrackPoint point in ARS.TrackPoints)
                 {
                     float distance = point.Position.DistanceTo(Car.Position);
                     if (distance < closestDistance)
@@ -1706,8 +1706,8 @@ namespace ARS
             TrackPoint ResolveLookAhead(int offset)
             {
                 int node = CurrentTrackPoint.Node + offset;
-                if (ARS._isPointToPoint) return ARS._trackPoints[Math.Min(node, lastNode)];
-                return ARS._trackPoints[node % ARS._trackPoints.Count];
+                if (ARS._isPointToPoint) return ARS.TrackPoints[Math.Min(node, lastNode)];
+                return ARS.TrackPoints[node % ARS.TrackPoints.Count];
             }
 
             var lookAheadOffsets = new (LookAhead key, int offset)[]
@@ -1728,7 +1728,7 @@ namespace ARS
 
             if (CanRegisterNewLap)
             {
-                if (hasCrossedStartLine || (ARS._isPointToPoint && ARS.GetPercent(CurrentTrackPoint.Node, ARS._trackPoints.Count) > 99 && ARS.EntityRelativeOffset(Car, ARS._trackPoints.Last().Position).Y < 0f))
+                if (hasCrossedStartLine || (ARS._isPointToPoint && ARS.GetPercent(CurrentTrackPoint.Node, ARS.TrackPoints.Count) > 99 && ARS.EntityRelativeOffset(Car, ARS.TrackPoints.Last().Position).Y < 0f))
                 {
                     CanRegisterNewLap = false;
                     _hasLeftLapArmNode = false;
@@ -1768,7 +1768,7 @@ namespace ARS
         float ComputeRouteRadius(float windowStart, float windowSize)
         {
             float routeSpeed = Car.Velocity.Length();
-            int count = ARS._trackPoints.Count;
+            int count = ARS.TrackPoints.Count;
             int startOffset = CurrentTrackPoint.Node + (int)(routeSpeed * windowStart);
             int endOffset = CurrentTrackPoint.Node + (int)(routeSpeed * (windowStart + windowSize));
             int routeStartNode, routeEndNode, routeMidNode;
@@ -1789,9 +1789,9 @@ namespace ARS
 
             if (routeEndNode == routeStartNode) return 999f;
             return ARS.Circumradius3D(
-                ARS._trackPoints[routeStartNode].Position,
-                ARS._trackPoints[routeEndNode].Position,
-                ARS._trackPoints[routeMidNode].Position) / 2f;
+                ARS.TrackPoints[routeStartNode].Position,
+                ARS.TrackPoints[routeEndNode].Position,
+                ARS.TrackPoints[routeMidNode].Position) / 2f;
         }
 
 
