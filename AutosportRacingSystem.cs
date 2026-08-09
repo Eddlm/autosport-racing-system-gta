@@ -3843,7 +3843,7 @@ namespace ARS
             float coastReserve = velTarget * BrakingCoastSecondsBeforeApex;
             // Pressure scales the coast reserve: 0 pressure = x1.2 (brake earlier, cautious),
             // 100 pressure = x0.8 (brake later, aggressive). Applied before the divebomb reduction.
-            coastReserve *= ARS.Remap(r.Pressure, 100f, 0f, 1.2f, 0.8f, true);
+            coastReserve *= ARS.Remap(r.Pressure, 100f, 0f, 0.8f, 1.2f, true);
             float rawDistance = apexNode - r.CurrentTrackPoint.Node;
             if (!_isPointToPoint && rawDistance < 0f) rawDistance += _trackPoints.Count;
             if (rawDistance < 0f) rawDistance = 0f;
