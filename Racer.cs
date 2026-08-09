@@ -533,8 +533,10 @@ namespace ARS
             float currentLane = Brain.CurrentPerception.DeviationFromCenter;
 
             // Loop through rivals (sorted by distance). Compute avoidance for each
-            // qualifying rival. If a second one triggers, average the two results and stop.
+            // qualifying rival. If a second one triggers on the opposite side, average
+            // the two results (thread the needle) and stop. Same side — just keep the first.
             float firstTarget = 0f;
+            bool firstGoLeft = false;
             bool foundFirst = false;
             foreach (Rival r in Brain.Rivals)
             {
@@ -575,12 +577,16 @@ namespace ARS
                 if (!foundFirst)
                 {
                     firstTarget = targetLane;
+                    firstGoLeft = goLeft;
                     foundFirst = true;
                 }
                 else
                 {
-                    // Second qualifying rival — average and we're done.
-                    return (firstTarget + targetLane) * 0.5f;
+                    // Second qualifying rival — only average if on the opposite side.
+                    if (goLeft != firstGoLeft)
+                        return (firstTarget + targetLane) * 0.5f;
+                    // Same side — the first rival's avoidance already covers this one.
+                    return firstTarget;
                 }
             }
 
