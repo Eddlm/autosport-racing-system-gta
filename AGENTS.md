@@ -12,6 +12,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - Build output used by the game: `D:\SteamLibrary\steamapps\common\Grand Theft Auto V\Scripts\ARS\`
 - Crash log: `D:\SteamLibrary\steamapps\common\Grand Theft Auto V\ScriptHookVDotNet2.log`
 - Sub-200 ms lags don't matter: one-frame ordering quirks are acceptable — don't restructure call order or add plumbing just to kill them.
+- **Avoidance experiments checkpoint:** `3087663` — last commit before further avoidance/speed tuning experiments. Roll back here if experiments go sideways.
 
 ## Dependencies and UI
 - LemonUI SHVDN2 replaces the hand-drawn menu. Root actions: Start Race and Freecam; Debug submenu exposes debug toggles.
