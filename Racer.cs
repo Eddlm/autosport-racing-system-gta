@@ -63,8 +63,8 @@ namespace ARS
         int _stuckRecoveryEndTime = 0;
         const int StuckRecoveryTimeMs = 2000;
         int _stuckRecoveryAttempts = 0;
-        public int _stuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
-        public bool _isRecoveringFromStuckNow => _isRecoveringFromStuck;
+        public int StuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
+        public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
 
 
         struct TrailSample
