@@ -2012,7 +2012,7 @@ namespace ARS
             foreach (Rival r in Brain.Rivals) r.RivalRacer = null;
             if (candidates.Count > 0)
             {
-                Vector3 hoodPos = Car.Position + Car.ForwardVector * 5f;
+                Vector3 hoodPos = Car.Position + Car.ForwardVector;
                 candidates.Sort((a, b) => Vector3.Distance(a.Car.Position, hoodPos).CompareTo(Vector3.Distance(b.Car.Position, hoodPos)));
                 for (int i = 0; i < Brain.Rivals.Count - 1; i++)
                 {
