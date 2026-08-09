@@ -919,6 +919,10 @@ namespace ARS
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
+            // Pressure speed bias: 0..100 pressure maps to -2..+2 m/s on the final intended speed.
+            // Applied after the min so it can push above or below the computed speeds; only
+            // _speedCap (applied later in ConvertSpeedToPedals) can cap it.
+            Brain.CurrentIntention.Speed += ARS.Remap(Pressure, 0f, 100f, -2f, 2f, true);
 
             // Yield: cap throttle to 0.5 to stay behind
             if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
