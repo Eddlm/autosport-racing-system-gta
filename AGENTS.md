@@ -8,7 +8,8 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 
 ## Workflow
 - Compile, test, then commit each logical change. Ask before pushing.
-- Build: `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" NewRacingSystem.csproj /v:minimal /nologo /p:Configuration=Release`
+- Build (MSBuild, Release): `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" NewRacingSystem.csproj /v:minimal /nologo /p:Configuration=Release`
+- Build (dotnet, agent-tuned — suppresses 1300+ SHVDN2 deprecation warnings, errors only): `dotnet build "F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\NewRacingSystem.sln" /target:NewRacingSystem /property:GenerateFullPaths=true /p:Configuration=Debug /p:Platform="Any CPU" /consoleloggerparameters:ErrorsOnly`
 - Build output used by the game: `D:\SteamLibrary\steamapps\common\Grand Theft Auto V\Scripts\ARS\`
 - Crash log: `D:\SteamLibrary\steamapps\common\Grand Theft Auto V\ScriptHookVDotNet2.log`
 - Sub-200 ms lags don't matter: one-frame ordering quirks are acceptable — don't restructure call order or add plumbing just to kill them.
