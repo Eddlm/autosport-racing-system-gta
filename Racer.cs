@@ -906,17 +906,16 @@ namespace ARS
             // }
 
             // Pressure overspeed: fixed offset (5 m/s at full pressure), applied only to route speed.
-            followTrackSpd += 5f; // flat offset matching cornerSpd's +5
             followTrackSpd += PressureMaxSpeedOffset * (Pressure / PressureRange);
 
             // Store the apex speed (the actual corner constraint) for the corner-approach gate.
             // The braking-plan cornerSpd is the entry speed, which is naturally higher than the
             // current speed and would always skip the approach.
             _cornerSpd = Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f;
-            cornerSpd += 5f;
+            cornerSpd += 4f;
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
-            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
+            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd + 2f);
 
             // Yield: cap throttle to 0.5 to stay behind
             if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
