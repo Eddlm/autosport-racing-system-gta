@@ -966,13 +966,9 @@ namespace ARS
                         // Cap at whichever speed is lower (corner or route), minus 4 m/s.
                         float capBase = Math.Min(_cornerSpd, followTrackSpd) - 4f;
                         _speedCap = Math.Min(_speedCap, capBase);
-                        // If the cap is already below the base (deduction has bitten), the car
-                        // intended to brake even more — kill throttle and let it coast instead.
-                        if (_speedCap < capBase)
-                            Control.MaxThrottle = 0f;
                         // Incremental deduction: 1 m/s per meter of overshoot, per second.
                         _speedCap = Math.Max(_speedCap - overshoot * 1f * TickScale, floor);
-                        // If the floor was hit, kill throttle entirely.
+                        // If the floor was hit, kill throttle entirely — coast.
                         if (_speedCap <= floor)
                             Control.MaxThrottle = 0f;
                     }
