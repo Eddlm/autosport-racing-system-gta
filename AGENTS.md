@@ -50,7 +50,7 @@ Design rules:
 ## Speed pipeline — how fast the car goes
 - **`cornerSpd`** — the "ballpark": kinematic braking plan `√(v²+2·a·d)` targeting the **apex speed**, distance to the **apex node**, plus a flat +5 m/s offset.
 - **`followTrackSpd`** — the "precise": route curvature `√(g·grip·radius)` from the speed-based lookahead window, plus a flat +5 m/s offset and pressure overspeed.
-- **Slope grip loss and crest/dip grip effects are TEMPORARILY DISABLED** for speed tuning. Both the slope-grip factor (applied to corner and route speed) and the vertical curvature crest/dip factor (route speed only) are commented out in `ComputeTargetSpeed`. Re-enable when tuning is settled.
+- **Slope grip loss is TEMPORARILY DISABLED** for speed tuning. The slope-grip factor (applied to corner and route speed) is commented out in `ComputeTargetSpeed`. Re-enable when tuning is settled. The crest/dip vertical curvature factor (route speed only) is re-enabled.
 - **`Intention.Speed` = min(cornerSpd, followTrackSpd)**, then clamped by engine top speed, `MaxSpeed`, and `_speedCap`.
 - **Two cap domains, deliberately split:**
   - `_accelerationCap` (input domain, ±1): throttle/brake scalar from avoidance (rival-distance smooth map). Lifts/brakes proportionally; only lowers via `Math.Min`.

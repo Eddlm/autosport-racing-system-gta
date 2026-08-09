@@ -890,21 +890,24 @@ namespace ARS
             // cornerSpd *= slopeSpeedFactor;
             // followTrackSpd *= slopeSpeedFactor;
 
-            // Vertical curvature (crest/dip) grip effect - TEMPORARILY DISABLED for speed tuning.
-            // int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, ARS._trackPoints.Count - 1);
-            // int crestStartNode = (int)ARS.Clamp(followNode - 3, 0, ARS._trackPoints.Count - 1);
-            // int crestEndNode = (int)ARS.Clamp(followNode + 3, 0, ARS._trackPoints.Count - 1);
-            // if (crestStartNode < crestEndNode && followNode > crestStartNode && followNode < crestEndNode)
-            // {
-            //     Vector3 crestStart = ARS._trackPoints[crestStartNode].Position;
-            //     Vector3 crestMid = ARS._trackPoints[followNode].Position;
-            //     Vector3 crestEnd = ARS._trackPoints[crestEndNode].Position;
-            //     float deltaGs = ARS.HillGripDeltaGs(crestStart, crestMid, crestEnd, Car.Velocity.Length());
-            //     float effectiveDeltaGs = deltaGs;
-            //     if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - CrestAggression);
-            //     float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0f);
-            //     followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
-            // }
+            // Vertical curvature (crest/dip) grip effect - route speed only.
+            // At a crest, the car needs centripetal acceleration v²/r. If that exceeds g, the car lifts off.
+            // At a dip, the car is loaded, increasing grip temporarily.
+            int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, ARS._trackPoints.Count - 1);
+            int crestStartNode = (int)ARS.Clamp(followNode - 3, 0, ARS._trackPoints.Count - 1);
+            int crestEndNode = (int)ARS.Clamp(followNode + 3, 0, ARS._trackPoints.Count - 1);
+            if (crestStartNode < crestEndNode && followNode > crestStartNode && followNode < crestEndNode)
+            {
+                Vector3 crestStart = ARS._trackPoints[crestStartNode].Position;
+                Vector3 crestMid = ARS._trackPoints[followNode].Position;
+                Vector3 crestEnd = ARS._trackPoints[crestEndNode].Position;
+                float deltaGs = ARS.HillGripDeltaGs(crestStart, crestMid, crestEnd, Car.Velocity.Length());
+                // deltaGs < 0 = crest (unloading), deltaGs > 0 = dip (loading)
+                float effectiveDeltaGs = deltaGs;
+                if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - CrestAggression); // scale only the unloading side
+                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0f); // clamp at 0 for liftoff
+                followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
+            }
 
             // Pressure overspeed: fixed offset (5 m/s at full pressure), applied only to route speed.
             followTrackSpd += PressureMaxSpeedOffset * (Pressure / PressureRange);
