@@ -3844,11 +3844,12 @@ namespace ARS
             float rawDistance = apexNode - r.CurrentTrackPoint.Node;
             if (!_isPointToPoint && rawDistance < 0f) rawDistance += _trackPoints.Count;
             if (rawDistance < 0f) rawDistance = 0f;
-            // Divebomb: halve the braking distance so the car brakes later and carries
+            // Divebomb: halve the coast reserve so the car brakes later and carries
             // more entry speed into the corner — the whole point of the maneuver.
-            float distance = r.ActiveManeuver.Type == ManeuverType.DiveBomb
-                ? rawDistance * 0.5f
-                : rawDistance - coastReserve;
+            float effectiveCoastReserve = r.ActiveManeuver.Type == ManeuverType.DiveBomb
+                ? coastReserve * 0.5f
+                : coastReserve;
+            float distance = rawDistance - effectiveCoastReserve;
             if (distance < 0f) distance = 0f;
 
             float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip);
