@@ -99,14 +99,14 @@ namespace ARS
             OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
             Distance =  (me.Car.Position -RivalRacer.Car.Position).Length();
 
-            float SpeedDiff = (float)Math.Round(me.Car.Velocity.Length()- RivalRacer.Car.Velocity.Length(), 4);
-            if (SpeedDiff <= 0.001f)
+            float speedDiff = (float)Math.Round(me.Car.Velocity.Length()- RivalRacer.Car.Velocity.Length(), 4);
+            if (speedDiff <= 0.001f)
             {
                 SecondsToReach = 909f;
             }
             else
             {
-                SecondsToReach = Distance / SpeedDiff;
+                SecondsToReach = Distance / speedDiff;
             }
 
             if (RelativeOffset.Y > CombinedSize.Y)
