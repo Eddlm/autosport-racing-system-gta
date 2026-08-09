@@ -418,7 +418,7 @@ namespace ARS
 
             int count = ARS.TrackPoints.Count;
             int backNode, fwdNode;
-            if (ARS._isPointToPoint)
+            if (ARS.IsPointToPoint)
             {
                 backNode = (int)ARS.Clamp(CurrentTrackPoint.Node - 20, 0, count - 1);
                 fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 20, 0, count - 1);
@@ -896,7 +896,7 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, count - 1);
             int crestStartNode, crestEndNode;
-            if (ARS._isPointToPoint)
+            if (ARS.IsPointToPoint)
             {
                 crestStartNode = (int)ARS.Clamp(followNode - 3, 0, count - 1);
                 crestEndNode = (int)ARS.Clamp(followNode + 3, 0, count - 1);
@@ -938,7 +938,7 @@ namespace ARS
             {
                 int apexNode = Brain.Corner.Point.Node;
                 int cornerCrestStart, cornerCrestEnd;
-                if (ARS._isPointToPoint)
+                if (ARS.IsPointToPoint)
                 {
                     cornerCrestStart = (int)ARS.Clamp(apexNode - 3, 0, count - 1);
                     cornerCrestEnd = (int)ARS.Clamp(apexNode + 3, 0, count - 1);
@@ -1084,7 +1084,7 @@ namespace ARS
             if (ActiveManeuver.Type == ManeuverType.DiveBomb && _divebombApexNode >= 0)
             {
                 int passed = CurrentTrackPoint.Node - _divebombApexNode;
-                if (!ARS._isPointToPoint && passed < 0) passed += ARS.TrackPoints.Count;
+                if (!ARS.IsPointToPoint && passed < 0) passed += ARS.TrackPoints.Count;
                 if (passed >= 0)
                 {
                     ActiveManeuver.Type = ManeuverType.None;
@@ -1102,7 +1102,7 @@ namespace ARS
                     || !Brain.Rivals.Any(r => r.RivalRacer == ActiveManeuver.Target && r.RelativePosition == RelativePos.Behind);
 
                 int passed = CurrentTrackPoint.Node - _defendApexNode;
-                if (!ARS._isPointToPoint && passed < 0) passed += ARS.TrackPoints.Count;
+                if (!ARS.IsPointToPoint && passed < 0) passed += ARS.TrackPoints.Count;
 
                 if (overtaken || (_defendApexNode >= 0 && passed >= 0))
                 {
@@ -1198,14 +1198,14 @@ namespace ARS
         int ForwardNodeDistance(int targetNode)
         {
             int fwd = targetNode - CurrentTrackPoint.Node;
-            if (!ARS._isPointToPoint && fwd < 0) fwd += ARS.TrackPoints.Count;
+            if (!ARS.IsPointToPoint && fwd < 0) fwd += ARS.TrackPoints.Count;
             return fwd;
         }
 
         int BehindNodeDistance(int targetNode)
         {
             int behind = CurrentTrackPoint.Node - targetNode;
-            if (!ARS._isPointToPoint && behind < 0) behind += ARS.TrackPoints.Count;
+            if (!ARS.IsPointToPoint && behind < 0) behind += ARS.TrackPoints.Count;
             return behind;
         }
 
@@ -1301,7 +1301,7 @@ namespace ARS
             Brain.CurrentPerception.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
 
 
-            if (ARS._debugToggles[Options.ShowInputs] && !Driver.IsPlayer)
+            if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer)
             {
                 float combinedInput = ARS.Clamp(Control.Throttle - Control.Brake, -1f, 1f);
                 if (_trailSamples.Count == 0)
@@ -1349,7 +1349,7 @@ namespace ARS
             UpdateCornerValidity();
 
             ProcessAI();
-            if (Driver.IsPlayer && ARS._settingsFile.GetValue("CATCHUP", "OnlyBehindPlayer", true)) ARS.CatchupPosition = RacePosition;
+            if (Driver.IsPlayer && ARS.SettingsFile.GetValue("CATCHUP", "OnlyBehindPlayer", true)) ARS.CatchupPosition = RacePosition;
 
             _lastCoreTick = Game.GameTime;
         }
@@ -1425,17 +1425,17 @@ namespace ARS
         }
         void DrawRacerDebug()
         {
-            bool showAggro = ARS._debugToggles[Options.ShowAggro];
-            bool showInputs = ARS._debugToggles[Options.ShowInputs];
-            bool showTrack = ARS._debugToggles[Options.ShowTrackAnalysis];
-            bool showPhysics = ARS._debugToggles[Options.ShowPhysics];
+            bool showAggro = ARS.DebugToggles[Options.ShowAggro];
+            bool showInputs = ARS.DebugToggles[Options.ShowInputs];
+            bool showTrack = ARS.DebugToggles[Options.ShowTrackAnalysis];
+            bool showPhysics = ARS.DebugToggles[Options.ShowPhysics];
             bool showAny = showAggro || showInputs || showTrack || showPhysics;
             if (!showAny) return;
 
             if ((Car.Position - Game.Player.Character.Position).Length() > 50) return;
 
 
-            if (showTrack && Driver.IsPlayer && Lap >= ARS._settingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) && CanRegisterNewLap)
+            if (showTrack && Driver.IsPlayer && Lap >= ARS.SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) && CanRegisterNewLap)
             {
                 World.DrawMarker(MarkerType.CheckeredFlagRect, ARS.TrackPoints.First().Position + new Vector3(0, 0, 5f), ARS.TrackPoints.First().Direction, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);
             }
@@ -1657,7 +1657,7 @@ namespace ARS
                 points.Add(ARS.TrackPoints[i]);
             }
 
-            bool hasCrossedStartLine = !ARS._isPointToPoint
+            bool hasCrossedStartLine = !ARS.IsPointToPoint
                 && CanRegisterNewLap
                 && refTrackpoint >= lastNode - 6
                 && Vector3.Dot(Car.Position - ARS.TrackPoints[0].Position, ARS.TrackPoints[0].Direction) > 0f;
@@ -1706,7 +1706,7 @@ namespace ARS
             TrackPoint ResolveLookAhead(int offset)
             {
                 int node = CurrentTrackPoint.Node + offset;
-                if (ARS._isPointToPoint) return ARS.TrackPoints[Math.Min(node, lastNode)];
+                if (ARS.IsPointToPoint) return ARS.TrackPoints[Math.Min(node, lastNode)];
                 return ARS.TrackPoints[node % ARS.TrackPoints.Count];
             }
 
@@ -1728,12 +1728,12 @@ namespace ARS
 
             if (CanRegisterNewLap)
             {
-                if (hasCrossedStartLine || (ARS._isPointToPoint && ARS.GetPercent(CurrentTrackPoint.Node, ARS.TrackPoints.Count) > 99 && ARS.EntityRelativeOffset(Car, ARS.TrackPoints.Last().Position).Y < 0f))
+                if (hasCrossedStartLine || (ARS.IsPointToPoint && ARS.GetPercent(CurrentTrackPoint.Node, ARS.TrackPoints.Count) > 99 && ARS.EntityRelativeOffset(Car, ARS.TrackPoints.Last().Position).Y < 0f))
                 {
                     CanRegisterNewLap = false;
                     _hasLeftLapArmNode = false;
                     Lap++;
-                    if (Lap > ARS._settingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5))
+                    if (Lap > ARS.SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5))
                     {
                         if (Car.CurrentBlip != null) Car.CurrentBlip.Color = BlipColor.Green;
                     }
@@ -1772,7 +1772,7 @@ namespace ARS
             int startOffset = CurrentTrackPoint.Node + (int)(routeSpeed * windowStart);
             int endOffset = CurrentTrackPoint.Node + (int)(routeSpeed * (windowStart + windowSize));
             int routeStartNode, routeEndNode, routeMidNode;
-            if (ARS._isPointToPoint)
+            if (ARS.IsPointToPoint)
             {
                 routeStartNode = (int)ARS.Clamp(startOffset, 0, count - 1);
                 routeEndNode = (int)ARS.Clamp(endOffset, 0, count - 1);
@@ -1813,7 +1813,7 @@ namespace ARS
 
                 if (!ControlledByPlayer)
                 {
-                    if (BaseBehavior == RacerBaseBehavior.Race && ARS._racers.Count >= 1)
+                    if (BaseBehavior == RacerBaseBehavior.Race && ARS.Racers.Count >= 1)
                     {
                         UpdateRivals();
                         ConsiderManeuvers();
@@ -1893,7 +1893,7 @@ namespace ARS
             float closestDistance = float.MaxValue;
             if (BaseBehavior == RacerBaseBehavior.Race)
             {
-                foreach (Racer racer in ARS._racers)
+                foreach (Racer racer in ARS.Racers)
                 {
                     if (racer == this || racer.Car == null || !racer.Car.Exists()) continue;
                     float dist = racer.Car.Position.DistanceTo(Car.Position);
@@ -2047,9 +2047,9 @@ namespace ARS
             VehicleData.CurrentMechanicalGrip = ((VehicleData.BaseMechanicalGrip) * GroundGripMultiplier);
 
         
-            if (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) < CurrentTrackPoint.TrackHalfWidth && RacePosition <= 2 && !ARS._terrainGripMultipliers.ContainsKey(CurrentTrackPoint.Node))
+            if (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) < CurrentTrackPoint.TrackHalfWidth && RacePosition <= 2 && !ARS.TerrainGripMultipliers.ContainsKey(CurrentTrackPoint.Node))
             {
-                ARS._terrainGripMultipliers.Add(CurrentTrackPoint.Node, GroundGripMultiplier);
+                ARS.TerrainGripMultipliers.Add(CurrentTrackPoint.Node, GroundGripMultiplier);
             }
 
             float zSpeedDegreesFromHoriz = (Math.Abs(VehicleData.SpeedVectorLocal.Normalized.Z) * 90);
@@ -2068,7 +2068,7 @@ namespace ARS
         public void UpdateRivals()
         {
             List<Racer> candidates = new List<Racer>();
-            foreach (Racer r in ARS._racers)
+            foreach (Racer r in ARS.Racers)
             {
                 if (r.Car.Handle != Car.Handle && r.Car.Position.DistanceTo(Car.Position) < 200f)
                 {
