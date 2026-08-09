@@ -3840,8 +3840,7 @@ namespace ARS
             float velTarget = r.Brain.Corner.Speed;
             // Reserve corner-speed × N seconds of distance so the car reaches corner speed
             // N seconds before the apex, then coasts the rest at corner speed.
-            // TEMPORARILY DISABLED — cars were braking too soon. Brake to the apex itself.
-            // float coastReserve = velTarget * BrakingCoastSecondsBeforeApex;
+            float coastReserve = velTarget * BrakingCoastSecondsBeforeApex;
             float rawDistance = apexNode - r.CurrentTrackPoint.Node;
             if (!_isPointToPoint && rawDistance < 0f) rawDistance += _trackPoints.Count;
             if (rawDistance < 0f) rawDistance = 0f;
@@ -3849,7 +3848,7 @@ namespace ARS
             // more entry speed into the corner — the whole point of the maneuver.
             float distance = r.ActiveManeuver.Type == ManeuverType.DiveBomb
                 ? rawDistance * 0.5f
-                : rawDistance;
+                : rawDistance - coastReserve;
             if (distance < 0f) distance = 0f;
 
             float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip);
