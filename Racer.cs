@@ -1005,9 +1005,9 @@ namespace ARS
             bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
 
 
-            float allowedWheelspin = ARS.Remap(Pressure, 20f, 100f, 0.2f,2f, true);
+            // float allowedWheelspin = ARS.Remap(Pressure, 20f, 100f, 0.2f,2f, true);
 
-            float tcsValue = ARS.Remap(Math.Abs(wheelspin) - allowedWheelspin, 0.1f, -0.1f, -1f, 1f, true) * 8;
+            float tcsValue = ARS.Remap(Math.Abs(wheelspin) - 4f, 0.1f, -0.1f, -1f, 1f, true) * 8;
             float change = tcsValue * TickScale;
             Control.TCSThrottle = ARS.Clamp(Control.TCSThrottle + change, 0.01f, 1);
         }
