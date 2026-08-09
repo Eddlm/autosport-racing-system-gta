@@ -913,10 +913,9 @@ namespace ARS
             // The braking-plan cornerSpd is the entry speed, which is naturally higher than the
             // current speed and would always skip the approach.
             _cornerSpd = Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f;
-            cornerSpd += 4f;
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
-            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd + 2f);
+            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
             // Yield: cap throttle to 0.5 to stay behind
             if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
