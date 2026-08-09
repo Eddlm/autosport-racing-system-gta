@@ -3854,7 +3854,7 @@ namespace ARS
 
             float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip);
             
-            float decel = brakingAbility * r.Handling.Gravity * 0.5f;
+            float decel = brakingAbility * r.Handling.Gravity;
             // Yielding cars perceive half the deceleration, so they brake earlier.
             if (r.ActiveManeuver.Type == ManeuverType.Yield)
                 decel *= 0.5f;
