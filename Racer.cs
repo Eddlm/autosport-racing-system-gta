@@ -962,11 +962,14 @@ namespace ARS
                     float overshoot = distanceFromInside - trackWidth;
                     if (overshoot > 0f)
                     {
-                        float floor = 15f;
+                        float floor = 4f;
                         // Cap never exceeds the corner speed while off-track.
                         _speedCap = Math.Min(_speedCap, _cornerSpd);
                         // Incremental deduction: 1 m/s per meter of overshoot, per second.
                         _speedCap = Math.Max(_speedCap - overshoot * 1f * TickScale, floor);
+                        // If the floor was hit, kill throttle entirely.
+                        if (_speedCap <= floor)
+                            Control.MaxThrottle = 0f;
                     }
                 }
             }
