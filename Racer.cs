@@ -893,10 +893,20 @@ namespace ARS
             // Vertical curvature (crest/dip) grip effect - route speed only.
             // At a crest, the car needs centripetal acceleration v²/r. If that exceeds g, the car lifts off.
             // At a dip, the car is loaded, increasing grip temporarily.
-            int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, ARS._trackPoints.Count - 1);
-            int crestStartNode = (int)ARS.Clamp(followNode - 3, 0, ARS._trackPoints.Count - 1);
-            int crestEndNode = (int)ARS.Clamp(followNode + 3, 0, ARS._trackPoints.Count - 1);
-            if (crestStartNode < crestEndNode && followNode > crestStartNode && followNode < crestEndNode)
+            int count = ARS._trackPoints.Count;
+            int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteWindowStart), 0, count - 1);
+            int crestStartNode, crestEndNode;
+            if (ARS._isPointToPoint)
+            {
+                crestStartNode = (int)ARS.Clamp(followNode - 3, 0, count - 1);
+                crestEndNode = (int)ARS.Clamp(followNode + 3, 0, count - 1);
+            }
+            else
+            {
+                crestStartNode = ((followNode - 3) % count + count) % count;
+                crestEndNode = ((followNode + 3) % count + count) % count;
+            }
+            if (crestStartNode != crestEndNode && crestStartNode != followNode && crestEndNode != followNode)
             {
                 Vector3 crestStart = ARS._trackPoints[crestStartNode].Position;
                 Vector3 crestMid = ARS._trackPoints[followNode].Position;
@@ -927,9 +937,18 @@ namespace ARS
             if (Brain.Corner != null)
             {
                 int apexNode = Brain.Corner.Point.Node;
-                int cornerCrestStart = (int)ARS.Clamp(apexNode - 3, 0, ARS._trackPoints.Count - 1);
-                int cornerCrestEnd = (int)ARS.Clamp(apexNode + 3, 0, ARS._trackPoints.Count - 1);
-                if (cornerCrestStart < cornerCrestEnd && apexNode > cornerCrestStart && apexNode < cornerCrestEnd)
+                int cornerCrestStart, cornerCrestEnd;
+                if (ARS._isPointToPoint)
+                {
+                    cornerCrestStart = (int)ARS.Clamp(apexNode - 3, 0, count - 1);
+                    cornerCrestEnd = (int)ARS.Clamp(apexNode + 3, 0, count - 1);
+                }
+                else
+                {
+                    cornerCrestStart = ((apexNode - 3) % count + count) % count;
+                    cornerCrestEnd = ((apexNode + 3) % count + count) % count;
+                }
+                if (cornerCrestStart != cornerCrestEnd && cornerCrestStart != apexNode && cornerCrestEnd != apexNode)
                 {
                     Vector3 ccStart = ARS._trackPoints[cornerCrestStart].Position;
                     Vector3 ccMid = ARS._trackPoints[apexNode].Position;
