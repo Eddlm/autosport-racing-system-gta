@@ -3841,6 +3841,9 @@ namespace ARS
             // Reserve corner-speed × N seconds of distance so the car reaches corner speed
             // N seconds before the apex, then coasts the rest at corner speed.
             float coastReserve = velTarget * BrakingCoastSecondsBeforeApex;
+            // Pressure scales the coast reserve: 0 pressure = x1.2 (brake earlier, cautious),
+            // 100 pressure = x0.8 (brake later, aggressive). Applied before the divebomb reduction.
+            coastReserve *= ARS.Remap(r.Pressure, 0f, 100f, 1.2f, 0.8f, true);
             float rawDistance = apexNode - r.CurrentTrackPoint.Node;
             if (!_isPointToPoint && rawDistance < 0f) rawDistance += _trackPoints.Count;
             if (rawDistance < 0f) rawDistance = 0f;
