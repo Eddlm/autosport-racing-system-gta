@@ -28,7 +28,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 Rough order, each step consuming the last:
 1. `UpdateTrackPosition` — local ±6-node search (global rescan past ~25 m), builds time-based lookaheads (0.25s→2s), computes the route radii, ticks laps.
 2. `ComputeTargetSpeed` — builds the **intended speed** (see Speed pipeline) and sets `_cornerSpd` = current corner's apex speed.
-3. `ComputeSteering` — resolves the lane (see Lane systems), derives heading/lane/recovery angles, runs the PD to `Control.SteerDegrees`.
+3. `ComputeSteering` — resolves the lane (see Lane systems), derives heading/lane/recovery angles, runs the PD to `Control.SteerDegrees`. **The heading-error term is load-bearing — do not remove or merge it into the lane term.** It anchors the car to face the track direction, which is what catches lateral-drift overshoot at the lane center. Merging heading + lane into a single "aim at the point" angle was tried and reverted: without a separate heading term the car sails past the lane and oscillates.
 4. `ApplySteerLimits` — speed-based clamp on steer (only when steer and yaw share sign).
 5. `ConvertSpeedToPedals` — the speed loop: intended speed → throttle/brake, clamped by the caps.
 6. `TranslateSteerToInput` — smooths steer toward the target and remaps degrees → -1..1 input.
@@ -48,8 +48,9 @@ Design rules:
 - The corner line phases are a **hard switch** (outside → inside), no lerp.
 
 ## Speed pipeline — how fast the car goes
-- **`cornerSpd`** — the "ballpark": kinematic braking plan `√(v²+2·a·d)` targeting the **apex speed**, distance to the **apex node**, plus slope-grip loss and a flat offset.
-- **`followTrackSpd`** — the "precise": route curvature `√(g·grip·radius)` from the speed-based lookahead window, plus slope-grip, crest/dip, and pressure overspeed.
+- **`cornerSpd`** — the "ballpark": kinematic braking plan `√(v²+2·a·d)` targeting the **apex speed**, distance to the **apex node**, plus a flat +5 m/s offset.
+- **`followTrackSpd`** — the "precise": route curvature `√(g·grip·radius)` from the speed-based lookahead window, plus a flat +5 m/s offset and pressure overspeed.
+- **Slope grip loss and crest/dip grip effects are TEMPORARILY DISABLED** for speed tuning. Both the slope-grip factor (applied to corner and route speed) and the vertical curvature crest/dip factor (route speed only) are commented out in `ComputeTargetSpeed`. Re-enable when tuning is settled.
 - **`Intention.Speed` = min(cornerSpd, followTrackSpd)**, then clamped by engine top speed, `MaxSpeed`, and `_speedCap`.
 - **Two cap domains, deliberately split:**
   - `_accelerationCap` (input domain, ±1): throttle/brake scalar from avoidance (rival-distance smooth map). Lifts/brakes proportionally; only lowers via `Math.Min`.
@@ -71,6 +72,9 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **Maneuvers** (`Maneuver` on the racer): one-off tactical behaviors with a periodic arm check and a fixed lifecycle (arm → act → off). Nitrous (temporary speed boost), Yield (lift off while trailing a faster rival near a corner), Divebomb (pressure-driven commit to the inside of a rival ahead at a corner), and DefendLane (cover the inside against a rival behind so they can't dive — they take the corner wide).
 - **Passengerize**: AI drivers shift to the passenger seat while a rival overlaps within combined half-length + 0.5 m, preventing contact swerves. Never applied to the player.
 - Ghosting was removed during avoidance cleanup; rebuild later with the avoidance system.
+
+## Per-racer randomization
+- **`_laneGainDivisor`** (90–110): set once in the constructor at spawn. Scales the lane-pursuit gain curve's input — a lower divisor means the car saturates the gain at a smaller degree error (snappier lane pursuit), a higher divisor means it needs more error to max out (lazier). Subtle per-car variation so the field doesn't all steer identically.
 
 ## Debug (LemonUI Debug submenu)
 - **ShowInputs** — per-car speed readout (current/intended, corner/route speed, `_speedCap`/`_accelerationCap`) + pedal trail.
