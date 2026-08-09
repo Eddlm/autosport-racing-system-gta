@@ -3830,7 +3830,7 @@ namespace ARS
         
         
         
-        const float BrakingCoastSecondsBeforeApex = 2f; // reach corner speed this many seconds before the apex
+        const float BrakingCoastSecondsBeforeApex = 1f; // reach corner speed this many seconds before the apex
 
         public static float MaxSpeedForBrakingDistance(CornerPoint c, Racer r)
         {
@@ -3844,10 +3844,10 @@ namespace ARS
             float rawDistance = apexNode - r.CurrentTrackPoint.Node;
             if (!_isPointToPoint && rawDistance < 0f) rawDistance += _trackPoints.Count;
             if (rawDistance < 0f) rawDistance = 0f;
-            // Divebomb: halve the coast reserve so the car brakes later and carries
+            // Divebomb: reduce the coast reserve so the car brakes later and carries
             // more entry speed into the corner — the whole point of the maneuver.
             float effectiveCoastReserve = r.ActiveManeuver.Type == ManeuverType.DiveBomb
-                ? coastReserve * 0.5f
+                ? coastReserve * 0.8f
                 : coastReserve;
             float distance = rawDistance - effectiveCoastReserve;
             if (distance < 0f) distance = 0f;
