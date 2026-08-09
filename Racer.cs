@@ -780,13 +780,13 @@ namespace ARS
             if (speedErrorGs > 0.0f)
             {
 
-                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 2f, 0f, 1f);
-                else newThrottle = ARS.Clamp(speedErrorGs * 2f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
+                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 5f, 0f, 1f);
+                else newThrottle = ARS.Clamp(speedErrorGs * 5f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
             }
             else if (speedErrorGs < 0.0f)
             {
-                float reverseDemand = ARS.Clamp((-speedErrorGs) * 2f, 0f, throttleCap);
-                float brakeDemand = ARS.Clamp((-speedErrorGs) * 2f, 0f, 1f);
+                float reverseDemand = ARS.Clamp((-speedErrorGs) * 5f, 0f, throttleCap);
+                float brakeDemand = ARS.Clamp((-speedErrorGs) * 5f, 0f, 1f);
 
                 if (wantsReverse)
                 {
