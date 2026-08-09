@@ -909,6 +909,11 @@ namespace ARS
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
 
+            // Same crest/dip check for the corner apex — sample ±3 nodes around the apex
+            // using the apex speed as the velocity reference (that's the speed the car will
+            // be doing at the apex). Apply the grip factor to cornerSpd.
+            // (Moved after _cornerSpd is set — it needs the pure apex speed as input.)
+
             // Pressure overspeed: fixed offset (5 m/s at full pressure), applied only to route speed.
             followTrackSpd += PressureMaxSpeedOffset * (Pressure / PressureRange);
 
@@ -916,6 +921,27 @@ namespace ARS
             // The braking-plan cornerSpd is the entry speed, which is naturally higher than the
             // current speed and would always skip the approach.
             _cornerSpd = Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f;
+
+            // Corner crest/dip: same vertical curvature check as route speed, but centered on
+            // the apex node and using the apex speed as the velocity reference.
+            if (Brain.Corner != null)
+            {
+                int apexNode = Brain.Corner.Point.Node;
+                int cornerCrestStart = (int)ARS.Clamp(apexNode - 3, 0, ARS._trackPoints.Count - 1);
+                int cornerCrestEnd = (int)ARS.Clamp(apexNode + 3, 0, ARS._trackPoints.Count - 1);
+                if (cornerCrestStart < cornerCrestEnd && apexNode > cornerCrestStart && apexNode < cornerCrestEnd)
+                {
+                    Vector3 ccStart = ARS._trackPoints[cornerCrestStart].Position;
+                    Vector3 ccMid = ARS._trackPoints[apexNode].Position;
+                    Vector3 ccEnd = ARS._trackPoints[cornerCrestEnd].Position;
+                    float cornerDeltaGs = ARS.HillGripDeltaGs(ccStart, ccMid, ccEnd, _cornerSpd);
+                    float cornerEffectiveDelta = cornerDeltaGs;
+                    if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - CrestAggression);
+                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, 0f);
+                    cornerSpd *= (float)Math.Sqrt(cornerVerticalGrip);
+                }
+            }
+
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
