@@ -169,6 +169,11 @@ namespace ARS
         public float Elevation = 0f;
         public float ElevationChange = 0f;
         public bool IsKey = false;
+        // True when a sharp lifting lip sits in the approach (a few tens of metres before the
+        // apex). The car unweights and grips poorly there, so it must brake before the lip, not
+        // at/after it. RampEndNode is the node where the lip was found (-1 when none).
+        public bool RequiresEarlyBrake = false;
+        public int RampEndNode = -1;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }

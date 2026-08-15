@@ -1581,6 +1581,11 @@ namespace ARS
             World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node].Position, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
             World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[endNode].Position, ARS.TrackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
 
+            // Ramp-end corners get a red chevron on the apex so they're easy to spot: the car
+            // unweights at the sharp uphill-to-flat transition and needs extra braking margin.
+            if (c.RequiresEarlyBrake)
+                World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node].Position + new Vector3(0f, 0f, 4f), ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Red);
+
             // Text ~2m above the apex: corner radius + apex speed (single block, ~n~ newline)
             Vector3 apexPos = ARS.TrackPoints[c.Node].Position;
             ARS.DrawText(apexPos + new Vector3(0f, 0f, 2f),

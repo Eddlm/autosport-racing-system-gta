@@ -51,6 +51,26 @@ namespace ARS
         public static List<string> KnownTracks = new List<string>();
         public static List<Model> KnownVehicleModels = new List<Model>();
         public static Dictionary<string, float> ModelPowerCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+        // Scaled top speed per model, keyed the same way as ModelPowerCache (the //Model hash string).
+        // The native's raw m/s value is converted to mph and divided by TopSpeedScaleDivisor so the
+        // scaled figure lands on the same ~0.1-0.4 band as power, letting both feed a summed "powerscale".
+        public static Dictionary<string, float> ModelTopSpeedScaledCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+        // 140 mph / 0.3 = 466.67: a 140 mph car scores 0.3, matching the power band midpoint.
+        public const float TopSpeedScaleDivisor = 466.67f;
+
+        // Vehicle classes we never race. Anything not in this set (Compacts, Sedans, SUVs, Coupes,
+        // Muscle, SportsClassics, Sports, Super, Vans) is a valid race candidate. Read via
+        // GET_VEHICLE_CLASS_FROM_NAME (model-hash native, so on the main thread only).
+        static readonly HashSet<VehicleClass> BlacklistedVehicleClasses = new HashSet<VehicleClass>
+        {
+            VehicleClass.Motorcycles, VehicleClass.OffRoad, VehicleClass.Industrial, VehicleClass.Utility,
+            VehicleClass.Cycles, VehicleClass.Boats, VehicleClass.Helicopters, VehicleClass.Planes,
+            VehicleClass.Service, VehicleClass.Emergency, VehicleClass.Military, VehicleClass.Commercial,
+            VehicleClass.Trains
+        };
+
         public static int RaceReward = 0;
 
         public static ScriptSettings SettingsFile;
@@ -181,6 +201,7 @@ namespace ARS
                 
                 BuildPowerCache();
                 FillCachedCandidates(DisciplineFilter, _intendedOpponents, true);
+                RefreshTrackList(); // tracks are now discovered in _trackTags — populate the menu list
                 Log(LogImportance.Info, "Initialization complete.", true);
                 DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
                 HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARSe~w~ menu.");
@@ -360,6 +381,7 @@ namespace ARS
             _racerTagLookup.Clear();
             KnownVehicleModels.Clear();
             ModelPowerCache.Clear();
+            ModelTopSpeedScaledCache.Clear();
             Log(LogImportance.Info, "-------------");
             Log(LogImportance.Info, "Learning available disciplines...");
             List<string> folders = Directory.GetDirectories(@"scripts\ARS\Vehicles").ToList();
@@ -404,6 +426,7 @@ namespace ARS
         public void BuildPowerCache()
         {
             ModelPowerCache.Clear();
+            ModelTopSpeedScaledCache.Clear();
 
             int carsLogged = 0;
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -424,10 +447,20 @@ namespace ARS
                 // Native expects the int model hash, not the Model object.
                 try
                 {
+                    // Blacklist classes we never race (read via the model-hash native, so on the main thread).
+                    VehicleClass vClass = (VehicleClass)Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, m.Hash);
+                    if (BlacklistedVehicleClasses.Contains(vClass)) continue;
+
                     float power = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, m.Hash);
+                    // 0xF417C2502FFFED43 = estimated top speed from the model hash, returned in m/s.
+                    // Scale it down to the power band (mph / divisor) so both can feed a summed powerscale.
+                    float topSpeedMph = MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, m.Hash));
+                    float topSpeedScaled = topSpeedMph / TopSpeedScaleDivisor;
+
                     ModelPowerCache[innerText] = power;
+                    ModelTopSpeedScaledCache[innerText] = topSpeedScaled;
                     carsLogged++;
-                    Log(LogImportance.Info, "Power for " + innerText + " (" + m.ToString() + "): " + power.ToString("0.####"));
+                    Log(LogImportance.Info, "Power for " + innerText + " (" + m.ToString() + "): " + power.ToString("0.####") + "  TopSpeed " + topSpeedMph.ToString("0") + "mph  scaled " + topSpeedScaled.ToString("0.####") + "  class " + vClass);
                 }
                 catch (Exception) { /* skip unreadable model power */ }
             }
@@ -655,6 +688,11 @@ namespace ARS
         readonly ObjectPool _menuPool = new ObjectPool();
         NativeMenu _arsMenu;
 
+        // Menu track selector: the user picks a race from the list and Start Race uses it.
+        NativeListItem<string> _trackListItem;
+        readonly List<string> _trackListPaths = new List<string>(); // parallel to _trackListItem.Items
+        string _selectedTrackPath = null;
+
         void InitializeMenu()
         {
             _arsMenu = new NativeMenu("ARS", "RACING")
@@ -662,6 +700,17 @@ namespace ARS
                 UseMouse = false,
                 DisableControls = true
             };
+
+            // "Select Track" — cycles through every discovered race and remembers the choice.
+            // Start Race below then loads this specific file (falls back to the current behavior
+            // when none is chosen).
+            _trackListItem = new NativeListItem<string>("Select Track", "Pick the race to start, then hit Start Race.", Array.Empty<string>());
+            _trackListItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index >= 0 && args.Index < _trackListPaths.Count)
+                    _selectedTrackPath = _trackListPaths[args.Index];
+            };
+            _arsMenu.Add(_trackListItem);
 
             NativeItem startRaceItem = new NativeItem("Start Race", "Load the selected track, build the grid, and start a race.");
             startRaceItem.Activated += (sender, args) => StartRaceFromMenu();
@@ -701,7 +750,12 @@ namespace ARS
         {
             _arsMenu.Visible = false;
 
-            if (RouteNodes.Count == 0)
+            // If the user picked a race from the "Select Track" list, always load that one.
+            if (_selectedTrackPath != null)
+            {
+                LoadTrack(LoadTrackFile(_selectedTrackPath));
+            }
+            else if (RouteNodes.Count == 0)
             {
                 if (FilteredTracks.Count == 0)
                 {
@@ -713,6 +767,37 @@ namespace ARS
 
             LoadGrid(DisciplineFilter, _intendedOpponents);
             StartRace();
+        }
+
+        // (Re)build the "Select Track" list from every discovered race, keeping the current
+        // choice when the file still exists. Must run after FillKnownTracks has populated
+        // _trackTags (i.e. after the load task completes).
+        void RefreshTrackList()
+        {
+            if (_trackListItem == null) return;
+
+            // Preserve the chosen path if its file is still among the discovered tracks.
+            string chosen = _selectedTrackPath;
+            string keepVisible = chosen != null ? System.IO.Path.GetFileNameWithoutExtension(chosen) : null;
+
+            List<string> sorted = new List<string>(_trackTags.Keys);
+            sorted.Sort(StringComparer.OrdinalIgnoreCase);
+
+            _trackListPaths.Clear();
+            for (int i = 0; i < sorted.Count; i++) _trackListPaths.Add(sorted[i]);
+
+            // The list item shows the file name (without extension); _trackListPaths holds the
+            // full paths in the same order so selection maps back cleanly.
+            _trackListItem.Items.Clear();
+            foreach (string path in sorted)
+                _trackListItem.Items.Add(System.IO.Path.GetFileNameWithoutExtension(path));
+
+            int idx = -1;
+            if (keepVisible != null) idx = _trackListItem.Items.IndexOf(keepVisible);
+            _trackListItem.SelectedIndex = idx >= 0 ? idx : 0;
+
+            if (_trackListPaths.Count > 0)
+                _selectedTrackPath = _trackListPaths[_trackListItem.SelectedIndex];
         }
         public static float MpsToMph(float ms)
         {
@@ -3241,7 +3326,7 @@ namespace ARS
 
                     t.Direction = (RouteNodes[t.Node + 2] - RouteNodes[t.Node - 2]).Normalized;
 
-                    t.Elevation = (RouteNodes[t.Node + 10] - RouteNodes[t.Node - 10]).Normalized.Z * 90f;
+                    t.Elevation = (RouteNodes[t.Node + 3] - RouteNodes[t.Node - 3]).Normalized.Z * 90f;
 
                     
 
@@ -3377,7 +3462,38 @@ namespace ARS
                 i++;
             }
 
-            
+            // Lip detection: a sharp lifting lip in the approach run-up (a "ramp/ledge end", NOT a
+            // rounded crest). The car crosses it at speed, unweights, and is mid-air when its braking
+            // logic fires — so it must brake before the lip. We reuse the crest vector math
+            // (HillGripDeltaGs) with a -2/n/+2 window and the apex speed as the reference. Only the
+            // run-up BEFORE the corner start is scanned (the lip must be ahead of the corner, not
+            // inside it); a lip that unloads the car by more than the threshold (Gs) is flagged, and
+            // the braking target becomes the lip node ("brake before this lip").
+            const int LipLookbackNodes = 60;   // scan from this many nodes behind the apex
+            const float LipGsThreshold = -1.0f; // unload more than this (Gs) at the apex speed -> lip
+            const float LipReferenceSpeed = 30f; // nominal apex speed (m/s) for the shape-only Gs measure
+            foreach (CornerPoint c in keyCorners)
+            {
+                c.RampEndNode = -1;
+                int cornerStart = c.Node - c.LengthStart;
+                if (c.Node < LipLookbackNodes + 2 || cornerStart < 2 || c.Node + 1 > RouteNodes.Count - 1) continue;
+
+                for (int n = c.Node - LipLookbackNodes; n + 2 <= cornerStart; n++)
+                {
+                    Vector3 a = RouteNodes[n - 2];
+                    Vector3 b = RouteNodes[n];
+                    Vector3 e = RouteNodes[n + 2];
+                    float deltaGs = HillGripDeltaGs(a, b, e, LipReferenceSpeed);
+                    if (deltaGs < LipGsThreshold)
+                    {
+                        c.RequiresEarlyBrake = true;
+                        c.RampEndNode = n;
+                        Log(LogImportance.Info, "Lip on corner " + c.Node + " at node " + n + " (unload " + deltaGs.ToString("0.00") + " Gs, " + (c.Node - n) + " nodes before apex, corner starts " + cornerStart + ") -> brake before this lip.");
+                        break; // earliest lip wins (largest margin)
+                    }
+                }
+            }
+
             foreach (CornerPoint c in keyCorners)
             {
                 int cornerSign = Math.Sign(c.Angle);
@@ -3883,7 +3999,11 @@ namespace ARS
             // Pressure scales the coast reserve: 0 pressure = x1.2 (brake earlier, cautious),
             // 100 pressure = x0.8 (brake later, aggressive). Applied before the divebomb reduction.
             coastReserve *= ARS.Remap(r.Pressure, 100f, 0f, 0.8f, 1.2f, true);
-            float rawDistance = apexNode - r.CurrentTrackPoint.Node;
+            // Lip corners: the car must be at corner speed BEFORE the lip (it unweights and loses
+            // grip there, so braking at/after the lip is mid-air). Braking target = the lip node,
+            // which is ahead of the apex, so the usable distance is shorter -> the car brakes earlier.
+            int brakeTargetNode = (c.RequiresEarlyBrake && c.RampEndNode >= 0) ? c.RampEndNode : apexNode;
+            float rawDistance = brakeTargetNode - r.CurrentTrackPoint.Node;
             if (!IsPointToPoint && rawDistance < 0f) rawDistance += TrackPoints.Count;
             if (rawDistance < 0f) rawDistance = 0f;
             // Divebomb: reduce the coast reserve so the car brakes later and carries
@@ -4392,14 +4512,15 @@ namespace ARS
         {
             _cachedCandidates.Clear();
 
-            // Power-matched grid: ignore the discipline filter entirely for now.
-            // Reference power is hardcoded for testing; candidates are those whose
-            // cached power (GET_VEHICLE_MODEL_ACCELERATION, model-hash only) is
-            // within this tolerance of the reference.
-            const float PowerTolerance = 0.1f;
+            // Powerscale-matched grid: ignore the discipline filter entirely for now.
+            // candidates are those whose combined "powerscale" = power + scaledTopSpeed
+            // is within this tolerance of the reference. scaledTopSpeed = mph / TopSpeedScaleDivisor
+            // (140 mph -> 0.3), so it sits on the same band as power and the two add cleanly.
+            const float PowerscaleTolerance = 0.1f;
             const float ReferencePower = 0.3f;
+            const float ReferencePowerscale = 0.5f; // 0.4 .. 0.6 (0.5 ± 0.1)
 
-            Log(LogImportance.Info, "Reference power: " + ReferencePower.ToString("0.####") + "  (tolerance " + PowerTolerance + ")");
+            Log(LogImportance.Info, "Reference power: " + ReferencePower.ToString("0.####") + "  powerscale: " + ReferencePowerscale.ToString("0.####") + "  (tolerance " + PowerscaleTolerance + ")");
 
             List<XmlDocument> candidates = new List<XmlDocument>();
 
@@ -4411,9 +4532,13 @@ namespace ARS
                     string model = GetRacerModel(filename);
 
                     float cachedPower;
-                    if (!string.IsNullOrWhiteSpace(model) && ModelPowerCache.TryGetValue(model, out cachedPower))
+                    float cachedSpeed;
+                    if (!string.IsNullOrWhiteSpace(model) &&
+                        ModelPowerCache.TryGetValue(model, out cachedPower) &&
+                        ModelTopSpeedScaledCache.TryGetValue(model, out cachedSpeed))
                     {
-                        if (Math.Abs(cachedPower - ReferencePower) <= PowerTolerance)
+                        float powerscale = cachedPower + cachedSpeed;
+                        if (Math.Abs(powerscale - ReferencePowerscale) <= PowerscaleTolerance)
                         {
                             XmlDocument xmlFile = new XmlDocument();
                             try
