@@ -174,6 +174,10 @@ namespace ARS
         // at/after it. RampEndNode is the node where the lip was found (-1 when none).
         public bool RequiresEarlyBrake = false;
         public int RampEndNode = -1;
+        // Vertical curvature Gs at the apex (negative = crest/unload, positive = dip/load),
+        // evaluated live at detection time using the apex speed computed from the corner radius
+        // and this car's grip/gravity. Part of the corner's definition, stored when instanced.
+        public float CrestGs = 0f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }

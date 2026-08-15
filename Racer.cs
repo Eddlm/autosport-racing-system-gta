@@ -29,6 +29,18 @@ namespace ARS
         public VehicleControl Control = new VehicleControl();
         public RacerBrain Brain = new RacerBrain();
 
+        // Reusable CornerPoint for live corner detection. Corners are no longer pre-generated into
+        // a shared list; each racer refills this instance from a forward scan of the track nodes
+        // every timed core, so the corner the racer reacts to is always derived from the live
+        // track geometry rather than stale load-time data.
+        public CornerPoint LiveCorner = new CornerPoint();
+
+        // Rolling corner-scan state: the last track node this racer has already checked for a
+        // corner. Each timed core the scan advances a small fixed chunk of nodes forward from here
+        // (10 nodes per core), so detection cost is constant per core instead of one big forward
+        // scan per corner. -1 = not started yet (start from the current node on the next core).
+        public int CornerScanNode = -1;
+
 
         public VehicleState VehicleData = new VehicleState();
         public HandlingData Handling = new HandlingData();
@@ -723,6 +735,7 @@ namespace ARS
         public void Launch()
         {
             Brain.Corner = null;
+            CornerScanNode = -1;
             VehicleData.AvgGroundStability = 1;
             BaseBehavior = RacerBaseBehavior.Race;
             LapStartTime = Game.GameTime;

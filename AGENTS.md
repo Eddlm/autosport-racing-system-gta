@@ -18,6 +18,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - Crash log: `D:\SteamLibrary\steamapps\common\Grand Theft Auto V\ScriptHookVDotNet2.log`
 - Sub-200 ms lags don't matter: one-frame ordering quirks are acceptable — don't restructure call order or add plumbing just to kill them.
 - **Avoidance experiments checkpoint:** `3087663` — last commit before further avoidance/speed tuning experiments. Roll back here if experiments go sideways.
+- **Corner experiments checkpoint:** `54b33a7` — last commit before the **live corner creation** experiments. Known-good baseline (hill grip-loss exponential, radius-mapped crest aggression, later apex gate, power-matched grid). Roll back here if live-corner work goes sideways.
 
 ## Dependencies and UI
 - LemonUI SHVDN2 replaces the hand-drawn menu. Root actions: Start Race and Freecam; Debug submenu exposes debug toggles.
@@ -25,7 +26,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - The menu opens through the existing Sprint + Context hotkey or `arsmenu`; LemonUI controls navigation/cancel/input suppression.
 
 ## Code map — the files
-- `AutosportRacingSystem.cs` — the big orchestration file: race setup/flow, track/corner generation, grid, leaderboard, helpers (`Remap`/`Clamp`/`Circumradius`, native-call wrappers), `GetNextCorner`/`FindNextCorner`/`CornerApexSpeed`/`MaxSpeedForBrakingDistance` (static AI math that Racer calls).
+- `AutosportRacingSystem.cs` — the big orchestration file: race setup/flow, track/corner generation, grid, leaderboard, helpers (`Remap`/`Clamp`/`Circumradius`, native-call wrappers), `FindNextCorner` (live rolling scan)/`CornerApexSpeed`/`MaxSpeedForBrakingDistance` (static AI math that Racer calls).
 - `Racer.cs` — per-car intelligence: the whole steering/speed pipeline (`ComputeSteering`, `ComputeTargetSpeed`, `ComputeHighSpeedLane`, `ComputeCornerTargetLane`, `ComputeAvoidAheadLane`, `ApplyRivalWalls`, `ApplySteerLimits`, `ConvertSpeedToPedals`, `TranslateSteerToInput`), plus pressure, maneuvers, traction control, stuck recovery, debug drawing.
 - `DataStructures.cs` — shared state: `RacerBrain` (perception, corner, rivals, intention), `Rival`, `TrackPoint`, `CornerPoint`/`Corner`, `VehicleControl`, `VehicleState`, `HandlingData`.
 - `PersonalitySet.cs` / `SkillSet.cs` — leftover per-racer personality scaffolding.
@@ -64,11 +65,13 @@ Design rules:
 - **Asymmetry is by design**: corner is the loose target, route is the tight one. Do not add flat offsets to `followTrackSpd` to "balance" them.
 - **High-grip cars don't respond to braking-side tuning**: their braking is so strong that the braking plan rarely binds — route-curvature speed control wins. Adjustments that act on the braking plan barely register on them; tune the route-speed side instead.
 
-## Corner lifecycle
-1. **Generation** (AutosportRacingSystem): scan nodes → radius below the candidate threshold marks key candidates → second pass demotes any key corner closer than **full track width × 10** to its predecessor (uses the wider of the pair) → spans + min precise radius computed per corner. Spans are for radius scan/raceline/debug only — not culling.
-2. **Targeting**: `FindNextCorner` resolves the first key corner after the current node every timed core (no speed/range gate); circuits wrap; braking distance wraps across the seam.
-3. **Approach**: 5s window; outside hold (System 1) → let-go → inside (System 2) through the apex.
-4. **Apex**: `GetNextCorner` flips to the next key corner once the apex is passed — the corner speed guard releases here (relevant to blow-through behavior in packs).
+## Corner lifecycle (live, per-racer — no generation-time corner table)
+1. **No corners are precomputed.** `GenerateRouteInfo` builds only per-node geometry (`TrackPoint` position, direction, half-width, elevation, angle, general/precise curve radius) — the corner list and the bezier raceline (`NodeLaneOffsets`) were removed entirely.
+2. **Rolling chunk scan** (`FindNextCorner`, in the timed core): each racer holds a scan head (`Racer.CornerScanNode`, the last node checked) and checks a small fixed chunk of nodes per core (10/core → ~1000 nodes/sec). A potential corner is a node whose **precise curve radius** is below the threshold AND is a local curvature peak (±5 neighbors larger) — the tightest point, not the entry.
+3. **Resume offset**: when an apex is passed, the scan head jumps to the node **5s of travel after that apex** (at the apex speed) instead of the next node — corners inside the first 5s after an apex belong to the just-passed corner's exit zone and are never re-instanced. Only the very first scan starts just ahead of the car.
+4. **Define + instance + keep**: on detection, a racer-owned `CornerPoint` (`Racer.LiveCorner`) is filled with node, angle, spans, radius (min precise radius over the span), apex speed (from radius + the car's grip/gravity), crest Gs (vertical curvature at the apex at that speed) and the lip flag — then `Brain.Corner` holds it until the apex is passed.
+5. **Apex**: once passed, the corner speed guard releases and the rolling scan resumes. Circuits wrap the head; point-to-point clamps.
+6. All downstream consumers (braking plan, outside-approach lane, divebomb/defend, lip braking, chevrons, crest-at-apex) are unchanged — they only read `Brain.Corner.Point`.
 
 Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point clamps.
 
@@ -101,7 +104,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 
 ## Known TODOs / open items
 - Walls-collapsed avoidance (empty TODO in `ApplyRivalWalls`) — fold into `_accelerationCap` as a separate source if needed.
-- Two closely spaced corners where the second is slower — planner only targets the first key corner.
+- Two closely spaced corners where the second is slower — **now handled by design**: the live scan skips everything within the first 5s after an apex (exit-zone rule), so a close second corner is never instanced as a separate target.
 - Corner hugging (inside-line hold through the apex) still being evaluated.
 - Pressure-driven lookahead: reverted; hardcoded window pending investigation.
 - Grid car selection: **now implemented as power-matched selection** (see the "Grid car selection" section below). See `grid_rework.md` for the earlier performance-bracket brainstorm.
