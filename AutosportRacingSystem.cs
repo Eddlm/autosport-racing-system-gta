@@ -3357,6 +3357,7 @@ namespace ARS
                 if (ARS.NodeHalfWidths.ContainsKey(t.Node)) t.TrackHalfWidth = ARS.NodeHalfWidths[t.Node];
             }
 
+
             
             foreach (CornerPoint c in CornerPoints)
             {
@@ -3816,6 +3817,26 @@ namespace ARS
             float multiplier = 1f - loss;
             if (float.IsNaN(multiplier) || float.IsInfinity(multiplier)) return 1f;
             return Clamp(multiplier, 0f, 1f);
+        }
+
+        // Exponential hill grip-loss model, tuned to the observed anchor: a ~15º incline halves grip
+        // (0.5 factor). Grip decays NON-linearly with the off-level incline angle:
+        //   grip = exp(-k * |pitch| * gravityRatio)   where  k = ln(0.5)/15
+        // pitch = longitudinal run angle (deg) of the surface; uphill and downhill lose grip equally.
+        // gravityRatio = car Handling.Gravity / 9.8, so a heavier-gravity car effectively steepens the
+        // hill and loses more grip (the game's per-car gravity is real, but we model it as a steeper
+        // effective angle rather than trusting any live game grip value).
+        //
+        // Returns the grip multiplier in [HillGripMin, 1].
+        const float HillGripKPerDegree = 0.693147f / 15f; // ln(0.5)/15  ->  15° halves grip
+        const float HillGripMin = 0.05f;                  // never assume a car has zero grip on a hill
+        public static float HillGripFactorFromPitchAngle(float pitchDegrees, Racer r)
+        {
+            float gravityRatio = (r != null && r.Handling != null) ? (r.Handling.Gravity / 9.8f) : 1f;
+            float effectiveDeg = Math.Abs(pitchDegrees) * Math.Max(gravityRatio, 0.1f);
+            float factor = (float)Math.Exp(-HillGripKPerDegree * effectiveDeg);
+            if (float.IsNaN(factor) || float.IsInfinity(factor)) return 1f;
+            return Clamp(factor, HillGripMin, 1f);
         }
 
         public static float CornerApexSpeed(CornerPoint c, Racer r)

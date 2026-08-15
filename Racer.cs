@@ -93,6 +93,7 @@ namespace ARS
         float _cornerSpd = 999f;
         float _debugCornerSpd = 999f; // final cornerSpd after slope/offset, captured in ComputeTargetSpeed (debug)
         float _debugFollowTrackSpd = 999f; // final followTrackSpd after slope/pressure, captured in ComputeTargetSpeed (debug)
+        float _debugHillPitch = 0f;   // |run pitch (deg)| at the lookahead node, hill grip-loss model (debug)
         // Outside-approach entry latch: decided once when the car enters the 5s window for a
         // given corner. The outside hold only makes sense if the car needs to brake — entries
         // below apex speed + 20 mph skip the outside line entirely (System 2 inside covers it).
@@ -869,13 +870,13 @@ namespace ARS
 
             float followTrackSpd = ComputeRouteSpeed(Brain.CurrentPerception.CurveRadiusToFollowPoint);
 
-            // Gate route speed off within 5s of the apex — the braking plan (cornerSpd) is
+            // Gate route speed off within 2s of the apex — the braking plan (cornerSpd) is
             // the only speed authority on corner approach. Route curvature speed reacts to
             // the corner too early and brakes sooner than the braking plan needs.
             if (Brain.Corner != null)
             {
                 float timeToApex = ForwardNodeDistance(Brain.Corner.Point.Node) / Math.Max(Car.Velocity.Length(), 1f);
-                if (timeToApex <= 5f)
+                if (timeToApex <= 2f)
                     followTrackSpd = 999f;
             }
 
@@ -883,12 +884,18 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
-            // Slope grip loss: TEMPORARILY DISABLED for speed tuning.
-            // float slopeAngle = GetFollowPointSlopeAngle();
-            // float slopeGripFactor = Math.Max(1f - SlopeGripLossK * (float)Math.Pow(slopeAngle, SlopeGripLossExp), 0.1f);
-            // float slopeSpeedFactor = (float)Math.Sqrt(slopeGripFactor);
-            // cornerSpd *= slopeSpeedFactor;
-            // followTrackSpd *= slopeSpeedFactor;
+            // Hill grip loss (predictive, from the upcoming track pitch): an exponential model tuned to
+            // the observed ~15º halves-grip anchor. Uphill and downhill lose grip equally; heavier-gravity
+            // cars effectively see a steeper hill.
+            {
+                float slopeAngleDeg = ARS.RadToDeg(GetFollowPointSlopeAngle()); // |run pitch| at the lookahead node
+                float slopeGripFactor = ARS.HillGripFactorFromPitchAngle(slopeAngleDeg, this);
+                float slopeSpeedFactor = (float)Math.Sqrt(slopeGripFactor);
+                cornerSpd *= slopeSpeedFactor;
+                followTrackSpd *= slopeSpeedFactor;
+
+                if (ARS.DebugToggles[Options.ShowTrackAnalysis]) _debugHillPitch = slopeAngleDeg;
+            }
 
             // Vertical curvature (crest/dip) grip effect - route speed only.
             // At a crest, the car needs centripetal acceleration v²/r. If that exceeds g, the car lifts off.
@@ -913,8 +920,12 @@ namespace ARS
                 Vector3 crestEnd = ARS.TrackPoints[crestEndNode].Position;
                 float deltaGs = ARS.HillGripDeltaGs(crestStart, crestMid, crestEnd, Car.Velocity.Length());
                 // deltaGs < 0 = crest (unloading), deltaGs > 0 = dip (loading)
+                // Crest aggression is mapped to the route lookahead curvature: tight corner (small
+                // radius) = cautious (no lift-off), straight (large radius) = aggressive (carries
+                // speed, lets it jump). 100..300 radius ramps 0..1.
+                float routeAggression = ARS.Remap(Brain.CurrentPerception.CurveRadiusToFollowPoint, 100f, 300f, 0f, 1f, true);
                 float effectiveDeltaGs = deltaGs;
-                if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - CrestAggression); // scale only the unloading side
+                if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - routeAggression); // scale only the unloading side
                 float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0f); // clamp at 0 for liftoff
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
@@ -1521,6 +1532,9 @@ namespace ARS
 
                     // Track-ahead high-speed curve radius (0.5s→1.0s window) — the value the pursuit gain reads.
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~o~R: ~w~" + Brain.CurrentPerception.HighSpeedCurveRadius.ToString("0"), Color.White, 0.4f);
+                    // Hill grip-loss inputs: |run pitch| and signed bank (deg) at the lookahead node.
+                    // Bank is computed but NOT applied yet (isolation) — this is just for tuning.
+                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f), "~p~pitch ~w~" + _debugHillPitch.ToString("0.0"), Color.White, 0.4f);
                 }
 
                 if (showAggro)
