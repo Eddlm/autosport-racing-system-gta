@@ -45,6 +45,10 @@ namespace ARS
         public static Dictionary<Vector3, string> ImmersiveJoins = new Dictionary<Vector3, string>();
 
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
+        // Pre-computed apex table: every node whose precise curve radius is a local minimum
+        // (both neighbors larger). Built in a second pass after track generation (BuildApexCorners);
+        // each entry holds the node, the precise radius, and a tentative 1g corner speed.
+        public static List<CornerPoint> Corners = new List<CornerPoint>();
         public static List<Vehicle> GlobalTraffic = new List<Vehicle>();
 
         public static List<string> KnownTracks = new List<string>();
@@ -3349,7 +3353,47 @@ namespace ARS
                 if (ARS.NodeHalfWidths.ContainsKey(t.Node)) t.TrackHalfWidth = ARS.NodeHalfWidths[t.Node];
             }
 
+            BuildApexCorners();
+
             Log(LogImportance.Info, "Route generated");
+        }
+
+        // Second pass after the track geometry: walk the track sequentially in chunks of 30 m.
+        // In each chunk sort the nodes by precise curve radius and pick the smallest — that node
+        // is the chunk's apex, kept only if its radius is under the corner limit (400). Each
+        // CornerPoint carries only the node, the precise radius, and a tentative corner speed
+        // based on 1g (√(g·r)). No spans, no angles, no other thresholds.
+        public static void BuildApexCorners()
+        {
+            Corners.Clear();
+            int count = TrackPoints.Count;
+            if (count < 1) return;
+
+            const int chunkSize = 30;      // 30 m per chunk (1 node = 1 m)
+            const float radiusLimit = 100f; // only corners tighter than this are kept
+
+            for (int start = 0; start < count; start += chunkSize)
+            {
+                int end = Math.Min(start + chunkSize, count);
+
+                // Smallest precise radius in this chunk.
+                int bestNode = -1;
+                float bestR = float.MaxValue;
+                for (int n = start; n < end; n++)
+                {
+                    float r = TrackPoints[n].PreciseCurveRadius;
+                    if (r < bestR) { bestR = r; bestNode = n; }
+                }
+                if (bestNode < 0 || bestR >= radiusLimit) continue; // no corner in this chunk
+
+                CornerPoint c = new CornerPoint();
+                c.Node = bestNode;
+                c.SupposedRadius = bestR;
+                c.Speed = (float)Math.Sqrt(9.81f * bestR); // tentative: 1g corner speed
+                Corners.Add(c);
+            }
+
+            Log(LogImportance.Info, "Apex table: " + Corners.Count + " corners");
         }
 
         public static float Circumradius3D(Vector3 a, Vector3 b, Vector3 midpoint)
@@ -3563,7 +3607,7 @@ namespace ARS
         //
         // Returns the grip multiplier in [HillGripMin, 1].
         const float HillGripKPerDegree = 0.693147f / 15f; // ln(0.5)/15  ->  15° halves grip
-        const float HillGripMin = 0.05f;                  // never assume a car has zero grip on a hill
+        const float HillGripMin = 0.8f;                  // never remove more than 20% of grip on a hill
         public static float HillGripFactorFromPitchAngle(float pitchDegrees, Racer r)
         {
             float gravityRatio = (r != null && r.Handling != null) ? (r.Handling.Gravity / 9.8f) : 1f;
@@ -3576,7 +3620,7 @@ namespace ARS
         public static float CornerApexSpeed(CornerPoint c, Racer r)
         {
             
-            float radius = c.Radius;
+            float radius = c.SupposedRadius;
             if (radius <= 0f) radius = c.GetPreciseRadius();
 
             
@@ -3662,6 +3706,21 @@ namespace ARS
             }
             return angle;
         }
+
+        // Per-wheel ground contact: true if the wheel has grip (suspension loaded), false if airborne.
+        // Uses the same grip multiplier at 0x198 — a wheel with 0 grip is not touching the ground.
+        static public unsafe List<bool> WheelsOnGround(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x198;
+            List<bool> onGround = new List<bool>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float grip = *((float*)(wheel + offset));
+                onGround.Add(grip > 0.01f);
+            }
+            return onGround;
+        }
         
 
         static public unsafe float MaxWheelSlip(Vehicle handle)
@@ -3705,25 +3764,23 @@ namespace ARS
         // Rolling chunk scan for the next corner. Detection cost is constant per timed core: each
         // core we check a small fixed chunk of nodes (ChunkScanNodesPerCore) forward from the
         // racer's scan head (r.CornerScanNode = the last node already checked). The moment a chunk
-        // contains a qualifying corner, it's instanced and kept until its apex is passed; then the
-        // rolling scan resumes from where it left off. This replaces the old one-shot full-track
-        // forward scan per corner with a steady, bounded per-core scan.
+        // contains a corner region, it's instanced and kept until its apex is passed; then the
+        // rolling scan resumes from where it left off.
         //
-        // A potential corner is a node whose PRECISE curve radius is below the corner threshold AND
-        // is a local curvature peak (the tightest point of the corner, not its entry). Its
-        // definition (radius, apex speed from the car's grip/gravity, crest Gs at that speed) is
-        // filled into a racer-owned CornerPoint, which the racer keeps until the apex is passed.
+        // A corner's LIMITS are where the track's PRECISE curve radius crosses the corner-limit
+        // threshold: the region stays below the limit from its start (the downward crossing) to its
+        // end (the upward crossing). Two close turns connected by a still-tight stretch (a chicane)
+        // therefore read as ONE corner region. The apex is re-centered on the region's midpoint
+        // (start/end symmetric), and SupposedRadius is the general curve radius through the region's
+        // start, apex and end — the corner's overall arc, used for the final apex-speed calculation.
         const int ChunkScanNodesPerCore = 10;
-        const float CornerRadiusThreshold = 90f; // precise curve radius below this = a potential corner
+        const float CornerLimitRadius = 300f; // precise curve radius below this = inside a corner region
+        const int MaxCornerRegionWalk = 300;  // cap for walking the region's start/end limits
 
         public static void FindNextCorner(Racer r)
         {
             // Don't advance past the current corner until we've passed its apex.
             // The corner speed cap must remain active through the apex.
-            // The car must be aware of a corner at least 5s before reaching it — the rolling scan
-            // resumes the moment the previous apex is passed, and at 10 nodes per core it covers
-            // ~1000 nodes/sec, so the next corner is instanced with ample lead (>= 5s for any
-            // corner within ~5000 nodes ahead, which is the whole lap on most tracks).
             if (r.Brain.Corner != null && r.CurrentTrackPoint.Node <= r.Brain.Corner.Point.Node)
                 return;
 
@@ -3749,7 +3806,6 @@ namespace ARS
             }
 
             // Check the next fixed chunk of nodes forward from the scan head.
-            int found = -1;
             int chunkStart = r.CornerScanNode;
             for (int i = 0; i < ChunkScanNodesPerCore; i++)
             {
@@ -3757,50 +3813,66 @@ namespace ARS
                 if (!IsPointToPoint) n %= count;
                 if (n >= count) n = count - 1;
 
-                // Only interior nodes qualify so the ±5 neighbor reads stay in range (same seam
-                // blind spot the old whole-track pass had, over the start-line straight).
+                // Only interior nodes qualify so the region-walk neighbor reads stay in range (same
+                // seam blind spot the old whole-track pass had, over the start-line straight).
                 if (n < 6 || n > count - 6) continue;
 
-                float radius = TrackPoints[n].PreciseCurveRadius;
-                if (radius >= CornerRadiusThreshold) continue;
-                // Local curvature peak: both ±5 neighbors are less curved (larger radius).
-                if (!(TrackPoints[n - 5].PreciseCurveRadius > radius && radius < TrackPoints[n + 5].PreciseCurveRadius)) continue;
+                // Not inside a corner region (precise radius above the limit).
+                if (TrackPoints[n].PreciseCurveRadius >= CornerLimitRadius) continue;
 
-                found = n;
-                break;
-            }
+                // Inside a corner region: walk to its limits, where the precise radius crosses the
+                // limit back upward on each side.
+                int start = n;
+                while (start > 6 && TrackPoints[start - 1].PreciseCurveRadius < CornerLimitRadius && n - start < MaxCornerRegionWalk)
+                    start--;
+                int end = n;
+                while (end < count - 7 && TrackPoints[end + 1].PreciseCurveRadius < CornerLimitRadius && end - n < MaxCornerRegionWalk)
+                    end++;
 
-            if (found < 0)
-            {
-                // No corner in this chunk — advance the head by the chunk and keep scanning next core.
-                r.CornerScanNode = chunkStart + ChunkScanNodesPerCore;
-                r.Brain.Corner = null;
+                // Apex = the middle node of the region. Re-centered between the limits so the three
+                // points (start, apex, end) are symmetric — the circumradius through them then reads
+                // the corner's true general arc instead of being pulled tight toward one side.
+                int apex = start + (end - start) / 2;
+
+                // The region's apex is already behind us — it belongs to the corner we just passed
+                // (its tail). Skip past the region and keep scanning.
+                if (apex <= cur)
+                {
+                    r.CornerScanNode = end;
+                    r.Brain.Corner = null;
+                    return;
+                }
+
+                // Corner found: define + instance + keep. Head past the region's end AND the 5s exit
+                // window after the apex, so neither the corner's own tail nor a corner within 5s of
+                // the apex is ever re-instanced.
+                CornerPoint nextCorner = FillCornerPoint(r, start, end, apex);
+                float apexSpeed = CornerApexSpeed(nextCorner, r);
+                r.CornerScanNode = Math.Max(end, apex + (int)(apexSpeed * 5f) - 1);
+                if (r.Brain.Corner == null || r.Brain.Corner.Point.Node != nextCorner.Node)
+                    r.Brain.Corner = new Corner(apexSpeed, nextCorner);
                 return;
             }
 
-            // Corner found: define + instance + keep. Advance the head past it so the next scan
-            // (after this apex) resumes right after this corner.
-            CornerPoint nextCorner = FillCornerPoint(r, found);
-            r.CornerScanNode = found;
-            if (r.Brain.Corner == null || r.Brain.Corner.Point.Node != nextCorner.Node)
-                r.Brain.Corner = new Corner(CornerApexSpeed(nextCorner, r), nextCorner);
+            // No corner in this chunk — advance the head by the chunk and keep scanning next core.
+            r.CornerScanNode = chunkStart + ChunkScanNodesPerCore;
+            r.Brain.Corner = null;
         }
 
-        // Fill the racer-owned CornerPoint from the track geometry around apex node 'n', mirroring
-        // the span/radius/lip computations the old generation-time pass performed.
-        static CornerPoint FillCornerPoint(Racer r, int n)
+        // Fill the racer-owned CornerPoint for the corner region [start, end] with apex 'apex'.
+        static CornerPoint FillCornerPoint(Racer r, int start, int end, int apex)
         {
             CornerPoint c = r.LiveCorner;
-            c.Node = n;
+            c.Node = apex;
             c.RequiresEarlyBrake = false;
             c.RampEndNode = -1;
-            c.Elevation = TrackPoints[n].Elevation;
+            c.Elevation = TrackPoints[apex].Elevation;
 
             // Corner angle: signed heading change across ±20 nodes (sign: + left / - right).
-            if (n >= 20 && n < TrackPoints.Count - 20)
+            if (apex >= 20 && apex < TrackPoints.Count - 20)
             {
-                Vector3 pre = TrackPoints[n - 20].Direction;
-                Vector3 fut = TrackPoints[n + 20].Direction;
+                Vector3 pre = TrackPoints[apex - 20].Direction;
+                Vector3 fut = TrackPoints[apex + 20].Direction;
                 c.Angle = Vector3.SignedAngle(pre, fut, Vector3.WorldUp);
                 c.ElevationChange = ((fut - pre).Z * 90);
             }
@@ -3810,55 +3882,34 @@ namespace ARS
                 c.ElevationChange = 0f;
             }
 
-            // Span from the mid-track precise radius: walk forward/back from the apex to where the
-            // precise radius opens up past the corner-sized threshold, clamped to the track-width
-            // scaled max span and a minimum span.
-            const int MinSpan = 5;
-            const int MaxSpanSearch = 300;
-            const float RadiusFactorForCornerBounds = 50;
-            const int MaxSpanFromTrackWideF = 4;
-            float preciseRadius = GetPreciseRadius(TrackPoints[n], 3);
-            preciseRadius = Clamp(preciseRadius, 5f, 9999f);
-            float thresholdRadius = preciseRadius * RadiusFactorForCornerBounds;
+            // Spans from the region limits: the apex's offset within [start, end].
+            c.LengthStart = Math.Max(1, apex - start);
+            c.LengthEnd = Math.Max(1, end - apex);
 
-            int startCandidates = Math.Max(10, n - MaxSpanSearch);
-            int endCandidates = Math.Min(TrackPoints.Count - 11, n + MaxSpanSearch);
-            int foundStartNode = startCandidates;
-            for (int nodeID = n - 1; nodeID >= startCandidates; nodeID--)
+            // SupposedRadius: the general curve radius through the region's start, apex and end —
+            // the corner's overall arc, a smoother speed guide than any single per-node radius.
+            // Degenerate (nearly straight arc) -> fall back to the tightest precise radius in the region.
+            float supposed = Circumradius3D(TrackPoints[start].Position, TrackPoints[apex].Position, TrackPoints[end].Position);
+            if (supposed <= 0f || float.IsNaN(supposed) || float.IsInfinity(supposed) || supposed >= 999f)
             {
-                if (TrackPoints[nodeID].PreciseCurveRadius >= thresholdRadius)
+                supposed = 999f;
+                for (int m = start; m <= end; m++)
                 {
-                    foundStartNode = nodeID;
-                    break;
+                    float rm = TrackPoints[m].PreciseCurveRadius;
+                    if (rm > 0f && rm < supposed) supposed = rm;
                 }
             }
-
-            c.LengthStart = Math.Max(MinSpan, n - foundStartNode);
-            c.LengthEnd = c.LengthStart;
-            int maxSpanFromTrackWide = Math.Max(MinSpan, (int)Math.Round(TrackPoints[n].TrackHalfWidth * MaxSpanFromTrackWideF));
-            c.LengthStart = Math.Min(c.LengthStart, maxSpanFromTrackWide);
-            c.LengthEnd = Math.Min(c.LengthEnd, maxSpanFromTrackWide);
-
-            // Minimum precise curve radius across the final span -> the apex speed's radius.
-            int radiusStart = (int)Clamp(n - c.LengthStart, 0, TrackPoints.Count - 1);
-            int radiusEnd = (int)Clamp(n + c.LengthEnd, 0, TrackPoints.Count - 1);
-            float minRadius = float.MaxValue;
-            for (int nd = radiusStart; nd <= radiusEnd; nd++)
-            {
-                float rN = TrackPoints[nd].PreciseCurveRadius;
-                if (rN > 0f && rN < minRadius) minRadius = rN;
-            }
-            c.Radius = (minRadius == float.MaxValue) ? c.GetPreciseRadius() : minRadius;
+            c.SupposedRadius = Clamp(supposed, 5f, 9999f);
 
             // Lip detection: a sharp lifting lip in the run-up BEFORE the corner start. Recompute it
             // live so the lip is always true to the current track. Brake target becomes the lip node.
             const int LipLookbackNodes = 60;
             const float LipGsThreshold = -1.0f;
             const float LipReferenceSpeed = 30f;
-            int cornerStart = n - c.LengthStart;
-            if (n >= LipLookbackNodes + 2 && cornerStart >= 2 && n + 1 <= RouteNodes.Count - 1)
+            int cornerStart = apex - c.LengthStart;
+            if (apex >= LipLookbackNodes + 2 && cornerStart >= 2 && apex + 1 <= RouteNodes.Count - 1)
             {
-                for (int lip = n - LipLookbackNodes; lip + 2 <= cornerStart; lip++)
+                for (int lip = apex - LipLookbackNodes; lip + 2 <= cornerStart; lip++)
                 {
                     Vector3 a = RouteNodes[lip - 2];
                     Vector3 b = RouteNodes[lip];
@@ -3877,13 +3928,13 @@ namespace ARS
             // the vertical curvature (crest/dip) Gs at the apex evaluated at that speed. Only once
             // both are defined is this a corner worth instancing and keeping.
             c.CrestGs = 0f;
-            if (n >= 3 && n < TrackPoints.Count - 3)
+            if (apex >= 3 && apex < TrackPoints.Count - 3)
             {
                 float apexSpeed = CornerApexSpeed(c, r);
                 c.CrestGs = HillGripDeltaGs(
-                    TrackPoints[n - 3].Position,
-                    TrackPoints[n].Position,
-                    TrackPoints[n + 3].Position,
+                    TrackPoints[apex - 3].Position,
+                    TrackPoints[apex].Position,
+                    TrackPoints[apex + 3].Position,
                     apexSpeed);
             }
 

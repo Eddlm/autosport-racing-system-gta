@@ -140,7 +140,7 @@ namespace ARS
         public float Throttle = 1f;
         public float Brake = 1f;
         public float MaxThrottle = 1f;
-        public float TCSThrottle = 1f;
+        public float MaxThrottleFromTCS = 1f;
 
         public int HandBrakeTime = 0;
 
@@ -165,7 +165,6 @@ namespace ARS
         public int LengthStart = 5;
         public int LengthEnd = 5;
         public float Speed = 999;
-        public float Radius = 999f;
         public float Elevation = 0f;
         public float ElevationChange = 0f;
         public bool IsKey = false;
@@ -178,6 +177,10 @@ namespace ARS
         // evaluated live at detection time using the apex speed computed from the corner radius
         // and this car's grip/gravity. Part of the corner's definition, stored when instanced.
         public float CrestGs = 0f;
+        // SupposedRadius: the corner's assumed radius, computed from its limits (the region where
+        // the precise curve radius stays below the corner-limit threshold) — the tightest point
+        // the car must slow for. This is what the final apex-speed calculation uses.
+        public float SupposedRadius = 999f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }

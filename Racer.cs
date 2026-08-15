@@ -41,11 +41,42 @@ namespace ARS
         // scan per corner. -1 = not started yet (start from the current node on the next core).
         public int CornerScanNode = -1;
 
+        // Route braking target: the node the braking plan is committed to. Set when the 5s probe
+        // finds a corner region (precise radius below the limit); the region's edges are the
+        // 300-limit crossings, and the target is the region's midpoint node. Speed is gauged from
+        // the circumradius through the region's start / mid / end points (RouteTargetRadius).
+        // Once the node is crossed the probe re-arms. -1 = no target.
+        public int RouteTargetNode = -1;
+        // The circumradius through the corner region's three points (start, mid, end) — the radius
+        // the ideal speed is gauged from. 999 = no target.
+        public float RouteTargetRadius = 999f;
+
+        // The two next precomputed apexes (ARS.Corners), nearest first. Refreshed each core from
+        // the static apex table — no scan window, no lock: the nearest stays the nearest until
+        // passed, then the next slides into its place and a new one enters. Up to four are held
+        // and fed through the braking map; the one that demands the lower speed governs.
+        public int NextApexNode = -1;
+        public float NextApexRadius = 999f;
+        public float NextApexSpeed = 999f;
+        public int NextApexNode2 = -1;
+        public float NextApexRadius2 = 999f;
+        public float NextApexSpeed2 = 999f;
+        public int NextApexNode3 = -1;
+        public float NextApexRadius3 = 999f;
+        public float NextApexSpeed3 = 999f;
+        public int NextApexNode4 = -1;
+        public float NextApexRadius4 = 999f;
+        public float NextApexSpeed4 = 999f;
+
 
         public VehicleState VehicleData = new VehicleState();
         public HandlingData Handling = new HandlingData();
         public float GroundGripMultiplier = 1f;
         Vector3 _lastSpeed;
+
+        // Stability: max throttle is reduced when wheels are off the ground (3 Hz check).
+        // Max throttle recovers on its own in ConvertSpeedToPedals.
+        int _lastStabilityCheck = 0;
 
 
         public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
@@ -77,6 +108,13 @@ namespace ARS
         int _stuckRecoveryAttempts = 0;
         public int StuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
         public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
+
+        // Smooth lerp-to-track state (replaces the old velocity punt).
+        bool _isLerpingToTrack = false;
+        Vector3 _lerpStartPos = Vector3.Zero;
+        Vector3 _lerpTargetPos = Vector3.Zero;
+        int _lerpStartTime = 0;
+        const int LerpToTrackMs = 1500;
 
 
         struct TrailSample
@@ -726,7 +764,16 @@ namespace ARS
             if (Math.Sign(Control.SteerDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.0f));
-                speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * 0.75f, Handling.LateralTractionCurve * 0.33f);
+                // Multiplier mapped to throttle: 0 throttle = 1.0 (max steering), full throttle = 0.8
+                // (less steering). Lifting/coasting frees up grip budget for steering.
+                float steerMultiplier = ARS.Remap(Control.Throttle, 0f, 1f, 1f, 0.8f, true);
+                speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * steerMultiplier, Handling.LateralTractionCurve * 0.5f);
+
+                // If the car is steering 10º over the allowed limit, reduce max throttle at 1/s —
+                // the car is pushing past what grip allows, so back off the power.
+                if (Math.Abs(Control.SteerDegrees) > speedBasedSteeringLimit + 10f)
+                    Control.MaxThrottle = Math.Max(Control.MaxThrottle - 1f * TickScale, 0.1f);
+
                 Control.SteerDegrees = ARS.Clamp(Control.SteerDegrees, -speedBasedSteeringLimit, speedBasedSteeringLimit);
             }
         }
@@ -736,6 +783,21 @@ namespace ARS
         {
             Brain.Corner = null;
             CornerScanNode = -1;
+            RouteTargetNode = -1;
+            RouteTargetRadius = 999f;
+            NextApexNode = -1;
+            NextApexRadius = 999f;
+            NextApexSpeed = 999f;
+            NextApexNode2 = -1;
+            NextApexRadius2 = 999f;
+            NextApexSpeed2 = 999f;
+            NextApexNode3 = -1;
+            NextApexRadius3 = 999f;
+            NextApexSpeed3 = 999f;
+            NextApexNode4 = -1;
+            NextApexRadius4 = 999f;
+            NextApexSpeed4 = 999f;
+            ResetRouteProbe();
             VehicleData.AvgGroundStability = 1;
             BaseBehavior = RacerBaseBehavior.Race;
             LapStartTime = Game.GameTime;
@@ -749,6 +811,8 @@ namespace ARS
             _isRecoveringFromStuck = false;
             _stuckRecoveryEndTime = 0;
             _stuckRecoveryAttempts = 0;
+            _isLerpingToTrack = false;
+            _lerpStartTime = 0;
             Control.LastAppliedSteerDegrees = 0f;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
@@ -758,7 +822,7 @@ namespace ARS
         {
             float newThrottle = 0f;
             float newBrake = 0f;
-            float throttleCap = Math.Min(Control.TCSThrottle, 1f);
+            float throttleCap = Math.Min(Control.MaxThrottleFromTCS, 1f);
             float dirSwitchSpeed = ARS.MphToMps(5f);
 
 
@@ -794,13 +858,13 @@ namespace ARS
             if (speedErrorGs > 0.0f)
             {
 
-                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 5f, 0f, 1f);
-                else newThrottle = ARS.Clamp(speedErrorGs * 5f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
+                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 1f, 0f, 1f);
+                else newThrottle = ARS.Clamp(speedErrorGs * 1f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
             }
             else if (speedErrorGs < 0.0f)
             {
-                float reverseDemand = ARS.Clamp((-speedErrorGs) * 5f, 0f, throttleCap);
-                float brakeDemand = ARS.Clamp((-speedErrorGs) * 5f, 0f, 1f);
+                float reverseDemand = ARS.Clamp((-speedErrorGs) * 1f, 0f, throttleCap);
+                float brakeDemand = ARS.Clamp((-speedErrorGs) * 1f, 0f, 1f);
 
                 if (wantsReverse)
                 {
@@ -879,19 +943,23 @@ namespace ARS
             Brain.CurrentIntention.Speed = AiConstants.MaxSpeed;
 
             float cornerSpd = 999f;
-            if (Brain.Corner != null) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
-
-            float followTrackSpd = ComputeRouteSpeed(Brain.CurrentPerception.CurveRadiusToFollowPoint);
-
-            // Gate route speed off within 2s of the apex — the braking plan (cornerSpd) is
-            // the only speed authority on corner approach. Route curvature speed reacts to
-            // the corner too early and brakes sooner than the braking plan needs.
-            if (Brain.Corner != null)
+            if (NextApexNode >= 0)
             {
-                float timeToApex = ForwardNodeDistance(Brain.Corner.Point.Node) / Math.Max(Car.Velocity.Length(), 1f);
-                if (timeToApex <= 2f)
-                    followTrackSpd = 999f;
+                // Braking map over all four held apexes — the lowest one is the truly slowest:
+                // a slower later corner that demands earlier braking wins.
+                cornerSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
+                if (NextApexNode2 >= 0)
+                    cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode2, NextApexSpeed2)));
+                if (NextApexNode3 >= 0)
+                    cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode3, NextApexSpeed3)));
+                if (NextApexNode4 >= 0)
+                    cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode4, NextApexSpeed4)));
             }
+            else if (Brain.Corner != null) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
+
+            // Route speed: gauged from the triple-check circumradius (1s/2s/3s window). Continuous —
+            // no locked braking target; the route radius reacts as the car moves through the arc.
+            float followTrackSpd = RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint);
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
@@ -939,7 +1007,7 @@ namespace ARS
                 float routeAggression = ARS.Remap(Brain.CurrentPerception.CurveRadiusToFollowPoint, 100f, 300f, 0f, 1f, true);
                 float effectiveDeltaGs = deltaGs;
                 if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - routeAggression); // scale only the unloading side
-                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0f); // clamp at 0 for liftoff
+                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0.8f); // floor at 0.8 — never remove over 20% of grip
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
 
@@ -954,7 +1022,7 @@ namespace ARS
             // Store the apex speed (the actual corner constraint) for the corner-approach gate.
             // The braking-plan cornerSpd is the entry speed, which is naturally higher than the
             // current speed and would always skip the approach.
-            _cornerSpd = Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f;
+            _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
 
             // Corner crest/dip: same vertical curvature check as route speed, but centered on
             // the apex node and using the apex speed as the velocity reference.
@@ -980,7 +1048,7 @@ namespace ARS
                     float cornerDeltaGs = ARS.HillGripDeltaGs(ccStart, ccMid, ccEnd, _cornerSpd);
                     float cornerEffectiveDelta = cornerDeltaGs;
                     if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - CrestAggression);
-                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, 0f);
+                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, 0.8f); // floor at 0.8 — never remove over 20% of grip
                     cornerSpd *= (float)Math.Sqrt(cornerVerticalGrip);
                 }
             }
@@ -991,7 +1059,9 @@ namespace ARS
             // Pressure speed bias: 0..100 pressure maps to -2..+2 m/s on the final intended speed.
             // Applied after the min so it can push above or below the computed speeds; only
             // _speedCap (applied later in ConvertSpeedToPedals) can cap it.
-            Brain.CurrentIntention.Speed += ARS.Remap(Pressure, 0f, 100f, -2f, 2f, true);
+            // TEMPORARILY COMMENTED OUT for late-braking isolation testing (buffer bumped to 2s).
+            // TODO: re-enable once late-braking root cause is confirmed.
+            //Brain.CurrentIntention.Speed += ARS.Remap(Pressure, 0f, 100f, -2f, 2f, true);
 
             // Yield: cap throttle to 0.5 to stay behind
             if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
@@ -1013,49 +1083,83 @@ namespace ARS
                 }
             }
 
+            // Hard throttle kill: if either projection (0.5s or 1s) is off-track at any point,
+            // cut throttle to zero immediately — the car is about to leave the road.
+            // Only applies above 20 m/s and steering over 10º — below that the car needs
+            // throttle to recover/get unstuck, and a straight-running car projecting wide
+            // is not a cornering concern.
+            if (Car.Velocity.Length() > 20f && Math.Abs(Control.SteerDegrees) > 10f)
+            {
+                Vector3 projHalf = ProjectAhead(0.5f);
+                TrackPoint tpHalf = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projHalf)).First();
+                float offsetHalf = Math.Abs(ARS.SignedLaneOffset(projHalf, tpHalf.Position, tpHalf.Direction));
+                float boundHalf = tpHalf.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+                if (offsetHalf > boundHalf)
+                    Control.MaxThrottle = 0f;
+
+                Vector3 proj1s = ProjectAhead();
+                TrackPoint tp1s = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(proj1s)).First();
+                float offset1s = Math.Abs(ARS.SignedLaneOffset(proj1s, tp1s.Position, tp1s.Direction));
+                float bound1s = tp1s.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+                if (offset1s > bound1s)
+                    Control.MaxThrottle = 0f;
+            }
+
             // Projection off-track source (speed-based). Only the OUTSIDE of the upcoming
-            // corner matters: uses the closest track node to the projected 1s position as the
+            // corner matters: uses the closest track node to the projected position as the
             // reference frame. When the projection passes the actual track edge, the speed cap
             // is pinned at most to the corner speed, then deducted incrementally — 1 m/s per
             // meter of overshoot, per second — so a single frame of air/off-track projection
             // only nudges the cap instead of slamming it. Skipped while steering sits inside
             // the ±2° deadzone — a straight-running car projecting wide is not a cornering concern.
+            // Two horizons: 0.5s (early warning, catches fast exits) and 1s (the original).
             if (Brain.Corner != null && Math.Abs(Control.SteerDegrees) > ProjectionSteerDeadzoneDegrees)
             {
                 float cornerDir = Math.Sign(Brain.Corner.Point.Angle);
                 if (cornerDir != 0f)
                 {
-                    Vector3 projected = ProjectAhead();
-                    TrackPoint projectedTrackPoint = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
-                    float outsideOffset = cornerDir * ARS.SignedLaneOffset(projected, projectedTrackPoint.Position, projectedTrackPoint.Direction);
-                    float distanceFromInside = outsideOffset + projectedTrackPoint.TrackHalfWidth;
-                    float trackWidth = projectedTrackPoint.TrackHalfWidth * 2f;
-
-                    // Overshoot past the actual track edge (no 75% gate — the edge is the limit).
-                    float overshoot = distanceFromInside - trackWidth;
-                    if (overshoot > 0f)
+                    // 0.5s projection — earlier, shorter lookahead.
                     {
-                        // The safe speed is whichever is lower (corner or route). The cap pins
-                        // to that, and the floor is safe speed - 4 m/s — the car can slow down
-                        // to 4 m/s below the safe speed, but no further. At the floor, coast only.
-                        float safeSpeed = Math.Min(_cornerSpd, followTrackSpd);
-                        float floor = safeSpeed - 4f;
-                        _speedCap = Math.Min(_speedCap, safeSpeed);
-                        // Incremental deduction: 1 m/s per meter of overshoot, per second.
-                        _speedCap = Math.Max(_speedCap - overshoot * 1f * TickScale, floor);
-                        // If the floor was hit, kill throttle entirely — coast.
-                        if (_speedCap <= floor)
-                            Control.MaxThrottle = 0f;
+                        Vector3 projected = ProjectAhead(0.5f);
+                        TrackPoint projectedTrackPoint = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
+                        float outsideOffset = cornerDir * ARS.SignedLaneOffset(projected, projectedTrackPoint.Position, projectedTrackPoint.Direction);
+                        float distanceFromInside = outsideOffset + projectedTrackPoint.TrackHalfWidth;
+                        float trackWidth = projectedTrackPoint.TrackHalfWidth * 2f;
+
+                        float overshoot = distanceFromInside - trackWidth;
+                        if (overshoot > 0f)
+                        {
+                            float safeSpeed = Math.Min(_cornerSpd, followTrackSpd);
+                            float floor = safeSpeed - 4f;
+                            _speedCap = Math.Min(_speedCap, safeSpeed);
+                            _speedCap = Math.Max(_speedCap - overshoot * 1f * TickScale, floor);
+                            if (_speedCap <= floor)
+                                Control.MaxThrottle = 0f;
+                        }
+                    }
+
+                    // 1s projection — the original horizon.
+                    {
+                        Vector3 projected = ProjectAhead();
+                        TrackPoint projectedTrackPoint = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
+                        float outsideOffset = cornerDir * ARS.SignedLaneOffset(projected, projectedTrackPoint.Position, projectedTrackPoint.Direction);
+                        float distanceFromInside = outsideOffset + projectedTrackPoint.TrackHalfWidth;
+                        float trackWidth = projectedTrackPoint.TrackHalfWidth * 2f;
+
+                        float overshoot = distanceFromInside - trackWidth;
+                        if (overshoot > 0f)
+                        {
+                            float safeSpeed = Math.Min(_cornerSpd, followTrackSpd);
+                            float floor = safeSpeed - 4f;
+                            _speedCap = Math.Min(_speedCap, safeSpeed);
+                            _speedCap = Math.Max(_speedCap - overshoot * 1f * TickScale, floor);
+                            if (_speedCap <= floor)
+                                Control.MaxThrottle = 0f;
+                        }
                     }
                 }
             }
 
-        }
-
-        float ComputeRouteSpeed(float radius)
-        {
-            radius = Math.Max(radius, 0.1f);
-            return (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * radius);
         }
 
         const float SlopeGripLossK = 3f;    // multiplier for slope grip loss: loss = k · θ²
@@ -1084,14 +1188,13 @@ namespace ARS
             if (Control.Throttle <= 0.0f) return;
 
             float wheelspin = ARS.MaxWheelSlip(Car);
-            bool lowGripOrLowGear = GroundGripMultiplier < 0.9f || Car.CurrentGear < 2;
+          float  IdealWheelspin = OutOfTrackDistance() > 0f ? -1f : -2f;
 
-
-            // float allowedWheelspin = ARS.Remap(Pressure, 20f, 100f, 0.2f,2f, true);
-
-            float tcsValue = ARS.Remap(Math.Abs(wheelspin) - 4f, 0.1f, -0.1f, -1f, 1f, true) * 8;
-            float change = tcsValue * TickScale;
-            Control.TCSThrottle = ARS.Clamp(Control.TCSThrottle + change, 0.01f, 1);
+            // Error from ideal: positive = not enough spin (raise TCS), negative = too much spin (lower TCS).
+            float error = wheelspin - IdealWheelspin;
+            float change = error * TickScale * 5f;
+            // Off-track (car's bounding box past the track edge): clamp TCS to 0.15.
+            Control.MaxThrottleFromTCS = ARS.Clamp(Control.MaxThrottleFromTCS + change, 0.25f, 1);
         }
         void ConsiderManeuvers()
         {
@@ -1342,15 +1445,16 @@ namespace ARS
         }
 
 
-        // 1-second kinematic projection of the car in world space.
-        // Uses pos + v*t + 0.5*a*t² with t=1, where a is the running average of
+        // Kinematic projection of the car in world space.
+        // Uses pos + v*t + 0.5*a*t², where a is the running average of
         // the last ~10 frames' world-frame accelerations (m/s²) from UpdateTickData.
-        public Vector3 ProjectAhead()
+        // Default t=1 (1-second projection); pass a shorter horizon for an earlier check.
+        public Vector3 ProjectAhead(float seconds = 1f)
         {
             Vector3 avgAccel = VehicleData.AccelerationVector.Aggregate(
                 new Vector3(0, 0, 0), (s, v) => s + v)
                 / (float)VehicleData.AccelerationVector.Count;
-            return Car.Position + Car.Velocity + 0.5f * avgAccel;
+            return Car.Position + Car.Velocity * seconds + 0.5f * avgAccel * seconds * seconds;
         }
 
 
@@ -1370,7 +1474,13 @@ namespace ARS
             UpdateTrackPosition();
             UpdateSlideAndBoundingBox();
             UpdatePerceivedGrip();
-            UpdateCornerValidity();
+            // EXPERIMENT: corners ignored entirely — only the route curve radius drives speed/lane.
+            // Brain.Corner stays null so the whole corner stack (braking plan, apex gate, corner
+            // crest, outside-approach lane, divebomb/defend, chevrons) no-ops.
+            // UpdateCornerValidity();
+            // EXPERIMENT: braking-target probe dormant — route speed is continuous from the
+            // triple-check circumradius (1s/2s/3s window).
+            // UpdateRouteTarget();
 
             ProcessAI();
             if (Driver.IsPlayer && ARS.SettingsFile.GetValue("CATCHUP", "OnlyBehindPlayer", true)) ARS.CatchupPosition = RacePosition;
@@ -1557,10 +1667,12 @@ namespace ARS
 
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2f), ((int)Pressure).ToString(), Color.White, 0.4f);
 
-                    // Projection debug — white line + sphere at the 1-second projected position.
+                    // Projection debug — line from car to 0.5s projection, then to 1s projection.
+                    Vector3 projectedHalf = ProjectAhead(0.5f);
                     Vector3 projected = ProjectAhead();
                     Vector3 lineStart = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.6f);
-                    ARS.DrawLine(lineStart, projected, Color.White);
+                    ARS.DrawLine(lineStart, projectedHalf, Color.White);
+                    ARS.DrawLine(projectedHalf, projected, Color.White);
 
                     // Find the track point closest to the projected position and check if
                     // it falls inside the safe bound. If the projection is off-track, the
@@ -1572,6 +1684,7 @@ namespace ARS
 
                     Color projectionColor = willGoOffTrack ? Color.Red : Color.White;
                     World.DrawMarker(MarkerType.DebugSphere, projected, Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), projectionColor, false, false, 0, false, "", "", false);
+                    World.DrawMarker(MarkerType.DebugSphere, projectedHalf, Vector3.Zero, Vector3.Zero, new Vector3(0.4f, 0.4f, 0.4f), projectionColor, false, false, 0, false, "", "", false);
 
                     // Draw the two track edges at the projected progress so the comparison is visible.
                     Vector3 trackRight = Vector3.Cross(projectedTrackPoint.Direction, Vector3.WorldUp).Normalized;
@@ -1582,7 +1695,7 @@ namespace ARS
 
                 if (showTrack)
                 {
-                    DrawCornerChevrons(Brain.Corner);
+                    DrawRouteFollowLine();
                 }
 
             }
@@ -1590,34 +1703,69 @@ namespace ARS
             {
                 if (showTrack)
                 {
-                    DrawCornerChevrons(Brain.Corner);
+                    DrawRouteFollowLine();
                 }
             }
         }
 
-        void DrawCornerChevrons(Corner corner)
+        // Debug: three lines to the route-window sample nodes (car + velocity ÷ grip,
+        // midpoint, car + (velocity × 3) ÷ grip). The circumradius through these three
+        // positions gauges the route speed; the lines show where the window sits.
+        void DrawRouteFollowLine()
         {
-            if (corner == null || Lap <= 0) return;
-            CornerPoint c = corner.Point;
-            int startNode = (int)ARS.Clamp(c.Node - c.LengthStart, 0, ARS.TrackPoints.Count - 1);
-            int endNode = (int)ARS.Clamp(c.Node + c.LengthEnd, 0, ARS.TrackPoints.Count - 1);
+            float speed = Car.Velocity.Length();
+            int count = ARS.TrackPoints.Count;
+            if (count < 10) return;
 
-            Vector3 chevScale = new Vector3(ARS.TrackPoints[c.Node].TrackHalfWidth * 2.5f, 5, 5);
+            float grip = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
+            int o1 = (int)(speed / grip);        // start: car + velocity ÷ grip
+            int o3 = (int)(speed * 3f / grip);   // end: car + (velocity × 3) ÷ grip
+            if (o3 < o1 + 2) o3 = o1 + 2;
+            int o2 = o1 + (o3 - o1) / 2;         // middle: midpoint between 1 and 3
 
-            World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[startNode].Position, ARS.TrackPoints[startNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-            World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node].Position, ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
-            World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[endNode].Position, ARS.TrackPoints[endNode].Direction, new Vector3(90, 0, 0), chevScale, Color.Green);
+            int n1, n2, n3;
+            if (ARS.IsPointToPoint)
+            {
+                n1 = (int)ARS.Clamp(CurrentTrackPoint.Node + o1, 0, count - 1);
+                n2 = (int)ARS.Clamp(CurrentTrackPoint.Node + o2, 0, count - 1);
+                n3 = (int)ARS.Clamp(CurrentTrackPoint.Node + o3, 0, count - 1);
+            }
+            else
+            {
+                n1 = ((CurrentTrackPoint.Node + o1) % count + count) % count;
+                n2 = ((CurrentTrackPoint.Node + o2) % count + count) % count;
+                n3 = ((CurrentTrackPoint.Node + o3) % count + count) % count;
+            }
 
-            // Ramp-end corners get a red chevron on the apex so they're easy to spot: the car
-            // unweights at the sharp uphill-to-flat transition and needs extra braking margin.
-            if (c.RequiresEarlyBrake)
-                World.DrawMarker(MarkerType.ChevronUpx1, ARS.TrackPoints[c.Node].Position + new Vector3(0f, 0f, 4f), ARS.TrackPoints[c.Node].Direction, new Vector3(90, 0, 0), chevScale, Color.Red);
+            Vector3 from = Car.Position + new Vector3(0, 0, 0.6f);
+            int[] nodes = { n1, n2, n3 };
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 to = ARS.TrackPoints[nodes[i]].Position + new Vector3(0, 0, 0.6f);
+                ARS.DrawLine(from, to, Color.White);
+            }
 
-            // Text ~2m above the apex: corner radius + apex speed (single block, ~n~ newline)
-            Vector3 apexPos = ARS.TrackPoints[c.Node].Position;
-            ARS.DrawText(apexPos + new Vector3(0f, 0f, 2f),
-                "R ~b~" + c.Radius.ToString("0.0") + "~n~~o~SPD " + corner.Speed.ToString("0.0"),
-                Color.Blue, 0.4f);
+            // Red lines to the two held next apexes (the braking-plan targets).
+            if (NextApexNode >= 0)
+            {
+                Vector3 to = ARS.TrackPoints[NextApexNode].Position + new Vector3(0, 0, 0.6f);
+                ARS.DrawLine(from, to, Color.Red);
+            }
+            if (NextApexNode2 >= 0)
+            {
+                Vector3 to = ARS.TrackPoints[NextApexNode2].Position + new Vector3(0, 0, 0.6f);
+                ARS.DrawLine(from, to, Color.Red);
+            }
+            if (NextApexNode3 >= 0)
+            {
+                Vector3 to = ARS.TrackPoints[NextApexNode3].Position + new Vector3(0, 0, 0.6f);
+                ARS.DrawLine(from, to, Color.Red);
+            }
+            if (NextApexNode4 >= 0)
+            {
+                Vector3 to = ARS.TrackPoints[NextApexNode4].Position + new Vector3(0, 0, 0.6f);
+                ARS.DrawLine(from, to, Color.Red);
+            }
         }
 
         void DrawInputTrails()
@@ -1790,40 +1938,325 @@ namespace ARS
 
 
 
-            Brain.CurrentPerception.CurveRadiusToFollowPoint = ComputeRouteRadius(RouteWindowStart, RouteWindowSize);
+            // Route radius: circumradius through three sample points — car + velocity ÷ grip,
+            // midpoint, car + (velocity × 3) ÷ grip. The arc over that window gauges route speed.
+            Brain.CurrentPerception.CurveRadiusToFollowPoint = RouteRadiusSampled();
+            // The two next precomputed apexes (ARS.Corners), nearest first — braking-plan targets.
+            UpdateNextApexes();
             // High-speed lane radius: short 0.5s→1.0s window so the inside-edge pursuit gain
             // reacts to the imminent corner, not the long approach.
-            Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius(RouteWindowStart, 0.5f);
-            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius(RouteWindowStart + RouteWindowSize, RouteWindowSize); // NEVER USED — kept for future "two conflicting corners" work
+            Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius((int)(Car.Velocity.Length() * 0.5f), (int)(Car.Velocity.Length() * 1.0f));
+            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius((int)(Car.Velocity.Length() * 2.5f), (int)(Car.Velocity.Length() * 4.5f)); // NEVER USED — kept for future "two conflicting corners" work
         }
 
-        float ComputeRouteRadius(float windowStart, float windowSize)
+        // Route radius: three points — car + velocity ÷ grip, car + (velocity × 3) ÷ grip,
+        // and the true midpoint between them. The circumradius through those three points'
+        // positions is the curve the track describes over that window, and the route speed
+        // is gauged from it.
+        float RouteRadiusSampled()
         {
-            float routeSpeed = Car.Velocity.Length();
+            float speed = Car.Velocity.Length();
             int count = ARS.TrackPoints.Count;
-            int startOffset = CurrentTrackPoint.Node + (int)(routeSpeed * windowStart);
-            int endOffset = CurrentTrackPoint.Node + (int)(routeSpeed * (windowStart + windowSize));
+            if (count < 10) return 999f;
+
+            float grip = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
+            int o1 = (int)(speed / grip);        // start: car + velocity ÷ grip
+            int o3 = (int)(speed * 3f / grip);   // end: car + (velocity × 3) ÷ grip
+            if (o3 < o1 + 2) o3 = o1 + 2;
+            int o2 = o1 + (o3 - o1) / 2;         // middle: midpoint between 1 and 3
+
+            int n1, n2, n3;
+            if (ARS.IsPointToPoint)
+            {
+                n1 = (int)ARS.Clamp(CurrentTrackPoint.Node + o1, 0, count - 1);
+                n2 = (int)ARS.Clamp(CurrentTrackPoint.Node + o2, 0, count - 1);
+                n3 = (int)ARS.Clamp(CurrentTrackPoint.Node + o3, 0, count - 1);
+            }
+            else
+            {
+                n1 = ((CurrentTrackPoint.Node + o1) % count + count) % count;
+                n2 = ((CurrentTrackPoint.Node + o2) % count + count) % count;
+                n3 = ((CurrentTrackPoint.Node + o3) % count + count) % count;
+            }
+
+            // Circumradius through the three sample positions (endpoints n1/n3, midpoint n2).
+            float r = ARS.Circumradius3D(ARS.TrackPoints[n1].Position, ARS.TrackPoints[n3].Position, ARS.TrackPoints[n2].Position);
+            if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
+            return ARS.Clamp(r, 5f, 999f);
+        }
+
+        // The braking plan must reach the corner speed this many seconds (measured at the corner
+        // speed) before the apex, then coast the rest of the way at corner speed.
+        const float ApexBufferSeconds = 2f;
+
+        // Refresh the four next apexes from the precomputed table: the four corners in
+        // ARS.Corners with the smallest forward distance ahead of the car, nearest first.
+        // The table is static, so the nearest stays the nearest until passed — then the next
+        // takes its place and a new one enters. Always four at hand, no lock/re-arm bookkeeping.
+        // The nearest apex also instances Brain.Corner so the corner-driven systems (outside
+        // approach, corner crest/dip, 2s gate) have a target again.
+        void UpdateNextApexes()
+        {
+            Brain.Corner = null; // re-instanced below from the nearest apex when one is ahead
+
+            NextApexNode = -1;
+            NextApexRadius = 999f;
+            NextApexSpeed = 999f;
+            NextApexNode2 = -1;
+            NextApexRadius2 = 999f;
+            NextApexSpeed2 = 999f;
+            NextApexNode3 = -1;
+            NextApexRadius3 = 999f;
+            NextApexSpeed3 = 999f;
+            NextApexNode4 = -1;
+            NextApexRadius4 = 999f;
+            NextApexSpeed4 = 999f;
+
+            int count = ARS.TrackPoints.Count;
+            if (count < 10 || ARS.Corners.Count == 0) return;
+
+            // Collect the four nearest apexes ahead (smallest forward distance).
+            int[] best = { -1, -1, -1, -1 };
+            int[] bestD = { int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue };
+            for (int i = 0; i < ARS.Corners.Count; i++)
+            {
+                int d = ForwardNodeDistance(ARS.Corners[i].Node);
+                if (d <= 0) continue; // at/past this apex
+                // Insert into the sorted best[] if closer than the current worst slot.
+                for (int slot = 0; slot < 4; slot++)
+                {
+                    if (d < bestD[slot])
+                    {
+                        // Shift the worse slots down to make room.
+                        for (int s = 3; s > slot; s--)
+                        {
+                            bestD[s] = bestD[s - 1];
+                            best[s] = best[s - 1];
+                        }
+                        bestD[slot] = d;
+                        best[slot] = i;
+                        break;
+                    }
+                }
+            }
+
+            if (best[0] >= 0)
+            {
+                NextApexNode = ARS.Corners[best[0]].Node;
+                NextApexRadius = ARS.Corners[best[0]].SupposedRadius;
+                NextApexSpeed = RouteIdealSpeedForRadius(NextApexRadius);
+
+                // Instance the corner for the steering/speed consumers: node, track angle
+                // (signed corner direction), the table radius, and the per-car apex speed.
+                CornerPoint cp = new CornerPoint();
+                cp.Node = NextApexNode;
+                cp.Angle = ARS.TrackPoints[NextApexNode].Angle;
+                cp.SupposedRadius = NextApexRadius;
+                cp.Speed = NextApexSpeed;
+                Brain.Corner = new Corner(cp.Speed, cp);
+            }
+            if (best[1] >= 0)
+            {
+                NextApexNode2 = ARS.Corners[best[1]].Node;
+                NextApexRadius2 = ARS.Corners[best[1]].SupposedRadius;
+                NextApexSpeed2 = RouteIdealSpeedForRadius(NextApexRadius2);
+            }
+            if (best[2] >= 0)
+            {
+                NextApexNode3 = ARS.Corners[best[2]].Node;
+                NextApexRadius3 = ARS.Corners[best[2]].SupposedRadius;
+                NextApexSpeed3 = RouteIdealSpeedForRadius(NextApexRadius3);
+            }
+            if (best[3] >= 0)
+            {
+                NextApexNode4 = ARS.Corners[best[3]].Node;
+                NextApexRadius4 = ARS.Corners[best[3]].SupposedRadius;
+                NextApexSpeed4 = RouteIdealSpeedForRadius(NextApexRadius4);
+            }
+        }
+
+        // Braking map (mapidealspeed) toward one apex: v = √(vApex² + 2·a·d) over the usable
+        // distance (apex distance minus the coast reserve). The reserve is 1s at corner speed,
+        // pressure-scaled (0 pressure = brake earlier, 100 = brake later), and divebomb shortens
+        // it further so the car carries more entry speed. Continuous — tightens as the apex
+        // approaches, releases once the apex is behind. The lower result across the two held
+        // apexes is the truly slowest constraint: if the second corner is slow enough that it
+        // demands earlier braking, it wins.
+        float ApexBrakingSpeed(int apexNode, float apexSpeed)
+        {
+            if (apexNode < 0) return 999f;
+            float velTarget = apexSpeed;
+            float coastReserve = velTarget * ApexBufferSeconds;
+            // Pressure scales the coast reserve: 0 pressure = x1.2 (brake earlier, cautious),
+            // 100 pressure = x0.8 (brake later, aggressive).
+            coastReserve *= ARS.Remap(Pressure, 100f, 0f, 0.8f, 1.2f, true);
+            // Divebomb: reduce the reserve so the car brakes later and carries more entry
+            // speed into the corner — the whole point of the maneuver.
+            if (ActiveManeuver.Type == ManeuverType.DiveBomb) coastReserve *= 0.8f;
+
+            float rawDistance = ForwardNodeDistance(apexNode);
+            if (rawDistance < 0f) rawDistance = 0f;
+            float distance = rawDistance - coastReserve;
+            if (distance < 0f) distance = 0f;
+
+            float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
+            float decel = brakingAbility * Handling.Gravity;
+            // Yielding cars perceive half the deceleration, so they brake earlier.
+            if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
+
+            float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
+            if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
+            return spd;
+        }
+
+        // Route braking-target probe: the single 5s lookahead node. As the car drives, the probe
+        // sweeps forward along the track; we watch the precise radius there. While it shrinks we
+        // remember the tightest node read; the moment it stops shrinking and starts rising again,
+        // the remembered node is the corner's APEX — we lock it and brake to its ideal speed.
+        // After crossing it, the probe re-arms. That's the whole detector — no regions, no edges.
+        const float RouteProbeSeconds = 5f; // the single lookahead distance
+
+        // Probe tracking state (persists across cores while scanning — that persistence IS the
+        // detector; reset only when re-arming after a crossing, or at launch).
+        int _probeLastNode = -1;
+        float _probeLastRadius = 999f;
+        bool _probeShrinking = false;
+        bool _probeInitialized = false;
+        int _probeMinNode = -1;
+        float _probeMinRadius = 999f;
+
+        void ResetRouteProbe()
+        {
+            _probeLastNode = -1;
+            _probeLastRadius = 999f;
+            _probeShrinking = false;
+            _probeInitialized = false;
+            _probeMinNode = -1;
+            _probeMinRadius = 999f;
+        }
+
+        void UpdateRouteTarget()
+        {
+            // Hold the locked target until its node is crossed.
+            if (RouteTargetNode >= 0 && CurrentTrackPoint.Node <= RouteTargetNode)
+                return;
+
+            // Re-arm — only when a target was actually held and is now crossed. (When there is no
+            // target at all, the probe state must persist across cores or the sweep can never
+            // observe a shrink-then-rise.)
+            if (RouteTargetNode >= 0)
+            {
+                RouteTargetNode = -1;
+                RouteTargetRadius = 999f;
+                ResetRouteProbe();
+            }
+
+            float speed = Car.Velocity.Length();
+            int count = ARS.TrackPoints.Count;
+            if (speed < 1f || count < 10) return;
+
+            // The single probe: the node 5s ahead.
+            int probeNode = CurrentTrackPoint.Node + (int)(speed * RouteProbeSeconds);
+            if (ARS.IsPointToPoint)
+                probeNode = (int)ARS.Clamp(probeNode, 0, count - 1);
+            else
+                probeNode = ((probeNode % count) + count) % count;
+
+            float r = ARS.TrackPoints[probeNode].PreciseCurveRadius;
+            if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
+            r = ARS.Clamp(r, 5f, 999f);
+
+            // First read after arming: just baseline it — it is not yet a "shrink".
+            if (!_probeInitialized)
+            {
+                _probeInitialized = true;
+                _probeLastNode = probeNode;
+                _probeLastRadius = r;
+                _probeMinNode = probeNode;
+                _probeMinRadius = r;
+                return;
+            }
+
+            // Only judge the profile when the probe actually advanced along the track (a speed
+            // drop can pull the probe node backwards; the circuit seam makes it wrap for one core).
+            bool advanced = probeNode > _probeLastNode;
+            if (advanced)
+            {
+                if (r < _probeLastRadius)
+                {
+                    // Still shrinking — remember the tightest node seen.
+                    _probeShrinking = true;
+                    if (r < _probeMinRadius) { _probeMinRadius = r; _probeMinNode = probeNode; }
+                }
+                else if (_probeShrinking)
+                {
+                    // Local slope at the probe: node, node+1. If the next node is larger in
+                    // radius, the descent ended here — the remembered minimum is the apex. A
+                    // single jitter can't lock early because the probe must still be shrinking
+                    // (it compares consecutive reads); once we're on the rising side, this fires.
+                    int nextNode = probeNode + 1;
+                    if (ARS.IsPointToPoint)
+                        nextNode = (int)ARS.Clamp(nextNode, 0, count - 1);
+                    else
+                        nextNode = ((nextNode % count) + count) % count;
+
+                    float nextR = ARS.TrackPoints[nextNode].PreciseCurveRadius;
+                    if (float.IsNaN(nextR) || float.IsInfinity(nextR)) nextR = 999f;
+                    nextR = ARS.Clamp(nextR, 5f, 999f);
+
+                    if (nextR > r)
+                    {
+                        RouteTargetNode = _probeMinNode;
+                        RouteTargetRadius = _probeMinRadius;
+                        return;
+                    }
+                }
+            }
+
+            _probeLastNode = probeNode;
+            _probeLastRadius = r;
+            if (!_probeShrinking)
+            {
+                _probeMinNode = probeNode;
+                _probeMinRadius = r;
+            }
+        }
+
+        // Ideal (maximum) speed for a radius: the centripetal limit, straight from the radius.
+        float RouteIdealSpeedForRadius(float r)
+        {
+            if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
+            r = ARS.Clamp(r, 5f, 999f);
+            return (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * r);
+        }
+
+        float ComputeRouteRadius(int startOffset, int endOffset)
+        {
+            int count = ARS.TrackPoints.Count;
             int routeStartNode, routeEndNode, routeMidNode;
             if (ARS.IsPointToPoint)
             {
-                routeStartNode = (int)ARS.Clamp(startOffset, 0, count - 1);
-                routeEndNode = (int)ARS.Clamp(endOffset, 0, count - 1);
+                routeStartNode = (int)ARS.Clamp(CurrentTrackPoint.Node + startOffset, 0, count - 1);
+                routeEndNode = (int)ARS.Clamp(CurrentTrackPoint.Node + endOffset, 0, count - 1);
                 routeMidNode = (int)((routeStartNode + routeEndNode) * 0.5f);
             }
             else
             {
-                routeStartNode = ((startOffset % count) + count) % count;
-                routeEndNode = ((endOffset % count) + count) % count;
+                routeStartNode = ((CurrentTrackPoint.Node + startOffset) % count + count) % count;
+                routeEndNode = ((CurrentTrackPoint.Node + endOffset) % count + count) % count;
                 int span = ((endOffset - startOffset) % count + count) % count;
                 if (span == 0) return 999f;
-                routeMidNode = (((startOffset + span / 2) % count) + count) % count;
+                routeMidNode = (((CurrentTrackPoint.Node + startOffset + span / 2) % count) + count) % count;
             }
 
             if (routeEndNode == routeStartNode) return 999f;
+            // The three window points (start/mid/end) lie on the road's arc; their circumradius IS
+            // the arc's radius. No /2 scaling — dividing made steady corners read ~half their real
+            // radius, so the route speed ran ~29% below the true centripetal limit.
             return ARS.Circumradius3D(
                 ARS.TrackPoints[routeStartNode].Position,
                 ARS.TrackPoints[routeEndNode].Position,
-                ARS.TrackPoints[routeMidNode].Position) / 2f;
+                ARS.TrackPoints[routeMidNode].Position);
         }
 
 
@@ -1896,6 +2329,22 @@ namespace ARS
 
                 ComputeTargetSpeed();
                 ComputeSteering();
+
+                // Two-wheel stability: if both left or both right wheels are off the ground,
+                // steer into that side to bring all four wheels back down.
+                {
+                    List<bool> wg = ARS.WheelsOnGround(Car);
+                    if (wg.Count >= 4)
+                    {
+                        bool leftDown = wg[0] && wg[2];
+                        bool rightDown = wg[1] && wg[3];
+                        if (!leftDown && rightDown)
+                            Control.SteerDegrees = -VehicleData.SteeringLock; // steer left
+                        else if (!rightDown && leftDown)
+                            Control.SteerDegrees = VehicleData.SteeringLock;  // steer right
+                    }
+                }
+
                 ApplySteerLimits();
 
                 ConvertSpeedToPedals();
@@ -2037,6 +2486,24 @@ namespace ARS
 
         void ApplyStuckRecoveryOverride()
         {
+            // Smooth lerp to track edge — runs every frame while active, independent of the
+            // reverse-rock recovery. Once the lerp completes, the car is on-track and left alone.
+            if (_isLerpingToTrack)
+            {
+                float elapsed = Game.GameTime - _lerpStartTime;
+                float t = ARS.Clamp(elapsed / LerpToTrackMs, 0f, 1f);
+                // Smoothstep for ease-in/ease-out.
+                float smooth = t * t * (3f - 2f * t);
+                Car.Position = _lerpStartPos + (_lerpTargetPos - _lerpStartPos) * smooth;
+                Car.Velocity = Vector3.Zero; // hold still while lerping
+                if (t >= 1f)
+                {
+                    _isLerpingToTrack = false;
+                    _lerpStartTime = 0;
+                }
+                return; // skip the reverse-rock while lerping
+            }
+
             if (!_isRecoveringFromStuck) return;
 
             if (Game.GameTime >= _stuckRecoveryEndTime)
@@ -2057,13 +2524,20 @@ namespace ARS
         {
             if (_stuckRecoveryAttempts < 2) return;
 
+            // Smooth lerp to the track edge instead of the old velocity punt.
+            // Target: the nearest point on the track centerline, clamped to just inside the edge.
             Vector3 toTrack = CurrentTrackPoint.Position - Car.Position;
-            if (toTrack.Length() < 0.01f) toTrack = Car.ForwardVector;
+            if (toTrack.Length() < 0.01f) return; // already on the centerline, nothing to do
 
-            Vector3 nudgedVelocity = toTrack.Normalized * ARS.MphToMps(30f);
-            nudgedVelocity.Z += 30f;
-            Car.Velocity = nudgedVelocity;
-
+            // Find the direction from track center to the car, place the target at the track
+            // edge on that side (just inside), so the car ends up on-track but not yanked to center.
+            Vector3 trackRight = Vector3.Cross(CurrentTrackPoint.Direction, Vector3.WorldUp).Normalized;
+            float sideOffset = Vector3.Dot(Car.Position - CurrentTrackPoint.Position, trackRight);
+            float edgeOffset = Math.Sign(sideOffset) * (CurrentTrackPoint.TrackHalfWidth - 1f);
+            _lerpTargetPos = CurrentTrackPoint.Position + trackRight * edgeOffset;
+            _lerpStartPos = Car.Position;
+            _lerpStartTime = Game.GameTime;
+            _isLerpingToTrack = true;
         }
 
         void UpdatePerceivedGrip()
@@ -2077,6 +2551,17 @@ namespace ARS
 
             VehicleData.BaseMechanicalGrip = handlingGrip;
             VehicleData.CurrentMechanicalGrip = ((VehicleData.BaseMechanicalGrip) * GroundGripMultiplier);
+
+            // Stability: if not all wheels are on the ground, reduce max throttle at 0.5/s.
+            // Checked at 3 Hz. Max throttle recovers on its own (2/s in ConvertSpeedToPedals).
+            if (Game.GameTime - _lastStabilityCheck >= 333) // ~3 Hz
+            {
+                _lastStabilityCheck = Game.GameTime;
+                List<bool> wheelsOnGround = ARS.WheelsOnGround(Car);
+                bool allDown = wheelsOnGround.Count > 0 && wheelsOnGround.All(w => w);
+                if (!allDown)
+                    Control.MaxThrottle = Math.Max(Control.MaxThrottle - 0.5f * TickScale, 0.1f);
+            }
 
         
             if (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) < CurrentTrackPoint.TrackHalfWidth && RacePosition <= 2 && !ARS.TerrainGripMultipliers.ContainsKey(CurrentTrackPoint.Node))

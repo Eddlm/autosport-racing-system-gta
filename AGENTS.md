@@ -58,20 +58,21 @@ Design rules:
 - **`cornerSpd`** — the "ballpark": kinematic braking plan `√(v²+2·a·d)` targeting the **apex speed**, distance to the **apex node**, plus a flat +5 m/s offset.
 - **`followTrackSpd`** — the "precise": route curvature `√(g·grip·radius)` from the speed-based lookahead window, plus a flat +5 m/s offset and pressure overspeed.
 - **Slope grip loss is TEMPORARILY DISABLED** for speed tuning. The slope-grip factor (applied to corner and route speed) is commented out in `ComputeTargetSpeed`. Re-enable when tuning is settled. The crest/dip vertical curvature factor (route speed only) is re-enabled.
-- **`Intention.Speed` = min(cornerSpd, followTrackSpd)**, then clamped by engine top speed, `MaxSpeed`, and `_speedCap`.
+- **Hill/crest grip floors**: `HillGripMin` and the crest/dip vertical grip factors are all floored at 0.8 — hills and crests can never remove more than 20% of grip. (Previously could zero out corner speed at sharp crests.)
+- **`Intention.Speed` = min(cornerSpd, followTrackSpd)**, then clamped by engine top speed, `MaxSpeed`, and `_speedCap`. The pressure speed bias (a post-min `±2 m/s` nudge) is **commented out** for late-braking isolation testing — re-enable when root cause is confirmed.
+- **Pedal gain**: speed error (in Gs) → pedals uses `* 1f` (1 G = full throttle/brake). Was `* 5f` (0.2 G saturated) — the old gain caused over-braking.
 - **Two cap domains, deliberately split:**
   - `_accelerationCap` (input domain, ±1): throttle/brake scalar from avoidance (rival-distance smooth map). Lifts/brakes proportionally; only lowers via `Math.Min`.
   - `_speedCap` (speed domain, m/s): the projection off-track source pins it at most to the corner speed, then deducts **incrementally** (per-second rate, not an instant pin) so a single frame of air/off-track doesn't slam the cap.
 - **Asymmetry is by design**: corner is the loose target, route is the tight one. Do not add flat offsets to `followTrackSpd` to "balance" them.
 - **High-grip cars don't respond to braking-side tuning**: their braking is so strong that the braking plan rarely binds — route-curvature speed control wins. Adjustments that act on the braking plan barely register on them; tune the route-speed side instead.
 
-## Corner lifecycle (live, per-racer — no generation-time corner table)
-1. **No corners are precomputed.** `GenerateRouteInfo` builds only per-node geometry (`TrackPoint` position, direction, half-width, elevation, angle, general/precise curve radius) — the corner list and the bezier raceline (`NodeLaneOffsets`) were removed entirely.
-2. **Rolling chunk scan** (`FindNextCorner`, in the timed core): each racer holds a scan head (`Racer.CornerScanNode`, the last node checked) and checks a small fixed chunk of nodes per core (10/core → ~1000 nodes/sec). A potential corner is a node whose **precise curve radius** is below the threshold AND is a local curvature peak (±5 neighbors larger) — the tightest point, not the entry.
-3. **Resume offset**: when an apex is passed, the scan head jumps to the node **5s of travel after that apex** (at the apex speed) instead of the next node — corners inside the first 5s after an apex belong to the just-passed corner's exit zone and are never re-instanced. Only the very first scan starts just ahead of the car.
-4. **Define + instance + keep**: on detection, a racer-owned `CornerPoint` (`Racer.LiveCorner`) is filled with node, angle, spans, radius (min precise radius over the span), apex speed (from radius + the car's grip/gravity), crest Gs (vertical curvature at the apex at that speed) and the lip flag — then `Brain.Corner` holds it until the apex is passed.
-5. **Apex**: once passed, the corner speed guard releases and the rolling scan resumes. Circuits wrap the head; point-to-point clamps.
-6. All downstream consumers (braking plan, outside-approach lane, divebomb/defend, lip braking, chevrons, crest-at-apex) are unchanged — they only read `Brain.Corner.Point`.
+## Corner lifecycle (precomputed apex table + four held targets)
+1. **Apex table at generation time** (`BuildApexCorners`, end of `GenerateRouteInfo`): a second pass walks the track **sequentially in chunks**; in each chunk the node with the **smallest precise curve radius** is the chunk's apex, kept **only if its radius is under a corner limit**. Each `CornerPoint` in `ARS.Corners` carries only the node, that radius, and a tentative 1g corner speed (`√(g·r)`). Nothing else — no spans, angles, thresholds. (Earlier local-minimum criteria over ±1 then ±4 neighbors produced ~every node as a corner on noisy recorded tracks; the chunked pass fixed it.)
+2. **Four held targets per racer** (`UpdateNextApexes`, each timed core): the **4 nearest apexes ahead** from the static table (smallest forward distances), refreshed every core — no scan window, no lock/re-arm bookkeeping. The nearest stays the nearest until passed, then the next slides into its place and a new one enters: **always 4 at hand**. Per-car apex speed = `√(grip · gravity · radius)`.
+3. **Braking map (ApexBrakingSpeed)**: each held apex feeds the kinematic map `v = √(vApex² + 2·a·d)` over the usable distance (apex distance minus a buffer of `ApexBufferSeconds` × corner speed). `cornerSpd = min(map(apex1..4))` — whichever corner demands the lowest speed wins. The buffer is pressure-scaled (0 pressure = brake earlier, 100 = later) and divebomb shortens it further.
+4. **Route-speed split**: the near window (three sample points car+velocity÷grip / midpoint / car+(velocity×3)÷grip, circumradius through them) gauges `followTrackSpd` and is the authority for **sweeping corners**; the four-apex braking map handles tight ("killer") corners from far away. `Intention.Speed = min(cornerSpd, followTrackSpd)`. The route speed is **no longer gated off** near the apex — both speeds always run and the min governs (the old 2s gate caused unawareness in complex curves).
+5. The old live per-racer rolling scan (`FindNextCorner`, `Brain.Corner`) and the far-killer 4s→8s window scan are **superseded and dormant** — `Brain.Corner` consumers (outside-approach lane, divebomb/defend, chevrons) still read it when a corner is instanced, but nothing instances corners anymore.
 
 Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point clamps.
 
@@ -93,7 +94,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 ## Debug (LemonUI Debug submenu)
 - **ShowInputs** — per-car speed readout (current/intended, corner/route speed, `_speedCap`/`_accelerationCap`) + pedal trail.
 - **ShowTrackAnalysis** — lane-aim spheres to the final target, track-ahead radius, wall lines, corner chevrons.
-- **ShowAggro** — pressure chevron/text + 1s projection (white line/sphere, red when off-track).
+- **ShowAggro** — pressure chevron/text + 0.5s and 1s projections (white line/sphere, red when off-track).
 - **ShowPhysics** — G-force sphere/vector.
 
 ## Durable gotchas — do not "fix" these
@@ -108,5 +109,9 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - Corner hugging (inside-line hold through the apex) still being evaluated.
 - Pressure-driven lookahead: reverted; hardcoded window pending investigation.
 - Grid car selection: **now implemented as power-matched selection** (see the "Grid car selection" section below). See `grid_rework.md` for the earlier performance-bracket brainstorm.
-- **Stability awareness**: wheels off the ground = unstable → the car should drive more carefully (lift-off/unweighting should bias speed down beyond the current crest/dip factor). No implementation yet.
+- **Stability awareness**: **now implemented** — two rules: (1) if both left or both right wheels are off the ground, steer into that side to regain all four wheels; (2) if not all wheels are on the ground (3 Hz check), reduce `MaxThrottle` at 0.5/s (floors at 0.1, recovers on its own at 2/s). Also: if steer angle exceeds the grip-based limit by 10º, reduce `MaxThrottle` at 1/s (same floor/recovery).
+- **Stuck recovery**: the old velocity punt (setting `Car.Velocity` to throw the car toward the track) is **replaced** with a smooth position lerp to the track edge over 1.5s (smoothstep). Triggers on the 3rd+ recovery attempt instead of the punt.
+- **TCS**: simplified to a P-controller on `MaxThrottleFromTCS` targeting ideal wheelspin (-1). Max 0.5 on-track, 0.15 off-track (`OutOfTrackDistance() > 0`). Wheelspin is signed: negative = spin, positive = lockup.
+- **Projection off-track throttle kill**: if either the 0.5s or 1s projection is off-track, `MaxThrottle = 0` — but only above 20 m/s and steering > 10º (below that the car needs throttle to recover).
+- **Steering limit**: multiplier mapped to throttle (0 throttle = 1.0, full = 0.8). Lateral traction curve floor at 0.5.
 - **Prevent rear-ends**: cars need to brake before hitting the car ahead from behind, and avoid leaning on each other — specifically, the *inside* car should brake to close its own trajectory in (don't rely on the outside car to open up). No implementation yet.
