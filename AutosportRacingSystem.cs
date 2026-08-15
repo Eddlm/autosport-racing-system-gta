@@ -50,6 +50,7 @@ namespace ARS
 
         public static List<string> KnownTracks = new List<string>();
         public static List<Model> KnownVehicleModels = new List<Model>();
+        public static Dictionary<string, float> ModelPowerCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         public static int RaceReward = 0;
 
         public static ScriptSettings SettingsFile;
@@ -178,6 +179,7 @@ namespace ARS
             else
             {
                 
+                BuildPowerCache();
                 FillCachedCandidates(DisciplineFilter, _intendedOpponents, true);
                 Log(LogImportance.Info, "Initialization complete.", true);
                 DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
@@ -357,6 +359,7 @@ namespace ARS
         {
             _racerTagLookup.Clear();
             KnownVehicleModels.Clear();
+            ModelPowerCache.Clear();
             Log(LogImportance.Info, "-------------");
             Log(LogImportance.Info, "Learning available disciplines...");
             List<string> folders = Directory.GetDirectories(@"scripts\ARS\Vehicles").ToList();
@@ -393,6 +396,42 @@ namespace ARS
             Log(LogImportance.Info, "Done.");
             Log(LogImportance.Info, "-------------");
 
+        }
+
+        // Called on the main script thread (NOT from the background load task).
+        // GTA natives are not safe to call off the main thread, so we fill the
+        // modelName -> power cache here rather than during the XML scan.
+        public void BuildPowerCache()
+        {
+            ModelPowerCache.Clear();
+
+            int carsLogged = 0;
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string filename in _racerTagLookup.Keys)
+            {
+                // GetRacerModel returns the //Model InnerText, which is the
+                // numeric hash in these XML files (e.g. "-1045541610"), NOT the
+                // model name. Build the Model from that parsed int hash.
+                string innerText = GetRacerModel(filename);
+                if (string.IsNullOrWhiteSpace(innerText) || !seen.Add(innerText)) continue;
+
+                int hash;
+                if (!int.TryParse(innerText, out hash)) continue;
+
+                Model m = new Model(hash);
+                if (!m.IsCar || !m.IsValid) continue; // power native is for road cars only
+
+                // Native expects the int model hash, not the Model object.
+                try
+                {
+                    float power = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, m.Hash);
+                    ModelPowerCache[innerText] = power;
+                    carsLogged++;
+                    Log(LogImportance.Info, "Power for " + innerText + " (" + m.ToString() + "): " + power.ToString("0.####"));
+                }
+                catch (Exception) { /* skip unreadable model power */ }
+            }
+            Log(LogImportance.Info, "BuildPowerCache: cached power for " + carsLogged + " road cars.");
         }
 
         public static float SignedLaneOffset(Vector3 pos, Vector3 refPoint, Vector3 refDir)
@@ -4353,78 +4392,39 @@ namespace ARS
         {
             _cachedCandidates.Clear();
 
-            List<string> disciplinesArray = dlist.Split(' ').ToList();
-            List<string> optionals = new List<string>();
-            List<string> required = new List<string>();
-            List<string> banned = new List<string>();
-            List<string> priority = new List<string>();
+            // Power-matched grid: ignore the discipline filter entirely for now.
+            // Reference power is hardcoded for testing; candidates are those whose
+            // cached power (GET_VEHICLE_MODEL_ACCELERATION, model-hash only) is
+            // within this tolerance of the reference.
+            const float PowerTolerance = 0.1f;
+            const float ReferencePower = 0.3f;
 
+            Log(LogImportance.Info, "Reference power: " + ReferencePower.ToString("0.####") + "  (tolerance " + PowerTolerance + ")");
 
-            for (int i = 0; i < disciplinesArray.Count; i++)
-            {
-                if (disciplinesArray[i].Contains("+"))
-                {
-                    disciplinesArray[i] = disciplinesArray[i].Replace("+", "");
-                    required.Add(disciplinesArray[i].ToLowerInvariant());
-                }
-                else if (disciplinesArray[i].Contains("-"))
-                {
-                    disciplinesArray[i] = disciplinesArray[i].Replace("-", "");
-                    banned.Add(disciplinesArray[i].ToLowerInvariant());
-                }
-                else if (disciplinesArray[i].Contains("*"))
-                {
-                    
-                    disciplinesArray[i] = disciplinesArray[i].Replace("*", "");
-                    priority.Add(disciplinesArray[i].ToLowerInvariant());
-                }
-                else
-                {
-                    optionals.Add(disciplinesArray[i].ToLowerInvariant());
-                }
-            }
-
-            XmlDocument xmlFile = new XmlDocument();
-            List<XmlDocument> files = new List<XmlDocument>();
             List<XmlDocument> candidates = new List<XmlDocument>();
 
-            Dictionary<XmlDocument, float> racerToStats = new Dictionary<XmlDocument, float>();
-            List<string> approved = new List<string>();
-            List<string> haspriority = new List<string>();
             int cooldown = 0;
-            if (dlist.Length > 0)
             {
-                Log(LogImportance.Info, "Looking up racers that fit the " + dlist + " criteria...");
-
-                foreach (string racerfile in _racerTagLookup.Keys)
+                foreach (KeyValuePair<string, string> kv in _racerTagLookup)
                 {
+                    string filename = kv.Key;
+                    string model = GetRacerModel(filename);
 
-                    bool fitsOptionals = optionals.Count == 0;
-                    bool fitsBanned = false;
-                    bool fitsRequired = false;
-                    bool fitspriority = false;
-                    int reqscore = 0;
-
-                    foreach (string racerTag in _racerTagLookup[racerfile].Split(' '))
+                    float cachedPower;
+                    if (!string.IsNullOrWhiteSpace(model) && ModelPowerCache.TryGetValue(model, out cachedPower))
                     {
-                        
-                        foreach (string partial in optionals) if (racerTag.Contains(partial)) fitsOptionals = true;
-                        foreach (string req in required) if (racerTag == req) { Log(LogImportance.Info, racerfile + " fits  " + req + ""); reqscore++; }
-                        foreach (string pri in priority) if (pri.Contains(racerTag) || racerTag.Contains(pri)) { fitspriority = true; }
-                        if (banned.Contains(racerTag))
+                        if (Math.Abs(cachedPower - ReferencePower) <= PowerTolerance)
                         {
-                            fitsBanned = true;
-                            break;
+                            XmlDocument xmlFile = new XmlDocument();
+                            try
+                            {
+                                xmlFile.Load(filename);
+                                candidates.Add(xmlFile);
+                            }
+                            catch (Exception) { /* skip unreadable file */ }
                         }
                     }
-                    if (reqscore == required.Count) fitsRequired = true;
 
-                    if (!fitsBanned && ((fitsOptionals && fitsRequired)))
-                    {
-                        Log(LogImportance.Info, System.IO.Path.GetFileName(racerfile) + " fits the criteria.");
-                        approved.Add(racerfile);
-                        if (fitspriority) haspriority.Add(racerfile);
-                    }
                     cooldown++;
                     if (allowScriptYield && cooldown > 20)
                     {
@@ -4433,58 +4433,9 @@ namespace ARS
                     }
                 }
 
+                Log(LogImportance.Info, "Power-matched candidates: " + candidates.Count);
 
-                foreach (string filename in approved)
-                {
-xmlFile.Load(filename);
-
-                        string m = "";
-                        if (GetChild(xmlFile, "//Model") != null) m = GetChild(xmlFile, "//Model").InnerText;
-
-                        {
-
-                            int n = 0;
-                            int.TryParse(m, out n);
-                            Model model = new Model(n);
-                            if (model.IsValid)
-                            {
-
-
-
-                                if (haspriority.Contains(filename))
-                                {
-                                    Log(LogImportance.Info, "added priority reminder");
-
-                                    XmlNode donot = xmlFile.CreateElement("priority");
-                                    if (GetChild(xmlFile, "Vehicle") != null) GetChild(xmlFile, "Vehicle").AppendChild(donot);
-                                }
-                                candidates.Add(xmlFile);
-
-                                float stats = Function.Call<float>((Hash)0xF417C2502FFFED43, model) / 100;
-                                stats += Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model);
-                                stats += Function.Call<float>(Hash.GET_VEHICLE_MODEL_MAX_TRACTION, model) / 2;
-                                racerToStats.Add(xmlFile, stats);
-                            }
-                            else
-                            {
-
-                                Log(LogImportance.Info, n + " in " + filename + " is not a valid model. Its probably just not installed in this machine.");
-
-                            }
-                        }
-                    xmlFile = new XmlDocument();
-                }
-                Log(LogImportance.Info, "Vehicles found: " + candidates.Count);
-
-                candidates.Clear();
-
-
-                foreach (var item in racerToStats.OrderBy(r => r.Value))
-                {
-                    candidates.Add(item.Key);
-                }
-
-                // Pick maxcars random candidates from the qualified pool instead of always the fastest
+                // Pick maxcars random candidates from the qualified pool.
                 if (candidates.Count > maxcars)
                 {
                     // Fisher-Yates shuffle
@@ -4500,15 +4451,8 @@ xmlFile.Load(filename);
                 }
                 else
                 {
-                    Log(LogImportance.Info, "Vehicles sorted by top speed.");
+                    Log(LogImportance.Info, "Using all power-matched candidates.");
                 }
-
-
-            }
-            else
-            {
-                Log(LogImportance.Info, "The discipline criteria is empty. Skipping the vehicle lookup.");
-
             }
 
             if (maxcars > -1)

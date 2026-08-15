@@ -3,11 +3,15 @@
 Source: `F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem`
 Target: C# / .NET Framework 4.8 / ScriptHookVDotNet 2
 
+## Persistent cross-session memory for the agent
+**This file is the agent's long-term memory.** The agent has no memory between sessions, so this doc is the durable record it must rely on. **Aggressively save durable memories here**: quirks of the code, non-obvious design decisions and their *why*, high-level concepts, invariants, override order, workflow rules, architecture intent. **Never** record volatile things like exact numeric values/constants/thresholds/knob names that get tuned constantly — the code is the source of truth for those. When a meaningful durable fact is established, write it here (or append to the relevant section) before the session ends. When uncertain from memory, read this file first.
+
 ## Writing this file — no specific values
 Constants, thresholds, conditions, windows and knob names get tuned constantly and go stale. Keep this doc to **stable architecture**: structure, override order, invariants, and design intent (the *why*, not the *what number*). The code is the source of truth for specifics — describe behavior, don't enumerate current values.
 
 ## Workflow
-- Compile, test, then commit each logical change. Ask before pushing.
+- **Every file change → compile (with autocopy) → user verifies in-game → then commit.** Never commit before the human confirms the change works. The human is the gatekeeper for verification; do not treat a successful compile as "verified."
+- **The project auto-copies on build** (`NewRacingSystem.csproj` has both a `PostBuildEvent` and a `CopyArsDll` target): every build drops `ARS.dll` into `D:\SteamLibrary\...\Scripts\ARS\`. **Quirk:** both Debug and Release fire the copy, so *whichever configuration builds last wins* in the game folder. When you need Release deployed, run Release last.
 - Build (MSBuild, Release): `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" NewRacingSystem.csproj /v:minimal /nologo /p:Configuration=Release`
 - Build (dotnet, agent-tuned — suppresses 1300+ SHVDN2 deprecation warnings, errors only): `dotnet build "F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\NewRacingSystem.sln" /target:NewRacingSystem /property:GenerateFullPaths=true /p:Configuration=Debug /p:Platform="Any CPU" /consoleloggerparameters:ErrorsOnly`
 - Build output used by the game: `D:\SteamLibrary\steamapps\common\Grand Theft Auto V\Scripts\ARS\`
@@ -68,6 +72,11 @@ Design rules:
 
 Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point clamps.
 
+## Grid car selection (power-matched)
+- **Vehicle stats can be read from the model without spawning**: natives like `GET_VEHICLE_MODEL_ACCELERATION` (power), `GET_VEHICLE_MODEL_MAX_TRACTION` (grip), and the estimated-max-speed native take a **model hash** (as opposed to the spawned-handle versions, e.g. `GET_VEHICLE_ACCELERATION` / `_0x53AF99BAA671CA47`). This is what makes pre-race vehicle evaluation cheap — no car needs to exist yet.
+- **Model-power cache (`ModelPowerCache`)**: scans the `Vehicles\*.xml` pool for which models exist (no natives on the background thread), then `BuildPowerCache()` runs on the **main script thread** after loading and fills model → power via the native. **GTA natives must not be called on the background load thread (`Task.Run`) — that hard-crashes the game**; always do native-per-car reads on the main thread. Grid selection later is a pure cache lookup — no natives called at race start for the matched set.
+- **Selection** (`FillCachedCandidates`): candidates are kept if their cached power falls within a tolerance of a **reference power**; the qualified pool is shuffled and trimmed to grid size. Currently the reference is hardcoded (testing) and the old Disciplines tag filter is bypassed so the whole `Vehicles\` pool is considered. Watch the log for the candidate count to debug the band width.
+
 ## Per-racer state
 - **Aggression** (0–100): grid-assigned (first=0 … last=100, rounded to 10); player stays 50. Scales avoidance extra buffer and allowed TCS wheelspin.
 - **Pressure** (0–100): pure proximity × aggression — target ramps from the nearest racer within 100 m; rises toward target, falls quickly. Adds a fixed overspeed to `followTrackSpd`.
@@ -95,6 +104,6 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - Two closely spaced corners where the second is slower — planner only targets the first key corner.
 - Corner hugging (inside-line hold through the apex) still being evaluated.
 - Pressure-driven lookahead: reverted; hardcoded window pending investigation.
-- Grid car selection: see `grid_rework.md` (performance-bracket brainstorm, not implemented).
+- Grid car selection: **now implemented as power-matched selection** (see the "Grid car selection" section below). See `grid_rework.md` for the earlier performance-bracket brainstorm.
 - **Stability awareness**: wheels off the ground = unstable → the car should drive more carefully (lift-off/unweighting should bias speed down beyond the current crest/dip factor). No implementation yet.
 - **Prevent rear-ends**: cars need to brake before hitting the car ahead from behind, and avoid leaning on each other — specifically, the *inside* car should brake to close its own trajectory in (don't rely on the outside car to open up). No implementation yet.
