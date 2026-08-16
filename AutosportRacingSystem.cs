@@ -1783,6 +1783,9 @@ namespace ARS
         static public bool IsPointToPoint = false;
         public void SpawnTrackLimits(List<Vector3> nodes, Dictionary<int, float> widedict, int fidelity)
         {
+            IsPointToPoint = TrackBuilder.Build(nodes, widedict, CurrentFile, IsPointToPoint, _intendedOpponents, TrackLimits, _flareFx, GridPositions);
+            return;
+
             GridPositions.Clear();
 
             string modelOne = "none"; 
