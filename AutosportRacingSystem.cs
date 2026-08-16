@@ -1598,6 +1598,9 @@ namespace ARS
                 }
         void PlaceCars(bool sortbypower)
         {
+            GridBuilder.Place(Racers, GridPositions, RouteNodes, IsPointToPoint, sortbypower);
+            return;
+
             if (sortbypower)
             {
 
