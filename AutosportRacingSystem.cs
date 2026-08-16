@@ -380,46 +380,14 @@ namespace ARS
 
         public void FillKnownDisciplines(bool allowScriptYield = true)
         {
-            _racerTagLookup.Clear();
-            KnownVehicleModels.Clear();
             ModelPowerCache.Clear();
             ModelTopSpeedScaledCache.Clear();
             Log(LogImportance.Info, "-------------");
             Log(LogImportance.Info, "Learning available disciplines...");
-            List<string> folders = Directory.GetDirectories(@"scripts\ARS\Vehicles").ToList();
-            folders.Add(@"scripts\ARS\Vehicles");
-            HashSet<string> knownModelsSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string dir in folders)
-            {
-                int count = 0;
-                foreach (string st in Directory.EnumerateFiles(@dir))
-                {
-                    string n = System.IO.Path.GetFileName(st);
-                    List<string> racerTags = GetRacerTags(st);
-                    string model = GetRacerModel(st);
-
-                    Log(LogImportance.Info, st + " - [" + string.Join(", ", racerTags) + "]");
-                    _racerTagLookup.Add(st, string.Join(" ", racerTags));
-
-                    if (!string.IsNullOrWhiteSpace(model) && knownModelsSet.Add(model))
-                    {
-                        KnownVehicleModels.Add(new Model(model));
-                    }
-
-                    count++;
-                    if (allowScriptYield && count > 20)
-                    {
-                        DisplayHelpTextTimed("Loading " + n, 5000);
-
-                        count = 0;
-                        Yield();
-                    }
-                }
-            }
+            VehicleCatalog.Scan(_racerTagLookup, KnownVehicleModels, text => Log(LogImportance.Info, text), text => DisplayHelpTextTimed(text, 5000), Yield, allowScriptYield);
             KnownTracks = Directory.GetFiles(@"scripts\ARS\Tracks").ToList();
             Log(LogImportance.Info, "Done.");
             Log(LogImportance.Info, "-------------");
-
         }
 
         // Called on the main script thread (NOT from the background load task).
@@ -427,46 +395,7 @@ namespace ARS
         // modelName -> power cache here rather than during the XML scan.
         public void BuildPowerCache()
         {
-            ModelPowerCache.Clear();
-            ModelTopSpeedScaledCache.Clear();
-
-            int carsLogged = 0;
-            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string filename in _racerTagLookup.Keys)
-            {
-                // GetRacerModel returns the //Model InnerText, which is the
-                // numeric hash in these XML files (e.g. "-1045541610"), NOT the
-                // model name. Build the Model from that parsed int hash.
-                string innerText = GetRacerModel(filename);
-                if (string.IsNullOrWhiteSpace(innerText) || !seen.Add(innerText)) continue;
-
-                int hash;
-                if (!int.TryParse(innerText, out hash)) continue;
-
-                Model m = new Model(hash);
-                if (!m.IsCar || !m.IsValid) continue; // power native is for road cars only
-
-                // Native expects the int model hash, not the Model object.
-                try
-                {
-                    // Blacklist classes we never race (read via the model-hash native, so on the main thread).
-                    VehicleClass vClass = (VehicleClass)Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, m.Hash);
-                    if (BlacklistedVehicleClasses.Contains(vClass)) continue;
-
-                    float power = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, m.Hash);
-                    // 0xF417C2502FFFED43 = estimated top speed from the model hash, returned in m/s.
-                    // Scale it down to the power band (mph / divisor) so both can feed a summed powerscale.
-                    float topSpeedMph = MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, m.Hash));
-                    float topSpeedScaled = topSpeedMph / TopSpeedScaleDivisor;
-
-                    ModelPowerCache[innerText] = power;
-                    ModelTopSpeedScaledCache[innerText] = topSpeedScaled;
-                    carsLogged++;
-                    Log(LogImportance.Info, "Power for " + innerText + " (" + m.ToString() + "): " + power.ToString("0.####") + "  TopSpeed " + topSpeedMph.ToString("0") + "mph  scaled " + topSpeedScaled.ToString("0.####") + "  class " + vClass);
-                }
-                catch (Exception) { /* skip unreadable model power */ }
-            }
-            Log(LogImportance.Info, "BuildPowerCache: cached power for " + carsLogged + " road cars.");
+            VehicleCatalog.BuildPowerCache(_racerTagLookup, ModelPowerCache, ModelTopSpeedScaledCache, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
         }
 
         public static float SignedLaneOffset(Vector3 pos, Vector3 refPoint, Vector3 refDir)
@@ -4065,145 +3994,8 @@ namespace ARS
 
         void FillCachedCandidates(string dlist, int maxcars, bool allowScriptYield = true)
         {
-            _cachedCandidates.Clear();
-
-            // Select candidates within the reference powerscale tolerance; ignore discipline tags.
-            const float PowerscaleTolerance = 0.1f;
-            const float ReferencePower = 0.3f;
-            const float ReferencePowerscale = 0.5f; // 0.4 .. 0.6 (0.5 ± 0.1)
-
-            Log(LogImportance.Info, "Reference power: " + ReferencePower.ToString("0.####") + "  powerscale: " + ReferencePowerscale.ToString("0.####") + "  (tolerance " + PowerscaleTolerance + ")");
-
-            List<XmlDocument> candidates = new List<XmlDocument>();
-
-            int cooldown = 0;
-            {
-                foreach (KeyValuePair<string, string> kv in _racerTagLookup)
-                {
-                    string filename = kv.Key;
-                    string model = GetRacerModel(filename);
-
-                    float cachedPower;
-                    float cachedSpeed;
-                    if (!string.IsNullOrWhiteSpace(model) &&
-                        ModelPowerCache.TryGetValue(model, out cachedPower) &&
-                        ModelTopSpeedScaledCache.TryGetValue(model, out cachedSpeed))
-                    {
-                        float powerscale = cachedPower + cachedSpeed;
-                        if (Math.Abs(powerscale - ReferencePowerscale) <= PowerscaleTolerance)
-                        {
-                            XmlDocument xmlFile = new XmlDocument();
-                            try
-                            {
-                                xmlFile.Load(filename);
-                                candidates.Add(xmlFile);
-                            }
-                            catch (Exception) { /* skip unreadable file */ }
-                        }
-                    }
-
-                    cooldown++;
-                    if (allowScriptYield && cooldown > 20)
-                    {
-                        cooldown = 0;
-                        Yield();
-                    }
-                }
-
-                Log(LogImportance.Info, "Power-matched candidates: " + candidates.Count);
-
-                // Pick maxcars random candidates from the qualified pool.
-                if (candidates.Count > maxcars)
-                {
-                    // Fisher-Yates shuffle
-                    for (int i = candidates.Count - 1; i > 0; i--)
-                    {
-                        int j = GetRandomInt(0, i);
-                        XmlDocument temp = candidates[i];
-                        candidates[i] = candidates[j];
-                        candidates[j] = temp;
-                    }
-                    candidates.RemoveRange(maxcars, candidates.Count - maxcars);
-                    Log(LogImportance.Info, "Vehicles shuffled and randomized.");
-                }
-                else
-                {
-                    Log(LogImportance.Info, "Using all power-matched candidates.");
-                }
-            }
-
-            if (maxcars > -1)
-            {
-                if (candidates.Count > 0)
-                {
-
-
-                    if (candidates.Count < maxcars && SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AllowDuplicates", true))
-                    {
-                        Log(LogImportance.Info, "There are not enough candidates to fill the grid. Duplicating some vehicles...");
-
-                        List<XmlDocument> dupes = new List<XmlDocument>();
-                        foreach (XmlDocument d in candidates)
-                        {
-                            XmlDocument n = new XmlDocument();
-                            n = (XmlDocument)d.Clone();
-                            if (n.SelectSingleNode("//Colors") != null)
-                            {
-                                n.SelectSingleNode("//Colors").RemoveAll();
-                            }
-
-
-                            if (n.SelectNodes("//Mods/Mod").Count > 0)
-                            {
-                                n.SelectSingleNode("//Vehicle").RemoveChild(n.SelectSingleNode("//Mods"));
-                            }
-
-                            dupes.Add(n);
-                        }
-
-                        while (candidates.Count < maxcars)
-                        {
-
-                            candidates.AddRange(dupes);
-                        }
-
-                    }
-
-
-                }
-                if (candidates.Count > maxcars && candidates.Count > 1)
-                {
-
-                    Log(LogImportance.Info, "There are too many candidates (" + candidates.Count + ") for the selected grid size. Shuffling vehicles around to randomize the final list.");
-                    for (int i = 0; i < 30; i++)
-                    {
-                        int r = GetRandomInt(0, candidates.Count - 1);
-                        XmlDocument taken = candidates[r];
-
-                        candidates.RemoveAt(r);
-                        candidates.Insert(GetRandomInt(0, candidates.Count - 1), taken);
-                    }
-                    int patience = 0;
-
-                    Log(LogImportance.Info, "Removing random vehicles until we are within the grid size (" + maxcars + ").");
-                    while (candidates.Count > maxcars)
-                    {
-
-                        
-
-                        int r = GetRandomInt(0, candidates.Count - 1);
-                        if (NodeExists(GetChild(candidates[r], "//Vehicle"), "priority"))
-                        {
-                            
-
-                            patience++;
-                            if (patience > 100) break; else continue;
-                        }
-                        candidates.RemoveAt(r);
-                    }
-                }
-            }
-            _cachedCandidates = candidates;
+            bool allowDuplicates = SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AllowDuplicates", true);
+            _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPowerCache, ModelTopSpeedScaledCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text));
         }
 
         void LoadGrid(string dlist, int maxcars)

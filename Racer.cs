@@ -254,10 +254,10 @@ namespace ARS
         }
         public void Initialize()
         {
-            Handling.Downforce = ARS.GetDownforce(Car);
+            Handling.Downforce = VehicleMemory.GetDownforce(Car);
             if (Handling.Downforce > 100) Handling.Downforce *= 0.1f;
 
-            Handling.LateralTractionCurve = ARS.RadToDeg(ARS.GetTRCurveLat(Car));
+            Handling.LateralTractionCurve = ARS.RadToDeg(VehicleMemory.GetLateralTraction(Car));
             if (Handling.LateralTractionCurve < 1 || Handling.LateralTractionCurve > 100) Handling.LateralTractionCurve = 22;
             ARS.Log(ARS.LogImportance.Info, "TRlat for " + Car.DisplayName + ":" + Handling.LateralTractionCurve + "º");
 
@@ -266,7 +266,7 @@ namespace ARS
             Handling.Acceleration = Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, Car);
 
 
-            VehicleData.SteeringLock = ARS.RadToDeg(ARS.GetSteerLock(Car));
+            VehicleData.SteeringLock = ARS.RadToDeg(VehicleMemory.GetSteerLock(Car));
             if (VehicleData.SteeringLock < 1 || VehicleData.SteeringLock > 100) VehicleData.SteeringLock = 40;
             ARS.Log(ARS.LogImportance.Info, "Steerlock for " + Car.DisplayName + ":" + VehicleData.SteeringLock + "º");
             Control.SteerDegrees = 0f;
@@ -1391,16 +1391,16 @@ namespace ARS
 
                 if (Control.HandBrakeTime > Game.GameTime) Car.HandbrakeOn = true; else Car.HandbrakeOn = false;
 
-                ARS.SetThrottle(Car, ARS.Clamp(Control.Throttle, -1, 1));
-                ARS.SetBrakes(Car, Control.Brake);
-                ARS.SetSteerAngle(Car, Control.SteerInput);
+                VehicleMemory.SetThrottle(Car, ARS.Clamp(Control.Throttle, -1, 1));
+                VehicleMemory.SetBrakes(Car, Control.Brake);
+                VehicleMemory.SetSteerAngle(Car, Control.SteerInput);
 
             }
             else
             {
-                ARS.SetThrottle(Car, 0f);
-                ARS.SetBrakes(Car, 0f);
-                ARS.SetSteerInput(Car, 0f);
+                VehicleMemory.SetThrottle(Car, 0f);
+                VehicleMemory.SetBrakes(Car, 0f);
+                VehicleMemory.SetSteerInput(Car, 0f);
             }
         }
         void DrawRacerDebug()
