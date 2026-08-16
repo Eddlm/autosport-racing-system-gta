@@ -51,11 +51,9 @@ namespace ARS
         {
             public float DeviationFromCenter = 0f;
             public float CurveRadiusToFollowPoint = 0f;
-            // Short-window (0.5s to 1.0s) radius for the System 2 high-speed lane pursuit gain.
-            // Shorter than CurveRadiusToFollowPoint (0.5s to 2.5s) so the inside-edge commitment
-            // responds to the imminent corner instead of the long approach.
+            // Short-window radius for the high-speed lane pursuit gain.
             public float HighSpeedCurveRadius = 0f;
-            // NEVER USED. Kept for the future "two conflicting corners" work. Written in Racer.UpdateTrackPosition, never read.
+            // NEVER USED. Kept for future "two conflicting corners" work.
             public float CurveRadiusAfterFollowPoint = 0f;
             public Vector3 SpeedVector = Vector3.Zero;
         }
@@ -90,8 +88,7 @@ namespace ARS
             if (RivalRacer == null) return;
 
             RelativeOffset = ARS.EntityRelativeOffset(me.Car, RivalRacer.Car);
-            // Artificial longitudinal buffer on the overlap window. Keep more margin from a
-            // rival ahead (+1m) than from one behind (+0.25m). We can see the one ahead.
+            // More margin from a rival ahead (+1m) than behind (+0.25m).
             float yBuffer = RelativeOffset.Y >= 0f ? 1f : 0.25f;
             CombinedSize.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2)) + yBuffer;
             CombinedSize.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
@@ -168,18 +165,12 @@ namespace ARS
         public float Elevation = 0f;
         public float ElevationChange = 0f;
         public bool IsKey = false;
-        // True when a sharp lifting lip sits in the approach (a few tens of metres before the
-        // apex). The car unweights and grips poorly there, so it must brake before the lip, not
-        // at or after it. RampEndNode is the node where the lip was found (-1 when none).
+        // True when a lifting lip sits before the apex. Car must brake before the lip.
         public bool RequiresEarlyBrake = false;
         public int RampEndNode = -1;
-        // Vertical curvature Gs at the apex (negative = crest or unload, positive = dip or load),
-        // evaluated live at detection time using the apex speed computed from the corner radius
-        // and this car grip and gravity. Part of the corner definition, stored when instanced.
+        // Vertical curvature Gs at the apex (negative = crest, positive = dip).
         public float CrestGs = 0f;
-        // SupposedRadius: the corner assumed radius, computed from its limits (the region where
-        // the precise curve radius stays below the corner-limit threshold). The tightest point
-        // the car must slow for. This is what the final apex-speed calculation uses.
+        // The corner radius from its region limits. Used for apex-speed calculation.
         public float SupposedRadius = 999f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
