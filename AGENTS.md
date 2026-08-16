@@ -11,6 +11,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 
 ## Workflow
 - **Every file change → compile (with autocopy) → user verifies in-game → then commit.** Never commit before the human confirms the change works. The human is the gatekeeper for verification; do not treat a successful compile as "verified."
+- **Documentation-only changes:** when a change is strictly comments or other non-executable documentation and the build passes, in-game verification is not required before committing. Git is the backup while the work remains undistributed.
 - **The project auto-copies on build** (`NewRacingSystem.csproj` has both a `PostBuildEvent` and a `CopyArsDll` target): every build drops `ARS.dll` into `D:\SteamLibrary\...\Scripts\ARS\`. **Quirk:** both Debug and Release fire the copy, so *whichever configuration builds last wins* in the game folder. When you need Release deployed, run Release last.
 - Build (MSBuild, Release): `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" NewRacingSystem.csproj /v:minimal /nologo /p:Configuration=Release`
 - Build (dotnet, agent-tuned — suppresses 1300+ SHVDN2 deprecation warnings, errors only): `dotnet build "F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem\NewRacingSystem.sln" /target:NewRacingSystem /property:GenerateFullPaths=true /p:Configuration=Debug /p:Platform="Any CPU" /consoleloggerparameters:ErrorsOnly`

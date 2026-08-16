@@ -1242,9 +1242,11 @@ namespace ARS
                     }
                 }
             }
+            // Draw the pending section until the circuit closes.
             if (cool < 1) DrawSection(_routeSection, EditNodeHalfWidths);
 
             
+            // Route editing is available only from freecam.
             if (_routeEditorActive && _inFreeCam)
             {
                 if (_pathWidth < 1) _pathWidth = 1;
@@ -1268,6 +1270,7 @@ namespace ARS
                     {
                         if (!Game.IsControlPressed(2, GTA.Control.Sprint)) _bezierScale += 5f; else _pathWidth++;
                     }
+                    // Aim removes one node; Sprint + Aim removes up to ten.
                     if (Game.IsControlJustPressed(2, GTA.Control.Aim))
                     {
                         if (RouteNodes.Count > 2)
@@ -1376,6 +1379,7 @@ namespace ARS
                     }
                 }
 
+                // Keep one half-width entry for every route segment.
                 for (int i = 0; i < RouteNodes.Count - 1; i++)
                 {
                     if (NodeHalfWidths.Count - 1 < RouteNodes.Count - 1)
@@ -1398,6 +1402,7 @@ namespace ARS
 
         
         
+        // Generate evenly spaced curve points from the route end to the raycast target.
         public static List<Vector3> GenerateBezier(Vector3 sStart, Vector3 sDirection, Vector3 sEnd, float sScale)
         {
             List<Vector3> points = new List<Vector3>();
@@ -3607,15 +3612,7 @@ namespace ARS
             return Clamp(multiplier, 0f, 1f);
         }
 
-        // Exponential hill grip-loss model, tuned to the observed anchor: a 15-degree incline halves grip
-        // (0.5 factor). Grip decays NON-linearly with the off-level incline angle:
-        //   grip = exp(-k * |pitch| * gravityRatio)   where  k = ln(0.5)/15
-        // pitch = longitudinal run angle (deg) of the surface. Uphill and downhill lose grip equally.
-        // gravityRatio = car Handling.Gravity / 9.8, so a heavier-gravity car effectively steepens the
-        // hill and loses more grip (the game per-car gravity is real, but we model it as a steeper
-        // effective angle rather than trusting any live game grip value).
-        //
-        // Returns the grip multiplier in [HillGripMin, 1].
+        // Exponential hill-grip loss, scaled by vehicle gravity.
         const float HillGripKPerDegree = 0.693147f / 15f; // ln(0.5)/15  ->  15 degrees halves grip
         const float HillGripMin = 0.8f;                  // never remove more than 20% of grip on a hill
         public static float HillGripFactorFromPitchAngle(float pitchDegrees, Racer r)
@@ -3717,8 +3714,7 @@ namespace ARS
             return angle;
         }
 
-        // Per-wheel ground contact: true if the wheel has grip (suspension loaded), false if airborne.
-        // Uses the same grip multiplier at 0x198. A wheel with 0 grip is not touching the ground.
+        // A wheel is grounded when its grip multiplier is positive.
         static public unsafe List<bool> WheelsOnGround(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
@@ -3771,8 +3767,7 @@ namespace ARS
             return 0;
         }
         
-        // Rolling chunk scan for the next corner. Constant cost per core.
-        // A corner region is where precise curve radius stays below the limit. Chicanes read as one region.
+        // Legacy live corner scan; superseded by the apex-table pipeline.
         const int ChunkScanNodesPerCore = 10;
         const float CornerLimitRadius = 300f;
         const int MaxCornerRegionWalk = 300;
@@ -3872,12 +3867,11 @@ namespace ARS
             c.LengthStart = Math.Max(1, apex - start);
             c.LengthEnd = Math.Max(1, end - apex);
 
-            // SupposedRadius: the general curve radius through the region start, apex and end.
-            // The corner overall arc, a smoother speed guide than any single per-node radius.
-            // Degenerate (nearly straight arc) -> fall back to the tightest precise radius in the region.
+            // Estimate the corner radius from the region endpoints and apex.
             float supposed = Circumradius3D(TrackPoints[start].Position, TrackPoints[apex].Position, TrackPoints[end].Position);
             if (supposed <= 0f || float.IsNaN(supposed) || float.IsInfinity(supposed) || supposed >= 999f)
             {
+                // Fall back to the tightest region radius for degenerate arcs.
                 supposed = 999f;
                 for (int m = start; m <= end; m++)
                 {
@@ -3887,8 +3881,7 @@ namespace ARS
             }
             c.SupposedRadius = Clamp(supposed, 5f, 9999f);
 
-            // Lip detection: a sharp lifting lip in the run-up BEFORE the corner start. Recompute it
-            // live so the lip is always true to the current track. Brake target becomes the lip node.
+            // Detect a lifting lip before the corner and brake before it.
             const int LipLookbackNodes = 60;
             const float LipGsThreshold = -1.0f;
             const float LipReferenceSpeed = 30f;
@@ -3910,9 +3903,7 @@ namespace ARS
                 }
             }
 
-            // Corner definition: apex speed from the corner radius and this car grip and gravity, then
-            // the vertical curvature (crest or dip) Gs at the apex evaluated at that speed. Only once
-            // both are defined is this a corner worth instancing and keeping.
+            // Evaluate vertical curvature at the apex speed.
             c.CrestGs = 0f;
             if (apex >= 3 && apex < TrackPoints.Count - 3)
             {
@@ -3942,21 +3933,16 @@ namespace ARS
             int apexNode = c.Node;
             if (!IsPointToPoint && apexNode < 0) apexNode += TrackPoints.Count;
             float velTarget = r.Brain.Corner.Speed;
-            // Reserve corner-speed × N seconds of distance so the car reaches corner speed
-            // N seconds before the apex, then coasts the rest at corner speed.
+            // Reserve coasting distance before the apex.
             float coastReserve = velTarget * BrakingCoastSecondsBeforeApex;
-            // Pressure scales the coast reserve: 0 pressure = x1.2 (brake earlier, cautious),
-            // 100 pressure = x0.8 (brake later, aggressive). Applied before the divebomb reduction.
+            // Pressure scales the reserve: low pressure brakes earlier.
             coastReserve *= ARS.Remap(r.Pressure, 100f, 0f, 0.8f, 1.2f, true);
-            // Lip corners: the car must be at corner speed BEFORE the lip (it unweights and loses
-            // grip there, so braking at or after the lip is mid-air). Braking target = the lip node,
-            // which is ahead of the apex, so the usable distance is shorter. The car brakes earlier.
+            // Brake before a lifting lip.
             int brakeTargetNode = (c.RequiresEarlyBrake && c.RampEndNode >= 0) ? c.RampEndNode : apexNode;
             float rawDistance = brakeTargetNode - r.CurrentTrackPoint.Node;
             if (!IsPointToPoint && rawDistance < 0f) rawDistance += TrackPoints.Count;
             if (rawDistance < 0f) rawDistance = 0f;
-            // Divebomb: reduce the coast reserve so the car brakes later and carries
-            // more entry speed into the corner. That is the whole point of the maneuver.
+            // Divebombs shorten the reserve to brake later.
             float effectiveCoastReserve = r.ActiveManeuver.Type == ManeuverType.DiveBomb
                 ? coastReserve * 0.8f
                 : coastReserve;
@@ -4461,10 +4447,7 @@ namespace ARS
         {
             _cachedCandidates.Clear();
 
-            // Powerscale-matched grid: ignore the discipline filter entirely for now.
-            // candidates are those whose combined "powerscale" = power + scaledTopSpeed
-            // is within this tolerance of the reference. scaledTopSpeed = mph / TopSpeedScaleDivisor
-            // (140 mph -> 0.3), so it sits on the same band as power and the two add cleanly.
+            // Select candidates within the reference powerscale tolerance; ignore discipline tags.
             const float PowerscaleTolerance = 0.1f;
             const float ReferencePower = 0.3f;
             const float ReferencePowerscale = 0.5f; // 0.4 .. 0.6 (0.5 ± 0.1)

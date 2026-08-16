@@ -29,13 +29,9 @@ namespace ARS
         public VehicleControl Control = new VehicleControl();
         public RacerBrain Brain = new RacerBrain();
 
-        // Reusable corner instance for live corner detection.
+        // Dormant legacy state retained for the disabled live-corner and route-probe systems.
         public CornerPoint LiveCorner = new CornerPoint();
-
-        // Last track node checked by the rolling corner scan. -1 = not started.
         public int CornerScanNode = -1;
-
-        // Braking target node from the 5s route probe. -1 = no target.
         public int RouteTargetNode = -1;
         public float RouteTargetRadius = 999f;
 
@@ -62,10 +58,10 @@ namespace ARS
         
         int _lastStabilityCheck = 0;
 
-        // Where the racer is on the track, progress wise.
+        // Racer progress along the route.
         public TrackPoint CurrentTrackPoint = new TrackPoint();
 
-        // Used for understanding the route ahead.
+        // Time-based route references used by steering and speed calculations.
         public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
         public Dictionary<LookAhead, TrackPoint> LookAheads = new Dictionary<LookAhead, TrackPoint>();
 
@@ -95,7 +91,7 @@ namespace ARS
         public int StuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
         public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
 
-        // Smooth lerp-to-track state (replaces the old velocity punt).
+        // State for smooth recovery repositioning toward the track.
         bool _isLerpingToTrack = false;
         Vector3 _lerpStartPos = Vector3.Zero;
         Vector3 _lerpTargetPos = Vector3.Zero;
@@ -131,7 +127,7 @@ namespace ARS
         float _debugFollowTrackSpd = 999f;
         float _debugHillPitch = 0f;
 
-        // Flips true if the racer entered the 5s window of the corner at sufficient speed, which engages approach behavior.
+        // Latched on corner approach when entry speed warrants holding the outside line.
         bool _approachOutsideDecided = false;
         bool _approachHoldsOutside = false;
         int _approachCornerNode = -1;
@@ -141,7 +137,7 @@ namespace ARS
         float _speedCap = 999f;
         const float SpeedCapRiseRate = 30f;
 
-        // Drifts up or down depending on the projection being inside the track, edge, or outside. Helps with live speed adjustments-
+        // Speed bias that drifts according to projected track safety.
         float _confidenceMPS = 0f;
         const float ConfidenceDriftRate = 2f;
         const float ConfidenceMax = 5f;
@@ -152,7 +148,8 @@ namespace ARS
 
         bool _isPassengerized = false;
 
-        const bool AiNitrousEnabled = false;    // TEMP DISABLED - re-enable after tuning pass
+        // Feature gate for AI nitrous.
+        const bool AiNitrousEnabled = false;
         const float NitrousPowerMultiplier = 2.5f;
         const float NitrousCornerLookaheadSeconds = 8f;
         const int NitrousDurationMs = 3000;
@@ -326,13 +323,13 @@ namespace ARS
 
             float naturalLane = ComputeHighSpeedLane(roadWide);
 
-            // Lane Control System 1: corner outside approach. Overrides System 2 while in its approach window.
+            // Corner approach temporarily overrides the high-speed inside line.
             bool cornerActive = Brain.Corner != null && Lap > 0;
             float cornerLane = cornerActive ? ComputeCornerTargetLane(steerRefPoint, speedMps) : 0f;
             if (cornerLane != 0f) naturalLane = cornerLane;
             _rawCornerLane = cornerLane;
 
-            // Avoid-ahead: pick a lane to pass a rival ahead. Skipped during divebomb (the committed inside lane IS the pass).
+            // Avoidance overrides track-line targets, except during a committed divebomb.
             float avoidAheadLane = 0f;
             if (ActiveManeuver.Type != ManeuverType.DiveBomb)
             {
@@ -460,7 +457,7 @@ namespace ARS
             float cornerDir = Math.Sign(signedAngle);
             return -cornerDir * roadWide;
         }
-        // Lane Control System 1: holds the outside line during the corner approach window (5s to 1s before apex).
+        // Hold the outside line on entry, then release it for the high-speed inside line.
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
         {
             CornerPoint c = Brain.Corner.Point;
@@ -478,7 +475,6 @@ namespace ARS
             const float approachStartTime = 5.0f;
             if (timeToApex > approachStartTime) return 0f;
 
-            //If within 5s window, decide if we really need to hold Outside for this corner. Or not.
             if (!_approachOutsideDecided)
             {
                 _approachHoldsOutside = speedMps >= _cornerSpd + ARS.MphToMps(20f);
@@ -492,9 +488,6 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-
-
-            // Timing to keep holding the outside. Below this, release outside lane.
             float holdOutsideUntil = (steerRefPoint.TrackHalfWidth * 2f) / 10f;
             if (_approachHoldsOutside && timeToApex > holdOutsideUntil)
             {
@@ -658,20 +651,12 @@ namespace ARS
             else
                 _avoidRightWall = Math.Min(_avoidRightWall + openRate, trackBound);
 
-            // Walls must never cross. Collapse crossed walls to midpoint +/- 1m.
+            // Rival walls must remain ordered; collapse overlap to a narrow centered corridor.
             if (_avoidLeftWall > _avoidRightWall)
             {
                 float mid = (_avoidLeftWall + _avoidRightWall) * 0.5f;
                 _avoidLeftWall = mid - 1f;
                 _avoidRightWall = mid + 1f;
-            }
-
-
-            float squeezeThreshold = VehicleData.BoundingBox + 0.2f;
-            if (_avoidRightWall - _avoidLeftWall < squeezeThreshold)
-            {
-                // Squeeze speedcap disabled. Revisit.
-                // _speedCap = Math.Min(_speedCap, Math.Max(Car.Velocity.Length() - 0.5f, 0f));
             }
 
 
@@ -872,7 +857,7 @@ namespace ARS
             float cornerSpd = 999f;
             if (NextApexNode >= 0)
             {
-                // Braking map over all four held apexes. The lowest one wins.
+                // Plan braking against all held apexes; the most restrictive target governs.
                 cornerSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
                 if (NextApexNode2 >= 0)
                     cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode2, NextApexSpeed2)));
@@ -1042,7 +1027,7 @@ namespace ARS
 
         const float SlopeGripLossK = 3f;
         const float SlopeGripLossExp = 2f;
-        // Crest aggression (route speed only). 0 = safe, 1 = careless blow-through.
+        // Reduces crest-induced grip loss as curvature allows more aggressive traversal.
         const float CrestAggression = 0.5f;
 
         float GetFollowPointSlopeAngle()
@@ -1338,9 +1323,9 @@ namespace ARS
             UpdateTrackPosition();
             UpdateSlideAndBoundingBox();
             UpdatePerceivedGrip();
-            // EXPERIMENT: corners ignored. Route curve radius drives speed and lane.
+            // Legacy live-corner scan and route probe remain disabled.
+            // UpdateNextApexes supplies corner state.
             // UpdateCornerValidity();
-            // EXPERIMENT: braking-target probe dormant.
             // UpdateRouteTarget();
 
             ProcessAI();
@@ -1792,7 +1777,7 @@ namespace ARS
             UpdateNextApexes();
             // High-speed lane radius: short 0.5s to 1.0s window.
             Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius((int)(Car.Velocity.Length() * 0.5f), (int)(Car.Velocity.Length() * 1.0f));
-            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius((int)(Car.Velocity.Length() * 2.5f), (int)(Car.Velocity.Length() * 4.5f)); // NEVER USED.
+            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius((int)(Car.Velocity.Length() * 2.5f), (int)(Car.Velocity.Length() * 4.5f));
         }
 
         // Circumradius through three route-window sample points.
@@ -1830,7 +1815,7 @@ namespace ARS
         // Braking plan reaches corner speed this many seconds before the apex.
         const float ApexBufferSeconds = 2f;
 
-        // Refresh the four nearest precomputed apexes ahead. Nearest one instances Brain.Corner.
+        // Refresh the four nearest precomputed apexes ahead and instance Brain.Corner from the nearest.
         void UpdateNextApexes()
         {
             Brain.Corner = null;
@@ -1910,7 +1895,7 @@ namespace ARS
             }
         }
 
-        // Kinematic braking map: v = sqrt(vApex^2 + 2*a*d) over usable distance (apex distance minus coast reserve).
+        // Kinematic braking map over the apex distance minus the coast reserve.
         float ApexBrakingSpeed(int apexNode, float apexSpeed)
         {
             if (apexNode < 0) return 999f;
@@ -1935,10 +1920,8 @@ namespace ARS
             return spd;
         }
 
-        // Route braking-target probe: 5s lookahead. Watches radius shrink, locks the minimum as the apex.
+        // Dormant legacy route-probe state; the static apex table now supplies braking targets.
         const float RouteProbeSeconds = 5f;
-
-        // Probe state persists across cores. Reset on re-arm or launch.
         int _probeLastNode = -1;
         float _probeLastRadius = 999f;
         bool _probeShrinking = false;
@@ -2063,7 +2046,7 @@ namespace ARS
             }
 
             if (routeEndNode == routeStartNode) return 999f;
-            // Circumradius through start, mid, end = the arc radius. No /2 scaling.
+            // Circumradius through the start, midpoint, and end of the route window.
             return ARS.Circumradius3D(
                 ARS.TrackPoints[routeStartNode].Position,
                 ARS.TrackPoints[routeEndNode].Position,
@@ -2196,7 +2179,7 @@ namespace ARS
             float targetPressure = 0f;
             if (closestDistance <= PressureProximityRange)
             {
-                // Map 100m→0, 20m→Aggression
+                // Map nearby-rival proximity to an aggression-scaled pressure target.
                 float t = ARS.Clamp((PressureProximityRange - closestDistance) / (PressureProximityRange - 20f), 0f, 1f);
                 targetPressure = Aggression * t;
             }
@@ -2208,8 +2191,7 @@ namespace ARS
 
             Pressure = ARS.Clamp(Pressure, 0f, PressureRange);
 
-            // Pressure-driven lookahead disabled. Hardcoded for now.
-            // RouteLookAheadSeconds = Pressure / PressureRange;
+            // Pressure-driven lookahead is intentionally disabled.
             RouteLookAheadSeconds = 0.5f;
         }
  
@@ -2295,7 +2277,7 @@ namespace ARS
 
         void ApplyStuckRecoveryOverride()
         {
-            // Smooth lerp to track edge (3rd+ recovery attempt).
+            // Smoothly reposition to the track edge after repeated failed recovery attempts.
             if (_isLerpingToTrack)
             {
                 float elapsed = Game.GameTime - _lerpStartTime;
@@ -2331,7 +2313,7 @@ namespace ARS
         {
             if (_stuckRecoveryAttempts < 2) return;
 
-            // Lerp to the track edge on the side the car is on.
+            // Smoothly reposition to the track edge after repeated failed recovery attempts.
             Vector3 toTrack = CurrentTrackPoint.Position - Car.Position;
             if (toTrack.Length() < 0.01f) return;
 
@@ -2356,8 +2338,7 @@ namespace ARS
             VehicleData.BaseMechanicalGrip = handlingGrip;
             VehicleData.CurrentMechanicalGrip = ((VehicleData.BaseMechanicalGrip) * GroundGripMultiplier);
 
-            // Stability: if not all wheels are on the ground, reduce max throttle at 0.5/s.
-            // Checked at 3 Hz. Max throttle recovers on its own (2/s in ConvertSpeedToPedals).
+            // Airborne vehicles temporarily lose available throttle; normal pedal processing restores it.
             if (Game.GameTime - _lastStabilityCheck >= 333) // ~3 Hz
             {
                 _lastStabilityCheck = Game.GameTime;
