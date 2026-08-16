@@ -253,9 +253,9 @@ namespace ARS
                 foreach (string st in Directory.EnumerateFiles(@dir))
                 {
                     string n = System.IO.Path.GetFileName(st);
-                    Log(LogImportance.Info, st + " - [" + string.Join(", ", GetTrackTags(st)) + "]");
-                    _trackTags.Add(st, string.Join(", ", GetTrackTags(st)));
-                    if (!ImmersiveJoins.ContainsKey(GetTrackStartPos(st))) ImmersiveJoins.Add(GetTrackStartPos(st), st);
+                    Log(LogImportance.Info, st + " - [" + string.Join(", ", TrackRepository.ReadTrackTags(st)) + "]");
+                    _trackTags.Add(st, string.Join(", ", TrackRepository.ReadTrackTags(st)));
+                    if (!ImmersiveJoins.ContainsKey(TrackRepository.ReadTrackStartPosition(st))) ImmersiveJoins.Add(TrackRepository.ReadTrackStartPosition(st), st);
 
                     count++;
                     if (allowScriptYield && count > 5)
@@ -282,6 +282,7 @@ namespace ARS
 
         public static List<string> GetTrackTags(string _routeNodes)
         {
+            return TrackRepository.ReadTrackTags(_routeNodes);
             XmlDocument document = LoadXmlOrThrow(_routeNodes);
 
             List<string> tags = new List<string>();
@@ -297,6 +298,7 @@ namespace ARS
 
         public static Vector3 GetTrackStartPos(string _routeNodes)
         {
+            return TrackRepository.ReadTrackStartPosition(_routeNodes);
             XmlDocument document = LoadXmlOrThrow(_routeNodes);
 
             List<string> tags = new List<string>();
@@ -325,6 +327,7 @@ namespace ARS
 
         public static List<string> GetRacerTags(string _routeNodes)
         {
+            return TrackRepository.ReadVehicleTags(_routeNodes);
             XmlDocument document = LoadXmlOrThrow(_routeNodes);
 
             List<string> tags = new List<string>();
@@ -345,6 +348,7 @@ namespace ARS
 
         public static string GetRacerModel(string _routeNodes)
         {
+            return TrackRepository.ReadVehicleModel(_routeNodes);
             try
             {
                 XmlDocument document = new XmlDocument();
@@ -3125,10 +3129,7 @@ namespace ARS
         public static XmlDocument LoadTrackFile(string trackname = null)
         {
             Log(LogImportance.Info, "Loading " + trackname);
-            XmlDocument doc = new XmlDocument();
-
-            doc.Load(trackname);
-            return doc;
+            return TrackRepository.Load(trackname);
 
         }
 
