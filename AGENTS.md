@@ -92,7 +92,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **`_laneGainDivisor`** (90–110): set once in the constructor at spawn. Scales the lane-pursuit gain curve's input — a lower divisor means the car saturates the gain at a smaller degree error (snappier lane pursuit), a higher divisor means it needs more error to max out (lazier). Subtle per-car variation so the field doesn't all steer identically.
 
 ## Debug (LemonUI Debug submenu)
-- **ShowInputs** — per-car speed readout (current/intended, corner/route speed, `_speedCap`/`_accelerationCap`) + pedal trail.
+- **ShowInputs** — per-car speed readout (current/intended, corner/route speed, `_speedCap`/`_accelerationCap`/`_confidenceMPS`) + pedal trail.
 - **ShowTrackAnalysis** — lane-aim spheres to the final target, track-ahead radius, wall lines, corner chevrons.
 - **ShowAggro** — pressure chevron/text + 0.5s and 1s projections (white line/sphere, red when off-track).
 - **ShowPhysics** — G-force sphere/vector.
@@ -112,6 +112,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **Stability awareness**: **now implemented** — two rules: (1) if both left or both right wheels are off the ground, steer into that side to regain all four wheels; (2) if not all wheels are on the ground (3 Hz check), reduce `MaxThrottle` at 0.5/s (floors at 0.1, recovers on its own at 2/s). Also: if steer angle exceeds the grip-based limit by 10º, reduce `MaxThrottle` at 1/s (same floor/recovery).
 - **Stuck recovery**: the old velocity punt (setting `Car.Velocity` to throw the car toward the track) is **replaced** with a smooth position lerp to the track edge over 1.5s (smoothstep). Triggers on the 3rd+ recovery attempt instead of the punt.
 - **TCS**: simplified to a P-controller on `MaxThrottleFromTCS` targeting ideal wheelspin (-1). Max 0.5 on-track, 0.15 off-track (`OutOfTrackDistance() > 0`). Wheelspin is signed: negative = spin, positive = lockup.
-- **Projection off-track throttle kill**: if either the 0.5s or 1s projection is off-track, `MaxThrottle = 0` — but only above 20 m/s and steering > 10º (below that the car needs throttle to recover).
+- **Projection off-track throttle kill**: **REMOVED** — replaced by ConfidenceMPS (see below).
+- **ConfidenceMPS**: a drifting speed bias added to `Intention.Speed` right after `min(cornerSpd, followTrackSpd)`. Evaluates the 0.5s and 1s projections against the track edge (with a 2 m wiggleroom): either off-track → drift toward −5; either at the edge → drift toward 0; both inside → drift toward +5. All drift at 2 m/s per second (TickScale-scaled). Replaces the old hard throttle kill and the projection `_speedCap` source — the car slows smoothly when its trajectory is unsafe and carries a bit more speed when clearly safe.
 - **Steering limit**: multiplier mapped to throttle (0 throttle = 1.0, full = 0.8). Lateral traction curve floor at 0.5.
 - **Prevent rear-ends**: cars need to brake before hitting the car ahead from behind, and avoid leaning on each other — specifically, the *inside* car should brake to close its own trajectory in (don't rely on the outside car to open up). No implementation yet.
