@@ -74,6 +74,7 @@
     <Compile Include="DataStructures.cs" />
     <Compile Include="FreeCamController.cs" />
     <Compile Include="TrackRepository.cs" />
+    <Compile Include="RouteAnalysis.cs" />
     <Compile Include="PersonalitySet.cs" />
     <Compile Include="Racer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

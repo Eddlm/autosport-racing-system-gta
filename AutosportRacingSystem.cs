@@ -3271,7 +3271,7 @@ namespace ARS
             IsPointToPoint = false;
             if (ARS.RouteNodes[0].DistanceTo(ARS.RouteNodes[ARS.RouteNodes.Count - 1]) > 20) IsPointToPoint = true;
 
-            GenerateRouteInfo();
+            RouteAnalysis.Generate();
 
 
             Script.Wait(1000);
