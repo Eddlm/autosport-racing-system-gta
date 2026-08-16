@@ -90,8 +90,8 @@ namespace ARS
         public static List<Racer> LeaderboardFinish = new List<Racer>();
 
         
-        bool _droneMode = true;
         public static Prop FreeCamRide = null;
+        readonly FreeCamController _freeCam;
 
         public static PedHash[] StreetRacerModels = { PedHash.Car3Guy2, PedHash.Vinewood02AFY, PedHash.Stwhi02AMY, PedHash.StrPunk02GMY, PedHash.Stbla02AMY };
         public static List<Model> RacerModels = new List<Model> { "a_m_y_motox_01", "a_m_y_motox_02" };
@@ -141,6 +141,8 @@ namespace ARS
         int _raceTimedFinishMs = 0;
         float _timeScale = 1f;
         float _idealTimeScale = 1f;
+        internal float TimeScale { get => _timeScale; set => _timeScale = value; }
+        internal float IdealTimeScale { get => _idealTimeScale; set => _idealTimeScale = value; }
         int _posUpdateTickMs = 0;
         int _longTickMs = 0;
 
@@ -208,6 +210,7 @@ namespace ARS
         }
         public ARS()
         {
+            _freeCam = new FreeCamController(this);
 
             Tick += OnTick;
             Aborted += OnAbort;
@@ -714,7 +717,7 @@ namespace ARS
             freecamItem.Activated += (sender, args) =>
             {
                 _arsMenu.Visible = false;
-                ToggleFreeCam();
+                _freeCam.Toggle();
             };
 
             NativeMenu debugMenu = new NativeMenu("Debug", "OPTIONS", "Configure ARS debug and race setup options.")
@@ -880,7 +883,7 @@ namespace ARS
                 }
 
 
-                HandleFreecam();
+                _freeCam.Update(_routeEditorActive, RouteNodes.Count);
 
                 
                 if (_routeEditorActive) DrawRouteNodes(RouteNodes, NodeHalfWidths, _pathDisplayFidelity);
@@ -1202,7 +1205,6 @@ namespace ARS
         {
             try { foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (state) p.Alpha = 255; else p.Alpha = 0; } catch (Exception) { }
         }
-        bool _inFreeCam = false;
         void HandleTrackCreator()
         {
 
@@ -1247,7 +1249,7 @@ namespace ARS
 
             
             // Route editing is available only from freecam.
-            if (_routeEditorActive && _inFreeCam)
+            if (_routeEditorActive && _freeCam.IsActive)
             {
                 if (_pathWidth < 1) _pathWidth = 1;
                 if (_bezierScale < 5f) _bezierScale = 5f;
@@ -1508,6 +1510,7 @@ namespace ARS
 
 
 
+        #if false
         public void HandleFreecam()
         {
 
@@ -1731,6 +1734,8 @@ namespace ARS
         }
 
 
+        #endif
+
         public void StartRace()
         {
             Log(LogImportance.Info, "Starting race");
@@ -1747,7 +1752,7 @@ namespace ARS
             if (Racers.Count == 0)
             {
                 UI.Notify("~r~No vehicles found with those tags.");
-                if (!_inFreeCam) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+                if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
                 return;
             }
 
@@ -1756,7 +1761,7 @@ namespace ARS
             SetupRace(true, true);
             Log(LogImportance.Info, "Set up");
 
-            if (!_inFreeCam || Game.IsScreenFadedIn) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+            if (!_freeCam.IsActive || Game.IsScreenFadedIn) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
             Game.SetControlNormal(2, GTA.Control.VehicleLookBehind, 1f);
 
 
@@ -1960,7 +1965,6 @@ namespace ARS
             }
         }
 
-        float _camIntendedHeight = 4f;
         public void SetupRace(bool placecars, bool tunecars)
         {
             LeaderboardFinish.Clear();
@@ -2344,7 +2348,7 @@ namespace ARS
 
         public bool PlayerOrCameraNearPos(Vector3 pos, float dist)
         {
-            if (_inFreeCam) return Game.Player.Character.Position.DistanceTo(pos) < dist;
+            if (_freeCam.IsActive) return Game.Player.Character.Position.DistanceTo(pos) < dist;
             else return World.RenderingCamera.Position.DistanceTo(pos) < dist;
 
 
@@ -2549,6 +2553,7 @@ namespace ARS
         }
         
 
+        #if false
         void ToggleFreeCam()
         {
 
@@ -2593,6 +2598,8 @@ namespace ARS
             }
 
         }
+
+        #endif
 
         public bool ListenMode = false;
         public void HandleCheats()
@@ -3133,7 +3140,7 @@ namespace ARS
                 UI.Notify("~r~Invalid track file.");
                 return;
             }
-            if (!_inFreeCam) Function.Call(Hash.DO_SCREEN_FADE_OUT, 200);
+            if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_OUT, 200);
             SetLoadingPromptText("Loading track...");
             Script.Wait(500);
 
@@ -3980,9 +3987,9 @@ namespace ARS
 
             World.RenderingCamera = null;
             Function.Call(Hash._STOP_ALL_SCREEN_EFFECTS);
-            if (_inFreeCam)
+            if (_freeCam.IsActive)
             {
-                ToggleFreeCam();
+                _freeCam.Toggle();
 
             }
             Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
