@@ -682,7 +682,7 @@ namespace ARS
             if (Math.Sign(Control.SteerDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
                 float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.0f));
-                float steerMultiplier = ARS.Remap(Control.Throttle, 1f, 0f, 0.5f, 0.75f, true);
+                float steerMultiplier = ARS.Remap(Control.Throttle, 1f, 0f, 0.4f, 0.5f, true);
                 speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * steerMultiplier, Handling.LateralTractionCurve * 0.5f);
 
                 // Oversteer throttle cut: steering 10 degrees past the grip limit, back off power.
@@ -2029,7 +2029,7 @@ namespace ARS
         // Braking map close-corner filtering and entrance timing.
         const float ApexBufferSeconds = 2f;
         const float EntranceBrakeBufferSeconds = 1f;
-        const float EntranceBrakeExtraDistance = 10f;
+        const float EntranceBrakeExtraDistance = 0f;
         const float SecondaryApexSpeedDifference = 5f;
         const float ConfidenceTightTurnRadiusRatio = 0.75f;
         const float ConfidenceBrakingZoneMinSeconds = 2f;

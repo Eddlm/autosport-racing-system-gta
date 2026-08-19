@@ -163,6 +163,17 @@ namespace ARS
 
             if (apexRadius >= 100f || float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
 
+            float entranceRadiusTarget = apexRadius * 2f;
+            for (int position = startPosition; position < apexPosition; position++)
+            {
+                float radius = ARS.TrackPoints[scanNodes[position]].PreciseCurveRadius;
+                if (radius < entranceRadiusTarget)
+                {
+                    startPosition = position;
+                    break;
+                }
+            }
+
             int apexNode = scanNodes[apexPosition];
             ARS.Corners.Add(new CornerPoint
             {
