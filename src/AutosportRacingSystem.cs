@@ -614,7 +614,7 @@ namespace ARS
         public static List<string> FilteredTracks = new List<string>();
         public static string TrackFilter = "airport";
         public static string DisciplineFilter = "sports";
-        public static float PowerTargetScale = 0.5f;
+        public static float PowerTargetScale = 0.7f;
         public static float PowerBracketScale = 0.1f;
 
         Dictionary<string, string> _racerTagLookup = new Dictionary<string, string>();
@@ -766,7 +766,7 @@ namespace ARS
             {
                 for (int i = 0; i < _trackListItem.Items.Count; i++)
                 {
-                    if (string.Equals(_trackListItem.Items[i], "Figureight", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(_trackListItem.Items[i], "LSIA Test Track", StringComparison.OrdinalIgnoreCase))
                     {
                         idx = i;
                         break;
@@ -3406,7 +3406,7 @@ namespace ARS
             return Function.Call<bool>(Hash._0x557E43C447E700A8, Game.GenerateHash(cheat));
         }
 
-        int _intendedOpponents = 4;
+        int _intendedOpponents = 3;
 
         
         void LoadSettings()
@@ -3420,7 +3420,7 @@ namespace ARS
                 SettingsFile = ScriptSettings.Load(@"scripts\ARS\Options.ini");
 
 
-                _intendedOpponents = SettingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 4);
+                _intendedOpponents = SettingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 3);
                 TrackFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "TrackFilter", "city");
                 DisciplineFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "Disciplines", "muscle");
                 Log(LogImportance.Info, "Loaded Options.");
@@ -3519,7 +3519,7 @@ namespace ARS
             Function.Call(Hash._SET_TEXT_ENTRY, "STRING");
             Function.Call(Hash.SET_TEXT_COLOUR, c.R, c.G, c.B, c.A);
             Function.Call(Hash.SET_TEXT_SCALE, 1f, scale);
-            Function.Call(Hash.SET_TEXT_RIGHT_JUSTIFY, true);
+            Function.Call(Hash.SET_TEXT_RIGHT_JUSTIFY, align == DrawTextAlign.Right);
             Function.Call(Hash.SET_TEXT_DROP_SHADOW, true);
             Function.Call(Hash.SET_TEXT_JUSTIFICATION, (int)align);
             Function.Call(Hash.SET_TEXT_FONT, (int)font);

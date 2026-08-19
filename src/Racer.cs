@@ -48,6 +48,7 @@ namespace ARS
         public int NextApexNode4 = -1;
         public float NextApexRadius4 = 999f;
         public float NextApexSpeed4 = 999f;
+        int _lastApexProgressNode = -1;
 
 
         public VehicleState VehicleData = new VehicleState();
@@ -139,7 +140,7 @@ namespace ARS
 
         // Speed bias that drifts according to projected track safety.
         float _confidenceMPS = 0f;
-        const float ConfidenceDriftRate = 2f;
+        const float ConfidenceDriftRate = 1f;
         const float ConfidenceMax = 5f;
         const float ConfidenceMin = -5f;
         const float ConfidenceNeutralWiggleroom = 2f;
@@ -714,6 +715,7 @@ namespace ARS
             NextApexNode4 = -1;
             NextApexRadius4 = 999f;
             NextApexSpeed4 = 999f;
+            _lastApexProgressNode = -1;
             ResetRouteProbe();
             VehicleData.AvgGroundStability = 1;
             BaseBehavior = RacerBaseBehavior.Race;
@@ -959,50 +961,33 @@ namespace ARS
             {
                 Vector3 projHalf = ProjectAhead(0.5f);
                 Vector3 proj1s = ProjectAhead(1f);
-
-                // Trajectory curvature gate: only drift off 0 when the car bends the same way as the road.
-                Vector3 dir1 = projHalf - Car.Position; dir1.Z = 0f;
-                Vector3 dir2 = proj1s - projHalf; dir2.Z = 0f;
-                float trajLen = dir1.Length() + dir2.Length();
-                float trajAngle = 0f;
-                if (trajLen > 0.1f && dir1.Length() > 0.01f && dir2.Length() > 0.01f)
-                    trajAngle = Vector3.SignedAngle(dir1.Normalized, dir2.Normalized, Vector3.WorldUp);
-
-                TrackPoint tpHalf = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projHalf)).First();
-                float roadSign = Math.Sign(tpHalf.Angle);
-                float trajSign = Math.Sign(trajAngle);
-                float lateralGs = Math.Abs(VehicleData.LocalGs.X) / 9.8f;
-                bool lateralLoadGate = lateralGs >= VehicleData.CurrentMechanicalGrip * 0.66f;
+                bool anyOff = false;
+                bool anyEdge = false;
+                Vector3[] projections = { projHalf, proj1s };
+                float carHalf = VehicleData.BoundingBox * 0.5f;
+                for (int i = 0; i < projections.Length; i++)
+                {
+                    TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projections[i])).First();
+                    float lateralOffset = Math.Abs(ARS.SignedLaneOffset(projections[i], tp.Position, tp.Direction));
+                    float edge = tp.TrackHalfWidth - carHalf;
+                    if (lateralOffset > edge) anyOff = true;
+                    else if (lateralOffset > edge - ConfidenceNeutralWiggleroom) anyEdge = true;
+                }
 
                 float target;
-                if (!lateralLoadGate || roadSign == 0f || trajSign == 0f || roadSign != trajSign)
+                float lateralGs = Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector));
+                bool lateralLoadGate = lateralGs >= VehicleData.CurrentMechanicalGrip * 0.5f;
+                if (anyOff) Control.MaxThrottle = 0.2f;
+                if (!lateralLoadGate)
                 {
                     target = 0f;
                 }
-                else
+                else if (anyOff)
                 {
-                    // Trajectory matches road curvature. Evaluate the outside edge.
-                    float carHalf = VehicleData.BoundingBox * 0.5f;
-                    bool anyOff = false;
-                    bool anyEdge = false;
-
-                    Vector3[] projections = { projHalf, proj1s };
-                    for (int i = 0; i < projections.Length; i++)
-                    {
-                        TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projections[i])).First();
-                        float cornerDir = Math.Sign(tp.Angle);
-                        if (cornerDir == 0f) continue;
-
-                        float outsideOffset = cornerDir * ARS.SignedLaneOffset(projections[i], tp.Position, tp.Direction);
-                        float edge = tp.TrackHalfWidth - carHalf;
-                        if (outsideOffset > edge) { anyOff = true; }
-                        else if (outsideOffset > edge - ConfidenceNeutralWiggleroom) { anyEdge = true; }
-                    }
-
-                    if (anyOff) target = ConfidenceMin;
-                    else if (anyEdge) target = 0f;
-                    else target = ConfidenceMax;
+                    target = ConfidenceMin;
                 }
+                else if (anyEdge) target = 0f;
+                else target = ConfidenceMax;
 
                 if (_confidenceMPS < target)
                     _confidenceMPS = Math.Min(_confidenceMPS + ConfidenceDriftRate * TickScale, target);
@@ -1272,7 +1257,6 @@ namespace ARS
         }
         public void UpdateTickData()
         {
-            VehicleData.LocalGs = (Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true) - VehicleData.SpeedVectorLocal) / Game.LastFrameTime;
             Vector3 cSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
 
             VehicleData.AccelerationVector.Add((cSpeed - _lastSpeed) / Game.LastFrameTime);
@@ -1410,6 +1394,28 @@ namespace ARS
         }
         void DrawRacerDebug()
         {
+            bool requestedInputs = ARS.DebugToggles[Options.ShowInputs];
+            bool requestedTrack = ARS.DebugToggles[Options.ShowTrackAnalysis];
+            if (!requestedInputs && !requestedTrack) return;
+
+            // During focused debugging, use the closest AI racer so input data is available.
+            Racer closestAiToPlayer = ARS.Racers
+                .Where(r => r != null && r.Driver != null && !r.Driver.IsPlayer && r.Car != null && r.Car.Exists())
+                .OrderBy(r => r.Car.Position.DistanceTo(Game.Player.Character.Position))
+                .FirstOrDefault();
+            if (closestAiToPlayer != this) return;
+
+            if (requestedInputs)
+            {
+                DrawInputTrails();
+            }
+
+            if (requestedTrack) DrawCornerDebug();
+            DrawDebugPanel(requestedInputs, requestedTrack);
+
+            // Legacy debug visuals remain below for later reintroduction, but are not called for now.
+            return;
+
             bool showAggro = ARS.DebugToggles[Options.ShowAggro];
             bool showInputs = ARS.DebugToggles[Options.ShowInputs];
             bool showTrack = ARS.DebugToggles[Options.ShowTrackAnalysis];
@@ -1417,7 +1423,11 @@ namespace ARS
             bool showAny = showAggro || showInputs || showTrack || showPhysics;
             if (!showAny) return;
 
-            if ((Car.Position - Game.Player.Character.Position).Length() > 50) return;
+            Racer closestToPlayer = ARS.Racers
+                .Where(r => r != null && r.Car != null && r.Car.Exists())
+                .OrderBy(r => r.Car.Position.DistanceTo(Game.Player.Character.Position))
+                .FirstOrDefault();
+            if (closestToPlayer != this) return;
 
 
             if (showTrack && Driver.IsPlayer && Lap >= ARS.SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) && CanRegisterNewLap)
@@ -1547,6 +1557,61 @@ namespace ARS
                     DrawRouteFollowLine();
                 }
             }
+        }
+
+        void DrawCornerDebug()
+        {
+            Vector3 from = Car.Position + new Vector3(0, 0, 0.6f);
+            DrawApexDebug(NextApexNode, Color.Yellow, from);
+            DrawApexDebug(NextApexNode2, Color.Orange, from);
+        }
+
+        void DrawApexDebug(int apexNode, Color color, Vector3 from)
+        {
+            if (apexNode < 0 || apexNode >= ARS.TrackPoints.Count) return;
+
+            Vector3 apexPosition = ARS.TrackPoints[apexNode].Position + new Vector3(0, 0, 0.6f);
+            ARS.DrawLine(from, apexPosition, color);
+            World.DrawMarker(MarkerType.DebugSphere, apexPosition, Vector3.Zero, Vector3.Zero, new Vector3(0.35f, 0.35f, 0.35f), color, false, false, 0, false, "", "", false);
+        }
+
+        void DrawDebugPanel(bool showInputs, bool showTrack)
+        {
+            int lineCount = (showInputs ? 2 : 0) + (showTrack ? 2 : 0);
+            if (lineCount == 0) return;
+
+            float lineHeight = 0.026f;
+            float top = 0.045f;
+            float height = lineCount * lineHeight + 0.02f;
+            Function.Call(Hash.DRAW_RECT, 0.89f, top + height * 0.5f, 0.22f, height, 0, 0, 0, 120);
+
+            float y = top + 0.01f;
+            if (showInputs)
+            {
+                ARS.DrawText(new Vector2(0.79f, y),
+                    "SPD   " + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + " / " + ARS.MpsToMph(Brain.CurrentIntention.Speed).ToString("0") + " mph",
+                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+                ARS.DrawText(new Vector2(0.79f, y),
+                    "ERR   " + (Brain.CurrentIntention.IntendedSpeedChangeGs * 9.8f).ToString("0.0") + " m/s",
+                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+            }
+
+            if (showTrack)
+            {
+                DrawApexPanelLine(ref y, "A1", NextApexNode, NextApexSpeed, NextApexRadius, Color.Yellow, lineHeight);
+                DrawApexPanelLine(ref y, "A2", NextApexNode2, NextApexSpeed2, NextApexRadius2, Color.Orange, lineHeight);
+            }
+        }
+
+        void DrawApexPanelLine(ref float y, string label, int apexNode, float apexSpeed, float apexRadius, Color color, float lineHeight)
+        {
+            string value = apexNode >= 0
+                ? label + "   " + ARS.MpsToMph(apexSpeed).ToString("0") + " mph | " + apexRadius.ToString("0") + " m"
+                : label + "   --";
+            ARS.DrawText(new Vector2(0.79f, y), value, color, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+            y += lineHeight;
         }
 
         // Debug: lines to the route-window sample nodes.
@@ -1819,59 +1884,105 @@ namespace ARS
 
         // Braking plan reaches corner speed this many seconds before the apex.
         const float ApexBufferSeconds = 2f;
+        const float SecondaryApexSpeedDifference = 5f;
 
-        // Refresh the four nearest precomputed apexes ahead and instance Brain.Corner from the nearest.
+        // Refresh useful precomputed apexes ahead and instance Brain.Corner from the nearest.
         void UpdateNextApexes()
         {
             Brain.Corner = null;
 
-            NextApexNode = -1;
-            NextApexRadius = 999f;
-            NextApexSpeed = 999f;
-            NextApexNode2 = -1;
-            NextApexRadius2 = 999f;
-            NextApexSpeed2 = 999f;
-            NextApexNode3 = -1;
-            NextApexRadius3 = 999f;
-            NextApexSpeed3 = 999f;
-            NextApexNode4 = -1;
-            NextApexRadius4 = 999f;
-            NextApexSpeed4 = 999f;
-
             int count = ARS.TrackPoints.Count;
-            if (count < 10 || ARS.Corners.Count == 0) return;
+            int[] heldNodes = { NextApexNode, NextApexNode2, NextApexNode3, NextApexNode4 };
+            float[] heldRadii = { NextApexRadius, NextApexRadius2, NextApexRadius3, NextApexRadius4 };
 
-            // Collect the four nearest apexes ahead (smallest forward distance).
-            int[] best = { -1, -1, -1, -1 };
-            int[] bestD = { int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue };
-            for (int i = 0; i < ARS.Corners.Count; i++)
+            bool heldTableChanged = heldNodes.Any(node => node >= 0 && !ARS.Corners.Any(corner => corner.Node == node));
+            bool lowSpeedInvalidation = heldNodes[0] >= 0 && Car.Velocity.Length() < NextApexSpeed * 0.5f;
+            if (heldTableChanged || lowSpeedInvalidation)
             {
-                int d = ForwardNodeDistance(ARS.Corners[i].Node);
-                if (d <= 0) continue; // at/past this apex
-                // Insert into the sorted best[] if closer than the current worst slot.
-                for (int slot = 0; slot < 4; slot++)
+                for (int i = 0; i < heldNodes.Length; i++) heldNodes[i] = -1;
+            }
+            else
+            {
+                // Leapfrog passed apexes forward through the held queue.
+                int shift = 0;
+                while (shift < heldNodes.Length && heldNodes[shift] >= 0 && HasPassedApex(heldNodes[shift])) shift++;
+                if (shift > 0)
                 {
-                    if (d < bestD[slot])
+                    for (int i = 0; i < heldNodes.Length - shift; i++)
                     {
-                        // Shift the worse slots down to make room.
-                        for (int s = 3; s > slot; s--)
-                        {
-                            bestD[s] = bestD[s - 1];
-                            best[s] = best[s - 1];
-                        }
-                        bestD[slot] = d;
-                        best[slot] = i;
-                        break;
+                        heldNodes[i] = heldNodes[i + shift];
+                        heldRadii[i] = heldRadii[i + shift];
+                    }
+                    for (int i = heldNodes.Length - shift; i < heldNodes.Length; i++)
+                    {
+                        heldNodes[i] = -1;
+                        heldRadii[i] = 999f;
                     }
                 }
             }
 
-            if (best[0] >= 0)
+            if (count < 10 || ARS.Corners.Count == 0)
             {
-                NextApexNode = ARS.Corners[best[0]].Node;
-                NextApexRadius = ARS.Corners[best[0]].SupposedRadius;
-                NextApexSpeed = RouteIdealSpeedForRadius(NextApexRadius);
+                heldNodes = new[] { -1, -1, -1, -1 };
+                heldRadii = new[] { 999f, 999f, 999f, 999f };
+            }
 
+            List<int> selectedNodes = new List<int>();
+            List<float> selectedRadii = new List<float>();
+            for (int i = 0; i < heldNodes.Length && selectedNodes.Count < 4; i++)
+            {
+                if (heldNodes[i] < 0) break;
+                selectedNodes.Add(heldNodes[i]);
+                selectedRadii.Add(heldRadii[i]);
+            }
+
+            // Scan forward from the last held apex, leapfrogging each accepted target.
+            List<int> upcoming = new List<int>();
+            for (int i = 0; i < ARS.Corners.Count; i++)
+            {
+                int d = ForwardNodeDistance(ARS.Corners[i].Node);
+                if (d > 0) upcoming.Add(i);
+            }
+
+            upcoming.Sort((left, right) => ForwardNodeDistance(ARS.Corners[left].Node).CompareTo(ForwardNodeDistance(ARS.Corners[right].Node)));
+            for (int i = 0; i < upcoming.Count && selectedNodes.Count < 4; i++)
+            {
+                int candidate = upcoming[i];
+                int distance = ForwardNodeDistance(ARS.Corners[candidate].Node);
+                if (selectedNodes.Contains(ARS.Corners[candidate].Node)) continue;
+                float candidateSpeed = RouteIdealSpeedForRadius(ARS.Corners[candidate].SupposedRadius);
+
+                if (selectedNodes.Count > 0)
+                {
+                    int previousDistance = ForwardNodeDistance(selectedNodes[selectedNodes.Count - 1]);
+                    float previousSpeed = RouteIdealSpeedForRadius(selectedRadii[selectedRadii.Count - 1]);
+                    if (distance <= previousDistance) continue;
+
+                    float closeCornerDistance = Math.Max(5f, previousSpeed * ApexBufferSeconds);
+                    bool closeToPrevious = distance - previousDistance <= closeCornerDistance;
+                    bool materiallySlower = previousSpeed - candidateSpeed >= SecondaryApexSpeedDifference;
+                    if (closeToPrevious && !materiallySlower) continue;
+                }
+
+                selectedNodes.Add(ARS.Corners[candidate].Node);
+                selectedRadii.Add(ARS.Corners[candidate].SupposedRadius);
+            }
+
+            NextApexNode = selectedNodes.Count > 0 ? selectedNodes[0] : -1;
+            NextApexRadius = selectedRadii.Count > 0 ? selectedRadii[0] : 999f;
+            NextApexSpeed = NextApexNode >= 0 ? RouteIdealSpeedForRadius(NextApexRadius) : 999f;
+            NextApexNode2 = selectedNodes.Count > 1 ? selectedNodes[1] : -1;
+            NextApexRadius2 = selectedRadii.Count > 1 ? selectedRadii[1] : 999f;
+            NextApexSpeed2 = NextApexNode2 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius2) : 999f;
+            NextApexNode3 = selectedNodes.Count > 2 ? selectedNodes[2] : -1;
+            NextApexRadius3 = selectedRadii.Count > 2 ? selectedRadii[2] : 999f;
+            NextApexSpeed3 = NextApexNode3 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius3) : 999f;
+            NextApexNode4 = selectedNodes.Count > 3 ? selectedNodes[3] : -1;
+            NextApexRadius4 = selectedRadii.Count > 3 ? selectedRadii[3] : 999f;
+            NextApexSpeed4 = NextApexNode4 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius4) : 999f;
+
+            if (NextApexNode >= 0)
+            {
                 // Instance Brain.Corner from the nearest apex.
                 CornerPoint cp = new CornerPoint();
                 cp.Node = NextApexNode;
@@ -1880,24 +1991,20 @@ namespace ARS
                 cp.Speed = NextApexSpeed;
                 Brain.Corner = new Corner(cp.Speed, cp);
             }
-            if (best[1] >= 0)
-            {
-                NextApexNode2 = ARS.Corners[best[1]].Node;
-                NextApexRadius2 = ARS.Corners[best[1]].SupposedRadius;
-                NextApexSpeed2 = RouteIdealSpeedForRadius(NextApexRadius2);
-            }
-            if (best[2] >= 0)
-            {
-                NextApexNode3 = ARS.Corners[best[2]].Node;
-                NextApexRadius3 = ARS.Corners[best[2]].SupposedRadius;
-                NextApexSpeed3 = RouteIdealSpeedForRadius(NextApexRadius3);
-            }
-            if (best[3] >= 0)
-            {
-                NextApexNode4 = ARS.Corners[best[3]].Node;
-                NextApexRadius4 = ARS.Corners[best[3]].SupposedRadius;
-                NextApexSpeed4 = RouteIdealSpeedForRadius(NextApexRadius4);
-            }
+            _lastApexProgressNode = CurrentTrackPoint.Node;
+        }
+
+        bool HasPassedApex(int apexNode)
+        {
+            if (apexNode < 0 || _lastApexProgressNode < 0) return false;
+            if (ARS.IsPointToPoint) return CurrentTrackPoint.Node >= apexNode;
+
+            int count = ARS.TrackPoints.Count;
+            int moved = CurrentTrackPoint.Node - _lastApexProgressNode;
+            if (moved < 0) moved += count;
+            int distanceToApex = apexNode - _lastApexProgressNode;
+            if (distanceToApex < 0) distanceToApex += count;
+            return distanceToApex <= moved;
         }
 
         // Kinematic braking map over the apex distance minus the coast reserve.
@@ -2222,7 +2329,7 @@ namespace ARS
                 return;
             }
 
-            bool lowLongitudinalGs = Math.Abs(VehicleData.LongitudinalGs) < 0.25f;
+            bool lowLongitudinalGs = Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < 0.25f;
             bool stuckCondition = lowLongitudinalGs && ARS.MpsToMph(Car.Velocity.Length()) < 5f;
 
             if (!stuckCondition)

@@ -20,8 +20,33 @@ namespace ARS
         public float BaseMechanicalGrip = 1f;
         public float CurrentMechanicalGrip = 1f;
         public float AvgGroundStability = 1;
-        public Vector3 LocalGs = Vector3.Zero;
-        public float LongitudinalGs => LocalGs.Y/9.8f;
+
+        public Vector3 AverageAcceleration
+        {
+            get
+            {
+                Vector3 total = Vector3.Zero;
+                foreach (Vector3 acceleration in AccelerationVector) total += acceleration;
+                return AccelerationVector.Count > 0 ? total / AccelerationVector.Count : Vector3.Zero;
+            }
+        }
+
+        public float GetLongitudinalGs(Vector3 forward)
+        {
+            Vector3 horizontalForward = new Vector3(forward.X, forward.Y, 0f);
+            if (horizontalForward.LengthSquared() < 0.0001f) return 0f;
+            horizontalForward.Normalize();
+            return Vector3.Dot(AverageAcceleration, horizontalForward) / 9.8f;
+        }
+
+        public float GetLateralGs(Vector3 forward)
+        {
+            Vector3 horizontalForward = new Vector3(forward.X, forward.Y, 0f);
+            if (horizontalForward.LengthSquared() < 0.0001f) return 0f;
+            horizontalForward.Normalize();
+            Vector3 right = Vector3.Cross(horizontalForward, Vector3.WorldUp).Normalized;
+            return Vector3.Dot(AverageAcceleration, right) / 9.8f;
+        }
         
         
         public float PerformanceIndex = 0;

@@ -22,7 +22,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - **Corner experiments checkpoint:** `54b33a7` — last commit before the **live corner creation** experiments. Known-good baseline (hill grip-loss exponential, radius-mapped crest aggression, later apex gate, power-matched grid). Roll back here if live-corner work goes sideways.
 
 ## Dependencies and UI
-- LemonUI SHVDN2 replaces the hand-drawn menu. Root actions: Start Race and Freecam; the race setup area exposes track selection, target grid size, power target, and power bracket; Debug submenu exposes debug toggles. If available, Figureight is selected as the default track.
+- LemonUI SHVDN2 replaces the hand-drawn menu. Root actions: Start Race and Freecam; the race setup area exposes track selection, target grid size, power target, and power bracket; Debug submenu exposes debug toggles. If available, LSIA Test Track is selected as the default track.
 - Reference: `C:\Users\Usuario\Downloads\LemonUI\SHVDN2\LemonUI.SHVDN2.dll`; deployed beside `ARS.dll`.
 - The menu opens through the existing Sprint + Context hotkey or `arsmenu`; LemonUI controls navigation/cancel/input suppression.
 
