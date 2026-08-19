@@ -1,5 +1,6 @@
 using GTA.Math;
 using System;
+using System.Collections.Generic;
 
 namespace ARS
 {
@@ -56,28 +57,144 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             if (count < 1) return;
 
-            const int chunkSize = 30;
-            const float radiusLimit = 100f;
-            for (int start = 0; start < count; start += chunkSize)
+            const float entryRadius = 100f;
+            const float exitRadius = 130f;
+            const int smoothingNodes = 2;
+            const int exitRelaxationNodes = 4;
+            const int minimumCornerNodes = 5;
+
+            // Start a circuit scan on a straight so a corner crossing the node-zero boundary
+            // is detected as one region rather than split between the end and beginning.
+            int scanStart = 0;
+            if (!ARS.IsPointToPoint)
             {
-                int bestNode = -1;
-                float bestRadius = float.MaxValue;
-                for (int node = start; node < start + chunkSize; node++)
+                for (int node = 0; node < count; node++)
                 {
-                    int index = ARS.IsPointToPoint ? node : Wrap(node, count);
-                    if (index >= count) index = count - 1;
-                    float radius = ARS.TrackPoints[index].PreciseCurveRadius;
-                    if (radius < bestRadius) { bestRadius = radius; bestNode = index; }
+                    if (SmoothedRadius(node, count, smoothingNodes) >= exitRadius)
+                    {
+                        scanStart = node;
+                        break;
+                    }
                 }
-                if (bestNode < 0 || bestRadius >= radiusLimit) continue;
-                ARS.Corners.Add(new CornerPoint
-                {
-                    Node = bestNode,
-                    SupposedRadius = bestRadius,
-                    Speed = (float)Math.Sqrt(9.81f * bestRadius)
-                });
             }
+
+            List<int> scanNodes = new List<int>(count);
+            for (int offset = 0; offset < count; offset++)
+            {
+                int node = ARS.IsPointToPoint
+                    ? scanStart + offset
+                    : Wrap(scanStart + offset, count);
+                if (node >= 0 && node < count) scanNodes.Add(node);
+            }
+
+            bool inCorner = false;
+            int cornerStartPosition = -1;
+            int cornerDirection = 0;
+            int relaxedNodes = 0;
+
+            for (int position = 0; position < scanNodes.Count; position++)
+            {
+                int node = scanNodes[position];
+                float radius = SmoothedRadius(node, count, smoothingNodes);
+                float generalRadius = ARS.TrackPoints[node].GeneralCurveRadius;
+                int direction = Math.Sign(ARS.TrackPoints[node].Angle);
+                bool cornerSignal = radius < entryRadius && generalRadius < exitRadius;
+
+                if (!inCorner)
+                {
+                    if (cornerSignal && direction != 0)
+                    {
+                        inCorner = true;
+                        cornerStartPosition = position;
+                        cornerDirection = direction;
+                        relaxedNodes = 0;
+                    }
+                    continue;
+                }
+
+                if (direction != 0 && direction != cornerDirection && cornerSignal)
+                {
+                    AddCornerRegion(scanNodes, cornerStartPosition, position - 1, count, smoothingNodes, minimumCornerNodes);
+                    cornerStartPosition = position;
+                    cornerDirection = direction;
+                    relaxedNodes = 0;
+                    continue;
+                }
+
+                if (!cornerSignal || radius >= exitRadius || direction == 0)
+                    relaxedNodes++;
+                else
+                    relaxedNodes = 0;
+
+                if (relaxedNodes >= exitRelaxationNodes)
+                {
+                    AddCornerRegion(scanNodes, cornerStartPosition, position - relaxedNodes, count, smoothingNodes, minimumCornerNodes);
+                    inCorner = false;
+                    cornerStartPosition = -1;
+                    cornerDirection = 0;
+                    relaxedNodes = 0;
+                }
+            }
+
+            if (inCorner)
+                AddCornerRegion(scanNodes, cornerStartPosition, scanNodes.Count - 1, count, smoothingNodes, minimumCornerNodes);
+
             ARS.Log(ARS.LogImportance.Info, "Apex table: " + ARS.Corners.Count + " corners");
+        }
+
+        static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int smoothingNodes, int minimumCornerNodes)
+        {
+            if (startPosition < 0 || endPosition < startPosition || endPosition - startPosition + 1 < minimumCornerNodes)
+                return;
+
+            int apexPosition = startPosition;
+            float apexRadius = float.MaxValue;
+            for (int position = startPosition; position <= endPosition; position++)
+            {
+                // The apex radius remains the precise node radius: circumradius through
+                // the node and its +/-4-node samples. Smoothing is only for region detection.
+                float radius = ARS.TrackPoints[scanNodes[position]].PreciseCurveRadius;
+                if (radius < apexRadius)
+                {
+                    apexRadius = radius;
+                    apexPosition = position;
+                }
+            }
+
+            if (apexRadius >= 100f || float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
+
+            int apexNode = scanNodes[apexPosition];
+            ARS.Corners.Add(new CornerPoint
+            {
+                Node = apexNode,
+                Angle = ARS.TrackPoints[apexNode].Angle,
+                StartNode = scanNodes[startPosition],
+                EndNode = scanNodes[endPosition],
+                LengthStart = apexPosition - startPosition,
+                LengthEnd = endPosition - apexPosition,
+                SupposedRadius = apexRadius,
+                Speed = (float)Math.Sqrt(9.81f * apexRadius)
+            });
+        }
+
+        static float SmoothedRadius(int node, int count, int halfWindow)
+        {
+            float curvature = 0f;
+            int samples = 0;
+            for (int offset = -halfWindow; offset <= halfWindow; offset++)
+            {
+                int sample = ARS.IsPointToPoint
+                    ? node + offset
+                    : Wrap(node + offset, count);
+                if (sample < 0 || sample >= count) continue;
+
+                float radius = ARS.TrackPoints[sample].PreciseCurveRadius;
+                if (radius <= 0f || radius >= 999f || float.IsNaN(radius) || float.IsInfinity(radius)) continue;
+                curvature += 1f / radius;
+                samples++;
+            }
+
+            return samples > 0 ? 1f / (curvature / samples) : 999f;
         }
 
         public static float Circumradius3D(Vector3 a, Vector3 b, Vector3 midpoint)

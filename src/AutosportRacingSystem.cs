@@ -3231,6 +3231,8 @@ namespace ARS
         {
             CornerPoint c = r.LiveCorner;
             c.Node = apex;
+            c.StartNode = start;
+            c.EndNode = end;
             c.RequiresEarlyBrake = false;
             c.RampEndNode = -1;
             c.Elevation = TrackPoints[apex].Elevation;

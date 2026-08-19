@@ -185,6 +185,8 @@ namespace ARS
     {
         public int Node = 0;
         public float Angle = 0f;
+        public int StartNode = -1;
+        public int EndNode = -1;
         public int LengthStart = 5;
         public int LengthEnd = 5;
         public float Speed = 999;

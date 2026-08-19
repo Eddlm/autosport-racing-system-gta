@@ -772,13 +772,13 @@ namespace ARS
             if (speedErrorGs > 0.0f)
             {
 
-                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs * 1f, 0f, 1f);
-                else newThrottle = ARS.Clamp(speedErrorGs * 1f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
+                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs / 0.3f, 0f, 1f);
+                else newThrottle = ARS.Clamp(speedErrorGs / 0.3f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
             }
             else if (speedErrorGs < 0.0f)
             {
-                float reverseDemand = ARS.Clamp((-speedErrorGs) * 1f, 0f, throttleCap);
-                float brakeDemand = ARS.Clamp((-speedErrorGs) * 1f, 0f, 1f);
+                    float reverseDemand = ARS.Clamp((-speedErrorGs) / 0.3f, 0f, throttleCap);
+                    float brakeDemand = ARS.Clamp((-speedErrorGs) / 0.3f, 0f, 1f);
 
                 if (wantsReverse)
                 {
@@ -812,8 +812,9 @@ namespace ARS
             }
 
 
-            Control.Brake += (newBrake - Control.Brake) * 5 * TickScale;
-            Control.Throttle += (newThrottle - Control.Throttle) * 5 * TickScale;
+            float inputChange = 10f * TickScale;
+            Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
+            Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
             Control.Throttle = Math.Min(Control.Throttle, Control.MaxThrottle);
             if (Control.MaxThrottle < 1.00f) Control.MaxThrottle += 2 * TickScale;
 
@@ -1216,7 +1217,10 @@ namespace ARS
             // Corner check: more than 8s away.
             if (Brain.Corner != null)
             {
-                float distanceToEntrance = (Brain.Corner.Point.Node - Brain.Corner.Point.LengthStart) - CurrentTrackPoint.Node;
+                int entranceNode = Brain.Corner.Point.StartNode >= 0
+                    ? Brain.Corner.Point.StartNode
+                    : OffsetCornerNode(Brain.Corner.Point.Node, -Brain.Corner.Point.LengthStart);
+                float distanceToEntrance = ForwardNodeDistance(entranceNode);
                 float timeToEntrance = distanceToEntrance * 2f / Math.Max(Car.Velocity.Length(), 1f);
                 if (timeToEntrance <= NitrousCornerLookaheadSeconds) return;
             }
@@ -1575,6 +1579,40 @@ namespace ARS
             Vector3 from = Car.Position + new Vector3(0, 0, 0.6f);
             DrawApexDebug(NextApexNode, Color.Yellow, from);
             DrawApexDebug(NextApexNode2, Color.Orange, from);
+
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                int startNode = corner.StartNode >= 0
+                    ? corner.StartNode
+                    : OffsetCornerNode(corner.Node, -corner.LengthStart);
+                int endNode = corner.EndNode >= 0
+                    ? corner.EndNode
+                    : OffsetCornerNode(corner.Node, corner.LengthEnd);
+                DrawCornerBoundary(startNode, Color.Cyan);
+                DrawCornerBoundary(endNode, Color.Magenta);
+            }
+        }
+
+        int OffsetCornerNode(int node, int offset)
+        {
+            int count = ARS.TrackPoints.Count;
+            if (count == 0) return -1;
+
+            if (ARS.IsPointToPoint)
+                return (int)ARS.Clamp(node + offset, 0, count - 1);
+
+            int wrapped = (node + offset) % count;
+            return wrapped < 0 ? wrapped + count : wrapped;
+        }
+
+        void DrawCornerBoundary(int node, Color color)
+        {
+            if (node < 0 || node >= ARS.TrackPoints.Count) return;
+
+            TrackPoint point = ARS.TrackPoints[node];
+            Vector3 right = Vector3.Cross(point.Direction, Vector3.WorldUp).Normalized;
+            Vector3 center = point.Position + new Vector3(0, 0, 0.35f);
+            ARS.DrawLine(center - right * point.TrackHalfWidth, center + right * point.TrackHalfWidth, color);
         }
 
         void DrawApexDebug(int apexNode, Color color, Vector3 from)
@@ -1897,8 +1935,10 @@ namespace ARS
             return ARS.Clamp(r, 5f, 999f);
         }
 
-        // Braking plan reaches corner speed this many seconds before the apex.
+        // Braking map close-corner filtering and entrance timing.
         const float ApexBufferSeconds = 2f;
+        const float EntranceBrakeBufferSeconds = 1f;
+        const float EntranceBrakeExtraDistance = 30f;
         const float SecondaryApexSpeedDifference = 5f;
 
         // Refresh useful precomputed apexes ahead and instance Brain.Corner from the nearest.
@@ -2022,21 +2062,31 @@ namespace ARS
             return distanceToApex <= moved;
         }
 
-        // Kinematic braking map over the apex distance minus the coast reserve.
+        // Kinematic braking map reaches apex speed at the corner entrance.
         float ApexBrakingSpeed(int apexNode, float apexSpeed)
         {
             if (apexNode < 0) return 999f;
             float velTarget = apexSpeed;
-            float coastReserve = velTarget * ApexBufferSeconds;
-            // Pressure scales coast reserve: 0 = brake earlier, 100 = brake later.
-            coastReserve *= ARS.Remap(Pressure, 100f, 0f, 0.8f, 1.2f, true);
-            // Divebomb: shorter reserve, more entry speed.
-            if (ActiveManeuver.Type == ManeuverType.DiveBomb) coastReserve *= 0.8f;
 
-            float rawDistance = ForwardNodeDistance(apexNode);
+            CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
+            int entranceNode = corner == null
+                ? apexNode
+                : (corner.StartNode >= 0
+                    ? corner.StartNode
+                    : OffsetCornerNode(apexNode, -corner.LengthStart));
+            int entranceDistance = ForwardNodeDistance(entranceNode);
+            int apexDistance = ForwardNodeDistance(apexNode);
+            // On circuits, a passed entrance wraps to the next lap. Once the apex is
+            // still ahead but its entrance is farther away, the entrance has been passed.
+            float rawDistance = !ARS.IsPointToPoint && entranceDistance > apexDistance
+                ? 0f
+                : entranceDistance;
             if (rawDistance < 0f) rawDistance = 0f;
-            float distance = rawDistance - coastReserve;
-            if (distance < 0f) distance = 0f;
+            float distance = rawDistance > 0f
+                ? rawDistance
+                    + Car.Velocity.Length() * EntranceBrakeBufferSeconds
+                    + EntranceBrakeExtraDistance
+                : 0f;
 
             float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
             float decel = brakingAbility * Handling.Gravity;
