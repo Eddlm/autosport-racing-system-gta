@@ -25,6 +25,7 @@ namespace ARS
         
         
         public float PerformanceIndex = 0;
+        public float PowerScale = 0;
         public string TextPerformanceIndex = "0";
         public float BoundingBox = 0f;
         public float SteeringLock = 0f;

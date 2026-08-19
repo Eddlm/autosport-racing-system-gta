@@ -22,7 +22,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - **Corner experiments checkpoint:** `54b33a7` — last commit before the **live corner creation** experiments. Known-good baseline (hill grip-loss exponential, radius-mapped crest aggression, later apex gate, power-matched grid). Roll back here if live-corner work goes sideways.
 
 ## Dependencies and UI
-- LemonUI SHVDN2 replaces the hand-drawn menu. Root actions: Start Race and Freecam; Debug submenu exposes debug toggles.
+- LemonUI SHVDN2 replaces the hand-drawn menu. Root actions: Start Race and Freecam; the race setup area exposes track selection, target grid size, power target, and power bracket; Debug submenu exposes debug toggles. If available, Figureight is selected as the default track.
 - Reference: `C:\Users\Usuario\Downloads\LemonUI\SHVDN2\LemonUI.SHVDN2.dll`; deployed beside `ARS.dll`.
 - The menu opens through the existing Sprint + Context hotkey or `arsmenu`; LemonUI controls navigation/cancel/input suppression.
 
@@ -80,7 +80,8 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 ## Grid car selection (power-matched)
 - **Vehicle stats can be read from the model without spawning**: natives like `GET_VEHICLE_MODEL_ACCELERATION` (power), `GET_VEHICLE_MODEL_MAX_TRACTION` (grip), and the estimated-max-speed native take a **model hash** (as opposed to the spawned-handle versions, e.g. `GET_VEHICLE_ACCELERATION` / `_0x53AF99BAA671CA47`). This is what makes pre-race vehicle evaluation cheap — no car needs to exist yet.
 - **Model-power cache (`ModelPowerCache`)**: scans the `Vehicles\*.xml` pool for which models exist (no natives on the background thread), then `BuildPowerCache()` runs on the **main script thread** after loading and fills model → power via the native. **GTA natives must not be called on the background load thread (`Task.Run`) — that hard-crashes the game**; always do native-per-car reads on the main thread. Grid selection later is a pure cache lookup — no natives called at race start for the matched set.
-- **Selection** (`FillCachedCandidates`): candidates are kept if their cached power falls within a tolerance of a **reference power**; the qualified pool is shuffled and trimmed to grid size. Currently the reference is hardcoded (testing) and the old Disciplines tag filter is bypassed so the whole `Vehicles\` pool is considered. Watch the log for the candidate count to debug the band width.
+- **Selection** (`FillCachedCandidates`): candidates are kept if their cached power falls within the user-selected power bracket around the user-selected power target; the qualified pool is shuffled and trimmed to the requested grid size. The old Disciplines tag filter is bypassed so the whole `Vehicles\` pool is considered. Watch the log for the candidate count to debug the band width.
+- The leaderboard displays each car's combined power scale rather than the former three-part performance string. It uses the same model acceleration plus scaled estimated-top-speed formula as grid selection.
 
 ## Per-racer state
 - **Aggression** (0–100): grid-assigned (first=0 … last=100, rounded to 10); player stays 50. Scales avoidance extra buffer and allowed TCS wheelspin.
@@ -102,6 +103,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **Remap with a descending output range + `clamp=true` is inverted** by `Clamp(val, min, max)` when `min > max` (NaN also compares less-than-anything). Keep output clamps ascending — use a descending *input* range when you want a reversed map. (This bit us repeatedly.)
 - **NaN discipline**: `Clamp(NaN, -limit, +limit)` returns the min bound → instant full-lock. Guard steering outputs and any clamp input that can be non-finite.
 - **Sub-200 ms lag** acceptable; don't add plumbing for one-frame quirks.
+- Synchronous setup/loading work can pause `OnTick` and temporarily suppress per-frame debug visuals; revisit those operations later if setup stalls need to become incremental.
 - **Speed asymmetry** (above) is intentional.
 
 ## Known TODOs / open items

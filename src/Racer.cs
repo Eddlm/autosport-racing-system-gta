@@ -291,7 +291,10 @@ namespace ARS
             Handling.Grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
 
             VehicleData.PerformanceIndex = (int)((Handling.EstimatedTopSpeed * 5) + (Handling.Grip * 100) + (Handling.Acceleration * 500));
-            VehicleData.TextPerformanceIndex = ((int)(Handling.EstimatedTopSpeed / 1.2) + " | " + (int)(Handling.Acceleration * 200) + " | " + (int)(Handling.Grip * 20));
+            float modelPower = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, Car.Model.Hash);
+            float modelTopSpeed = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, Car.Model.Hash)) / ARS.TopSpeedScaleDivisor;
+            VehicleData.PowerScale = modelPower + modelTopSpeed;
+            VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.00");
 
             Car.Repair();
         }
@@ -968,9 +971,11 @@ namespace ARS
                 TrackPoint tpHalf = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projHalf)).First();
                 float roadSign = Math.Sign(tpHalf.Angle);
                 float trajSign = Math.Sign(trajAngle);
+                float lateralGs = Math.Abs(VehicleData.LocalGs.X) / 9.8f;
+                bool lateralLoadGate = lateralGs >= VehicleData.CurrentMechanicalGrip * 0.66f;
 
                 float target;
-                if (roadSign == 0f || trajSign == 0f || roadSign != trajSign)
+                if (!lateralLoadGate || roadSign == 0f || trajSign == 0f || roadSign != trajSign)
                 {
                     target = 0f;
                 }

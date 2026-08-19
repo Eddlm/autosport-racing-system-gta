@@ -197,6 +197,7 @@ namespace ARS
             {
                 
                 BuildPowerCache();
+                RefreshPowerControls();
                 FillCachedCandidates(DisciplineFilter, _intendedOpponents, true);
                 RefreshTrackList(); // tracks are now discovered in _trackTags. Populate the menu list.
                 Log(LogImportance.Info, "Initialization complete.", true);
@@ -613,6 +614,8 @@ namespace ARS
         public static List<string> FilteredTracks = new List<string>();
         public static string TrackFilter = "airport";
         public static string DisciplineFilter = "sports";
+        public static float PowerTargetScale = 0.5f;
+        public static float PowerBracketScale = 0.1f;
 
         Dictionary<string, string> _racerTagLookup = new Dictionary<string, string>();
         public static int TrackListPos = 0;
@@ -623,6 +626,11 @@ namespace ARS
         NativeListItem<string> _trackListItem;
         readonly List<string> _trackListPaths = new List<string>(); // parallel to _trackListItem.Items
         string _selectedTrackPath = null;
+        NativeListItem<string> _gridSizeItem;
+        NativeListItem<string> _powerTargetItem;
+        NativeListItem<string> _powerBracketItem;
+        readonly List<float> _powerTargetValues = new List<float>();
+        readonly List<float> _powerBracketValues = new List<float>();
 
         void InitializeMenu()
         {
@@ -642,6 +650,32 @@ namespace ARS
                     _selectedTrackPath = _trackListPaths[args.Index];
             };
             _arsMenu.Add(_trackListItem);
+
+            _gridSizeItem = new NativeListItem<string>("Target Grid Size", "Target number of vehicles for the grid.", new[] { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12" });
+            _gridSizeItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index >= 0 && args.Index <= 12)
+                    _intendedOpponents = args.Index;
+            };
+            _intendedOpponents = (int)Clamp(_intendedOpponents, 0, 12);
+            _gridSizeItem.SelectedIndex = _intendedOpponents;
+            _arsMenu.Add(_gridSizeItem);
+
+            _powerTargetItem = new NativeListItem<string>("Power Target", "Target combined power scale for grid selection.", Array.Empty<string>());
+            _powerTargetItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index >= 0 && args.Index < _powerTargetValues.Count)
+                    PowerTargetScale = _powerTargetValues[args.Index];
+            };
+            _arsMenu.Add(_powerTargetItem);
+
+            _powerBracketItem = new NativeListItem<string>("Power Bracket", "Allowed power scale above or below the target.", Array.Empty<string>());
+            _powerBracketItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index >= 0 && args.Index < _powerBracketValues.Count)
+                    PowerBracketScale = _powerBracketValues[args.Index];
+            };
+            _arsMenu.Add(_powerBracketItem);
 
             NativeItem startRaceItem = new NativeItem("Start Race", "Load the selected track, build the grid, and start a race.");
             startRaceItem.Activated += (sender, args) => StartRaceFromMenu();
@@ -696,6 +730,9 @@ namespace ARS
                 LoadTrack(LoadTrackFile(FilteredTracks[0]));
             }
 
+            // Rebuild the cached candidate pool after menu changes. The initial load
+            // populates this cache using the startup grid-size and power settings.
+            FillCachedCandidates(DisciplineFilter, _intendedOpponents, true);
             LoadGrid(DisciplineFilter, _intendedOpponents);
             StartRace();
         }
@@ -725,10 +762,75 @@ namespace ARS
 
             int idx = -1;
             if (keepVisible != null) idx = _trackListItem.Items.IndexOf(keepVisible);
+            if (idx < 0 && keepVisible == null)
+            {
+                for (int i = 0; i < _trackListItem.Items.Count; i++)
+                {
+                    if (string.Equals(_trackListItem.Items[i], "Figureight", StringComparison.OrdinalIgnoreCase))
+                    {
+                        idx = i;
+                        break;
+                    }
+                }
+            }
             _trackListItem.SelectedIndex = idx >= 0 ? idx : 0;
 
             if (_trackListPaths.Count > 0)
                 _selectedTrackPath = _trackListPaths[_trackListItem.SelectedIndex];
+        }
+
+        void RefreshPowerControls()
+        {
+            if (_powerTargetItem == null || _powerBracketItem == null) return;
+
+            float min = float.MaxValue;
+            float max = float.MinValue;
+            foreach (string model in ModelPowerCache.Keys)
+            {
+                float power;
+                float speed;
+                if (!ModelPowerCache.TryGetValue(model, out power) || !ModelTopSpeedScaledCache.TryGetValue(model, out speed)) continue;
+                float scale = power + speed;
+                if (float.IsNaN(scale) || float.IsInfinity(scale)) continue;
+                if (scale < min) min = scale;
+                if (scale > max) max = scale;
+            }
+            if (min == float.MaxValue) return;
+
+            PowerTargetScale = Clamp(PowerTargetScale, min, max);
+            PowerBracketScale = Clamp(PowerBracketScale, 0f, max - min);
+
+            _powerTargetValues.Clear();
+            AddPowerValues(_powerTargetValues, min, max);
+            _powerBracketValues.Clear();
+            AddPowerValues(_powerBracketValues, 0f, max - min);
+
+            _powerTargetItem.Items.Clear();
+            foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0.00"));
+            _powerTargetItem.SelectedIndex = FindNearestPowerValue(_powerTargetValues, PowerTargetScale);
+
+            _powerBracketItem.Items.Clear();
+            foreach (float value in _powerBracketValues) _powerBracketItem.Items.Add(value.ToString("0.00"));
+            _powerBracketItem.SelectedIndex = FindNearestPowerValue(_powerBracketValues, PowerBracketScale);
+        }
+
+        static void AddPowerValues(List<float> values, float min, float max)
+        {
+            const float step = 0.01f;
+            for (float value = min; value < max; value += step) values.Add((float)Math.Round(value, 2));
+            if (values.Count == 0 || values[values.Count - 1] != max) values.Add(max);
+        }
+
+        static int FindNearestPowerValue(List<float> values, float target)
+        {
+            int nearest = 0;
+            float distance = float.MaxValue;
+            for (int i = 0; i < values.Count; i++)
+            {
+                float candidateDistance = Math.Abs(values[i] - target);
+                if (candidateDistance < distance) { distance = candidateDistance; nearest = i; }
+            }
+            return nearest;
         }
         public static float MpsToMph(float ms)
         {
@@ -3304,7 +3406,7 @@ namespace ARS
             return Function.Call<bool>(Hash._0x557E43C447E700A8, Game.GenerateHash(cheat));
         }
 
-        int _intendedOpponents = 5;
+        int _intendedOpponents = 4;
 
         
         void LoadSettings()
@@ -3318,7 +3420,7 @@ namespace ARS
                 SettingsFile = ScriptSettings.Load(@"scripts\ARS\Options.ini");
 
 
-                _intendedOpponents = SettingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 5);
+                _intendedOpponents = SettingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 4);
                 TrackFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "TrackFilter", "city");
                 DisciplineFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "Disciplines", "muscle");
                 Log(LogImportance.Info, "Loaded Options.");
@@ -3730,7 +3832,7 @@ namespace ARS
         void FillCachedCandidates(string dlist, int maxcars, bool allowScriptYield = true)
         {
             bool allowDuplicates = SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AllowDuplicates", true);
-            _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPowerCache, ModelTopSpeedScaledCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text));
+            _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPowerCache, ModelTopSpeedScaledCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale);
         }
 
         void LoadGrid(string dlist, int maxcars)

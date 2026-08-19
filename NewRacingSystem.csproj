@@ -71,21 +71,21 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DataStructures.cs" />
-    <Compile Include="FreeCamController.cs" />
-    <Compile Include="TrackRepository.cs" />
-    <Compile Include="TrackBuilder.cs" />
-    <Compile Include="TrackVisuals.cs" />
-    <Compile Include="GridBuilder.cs" />
-    <Compile Include="RouteAnalysis.cs" />
-    <Compile Include="VehicleCatalog.cs" />
-    <Compile Include="VehicleSelector.cs" />
-    <Compile Include="VehicleMemory.cs" />
-    <Compile Include="PersonalitySet.cs" />
-    <Compile Include="Racer.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="AutosportRacingSystem.cs" />
-    <Compile Include="SkillSet.cs" />
+    <Compile Include="src\DataStructures.cs" />
+    <Compile Include="src\FreeCamController.cs" />
+    <Compile Include="src\TrackRepository.cs" />
+    <Compile Include="src\TrackBuilder.cs" />
+    <Compile Include="src\TrackVisuals.cs" />
+    <Compile Include="src\GridBuilder.cs" />
+    <Compile Include="src\RouteAnalysis.cs" />
+    <Compile Include="src\VehicleCatalog.cs" />
+    <Compile Include="src\VehicleSelector.cs" />
+    <Compile Include="src\VehicleMemory.cs" />
+    <Compile Include="src\PersonalitySet.cs" />
+    <Compile Include="src\Racer.cs" />
+    <Compile Include="src\Properties\AssemblyInfo.cs" />
+    <Compile Include="src\AutosportRacingSystem.cs" />
+    <Compile Include="src\SkillSet.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

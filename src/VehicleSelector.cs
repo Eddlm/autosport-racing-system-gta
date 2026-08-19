@@ -6,10 +6,8 @@ namespace ARS
 {
     public static class VehicleSelector
     {
-        public static List<XmlDocument> Select(Dictionary<string, string> files, Dictionary<string, float> powers, Dictionary<string, float> topSpeeds, int maxCars, bool allowDuplicates, bool allowYield, Action yield, Func<int, int, int> random, Action<string> log)
+        public static List<XmlDocument> Select(Dictionary<string, string> files, Dictionary<string, float> powers, Dictionary<string, float> topSpeeds, int maxCars, bool allowDuplicates, bool allowYield, Action yield, Func<int, int, int> random, Action<string> log, float powerTarget, float powerBracket)
         {
-            const float tolerance = 0.1f;
-            const float referencePowerScale = 0.5f;
             List<XmlDocument> candidates = new List<XmlDocument>();
             int cooldown = 0;
             foreach (string path in files.Keys)
@@ -17,7 +15,7 @@ namespace ARS
                 string model = TrackRepository.ReadVehicleModel(path);
                 float power;
                 float speed;
-                if (!string.IsNullOrWhiteSpace(model) && powers.TryGetValue(model, out power) && topSpeeds.TryGetValue(model, out speed) && Math.Abs(power + speed - referencePowerScale) <= tolerance)
+                if (!string.IsNullOrWhiteSpace(model) && powers.TryGetValue(model, out power) && topSpeeds.TryGetValue(model, out speed) && Math.Abs(power + speed - powerTarget) <= powerBracket)
                 {
                     try { XmlDocument document = new XmlDocument(); document.Load(path); candidates.Add(document); }
                     catch (Exception) { }
@@ -27,13 +25,6 @@ namespace ARS
 
             log("Power-matched candidates: " + candidates.Count);
             Shuffle(candidates, random);
-            if (candidates.Count > maxCars) candidates.RemoveRange(maxCars, candidates.Count - maxCars);
-            if (candidates.Count < maxCars && allowDuplicates && candidates.Count > 0)
-            {
-                List<XmlDocument> copies = new List<XmlDocument>();
-                foreach (XmlDocument candidate in candidates) copies.Add(CreateDuplicate(candidate));
-                while (candidates.Count < maxCars) candidates.AddRange(copies);
-            }
             if (candidates.Count > maxCars) candidates.RemoveRange(maxCars, candidates.Count - maxCars);
             return candidates;
         }
