@@ -3330,11 +3330,7 @@ namespace ARS
             float rawDistance = brakeTargetNode - r.CurrentTrackPoint.Node;
             if (!IsPointToPoint && rawDistance < 0f) rawDistance += TrackPoints.Count;
             if (rawDistance < 0f) rawDistance = 0f;
-            // Divebombs shorten the reserve to brake later.
-            float effectiveCoastReserve = r.ActiveManeuver.Type == ManeuverType.DiveBomb
-                ? coastReserve * 0.8f
-                : coastReserve;
-            float distance = rawDistance - effectiveCoastReserve;
+            float distance = rawDistance - coastReserve;
             if (distance < 0f) distance = 0f;
 
             float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip);
