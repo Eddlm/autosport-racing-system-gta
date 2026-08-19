@@ -140,6 +140,7 @@ namespace ARS
 
         // Speed bias that drifts according to projected track safety.
         float _confidence = 0f;
+        float _vehicleTrajectoryRadius = 999f;
         const float ConfidenceNeutralWiggleroom = 2f;
 
 
@@ -772,13 +773,13 @@ namespace ARS
             if (speedErrorGs > 0.0f)
             {
 
-                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs / 0.3f, 0f, 1f);
-                else newThrottle = ARS.Clamp(speedErrorGs / 0.3f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
+                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs / 0.66f, 0f, 1f);
+                else newThrottle = ARS.Clamp(speedErrorGs / 0.66f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
             }
             else if (speedErrorGs < 0.0f)
             {
-                    float reverseDemand = ARS.Clamp((-speedErrorGs) / 0.3f, 0f, throttleCap);
-                    float brakeDemand = ARS.Clamp((-speedErrorGs) / 0.3f, 0f, 1f);
+                    float reverseDemand = ARS.Clamp((-speedErrorGs) / 0.66f, 0f, throttleCap);
+                    float brakeDemand = ARS.Clamp((-speedErrorGs) / 0.66f, 0f, 1f);
 
                 if (wantsReverse)
                 {
@@ -803,9 +804,10 @@ namespace ARS
             if (newBrake > 0.0) newThrottle = 0; else newBrake = 0;
 
             // Confidence is an additive longitudinal input offset. It may not cancel braking.
-            if (_confidence > 0f && newBrake <= 0f)
+            if (!ConfidenceEnabled) _confidence = 0f;
+            if (ConfidenceEnabled && _confidence > 0f && newBrake <= 0f)
                 newThrottle = ARS.Clamp(newThrottle + _confidence, 0f, throttleCap);
-            else if (_confidence < 0f)
+            else if (ConfidenceEnabled && _confidence < 0f)
             {
                 newThrottle = 0f;
                 newBrake = ARS.Clamp(newBrake - _confidence, 0f, 1f);
@@ -881,7 +883,9 @@ namespace ARS
             else if (Brain.Corner != null) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
 
             // Route speed from the triple-check circumradius window.
-            float followTrackSpd = RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint);
+            float followTrackSpd = RouteSpeedEnabled
+                ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint)
+                : 999f;
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
@@ -931,6 +935,7 @@ namespace ARS
 
             // Pure apex speed for the corner-approach gate.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
+            float cornerApexSpeedWithVerticalGrip = _cornerSpd;
 
             // Corner crest/dip: same check as route, centered on the apex node.
             if (Brain.Corner != null)
@@ -954,17 +959,29 @@ namespace ARS
                     Vector3 ccEnd = ARS.TrackPoints[cornerCrestEnd].Position;
                     float cornerDeltaGs = ARS.HillGripDeltaGs(ccStart, ccMid, ccEnd, _cornerSpd);
                     float cornerEffectiveDelta = cornerDeltaGs;
-                    if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - CrestAggression);
+                    float cornerRadius = NextApexRadius;
+                    float cornerAggression = ARS.Remap(cornerRadius, 100f, 300f, 0f, 1f, true);
+                    if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - cornerAggression);
                     float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, 0.8f);
-                    cornerSpd *= (float)Math.Sqrt(cornerVerticalGrip);
+                    float cornerVerticalSpeedFactor = (float)Math.Sqrt(cornerVerticalGrip);
+                    cornerSpd *= cornerVerticalSpeedFactor;
+                    cornerApexSpeedWithVerticalGrip *= cornerVerticalSpeedFactor;
                 }
             }
+
+            // During the generated corner region, apex speed is the sole speed authority.
+            CornerPoint activeCorner = NextApexNode >= 0
+                ? ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode)
+                : null;
+            if (activeCorner != null && IsWithinCorner(activeCorner))
+                cornerSpd = cornerApexSpeedWithVerticalGrip;
 
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
 
             // ConfidenceMPS: drift toward a target based on the 0.5s and 1s projections.
+            if (ConfidenceEnabled)
             {
                 Vector3 projHalf = ProjectAhead(0.5f);
                 Vector3 proj1s = ProjectAhead(1f);
@@ -987,15 +1004,22 @@ namespace ARS
                 }
 
                 float target;
-                float absoluteLateralGs = Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector));
-                float positiveLongitudinalGs = Math.Max(0f, VehicleData.GetLongitudinalGs(Car.ForwardVector));
-                float halfGripGs = VehicleData.CurrentMechanicalGrip * 0.5f;
-                bool confidenceGate = absoluteLateralGs > halfGripGs && positiveLongitudinalGs < halfGripGs;
+                float longitudinalGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
+                float lateralGs = VehicleData.GetLateralGs(Car.ForwardVector);
+                float confidenceGripThreshold = VehicleData.CurrentMechanicalGrip * 0.2f;
+                float overallGs = (float)Math.Sqrt(longitudinalGs * longitudinalGs + lateralGs * lateralGs);
+                bool confidenceGate = Math.Abs(longitudinalGs) < confidenceGripThreshold
+                    && overallGs > confidenceGripThreshold;
+                float speed = Car.Velocity.Length();
+                float theoreticalRadius = speed * speed
+                    / Math.Max(VehicleData.CurrentMechanicalGrip * Handling.Gravity, 0.1f);
+                bool turningInWell = theoreticalRadius > 5f
+                    && _vehicleTrajectoryRadius <= theoreticalRadius * ConfidenceTightTurnRadiusRatio;
                 if (!confidenceGate)
                 {
                     target = 0f;
                 }
-                else if (anyOff)
+                else if (anyOff && !turningInWell)
                 {
                     target = -1f;
                 }
@@ -1007,6 +1031,10 @@ namespace ARS
                     _confidence = Math.Min(_confidence + confidenceDriftRate * TickScale, target);
                 else if (_confidence > target)
                     _confidence = Math.Max(_confidence - confidenceDriftRate * TickScale, target);
+            }
+            else
+            {
+                _confidence = 0f;
             }
 
             // Yield: cap throttle to 0.5 to stay behind.
@@ -1030,7 +1058,6 @@ namespace ARS
         const float SlopeGripLossK = 3f;
         const float SlopeGripLossExp = 2f;
         // Reduces crest-induced grip loss as curvature allows more aggressive traversal.
-        const float CrestAggression = 0.5f;
 
         float GetFollowPointSlopeAngle()
         {
@@ -1185,6 +1212,22 @@ namespace ARS
             return fwd;
         }
 
+        bool IsWithinCorner(CornerPoint corner)
+        {
+            if (corner == null || corner.StartNode < 0 || corner.EndNode < 0) return false;
+
+            if (ARS.IsPointToPoint)
+                return CurrentTrackPoint.Node >= corner.StartNode
+                    && CurrentTrackPoint.Node <= corner.EndNode;
+
+            if (corner.StartNode <= corner.EndNode)
+                return CurrentTrackPoint.Node >= corner.StartNode
+                    && CurrentTrackPoint.Node <= corner.EndNode;
+
+            return CurrentTrackPoint.Node >= corner.StartNode
+                || CurrentTrackPoint.Node <= corner.EndNode;
+        }
+
         int BehindNodeDistance(int targetNode)
         {
             int behind = CurrentTrackPoint.Node - targetNode;
@@ -1283,6 +1326,13 @@ namespace ARS
             VehicleData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
             Brain.CurrentPerception.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
 
+            Vector3 projectedHalf = ProjectAhead(0.5f);
+            Vector3 projectedOne = ProjectAhead(1f);
+            _vehicleTrajectoryRadius = ARS.Circumradius3D(Car.Position, projectedHalf, projectedOne);
+            if (float.IsNaN(_vehicleTrajectoryRadius) || float.IsInfinity(_vehicleTrajectoryRadius))
+                _vehicleTrajectoryRadius = 999f;
+            _vehicleTrajectoryRadius = ARS.Clamp(_vehicleTrajectoryRadius, 5f, 999f);
+
 
             if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer)
             {
@@ -1297,7 +1347,7 @@ namespace ARS
                 }
             }
 
-            while (_trailSamples.Count > 10) _trailSamples.RemoveAt(0);
+            while (_trailSamples.Count > 100) _trailSamples.RemoveAt(0);
         }
 
 
@@ -1425,7 +1475,11 @@ namespace ARS
                 DrawInputTrails();
             }
 
-            if (requestedTrack) DrawCornerDebug();
+            if (requestedTrack)
+            {
+                DrawCornerDebug();
+                DrawProjectionDebug();
+            }
             DrawDebugPanel(requestedInputs, requestedTrack);
 
             // Legacy debug visuals remain below for later reintroduction, but are not called for now.
@@ -1527,6 +1581,9 @@ namespace ARS
 
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~o~R: ~w~" + Brain.CurrentPerception.HighSpeedCurveRadius.ToString("0"), Color.White, 0.4f);
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f), "~p~pitch ~w~" + _debugHillPitch.ToString("0.0"), Color.White, 0.4f);
+
+                    // Projection debug is also shown with Track Analysis.
+                    DrawProjectionDebug();
                 }
 
                 if (showAggro)
@@ -1536,27 +1593,7 @@ namespace ARS
 
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2f), ((int)Pressure).ToString(), Color.White, 0.4f);
 
-                    // Projection debug: car to 0.5s to 1s. Red if off-track.
-                    Vector3 projectedHalf = ProjectAhead(0.5f);
-                    Vector3 projected = ProjectAhead();
-                    Vector3 lineStart = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.6f);
-                    ARS.DrawLine(lineStart, projectedHalf, Color.White);
-                    ARS.DrawLine(projectedHalf, projected, Color.White);
-
-                    TrackPoint projectedTrackPoint = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
-                    float projectedLateralOffset = Math.Abs(ARS.SignedLaneOffset(projected, projectedTrackPoint.Position, projectedTrackPoint.Direction));
-                    float projectedSafeBound = projectedTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
-                    bool willGoOffTrack = projectedLateralOffset > projectedSafeBound;
-
-                    Color projectionColor = willGoOffTrack ? Color.Red : Color.White;
-                    World.DrawMarker(MarkerType.DebugSphere, projected, Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), projectionColor, false, false, 0, false, "", "", false);
-                    World.DrawMarker(MarkerType.DebugSphere, projectedHalf, Vector3.Zero, Vector3.Zero, new Vector3(0.4f, 0.4f, 0.4f), projectionColor, false, false, 0, false, "", "", false);
-
-                    // Track edges at the projected progress.
-                    Vector3 trackRight = Vector3.Cross(projectedTrackPoint.Direction, Vector3.WorldUp).Normalized;
-                    Vector3 leftEdge = projectedTrackPoint.Position - trackRight * projectedTrackPoint.TrackHalfWidth;
-                    Vector3 rightEdge = projectedTrackPoint.Position + trackRight * projectedTrackPoint.TrackHalfWidth;
-                    ARS.DrawLine(leftEdge, rightEdge, willGoOffTrack ? Color.Red : Color.Green);
+                    DrawProjectionDebug();
                 }
 
                 if (showTrack)
@@ -1572,6 +1609,31 @@ namespace ARS
                     DrawRouteFollowLine();
                 }
             }
+        }
+
+        void DrawProjectionDebug()
+        {
+            // Projection debug: car to 0.5s to 1s. Red if off-track.
+            Vector3 projectedHalf = ProjectAhead(0.5f);
+            Vector3 projected = ProjectAhead();
+            Vector3 lineStart = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.6f);
+            ARS.DrawLine(lineStart, projectedHalf, Color.White);
+            ARS.DrawLine(projectedHalf, projected, Color.White);
+
+            TrackPoint projectedTrackPoint = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projected)).First();
+            float projectedLateralOffset = Math.Abs(ARS.SignedLaneOffset(projected, projectedTrackPoint.Position, projectedTrackPoint.Direction));
+            float projectedSafeBound = projectedTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+            bool willGoOffTrack = projectedLateralOffset > projectedSafeBound;
+
+            Color projectionColor = willGoOffTrack ? Color.Red : Color.White;
+            World.DrawMarker(MarkerType.DebugSphere, projected, Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), projectionColor, false, false, 0, false, "", "", false);
+            World.DrawMarker(MarkerType.DebugSphere, projectedHalf, Vector3.Zero, Vector3.Zero, new Vector3(0.4f, 0.4f, 0.4f), projectionColor, false, false, 0, false, "", "", false);
+
+            // Track edges at the projected progress.
+            Vector3 trackRight = Vector3.Cross(projectedTrackPoint.Direction, Vector3.WorldUp).Normalized;
+            Vector3 leftEdge = projectedTrackPoint.Position - trackRight * projectedTrackPoint.TrackHalfWidth;
+            Vector3 rightEdge = projectedTrackPoint.Position + trackRight * projectedTrackPoint.TrackHalfWidth;
+            ARS.DrawLine(leftEdge, rightEdge, willGoOffTrack ? Color.Red : Color.Green);
         }
 
         void DrawCornerDebug()
@@ -1938,8 +2000,11 @@ namespace ARS
         // Braking map close-corner filtering and entrance timing.
         const float ApexBufferSeconds = 2f;
         const float EntranceBrakeBufferSeconds = 1f;
-        const float EntranceBrakeExtraDistance = 30f;
+        const float EntranceBrakeExtraDistance = 10f;
         const float SecondaryApexSpeedDifference = 5f;
+        const float ConfidenceTightTurnRadiusRatio = 0.75f;
+        const bool RouteSpeedEnabled = true;
+        const bool ConfidenceEnabled = true;
 
         // Refresh useful precomputed apexes ahead and instance Brain.Corner from the nearest.
         void UpdateNextApexes()
@@ -2083,12 +2148,12 @@ namespace ARS
                 : entranceDistance;
             if (rawDistance < 0f) rawDistance = 0f;
             float distance = rawDistance > 0f
-                ? rawDistance
-                    + Car.Velocity.Length() * EntranceBrakeBufferSeconds
-                    + EntranceBrakeExtraDistance
+                ? Math.Max(0f, rawDistance
+                    - Car.Velocity.Length() * EntranceBrakeBufferSeconds
+                    - EntranceBrakeExtraDistance)
                 : 0f;
 
-            float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
+            float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip) * 0.8f;
             float decel = brakingAbility * Handling.Gravity;
             if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
 
