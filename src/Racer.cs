@@ -139,10 +139,7 @@ namespace ARS
         const float SpeedCapRiseRate = 30f;
 
         // Speed bias that drifts according to projected track safety.
-        float _confidenceMPS = 0f;
-        const float ConfidenceDriftRate = 1f;
-        const float ConfidenceMax = 5f;
-        const float ConfidenceMin = -5f;
+        float _confidence = 0f;
         const float ConfidenceNeutralWiggleroom = 2f;
 
 
@@ -805,6 +802,15 @@ namespace ARS
 
             if (newBrake > 0.0) newThrottle = 0; else newBrake = 0;
 
+            // Confidence is an additive longitudinal input offset. It may not cancel braking.
+            if (_confidence > 0f && newBrake <= 0f)
+                newThrottle = ARS.Clamp(newThrottle + _confidence, 0f, throttleCap);
+            else if (_confidence < 0f)
+            {
+                newThrottle = 0f;
+                newBrake = ARS.Clamp(newBrake - _confidence, 0f, 1f);
+            }
+
 
             Control.Brake += (newBrake - Control.Brake) * 5 * TickScale;
             Control.Throttle += (newThrottle - Control.Throttle) * 5 * TickScale;
@@ -968,33 +974,38 @@ namespace ARS
                 for (int i = 0; i < projections.Length; i++)
                 {
                     TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projections[i])).First();
-                    float lateralOffset = Math.Abs(ARS.SignedLaneOffset(projections[i], tp.Position, tp.Direction));
+                    float signedLateralOffset = ARS.SignedLaneOffset(projections[i], tp.Position, tp.Direction);
+                    bool isInsideCorner = Math.Abs(tp.Angle) > 1f
+                        && Math.Sign(signedLateralOffset) == -Math.Sign(tp.Angle);
+                    if (isInsideCorner) continue;
+
+                    float lateralOffset = Math.Abs(signedLateralOffset);
                     float edge = tp.TrackHalfWidth - carHalf;
                     if (lateralOffset > edge) anyOff = true;
                     else if (lateralOffset > edge - ConfidenceNeutralWiggleroom) anyEdge = true;
                 }
 
                 float target;
-                float lateralGs = Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector));
-                bool lateralLoadGate = lateralGs >= VehicleData.CurrentMechanicalGrip * 0.5f;
-                if (anyOff) Control.MaxThrottle = 0.2f;
-                if (!lateralLoadGate)
+                float absoluteLateralGs = Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector));
+                float positiveLongitudinalGs = Math.Max(0f, VehicleData.GetLongitudinalGs(Car.ForwardVector));
+                float halfGripGs = VehicleData.CurrentMechanicalGrip * 0.5f;
+                bool confidenceGate = absoluteLateralGs > halfGripGs && positiveLongitudinalGs < halfGripGs;
+                if (!confidenceGate)
                 {
                     target = 0f;
                 }
                 else if (anyOff)
                 {
-                    target = ConfidenceMin;
+                    target = -1f;
                 }
                 else if (anyEdge) target = 0f;
-                else target = ConfidenceMax;
+                else target = 1f;
 
-                if (_confidenceMPS < target)
-                    _confidenceMPS = Math.Min(_confidenceMPS + ConfidenceDriftRate * TickScale, target);
-                else if (_confidenceMPS > target)
-                    _confidenceMPS = Math.Max(_confidenceMPS - ConfidenceDriftRate * TickScale, target);
-
-                Brain.CurrentIntention.Speed += _confidenceMPS;
+                float confidenceDriftRate = Math.Max(0.5f, Car.Velocity.Length() * 0.01f);
+                if (_confidence < target)
+                    _confidence = Math.Min(_confidence + confidenceDriftRate * TickScale, target);
+                else if (_confidence > target)
+                    _confidence = Math.Max(_confidence - confidenceDriftRate * TickScale, target);
             }
 
             // Yield: cap throttle to 0.5 to stay behind.
@@ -1480,7 +1491,7 @@ namespace ARS
                         "~w~corn ~o~" + ARS.MpsToMph(_debugCornerSpd).ToString("0") + "~w~ rte ~c~" + ARS.MpsToMph(_debugFollowTrackSpd).ToString("0"),
                         Color.White, 0.4f);
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f),
-                        "~w~spdCap ~p~" + ARS.MpsToMph(_speedCap).ToString("0") + "~w~ accCap ~r~" + _accelerationCap.ToString("0.00") + "~w~ conf ~y~" + _confidenceMPS.ToString("0.0"),
+                        "~w~spdCap ~p~" + ARS.MpsToMph(_speedCap).ToString("0") + "~w~ accCap ~r~" + _accelerationCap.ToString("0.00") + "~w~ conf ~y~" + _confidence.ToString("0.0"),
                         Color.White, 0.4f);
                 }
                 if (showTrack)
@@ -1577,7 +1588,7 @@ namespace ARS
 
         void DrawDebugPanel(bool showInputs, bool showTrack)
         {
-            int lineCount = (showInputs ? 2 : 0) + (showTrack ? 2 : 0);
+            int lineCount = (showInputs ? 2 : 0) + (showTrack ? 3 : 0);
             if (lineCount == 0) return;
 
             float lineHeight = 0.026f;
@@ -1593,7 +1604,7 @@ namespace ARS
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
                 ARS.DrawText(new Vector2(0.79f, y),
-                    "ERR   " + (Brain.CurrentIntention.IntendedSpeedChangeGs * 9.8f).ToString("0.0") + " m/s",
+                    "ERR   " + (Brain.CurrentIntention.Speed - VehicleData.SpeedVectorLocal.Y).ToString("0.0") + " m/s | " + Math.Abs(Brain.CurrentIntention.IntendedSpeedChangeGs * 9.8f).ToString("0.0") + " m/s/s",
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
             }
@@ -1602,6 +1613,10 @@ namespace ARS
             {
                 DrawApexPanelLine(ref y, "A1", NextApexNode, NextApexSpeed, NextApexRadius, Color.Yellow, lineHeight);
                 DrawApexPanelLine(ref y, "A2", NextApexNode2, NextApexSpeed2, NextApexRadius2, Color.Orange, lineHeight);
+                ARS.DrawText(new Vector2(0.79f, y),
+                    "CONF  " + _confidence.ToString("+0.00;-0.00;0.00"),
+                    Color.Cyan, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
             }
         }
 
