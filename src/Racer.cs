@@ -713,23 +713,35 @@ namespace ARS
                 // float speedBasedSteeringLimit = ARS.Remap(Car.Velocity.Length(), 15f, 0f, slideLimit, VehicleData.SteeringLock, true);
 
                 // Empirical peak-memory limit: learn from reality instead of trusting
-                // declared curves. Remembers the steer that achieved the best measured
-                // lateral G. Utilization is measured against that remembered peak, not
-                // the declared grip — declared grip is only the sanity cap that rejects
-                // impact/bump spikes from entering the memory. Counter-steer never
-                // enters this gate.
-                float gripCeiling = Math.Max(VehicleData.CurrentMechanicalGrip * Handling.Gravity, 0.1f);
-                float latG = Math.Abs(Vector3.Dot(VehicleData.AverageAcceleration, Car.RightVector));
+                // declared curves. Everything in this block is in Gs: _bestLatG is the
+                // peak lateral G (already divided by gravity), gripCeiling is the
+                // declared grip in Gs (CurrentMechanicalGrip only — NOT × gravity).
+                // That ceiling is only the sanity cap that rejects impact/bump spikes.
+                float gripCeiling = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
+                float latG = Math.Abs(Vector3.Dot(VehicleData.AverageAcceleration, Car.RightVector)) / 9.8f;
                 if (float.IsNaN(latG) || float.IsInfinity(latG)) latG = 0f;
+
+                // Exponential peak memory: rise and decay are both exponential, so a
+                // stale peak fades quickly when grip degrades. (A slow linear decay
+                // kept the car aiming at a G that was true seconds ago — understeer
+                // that never corrected.) Frame-independent via exp(-TickScale/tau):
+                // decayTau = 0.33s corrects ~63% of a stale 1 G error in 0.33s.
+                const float riseTau = 0.5f;
+                const float decayTau = 0.33f;
+                float riseFactor = 1f - (float)Math.Exp(-TickScale / riseTau);
+                float decayFactor = 1f - (float)Math.Exp(-TickScale / decayTau);
 
                 if (latG > _bestLatG && latG <= gripCeiling * 1.1f)
                 {
-                    _bestLatG = latG;
+                    _bestLatG += (latG - _bestLatG) * riseFactor;
                     _bestSteerDeg = Math.Abs(Control.SteerDegrees);
                 }
-                _bestLatG = Math.Max(_bestLatG - 1.5f * TickScale, 0f); // forget stale peaks
+                else if (latG < _bestLatG * 0.98f)
+                {
+                    _bestLatG *= 1f - decayFactor;
+                }
 
-                float utilization = latG / Math.Max(_bestLatG, 2f);
+                float utilization = latG / Math.Max(_bestLatG, 0.2f);
 
                 if (utilization >= 0.9f) _empiricalExploit = true;
                 else if (utilization < 0.6f) _empiricalExploit = false;
@@ -742,8 +754,13 @@ namespace ARS
                 }
                 else
                 {
-                    // Below the remembered peak: headroom to explore.
-                    speedBasedSteeringLimit = VehicleData.SteeringLock;
+                    // Below the remembered peak: explore, but the authority stays bounded
+                    // so the limiter still bites (the clamp must be able to bind — full
+                    // steering lock would map to ±1 input and make it a no-op). The 1.5x
+                    // headroom over the remembered best keeps probing possible without
+                    // granting an unbounded wash-out window.
+                    speedBasedSteeringLimit = Math.Min(VehicleData.SteeringLock, _bestSteerDeg * 1.5f + 2f);
+                    speedBasedSteeringLimit = Math.Max(speedBasedSteeringLimit, 8f);
                 }
 
                 // Oversteer throttle cut: steering 10 degrees past the grip limit, back off power.
@@ -1799,15 +1816,16 @@ namespace ARS
                 y += lineHeight;
 
                 // Empirical steer-limit readout (ApplySteerLimits peak memory).
-                float dbgLatG = Math.Abs(Vector3.Dot(VehicleData.AverageAcceleration, Car.RightVector));
+                // _bestLatG is already in Gs — no gravity division.
+                float dbgLatG = Math.Abs(Vector3.Dot(VehicleData.AverageAcceleration, Car.RightVector)) / 9.8f;
                 if (float.IsNaN(dbgLatG) || float.IsInfinity(dbgLatG)) dbgLatG = 0f;
-                float dbgRef = Math.Max(_bestLatG, 2f);
+                float dbgRef = Math.Max(_bestLatG, 0.2f);
                 ARS.DrawText(new Vector2(0.79f, y),
-                    "LAT   " + (dbgLatG / 9.8f).ToString("0.0") + "/" + (dbgRef / 9.8f).ToString("0.0") + "G  u " + (dbgLatG / dbgRef).ToString("0.00"),
+                    "LAT   " + dbgLatG.ToString("0.0") + "/" + dbgRef.ToString("0.0") + "G  u " + (dbgLatG / dbgRef).ToString("0.00"),
                     Color.Cyan, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
                 ARS.DrawText(new Vector2(0.79f, y),
-                    "BEST  " + _bestSteerDeg.ToString("0") + "º @ " + (_bestLatG / 9.8f).ToString("0.1") + "G  " + (_empiricalExploit ? "EXPLOIT" : "EXPLORE"),
+                    "BEST  " + _bestSteerDeg.ToString("0") + "º @ " + _bestLatG.ToString("0.1") + "G  " + (_empiricalExploit ? "EXPLOIT" : "EXPLORE"),
                     _empiricalExploit ? Color.Red : Color.Green, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
             }
