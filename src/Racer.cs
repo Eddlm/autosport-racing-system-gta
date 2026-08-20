@@ -721,24 +721,26 @@ namespace ARS
                 float latG = Math.Abs(Vector3.Dot(VehicleData.AverageAcceleration, Car.RightVector)) / 9.8f;
                 if (float.IsNaN(latG) || float.IsInfinity(latG)) latG = 0f;
 
-                // Exponential peak memory: rise and decay are both exponential, so a
-                // stale peak fades quickly when grip degrades. (A slow linear decay
-                // kept the car aiming at a G that was true seconds ago — understeer
-                // that never corrected.) Frame-independent via exp(-TickScale/tau):
-                // decayTau = 0.33s corrects ~63% of a stale 1 G error in 0.33s.
-                const float riseTau = 0.5f;
-                const float decayTau = 0.33f;
-                float riseFactor = 1f - (float)Math.Exp(-TickScale / riseTau);
-                float decayFactor = 1f - (float)Math.Exp(-TickScale / decayTau);
+                // Linear proportional peak memory: ref += (Gs - ref) * gain * dt.
+                // Rises when current G exceeds the reference, falls when below, holds
+                // when equal — symmetric, and frame-independent via × TickScale. gain
+                // = 5 gives a ~0.2s time constant (a 1 G error moves ~63% of the way
+                // in ~0.2s). Corrects stale peaks fast and drains sag deterministically
+                // (no hard deadband), replacing the old exponential rise + 2% deadband.
+                const float refGain = 5f;
 
+                // A spike (collision/bump) must not lift the reference even by one frame's
+                // proportional step, so clamp the input to the spike cap before integrating.
+                // This rejects impulse-pulled reference rises while decay stays symmetric.
+                float cappedLatG = latG <= gripCeiling * 1.1f ? latG : _bestLatG;
+
+                _bestLatG += (cappedLatG - _bestLatG) * refGain * TickScale;
+                _bestLatG = Math.Max(_bestLatG, 0f);
+
+                // On a genuine (capped) rise, remember the steer that produced it.
                 if (latG > _bestLatG && latG <= gripCeiling * 1.1f)
                 {
-                    _bestLatG += (latG - _bestLatG) * riseFactor;
                     _bestSteerDeg = Math.Abs(Control.SteerDegrees);
-                }
-                else if (latG < _bestLatG * 0.98f)
-                {
-                    _bestLatG *= 1f - decayFactor;
                 }
 
                 float utilization = latG / Math.Max(_bestLatG, 0.2f);
