@@ -20,6 +20,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - Sub-200 ms lags don't matter: one-frame ordering quirks are acceptable — don't restructure call order or add plumbing just to kill them.
 - **Avoidance experiments checkpoint:** `3087663` — last commit before further avoidance/speed tuning experiments. Roll back here if experiments go sideways.
 - **Corner experiments checkpoint:** `54b33a7` — last commit before the **live corner creation** experiments. Known-good baseline (hill grip-loss exponential, radius-mapped crest aggression, later apex gate, power-matched grid). Roll back here if live-corner work goes sideways.
+- **Gs-aware preview checkpoint:** tag `checkpoint-pre-gs-aware` (commit `183aeda`) — state right before the Gs-aware preview steering experiment.
 
 ## Dependencies and UI
 - LemonUI SHVDN2 replaces the hand-drawn menu. Root actions: Start Race and Freecam; the race setup area exposes track selection, target grid size, power target, and power bracket; Debug submenu exposes debug toggles. If available, LSIA Test Track is selected as the default track.
@@ -54,6 +55,12 @@ Design rules:
 - **Corner approach**: only engages if the car entered the window needing to brake (entry latch); let-go time scales with track width (wider track → release earlier, more time to cross to the inside).
 - **Corner-commit maneuvers** (Divebomb / DefendLane): inside the outside-approach window they replace the outside hold with a lane right beside the target rival on the corner's inside — the divebomber to out-brake an ahead rival, the defender to block a behind rival from diving. Same lane formula, opposite target frame; both clean up when their armed apex is passed (defend also drops on overtake).
 - The corner line phases are a **hard switch** (outside → inside), no lerp.
+
+## Gs-aware preview steering (lane error blend)
+- **The concept**: pure-pursuit lane steering measures the lane error at the *car's current position*, implicitly assuming the path follows the nose. At speed, centrifugal force (already present in `ProjectAhead`, whose acceleration term is measured, not commanded) curves the real path, so nose-aimed steering overshoots. The preview fix: measure the lane error at the **1s Gs-aware projection** instead — steering then anticipates centrifugal drift rather than reacting to it.
+- **Implementation** (in `ComputeSteering`'s lane-bias block): the lane error is a blend of the legacy error (measured at the car) and the preview error (measured at `ProjectAhead(1f)` against the `LookAhead.OneSec` node frame). Blend 0 = exact legacy behavior (the toggle is the A/B switch); blend 1 = full preview. The `atan2` lookahead denominator and the `_laneGainDivisor` exp-gain curve are shared by both — untouched.
+- **Menu**: Debug submenu — "Gs-Aware Preview" checkbox (`Options.GsAwarePreview` in `DebugToggles`) plus a "Preview Blend" list item (steps between 0.1 and 1.0) writing `ARS.GsAwarePreviewBlend`. Default off.
+- The projection read in steering is one frame stale (`RunTimedCore` runs before `ProcessTick` refreshes `AccelerationVector`) — same staleness ConfidenceMPS lives with; acceptable by design.
 
 ## Speed pipeline — how fast the car goes
 - **`cornerSpd`** — the "ballpark": kinematic braking plan `√(v²+2·a·d)` targeting the **apex speed**, distance to the **apex node**, plus a flat +5 m/s offset.

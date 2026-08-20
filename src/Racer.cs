@@ -368,6 +368,21 @@ namespace ARS
 
 
                 float laneError = clampedLane - currentLane;
+
+                // Gs-aware preview: blend part of the lane error to the 1s projection.
+                // The projection already carries the centripetal (lateral-G) displacement,
+                // so measuring error there makes steering anticipate centrifugal drift
+                // instead of reacting to it. Blend 0 = exact legacy behavior.
+                if (ARS.DebugToggles[Options.GsAwarePreview]
+                    && LookAheads.TryGetValue(LookAhead.OneSec, out TrackPoint oneSecPoint)
+                    && oneSecPoint != null)
+                {
+                    Vector3 projection = ProjectAhead(1f);
+                    float projectedLane = ARS.SignedLaneOffset(projection, oneSecPoint.Position, oneSecPoint.Direction);
+                    float blend = ARS.Clamp(ARS.GsAwarePreviewBlend, 0f, 1f);
+                    laneError = (clampedLane - currentLane) * (1f - blend) + (clampedLane - projectedLane) * blend;
+                }
+
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
                 float expGain = (float)Math.Pow(Math.Min(Math.Abs(laneBiasDeg) / _laneGainDivisor, 1f), 0.66f);
                 expGain = Math.Min(expGain, 0.3f);
