@@ -143,6 +143,11 @@ namespace ARS
         float _vehicleTrajectoryRadius = 999f;
         const float ConfidenceNeutralWiggleroom = 2f;
 
+        // Empirical steer-limit memory: best measured lateral G and the steer that got it.
+        float _bestLatG = 0f;
+        float _bestSteerDeg = 15f;
+        bool _empiricalExploit = false;
+
 
 
         bool _isPassengerized = false;
@@ -384,8 +389,7 @@ namespace ARS
                 }
 
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
-                float expGain = (float)Math.Pow(Math.Min(Math.Abs(laneBiasDeg) / _laneGainDivisor, 1f), 0.66f);
-                expGain = Math.Min(expGain, 0.3f);
+                float expGain = (float)Math.Pow(Math.Min(Math.Abs(laneBiasDeg) / _laneGainDivisor, 1f), ARS.LaneGainExponent);
                 laneBiasDeg *= expGain;
             }
 
@@ -696,9 +700,51 @@ namespace ARS
 
             if (Math.Sign(Control.SteerDegrees) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
             {
-                float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.0f));
-                float steerMultiplier = ARS.Remap(Control.Throttle, 1f, 0f, 0.4f, 0.5f, true);
-                speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * steerMultiplier, Handling.LateralTractionCurve * 0.5f);
+                // Grip-saturation limit + throttle-mapped multiplier: commented out for the
+                // slide-angle limit experiment. Re-enable by uncommenting below.
+                // float speedBasedSteeringLimit = (float)((VehicleData.BaseMechanicalGrip * Handling.Gravity * VehicleData.WheelBase) / Math.Pow(Car.Velocity.Length() + 0.01f, 2.0f));
+                // float steerMultiplier = ARS.Remap(Control.Throttle, 1f, 0f, 0.4f, 0.45f, true);
+                // speedBasedSteeringLimit = Math.Max(ARS.RadToDeg(speedBasedSteeringLimit) * steerMultiplier, 3f);
+
+                // Slide-angle limit experiment: commented out (kept for reference).
+                // float slideLimit = Math.Abs(VehicleData.SlideAngle) + 4f;
+                // if (float.IsNaN(slideLimit) || float.IsInfinity(slideLimit)) slideLimit = 8f;
+                // slideLimit = Math.Min(slideLimit, VehicleData.SteeringLock);
+                // float speedBasedSteeringLimit = ARS.Remap(Car.Velocity.Length(), 15f, 0f, slideLimit, VehicleData.SteeringLock, true);
+
+                // Empirical peak-memory limit: learn from reality instead of trusting
+                // declared curves. Remembers the steer that achieved the best measured
+                // lateral G. Utilization is measured against that remembered peak, not
+                // the declared grip — declared grip is only the sanity cap that rejects
+                // impact/bump spikes from entering the memory. Counter-steer never
+                // enters this gate.
+                float gripCeiling = Math.Max(VehicleData.CurrentMechanicalGrip * Handling.Gravity, 0.1f);
+                float latG = Math.Abs(Vector3.Dot(VehicleData.AverageAcceleration, Car.RightVector));
+                if (float.IsNaN(latG) || float.IsInfinity(latG)) latG = 0f;
+
+                if (latG > _bestLatG && latG <= gripCeiling * 1.1f)
+                {
+                    _bestLatG = latG;
+                    _bestSteerDeg = Math.Abs(Control.SteerDegrees);
+                }
+                _bestLatG = Math.Max(_bestLatG - 1.5f * TickScale, 0f); // forget stale peaks
+
+                float utilization = latG / Math.Max(_bestLatG, 2f);
+
+                if (utilization >= 0.9f) _empiricalExploit = true;
+                else if (utilization < 0.6f) _empiricalExploit = false;
+
+                float speedBasedSteeringLimit;
+                if (_empiricalExploit)
+                {
+                    // Near the remembered grip peak: a hair beyond the best steer only.
+                    speedBasedSteeringLimit = Math.Max(_bestSteerDeg + 2f, 8f);
+                }
+                else
+                {
+                    // Below the remembered peak: headroom to explore.
+                    speedBasedSteeringLimit = VehicleData.SteeringLock;
+                }
 
                 // Oversteer throttle cut: steering 10 degrees past the grip limit, back off power.
                 if (Math.Abs(Control.SteerDegrees) > speedBasedSteeringLimit + 10f)
@@ -1095,7 +1141,7 @@ namespace ARS
         void TractionControl()
         {
             float wheelspin = ARS.MaxWheelSlip(Car);
-          float  IdealWheelspin = OutOfTrackDistance() > 0f ? -1f : -2f;
+          float  IdealWheelspin = OutOfTrackDistance() > 0f ? -0.25f : -0.5f;
 
             float error = wheelspin - IdealWheelspin;
             float change = error * TickScale * 5f;
@@ -1732,7 +1778,7 @@ namespace ARS
 
         void DrawDebugPanel(bool showInputs, bool showTrack)
         {
-            int lineCount = (showInputs ? 2 : 0) + (showTrack ? 3 : 0);
+            int lineCount = (showInputs ? 4 : 0) + (showTrack ? 3 : 0);
             if (lineCount == 0) return;
 
             float lineHeight = 0.026f;
@@ -1750,6 +1796,19 @@ namespace ARS
                 ARS.DrawText(new Vector2(0.79f, y),
                     "ERR   " + (Brain.CurrentIntention.Speed - VehicleData.SpeedVectorLocal.Y).ToString("0.0") + " m/s | " + Math.Abs(Brain.CurrentIntention.IntendedSpeedChangeGs * 9.8f).ToString("0.0") + " m/s/s",
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+
+                // Empirical steer-limit readout (ApplySteerLimits peak memory).
+                float dbgLatG = Math.Abs(Vector3.Dot(VehicleData.AverageAcceleration, Car.RightVector));
+                if (float.IsNaN(dbgLatG) || float.IsInfinity(dbgLatG)) dbgLatG = 0f;
+                float dbgRef = Math.Max(_bestLatG, 2f);
+                ARS.DrawText(new Vector2(0.79f, y),
+                    "LAT   " + (dbgLatG / 9.8f).ToString("0.0") + "/" + (dbgRef / 9.8f).ToString("0.0") + "G  u " + (dbgLatG / dbgRef).ToString("0.00"),
+                    Color.Cyan, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+                ARS.DrawText(new Vector2(0.79f, y),
+                    "BEST  " + _bestSteerDeg.ToString("0") + "º @ " + (_bestLatG / 9.8f).ToString("0.1") + "G  " + (_empiricalExploit ? "EXPLOIT" : "EXPLORE"),
+                    _empiricalExploit ? Color.Red : Color.Green, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
             }
 
