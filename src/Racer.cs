@@ -743,16 +743,16 @@ namespace ARS
                     _bestSteerDeg = Math.Abs(Control.SteerDegrees);
                 }
 
-                float utilization = latG / Math.Max(_bestLatG, 0.2f);
+                float utilization = latG / Math.Max(_bestLatG, Handling.LateralTractionCurve*0.5f);
 
                 if (utilization >= 0.9f) _empiricalExploit = true;
-                else if (utilization < 0.6f) _empiricalExploit = false;
+                else if (utilization < 0.9f) _empiricalExploit = false;
 
                 float speedBasedSteeringLimit;
                 if (_empiricalExploit)
                 {
                     // Near the remembered grip peak: a hair beyond the best steer only.
-                    speedBasedSteeringLimit = Math.Max(_bestSteerDeg + 2f, 8f);
+                    speedBasedSteeringLimit = Math.Max(_bestSteerDeg, 8f);
                 }
                 else
                 {
@@ -761,8 +761,8 @@ namespace ARS
                     // steering lock would map to ±1 input and make it a no-op). The 1.5x
                     // headroom over the remembered best keeps probing possible without
                     // granting an unbounded wash-out window.
-                    speedBasedSteeringLimit = Math.Min(VehicleData.SteeringLock, _bestSteerDeg * 1.5f + 2f);
-                    speedBasedSteeringLimit = Math.Max(speedBasedSteeringLimit, 8f);
+                    speedBasedSteeringLimit = Math.Min(VehicleData.SteeringLock, _bestSteerDeg);
+                    speedBasedSteeringLimit = Math.Max(speedBasedSteeringLimit, 8f)/2;
                 }
 
                 // Oversteer throttle cut: steering 10 degrees past the grip limit, back off power.
