@@ -32,10 +32,12 @@ namespace ARS
             }
         }
 
-        public static void BuildPowerCache(Dictionary<string, string> tagsByFile, Dictionary<string, float> powerByModel, Dictionary<string, float> topSpeedByModel, HashSet<VehicleClass> blacklistedClasses, Action<string> log)
+        public static void BuildPowerCache(Dictionary<string, string> tagsByFile, Dictionary<string, float> gripByModel, Dictionary<string, float> topSpeedMphByModel, Dictionary<string, float> accelByModel, Dictionary<string, bool> electricByModel, HashSet<VehicleClass> blacklistedClasses, Action<string> log)
         {
-            powerByModel.Clear();
-            topSpeedByModel.Clear();
+            gripByModel.Clear();
+            topSpeedMphByModel.Clear();
+            accelByModel.Clear();
+            electricByModel.Clear();
             int cached = 0;
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (string path in tagsByFile.Keys)
@@ -50,15 +52,19 @@ namespace ARS
                 {
                     VehicleClass vehicleClass = (VehicleClass)Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, model.Hash);
                     if (blacklistedClasses.Contains(vehicleClass)) continue;
-                    float power = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model.Hash);
-                    float topSpeed = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, model.Hash)) / ARS.TopSpeedScaleDivisor;
-                    powerByModel[modelText] = power;
-                    topSpeedByModel[modelText] = topSpeed;
+                    float grip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, model.Hash);
+                    float topSpeedMph = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, model.Hash));
+                    float accel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model.Hash);
+                    bool isElectric = Function.Call<int>((Hash)0xD839450756ED5A80, model.Hash) != 0;
+                    gripByModel[modelText] = grip;
+                    topSpeedMphByModel[modelText] = topSpeedMph;
+                    accelByModel[modelText] = accel;
+                    electricByModel[modelText] = isElectric;
                     cached++;
                 }
                 catch (Exception) { }
             }
-            log("BuildPowerCache: cached power for " + cached + " road cars.");
+            log("BuildPowerCache: cached grip+topspeed+power for " + cached + " road cars.");
         }
     }
 }

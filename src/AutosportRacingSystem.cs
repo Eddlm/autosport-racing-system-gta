@@ -32,7 +32,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning
     }
 
     public enum DebugDisplay
@@ -51,10 +51,59 @@ namespace ARS
 
         public static List<string> KnownTracks = new List<string>();
         public static List<Model> KnownVehicleModels = new List<Model>();
-        public static Dictionary<string, float> ModelPowerCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        // Raw grip (max traction, in G) per model, keyed by the XML <Model> hash text.
+        public static Dictionary<string, float> ModelGripCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Scaled top speed per model, keyed same as ModelPowerCache.
-        public static Dictionary<string, float> ModelTopSpeedScaledCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        // Raw estimated top speed (mph) per model, keyed same as ModelGripCache.
+        public static Dictionary<string, float> ModelTopSpeedMphCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+        // Raw acceleration (G, ~0-0.5) per model from GET_VEHICLE_MODEL_ACCELERATION. Coded but
+        // not yet weighted into the pace index (PaceWeightPower = 0) — activate by raising the
+        // weight and rebalancing the others so the weights still sum to 1.0.
+        public static Dictionary<string, float> ModelAccelCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+        // Per-model electric flag from GET_IS_VEHICLE_ELECTRIC (0xD839450756ED5A80). Electric
+        // cars use a different first-gear multiplier (×5.0 vs ×3.33 for ICE), so the same raw
+        // acceleration stat yields different real thrust. Used when computing the effective
+        // acceleration component (currently weight 0).
+        public static Dictionary<string, bool> ModelElectricCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+        // Pace index per model (0-1), keyed same as the stat caches. Built in BuildPowerCache
+        // from a normalized, weighted blend of top speed (0-200 mph) and grip (0-3 G).
+        public static Dictionary<string, float> ModelPaceIndexCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+        // Pace-index weights. Top speed carries 0.75, power (acceleration) 0.25. Grip is
+        // ignored (weight 0) for now. Sum is 1.0; rebalance when activating grip.
+        public static readonly float PaceWeightTopSpeed = 0.75f;
+        public static readonly float PaceWeightGrip = 0f;
+        public static readonly float PaceWeightPower = 0.25f;
+
+        // Normalization ceilings — raw native values divided by these to produce a 0-1 component.
+        public const float TopSpeedMphCeiling = 200f;
+        public const float GripCeiling = 3f;
+
+        // Acceleration normalization. The raw stat (GET_VEHICLE_MODEL_ACCELERATION) reads in G
+        // over a ~0-0.5 range. First-gear multiplier differs by drivetrain: ICE ×3.33, electric
+        // ×5.0. For the pace index, ICE is the baseline (no multiplier); electric gets the
+        // difference (5.0 - 3.33 = 1.67) as its effective multiplier. The effective ceiling is
+        // the raw ceiling × the electric multiplier (the highest any car can reach).
+        public const float AccelRawCeiling = 0.5f;
+        public const float IceFirstGear = 3.33f;
+        public const float ElectricFirstGear = 5.0f;
+        public static readonly float ElectricAccelMultiplier = ElectricFirstGear - IceFirstGear; // 1.67
+        public static readonly float AccelEffectiveCeiling = AccelRawCeiling * ElectricAccelMultiplier;
+
+        // Normalized, weighted pace index from raw native values. Top speed against 0-200 mph,
+        // power (effective accel, electric-aware) against the effective ceiling — all clamped
+        // 0-1 then weighted. Grip is read but weighted 0 (ignored) for now.
+        public static float ComputePaceIndex(float topSpeedMph, float grip, float accelRaw, bool isElectric)
+        {
+            float topN = Clamp(topSpeedMph / TopSpeedMphCeiling, 0f, 1f);
+            float gripN = Clamp(grip / GripCeiling, 0f, 1f);
+            float accelEffective = accelRaw * (isElectric ? ElectricAccelMultiplier : 1f);
+            float accelN = Clamp(accelEffective / AccelEffectiveCeiling, 0f, 1f);
+            return PaceWeightTopSpeed * topN + PaceWeightGrip * gripN + PaceWeightPower * accelN;
+        }
 
         public const float TopSpeedScaleDivisor = 466.67f;
 
@@ -82,7 +131,8 @@ namespace ARS
         { Options.ShowPhysics, false },
         { Options.UseNearbyCars, false },
         { Options.ReverseRoute, false },
-        { Options.GsAwarePreview, false }
+        { Options.GsAwarePreview, true },
+        { Options.BrakeLearning, true }
     };
 
         // Gs-aware preview steering: how much of the lane error is measured at the 1s
@@ -390,8 +440,11 @@ namespace ARS
 
         public void FillKnownDisciplines(bool allowScriptYield = true)
         {
-            ModelPowerCache.Clear();
-            ModelTopSpeedScaledCache.Clear();
+            ModelGripCache.Clear();
+            ModelTopSpeedMphCache.Clear();
+            ModelAccelCache.Clear();
+            ModelElectricCache.Clear();
+            ModelPaceIndexCache.Clear();
             Log(LogImportance.Info, "-------------");
             Log(LogImportance.Info, "Learning available disciplines...");
             VehicleCatalog.Scan(_racerTagLookup, KnownVehicleModels, text => Log(LogImportance.Info, text), text => DisplayHelpTextTimed(text, 5000), Yield, allowScriptYield);
@@ -405,7 +458,31 @@ namespace ARS
         // modelName -> power cache here rather than during the XML scan.
         public void BuildPowerCache()
         {
-            VehicleCatalog.BuildPowerCache(_racerTagLookup, ModelPowerCache, ModelTopSpeedScaledCache, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
+            VehicleCatalog.BuildPowerCache(_racerTagLookup, ModelGripCache, ModelTopSpeedMphCache, ModelAccelCache, ModelElectricCache, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
+            BuildPaceIndex();
+        }
+
+        // Second pass over the raw stat caches: compute the 0-1 pace index per model from top
+        // speed (0-200 mph) and grip (0-3 G), weighted 2:1. Power is read and cached but weighted 0.
+        void BuildPaceIndex()
+        {
+            ModelPaceIndexCache.Clear();
+            int indexed = 0;
+            foreach (var kv in ModelGripCache)
+            {
+                float grip = kv.Value;
+                if (float.IsNaN(grip) || float.IsInfinity(grip) || grip <= 0f) continue;
+                float mph;
+                if (!ModelTopSpeedMphCache.TryGetValue(kv.Key, out mph)) continue;
+                if (float.IsNaN(mph) || float.IsInfinity(mph) || mph <= 0f) continue;
+                float accel = 0f;
+                ModelAccelCache.TryGetValue(kv.Key, out accel);
+                bool isElectric = false;
+                ModelElectricCache.TryGetValue(kv.Key, out isElectric);
+                ModelPaceIndexCache[kv.Key] = ComputePaceIndex(mph, grip, accel, isElectric);
+                indexed++;
+            }
+            Log(LogImportance.Info, "BuildPaceIndex: " + indexed + " models indexed.");
         }
 
         public static float SignedLaneOffset(Vector3 pos, Vector3 refPoint, Vector3 refDir)
@@ -623,8 +700,8 @@ namespace ARS
         public static List<string> FilteredTracks = new List<string>();
         public static string TrackFilter = "airport";
         public static string DisciplineFilter = "sports";
-        public static float PowerTargetScale = 0.7f;
-        public static float PowerBracketScale = 0.1f;
+        public static float PowerTargetScale = 0.52f;
+        public static float PowerBracketScale = 0.02f;
 
         Dictionary<string, string> _racerTagLookup = new Dictionary<string, string>();
         public static int TrackListPos = 0;
@@ -670,7 +747,7 @@ namespace ARS
             _gridSizeItem.SelectedIndex = _intendedOpponents;
             _arsMenu.Add(_gridSizeItem);
 
-            _powerTargetItem = new NativeListItem<string>("Power Target", "Target combined power scale for grid selection.", Array.Empty<string>());
+            _powerTargetItem = new NativeListItem<string>("Pace Target", "Target pace index (0-1, top-speed weighted) for grid selection.", Array.Empty<string>());
             _powerTargetItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index < _powerTargetValues.Count)
@@ -678,7 +755,7 @@ namespace ARS
             };
             _arsMenu.Add(_powerTargetItem);
 
-            _powerBracketItem = new NativeListItem<string>("Power Bracket", "Allowed power scale above or below the target.", Array.Empty<string>());
+            _powerBracketItem = new NativeListItem<string>("Pace Bracket", "Allowed pace index above or below the target.", Array.Empty<string>());
             _powerBracketItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index < _powerBracketValues.Count)
@@ -708,6 +785,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
             AddDebugCheckbox(debugMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.");
             AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
+            AddDebugCheckbox(debugMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~75% of each braking phase.");
 
             NativeListItem<string> previewBlendItem = new NativeListItem<string>("Preview Blend", "How much of the lane error is measured at the projection (Gs-aware) rather than at the car.", new[] { "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%" });
             previewBlendItem.ItemChanged += (sender, args) =>
@@ -812,27 +890,25 @@ namespace ARS
         {
             if (_powerTargetItem == null || _powerBracketItem == null) return;
 
+            // The pace index is 0-1 by construction; take the actual cache span so the sliders
+            // don't offer values no car can match.
             float min = float.MaxValue;
             float max = float.MinValue;
-            foreach (string model in ModelPowerCache.Keys)
+            foreach (float pace in ModelPaceIndexCache.Values)
             {
-                float power;
-                float speed;
-                if (!ModelPowerCache.TryGetValue(model, out power) || !ModelTopSpeedScaledCache.TryGetValue(model, out speed)) continue;
-                float scale = power + speed;
-                if (float.IsNaN(scale) || float.IsInfinity(scale)) continue;
-                if (scale < min) min = scale;
-                if (scale > max) max = scale;
+                if (float.IsNaN(pace) || float.IsInfinity(pace)) continue;
+                if (pace < min) min = pace;
+                if (pace > max) max = pace;
             }
-            if (min == float.MaxValue) return;
+            if (min == float.MaxValue) { min = 0f; max = 1f; }
 
             PowerTargetScale = Clamp(PowerTargetScale, min, max);
             PowerBracketScale = Clamp(PowerBracketScale, 0f, max - min);
 
             _powerTargetValues.Clear();
-            AddPowerValues(_powerTargetValues, min, max);
+            AddPowerValues(_powerTargetValues, min, max, 0.02f);
             _powerBracketValues.Clear();
-            AddPowerValues(_powerBracketValues, 0f, max - min);
+            AddPowerValues(_powerBracketValues, 0f, max - min, 0.02f);
 
             _powerTargetItem.Items.Clear();
             foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0.00"));
@@ -843,11 +919,15 @@ namespace ARS
             _powerBracketItem.SelectedIndex = FindNearestPowerValue(_powerBracketValues, PowerBracketScale);
         }
 
-        static void AddPowerValues(List<float> values, float min, float max)
+        static void AddPowerValues(List<float> values, float min, float max, float step)
         {
-            const float step = 0.01f;
-            for (float value = min; value < max; value += step) values.Add((float)Math.Round(value, 2));
-            if (values.Count == 0 || values[values.Count - 1] != max) values.Add(max);
+            // Anchor the grid at clean multiples of the step (0.50, 0.52, 0.54 ...) rather than
+            // at the raw cache min, so the offered values are always even and the default lands
+            // exactly on a grid point (no offset like 0.49).
+            int startIndex = (int)Math.Ceiling(min / step);
+            int endIndex = (int)Math.Floor(max / step);
+            for (int i = startIndex; i <= endIndex; i++)
+                values.Add((float)Math.Round(i * step, 2));
         }
 
         static int FindNearestPowerValue(List<float> values, float target)
@@ -3156,6 +3236,7 @@ namespace ARS
             }
             return w;
         }
+
         
 
         
@@ -3364,7 +3445,7 @@ namespace ARS
 
             float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip);
             
-            float decel = brakingAbility * r.Handling.Gravity;
+            float decel = brakingAbility * r.Handling.Gravity * r.BrakeDecelFactor;
             // Yielding cars perceive half the deceleration, so they brake earlier.
             if (r.ActiveManeuver.Type == ManeuverType.Yield)
                 decel *= 0.5f;
@@ -3859,7 +3940,7 @@ namespace ARS
         void FillCachedCandidates(string dlist, int maxcars, bool allowScriptYield = true)
         {
             bool allowDuplicates = SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AllowDuplicates", true);
-            _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPowerCache, ModelTopSpeedScaledCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale);
+            _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale);
         }
 
         void LoadGrid(string dlist, int maxcars)

@@ -148,6 +148,21 @@ namespace ARS
         float _peakSteerDeg = 15f;
         bool _nearGripPeak = false;
 
+        // Brake learning (Phase 1): learn the effective decel factor that keeps the car
+        // at full brake ~75% of each braking phase. Toggle off → factor pinned at 1.
+        float _brakeDecelFactor = 1f;
+        int _brakePhaseFrames = 0;
+        int _brakePhaseFullFrames = 0;
+        bool _inBrakePhase = false;
+        const float FullBrakeThreshold = 0.9f;   // brake input at/above this counts as "full"
+        const float BrakeFractionTarget = 0.75f; // target share of the phase at full brake
+        const float BrakeEaseOffRate = 0.98f;    // reduce factor when fraction too high
+        const float BrakeLeanOnRate = 1.02f;     // increase factor when fraction too low
+        const float MinBrakeDecelFactor = 0.3f;
+        const float MaxBrakeDecelFactor = 1.5f;
+        // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
+        public float BrakeDecelFactor => _brakeDecelFactor;
+
 
 
         bool _isPassengerized = false;
@@ -295,9 +310,11 @@ namespace ARS
             Handling.Grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
 
             VehicleData.PerformanceIndex = (int)((Handling.EstimatedTopSpeed * 5) + (Handling.Grip * 100) + (Handling.Acceleration * 500));
-            float modelPower = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, Car.Model.Hash);
-            float modelTopSpeed = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, Car.Model.Hash)) / ARS.TopSpeedScaleDivisor;
-            VehicleData.PowerScale = modelPower + modelTopSpeed;
+            float modelGrip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, Car.Model.Hash);
+            float modelTopSpeedMph = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, Car.Model.Hash));
+            float modelAccel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, Car.Model.Hash);
+            bool modelElectric = Function.Call<int>((Hash)0xD839450756ED5A80, Car.Model.Hash) != 0;
+            VehicleData.PowerScale = ARS.ComputePaceIndex(modelTopSpeedMph, modelGrip, modelAccel, modelElectric);
             VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.00");
 
             Car.Repair();
@@ -869,6 +886,40 @@ namespace ARS
             float inputChange = 10f * TickScale;
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
+
+            // Brake learning (Phase 1): accumulate the full-brake fraction per braking
+            // phase and drive the effective decel factor toward the 75% setpoint.
+            // Skip while a maneuver is active — its altered braking (divebomb target,
+            // yield halving, etc.) would corrupt the fraction.
+            if (ARS.DebugToggles[Options.BrakeLearning] && ActiveManeuver.Type == ManeuverType.None)
+            {
+                if (Control.Brake > 0f && !_inBrakePhase)
+                {
+                    _inBrakePhase = true;
+                    _brakePhaseFrames = 0;
+                    _brakePhaseFullFrames = 0;
+                }
+                if (_inBrakePhase)
+                {
+                    _brakePhaseFrames++;
+                    if (Control.Brake >= FullBrakeThreshold) _brakePhaseFullFrames++;
+                }
+                if (Control.Brake <= 0f && _inBrakePhase)
+                {
+                    _inBrakePhase = false;
+                    float fraction = _brakePhaseFrames > 0 ? (float)_brakePhaseFullFrames / _brakePhaseFrames : 0f;
+                    if (fraction > BrakeFractionTarget) _brakeDecelFactor *= BrakeEaseOffRate;
+                    else if (fraction < BrakeFractionTarget) _brakeDecelFactor *= BrakeLeanOnRate;
+                    _brakeDecelFactor = ARS.Clamp(_brakeDecelFactor, MinBrakeDecelFactor, MaxBrakeDecelFactor);
+                }
+            }
+            else
+            {
+                // Abort any in-progress phase (maneuver or toggle off). Only pin the
+                // factor when the feature is disabled — a maneuver keeps the learned value.
+                _inBrakePhase = false;
+                if (!ARS.DebugToggles[Options.BrakeLearning]) _brakeDecelFactor = 1f;
+            }
             Control.Throttle = Math.Min(Control.Throttle, Control.MaxThrottle);
             if (Control.MaxThrottle < 1.00f) Control.MaxThrottle += 2 * TickScale;
 
@@ -2270,7 +2321,7 @@ namespace ARS
                 : 0f;
 
             float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
-            float decel = brakingAbility * Handling.Gravity;
+            float decel = brakingAbility * Handling.Gravity * _brakeDecelFactor;
             if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
