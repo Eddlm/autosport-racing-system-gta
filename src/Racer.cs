@@ -719,6 +719,8 @@ namespace ARS
         const float PlayerSpeedSteerFwdThreshold = 5f;   // m/s above which steering is reduced
         const float PlayerSpeedSteerMult = 0.05f;       // reduction multiplier
         // Floor: TRlat/3 (degrees) so high-speed steering doesn't collapse.
+        const float SteerSlewRate = 45f;                // fixed steering slew rate (degrees/second)
+        const float SteerSlewRateCountersteer = 90f;    // doubled when countersteering (steer opposes yaw)
 
         void ApplySteerLimits()
         {
@@ -937,10 +939,14 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees)) Control.SteerDegrees = 0f;
 
-            float maxDeltaPerTick = 90 * TickScale;
-            float deltaToTarget = ARS.Clamp(Control.SteerDegrees - Control.LastAppliedSteerDegrees, -maxDeltaPerTick, maxDeltaPerTick);
-             
-            Control.SteerDegrees = Control.LastAppliedSteerDegrees+ deltaToTarget;
+            // Fixed slew-rate limiter: the applied steer moves toward the target at a
+            // fixed rate (45°/s), doubled to 90°/s when countersteering (steer opposes yaw).
+            float error = Control.SteerDegrees - Control.LastAppliedSteerDegrees;
+            bool countersteering = Math.Sign(Control.SteerDegrees) != Math.Sign((int)VehicleData.YawRotationPerSecondDegrees);
+            float rate = countersteering ? SteerSlewRateCountersteer : SteerSlewRate;
+            float maxDeltaPerTick = rate * TickScale;
+            float delta = ARS.Clamp(error, -maxDeltaPerTick, maxDeltaPerTick);
+            Control.SteerDegrees = Control.LastAppliedSteerDegrees + delta;
 
             Control.LastAppliedSteerDegrees = Control.SteerDegrees;
 
@@ -1179,7 +1185,18 @@ namespace ARS
         void TractionControl()
         {
             float wheelspin = ARS.MaxWheelSlip(Car);
-          float  IdealWheelspin = OutOfTrackDistance() > 0f ? -0.25f : -1f;
+
+            float IdealWheelspin;
+            if (OutOfTrackDistance() > 0f)
+            {
+                IdealWheelspin = -0.25f;  // off-track: tame target
+            }
+            else
+            {
+                // On-track: allow more wheelspin as the car slides (slide angle in degrees, /10).
+                IdealWheelspin = -1f - Math.Abs(VehicleData.SlideAngle) / 10f;
+                IdealWheelspin = ARS.Clamp(IdealWheelspin, -3f, 0f);  // magnitude capped at 3
+            }
 
             float error = wheelspin - IdealWheelspin;
             float change = error * TickScale * 2f;
