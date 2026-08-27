@@ -1179,10 +1179,10 @@ namespace ARS
         void TractionControl()
         {
             float wheelspin = ARS.MaxWheelSlip(Car);
-          float  IdealWheelspin = OutOfTrackDistance() > 0f ? -0.25f : -0.5f;
+          float  IdealWheelspin = OutOfTrackDistance() > 0f ? -0.25f : -1f;
 
             float error = wheelspin - IdealWheelspin;
-            float change = error * TickScale * 5f;
+            float change = error * TickScale * 2f;
             Control.MaxThrottleFromTCS = ARS.Clamp(Control.MaxThrottleFromTCS + change, 0.25f, 1);
         }
         void ConsiderManeuvers()
@@ -2569,18 +2569,19 @@ namespace ARS
 
                 // Two-wheel stability: steer into the airborne side to regain all four wheels.
                 // TEMPORARILY DISABLED while tuning the speed-based steering limiter.
-                // {
-                //     List<bool> wg = ARS.WheelsOnGround(Car);
-                //     if (wg.Count >= 4)
-                //     {
-                //         bool leftDown = wg[0] && wg[2];
-                //         bool rightDown = wg[1] && wg[3];
-                //         if (!leftDown && rightDown)
-                //             Control.SteerDegrees = -VehicleData.SteeringLock;
-                //         else if (!rightDown && leftDown)
-                //             Control.SteerDegrees = VehicleData.SteeringLock;
-                //     }
-                // }
+                if (1 == 2)
+                {
+                    List<bool> wg = ARS.WheelsOnGround(Car);
+                    if (wg.Count >= 4)
+                    {
+                        bool leftDown = wg[0] && wg[2];
+                        bool rightDown = wg[1] && wg[3];
+                        if (!leftDown && rightDown)
+                            Control.SteerDegrees = -VehicleData.SteeringLock;
+                        else if (!rightDown && leftDown)
+                            Control.SteerDegrees = VehicleData.SteeringLock;
+                    }
+                }
 
                 ApplySteerLimits();
 
