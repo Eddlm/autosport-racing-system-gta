@@ -58,6 +58,7 @@ namespace ARS
 
         
         int _lastStabilityCheck = 0;
+        int _wheelsOffGround = 0;
 
         // Racer progress along the route.
         public TrackPoint CurrentTrackPoint = new TrackPoint();
@@ -711,6 +712,10 @@ namespace ARS
         const float UtilizationFloorFactor = 0.5f;   // fraction of traction curve as utilization floor
         const float SpikeCapFactor = 1.1f;           // × declared grip = spike-rejection cap
         const float OversteerCutMargin = 10f;        // degrees past limit before throttle cut
+        // Game's player steering limiter (Automobile.cpp): speed-based reduction.
+        const float PlayerSpeedSteerFwdThreshold = 5f;   // m/s above which steering is reduced
+        const float PlayerSpeedSteerMult = 0.05f;       // reduction multiplier
+        const float PlayerSpeedSteerMinAngle = 3f;       // degrees, floor so high-speed steering doesn't collapse
 
         void ApplySteerLimits()
         {
@@ -725,38 +730,26 @@ namespace ARS
             if (Math.Sign(Control.SteerDegrees) != Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
                 return;
 
-            // Empirical peak-memory limit: learn the real grip peak instead of trusting
-            // declared curves. All values in Gs (lateral G already divided by gravity).
-            float gripCeiling = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
-            float latG = Math.Abs(Vector3.Dot(VehicleData.AverageAcceleration, Car.RightVector)) / 9.8f;
-            if (float.IsNaN(latG) || float.IsInfinity(latG)) latG = 0f;
+            // Game's player steering limiter (Automobile.cpp): speed-based reduction.
+            float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
 
-            // Proportional reference: ref += (Gs - ref) * gain * dt. Reject impact/bump
-            // spikes so an impulse can't lift the reference even one step.
-            float refInput = latG <= gripCeiling * SpikeCapFactor ? latG : _latGRef;
-            _latGRef += (refInput - _latGRef) * GripRefGain * TickScale;
-            _latGRef = Math.Max(_latGRef, 0f);
+            // Speed-based reduction: steer /= 1 + 0.075*(fwdSpeed - 5) for fwdSpeed > 5 m/s.
+            if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
+            {
+                Control.SteerDegrees /= 1f + PlayerSpeedSteerMult * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
+            }
 
-            // Remember the steer that produced a genuine (capped) rise.
-            if (latG > _latGRef && latG <= gripCeiling * SpikeCapFactor)
-                _peakSteerDeg = Math.Abs(Control.SteerDegrees);
+            // Floor: keep a minimum steering angle (3 degrees) so high-speed steering doesn't collapse.
+            if (Control.SteerDegrees != 0f && Math.Abs(Control.SteerDegrees) < PlayerSpeedSteerMinAngle)
+                Control.SteerDegrees = Math.Sign(Control.SteerDegrees) * PlayerSpeedSteerMinAngle;
 
-            // Near the peak → exploit (clamp to the remembered best steer); below → explore
-            // (halved authority, still bounded so the clamp can bind).
-            float utilization = latG / Math.Max(_latGRef, Handling.LateralTractionCurve * UtilizationFloorFactor);
-            _nearGripPeak = utilization >= ExploitUtilization;
-
-            float steerLimit = _nearGripPeak
-                ? Math.Max(_peakSteerDeg, MinSteerLimit)
-                : Math.Max(Math.Min(VehicleData.SteeringLock, _peakSteerDeg), MinSteerLimit) / 2;
-
-            // Oversteer throttle cut: degrees past the limit, back off power.
-            if (Math.Abs(Control.SteerDegrees) > steerLimit + OversteerCutMargin)
-                Control.MaxThrottle = Math.Max(Control.MaxThrottle - 1f * TickScale, 0.1f);
-
-            Control.SteerDegrees = ARS.Clamp(Control.SteerDegrees, -steerLimit, steerLimit);
-            if (Math.Abs(Control.SteerDegrees) >= steerLimit)
-                Control.MaxThrottle = Math.Min(Control.MaxThrottle, FullSteerThrottleCap);
+            // TEMPORARILY DISABLED: oversteer throttle cut / full-steer cap. Isolating the
+            // steering-limiter curve; re-enable when factor tuning is settled.
+            // float steerLimit = VehicleData.SteeringLock;
+            // if (Math.Abs(Control.SteerDegrees) > steerLimit + OversteerCutMargin)
+            //     Control.MaxThrottle = Math.Max(Control.MaxThrottle - 1f * TickScale, 0.1f);
+            // if (Math.Abs(Control.SteerDegrees) >= steerLimit)
+            //     Control.MaxThrottle = Math.Min(Control.MaxThrottle, FullSteerThrottleCap);
         }
 
 
@@ -2745,7 +2738,9 @@ namespace ARS
             GroundGripMultiplier = ARS.WheelGripMultipliers(Car).Average();
 
             VehicleData.BaseMechanicalGrip = handlingGrip;
-            VehicleData.CurrentMechanicalGrip = ((VehicleData.BaseMechanicalGrip) * GroundGripMultiplier);
+            // Stability-aware grip: AvgGroundStability (0.8..1.0) multiplies the mechanical grip so
+            // grip loss from wheels lifting makes the AI more careful on corners and brake earlier.
+            VehicleData.CurrentMechanicalGrip = VehicleData.BaseMechanicalGrip * GroundGripMultiplier * VehicleData.AvgGroundStability;
 
             // Airborne vehicles temporarily lose available throttle; normal pedal processing restores it.
             if (Game.GameTime - _lastStabilityCheck >= 333) // ~3 Hz
@@ -2763,16 +2758,20 @@ namespace ARS
                 ARS.TerrainGripMultipliers.Add(CurrentTrackPoint.Node, GroundGripMultiplier);
             }
 
-            float zSpeedDegreesFromHoriz = (Math.Abs(VehicleData.SpeedVectorLocal.Normalized.Z) * 90);
+            // Slip-based stability: count wheels off the ground (slip ~0) while moving, then drop
+            // stability 0.1/s per wheel off, rise 1/s, clamped to 0.8..1.0.
+            bool moving = Car.Velocity.Length() > 1f;
+            _wheelsOffGround = moving ? ARS.WheelSlips(Car).Count(s => Math.Abs(s) < 0.01f) : 0;
 
-
-            if (zSpeedDegreesFromHoriz > 5f)
+            if (_wheelsOffGround > 0)
             {
-                if (VehicleData.AvgGroundStability >= 0.1f) VehicleData.AvgGroundStability -= zSpeedDegreesFromHoriz * TickScale * 0.1f;
+                VehicleData.AvgGroundStability -= 0.1f * _wheelsOffGround * TickScale;
             }
-            else if (VehicleData.AvgGroundStability < 1f) VehicleData.AvgGroundStability += 1f * TickScale;
-
-            if (VehicleData.AvgGroundStability > 1.0f) VehicleData.AvgGroundStability = 1f;
+            else if (VehicleData.AvgGroundStability < 1f)
+            {
+                VehicleData.AvgGroundStability += 1f * TickScale;
+            }
+            VehicleData.AvgGroundStability = ARS.Clamp(VehicleData.AvgGroundStability, 0.8f, 1f);
 
             VehicleData.YawRotationPerSecondDegrees = ARS.RadToDeg(Function.Call<Vector3>(Hash.GET_ENTITY_ROTATION_VELOCITY, Car).Z);            
         }

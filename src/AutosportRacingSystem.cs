@@ -3237,6 +3237,21 @@ namespace ARS
             return w;
         }
 
+        // Per-wheel slip (offset 0x174, same data TCS uses). A lifted wheel reads 0.00 slip, so
+        // counting wheels with ~0 slip detects ground contact for the stability factor.
+        static public unsafe List<float> WheelSlips(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x174;
+            List<float> slips = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float slip = (float)Math.Round(*((float*)(wheel + offset)), 3);
+                slips.Add(slip);
+            }
+            return slips;
+        }
+
         
 
         
