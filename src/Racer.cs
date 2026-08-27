@@ -149,6 +149,9 @@ namespace ARS
         float _peakSteerDeg = 15f;
         bool _nearGripPeak = false;
 
+        // True when the speed-based steering limiter actually reduced the steer this frame.
+        bool _steerLimitedThisFrame = false;
+
         // Brake learning (Phase 1): learn the effective decel factor that keeps the car
         // at full brake ~75% of each braking phase. Toggle off → factor pinned at 1.
         float _brakeDecelFactor = 1f;
@@ -714,11 +717,13 @@ namespace ARS
         const float OversteerCutMargin = 10f;        // degrees past limit before throttle cut
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
         const float PlayerSpeedSteerFwdThreshold = 5f;   // m/s above which steering is reduced
-        const float PlayerSpeedSteerMult = 0.05f;       // reduction multiplier
+        const float PlayerSpeedSteerMult = 0.02f;       // reduction multiplier
         const float PlayerSpeedSteerMinAngle = 3f;       // degrees, floor so high-speed steering doesn't collapse
 
         void ApplySteerLimits()
         {
+            _steerLimitedThisFrame = false;
+
             // NaN guard: Clamp would turn NaN into full-lock.
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
             {
@@ -736,7 +741,9 @@ namespace ARS
             // Speed-based reduction: steer /= 1 + 0.075*(fwdSpeed - 5) for fwdSpeed > 5 m/s.
             if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
             {
+                float before = Math.Abs(Control.SteerDegrees);
                 Control.SteerDegrees /= 1f + PlayerSpeedSteerMult * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
+                if (Math.Abs(Control.SteerDegrees) < before) _steerLimitedThisFrame = true;
             }
 
             // Floor: keep a minimum steering angle (3 degrees) so high-speed steering doesn't collapse.
@@ -1593,6 +1600,7 @@ namespace ARS
             if (requestedInputs)
             {
                 DrawInputTrails();
+                DrawWheelDirectionLine();
             }
 
             if (requestedTrack)
@@ -1956,6 +1964,36 @@ namespace ARS
 
                 World.DrawMarker(MarkerType.ChevronUpx1, point, -away, new Vector3(90, 0, 0), chevronScale, finalColor, false, false, 0, false, "", "", false);
             }
+        }
+
+        // Debug: line at the front of the car showing where the front wheels point.
+        // Angled by the steering angle; red when the speed-based steering limiter
+        // actually reduced the steer that frame (or last).
+        void DrawWheelDirectionLine()
+        {
+            if (Car == null || !Car.Exists()) return;
+
+            float steerDeg = Control.SteerDegrees;
+            if (float.IsNaN(steerDeg) || float.IsInfinity(steerDeg)) steerDeg = 0f;
+
+            // Positive steer = left (CCW from above). Rotate the car's forward
+            // vector by the steering angle around the up axis.
+            float steerRad = steerDeg * (float)Math.PI / 180f;
+            float cos = (float)Math.Cos(steerRad);
+            float sin = (float)Math.Sin(steerRad);
+            Vector3 fwd = Car.ForwardVector;
+            Vector3 dir = new Vector3(
+                fwd.X * cos - fwd.Y * sin,
+                fwd.X * sin + fwd.Y * cos,
+                fwd.Z);
+
+            // Start at the front of the car, slightly above the ground.
+            float halfLen = Car.Model.GetDimensions().Y * 0.5f;
+            Vector3 start = Car.Position + Car.ForwardVector * halfLen + new Vector3(0, 0, 0.3f);
+
+            // Red when the speed-based steering limiter actually reduced the steer
+            // this frame (or last, if the draw runs before ApplySteerLimits).
+            ARS.DrawLine(start, start + dir * 2f, _steerLimitedThisFrame ? Color.Red : Color.White);
         }
 
 
