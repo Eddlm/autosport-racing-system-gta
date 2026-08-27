@@ -717,8 +717,8 @@ namespace ARS
         const float OversteerCutMargin = 10f;        // degrees past limit before throttle cut
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
         const float PlayerSpeedSteerFwdThreshold = 5f;   // m/s above which steering is reduced
-        const float PlayerSpeedSteerMult = 0.02f;       // reduction multiplier
-        const float PlayerSpeedSteerMinAngle = 3f;       // degrees, floor so high-speed steering doesn't collapse
+        const float PlayerSpeedSteerMult = 0.05f;       // reduction multiplier
+        // Floor: TRlat/3 (degrees) so high-speed steering doesn't collapse.
 
         void ApplySteerLimits()
         {
@@ -746,9 +746,10 @@ namespace ARS
                 if (Math.Abs(Control.SteerDegrees) < before) _steerLimitedThisFrame = true;
             }
 
-            // Floor: keep a minimum steering angle (3 degrees) so high-speed steering doesn't collapse.
-            if (Control.SteerDegrees != 0f && Math.Abs(Control.SteerDegrees) < PlayerSpeedSteerMinAngle)
-                Control.SteerDegrees = Math.Sign(Control.SteerDegrees) * PlayerSpeedSteerMinAngle;
+            // Floor: keep a minimum steering angle (TRlat/3) so high-speed steering doesn't collapse.
+            float minAngle = Handling.LateralTractionCurve / 3f;
+            if (Control.SteerDegrees != 0f && Math.Abs(Control.SteerDegrees) < minAngle)
+                Control.SteerDegrees = Math.Sign(Control.SteerDegrees) * minAngle;
 
             // TEMPORARILY DISABLED: oversteer throttle cut / full-steer cap. Isolating the
             // steering-limiter curve; re-enable when factor tuning is settled.
@@ -1973,19 +1974,21 @@ namespace ARS
         {
             if (Car == null || !Car.Exists()) return;
 
-            float steerDeg = Control.SteerDegrees;
+            // The actual wheel angle is the steering input (what's written to the
+            // game) converted to degrees: SteerInput * SteeringLock.
+            float steerDeg = Control.SteerInput * VehicleData.SteeringLock;
             if (float.IsNaN(steerDeg) || float.IsInfinity(steerDeg)) steerDeg = 0f;
 
             // Positive steer = left (CCW from above). Rotate the car's forward
             // vector by the steering angle around the up axis.
-            float steerRad = steerDeg * (float)Math.PI / 180f;
-            float cos = (float)Math.Cos(steerRad);
-            float sin = (float)Math.Sin(steerRad);
             Vector3 fwd = Car.ForwardVector;
-            Vector3 dir = new Vector3(
-                fwd.X * cos - fwd.Y * sin,
-                fwd.X * sin + fwd.Y * cos,
-                fwd.Z);
+            Vector3 DirAt(float deg)
+            {
+                float rad = deg * (float)Math.PI / 180f;
+                float c = (float)Math.Cos(rad);
+                float s = (float)Math.Sin(rad);
+                return new Vector3(fwd.X * c - fwd.Y * s, fwd.X * s + fwd.Y * c, fwd.Z);
+            }
 
             // Start at the front of the car, slightly above the ground.
             float halfLen = Car.Model.GetDimensions().Y * 0.5f;
@@ -1993,7 +1996,7 @@ namespace ARS
 
             // Red when the speed-based steering limiter actually reduced the steer
             // this frame (or last, if the draw runs before ApplySteerLimits).
-            ARS.DrawLine(start, start + dir * 2f, _steerLimitedThisFrame ? Color.Red : Color.White);
+            ARS.DrawLine(start, start + DirAt(steerDeg) * 2f, _steerLimitedThisFrame ? Color.Red : Color.White);
         }
 
 
@@ -2565,18 +2568,19 @@ namespace ARS
                 ComputeSteering();
 
                 // Two-wheel stability: steer into the airborne side to regain all four wheels.
-                {
-                    List<bool> wg = ARS.WheelsOnGround(Car);
-                    if (wg.Count >= 4)
-                    {
-                        bool leftDown = wg[0] && wg[2];
-                        bool rightDown = wg[1] && wg[3];
-                        if (!leftDown && rightDown)
-                            Control.SteerDegrees = -VehicleData.SteeringLock;
-                        else if (!rightDown && leftDown)
-                            Control.SteerDegrees = VehicleData.SteeringLock;
-                    }
-                }
+                // TEMPORARILY DISABLED while tuning the speed-based steering limiter.
+                // {
+                //     List<bool> wg = ARS.WheelsOnGround(Car);
+                //     if (wg.Count >= 4)
+                //     {
+                //         bool leftDown = wg[0] && wg[2];
+                //         bool rightDown = wg[1] && wg[3];
+                //         if (!leftDown && rightDown)
+                //             Control.SteerDegrees = -VehicleData.SteeringLock;
+                //         else if (!rightDown && leftDown)
+                //             Control.SteerDegrees = VehicleData.SteeringLock;
+                //     }
+                // }
 
                 ApplySteerLimits();
 
