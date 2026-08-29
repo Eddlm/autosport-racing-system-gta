@@ -911,6 +911,10 @@ namespace ARS
                 return;
             }
 
+            // Place AI cars on grid positions so the player can see the field.
+            // PlaceCars also calls Initialize() which puts them in GridWait (handbrake on).
+            PlaceCars(true);
+
             _gridInstanced = true;
             Log(LogImportance.Info, "Grid instanced (" + Racers.Count + " AI cars)");
         }
@@ -4340,7 +4344,9 @@ namespace ARS
 
             result.Add(lastCar);
 
-            RaceStatus = RaceState.NotInitiated;
+            // Stay in None — the race isn't ready to start until SetupRace (phase 3)
+            // explicitly moves to NotInitiated. Setting it here caused auto-start.
+            RaceStatus = RaceState.None;
             Function.Call(Hash._0x10D373323E5B9C0D);
         }
 
