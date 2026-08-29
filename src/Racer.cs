@@ -196,7 +196,7 @@ namespace ARS
         const float PressureProximityRange = 100f;
         const float PressureRisePerSecond = 2f;
         const float PressureFallPerSecond = 30f;
-        const float PressureMaxSpeedOffset = 5f;
+        const float PressureMaxSpeedOffset = 3f;
 
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
@@ -506,21 +506,22 @@ namespace ARS
             CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
-            if (apexNode != _approachCornerNode)
+            float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
+            float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
+            const float approachStartTime = 5.0f;
+
+            if (apexNode != _approachCornerNode || timeToApex > approachStartTime)
             {
                 _approachCornerNode = apexNode;
                 _approachOutsideDecided = false;
                 _approachHoldsOutside = false;
+                if (timeToApex > approachStartTime) return 0f;
             }
 
-            float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
-            float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
-            const float approachStartTime = 5.0f;
-            if (timeToApex > approachStartTime) return 0f;
-
-            if (!_approachOutsideDecided)
+            bool shouldHoldOutside = speedMps >= _cornerSpd + ARS.MphToMps(5f);
+            if (!_approachOutsideDecided || (!_approachHoldsOutside && shouldHoldOutside))
             {
-                _approachHoldsOutside = speedMps >= _cornerSpd + ARS.MphToMps(20f);
+                _approachHoldsOutside = shouldHoldOutside;
                 _approachOutsideDecided = true;
             }
 
@@ -531,12 +532,12 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-            float holdOutsideUntil = (steerRefPoint.TrackHalfWidth * 2f) / 10f;
+            float holdOutsideUntil = (steerRefPoint.TrackHalfWidth * 2f) / 8f;
             if (_approachHoldsOutside && timeToApex > holdOutsideUntil)
             {
-                // Corner-commit: sit beside the defended rival on the corner inside instead of the outside line.
+                // Corner-commit: sit beside the rival on the corner inside instead of the outside line.
                 bool isCornerCommit = ActiveManeuver.Target != null
-                    && ActiveManeuver.Type == ManeuverType.DefendLane;
+                    && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb);
                 if (isCornerCommit)
                 {
                     Rival target = Brain.Rivals.FirstOrDefault(r => r.RivalRacer == ActiveManeuver.Target);
@@ -810,7 +811,7 @@ namespace ARS
         void ConvertSpeedToPedals()
         {
             float currentForwardSpeed = VehicleData.SpeedVectorLocal.Y;
-            float inputChange = 10f * TickScale;
+            float inputChange = 2f * TickScale;
             float newThrottle = 0f;
             float newBrake = 0f;
 
@@ -903,7 +904,7 @@ namespace ARS
             }
 
             InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, 0f, -0.5f, 1f, true);
-            float floorSpeed = 10f * VehicleData.CurrentMechanicalGrip;
+            float floorSpeed = 5f * VehicleData.CurrentMechanicalGrip;
             return ARS.Remap(InputForOffshoot, -0.5f, 1f, floorSpeed, 999f, true);
         }
 
@@ -1054,8 +1055,8 @@ namespace ARS
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
 
-            // Pressure overspeed on route speed.
-            followTrackSpd += PressureMaxSpeedOffset * (Pressure / PressureRange);
+            // Pressure speed offset on route speed: 0 pressure = 0, 100 = +3 m/s, 0 with close rival = -3 m/s.
+            followTrackSpd += PressureMaxSpeedOffset * ((Pressure - PressureRange * 0.5f) / (PressureRange * 0.5f));
 
             // Pure apex speed for the corner-approach gate.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
@@ -1093,12 +1094,12 @@ namespace ARS
                 }
             }
 
-            // During the generated corner region, apex speed is the sole speed authority.
+            // During the generated corner region, let route speed govern by invalidating the corner map.
             CornerPoint activeCorner = NextApexNode >= 0
                 ? ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode)
                 : null;
             if (activeCorner != null && IsWithinCorner(activeCorner))
-                cornerSpd = cornerApexSpeedWithVerticalGrip;
+                cornerSpd += 3f;
 
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
@@ -2177,9 +2178,8 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             if (count < 10) return 999f;
 
-            float grip = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
-            int o1 = (int)(speed / grip);
-            int o3 = (int)(speed * 3f / grip);
+            int o1 = (int)(speed * 0.5f);
+            int o3 = (int)(speed * 1.5f);
             if (o3 < o1 + 2) o3 = o1 + 2;
             int o2 = o1 + (o3 - o1) / 2;
 
