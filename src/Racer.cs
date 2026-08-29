@@ -882,17 +882,26 @@ namespace ARS
             float combinedInput = ARS.Clamp(newThrottle - newBrake, -1f, 1f);
 
             // InputForOffshoot: projection off-track pedal authority.
-            // Measures the 1s projection's lateral distance beyond the track edge.
-            // At the edge = 1 (no restriction), edge + 2m = -1 (full brake).
+            // Only applies when the projection is on the OUTSIDE of a corner (not inside,
+            // not on straights). At the edge = 1 (no restriction), edge + 2m = -0.5 (half brake).
             // Instant — no ramp. Takes the more conservative of the two inputs.
             {
                 Vector3 proj = ProjectAhead(1f);
                 TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(proj)).First();
-                float lateralOffset = Math.Abs(ARS.SignedLaneOffset(proj, tp.Position, tp.Direction));
+                float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
                 float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
-                float offTrackDistance = lateralOffset - safeBound;
-                // Descending input (2→0), ascending output (-1→1) to avoid the Clamp gotcha.
-                InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, 0f, -1f, 1f, true);
+                float offTrackDistance = Math.Abs(signedOffset) - safeBound;
+
+                // Only restrict on the outside of a corner: the projection's side matches
+                // the track's curvature direction. Skip straights (radius > 400) entirely.
+                bool isOutside = tp.PreciseCurveRadius < 400f
+                    && Math.Sign(signedOffset) == Math.Sign(tp.Angle);
+                if (offTrackDistance <= 0f || !isOutside)
+                    InputForOffshoot = 1f;
+                else
+                    // Descending input (2→0), ascending output (-0.5→1) to avoid the Clamp gotcha.
+                    InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, 0f, -0.5f, 1f, true);
+
                 combinedInput = Math.Min(combinedInput, InputForOffshoot);
             }
             if (combinedInput >= 0f)
