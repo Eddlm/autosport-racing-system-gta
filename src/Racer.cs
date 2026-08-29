@@ -814,7 +814,6 @@ namespace ARS
             float throttleCap = Math.Min(Control.MaxThrottleFromTCS, 1f);
             float dirSwitchSpeed = ARS.MphToMps(5f);
 
-
             if (BaseBehavior == RacerBaseBehavior.GridWait)
             {
                 Brain.CurrentIntention.Speed = 99f;
@@ -829,8 +828,7 @@ namespace ARS
                 float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
                 float offTrackDistance = Math.Abs(signedOffset) - safeBound;
 
-                bool isOutsideCorner = tp.PreciseCurveRadius < 400f
-                    && Math.Sign(signedOffset) == Math.Sign(tp.Angle);
+                bool isOutsideCorner = tp.PreciseCurveRadius < 400f && Math.Sign(signedOffset) == Math.Sign(tp.Angle);
                 if (offTrackDistance <= 0f || !isOutsideCorner)
                     InputForOffshoot = 1f;
                 else
@@ -842,8 +840,6 @@ namespace ARS
                     offshootSpeedCap = ARS.Remap(InputForOffshoot, -0.5f, 1f, floorSpeed, 999f, true);
                 }
             }
-
-
 
             if (Brain.CurrentIntention.Speed >= 0f)
             {
