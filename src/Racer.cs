@@ -135,7 +135,12 @@ namespace ARS
         int _approachCornerNode = -1;
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
-        float _accelerationCap = 1f; 
+        float _accelerationCap = 1f;
+        // Projection off-track pedal authority: 1 = on-track (no restriction),
+        // -1 = full brake. Instantly computed from the 1s projection's distance
+        // beyond the track edge (edge = 1, edge + 2m = -1).
+        float InputForOffshoot = 1f;
+        const float OffshootRangeMeters = 2f;
         float _speedCap = 999f;
         const float SpeedCapRiseRate = 30f;
 
@@ -875,6 +880,21 @@ namespace ARS
             // Confidence disabled for now — was fighting brake demand and causing
             // AI to sail into corners. Re-enable with proper brake gating later.
             float combinedInput = ARS.Clamp(newThrottle - newBrake, -1f, 1f);
+
+            // InputForOffshoot: projection off-track pedal authority.
+            // Measures the 1s projection's lateral distance beyond the track edge.
+            // At the edge = 1 (no restriction), edge + 2m = -1 (full brake).
+            // Instant — no ramp. Takes the more conservative of the two inputs.
+            {
+                Vector3 proj = ProjectAhead(1f);
+                TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(proj)).First();
+                float lateralOffset = Math.Abs(ARS.SignedLaneOffset(proj, tp.Position, tp.Direction));
+                float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+                float offTrackDistance = lateralOffset - safeBound;
+                // Descending input (2→0), ascending output (-1→1) to avoid the Clamp gotcha.
+                InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, 0f, -1f, 1f, true);
+                combinedInput = Math.Min(combinedInput, InputForOffshoot);
+            }
             if (combinedInput >= 0f)
             {
                 newThrottle = combinedInput;
