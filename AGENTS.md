@@ -41,7 +41,7 @@ Rough order, each step consuming the last:
 2. `ComputeTargetSpeed` — builds the **intended speed** (see Speed pipeline) and sets `_cornerSpd` = current corner's apex speed.
 3. `ComputeSteering` — resolves the lane (see Lane systems), derives heading/lane/recovery angles, runs the PD to `Control.SteerDegrees`. **The heading-error term is load-bearing — do not remove or merge it into the lane term.** It anchors the car to face the track direction, which is what catches lateral-drift overshoot at the lane center. Merging heading + lane into a single "aim at the point" angle was tried and reverted: without a separate heading term the car sails past the lane and oscillates.
 4. `ApplySteerLimits` — speed-based clamp on steer (only when steer and yaw share sign).
-5. `ConvertSpeedToPedals` — the speed loop: intended speed → throttle/brake, clamped by the caps.
+5. `ConvertSpeedToPedals` — the speed loop: intended speed → throttle/brake, clamped by `_speedCap`. **GridWait no longer lives here** — it is handled by `ComputeTargetSpeed` (pins `Intention.Speed` to 200), `ProcessAI` (refreshes handbrake), and `TranslateSteerToInput`/`TryGetSteerContext` (skips steering). Keep these three places in sync if GridWait behavior changes.
 6. `TranslateSteerToInput` — smooths steer toward the target and remaps degrees → -1..1 input.
 7. Traction control, maneuvers, stuck recovery run around these.
 
