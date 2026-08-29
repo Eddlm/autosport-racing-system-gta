@@ -872,11 +872,9 @@ namespace ARS
 
             if (newBrake > 0.0) newThrottle = 0; else newBrake = 0;
 
-            if (!ConfidenceEnabled) _confidence = 0f;
-            // Confidence must not fight the brake — only apply it when the car is
-            // not braking (coasting/throttling). This prevents sail-through corners.
-            float confidenceOffset = newBrake > 0f ? 0f : _confidence;
-            float combinedInput = ARS.Clamp(newThrottle - newBrake + confidenceOffset, -1f, 1f);
+            // Confidence disabled for now — was fighting brake demand and causing
+            // AI to sail into corners. Re-enable with proper brake gating later.
+            float combinedInput = ARS.Clamp(newThrottle - newBrake, -1f, 1f);
             if (combinedInput >= 0f)
             {
                 newThrottle = combinedInput;
