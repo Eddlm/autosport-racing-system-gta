@@ -119,7 +119,8 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **Speed asymmetry** (above) is intentional.
 
 ## Known TODOs / open items
-- Walls-collapsed avoidance (empty TODO in `ApplyRivalWalls`) — fold into `_accelerationCap` as a separate source if needed.
+- Walls-collapsed avoidance (empty TODO in `ApplyRivalWalls`) — fold into a new input-domain cap when rebuilt.
+- **Reverse throttle path untested**: the `ConvertSpeedToPedals` combinedInput refactor routes reverse demand to `Control.Throttle` as negative input instead of the old `Control.Brake`. Forward/brake behavior verified; reverse driving behavior is not.
 - Two closely spaced corners where the second is slower — **now handled by design**: the live scan skips everything within the first 5s after an apex (exit-zone rule), so a close second corner is never instanced as a separate target.
 - Corner hugging (inside-line hold through the apex) still being evaluated.
 - Pressure-driven lookahead: reverted; hardcoded window pending investigation.
