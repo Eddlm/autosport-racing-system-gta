@@ -823,6 +823,37 @@ namespace ARS
                 Control.HandBrakeTime = Game.GameTime + 500;
             }
 
+            // InputForOffshoot: projection off-track speed cap.
+            // Only applies when the projection is on the OUTSIDE of a corner (not inside,
+            // not on straights). At the edge = no cap, edge + 2m = cap to speed floor.
+            // The floor is 10 * grip m/s — the car brakes toward it but never below.
+            float offshootSpeedCap = 999f;
+            {
+                Vector3 proj = ProjectAhead(1f);
+                TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(proj)).First();
+                float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
+                float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+                float offTrackDistance = Math.Abs(signedOffset) - safeBound;
+
+                // Only restrict on the outside of a corner: the projection's side matches
+                // the track's curvature direction. Skip straights (radius > 400) entirely.
+                bool isOutside = tp.PreciseCurveRadius < 400f
+                    && Math.Sign(signedOffset) == Math.Sign(tp.Angle);
+                if (offTrackDistance <= 0f || !isOutside)
+                    InputForOffshoot = 1f;
+                else
+                    // Descending input (2→0), ascending output (-0.5→1) to avoid the Clamp gotcha.
+                    InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, 0f, -0.5f, 1f, true);
+
+                // Map InputForOffshoot to a speed cap: 1 = no cap (999), -0.5 = floor.
+                if (InputForOffshoot < 1f)
+                {
+                    float floorSpeed = 10f * VehicleData.CurrentMechanicalGrip;
+                    // Ascending input (-0.5→1), ascending output (floor→999).
+                    offshootSpeedCap = ARS.Remap(InputForOffshoot, -0.5f, 1f, floorSpeed, 999f, true);
+                }
+            }
+
 
 
             if (Brain.CurrentIntention.Speed >= 0f)
@@ -830,6 +861,7 @@ namespace ARS
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, Brain.CurrentIntention.MaxSpeed);
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, _speedCap);
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, offshootSpeedCap);
             }
 
             if ((Game.GameTime - LapStartTime) < 3000) Brain.CurrentIntention.IntendedSpeedChangeGs = 999;
@@ -881,29 +913,6 @@ namespace ARS
             // AI to sail into corners. Re-enable with proper brake gating later.
             float combinedInput = ARS.Clamp(newThrottle - newBrake, -1f, 1f);
 
-            // InputForOffshoot: projection off-track pedal authority.
-            // Only applies when the projection is on the OUTSIDE of a corner (not inside,
-            // not on straights). At the edge = 1 (no restriction), edge + 2m = -0.5 (half brake).
-            // Instant — no ramp. Takes the more conservative of the two inputs.
-            {
-                Vector3 proj = ProjectAhead(1f);
-                TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(proj)).First();
-                float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
-                float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
-                float offTrackDistance = Math.Abs(signedOffset) - safeBound;
-
-                // Only restrict on the outside of a corner: the projection's side matches
-                // the track's curvature direction. Skip straights (radius > 400) entirely.
-                bool isOutside = tp.PreciseCurveRadius < 400f
-                    && Math.Sign(signedOffset) == Math.Sign(tp.Angle);
-                if (offTrackDistance <= 0f || !isOutside)
-                    InputForOffshoot = 1f;
-                else
-                    // Descending input (2→0), ascending output (-0.5→1) to avoid the Clamp gotcha.
-                    InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, 0f, -0.5f, 1f, true);
-
-                combinedInput = Math.Min(combinedInput, InputForOffshoot);
-            }
             if (combinedInput >= 0f)
             {
                 newThrottle = combinedInput;
