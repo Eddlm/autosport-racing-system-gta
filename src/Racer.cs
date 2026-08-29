@@ -809,59 +809,20 @@ namespace ARS
 
         void ConvertSpeedToPedals()
         {
-            float newThrottle = 0f;
-            float newBrake = 0f;
-            float throttleCap = Math.Min(Control.MaxThrottleFromTCS, 1f);
             float currentForwardSpeed = VehicleData.SpeedVectorLocal.Y;
             float inputChange = 10f * TickScale;
-            float intendedSpeedChange;
-            bool wantsReverse;
-            float combinedInput;
+            float newThrottle = 0f;
+            float newBrake = 0f;
 
             FindLowestIntendedSpeed();
-                        
             Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
 
-            intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
-            wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
+            float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
+            bool wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
 
-            if (intendedSpeedChange > 0.0f)
-            {
-                if (ShouldBrakeBeforeDrivingForward(currentForwardSpeed)) newBrake = ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, 0f, 1f);
-                else newThrottle = ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, 0f, throttleCap);
-            }
-            else if (intendedSpeedChange < 0.0f)
-            {
-                float reverseDemand = ARS.Clamp((-intendedSpeedChange) / FullPedalSpeedErrorMps, 0f, throttleCap);
-                float brakeDemand = ARS.Clamp((-intendedSpeedChange) / FullPedalSpeedErrorMps, 0f, 1f);
-
-                if (wantsReverse)
-                {
-                    if (ShouldBrakeBeforeReversing(currentForwardSpeed)) newBrake = brakeDemand;
-                    else newThrottle = -reverseDemand;
-                }
-                else
-                {
-                    newBrake = brakeDemand;
-                }
-            }
-
-
-            if (newBrake > 0.0) newThrottle = 0; else newBrake = 0;
-
-            combinedInput = ARS.Clamp(newThrottle - newBrake, -1f, 1f);
-
-            if (combinedInput >= 0f)
-            {
-                newThrottle = combinedInput;
-                newBrake = 0f;
-            }
-            else
-            {
-                newThrottle = 0f;
-                newBrake = -combinedInput;
-            }
-
+            float combinedInput = ComputeCombinedInput(intendedSpeedChange, currentForwardSpeed, wantsReverse);
+            combinedInput = ApplyThrottleCap(combinedInput, wantsReverse, currentForwardSpeed);
+            SplitCombinedInput(combinedInput, wantsReverse, currentForwardSpeed, ref newThrottle, ref newBrake);
 
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
@@ -872,6 +833,43 @@ namespace ARS
 
             if (Brain.CurrentIntention.MaxSpeed < AiConstants.MaxSpeed) Brain.CurrentIntention.MaxSpeed += 15 * TickScale;
 
+        }
+
+        float ComputeCombinedInput(float intendedSpeedChange, float currentForwardSpeed, bool wantsReverse)
+        {
+            if (intendedSpeedChange > 0f && ShouldBrakeBeforeDrivingForward(currentForwardSpeed))
+                return -ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, 0f, 1f);
+
+            if (intendedSpeedChange < 0f && wantsReverse && ShouldBrakeBeforeReversing(currentForwardSpeed))
+                return -ARS.Clamp((-intendedSpeedChange) / FullPedalSpeedErrorMps, 0f, 1f);
+
+            return ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, -1f, 1f);
+        }
+
+        float ApplyThrottleCap(float combinedInput, bool wantsReverse, float currentForwardSpeed)
+        {
+            float throttleCap = Math.Min(Control.MaxThrottleFromTCS, 1f);
+            bool isReverseThrottle = wantsReverse && !ShouldBrakeBeforeReversing(currentForwardSpeed);
+
+            if (combinedInput > 0f) return Math.Min(combinedInput, throttleCap);
+            if (combinedInput < 0f && isReverseThrottle) return -Math.Min(-combinedInput, throttleCap);
+            return combinedInput;
+        }
+
+        void SplitCombinedInput(float combinedInput, bool wantsReverse, float currentForwardSpeed, ref float newThrottle, ref float newBrake)
+        {
+            if (combinedInput > 0f)
+            {
+                newThrottle = combinedInput;
+                return;
+            }
+
+            if (combinedInput < 0f)
+            {
+                bool isReverseThrottle = wantsReverse && !ShouldBrakeBeforeReversing(currentForwardSpeed);
+                if (isReverseThrottle) newThrottle = combinedInput;
+                else newBrake = -combinedInput;
+            }
         }
 
         bool ShouldBrakeBeforeDrivingForward(float speed) => speed < -StationarySpeedThresholdMps;
