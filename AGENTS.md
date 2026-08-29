@@ -71,9 +71,8 @@ Design rules:
 - **Hill/crest grip floors**: `HillGripMin` and the crest/dip vertical grip factors are all floored at 0.8 — hills and crests can never remove more than 20% of grip. (Previously could zero out corner speed at sharp crests.)
 - **`Intention.Speed` = min(cornerSpd, followTrackSpd)**, then clamped by engine top speed, `MaxSpeed`, and `_speedCap`. The pressure speed bias (a post-min `±2 m/s` nudge) is **commented out** for late-braking isolation testing — re-enable when root cause is confirmed.
 - **Pedal gain**: speed error (in Gs) → pedals uses `* 1f` (1 G = full throttle/brake). Was `* 5f` (0.2 G saturated) — the old gain caused over-braking.
-- **Two cap domains, deliberately split:**
-  - `_accelerationCap` (input domain, ±1): throttle/brake scalar from avoidance (rival-distance smooth map). Lifts/brakes proportionally; only lowers via `Math.Min`.
-  - `_speedCap` (speed domain, m/s): the projection off-track source pins it at most to the corner speed, then deducts **incrementally** (per-second rate, not an instant pin) so a single frame of air/off-track doesn't slam the cap.
+- **Speed cap**: `_speedCap` (speed domain, m/s): the projection off-track source pins it at most to the corner speed, then deducts **incrementally** (per-second rate, not an instant pin) so a single frame of air/off-track doesn't slam the cap.
+- **Throttle/brake avoidance override**: **REMOVED**. The old `_accelerationCap` field (±1 input-domain scalar) was scaffolding but no system ever pulled it down; it only created confusion. Avoidance/reaction to rivals and rear-end prevention will be rebuilt from scratch when needed.
 - **Asymmetry is by design**: corner is the loose target, route is the tight one. Do not add flat offsets to `followTrackSpd` to "balance" them.
 - **High-grip cars don't respond to braking-side tuning**: their braking is so strong that the braking plan rarely binds — route-curvature speed control wins. Adjustments that act on the braking plan barely register on them; tune the route-speed side instead.
 
@@ -107,7 +106,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **`_laneGainDivisor`** (90–110): set once in the constructor at spawn. Scales the lane-pursuit gain curve's input — a lower divisor means the car saturates the gain at a smaller degree error (snappier lane pursuit), a higher divisor means it needs more error to max out (lazier). Subtle per-car variation so the field doesn't all steer identically.
 
 ## Debug (LemonUI Debug submenu)
-- **ShowInputs** — per-car speed readout (current/intended, corner/route speed, `_speedCap`/`_accelerationCap`/`_confidenceMPS`) + pedal trail, plus the empirical steer-limit panel lines (LAT: measured lateral G vs the empirical reference = remembered peak, and utilization against it; BEST: remembered peak steer/G + explore/exploit mode). Panel shows for the closest AI racer to the player. The declared mechanical-grip native reads ~2× what cars actually achieve, so it is **not displayed** — only reality (the peak memory) is shown as the reference.
+- **ShowInputs** — per-car speed readout (current/intended, corner/route speed, `_speedCap`/`_confidenceMPS`) + pedal trail, plus the empirical steer-limit panel lines (LAT: measured lateral G vs the empirical reference = remembered peak, and utilization against it; BEST: remembered peak steer/G + explore/exploit mode). Panel shows for the closest AI racer to the player. The declared mechanical-grip native reads ~2× what cars actually achieve, so it is **not displayed** — only reality (the peak memory) is shown as the reference.
 - **ShowTrackAnalysis** — lane-aim spheres to the final target, track-ahead radius, wall lines, corner chevrons.
 - **ShowAggro** — pressure chevron/text + 0.5s and 1s projections (white line/sphere, red when off-track).
 - **ShowPhysics** — G-force sphere/vector (legacy block, currently unreachable — `DrawRacerDebug` early-returns unless ShowInputs/ShowTrackAnalysis is on).

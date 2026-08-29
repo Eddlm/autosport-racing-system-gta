@@ -135,11 +135,11 @@ namespace ARS
         int _approachCornerNode = -1;
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
-        float _accelerationCap = 1f;
+
         float InputForOffshoot = 1f;
         const float OffshootRangeMeters = 2f;
         const float FullPedalSpeedErrorMps = 6.47f;
-        static readonly float DirSwitchSpeed = ARS.MphToMps(5f);
+        static readonly float StationarySpeedThresholdMps = ARS.MphToMps(5f);
         float _speedCap = 999f;
         const float SpeedCapRiseRate = 30f;
 
@@ -795,7 +795,6 @@ namespace ARS
             _hasLeftLapArmNode = false;
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             Control.MaxThrottle = 1f;
-            _accelerationCap = 1f;
             IsStuckByThrottle = false;
             _lastStuckGameTime = 0;
             _isRecoveringFromStuck = false;
@@ -813,47 +812,32 @@ namespace ARS
             float newThrottle = 0f;
             float newBrake = 0f;
             float throttleCap = Math.Min(Control.MaxThrottleFromTCS, 1f);
-
-            if (BaseBehavior == RacerBaseBehavior.GridWait)
-            {
-                Brain.CurrentIntention.Speed = 99f;
-                Control.HandBrakeTime = Game.GameTime + 500;
-            }
-
-            float offshootSpeedCap = ComputeOffshootSpeedCap();
-
-            if (Brain.CurrentIntention.Speed >= 0f)
-            {
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, Brain.CurrentIntention.MaxSpeed);
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, _speedCap);
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, offshootSpeedCap);
-            }
-
-            if ((Game.GameTime - LapStartTime) < 3000) Brain.CurrentIntention.IntendedSpeedChange = 999f;
-            else
-            {
-                float currentLongitudinalSpeed = VehicleData.SpeedVectorLocal.Y;
-                Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentLongitudinalSpeed;
-            }
-
             float currentForwardSpeed = VehicleData.SpeedVectorLocal.Y;
-            float speedError = Brain.CurrentIntention.IntendedSpeedChange;
-            bool wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
+            float inputChange = 10f * TickScale;
+            float intendedSpeedChange;
+            bool wantsReverse;
+            float combinedInput;
 
-            if (speedError > 0.0f)
+            FindLowestIntendedSpeed();
+                        
+            Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
+
+            intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
+            wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
+
+            if (intendedSpeedChange > 0.0f)
             {
-                if (currentForwardSpeed < -DirSwitchSpeed) newBrake = ARS.Clamp(speedError / FullPedalSpeedErrorMps, 0f, 1f);
-                else newThrottle = ARS.Clamp(speedError / FullPedalSpeedErrorMps, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
+                if (ShouldBrakeBeforeDrivingForward(currentForwardSpeed)) newBrake = ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, 0f, 1f);
+                else newThrottle = ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, 0f, throttleCap);
             }
-            else if (speedError < 0.0f)
+            else if (intendedSpeedChange < 0.0f)
             {
-                float reverseDemand = ARS.Clamp((-speedError) / FullPedalSpeedErrorMps, 0f, throttleCap);
-                float brakeDemand = ARS.Clamp((-speedError) / FullPedalSpeedErrorMps, 0f, 1f);
+                float reverseDemand = ARS.Clamp((-intendedSpeedChange) / FullPedalSpeedErrorMps, 0f, throttleCap);
+                float brakeDemand = ARS.Clamp((-intendedSpeedChange) / FullPedalSpeedErrorMps, 0f, 1f);
 
                 if (wantsReverse)
                 {
-                    if (currentForwardSpeed > DirSwitchSpeed) newBrake = brakeDemand;
+                    if (ShouldBrakeBeforeReversing(currentForwardSpeed)) newBrake = brakeDemand;
                     else newThrottle = -reverseDemand;
                 }
                 else
@@ -863,16 +847,9 @@ namespace ARS
             }
 
 
-            // Brake floor from _accelerationCap (negative part = min brake).
-            float accelCapBrakeMin = -Math.Min(_accelerationCap, 0f);
-            if (accelCapBrakeMin > 0f)
-            {
-                newBrake = Math.Max(newBrake, accelCapBrakeMin);
-            }
-
             if (newBrake > 0.0) newThrottle = 0; else newBrake = 0;
 
-            float combinedInput = ARS.Clamp(newThrottle - newBrake, -1f, 1f);
+            combinedInput = ARS.Clamp(newThrottle - newBrake, -1f, 1f);
 
             if (combinedInput >= 0f)
             {
@@ -886,7 +863,6 @@ namespace ARS
             }
 
 
-            float inputChange = 10f * TickScale;
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
 
@@ -896,6 +872,21 @@ namespace ARS
 
             if (Brain.CurrentIntention.MaxSpeed < AiConstants.MaxSpeed) Brain.CurrentIntention.MaxSpeed += 15 * TickScale;
 
+        }
+
+        bool ShouldBrakeBeforeDrivingForward(float speed) => speed < -StationarySpeedThresholdMps;
+
+        bool ShouldBrakeBeforeReversing(float speed) => speed > StationarySpeedThresholdMps;
+
+        void FindLowestIntendedSpeed()
+        {
+            if (Brain.CurrentIntention.Speed >= 0f)
+            {
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, Brain.CurrentIntention.MaxSpeed);
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, _speedCap);
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ComputeOffshootSpeedCap());
+            }
         }
 
         float ComputeOffshootSpeedCap()
@@ -1720,7 +1711,7 @@ namespace ARS
                         "~w~corn ~o~" + ARS.MpsToMph(_debugCornerSpd).ToString("0") + "~w~ rte ~c~" + ARS.MpsToMph(_debugFollowTrackSpd).ToString("0"),
                         Color.White, 0.4f);
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f),
-                        "~w~spdCap ~p~" + ARS.MpsToMph(_speedCap).ToString("0") + "~w~ accCap ~r~" + _accelerationCap.ToString("0.00") + "~w~ conf ~y~" + _confidence.ToString("0.0"),
+                        "~w~spdCap ~p~" + ARS.MpsToMph(_speedCap).ToString("0") + "~w~ conf ~y~" + _confidence.ToString("0.0"),
                         Color.White, 0.4f);
                 }
                 if (showTrack)
@@ -2602,8 +2593,7 @@ namespace ARS
             {
                 UpdateRivalInfo();
 
-                // Re-rise the caps before concern sources pull them down.
-                _accelerationCap = Math.Min(1f, _accelerationCap + 0.33f * TickScale);
+                // Re-rise the speed cap before concern sources pull it down.
                 _speedCap = Math.Min(999f, _speedCap + SpeedCapRiseRate * TickScale);
 
                 ComputeTargetSpeed();
