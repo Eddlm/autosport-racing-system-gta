@@ -139,6 +139,7 @@ namespace ARS
         float InputForOffshoot = 1f;
         const float OffshootRangeMeters = 2f;
         const float FullPedalSpeedErrorMps = 6.47f;
+        static readonly float DirSwitchSpeed = ARS.MphToMps(5f);
         float _speedCap = 999f;
         const float SpeedCapRiseRate = 30f;
 
@@ -812,7 +813,6 @@ namespace ARS
             float newThrottle = 0f;
             float newBrake = 0f;
             float throttleCap = Math.Min(Control.MaxThrottleFromTCS, 1f);
-            float dirSwitchSpeed = ARS.MphToMps(5f);
 
             if (BaseBehavior == RacerBaseBehavior.GridWait)
             {
@@ -820,26 +820,7 @@ namespace ARS
                 Control.HandBrakeTime = Game.GameTime + 500;
             }
 
-            float offshootSpeedCap = 999f;
-            {
-                Vector3 proj = ProjectAhead(1f);
-                TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(proj)).First();
-                float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
-                float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
-                float offTrackDistance = Math.Abs(signedOffset) - safeBound;
-
-                bool isOutsideCorner = tp.PreciseCurveRadius < 400f && Math.Sign(signedOffset) == Math.Sign(tp.Angle);
-                if (offTrackDistance <= 0f || !isOutsideCorner)
-                    InputForOffshoot = 1f;
-                else
-                    InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, 0f, -0.5f, 1f, true);
-
-                if (InputForOffshoot < 1f)
-                {
-                    float floorSpeed = 10f * VehicleData.CurrentMechanicalGrip;
-                    offshootSpeedCap = ARS.Remap(InputForOffshoot, -0.5f, 1f, floorSpeed, 999f, true);
-                }
-            }
+            float offshootSpeedCap = ComputeOffshootSpeedCap();
 
             if (Brain.CurrentIntention.Speed >= 0f)
             {
@@ -862,7 +843,7 @@ namespace ARS
 
             if (speedError > 0.0f)
             {
-                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedError / FullPedalSpeedErrorMps, 0f, 1f);
+                if (currentForwardSpeed < -DirSwitchSpeed) newBrake = ARS.Clamp(speedError / FullPedalSpeedErrorMps, 0f, 1f);
                 else newThrottle = ARS.Clamp(speedError / FullPedalSpeedErrorMps, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
             }
             else if (speedError < 0.0f)
@@ -872,7 +853,7 @@ namespace ARS
 
                 if (wantsReverse)
                 {
-                    if (currentForwardSpeed > dirSwitchSpeed) newBrake = brakeDemand;
+                    if (currentForwardSpeed > DirSwitchSpeed) newBrake = brakeDemand;
                     else newThrottle = -reverseDemand;
                 }
                 else
@@ -909,45 +890,70 @@ namespace ARS
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
 
-            // Brake learning (Phase 1): accumulate the full-brake fraction per braking
-            // phase and drive the effective decel factor toward the 75% setpoint.
-            // Skip while a maneuver is active — its altered braking (divebomb target,
-            // yield halving, etc.) would corrupt the fraction.
-            if (ARS.DebugToggles[Options.BrakeLearning] && ActiveManeuver.Type == ManeuverType.None)
-            {
-                if (Control.Brake > 0f && !_inBrakePhase)
-                {
-                    _inBrakePhase = true;
-                    _brakePhaseFrames = 0;
-                    _brakePhaseFullFrames = 0;
-                }
-                if (_inBrakePhase)
-                {
-                    _brakePhaseFrames++;
-                    if (Control.Brake >= FullBrakeThreshold) _brakePhaseFullFrames++;
-                }
-                if (Control.Brake <= 0f && _inBrakePhase)
-                {
-                    _inBrakePhase = false;
-                    float fraction = _brakePhaseFrames > 0 ? (float)_brakePhaseFullFrames / _brakePhaseFrames : 0f;
-                    if (fraction > BrakeFractionTarget) _brakeDecelFactor *= BrakeEaseOffRate;
-                    else if (fraction < BrakeFractionTarget) _brakeDecelFactor *= BrakeLeanOnRate;
-                    _brakeDecelFactor = ARS.Clamp(_brakeDecelFactor, MinBrakeDecelFactor, MaxBrakeDecelFactor);
-                }
-            }
-            else
-            {
-                // Abort any in-progress phase (maneuver or toggle off). Only pin the
-                // factor when the feature is disabled — a maneuver keeps the learned value.
-                _inBrakePhase = false;
-                if (!ARS.DebugToggles[Options.BrakeLearning]) _brakeDecelFactor = 1f;
-            }
+            UpdateBrakeLearning();
             Control.Throttle = Math.Min(Control.Throttle, Control.MaxThrottle);
             if (Control.MaxThrottle < 1.00f) Control.MaxThrottle += 2 * TickScale;
 
             if (Brain.CurrentIntention.MaxSpeed < AiConstants.MaxSpeed) Brain.CurrentIntention.MaxSpeed += 15 * TickScale;
 
         }
+
+        float ComputeOffshootSpeedCap()
+        {
+            Vector3 proj = ProjectAhead(1f);
+            TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(proj)).First();
+            float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
+            float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+            float offTrackDistance = Math.Abs(signedOffset) - safeBound;
+            bool isOutsideCorner = tp.PreciseCurveRadius < 400f && Math.Sign(signedOffset) == Math.Sign(tp.Angle);
+
+            if (offTrackDistance <= 0f || !isOutsideCorner)
+            {
+                InputForOffshoot = 1f;
+                return 999f;
+            }
+
+            InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, 0f, -0.5f, 1f, true);
+            float floorSpeed = 10f * VehicleData.CurrentMechanicalGrip;
+            return ARS.Remap(InputForOffshoot, -0.5f, 1f, floorSpeed, 999f, true);
+        }
+
+        void UpdateBrakeLearning()
+        {
+            if (!ARS.DebugToggles[Options.BrakeLearning])
+            {
+                _inBrakePhase = false;
+                _brakeDecelFactor = 1f;
+                return;
+            }
+
+            if (ActiveManeuver.Type != ManeuverType.None)
+            {
+                _inBrakePhase = false;
+                return;
+            }
+
+            if (Control.Brake > 0f && !_inBrakePhase)
+            {
+                _inBrakePhase = true;
+                _brakePhaseFrames = 0;
+                _brakePhaseFullFrames = 0;
+            }
+            if (_inBrakePhase)
+            {
+                _brakePhaseFrames++;
+                if (Control.Brake >= FullBrakeThreshold) _brakePhaseFullFrames++;
+            }
+            if (Control.Brake <= 0f && _inBrakePhase)
+            {
+                _inBrakePhase = false;
+                float fraction = _brakePhaseFrames > 0 ? (float)_brakePhaseFullFrames / _brakePhaseFrames : 0f;
+                if (fraction > BrakeFractionTarget) _brakeDecelFactor *= BrakeEaseOffRate;
+                else if (fraction < BrakeFractionTarget) _brakeDecelFactor *= BrakeLeanOnRate;
+                _brakeDecelFactor = ARS.Clamp(_brakeDecelFactor, MinBrakeDecelFactor, MaxBrakeDecelFactor);
+            }
+        }
+
         float TickScale => (0.001f * TimeSince_lastCoreTick);
 
 
