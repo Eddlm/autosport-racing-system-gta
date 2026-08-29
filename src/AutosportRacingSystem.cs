@@ -158,6 +158,11 @@ namespace ARS
 
         public static RaceState RaceStatus = RaceState.None;
 
+        // Phased race instancing: track which setup phases have been completed.
+        // Reset by CleanRacers (_gridInstanced) and CleanEverything (both).
+        bool _trackInstanced;
+        bool _gridInstanced;
+
 
         
         static public ulong SteerOffset = 0x0;
@@ -743,6 +748,16 @@ namespace ARS
             };
             _arsMenu.Add(_trackListItem);
 
+            // Phase 1: load the selected track, compute route/corners, teleport the player.
+            NativeItem instanceTrackItem = new NativeItem("Instance Track", "Load the selected track and teleport to it.");
+            instanceTrackItem.Activated += (sender, args) =>
+            {
+                _arsMenu.Visible = false;
+                InstanceTrack();
+                _arsMenu.Visible = true;
+            };
+            _arsMenu.Add(instanceTrackItem);
+
             _gridSizeItem = new NativeListItem<string>("Target Grid Size", "Target number of vehicles for the grid.", new[] { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12" });
             _gridSizeItem.ItemChanged += (sender, args) =>
             {
@@ -769,8 +784,23 @@ namespace ARS
             };
             _arsMenu.Add(_powerBracketItem);
 
-            NativeItem startRaceItem = new NativeItem("Start Race", "Load the selected track, build the grid, and start a race.");
-            startRaceItem.Activated += (sender, args) => StartRaceFromMenu();
+            // Phase 2: spawn the AI grid with current pace/grid settings. Repeatable —
+            // re-click tears down the old grid and respawns with updated settings.
+            NativeItem instanceGridItem = new NativeItem("Instance Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing pace/size.");
+            instanceGridItem.Activated += (sender, args) =>
+            {
+                _arsMenu.Visible = false;
+                InstanceGrid();
+                _arsMenu.Visible = true;
+            };
+
+            // Phase 3: add the player to the grid, place cars, tune, and start the race.
+            NativeItem startRaceItem = new NativeItem("Start Race", "Add yourself to the grid and start the race.");
+            startRaceItem.Activated += (sender, args) =>
+            {
+                _arsMenu.Visible = false;
+                StartRace();
+            };
 
             NativeItem freecamItem = new NativeItem("Freecam", "Toggle the ARS free camera.");
             freecamItem.Activated += (sender, args) =>
@@ -812,6 +842,7 @@ namespace ARS
             laneGainExpItem.SelectedIndex = 1; // 1.0
             debugMenu.Add(laneGainExpItem);
 
+            _arsMenu.Add(instanceGridItem);
             _arsMenu.Add(startRaceItem);
             _arsMenu.Add(freecamItem);
             _arsMenu.AddSubMenu(debugMenu);
@@ -824,29 +855,74 @@ namespace ARS
             checkbox.CheckboxChanged += (sender, args) => DebugToggles[option] = checkbox.Checked;
             menu.Add(checkbox);
         }
-        void StartRaceFromMenu()
-        {
-            _arsMenu.Visible = false;
+        // ── Phased race instancing ──
+        // Each phase is a self-contained method callable individually or chained
+        // back-to-back (for future presets that instance everything in one go).
 
-            // If the user picked a race from the "Select Track" list, always load that one.
-            if (_selectedTrackPath != null)
-            {
-                LoadTrack(LoadTrackFile(_selectedTrackPath));
-            }
-            else if (RouteNodes.Count == 0)
+        // Phase 1: load the selected track, compute route/corners, teleport the player.
+        public void InstanceTrack()
+        {
+            // Tear down any existing race state before loading a new track.
+            CleanRacers();
+            _gridInstanced = false;
+
+            // Resolve which track file to load.
+            string trackPath = _selectedTrackPath;
+            if (trackPath == null)
             {
                 if (FilteredTracks.Count == 0)
                 {
                     UI.Notify("~r~No tracks found. Create one with 'arscreatetrack'.");
                     return;
                 }
-                LoadTrack(LoadTrackFile(FilteredTracks[0]));
+                trackPath = FilteredTracks[0];
             }
 
-            // Rebuild the cached candidate pool after menu changes. The initial load
-            // populates this cache using the startup grid-size and power settings.
+            LoadTrack(LoadTrackFile(trackPath));
+
+            // LoadTrack fades out but never fades back in — do it here so the player
+            // can see the instanced track and interact with the menu.
+            if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+
+            _trackInstanced = true;
+            Log(LogImportance.Info, "Track instanced");
+        }
+
+        // Phase 2: spawn the AI grid with current pace/grid settings. Repeatable —
+        // calling again tears down the old grid and respawns with updated settings.
+        public void InstanceGrid()
+        {
+            if (!_trackInstanced)
+            {
+                UI.Notify("~r~Instance a track first.");
+                return;
+            }
+
+            // Tear down any existing AI grid (player is not a racer yet at this point).
+            CleanRacers();
+
             FillCachedCandidates(DisciplineFilter, _intendedOpponents, true);
             LoadGrid(DisciplineFilter, _intendedOpponents);
+
+            if (Racers.Count == 0)
+            {
+                UI.Notify("~o~No vehicles found with current pace settings. Try widening the bracket.");
+                _gridInstanced = false;
+                return;
+            }
+
+            _gridInstanced = true;
+            Log(LogImportance.Info, "Grid instanced (" + Racers.Count + " AI cars)");
+        }
+
+        // All-in-one chain: runs all three phases back-to-back with no UI stops.
+        // Used by future presets; also the backward-compatible single-call path.
+        public void StartRaceFromMenu()
+        {
+            InstanceTrack();
+            if (!_trackInstanced) return;
+            InstanceGrid();
+            if (!_gridInstanced) return;
             StartRace();
         }
 
@@ -975,6 +1051,8 @@ namespace ARS
 
             RaceStatus = RaceState.None;
             _countdown = _maxCountdown;
+            _trackInstanced = false;
+            _gridInstanced = false;
         }
 
         int _shortTickMs = Game.GameTime;
@@ -1664,13 +1742,24 @@ namespace ARS
         public void StartRace()
         {
             Log(LogImportance.Info, "Starting race");
-            if (RouteNodes.Count == 0)
+
+            // Phase 3 requires track + grid to be instanced (unless called directly
+            // with a track already loaded and racers already spawned).
+            if (!_trackInstanced || !_gridInstanced)
             {
-                UI.Notify("~r~Load or create a path route first.");
-                return;
+                if (RouteNodes.Count == 0)
+                {
+                    UI.Notify("~r~Load or create a path route first.");
+                    return;
+                }
+                if (Racers.Count == 0)
+                {
+                    UI.Notify("~r~Instance a track and grid first.");
+                    return;
+                }
             }
 
-            
+           
 
             Log(LogImportance.Info, "Adding player to grid");
             AddPlayerToGrid();
@@ -1691,6 +1780,10 @@ namespace ARS
 
 
             if (ARS.SettingsFile.GetValue("CATCHUP", "OnlyLastHalf", true)) ARS.CatchupPosition = (int)(ARS.Racers.Count / 2);
+
+            // Race is now in the countdown/in-progress flow — clear setup flags.
+            _trackInstanced = false;
+            _gridInstanced = false;
             Log(LogImportance.Info, "Started race");
 
         }
@@ -1704,7 +1797,8 @@ namespace ARS
             }
             Racers.Clear();
             LeaderboardFinish.Clear();
-            RaceStatus = RaceState.NotInitiated;
+            RaceStatus = RaceState.None;
+            _gridInstanced = false;
         }
 
 
