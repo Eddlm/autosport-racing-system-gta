@@ -959,7 +959,7 @@ namespace ARS
             {
                 for (int i = 0; i < _trackListItem.Items.Count; i++)
                 {
-                    if (string.Equals(_trackListItem.Items[i], "LSIA Test Track", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(_trackListItem.Items[i], "Figureight", StringComparison.OrdinalIgnoreCase))
                     {
                         idx = i;
                         break;
