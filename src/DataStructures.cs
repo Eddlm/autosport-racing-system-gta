@@ -89,7 +89,7 @@ namespace ARS
         {
             public float Speed;
             public float MaxSpeed;
-            public float IntendedSpeedChangeGs;
+            public float IntendedSpeedChange;
 
         }
 

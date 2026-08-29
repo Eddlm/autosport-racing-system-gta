@@ -138,6 +138,7 @@ namespace ARS
         float _accelerationCap = 1f;
         float InputForOffshoot = 1f;
         const float OffshootRangeMeters = 2f;
+        const float FullPedalSpeedErrorMps = 6.47f;
         float _speedCap = 999f;
         const float SpeedCapRiseRate = 30f;
 
@@ -852,32 +853,29 @@ namespace ARS
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, offshootSpeedCap);
             }
 
-            if ((Game.GameTime - LapStartTime) < 3000) Brain.CurrentIntention.IntendedSpeedChangeGs = 999;
+            if ((Game.GameTime - LapStartTime) < 3000) Brain.CurrentIntention.IntendedSpeedChange = 999f;
             else
             {
                 float currentLongitudinalSpeed = VehicleData.SpeedVectorLocal.Y;
-                Brain.CurrentIntention.IntendedSpeedChangeGs = (Brain.CurrentIntention.Speed - currentLongitudinalSpeed) / 9.8f;
-            }            
+                Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentLongitudinalSpeed;
+            }
 
             float currentForwardSpeed = VehicleData.SpeedVectorLocal.Y;
-            float speedErrorGs = Brain.CurrentIntention.IntendedSpeedChangeGs;
+            float speedError = Brain.CurrentIntention.IntendedSpeedChange;
             bool wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
 
-            // Apply _accelerationCap: positive multiplies throttle, negative sets minimum brake.
-            if (speedErrorGs > 0.0f)
+            if (speedError > 0.0f)
             {
-
-                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedErrorGs / 0.66f, 0f, 1f);
-                else newThrottle = ARS.Clamp(speedErrorGs / 0.66f, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
+                if (currentForwardSpeed < -dirSwitchSpeed) newBrake = ARS.Clamp(speedError / FullPedalSpeedErrorMps, 0f, 1f);
+                else newThrottle = ARS.Clamp(speedError / FullPedalSpeedErrorMps, 0f, throttleCap) * Math.Max(_accelerationCap, 0f);
             }
-            else if (speedErrorGs < 0.0f)
+            else if (speedError < 0.0f)
             {
-                    float reverseDemand = ARS.Clamp((-speedErrorGs) / 0.66f, 0f, throttleCap);
-                    float brakeDemand = ARS.Clamp((-speedErrorGs) / 0.66f, 0f, 1f);
+                float reverseDemand = ARS.Clamp((-speedError) / FullPedalSpeedErrorMps, 0f, throttleCap);
+                float brakeDemand = ARS.Clamp((-speedError) / FullPedalSpeedErrorMps, 0f, 1f);
 
                 if (wantsReverse)
                 {
-
                     if (currentForwardSpeed > dirSwitchSpeed) newBrake = brakeDemand;
                     else newThrottle = -reverseDemand;
                 }
@@ -1875,7 +1873,7 @@ namespace ARS
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
                 ARS.DrawText(new Vector2(0.79f, y),
-                    "ERR   " + (Brain.CurrentIntention.Speed - VehicleData.SpeedVectorLocal.Y).ToString("0.0") + " m/s | " + Math.Abs(Brain.CurrentIntention.IntendedSpeedChangeGs * 9.8f).ToString("0.0") + " m/s/s",
+                    "ERR   " + Brain.CurrentIntention.IntendedSpeedChange.ToString("0.0") + " m/s",
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
