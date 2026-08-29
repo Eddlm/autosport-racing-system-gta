@@ -718,6 +718,9 @@ namespace ARS
         public static int TrackListPos = 0;
         readonly ObjectPool _menuPool = new ObjectPool();
         NativeMenu _arsMenu;
+        NativeMenu _raceMenu;
+        NativeMenu _trackMenu;
+        NativeMenu _gridMenu;
 
         // Menu track selector: the user picks a race from the list and Start Race uses it.
         NativeListItem<string> _trackListItem;
@@ -737,26 +740,43 @@ namespace ARS
                 DisableControls = true
             };
 
-            // "Select Track". Cycles through every discovered race and remembers the choice.
-            // Start Race below then loads this specific file (falls back to the current behavior
-            // when none is chosen).
-            _trackListItem = new NativeListItem<string>("Select Track", "Pick the race to start, then hit Start Race.", Array.Empty<string>());
+            // ── Race submenu ──
+            _raceMenu = new NativeMenu("Race", "SETUP")
+            {
+                UseMouse = false,
+                DisableControls = true
+            };
+
+            // ── Track submenu (inside Race) ──
+            _trackMenu = new NativeMenu("Track", "TRACK")
+            {
+                UseMouse = false,
+                DisableControls = true
+            };
+
+            _trackListItem = new NativeListItem<string>("Select Track", "Pick the race to instance.", Array.Empty<string>());
             _trackListItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index < _trackListPaths.Count)
                     _selectedTrackPath = _trackListPaths[args.Index];
             };
-            _arsMenu.Add(_trackListItem);
+            _trackMenu.Add(_trackListItem);
 
-            // Phase 1: load the selected track, compute route/corners, teleport the player.
             NativeItem instanceTrackItem = new NativeItem("Instance Track", "Load the selected track and teleport to it.");
             instanceTrackItem.Activated += (sender, args) =>
             {
-                _arsMenu.Visible = false;
+                _trackMenu.Visible = false;
                 InstanceTrack();
-                _arsMenu.Visible = true;
+                _trackMenu.Visible = true;
             };
-            _arsMenu.Add(instanceTrackItem);
+            _trackMenu.Add(instanceTrackItem);
+
+            // ── Grid submenu (inside Race) ──
+            _gridMenu = new NativeMenu("Grid", "GRID")
+            {
+                UseMouse = false,
+                DisableControls = true
+            };
 
             _gridSizeItem = new NativeListItem<string>("Target Grid Size", "Target number of vehicles for the grid.", new[] { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12" });
             _gridSizeItem.ItemChanged += (sender, args) =>
@@ -766,7 +786,7 @@ namespace ARS
             };
             _intendedOpponents = (int)Clamp(_intendedOpponents, 0, 12);
             _gridSizeItem.SelectedIndex = _intendedOpponents;
-            _arsMenu.Add(_gridSizeItem);
+            _gridMenu.Add(_gridSizeItem);
 
             _powerTargetItem = new NativeListItem<string>("Pace Target", "Target pace index (0-1, top-speed weighted) for grid selection.", Array.Empty<string>());
             _powerTargetItem.ItemChanged += (sender, args) =>
@@ -774,7 +794,7 @@ namespace ARS
                 if (args.Index >= 0 && args.Index < _powerTargetValues.Count)
                     PowerTargetScale = _powerTargetValues[args.Index];
             };
-            _arsMenu.Add(_powerTargetItem);
+            _gridMenu.Add(_powerTargetItem);
 
             _powerBracketItem = new NativeListItem<string>("Pace Bracket", "Allowed pace index above or below the target.", Array.Empty<string>());
             _powerBracketItem.ItemChanged += (sender, args) =>
@@ -782,46 +802,65 @@ namespace ARS
                 if (args.Index >= 0 && args.Index < _powerBracketValues.Count)
                     PowerBracketScale = _powerBracketValues[args.Index];
             };
-            _arsMenu.Add(_powerBracketItem);
+            _gridMenu.Add(_powerBracketItem);
 
-            // Phase 2: spawn the AI grid with current pace/grid settings. Repeatable —
-            // re-click tears down the old grid and respawns with updated settings.
             NativeItem instanceGridItem = new NativeItem("Instance Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing pace/size.");
             instanceGridItem.Activated += (sender, args) =>
             {
-                _arsMenu.Visible = false;
+                _gridMenu.Visible = false;
                 InstanceGrid();
-                _arsMenu.Visible = true;
+                _gridMenu.Visible = true;
             };
+            _gridMenu.Add(instanceGridItem);
 
-            // Phase 3: add the player to the grid, place cars, tune, and start the race.
-            NativeItem startRaceItem = new NativeItem("Start Race", "Add yourself to the grid and start the race.");
-            startRaceItem.Activated += (sender, args) =>
+            // Link Track and Grid as submenus of Race
+            _raceMenu.AddSubMenu(_trackMenu);
+            _raceMenu.AddSubMenu(_gridMenu);
+
+            // ── Root-level actions ──
+
+            // Start: add player to grid, place cars, tune, countdown.
+            NativeItem startItem = new NativeItem("Start", "Add yourself to the grid and start the race.");
+            startItem.Activated += (sender, args) =>
             {
                 _arsMenu.Visible = false;
                 StartRace();
             };
+            _arsMenu.Add(startItem);
 
+            // End: tear down race, clean everything.
+            NativeItem endItem = new NativeItem("End", "Tear down the current race and clean everything.");
+            endItem.Activated += (sender, args) =>
+            {
+                _arsMenu.Visible = false;
+                CleanEverything();
+                UI.Notify("~r~Race ended.~w~ Everything cleaned.");
+            };
+            _arsMenu.Add(endItem);
+
+            // Freecam toggle.
             NativeItem freecamItem = new NativeItem("Freecam", "Toggle the ARS free camera.");
             freecamItem.Activated += (sender, args) =>
             {
                 _arsMenu.Visible = false;
                 _freeCam.Toggle();
             };
+            _arsMenu.Add(freecamItem);
 
-            NativeMenu debugMenu = new NativeMenu("Debug", "OPTIONS", "Configure ARS debug and race setup options.")
+            // ── Settings submenu (root) ──
+            NativeMenu settingsMenu = new NativeMenu("Settings", "OPTIONS", "Configure ARS debug and race setup options.")
             {
                 UseMouse = false,
                 DisableControls = true
             };
-            AddDebugCheckbox(debugMenu, Options.ShowAggro, "Show Pressure", "Show each racer's pressure on the leaderboard and above their car.");
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
-            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
-            AddDebugCheckbox(debugMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
-            AddDebugCheckbox(debugMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
-            AddDebugCheckbox(debugMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.");
-            AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
-            AddDebugCheckbox(debugMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~75% of each braking phase.");
+            AddDebugCheckbox(settingsMenu, Options.ShowAggro, "Show Pressure", "Show each racer's pressure on the leaderboard and above their car.");
+            AddDebugCheckbox(settingsMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
+            AddDebugCheckbox(settingsMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
+            AddDebugCheckbox(settingsMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
+            AddDebugCheckbox(settingsMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
+            AddDebugCheckbox(settingsMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.");
+            AddDebugCheckbox(settingsMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
+            AddDebugCheckbox(settingsMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~75% of each braking phase.");
 
             NativeListItem<string> previewBlendItem = new NativeListItem<string>("Preview Blend", "How much of the lane error is measured at the projection (Gs-aware) rather than at the car.", new[] { "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%" });
             previewBlendItem.ItemChanged += (sender, args) =>
@@ -830,7 +869,7 @@ namespace ARS
                     GsAwarePreviewBlend = (args.Index + 1) / 10f;
             };
             previewBlendItem.SelectedIndex = 4; // 50%
-            debugMenu.Add(previewBlendItem);
+            settingsMenu.Add(previewBlendItem);
 
             NativeListItem<string> laneGainExpItem = new NativeListItem<string>("Lane Gain Exponent", "Shape of the lane-pursuit gain curve: below 1 boosts small errors (punchier), 1 is linear, above 1 damps them (softer).", new[] { "0.5", "1.0", "1.5", "2.0" });
             float[] laneGainExpValues = { 0.5f, 1f, 1.5f, 2f };
@@ -840,14 +879,18 @@ namespace ARS
                     LaneGainExponent = laneGainExpValues[args.Index];
             };
             laneGainExpItem.SelectedIndex = 1; // 1.0
-            debugMenu.Add(laneGainExpItem);
+            settingsMenu.Add(laneGainExpItem);
 
-            _arsMenu.Add(instanceGridItem);
-            _arsMenu.Add(startRaceItem);
-            _arsMenu.Add(freecamItem);
-            _arsMenu.AddSubMenu(debugMenu);
+            // Link Race and Settings as submenus of root
+            _arsMenu.AddSubMenu(_raceMenu);
+            _arsMenu.AddSubMenu(settingsMenu);
+
+            // Register all menus in the pool
             _menuPool.Add(_arsMenu);
-            _menuPool.Add(debugMenu);
+            _menuPool.Add(_raceMenu);
+            _menuPool.Add(_trackMenu);
+            _menuPool.Add(_gridMenu);
+            _menuPool.Add(settingsMenu);
         }
         void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description)
         {
