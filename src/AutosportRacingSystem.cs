@@ -275,9 +275,9 @@ namespace ARS
             Tick += OnTick;
             Aborted += OnAbort;
 
-            File.WriteAllText(@"scripts\ARS\Log.log", "----------------------------");
+            File.WriteAllText(ScriptsFolder + @"\Log.log", "----------------------------");
             Log(LogImportance.Info, "Script initialized - " + DateTime.Now);
-            File.AppendAllText(@"scripts\ARS\Log.log", "\n----------------------------");
+            File.AppendAllText(ScriptsFolder + @"\Log.log", "\n----------------------------");
             LoadSettings();
             InitializeMenu();
 
@@ -291,7 +291,7 @@ namespace ARS
             AssemblyName assemName = assem.GetName();
             Version ver = assemName.Version;
             scriptVer = ver.ToString() + " ~o~[PUBLIC BETA]~w~";
-            scriptDate = File.GetLastWriteTimeUtc(@"scripts/ARS/ARS.dll").ToString();
+            scriptDate = File.GetLastWriteTimeUtc(ScriptsFolder + @"\ARS.dll").ToString();
 
 
             UI.Notify("~b~" + scriptName + "~g~e~w~" + "~y~ " + scriptVer + "~n~Build: ~g~" + scriptDate);
@@ -305,8 +305,8 @@ namespace ARS
             _trackTags.Clear();
             ImmersiveJoins.Clear();
             Log(LogImportance.Info, "Learning available tracks...");
-            List<string> folders = Directory.GetDirectories(@"scripts\ARS\Tracks").ToList();
-            folders.Add(@"scripts\ARS\Tracks");
+            List<string> folders = Directory.GetDirectories(ScriptsFolder + @"\Tracks").ToList();
+            folders.Add(ScriptsFolder + @"\Tracks");
             foreach (string dir in folders)
             {
                 int count = 0;
@@ -328,7 +328,7 @@ namespace ARS
             }
 
 
-            KnownTracks = Directory.GetFiles(@"scripts\ARS\Tracks").ToList();
+            KnownTracks = Directory.GetFiles(ScriptsFolder + @"\Tracks").ToList();
             Log(LogImportance.Info, "Done.");
             Log(LogImportance.Info, "-------------");
         }
@@ -448,7 +448,7 @@ namespace ARS
             Log(LogImportance.Info, "-------------");
             Log(LogImportance.Info, "Learning available disciplines...");
             VehicleCatalog.Scan(_racerTagLookup, KnownVehicleModels, text => Log(LogImportance.Info, text), text => DisplayHelpTextTimed(text, 5000), Yield, allowScriptYield);
-            KnownTracks = Directory.GetFiles(@"scripts\ARS\Tracks").ToList();
+            KnownTracks = Directory.GetFiles(ScriptsFolder + @"\Tracks").ToList();
             Log(LogImportance.Info, "Done.");
             Log(LogImportance.Info, "-------------");
         }
@@ -702,6 +702,12 @@ namespace ARS
         public static string DisciplineFilter = "sports";
         public static float PowerTargetScale = 0.52f;
         public static float PowerBracketScale = 0.02f;
+        // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
+        // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
+        public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
+        // Test-only: force a specific car into the pace-matched grid for the next few tests.
+        // Match is by the XML <Model> InnerText (case-insensitive, e.g. "tiberius"). Flip to null to disable.
+        public static string AlwaysIncludeModelName = "tiberius";
 
         Dictionary<string, string> _racerTagLookup = new Dictionary<string, string>();
         public static int TrackListPos = 0;
@@ -2274,7 +2280,7 @@ namespace ARS
             {
                 UI.Notify("~b~[ARS]:~w~ Generating vehicle files from modeldump.txt.");
 
-                string dumpFilePath = @"Scripts\ARS\modeldump.txt";
+                string dumpFilePath = ScriptsFolder + @"\modeldump.txt";
                 if (File.Exists(dumpFilePath))
                 {
                     string content = File.ReadAllText(dumpFilePath);
@@ -2294,7 +2300,7 @@ namespace ARS
                 }
                 else
                 {
-                    UI.Notify("~r~[ARS]:~w~ modeldump.txt not found in Scripts\\ARS\\");
+                    UI.Notify("~r~[ARS]:~w~ modeldump.txt not found in " + ScriptsFolder + "\\");
                 }
             }
 
@@ -2481,12 +2487,12 @@ namespace ARS
             XmlNode getname = CurrentFile.SelectSingleNode("//Name");
             if (getname != null)
             {
-                CurrentFile.Save(@"scripts\ARS\Tracks\" + CurrentFile.SelectSingleNode("//Name").InnerText + ".xml");
+                CurrentFile.Save(ScriptsFolder + @"\Tracks\" + CurrentFile.SelectSingleNode("//Name").InnerText + ".xml");
 
             }
             else
             {
-                CurrentFile.Save(@"scripts\ARS\Tracks\" + Game.GetUserInput(200) + ".xml");
+                CurrentFile.Save(ScriptsFolder + @"\Tracks\" + Game.GetUserInput(200) + ".xml");
 
 
             }
@@ -2498,7 +2504,7 @@ namespace ARS
                 filename = World.GetStreetName(RouteNodes[0]);
             }
 
-            if (File.Exists(@"scripts\ARS\Tracks\" + filename + ".xml"))
+            if (File.Exists(ScriptsFolder + @"\Tracks\" + filename + ".xml"))
             {
                 DateTime today = DateTime.Now;
                 filename += " (" + today.Year + today.Month + today.Day + today.Hour + today.Minute + today.Second + ")";
@@ -2685,7 +2691,7 @@ namespace ARS
             document.SelectSingleNode("Data").AppendChild(objects);
 
 
-            document.Save(@"scripts\ARS\Tracks\" + filename + ".xml");
+            document.Save(ScriptsFolder + @"\Tracks\" + filename + ".xml");
 
             DisplayHelpTextTimed("Adding to track dictionary...", 1000);
             FillKnownTracks();
@@ -3537,10 +3543,10 @@ namespace ARS
             Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
             Log(LogImportance.Info, "Loading Options.ini ...");
-            if (File.Exists(@"scripts\ARS\Options.ini"))
+            if (File.Exists(ScriptsFolder + @"\Options.ini"))
             {
 
-                SettingsFile = ScriptSettings.Load(@"scripts\ARS\Options.ini");
+                SettingsFile = ScriptSettings.Load(ScriptsFolder + @"\Options.ini");
 
 
                 _intendedOpponents = SettingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 3);
@@ -3550,28 +3556,28 @@ namespace ARS
             }
             else
             {
-                Log(LogImportance.Error, " 'Scripts/ARS/Options.ini' does not exist. All config values will be default.");
+                Log(LogImportance.Error, " '" + ScriptsFolder + "/Options.ini' does not exist. All config values will be default.");
                 UI.Notify("~o~Failed to load the Options file.~w~ Check you've installed ARS properly.");
             }
 
             Log(LogImportance.Info, "Loading Developer Settings.ini ...");
-            if (File.Exists(@"scripts\ARS\Developer Settings.ini"))
+            if (File.Exists(ScriptsFolder + @"\Developer Settings.ini"))
             {
 
-                DevSettingsFile = ScriptSettings.Load(@"scripts\ARS\Developer Settings.ini");
+                DevSettingsFile = ScriptSettings.Load(ScriptsFolder + @"\Developer Settings.ini");
 
 
                 Log(LogImportance.Info, "Loaded Developer settings.");
             }
             else
             {
-                Log(LogImportance.Error, " 'Scripts/ARS/Settings.ini' does not exist. All config values will be default.");
+                Log(LogImportance.Error, " '" + ScriptsFolder + "/Settings.ini' does not exist. All config values will be default.");
                 UI.Notify("~o~Failed to load the Settings file.~w~ Check you've installed ARS properly.");
             }
 
-            if (File.Exists(@"scripts\ARS\MemoryOffsets.ini"))
+            if (File.Exists(ScriptsFolder + @"\MemoryOffsets.ini"))
             {
-                ScriptSettings menOffexts = ScriptSettings.Load(@"scripts\ARS\MemoryOffsets.ini");
+                ScriptSettings menOffexts = ScriptSettings.Load(ScriptsFolder + @"\MemoryOffsets.ini");
                 ThrottleOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Throttle", 0x0);
                 SteerOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Steer", 0x0);
                 BrakeOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Brake", 0x0);
@@ -3583,7 +3589,7 @@ namespace ARS
             }
             else
             {
-                Log(LogImportance.Error, " 'Scripts/ARS/MemoryOffsets.ini' does not exist. ARS will try to learn the memory offsets from the game.");
+                Log(LogImportance.Error, " '" + ScriptsFolder + "/MemoryOffsets.ini' does not exist. ARS will try to learn the memory offsets from the game.");
                 UI.Notify("~o~Failed to load the MemoryOffsets file.~w~ Check you've installed ARS properly.");
             }
 
@@ -3593,7 +3599,7 @@ namespace ARS
         {
             if (DevSettingsFile != null && DevSettingsFile.GetValue<LogImportance>("GENERAL", "LogLevel", LogImportance.Info) > i && !forced) return;
             string log = "\n[" + DateTime.Now + "](" + i.ToString() + "): " + text;
-            File.AppendAllText(@"scripts\ARS\Log.log", log);
+            File.AppendAllText(ScriptsFolder + @"\Log.log", log);
         }
 
         
@@ -3816,7 +3822,7 @@ namespace ARS
         {
             List<dynamic> info = new List<dynamic>();
 
-            string fileRouteNodes = @"Scripts\ARS\Drivers\" + DriverName + ".xml";
+            string fileRouteNodes = ScriptsFolder + @"\Drivers\" + DriverName + ".xml";
 
 
 
@@ -3842,7 +3848,7 @@ namespace ARS
         {
             string name = Game.GetUserInput(32);
 
-            string fileRouteNodes = @"Scripts\ARS\Drivers\" + name + ".xml";
+            string fileRouteNodes = ScriptsFolder + @"\Drivers\" + name + ".xml";
 
             File.AppendAllText(fileRouteNodes, "");
 
@@ -3943,7 +3949,7 @@ namespace ARS
 
             xmlFile.AppendChild(data);
 
-            xmlFile.Save(@"scripts\\ARS\Drivers\" + name + ".xml");
+            xmlFile.Save(ScriptsFolder + @"\Drivers\" + name + ".xml");
             UI.Notify("Saved");
             return "Finished";
 
@@ -3955,7 +3961,7 @@ namespace ARS
         void FillCachedCandidates(string dlist, int maxcars, bool allowScriptYield = true)
         {
             bool allowDuplicates = SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AllowDuplicates", true);
-            _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale);
+            _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale, AlwaysIncludeModelName);
         }
 
         void LoadGrid(string dlist, int maxcars)
@@ -4267,7 +4273,7 @@ namespace ARS
             if (name == null || name == "") name = car.FriendlyName;
             if (name == null || name == "") name = car.DisplayName.ToString()[0].ToString().ToUpper() + car.DisplayName.ToString().Substring(1).ToLowerInvariant();
 
-            string fileRouteNodes = @"Scripts\ARS\Vehicles\" + name + ".xml";
+            string fileRouteNodes = ScriptsFolder + @"\Vehicles\" + name + ".xml";
 
 
             if (File.Exists(fileRouteNodes))
@@ -4447,7 +4453,7 @@ namespace ARS
 
             xmlFile.AppendChild(data);
 
-            xmlFile.Save(@"scripts\\ARS\Vehicles\" + name + ".xml");
+            xmlFile.Save(ScriptsFolder + @"\Vehicles\" + name + ".xml");
             UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
 
@@ -4487,7 +4493,7 @@ namespace ARS
             }
 
             string name = modelName;
-            string fileRouteNodes = @"Scripts\ARS\Vehicles\" + name + ".xml";
+            string fileRouteNodes = ScriptsFolder + @"\Vehicles\" + name + ".xml";
 
             if (File.Exists(fileRouteNodes))
             {
@@ -4544,7 +4550,7 @@ namespace ARS
 
             xmlFile.AppendChild(data);
 
-            xmlFile.Save(@"scripts\\ARS\Vehicles\" + name + ".xml");
+            xmlFile.Save(ScriptsFolder + @"\Vehicles\" + name + ".xml");
             UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
 
@@ -4568,7 +4574,7 @@ namespace ARS
             string name = "text";
             name = h.ToString(); 
 
-            string fileRouteNodes = @"Scripts\ARS\Vehicles\" + name + ".xml";
+            string fileRouteNodes = ScriptsFolder + @"\Vehicles\" + name + ".xml";
 
 
             if (File.Exists(fileRouteNodes))
@@ -4637,7 +4643,7 @@ namespace ARS
 
             xmlFile.AppendChild(data);
 
-            xmlFile.Save(@"scripts\\ARS\Vehicles\" + name + ".xml");
+            xmlFile.Save(ScriptsFolder + @"\Vehicles\" + name + ".xml");
             UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
         

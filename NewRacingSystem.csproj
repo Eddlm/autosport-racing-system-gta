@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -90,7 +90,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <GtaScriptsRoot Condition="'$(GtaScriptsRoot)' == ''">D:\SteamLibrary\steamapps\common\Grand Theft Auto V\Scripts</GtaScriptsRoot>
-    <GtaArsScriptsDir>$(GtaScriptsRoot)\ARS</GtaArsScriptsDir>
+    <GtaArsScriptsDir>$(GtaScriptsRoot)\AutosportRacingSystem</GtaArsScriptsDir>
     <PostBuildEvent>if exist "$(GtaScriptsRoot)" (if not exist "$(GtaArsScriptsDir)" mkdir "$(GtaArsScriptsDir)" &amp; copy /Y "$(TargetPath)" "$(GtaArsScriptsDir)" &gt;nul)</PostBuildEvent>
   </PropertyGroup>
   <Target Name="CopyArsDll" AfterTargets="Build" Condition="Exists('$(GtaScriptsRoot)')">

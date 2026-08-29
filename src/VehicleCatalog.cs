@@ -14,8 +14,8 @@ namespace ARS
             tagsByFile.Clear();
             knownModels.Clear();
             HashSet<string> seenModels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            List<string> folders = Directory.GetDirectories(@"scripts\ARS\Vehicles").ToList();
-            folders.Add(@"scripts\ARS\Vehicles");
+            List<string> folders = Directory.GetDirectories(ARS.ScriptsFolder + @"\Vehicles").ToList();
+            folders.Add(ARS.ScriptsFolder + @"\Vehicles");
 
             foreach (string folder in folders)
             {
