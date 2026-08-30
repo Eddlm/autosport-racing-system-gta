@@ -713,6 +713,9 @@ namespace ARS
         // Test-only: force a specific car into the pace-matched grid for the next few tests.
         // Match is by the XML <Model> InnerText (case-insensitive, e.g. "tiberius"). Flip to null to disable.
         public static string AlwaysIncludeModelName = "tiberius";
+        // Temp: bypass pace matching entirely and load only these models into the grid.
+        // Set to null (or empty list) to re-enable pace-matched selection.
+        public static List<string> HardcodedRoster = null;
 
         Dictionary<string, string> _racerTagLookup = new Dictionary<string, string>();
         public static int TrackListPos = 0;
@@ -4102,7 +4105,14 @@ namespace ARS
         void FillCachedCandidates(string dlist, int maxcars, bool allowScriptYield = true)
         {
             bool allowDuplicates = SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AllowDuplicates", true);
-            _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale, AlwaysIncludeModelName);
+            if (HardcodedRoster != null && HardcodedRoster.Count > 0)
+            {
+                _cachedCandidates = VehicleSelector.SelectHardcoded(HardcodedRoster, _racerTagLookup, maxcars, allowDuplicates, Yield, GetRandomInt, text => Log(LogImportance.Info, text));
+            }
+            else
+            {
+                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale, AlwaysIncludeModelName);
+            }
         }
 
         void LoadGrid(string dlist, int maxcars)

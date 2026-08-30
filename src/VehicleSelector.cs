@@ -72,6 +72,27 @@ namespace ARS
             log("Always-include model '" + pinName + "' not found in vehicle pool; skipping.");
         }
 
+        // Temp: bypass pace matching and load only the named models from the vehicle pool.
+        // Used for hardcoded roster testing — mirrors the AlwaysIncludeModelName pin but for the full grid.
+        public static List<XmlDocument> SelectHardcoded(List<string> roster, Dictionary<string, string> files, int maxCars, bool allowDuplicates, Action yield, Func<int, int, int> random, Action<string> log)
+        {
+            List<XmlDocument> candidates = new List<XmlDocument>();
+            HashSet<string> rosterSet = new HashSet<string>(roster, StringComparer.OrdinalIgnoreCase);
+            foreach (string path in files.Keys)
+            {
+                string model = TrackRepository.ReadVehicleModel(path);
+                if (!string.IsNullOrWhiteSpace(model) && rosterSet.Contains(model))
+                {
+                    try { XmlDocument document = new XmlDocument(); document.Load(path); candidates.Add(document); }
+                    catch (Exception) { }
+                }
+            }
+            log("Hardcoded roster candidates: " + candidates.Count);
+            Shuffle(candidates, random);
+            if (candidates.Count > maxCars) candidates.RemoveRange(maxCars, candidates.Count - maxCars);
+            return candidates;
+        }
+
         static void Shuffle(List<XmlDocument> candidates, Func<int, int, int> random)
         {
             for (int i = candidates.Count - 1; i > 0; i--)
