@@ -715,7 +715,7 @@ namespace ARS
         public static string AlwaysIncludeModelName = "tiberius";
         // Temp: bypass pace matching entirely and load only these models into the grid.
         // Set to null (or empty list) to re-enable pace-matched selection.
-        public static List<string> HardcodedRoster = null;
+        public static List<string> HardcodedRoster = new List<string> { "comet2", "coquette", "sugoi", "specter", "specter2", "elegy", "elegy2" };
 
         Dictionary<string, string> _racerTagLookup = new Dictionary<string, string>();
         public static int TrackListPos = 0;
