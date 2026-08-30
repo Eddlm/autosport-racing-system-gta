@@ -129,7 +129,7 @@ namespace ARS
         { Options.ShowInputs, false },
         { Options.ShowTrackAnalysis, false },
         { Options.ShowPhysics, false },
-        { Options.UseNearbyCars, false },
+        { Options.UseNearbyCars, true },
         { Options.ReverseRoute, false },
         { Options.GsAwarePreview, true },
         { Options.BrakeLearning, true }
@@ -4393,6 +4393,22 @@ namespace ARS
                     try { if (driverPed != null) driverPed.Delete(); } catch (Exception) { }
                     try { if (car != null) car.Delete(); } catch (Exception) { }
                 }
+            }
+
+            // Add nearby vehicles as additional racers after the roster grid is built.
+            if (DebugToggles[Options.UseNearbyCars])
+            {
+                var nearby = GetNearbyCandidates();
+                int added = 0;
+                foreach (Vehicle veh in nearby)
+                {
+                    if (Racers.Count >= maxcars) break;
+                    Ped driver = veh.CreateRandomPedOnSeat(VehicleSeat.Driver);
+                    if (driver == null || !CanWeUse(driver)) continue;
+                    Racers.Add(new Racer(veh, driver));
+                    added++;
+                }
+                Log(LogImportance.Info, "Added " + added + " nearby cars to the grid.");
             }
 
             result.Add(lastCar);
