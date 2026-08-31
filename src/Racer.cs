@@ -366,6 +366,23 @@ namespace ARS
             avoidAheadLane = ComputeAvoidAheadLane(roadWide);
             if (avoidAheadLane != 0f) naturalLane = avoidAheadLane;
 
+            // When avoidance is active, the steer angle to the avoidance target uses the
+            // rival's longitudinal distance as the lookahead — not the generic track
+            // lookahead. Close rivals produce a large angle (committed swerve), far rivals
+            // produce a small angle (gentle drift) — same lateral target either way.
+            float avoidLookaheadDist = 0f;
+            if (avoidAheadLane != 0f)
+            {
+                foreach (Rival r in Brain.Rivals)
+                {
+                    if (r.RelativePosition != RelativePos.Ahead) continue;
+                    if (r.SecondsToReach < 0f || r.SecondsToReach > 3f) continue;
+                    if (Math.Abs(r.DirectionDiff) > 20f) continue;
+                    avoidLookaheadDist = r.SecondsToReach * Math.Max(speedMps, 1f);
+                    break;
+                }
+            }
+
 
 
             float clampedLane = ApplyRivalWalls(naturalLane, roadWide);
@@ -393,7 +410,11 @@ namespace ARS
             if (hasActiveGuidance)
             {
                 float currentLane = Brain.CurrentPerception.DeviationFromCenter;
-                float lookaheadDist = steerRefPoint.Position.DistanceTo(Car.Position);
+                // Avoidance uses the rival's longitudinal distance so the steer angle
+                // tracks the geometry of "reach the side of the rival at the rival's distance."
+                float lookaheadDist = avoidLookaheadDist > 0f
+                    ? avoidLookaheadDist
+                    : steerRefPoint.Position.DistanceTo(Car.Position);
                 if (lookaheadDist < 1f) lookaheadDist = speedMps * 1.5f;
 
 
@@ -418,8 +439,41 @@ namespace ARS
                 // heading over the lookahead window, not the instantaneous angle.
                 // Without this, a 5m lane error at 60m lookahead produces ~5° of steer
                 // command, which (combined with the PD's 1.0 gain) makes cars twitchy.
-                laneBiasDeg *= 1f / 3f;
+                laneBiasDeg *= 1f / 2f;
             }
+
+            // Overlap bias: when a rival is physically inside our bounding box, add a
+            // direct steer offset pointing away from them. Measured in the velocity frame
+            // (where the car is actually moving, not where it's pointed). Activates only
+            // when cars are roughly side-by-side longitudinally AND laterally overlapping.
+            // 2° per meter of penetration. Independent of the lane target — bypasses
+            // the lane abstraction for the moment of contact.
+            Vector3 velDir = Car.Velocity.LengthSquared() > 0.01f
+                ? Car.Velocity.Normalized
+                : Car.ForwardVector;
+            Vector3 velRight = Vector3.Cross(Vector3.WorldUp, velDir);
+            float overlapBiasDeg = 0f;
+            float myHalfWidth = VehicleData.BoundingBox * 0.5f;
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
+                Vector3 delta = r.RivalRacer.Car.Position - Car.Position;
+                float longComp = Vector3.Dot(delta, velDir);
+                float latComp = Vector3.Dot(delta, velRight);
+
+                float combinedHalfLen = (VehicleData.BoundingBox + r.RivalRacer.VehicleData.BoundingBox) * 0.5f;
+                if (Math.Abs(longComp) > combinedHalfLen) continue;
+
+                float rivalHalfWidth = r.RivalRacer.VehicleData.BoundingBox * 0.5f;
+                float penetration = (myHalfWidth + rivalHalfWidth) - Math.Abs(latComp);
+                if (penetration <= 0f) continue;
+
+                // latComp sign: + = rival on my right, - = rival on my left.
+                // To push *out*, steer the opposite direction.
+                float awayDir = -Math.Sign(latComp);
+                overlapBiasDeg += awayDir * penetration * 2f;
+            }
+            laneBiasDeg += overlapBiasDeg;
 
 
             float totalTargetDeg = headingErrorDeg + laneBiasDeg + recoveryDeg;
@@ -753,23 +807,21 @@ namespace ARS
             if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
             {
                 float before = Math.Abs(Control.SteerDegrees);
-                float steerSpeedDampening = ARS.Remap(Control.Throttle, 0.5f, 0.99f, 0.04f, 0.08f, true);
+                // TEMP: hardcoded 0.1 — empirical peak slip angle for front tires.
+                float steerSpeedDampening = 0.1f;
                 Control.SteerDegrees /= 1f + steerSpeedDampening * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
                 if (Math.Abs(Control.SteerDegrees) < before) _steerLimitedThisFrame = true;
             }
 
-            // Floor: keep a minimum steering angle (TRlat/3) so high-speed steering doesn't collapse.
-            float minAngle = Handling.LateralTractionCurve / 3f;
+            // Floor: keep a minimum steering angle so high-speed steering doesn't collapse.
+            // TEMP: hardcoded to 2° for steering-limit isolation testing.
+            float minAngle = 2f;
             if (Control.SteerDegrees != 0f && Math.Abs(Control.SteerDegrees) < minAngle)
                 Control.SteerDegrees = Math.Sign(Control.SteerDegrees) * minAngle;
 
-            // TEMPORARILY DISABLED: oversteer throttle cut / full-steer cap. Isolating the
-            // steering-limiter curve; re-enable when factor tuning is settled.
-            // float steerLimit = VehicleData.SteeringLock;
-            // if (Math.Abs(Control.SteerDegrees) > steerLimit + OversteerCutMargin)
-            //     Control.MaxThrottle = Math.Max(Control.MaxThrottle - 1f * TickScale, 0.1f);
-            // if (Math.Abs(Control.SteerDegrees) >= steerLimit)
-            //     Control.MaxThrottle = Math.Min(Control.MaxThrottle, FullSteerThrottleCap);
+            // Throttle cut: if the speed-based limiter reduced the steer this frame,
+            // zero MaxThrottle so the car coasts through the limit instead of pushing through it.
+            if (_steerLimitedThisFrame && Control.MaxThrottle>=0.1) Control.MaxThrottle -= (float)(2 * TickScale);
         }
 
 
