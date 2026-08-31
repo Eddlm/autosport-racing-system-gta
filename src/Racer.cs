@@ -816,6 +816,19 @@ namespace ARS
             float newBrake = 0f;
 
             FindLowestIntendedSpeed();
+
+            // Rear-end prevention: if a rival is ahead and we're closing in,
+            // reduce MaxThrottle to shed speed before we reach them.
+            Rival aheadRival = Brain.Rivals
+                .Where(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead && r.Distance < 30f)
+                .OrderBy(r => r.Distance)
+                .FirstOrDefault();
+            if (aheadRival != null)
+            {
+                float danger = ARS.Clamp(1f - aheadRival.Distance / 30f, 0f, 1f);
+                Control.MaxThrottle = Math.Min(Control.MaxThrottle, 1f - danger * 0.6f);
+            }
+
             Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
 
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
