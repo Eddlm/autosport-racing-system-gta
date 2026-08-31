@@ -817,8 +817,9 @@ namespace ARS
 
             FindLowestIntendedSpeed();
 
-            // Rear-end prevention: if a rival is ahead and laterally overlapping,
-            // reduce MaxThrottle to shed speed before we reach them.
+            // Rear-end prevention: reduce intended speed to match the rival ahead
+            // when we're closing in. At 1m behind, match exactly; never lower
+            // than the rival's speed so we don't artificially hold up traffic.
             Rival aheadRival = Brain.Rivals
                 .Where(r => r.RivalRacer != null
                     && r.RelativePosition == RelativePos.Ahead
@@ -828,8 +829,12 @@ namespace ARS
                 .FirstOrDefault();
             if (aheadRival != null)
             {
-                float danger = ARS.Clamp(1f - aheadRival.Distance / 30f, 0f, 1f);
-                Control.MaxThrottle = Math.Min(Control.MaxThrottle, 1f - danger * 0.6f);
+                float rivalSpeed = aheadRival.RivalRacer.Car.Velocity.Length();
+                float blend = ARS.Clamp(1f - aheadRival.Distance / 30f, 0f, 1f);
+                Brain.CurrentIntention.Speed = Math.Max(
+                    Brain.CurrentIntention.Speed * (1f - blend) + rivalSpeed * blend,
+                    rivalSpeed
+                );
             }
 
             Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
