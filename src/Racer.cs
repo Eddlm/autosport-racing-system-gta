@@ -817,10 +817,13 @@ namespace ARS
 
             FindLowestIntendedSpeed();
 
-            // Rear-end prevention: if a rival is ahead and we're closing in,
+            // Rear-end prevention: if a rival is ahead and laterally overlapping,
             // reduce MaxThrottle to shed speed before we reach them.
             Rival aheadRival = Brain.Rivals
-                .Where(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead && r.Distance < 30f)
+                .Where(r => r.RivalRacer != null
+                    && r.RelativePosition == RelativePos.Ahead
+                    && r.Distance < 30f
+                    && Math.Abs(r.RelativeOffset.X) < r.CombinedSize.X)
                 .OrderBy(r => r.Distance)
                 .FirstOrDefault();
             if (aheadRival != null)
