@@ -414,8 +414,11 @@ namespace ARS
                 }
 
                 laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
-                float expGain = (float)Math.Pow(Math.Min(Math.Abs(laneBiasDeg) / _laneGainDivisor, 1f), ARS.LaneGainExponent);
-                laneBiasDeg *= expGain;
+                // Scale down so the steer target represents the lane move's *average*
+                // heading over the lookahead window, not the instantaneous angle.
+                // Without this, a 5m lane error at 60m lookahead produces ~5° of steer
+                // command, which (combined with the PD's 1.0 gain) makes cars twitchy.
+                laneBiasDeg *= 1f / 3f;
             }
 
 
@@ -745,12 +748,13 @@ namespace ARS
             // Game's player steering limiter (Automobile.cpp): speed-based reduction.
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
 
-            // Speed-based reduction: steer /= 1 + 0.075*(fwdSpeed - 5) for fwdSpeed > 5 m/s.
+            // Speed-based reduction: steer /= 1 + steerSpeedDampening*(fwdSpeed - 5) for fwdSpeed > 5 m/s.
+            // Higher steerSpeedDampening = more reduction = less steering authority at speed.
             if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
             {
                 float before = Math.Abs(Control.SteerDegrees);
-                float steerMult = ARS.Remap(Control.Throttle, 0.5f, 0.99f, 0.04f, 0.08f, true);
-                Control.SteerDegrees /= 1f + steerMult * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
+                float steerSpeedDampening = ARS.Remap(Control.Throttle, 0.5f, 0.99f, 0.04f, 0.08f, true);
+                Control.SteerDegrees /= 1f + steerSpeedDampening * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
                 if (Math.Abs(Control.SteerDegrees) < before) _steerLimitedThisFrame = true;
             }
 
