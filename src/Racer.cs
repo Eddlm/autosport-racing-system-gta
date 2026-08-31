@@ -722,7 +722,7 @@ namespace ARS
         const float OversteerCutMargin = 10f;        // degrees past limit before throttle cut
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
         const float PlayerSpeedSteerFwdThreshold = 5f;   // m/s above which steering is reduced
-        const float PlayerSpeedSteerMult = 0.05f;       // reduction multiplier
+        // Steer reduction multiplier: 0.04 at throttle 0.5, 0.08 at throttle 0.99.
         // Floor: TRlat/3 (degrees) so high-speed steering doesn't collapse.
         const float SteerSlewRate = 45f;                // fixed steering slew rate (degrees/second)
         const float SteerSlewRateCountersteer = 90f;    // doubled when countersteering (steer opposes yaw)
@@ -749,7 +749,8 @@ namespace ARS
             if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
             {
                 float before = Math.Abs(Control.SteerDegrees);
-                Control.SteerDegrees /= 1f + PlayerSpeedSteerMult * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
+                float steerMult = ARS.Remap(Control.Throttle, 0.5f, 0.99f, 0.04f, 0.08f, true);
+                Control.SteerDegrees /= 1f + steerMult * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
                 if (Math.Abs(Control.SteerDegrees) < before) _steerLimitedThisFrame = true;
             }
 
