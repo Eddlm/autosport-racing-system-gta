@@ -880,14 +880,15 @@ namespace ARS
             Rival aheadRival = Brain.Rivals
                 .Where(r => r.RivalRacer != null
                     && r.RelativePosition == RelativePos.Ahead
-                    && r.Distance < 30f
+                    && r.Distance < 6f
                     && Math.Abs(r.RelativeOffset.X) < r.CombinedSize.X)
                 .OrderBy(r => r.Distance)
                 .FirstOrDefault();
             if (aheadRival != null)
             {
                 float rivalSpeed = aheadRival.RivalRacer.Car.Velocity.Length();
-                float blend = ARS.Clamp(1f - aheadRival.Distance / 30f, 0f, 1f);
+                // Blend toward rival speed as we close; saturates to full match at 1m.
+                float blend = ARS.Remap(aheadRival.Distance, 6f, 1f, 0f, 1f, true);
                 Brain.CurrentIntention.Speed = Math.Max(
                     Brain.CurrentIntention.Speed * (1f - blend) + rivalSpeed * blend,
                     rivalSpeed
