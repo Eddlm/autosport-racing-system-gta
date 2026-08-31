@@ -916,7 +916,7 @@ namespace ARS
             float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
             float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
             float offTrackDistance = Math.Abs(signedOffset) - safeBound;
-            bool isOutsideCorner = tp.PreciseCurveRadius < 400f && Math.Sign(signedOffset) == Math.Sign(tp.Angle);
+            bool isOutsideCorner = tp.PreciseCurveRadius < 400f && Math.Sign(signedOffset) == Math.Sign(CurrentTrackPoint.Angle);
 
             if (offTrackDistance <= 0f || !isOutsideCorner)
             {
