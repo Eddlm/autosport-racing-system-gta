@@ -155,6 +155,8 @@ namespace ARS
 
         // True when the speed-based steering limiter actually reduced the steer this frame.
         bool _steerLimitedThisFrame = false;
+        float _steerLimitDegrees = 999f;
+        float _requestedSteerDegrees = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor that keeps the car
         // at full brake ~75% of each braking phase. Toggle off → factor pinned at 1.
@@ -195,7 +197,6 @@ namespace ARS
         const float PressureProximityRange = 100f;
         const float PressureRisePerSecond = 2f;
         const float PressureFallPerSecond = 30f;
-        const float PressureMaxSpeedOffset = 3f;
 
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
@@ -415,9 +416,8 @@ namespace ARS
 
 
             const float steerKP = 1.0f;
-            float gripForKD = VehicleData.CurrentMechanicalGrip;
-            if (float.IsNaN(gripForKD) || float.IsInfinity(gripForKD) || gripForKD <= 0f) gripForKD = 1f;
-            float steerKD = 0.5f / gripForKD;
+            // TEMP: hardcoded 0.33 — previous 0.5/grip felt too damped, testing.
+            const float steerKD = 0.33f;
             Control.SteerDegrees = (steerKP * (headingErrorDeg + laneBiasDeg + recoveryDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
             bool sameSignSlideYaw = Math.Sign((int)VehicleData.SlideAngle) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees);
             if (sameSignSlideYaw)
@@ -544,6 +544,7 @@ namespace ARS
                 if (r.RivalRacer == null || r == target) continue;
                 if (r.RelativePosition != RelativePos.Ahead) continue;
                 if (!ARS.IsBetween(r.SecondsToHit, 0f, 5f)) continue;
+                if (!ARS.IsBetween(r.FrontGap, 0f, 5f)) continue;
                 if (!ARS.IsBetween(r.DirectionDiff, -20f, 20f)) continue;
 
                 if (!TryPickAvoidanceSide(r, trackBound, aggroBuffer, carHalfWidth, currentLane, out float secondTarget, out bool secondGoLeft))
@@ -671,23 +672,24 @@ namespace ARS
 
             // Game's player steering limiter (Automobile.cpp): speed-based reduction.
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
+            float preLimitSteer = Math.Abs(Control.SteerDegrees);
+            _requestedSteerDegrees = preLimitSteer;
+            float absoluteSteerLimit = VehicleData.SteeringLock;
+            _steerLimitDegrees = absoluteSteerLimit;
 
-            // Speed-based reduction: steer /= 1 + steerSpeedDampening*(fwdSpeed - 5) for fwdSpeed > 5 m/s.
-            // Higher steerSpeedDampening = more reduction = less steering authority at speed.
+            // Speed-based reduction: steer /= 1 + speedSteerReduction*(fwdSpeed - 5) for fwdSpeed > 5 m/s.
+            // Higher speedSteerReduction = more reduction = less steering authority at speed.
             if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
             {
-                float before = Math.Abs(Control.SteerDegrees);
-                // TEMP: hardcoded 0.1 — empirical peak slip angle for front tires.
-                float steerSpeedDampening = 0.1f;
-                Control.SteerDegrees /= 1f + steerSpeedDampening * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
-                if (Math.Abs(Control.SteerDegrees) < before) _steerLimitedThisFrame = true;
+                // TEMP: hardcoded 0.075 — testing between 0.05 and 0.1.
+                float speedSteerReduction = 0.075f;
+                float divisor = 1f + speedSteerReduction * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
+                Control.SteerDegrees /= divisor;
+                if (Math.Abs(Control.SteerDegrees) < preLimitSteer) _steerLimitedThisFrame = true;
+                _steerLimitDegrees = absoluteSteerLimit / divisor;
             }
 
-            // Floor: keep a minimum steering angle so high-speed steering doesn't collapse.
-            // TEMP: hardcoded to 2° for steering-limit isolation testing.
-            float minAngle = 2f;
-            if (Control.SteerDegrees != 0f && Math.Abs(Control.SteerDegrees) < minAngle)
-                Control.SteerDegrees = Math.Sign(Control.SteerDegrees) * minAngle;
+
 
             // Throttle cut: if the speed-based limiter reduced the steer this frame,
             // zero MaxThrottle so the car coasts through the limit instead of pushing through it.
@@ -983,8 +985,7 @@ namespace ARS
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
 
-            // Pressure speed offset on route speed: 0 pressure = 0, 100 = +3 m/s, 0 with close rival = -3 m/s.
-            followTrackSpd += PressureMaxSpeedOffset * ((Pressure - PressureRange * 0.5f) / (PressureRange * 0.5f));
+
 
             // Pure apex speed for the corner-approach gate.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
@@ -1026,8 +1027,7 @@ namespace ARS
             CornerPoint activeCorner = NextApexNode >= 0
                 ? ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode)
                 : null;
-            if (activeCorner != null && IsWithinCorner(activeCorner))
-                cornerSpd += 3f;
+
 
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
@@ -1787,37 +1787,27 @@ namespace ARS
 
         void DrawDebugPanel(bool showInputs, bool showTrack)
         {
-            int lineCount = (showInputs ? 4 : 0) + (showTrack ? 3 : 0);
+            int lineCount = (showInputs ? 1 : 0) + (showTrack ? 3 : 0);
             if (lineCount == 0) return;
 
             float lineHeight = 0.026f;
             float top = 0.045f;
             float height = lineCount * lineHeight + 0.02f;
-            Function.Call(Hash.DRAW_RECT, 0.89f, top + height * 0.5f, 0.22f, height, 0, 0, 0, 120);
+            bool limiterActive = _steerLimitedThisFrame;
+            int r = 0;
+            int g = 0;
+            int b = 0;
+            int a = 120;
+            Function.Call(Hash.DRAW_RECT, 0.89f, top + height * 0.5f, 0.22f, height, r, g, b, a);
 
             float y = top + 0.01f;
             if (showInputs)
             {
-                ARS.DrawText(new Vector2(0.79f, y),
-                    "SPD   " + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + " / " + ARS.MpsToMph(Brain.CurrentIntention.Speed).ToString("0") + " mph",
-                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
-                y += lineHeight;
-                ARS.DrawText(new Vector2(0.79f, y),
-                    "ERR   " + Brain.CurrentIntention.IntendedSpeedChange.ToString("0.0") + " m/s",
-                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
-                y += lineHeight;
-
-                // Empirical steer-limit readout (ApplySteerLimits peak memory). All in Gs.
-                float dbgLatG = Math.Abs(Vector3.Dot(VehicleData.AverageAcceleration, Car.RightVector)) / 9.8f;
-                if (float.IsNaN(dbgLatG) || float.IsInfinity(dbgLatG)) dbgLatG = 0f;
-                float dbgRef = Math.Max(_latGRef, Handling.LateralTractionCurve * UtilizationFloorFactor);
-                ARS.DrawText(new Vector2(0.79f, y),
-                    "LAT   " + dbgLatG.ToString("0.0") + "/" + dbgRef.ToString("0.0") + "G  u " + (dbgLatG / dbgRef).ToString("0.00"),
-                    Color.Cyan, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
-                y += lineHeight;
-                ARS.DrawText(new Vector2(0.79f, y),
-                    "BEST  " + _peakSteerDeg.ToString("0") + "º @ " + _latGRef.ToString("0.1") + "G  " + (_nearGripPeak ? "EXPLOIT" : "EXPLORE"),
-                    _nearGripPeak ? Color.Red : Color.Green, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                float allowedSteer = _steerLimitDegrees;
+                bool requestingMore = _requestedSteerDegrees > allowedSteer + 0.5f;
+                string steerText = "STEER " + allowedSteer.ToString("0.0") + "º";
+                ARS.DrawText(new Vector2(0.79f, y), steerText,
+                    requestingMore ? Color.Red : Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
             }
 
@@ -1983,7 +1973,11 @@ namespace ARS
             foreach (Rival r in Brain.Rivals)
             {
                 r.Update(this);
-                if (Brain.AvoidanceTarget == null && r.RelativePosition == RelativePos.Ahead && ARS.IsBetween(r.SecondsToHit, 0f, 5f) && ARS.IsBetween(r.DirectionDiff, -20f, 20f))
+                bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead
+                    && ARS.IsBetween(r.SecondsToHit, 0f, 5f)
+                    && ARS.IsBetween(r.FrontGap, 0f, 5f)
+                    && ARS.IsBetween(r.DirectionDiff, -20f, 20f);
+                if (Brain.AvoidanceTarget == null && isAvoidanceCandidate)
                 {
                     Brain.AvoidanceTarget = r;
                 }
@@ -1992,16 +1986,28 @@ namespace ARS
 
         void ApplyRivalThrottleCap()
         {
-            float nearestHit = float.PositiveInfinity;
+            float nearestThrottleCap = 1f;
+            float nearestSpeedLimit = float.PositiveInfinity;
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || r.RelativePosition != RelativePos.Ahead) continue;
-                if (!float.IsInfinity(r.SecondsToHit) && !float.IsNaN(r.SecondsToHit) && r.SecondsToHit < nearestHit)
-                    nearestHit = r.SecondsToHit;
+
+                if (ARS.IsBetween(r.SecondsToHit, 0f, 3f))
+                    nearestThrottleCap = Math.Min(nearestThrottleCap, ARS.Remap(r.SecondsToHit, 0f, 3f, 0f, 1f, true));
+                if (ARS.IsBetween(r.FrontGap, 0f, 1f))
+                    nearestThrottleCap = Math.Min(nearestThrottleCap, ARS.Remap(r.FrontGap, 0f, 1f, 0f, 1f, true));
+
+                if (ARS.IsBetween(r.FrontGap, 0f, 2f))
+                {
+                    float rivalSpeed = r.RivalRacer.Car.Velocity.Length();
+                    float ourSpeed = Car.Velocity.Length();
+                    float safeSpeedLimit = ARS.Remap(r.FrontGap, 0f, 2f, rivalSpeed, Math.Max(ourSpeed, rivalSpeed), true);
+                    nearestSpeedLimit = Math.Min(nearestSpeedLimit, safeSpeedLimit);
+                }
             }
-            if (nearestHit > 5f) return;
-            float cap = ARS.Remap(nearestHit, 0f, 5f, 0.05f, 1f, true);
-            Control.MaxThrottle = Math.Min(Control.MaxThrottle, cap);
+            Control.MaxThrottle = Math.Min(Control.MaxThrottle, nearestThrottleCap);
+            if (nearestSpeedLimit < float.PositiveInfinity)
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, nearestSpeedLimit);
         }
 
 

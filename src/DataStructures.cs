@@ -113,6 +113,7 @@ namespace ARS
         public float ClosingRate = 0f;         // signed: + = closing on rival (along me's forward axis)
         public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals
         public float SecondsToHit = float.PositiveInfinity;    // physical swept bounding-box hit time
+        public float FrontGap = float.PositiveInfinity;        // front-to-rear distance to rival
 
         public Vector2 CombinedSize = Vector2.Zero;
         public float OccupiedLane=0f;
@@ -216,10 +217,10 @@ namespace ARS
 
             float myHalfLen = me.Car.Model.GetDimensions().Y * 0.5f;
             float rivalHalfLen = RivalRacer.Car.Model.GetDimensions().Y * 0.5f;
-            float frontGap = longGap - (myHalfLen + rivalHalfLen);
-            if (frontGap <= 0f) return 0f;
+            FrontGap = longGap - (myHalfLen + rivalHalfLen);
+            if (FrontGap <= 2f) return 0f;
 
-            return frontGap / closingLong;
+            return FrontGap / closingLong;
         }
     }
 
