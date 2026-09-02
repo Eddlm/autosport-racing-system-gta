@@ -342,7 +342,7 @@ namespace ARS
             if (Car.Velocity.LengthSquared() > 0.01f) carForward = Car.Velocity.Normalized;
             float headingErrorDeg = -Vector3.SignedAngle(steerRefPoint.Direction, carForward, Vector3.WorldUp);
             if (float.IsNaN(headingErrorDeg) || float.IsInfinity(headingErrorDeg)) headingErrorDeg = 0f;
-            headingErrorDeg *= 0.9f;
+            headingErrorDeg *= 1.0f;
 
 
             float defaultLane = ComputeHighSpeedLane(roadWide);
@@ -394,7 +394,7 @@ namespace ARS
                     float blend = ARS.Clamp(ARS.GsAwarePreviewBlend, 0f, 1f);
                     laneError = laneError * (1f - blend) + (targetLane - projectedLane) * blend;
                 }
-                laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI)) * 0.5f;
+                laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI)) * 1.0f;
                 Vector3 velDir = Car.ForwardVector;
                 if (Car.Velocity.LengthSquared() > 0.01f) velDir = Car.Velocity.Normalized;
                 Vector3 velRight = Vector3.Cross(Vector3.WorldUp, velDir);
@@ -679,8 +679,8 @@ namespace ARS
             // Higher speedSteerReduction = more reduction = less steering authority at speed.
             if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
             {
-                // TEMP: hardcoded 0.075 — testing between 0.05 and 0.1.
-                float speedSteerReduction = 0.075f;
+                // TEMP: hardcoded 0.125 — testing higher reduction.
+                float speedSteerReduction = 0.125f;
                 float divisor = 1f + speedSteerReduction * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
                 Control.SteerDegrees /= divisor;
                 if (Math.Abs(Control.SteerDegrees) < preLimitSteer) _steerLimitedThisFrame = true;
