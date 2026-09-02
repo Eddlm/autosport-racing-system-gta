@@ -25,3 +25,6 @@ ScriptHookV.log
 # OS files
 Thumbs.db
 .DS_Store
+
+# Utility / junk folder
+Util/
