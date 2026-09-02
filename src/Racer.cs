@@ -1020,7 +1020,7 @@ namespace ARS
                 float routeAggression = ARS.Remap(Brain.CurrentPerception.CurveRadiusToFollowPoint, 100f, 300f, 0f, 1f, true);
                 float effectiveDeltaGs = deltaGs;
                 if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - routeAggression);
-                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0.8f);
+                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0.1f);
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
 
@@ -1055,7 +1055,7 @@ namespace ARS
                     float cornerRadius = NextApexRadius;
                     float cornerAggression = ARS.Remap(cornerRadius, 100f, 300f, 0f, 1f, true);
                     if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - cornerAggression);
-                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, 0.8f);
+                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, 0.1f);
                     float cornerVerticalSpeedFactor = (float)Math.Sqrt(cornerVerticalGrip);
                     cornerSpd *= cornerVerticalSpeedFactor;
                     cornerApexSpeedWithVerticalGrip *= cornerVerticalSpeedFactor;
