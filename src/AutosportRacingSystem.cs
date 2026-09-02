@@ -98,11 +98,8 @@ namespace ARS
         // 0-1 then weighted. Grip is read but weighted 0 (ignored) for now.
         public static float ComputePaceIndex(float topSpeedMph, float grip, float accelRaw, bool isElectric)
         {
-            float topN = Clamp(topSpeedMph / TopSpeedMphCeiling, 0f, 1f);
-            float gripN = Clamp(grip / GripCeiling, 0f, 1f);
-            float accelEffective = accelRaw * (isElectric ? ElectricAccelMultiplier : 1f);
-            float accelN = Clamp(accelEffective / AccelEffectiveCeiling, 0f, 1f);
-            return PaceWeightTopSpeed * topN + PaceWeightGrip * gripN + PaceWeightPower * accelN;
+            float accelEffective = accelRaw * (isElectric ? 10f : 30f);
+            return topSpeedMph + grip * 4f + accelEffective;
         }
 
         public const float TopSpeedScaleDivisor = 466.67f;
@@ -299,6 +296,7 @@ namespace ARS
 
             UI.Notify("~b~" + scriptName + "~g~e~w~" + "~y~ " + scriptVer + "~n~Build: ~g~" + scriptDate);
 
+            UpdateChecker.CheckLatestRelease();
         }
 
 
@@ -718,7 +716,7 @@ namespace ARS
         public static string AlwaysIncludeModelName = "tiberius";
         // Temp: bypass pace matching entirely and load only these models into the grid.
         // Set to null (or empty list) to re-enable pace-matched selection.
-        public static List<string> HardcodedRoster = new List<string> { "comet2", "coquette", "sugoi", "specter", "specter2", "elegy", "elegy2", "comet5", "dominator2", "gauntlet4", "pfister811", "cypher" };
+        public static List<string> HardcodedRoster = null;
 
         Dictionary<string, string> _racerTagLookup = new Dictionary<string, string>();
         public static int TrackListPos = 0;
@@ -794,7 +792,7 @@ namespace ARS
             _gridSizeItem.SelectedIndex = _intendedOpponents;
             _gridMenu.Add(_gridSizeItem);
 
-            _powerTargetItem = new NativeListItem<string>("Pace Target", "Target pace index (0-1, top-speed weighted) for grid selection.", Array.Empty<string>());
+            _powerTargetItem = new NativeListItem<string>("Pace Target", "Target pace score for grid selection.", Array.Empty<string>());
             _powerTargetItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index < _powerTargetValues.Count)
@@ -1037,33 +1035,36 @@ namespace ARS
             }
             if (min == float.MaxValue) { min = 0f; max = 1f; }
 
-            PowerTargetScale = Clamp(PowerTargetScale, min, max);
-            PowerBracketScale = Clamp(PowerBracketScale, 0f, max - min);
+            PowerTargetScale = RoundToNearestEven(Clamp(PowerTargetScale, min, max));
+            PowerBracketScale = RoundToNearestEven(Clamp(PowerBracketScale, 0f, max - min));
 
             _powerTargetValues.Clear();
-            AddPowerValues(_powerTargetValues, min, max, 0.02f);
+            AddPowerValues(_powerTargetValues, min, max, 2.0f);
             _powerBracketValues.Clear();
-            AddPowerValues(_powerBracketValues, 0f, max - min, 0.02f);
+            AddPowerValues(_powerBracketValues, 0f, max - min, 2.0f);
 
             _powerTargetItem.Items.Clear();
-            foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0.00"));
-            _powerTargetItem.SelectedIndex = FindNearestPowerValue(_powerTargetValues, PowerTargetScale);
+            foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0"));
+            _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
+            if (_powerTargetValues.Count > 0) PowerTargetScale = _powerTargetValues[_powerTargetItem.SelectedIndex];
 
             _powerBracketItem.Items.Clear();
-            foreach (float value in _powerBracketValues) _powerBracketItem.Items.Add(value.ToString("0.00"));
+            foreach (float value in _powerBracketValues) _powerBracketItem.Items.Add(value.ToString("0"));
             _powerBracketItem.SelectedIndex = FindNearestPowerValue(_powerBracketValues, PowerBracketScale);
         }
 
         static void AddPowerValues(List<float> values, float min, float max, float step)
         {
-            // Anchor the grid at clean multiples of the step (0.50, 0.52, 0.54 ...) rather than
-            // at the raw cache min, so the offered values are always even and the default lands
-            // exactly on a grid point (no offset like 0.49).
+            // Anchor the grid at clean multiples of the step (e.g. 2, 4, 6...) rather than
+            // at the raw cache min, so the offered values are always rounded and the default lands
+            // exactly on a grid point.
             int startIndex = (int)Math.Ceiling(min / step);
             int endIndex = (int)Math.Floor(max / step);
             for (int i = startIndex; i <= endIndex; i++)
-                values.Add((float)Math.Round(i * step, 2));
+                values.Add((float)Math.Round(i * step, 0));
         }
+
+        static float RoundToNearestEven(float value) => (float)(2 * Math.Round(value / 2f, MidpointRounding.AwayFromZero));
 
         static int FindNearestPowerValue(List<float> values, float target)
         {
@@ -1119,14 +1120,15 @@ namespace ARS
         {
             try
             {
+                UpdateChecker.TryNotify();
+
                 HandleLoadScriptTask();
 
                 Player player = Game.Player;
                 if (player == null || player.Character == null || !player.Character.Exists()) return;
 
                 Vehicle v = player.LastVehicle;
-                
-                
+
                 if (!_loaded)
                 {
                     if (DevSettingsFile.GetValue<bool>("GENERAL", "LoadAtStart", true) || WasCheatStringJustEntered("arson"))

@@ -364,8 +364,8 @@ namespace ARS
             float recoveryDeg = 0f;
             if (overshoot > 0f)
             {
-                float maxRecoveryDeg = ARS.Remap(speedMps, 10f, 50f, 10f, 2f);
-                float severity = Math.Min(overshoot / Math.Max(safeEdge, 1f), 1f);
+                float maxRecoveryDeg = ARS.Remap(ARS.MpsToMph(speedMps), 40f, 10f, 3f, 45f, true);
+                float severity = ARS.Clamp(overshoot / Math.Max(carHalfWidth, 0.1f), 0f, 1f);
                 recoveryDeg = Math.Sign(Brain.CurrentPerception.DeviationFromCenter) * maxRecoveryDeg * severity;
             }
 
@@ -646,8 +646,8 @@ namespace ARS
         const float UtilizationFloorFactor = 0.5f;   // fraction of traction curve as utilization floor
         const float SpikeCapFactor = 1.1f;           // × declared grip = spike-rejection cap
         const float OversteerCutMargin = 10f;        // degrees past limit before throttle cut
-        const float SteerSlewRate = 45f;                // fixed steering slew rate (degrees/second)
-        const float SteerSlewRateCountersteer = 90f;    // doubled when countersteering (steer opposes yaw)
+        const float SteerSlewRate = 180f;                // fixed steering slew rate (degrees/second)
+        const float SteerSlewRateCountersteer = 360f;    // doubled when countersteering (steer opposes yaw)
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
         const float PlayerSpeedSteerFwdThreshold = 0.001f;   // effectively always on
         // Steer reduction multiplier: 0.04 at throttle 0.5, 0.08 at throttle 0.99.
@@ -1007,10 +1007,12 @@ namespace ARS
                 Vector3 crestEnd = ARS.TrackPoints[crestEndNode].Position;
                 float deltaGs = ARS.HillGripDeltaGs(crestStart, crestMid, crestEnd, Car.Velocity.Length());
                 // Crest aggression scales with route curvature: tight = cautious, straight = aggressive.
-                float routeAggression = ARS.Remap(Brain.CurrentPerception.CurveRadiusToFollowPoint, 100f, 300f, 0f, 1f, true);
+                float routeRadius = Brain.CurrentPerception.CurveRadiusToFollowPoint;
+                float routeAggression = ARS.Remap(routeRadius, 100f, 300f, 0f, 1f, true);
+                float routeCrestFloor = ARS.Remap(routeRadius, 500f, 100f, 0.4f, 0.8f, true);
                 float effectiveDeltaGs = deltaGs;
                 if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - routeAggression);
-                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0.5f);
+                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, routeCrestFloor);
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
 
@@ -1044,8 +1046,9 @@ namespace ARS
                     float cornerEffectiveDelta = cornerDeltaGs;
                     float cornerRadius = NextApexRadius;
                     float cornerAggression = ARS.Remap(cornerRadius, 100f, 300f, 0f, 1f, true);
+                    float cornerCrestFloor = ARS.Remap(cornerRadius, 500f, 100f, 0.4f, 0.8f, true);
                     if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - cornerAggression);
-                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, 0.5f);
+                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, cornerCrestFloor);
                     float cornerVerticalSpeedFactor = (float)Math.Sqrt(cornerVerticalGrip);
                     cornerSpd *= cornerVerticalSpeedFactor;
                     cornerApexSpeedWithVerticalGrip *= cornerVerticalSpeedFactor;
