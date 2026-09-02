@@ -665,6 +665,24 @@ namespace ARS
                 return;
             }
 
+            // Slide-angle steer limit ramps in with speed: full lock at standstill,
+            // collapsing to |slide angle| + 2 by 10 m/s, staying at that value above.
+            // Applies in either steering direction (steering-in or countersteer).
+            float requestedSteer = Control.SteerDegrees;
+            _requestedSteerDegrees = Math.Abs(requestedSteer);
+            float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
+            float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
+            float maxSteer = ARS.Remap(fwdMph, 60f, 0f, Math.Abs(VehicleData.SlideAngle) + 2f, VehicleData.SteeringLock, true);
+            _steerLimitDegrees = maxSteer;
+            if (Math.Abs(requestedSteer) > maxSteer)
+            {
+                Control.SteerDegrees = Math.Sign(requestedSteer) * maxSteer;
+                _steerLimitedThisFrame = true;
+                if (Control.MaxThrottle >= 0.1) Control.MaxThrottle -= (float)(2 * TickScale);
+            }
+
+            /* ZOMBIE — speed-based reduction, disabled while trialing slide-angle steer limit.
+
             // Only limit when steering and yaw agree (car turning into the steer).
             if (Math.Sign(Control.SteerDegrees) != Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
                 return;
@@ -676,11 +694,8 @@ namespace ARS
             float absoluteSteerLimit = VehicleData.SteeringLock;
             _steerLimitDegrees = absoluteSteerLimit;
 
-            // Speed-based reduction: steer /= 1 + speedSteerReduction * fwdSpeed.
-            // Higher speedSteerReduction = more reduction = less steering authority at speed.
             if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
             {
-                // TEMP: hardcoded 0.5 — testing reduction.
                 float speedSteerReduction = 0.5f;
                 float divisor = 1f + speedSteerReduction * fwdSpeed;
                 Control.SteerDegrees /= divisor;
@@ -688,17 +703,13 @@ namespace ARS
                 _steerLimitDegrees = absoluteSteerLimit / divisor;
             }
 
-
-
-            // Throttle cut: if the speed-based limiter reduced the steer this frame,
-            // zero MaxThrottle so the car coasts through the limit instead of pushing through it.
-            // Floor: keep a minimum steering angle so high-speed steering doesn't collapse.
             const float MinSteerAngleFloorFactor = 0.3f;
             float MinSteerAngleFloor = Handling.LateralTractionCurve * MinSteerAngleFloorFactor;
             if (Control.SteerDegrees != 0f && Math.Abs(Control.SteerDegrees) < MinSteerAngleFloor)
                 Control.SteerDegrees = Math.Sign(Control.SteerDegrees) * MinSteerAngleFloor;
 
             if (_steerLimitedThisFrame && Control.MaxThrottle>=0.1) Control.MaxThrottle -= (float)(2 * TickScale);
+            */
         }
 
 
@@ -1822,8 +1833,7 @@ namespace ARS
             float y = top + 0.01f;
             if (showInputs)
             {
-                float minSteerFloor = Handling.LateralTractionCurve * 0.3f;
-                float allowedSteer = Math.Max(_steerLimitDegrees, minSteerFloor);
+                float allowedSteer = _steerLimitDegrees;
                 bool requestingMore = _requestedSteerDegrees > allowedSteer + 0.5f;
                 string steerText = "STEER " + allowedSteer.ToString("0.0") + "º";
                 ARS.DrawText(new Vector2(0.79f, y), steerText,
