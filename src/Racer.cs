@@ -143,11 +143,6 @@ namespace ARS
         float _speedCap = 999f;
         const float SpeedCapRiseRate = 30f;
 
-        // Speed bias that drifts according to projected track safety.
-        float _confidence = 0f;
-        float _vehicleTrajectoryRadius = 999f;
-        const float ConfidenceNeutralWiggleroom = 2f;
-
         // Empirical steer-limit memory: peak lateral G reference and the steer that produced it.
         float _latGRef = 0f;
         float _peakSteerDeg = 15f;
@@ -450,21 +445,16 @@ namespace ARS
             if (Brain.CurrentPerception.HighSpeedCurveRadius > 500f) return 0f;
 
             int count = ARS.TrackPoints.Count;
-            int backNode, fwdNode;
+            int fwdNode;
             if (ARS.IsPointToPoint)
-            {
-                backNode = (int)ARS.Clamp(CurrentTrackPoint.Node - 20, 0, count - 1);
                 fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 20, 0, count - 1);
-            }
             else
-            {
-                backNode = ((CurrentTrackPoint.Node - 20) % count + count) % count;
                 fwdNode = ((CurrentTrackPoint.Node + 20) % count + count) % count;
-            }
-            Vector3 backDir = ARS.TrackPoints[backNode].Direction;
-            Vector3 fwdDir = ARS.TrackPoints[fwdNode].Direction;
 
-            float signedAngle = Vector3.SignedAngle(backDir, fwdDir, Vector3.WorldUp);
+            Vector3 currentDir = CurrentTrackPoint.Direction;
+            Vector3 futureDir = ARS.TrackPoints[fwdNode].Direction;
+
+            float signedAngle = Vector3.SignedAngle(currentDir, futureDir, Vector3.WorldUp);
             if (float.IsNaN(signedAngle) || float.IsInfinity(signedAngle)) return 0f;
 
             float cornerDir = Math.Sign(signedAngle);
@@ -489,7 +479,7 @@ namespace ARS
                 if (timeToApex > approachStartTime) return 0f;
             }
 
-            bool shouldHoldOutside = speedMps >= _cornerSpd + ARS.MphToMps(5f);
+            bool shouldHoldOutside = speedMps >= _cornerSpd + ARS.MphToMps(-10f);
             if (!_approachOutsideDecided || (!_approachHoldsOutside && shouldHoldOutside))
             {
                 _approachHoldsOutside = shouldHoldOutside;
@@ -502,7 +492,7 @@ namespace ARS
             if (entranceNode >= 0 && entranceNode < ARS.TrackPoints.Count)
             {
                 float entranceHeading = Vector3.SignedAngle(ARS.TrackPoints[entranceNode].Direction, CurrentTrackPoint.Direction, Vector3.WorldUp);
-                if (!float.IsNaN(entranceHeading) && !float.IsInfinity(entranceHeading) && Math.Abs(entranceHeading) > 20f)
+                if (!float.IsNaN(entranceHeading) && !float.IsInfinity(entranceHeading) && Math.Abs(entranceHeading) > 45f)
                     return 0f;
             }
 
@@ -513,7 +503,7 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.25f;
+            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.2f;
             if (_approachHoldsOutside && timeToApex > releaseSeconds)
             {
                 // Corner-commit: sit beside the rival on the corner inside instead of the outside line.
@@ -683,8 +673,8 @@ namespace ARS
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // Max steer angle = 2 + (slide angle × 2), so a bigger slide unlocks proportionally more steer.
-            float maxSteerAngle = 2f + (slideAngle * 2f);
+            // Max steer angle = 2 + max(slide angle, TRlat × 0.2), so low-slide cars keep a grip-based minimum allowance.
+            float maxSteerAngle = 2f + Math.Max(slideAngle, Handling.LateralTractionCurve * 0.2f);
             float maxSteer = ARS.Remap(fwdMph, 60f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
             _steerLimitDegrees = maxSteer;
             if (Math.Abs(requestedSteer) > maxSteer)
@@ -862,9 +852,9 @@ namespace ARS
                 return 999f;
             }
 
-            InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, 0f, -0.5f, 1f, true);
+            InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, -OffshootRangeMeters, -1f, 1f, true);
             float floorSpeed = 5f * VehicleData.CurrentMechanicalGrip;
-            return ARS.Remap(InputForOffshoot, -0.5f, 1f, floorSpeed, 999f, true);
+            return ARS.Remap(InputForOffshoot, -1f, 1f, floorSpeed, 999f, true);
         }
 
         void UpdateBrakeLearning()
@@ -1020,7 +1010,7 @@ namespace ARS
                 float routeAggression = ARS.Remap(Brain.CurrentPerception.CurveRadiusToFollowPoint, 100f, 300f, 0f, 1f, true);
                 float effectiveDeltaGs = deltaGs;
                 if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - routeAggression);
-                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0.1f);
+                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, 0.5f);
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
 
@@ -1055,7 +1045,7 @@ namespace ARS
                     float cornerRadius = NextApexRadius;
                     float cornerAggression = ARS.Remap(cornerRadius, 100f, 300f, 0f, 1f, true);
                     if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - cornerAggression);
-                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, 0.1f);
+                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, 0.5f);
                     float cornerVerticalSpeedFactor = (float)Math.Sqrt(cornerVerticalGrip);
                     cornerSpd *= cornerVerticalSpeedFactor;
                     cornerApexSpeedWithVerticalGrip *= cornerVerticalSpeedFactor;
@@ -1074,71 +1064,6 @@ namespace ARS
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
-
-            // ConfidenceMPS: drift toward a target based on the 0.5s and 1s projections.
-            if (ConfidenceEnabled)
-            {
-                Vector3 projHalf = ProjectAhead(0.5f);
-                Vector3 proj1s = ProjectAhead(1f);
-                bool anyOff = false;
-                bool anyEdge = false;
-                bool projectionCloserToCenter = false;
-                Vector3[] projections = { projHalf, proj1s };
-                float carHalf = VehicleData.BoundingBox * 0.5f;
-                float carLateralOffset = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
-                for (int i = 0; i < projections.Length; i++)
-                {
-                    TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(projections[i])).First();
-                    float signedLateralOffset = ARS.SignedLaneOffset(projections[i], tp.Position, tp.Direction);
-                    if (Math.Abs(signedLateralOffset) < carLateralOffset)
-                        projectionCloserToCenter = true;
-                    bool isInsideCorner = Math.Abs(tp.Angle) > 1f
-                        && Math.Sign(signedLateralOffset) == -Math.Sign(tp.Angle);
-                    if (isInsideCorner) continue;
-
-                    float lateralOffset = Math.Abs(signedLateralOffset);
-                    float edge = tp.TrackHalfWidth - carHalf;
-                    if (lateralOffset > edge) anyOff = true;
-                    else if (lateralOffset > edge - ConfidenceNeutralWiggleroom) anyEdge = true;
-                }
-
-                float target;
-                float speed = Car.Velocity.Length();
-                bool atFullPush = Control.Throttle < 1.0f;
-                bool inBrakingZone = false;
-                if (NextApexNode >= 0)
-                {
-                    float timeToApex = ForwardNodeDistance(NextApexNode) / Math.Max(speed, 1f);
-                    inBrakingZone = timeToApex >= ConfidenceBrakingZoneMinSeconds
-                        && timeToApex <= ConfidenceBrakingZoneMaxSeconds;
-                }
-                bool steeringEnough = Math.Abs(Control.SteerDegrees) >= ConfidenceMinSteerDegrees;
-                bool confidenceGate = atFullPush
-                    && !inBrakingZone
-                    && steeringEnough
-                    && !projectionCloserToCenter;
-                float theoreticalRadius = speed * speed
-                    / Math.Max(VehicleData.CurrentMechanicalGrip * Handling.Gravity, 0.1f);
-                bool turningInWell = theoreticalRadius > 5f
-                    && _vehicleTrajectoryRadius <= theoreticalRadius * ConfidenceTightTurnRadiusRatio;
-                if (!confidenceGate)
-                {
-                    target = 0f;
-                }
-                else if (anyOff && !turningInWell)
-                {
-                    target = -1f;
-                }
-                else if (anyEdge) target = 0f;
-                else target = 1f;
-
-                float confidenceFactor = ARS.Clamp(ConfidenceRate * TickScale, 0f, 1f);
-                _confidence += (target - _confidence) * confidenceFactor;
-            }
-            else
-            {
-                _confidence = 0f;
-            }
 
             // Yield: cap throttle to 0.5 to stay behind.
             if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
@@ -1456,14 +1381,6 @@ namespace ARS
             VehicleData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
             Brain.CurrentPerception.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
 
-            Vector3 projectedHalf = ProjectAhead(0.5f);
-            Vector3 projectedOne = ProjectAhead(1f);
-            _vehicleTrajectoryRadius = ARS.Circumradius3D(Car.Position, projectedHalf, projectedOne);
-            if (float.IsNaN(_vehicleTrajectoryRadius) || float.IsInfinity(_vehicleTrajectoryRadius))
-                _vehicleTrajectoryRadius = 999f;
-            _vehicleTrajectoryRadius = ARS.Clamp(_vehicleTrajectoryRadius, 5f, 999f);
-
-
             if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer)
             {
                 float combinedInput = ARS.Clamp(Control.Throttle - Control.Brake, -1f, 1f);
@@ -1682,7 +1599,7 @@ namespace ARS
                         "~w~corn ~o~" + ARS.MpsToMph(_debugCornerSpd).ToString("0") + "~w~ rte ~c~" + ARS.MpsToMph(_debugFollowTrackSpd).ToString("0"),
                         Color.White, 0.4f);
                     ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f),
-                        "~w~spdCap ~p~" + ARS.MpsToMph(_speedCap).ToString("0") + "~w~ conf ~y~" + _confidence.ToString("0.0"),
+                        "~w~spdCap ~p~" + ARS.MpsToMph(_speedCap).ToString("0"),
                         Color.White, 0.4f);
                 }
                 if (showTrack)
@@ -1858,10 +1775,6 @@ namespace ARS
             {
                 DrawApexPanelLine(ref y, "A1", NextApexNode, NextApexSpeed, NextApexRadius, Color.Yellow, lineHeight);
                 DrawApexPanelLine(ref y, "A2", NextApexNode2, NextApexSpeed2, NextApexRadius2, Color.Orange, lineHeight);
-                ARS.DrawText(new Vector2(0.79f, y),
-                    "CONF  " + _confidence.ToString("+0.00;-0.00;0.00"),
-                    Color.Cyan, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
-                y += lineHeight;
             }
         }
 
@@ -2228,11 +2141,6 @@ namespace ARS
         const float EntranceBrakeBufferSeconds = 1f;
         const float EntranceBrakeExtraDistance = 0f;
         const float SecondaryApexSpeedDifference = 5f;
-        const float ConfidenceTightTurnRadiusRatio = 0.75f;
-        const float ConfidenceBrakingZoneMinSeconds = 2f;
-        const float ConfidenceBrakingZoneMaxSeconds = 5f;
-        const float ConfidenceMinSteerDegrees = 2f;
-        const float ConfidenceRate = 5f;
         const float BrakingTargetFactor = 0.66f;
         const bool RouteSpeedEnabled = true;
         const bool ConfidenceEnabled = true;

@@ -3240,7 +3240,7 @@ namespace ARS
 
         // Exponential hill-grip loss, scaled by vehicle gravity.
         const float HillGripKPerDegree = 0.693147f / 15f; // ln(0.5)/15  ->  15 degrees halves grip
-        const float HillGripMin = 0.1f;                  // never remove more than 90% of grip on a hill
+        const float HillGripMin = 0.5f;                  // never remove more than 50% of grip on a hill
         public static float HillGripFactorFromPitchAngle(float pitchDegrees, Racer r)
         {
             float gravityRatio = (r != null && r.Handling != null) ? (r.Handling.Gravity / 9.8f) : 1f;
