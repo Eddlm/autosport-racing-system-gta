@@ -70,6 +70,9 @@ namespace ARS
     {
         public Perception CurrentPerception = new Perception();
         public List<Rival> Rivals = new List<Rival> { new Rival(), new Rival(), new Rival() };
+        // The ahead rival this racer is currently reacting to for avoidance. Set during
+        // RivalInfoUpdate(); steering code consumes it without re-scanning the rival list.
+        public Rival AvoidanceTarget = null;
         public Corner Corner =null;
 
 
@@ -104,6 +107,11 @@ namespace ARS
         public float DirectionDiff = 99f;
         public Vector3 RelativeOffset = Vector3.Zero;
 
+        // Decomposed proximity (in me's local frame, SHVDN convention: +X right, +Y forward).
+        public float LongitudinalGap = 99f;   // signed: + = rival ahead, - = rival behind
+        public float LateralGap = 0f;          // signed: + = rival right, - = rival left
+        public float ClosingRate = 0f;         // signed: + = closing on rival (along me's forward axis)
+        public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals
 
         public Vector2 CombinedSize = Vector2.Zero;
         public float OccupiedLane=0f;
@@ -114,6 +122,8 @@ namespace ARS
             if (RivalRacer == null) return;
 
             RelativeOffset = ARS.EntityRelativeOffset(me.Car, RivalRacer.Car);
+            LongitudinalGap = RelativeOffset.Y;
+            LateralGap = RelativeOffset.X;
             // More margin from a rival ahead (+1m) than behind (+0.25m).
             float yBuffer = RelativeOffset.Y >= 0f ? 1f : 0.25f;
             CombinedSize.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2)) + yBuffer;
@@ -122,14 +132,35 @@ namespace ARS
             OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
             Distance =  (me.Car.Position -RivalRacer.Car.Position).Length();
 
-            float speedDiff = (float)Math.Round(me.Car.Velocity.Length()- RivalRacer.Car.Velocity.Length(), 4);
+            // Closing rate: project relative velocity onto me's forward axis.
+            // Positive = me is gaining on rival (closing if rival ahead, or pulling away if rival behind).
+            Vector3 meForward = me.Car.Velocity.LengthSquared() > 0.01f
+                ? me.Car.Velocity.Normalized
+                : me.Car.ForwardVector;
+            Vector3 relativeVelocity = me.Car.Velocity - RivalRacer.Car.Velocity;
+            ClosingRate = Vector3.Dot(relativeVelocity, meForward);
+
+            // SecondsToReach and TimeToContact use longitudinal gap, not Euclidean.
+            // Legacy SecondsToReach kept for existing consumers (avoidance filter expects 0..3 range).
+            float longitudinalAbs = Math.Abs(LongitudinalGap);
+            float speedDiff = (float)Math.Round(me.Car.Velocity.Length() - RivalRacer.Car.Velocity.Length(), 4);
             if (speedDiff <= 0.001f)
             {
-                SecondsToReach = 909f;
+                SecondsToReach = float.PositiveInfinity;
             }
             else
             {
-                SecondsToReach = Distance / speedDiff;
+                SecondsToReach = longitudinalAbs / Math.Abs(speedDiff);
+            }
+
+            // TimeToContact: only meaningful for rivals ahead of me that I'm closing on.
+            if (LongitudinalGap > 0f && ClosingRate > 0.001f)
+            {
+                TimeToContact = LongitudinalGap / ClosingRate;
+            }
+            else
+            {
+                TimeToContact = float.PositiveInfinity;
             }
 
             if (RelativeOffset.Y > CombinedSize.Y)
@@ -150,7 +181,17 @@ namespace ARS
                 }
             }
 
-            DirectionDiff = Vector3.SignedAngle(me.Car.Velocity, RivalRacer.Car.Velocity, me.Car.UpVector);
+            // DirectionDiff: angle between velocity vectors. Guard against zero velocity (NaN).
+            float meSpeed = me.Car.Velocity.LengthSquared();
+            float rivalSpeed = RivalRacer.Car.Velocity.LengthSquared();
+            if (meSpeed < 0.01f || rivalSpeed < 0.01f)
+            {
+                DirectionDiff = 0f;
+            }
+            else
+            {
+                DirectionDiff = Vector3.SignedAngle(me.Car.Velocity, RivalRacer.Car.Velocity, me.Car.UpVector);
+            }
         }
     }
 

@@ -541,6 +541,11 @@ namespace ARS
             else return val;
         }
 
+        public static bool IsBetween(float value, float min, float max)
+        {
+            return value >= min && value <= max;
+        }
+
         public unsafe static byte* FindPattern(string pattern, string mask)
         {
             ProcessModule module = Process.GetCurrentProcess().MainModule;
@@ -1793,20 +1798,17 @@ namespace ARS
         {
             Log(LogImportance.Info, "Starting race");
 
-            // Phase 3 requires track + grid to be instanced (unless called directly
-            // with a track already loaded and racers already spawned).
-            if (!_trackInstanced || !_gridInstanced)
+            // Auto-call missing phases: if no track, instance one; if no grid, spawn one.
+            // InstanceGrid already requires the track, so order is implicit.
+            if (!_trackInstanced)
             {
-                if (RouteNodes.Count == 0)
-                {
-                    UI.Notify("~r~Load or create a path route first.");
-                    return;
-                }
-                if (Racers.Count == 0)
-                {
-                    UI.Notify("~r~Instance a track and grid first.");
-                    return;
-                }
+                InstanceTrack();
+                if (!_trackInstanced) return; // InstanceTrack failed (e.g. no tracks available).
+            }
+            if (!_gridInstanced)
+            {
+                InstanceGrid();
+                if (!_gridInstanced) return; // InstanceGrid failed (e.g. no candidates).
             }
 
            

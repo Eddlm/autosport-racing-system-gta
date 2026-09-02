@@ -371,16 +371,9 @@ namespace ARS
             // lookahead. Close rivals produce a large angle (committed swerve), far rivals
             // produce a small angle (gentle drift) — same lateral target either way.
             float avoidLookaheadDist = 0f;
-            if (avoidAheadLane != 0f)
+            if (avoidAheadLane != 0f && Brain.AvoidanceTarget != null)
             {
-                foreach (Rival r in Brain.Rivals)
-                {
-                    if (r.RelativePosition != RelativePos.Ahead) continue;
-                    if (r.SecondsToReach < 0f || r.SecondsToReach > 3f) continue;
-                    if (Math.Abs(r.DirectionDiff) > 20f) continue;
-                    avoidLookaheadDist = r.SecondsToReach * Math.Max(speedMps, 1f);
-                    break;
-                }
+                avoidLookaheadDist = Brain.AvoidanceTarget.SecondsToReach * Math.Max(speedMps, 1f);
             }
 
 
@@ -630,57 +623,71 @@ namespace ARS
             float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
             float currentLane = Brain.CurrentPerception.DeviationFromCenter;
 
-            float firstTarget = 0f;
-            bool firstGoLeft = false;
-            bool foundFirst = false;
-            foreach (Rival r in Brain.Rivals)
+            Rival target = Brain.AvoidanceTarget;
+            if (target == null || target.RivalRacer == null) return 0f;
+
+            float rivalLane = target.OccupiedLane;
+            float buffer = target.OccupiedLaneWidth + aggroBuffer;
+
+            float roomLeft = rivalLane - buffer + trackBound;
+            float roomRight = trackBound - (rivalLane + buffer);
+            bool goLeft = roomLeft > roomRight;
+
+            float targetLane = goLeft
+                ? rivalLane - buffer - carHalfWidth
+                : rivalLane + buffer + carHalfWidth;
+
+            // If the chosen side is off-track, flip.
+            if (Math.Abs(targetLane) > trackBound)
             {
-                if (r.RivalRacer == null) continue;
-                if (r.RelativePosition != RelativePos.Ahead) continue;
-                if (r.SecondsToReach < 0f || r.SecondsToReach > 3f) continue;
-                if (Math.Abs(r.DirectionDiff) > 20f) continue;
-
-                float rivalLane = r.OccupiedLane;
-                float buffer = r.OccupiedLaneWidth + aggroBuffer;
-
-                float roomLeft = rivalLane - buffer + trackBound;
-                float roomRight = trackBound - (rivalLane + buffer);
-                bool goLeft = roomLeft > roomRight;
-
-                float targetLane = goLeft
-                    ? rivalLane - buffer - carHalfWidth
-                    : rivalLane + buffer + carHalfWidth;
-
-                // If the chosen side is off-track, flip.
-                if (Math.Abs(targetLane) > trackBound)
-                {
-                    targetLane = goLeft
-                        ? rivalLane + buffer + carHalfWidth
-                        : rivalLane - buffer - carHalfWidth;
-                    goLeft = !goLeft;
-                }
-
-                if (Math.Abs(targetLane) > trackBound) continue;
-
-                // Already on the far side, no avoidance needed.
-                if (goLeft && currentLane <= targetLane) continue;
-                if (!goLeft && currentLane >= targetLane) continue;
-
-                if (!foundFirst)
-                {
-                    firstTarget = targetLane;
-                    firstGoLeft = goLeft;
-                    foundFirst = true;
-                }
-                else
-                {
-                    if (goLeft != firstGoLeft)
-                        return (firstTarget + targetLane) * 0.5f;
-                    return firstTarget;
-                }
+                targetLane = goLeft
+                    ? rivalLane + buffer + carHalfWidth
+                    : rivalLane - buffer - carHalfWidth;
+                goLeft = !goLeft;
             }
 
-            return foundFirst ? firstTarget : 0f;
+            if (Math.Abs(targetLane) > trackBound) return 0f;
+
+            // Already on the far side, no avoidance needed.
+            if (goLeft && currentLane <= targetLane) return 0f;
+            if (!goLeft && currentLane >= targetLane) return 0f;
+
+            // Thread the needle if a second ahead rival is approaching from the opposite side.
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || r == target) continue;
+                if (r.RelativePosition != RelativePos.Ahead) continue;
+                if (!ARS.IsBetween(r.SecondsToReach, 0f, 5f)) continue;
+                if (!ARS.IsBetween(r.DirectionDiff, -20f, 20f)) continue;
+
+                float secondLane = r.OccupiedLane;
+                float secondBuffer = r.OccupiedLaneWidth + aggroBuffer;
+
+                float secondRoomLeft = secondLane - secondBuffer + trackBound;
+                float secondRoomRight = trackBound - (secondLane + secondBuffer);
+                bool secondGoLeft = secondRoomLeft > secondRoomRight;
+
+                float secondTarget = secondGoLeft
+                    ? secondLane - secondBuffer - carHalfWidth
+                    : secondLane + secondBuffer + carHalfWidth;
+
+                if (Math.Abs(secondTarget) > trackBound)
+                {
+                    secondTarget = secondGoLeft
+                        ? secondLane + secondBuffer + carHalfWidth
+                        : secondLane - secondBuffer - carHalfWidth;
+                    secondGoLeft = !secondGoLeft;
+                }
+
+                if (Math.Abs(secondTarget) > trackBound) continue;
+                if (secondGoLeft && currentLane <= secondTarget) continue;
+                if (!secondGoLeft && currentLane >= secondTarget) continue;
+
+                if (secondGoLeft != goLeft) return (targetLane + secondTarget) * 0.5f;
+                return targetLane;
+            }
+
+            return targetLane;
         }
 
         float ApplyRivalWalls(float targetLane, float roadWide)
@@ -873,27 +880,6 @@ namespace ARS
             float newBrake = 0f;
 
             FindLowestIntendedSpeed();
-
-            // Rear-end prevention: reduce intended speed to match the rival ahead
-            // when we're closing in. At 1m behind, match exactly; never lower
-            // than the rival's speed so we don't artificially hold up traffic.
-            Rival aheadRival = Brain.Rivals
-                .Where(r => r.RivalRacer != null
-                    && r.RelativePosition == RelativePos.Ahead
-                    && r.Distance < 6f
-                    && Math.Abs(r.RelativeOffset.X) < r.CombinedSize.X)
-                .OrderBy(r => r.Distance)
-                .FirstOrDefault();
-            if (aheadRival != null)
-            {
-                float rivalSpeed = aheadRival.RivalRacer.Car.Velocity.Length();
-                // Blend toward rival speed as we close; saturates to full match at 1m.
-                float blend = ARS.Remap(aheadRival.Distance, 6f, 1f, 0f, 1f, true);
-                Brain.CurrentIntention.Speed = Math.Max(
-                    Brain.CurrentIntention.Speed * (1f - blend) + rivalSpeed * blend,
-                    rivalSpeed
-                );
-            }
 
             Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
 
@@ -2120,7 +2106,15 @@ namespace ARS
 
         void UpdateRivalInfo()
         {
-            foreach (Rival r in Brain.Rivals) r.Update(this);
+            Brain.AvoidanceTarget = null;
+            foreach (Rival r in Brain.Rivals)
+            {
+                r.Update(this);
+                if (Brain.AvoidanceTarget == null && r.RelativePosition == RelativePos.Ahead && ARS.IsBetween(r.SecondsToReach, 0f, 5f) && ARS.IsBetween(r.DirectionDiff, -20f, 20f))
+                {
+                    Brain.AvoidanceTarget = r;
+                }
+            }
         }
 
 

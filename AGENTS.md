@@ -9,6 +9,11 @@ Target: C# / .NET Framework 4.8 / ScriptHookVDotNet 2
 ## Writing this file — no specific values
 Constants, thresholds, conditions, windows and knob names get tuned constantly and go stale. Keep this doc to **stable architecture**: structure, override order, invariants, and design intent (the *why*, not the *what number*). The code is the source of truth for specifics — describe behavior, don't enumerate current values.
 
+## Coding style
+- Keep consecutive `&&` / `||` conditions on a single line; do not break them across lines.
+- Use `ARS.IsBetween(value, min, max)` for inclusive range checks instead of inline `value >= min && value <= max`.
+- **Method names must be honest.** A method should do only what its name claims; if it also filters, selects, or computes unrelated things, refactor it.
+
 ## Workflow
 - **⚠️ RELEASE DEADLINE — September WIP.** The user needs to release a WIP in September. **Remind the user to stop adding features and tweaking** — the priority is shipping, not scope. When the user starts proposing new features or tuning, gently flag the deadline and ask whether it's worth the risk before the release. (User's explicit request, recorded so it persists across sessions.)
 - **Every file change → compile (with autocopy) → user verifies in-game → then commit.** Never commit before the human confirms the change works. The human is the gatekeeper for verification; do not treat a successful compile as "verified."
@@ -22,6 +27,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - **Avoidance experiments checkpoint:** `3087663` — last commit before further avoidance/speed tuning experiments. Roll back here if experiments go sideways.
 - **Corner experiments checkpoint:** `54b33a7` — last commit before the **live corner creation** experiments. Known-good baseline (hill grip-loss exponential, radius-mapped crest aggression, later apex gate, power-matched grid). Roll back here if live-corner work goes sideways.
 - **Gs-aware preview checkpoint:** tag `checkpoint-pre-gs-aware` (commit `183aeda`) — state right before the Gs-aware preview steering experiment.
+- **Pending: code reorganization + compaction** — once user is back on the PC and able to verify in-game, the steering/speed/avoidance subsystems in `Racer.cs` need a structural cleanup pass. The file has accumulated several iterations of in-line additions (overlap bias, rival-distance lookahead, throttle-cut on steer-limit, /2 lane-bias scale) that are correct but disorganized — many sit inline in `ComputeSteering`/`ComputeTargetSpeed`/`ApplySteerLimits` rather than in named methods. Goal: extract these into well-named helper methods with consistent signatures, group related code (e.g. all "rival awareness" helpers together), and reduce inline complexity. Will be done as a single reorganization commit after in-game verification, with a checkpoint tag for clean rollback.
 
 ## Dependencies and UI
 - **Script folder location is one constant**: `ARS.ScriptsFolder` (default `@"scripts\AutosportRacingSystem"`) drives every read/write path in the project (Tracks, Vehicles, Drivers, Options.ini, Log.log, etc.) — change it there and every site picks up the new folder. The `.csproj` `GtaArsScriptsDir` mirrors this independently; keep them in sync.
