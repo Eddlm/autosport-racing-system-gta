@@ -342,7 +342,7 @@ namespace ARS
             if (Car.Velocity.LengthSquared() > 0.01f) carForward = Car.Velocity.Normalized;
             float headingErrorDeg = -Vector3.SignedAngle(steerRefPoint.Direction, carForward, Vector3.WorldUp);
             if (float.IsNaN(headingErrorDeg) || float.IsInfinity(headingErrorDeg)) headingErrorDeg = 0f;
-            headingErrorDeg *= 0.5f;
+            headingErrorDeg *= 0.9f;
 
 
             float defaultLane = ComputeHighSpeedLane(roadWide);
@@ -447,7 +447,7 @@ namespace ARS
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
         float ComputeHighSpeedLane(float roadWide)
         {
-            if (Brain.CurrentPerception.HighSpeedCurveRadius > 250f) return 0f;
+            if (Brain.CurrentPerception.HighSpeedCurveRadius > 500f) return 0f;
 
             int count = ARS.TrackPoints.Count;
             int backNode, fwdNode;
@@ -466,8 +466,6 @@ namespace ARS
 
             float signedAngle = Vector3.SignedAngle(backDir, fwdDir, Vector3.WorldUp);
             if (float.IsNaN(signedAngle) || float.IsInfinity(signedAngle)) return 0f;
-
-            if (Math.Abs(signedAngle) < 1f) return 0f;
 
             float cornerDir = Math.Sign(signedAngle);
             return -cornerDir * roadWide;
@@ -505,8 +503,8 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
-            float holdOutsideUntil = (steerRefPoint.TrackHalfWidth * 2f) / 8f;
-            if (_approachHoldsOutside && timeToApex > holdOutsideUntil)
+            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.25f;
+            if (_approachHoldsOutside && timeToApex > releaseSeconds)
             {
                 // Corner-commit: sit beside the rival on the corner inside instead of the outside line.
                 bool isCornerCommit = ActiveManeuver.Target != null && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb);
@@ -946,6 +944,13 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
+            // Once the car has turned in, let route speed govern the corner instead of the apex braking plan.
+            if (NextApexNode >= 0)
+            {
+                float timeToApex = ForwardNodeDistance(NextApexNode) / Math.Max(Car.Velocity.Length(), 1f);
+                if (timeToApex <= 1f) cornerSpd = 999f;
+            }
+
             // Hill grip loss: exponential model, 15 degrees halves grip.
             {
                 float slopeAngleDeg = ARS.RadToDeg(GetFollowPointSlopeAngle());
@@ -1029,6 +1034,9 @@ namespace ARS
                 : null;
 
 
+            // Temporary: reduce both speed targets by 3 m/s to combat consistent overshooting.
+            cornerSpd -= 3f;
+            followTrackSpd -= 3f;
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
@@ -1562,6 +1570,7 @@ namespace ARS
             {
                 DrawInputTrails();
                 DrawWheelDirectionLine();
+                DrawSteerTargetLine();
             }
 
             if (requestedTrack)
@@ -1957,6 +1966,18 @@ namespace ARS
             // Red when the speed-based steering limiter actually reduced the steer
             // this frame (or last, if the draw runs before ApplySteerLimits).
             ARS.DrawLine(start, start + DirAt(steerDeg) * 2f, _steerLimitedThisFrame ? Color.Red : Color.White);
+        }
+
+        void DrawSteerTargetLine()
+        {
+            if (Car == null || !Car.Exists()) return;
+            if (!LookAheads.TryGetValue(LookAhead.SteerRef, out TrackPoint steerRefPoint) || steerRefPoint == null) return;
+
+            Vector3 right = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
+            Vector3 target = steerRefPoint.Position + right * _targetLane + new Vector3(0, 0, 0.3f);
+            float halfLen = Car.Model.GetDimensions().Y * 0.5f;
+            Vector3 start = Car.Position + Car.ForwardVector * halfLen + new Vector3(0, 0, 0.3f);
+            ARS.DrawLine(start, target, Color.Cyan);
         }
 
 
