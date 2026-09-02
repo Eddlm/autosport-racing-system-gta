@@ -718,7 +718,7 @@ namespace ARS
         public static string AlwaysIncludeModelName = "tiberius";
         // Temp: bypass pace matching entirely and load only these models into the grid.
         // Set to null (or empty list) to re-enable pace-matched selection.
-        public static List<string> HardcodedRoster = new List<string> { "comet2", "coquette", "sugoi", "specter", "specter2", "elegy", "elegy2", "comet5", "dominator2", "gauntlet4", "pfister811" };
+        public static List<string> HardcodedRoster = new List<string> { "comet2", "coquette", "sugoi", "specter", "specter2", "elegy", "elegy2", "comet5", "dominator2", "gauntlet4", "pfister811", "cypher" };
 
         Dictionary<string, string> _racerTagLookup = new Dictionary<string, string>();
         public static int TrackListPos = 0;
@@ -4353,6 +4353,9 @@ namespace ARS
 
                     List<string> tags = GetVehicleTags(file);
                     try { ApplyCarAppearance(file, car, tags); } catch (Exception ex) { Log(LogImportance.Info, "Appearance skipped: " + ex.Message); }
+                    // Menyoo livery override: if a matching Menyoo tuning file exists for this model,
+                    // apply one at random (cosmetic only, separate from the ARS supplier pool).
+                    MenyooAppearance.Apply(car);
                     ApplyAccelerationOverride(file, car);
 
                     XmlDocument driverXml;

@@ -496,6 +496,16 @@ namespace ARS
                 _approachOutsideDecided = true;
             }
 
+            // Entrance-direction gate: don't hold the outside line if the direction at the
+            // entrance diverges too far from the current track direction (the approach is misaligned).
+            int entranceNode = c.StartNode >= 0 ? c.StartNode : OffsetCornerNode(apexNode, -c.LengthStart);
+            if (entranceNode >= 0 && entranceNode < ARS.TrackPoints.Count)
+            {
+                float entranceHeading = Vector3.SignedAngle(ARS.TrackPoints[entranceNode].Direction, CurrentTrackPoint.Direction, Vector3.WorldUp);
+                if (!float.IsNaN(entranceHeading) && !float.IsInfinity(entranceHeading) && Math.Abs(entranceHeading) > 20f)
+                    return 0f;
+            }
+
             float cornerDir = Math.Sign(c.Angle);
             if (cornerDir == 0f) return 0f;
 
@@ -672,7 +682,10 @@ namespace ARS
             _requestedSteerDegrees = Math.Abs(requestedSteer);
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
-            float maxSteer = ARS.Remap(fwdMph, 60f, 0f, Math.Abs(VehicleData.SlideAngle) + 2f, VehicleData.SteeringLock, true);
+            float slideAngle = Math.Abs(VehicleData.SlideAngle);
+            // Max steer angle = 2 + (slide angle × 2), so a bigger slide unlocks proportionally more steer.
+            float maxSteerAngle = 2f + (slideAngle * 2f);
+            float maxSteer = ARS.Remap(fwdMph, 60f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
             _steerLimitDegrees = maxSteer;
             if (Math.Abs(requestedSteer) > maxSteer)
             {
