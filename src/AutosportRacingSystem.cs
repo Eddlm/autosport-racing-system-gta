@@ -3681,7 +3681,7 @@ namespace ARS
             return Function.Call<bool>(Hash._0x557E43C447E700A8, Game.GenerateHash(cheat));
         }
 
-        int _intendedOpponents = 3;
+        int _intendedOpponents = 8;
 
         
         void LoadSettings()
@@ -3695,7 +3695,7 @@ namespace ARS
                 SettingsFile = ScriptSettings.Load(ScriptsFolder + @"\Options.ini");
 
 
-                _intendedOpponents = SettingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 3);
+                _intendedOpponents = SettingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 8);
                 TrackFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "TrackFilter", "city");
                 DisciplineFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "Disciplines", "muscle");
                 Log(LogImportance.Info, "Loaded Options.");

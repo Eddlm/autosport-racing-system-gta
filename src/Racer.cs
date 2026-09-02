@@ -191,7 +191,6 @@ namespace ARS
 
         public float Aggression = 50f;
         public float Pressure = 0f;
-        float _laneGainDivisor = 100f;
         const float PressureRange = 100f;
         const float PressureProximityRange = 100f;
         const float PressureRisePerSecond = 2f;
@@ -207,7 +206,6 @@ namespace ARS
 
             if (Driver.IsPlayer) ControlledByPlayer = true;
             _halfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));
-            _laneGainDivisor = (float)ARS.GetRandomInt(90, 110);
 
             if (!ControlledByPlayer)
             {
@@ -336,22 +334,51 @@ namespace ARS
                 return;
             }
 
-
-
-            Vector3 carForward = Car.Velocity.LengthSquared() > 0.01f
-                ? Car.Velocity.Normalized
-                : Car.ForwardVector;
-            float headingErrorDeg = -Vector3.SignedAngle(
-                steerRefPoint.Direction, carForward, Vector3.WorldUp);
-            if (float.IsNaN(headingErrorDeg) || float.IsInfinity(headingErrorDeg))
-                headingErrorDeg = 0f;
-
-
-            headingErrorDeg *= 0.5f;
-
+            float headingErrorDeg = ComputeHeadingError(steerRefPoint);
             float speedMps = Math.Max(Car.Velocity.Length(), 1f);
-            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
 
+            float targetLane = ResolveTargetLane(steerRefPoint, roadWide, speedMps, out float avoidLookaheadDist);
+            _targetLane = targetLane;
+
+            float recoveryDeg = ComputeRecoverySteer(roadWide);
+            float laneBiasDeg = ComputeLaneBias(steerRefPoint, targetLane, roadWide, avoidLookaheadDist);
+
+            Control.SteerDegrees = ComputePDSteer(headingErrorDeg + laneBiasDeg + recoveryDeg);
+            ApplySlideCounterSteer();
+
+            // NaN/Inf guard: ApplySteerLimits would turn NaN into full-lock.
+            if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
+                Control.SteerDegrees = 0f;
+        }
+
+        bool TryGetSteerContext(out TrackPoint steerRef, out float roadWide)
+        {
+            steerRef = null;
+            roadWide = 0f;
+
+            if (BaseBehavior == RacerBaseBehavior.GridWait || BaseBehavior == RacerBaseBehavior.FinishedStandStill || CurrentTrackPoint.Node < 3)
+                return false;
+
+            if (!LookAheads.TryGetValue(LookAhead.SteerRef, out steerRef) || steerRef == null)
+                return false;
+
+            roadWide = steerRef.TrackHalfWidth;
+            return true;
+        }
+
+        float ComputeHeadingError(TrackPoint steerRefPoint)
+        {
+            Vector3 carForward = Car.Velocity.LengthSquared() > 0.01f ? Car.Velocity.Normalized : Car.ForwardVector;
+
+            float error = -Vector3.SignedAngle(steerRefPoint.Direction, carForward, Vector3.WorldUp);
+            if (float.IsNaN(error) || float.IsInfinity(error)) error = 0f;
+
+            return error * 0.5f;
+        }
+
+        float ResolveTargetLane(TrackPoint steerRefPoint, float roadWide, float speedMps, out float avoidLookaheadDist)
+        {
+            avoidLookaheadDist = 0f;
 
             float naturalLane = ComputeHighSpeedLane(roadWide);
 
@@ -362,94 +389,96 @@ namespace ARS
             _rawCornerLane = cornerLane;
 
             // Avoidance overrides track-line targets.
-            float avoidAheadLane = 0f;
-            avoidAheadLane = ComputeAvoidAheadLane(roadWide);
-            if (avoidAheadLane != 0f) naturalLane = avoidAheadLane;
-
-            // When avoidance is active, the steer angle to the avoidance target uses the
-            // rival's longitudinal distance as the lookahead — not the generic track
-            // lookahead. Close rivals produce a large angle (committed swerve), far rivals
-            // produce a small angle (gentle drift) — same lateral target either way.
-            float avoidLookaheadDist = 0f;
-            if (avoidAheadLane != 0f && Brain.AvoidanceTarget != null)
+            float avoidLane = ComputeAvoidAheadLane(roadWide);
+            if (avoidLane != 0f)
             {
-                avoidLookaheadDist = Brain.AvoidanceTarget.SecondsToReach * Math.Max(speedMps, 1f);
+                naturalLane = avoidLane;
+                avoidLookaheadDist = ComputeAvoidLookaheadDist(speedMps);
             }
 
+            return ApplyRivalWalls(naturalLane, roadWide);
+        }
 
+        float ComputeAvoidLookaheadDist(float speedMps)
+        {
+            if (Brain.AvoidanceTarget == null) return 0f;
+            return Brain.AvoidanceTarget.SecondsToReach * Math.Max(speedMps, 1f);
+        }
 
-            float clampedLane = ApplyRivalWalls(naturalLane, roadWide);
-            _targetLane = clampedLane;
-
-
-            float recoveryDeg = 0f;
+        float ComputeRecoverySteer(float roadWide)
+        {
+            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float absDev = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
             float safeEdge = roadWide - carHalfWidth;
             float overshoot = absDev - safeEdge;
-            if (overshoot > 0f)
-            {
-                float maxRecoveryDeg = ARS.Remap(speedMps, 10f, 50f, 10f, 2f);
-                float severity = Math.Min(overshoot / Math.Max(safeEdge, 1f), 1f);
-                recoveryDeg = Math.Sign(Brain.CurrentPerception.DeviationFromCenter) * maxRecoveryDeg * severity;
-            }
+            if (overshoot <= 0f) return 0f;
 
+            float maxRecoveryDeg = ARS.Remap(Math.Max(Car.Velocity.Length(), 1f), 10f, 50f, 10f, 2f);
+            float severity = Math.Min(overshoot / Math.Max(safeEdge, 1f), 1f);
+            return Math.Sign(Brain.CurrentPerception.DeviationFromCenter) * maxRecoveryDeg * severity;
+        }
 
-
-            float laneBiasDeg = 0f;
+        float ComputeLaneBias(TrackPoint steerRefPoint, float targetLane, float roadWide, float avoidLookaheadDist)
+        {
+            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float trackBound = roadWide - carHalfWidth;
-            bool hasActiveGuidance = Math.Abs(clampedLane) > 0.01f
-                || _avoidLeftWall > -trackBound
-                || _avoidRightWall < trackBound;
-            if (hasActiveGuidance)
-            {
-                float currentLane = Brain.CurrentPerception.DeviationFromCenter;
-                // Avoidance uses the rival's longitudinal distance so the steer angle
-                // tracks the geometry of "reach the side of the rival at the rival's distance."
-                float lookaheadDist = avoidLookaheadDist > 0f
-                    ? avoidLookaheadDist
-                    : steerRefPoint.Position.DistanceTo(Car.Position);
-                if (lookaheadDist < 1f) lookaheadDist = speedMps * 1.5f;
+            bool hasActiveGuidance = Math.Abs(targetLane) > 0.01f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
+            if (!hasActiveGuidance) return 0f;
 
+            float currentLane = Brain.CurrentPerception.DeviationFromCenter;
 
-                float laneError = clampedLane - currentLane;
+            // Avoidance uses the rival's longitudinal distance so the steer angle tracks the
+            // geometry of "reach the side of the rival at the rival's distance."
+            float lookaheadDist = avoidLookaheadDist > 0f ? avoidLookaheadDist : steerRefPoint.Position.DistanceTo(Car.Position);
+            if (lookaheadDist < 1f) lookaheadDist = Math.Max(Car.Velocity.Length(), 1f) * 1.5f;
 
-                // Gs-aware preview: blend part of the lane error to the 1s projection.
-                // The projection already carries the centripetal (lateral-G) displacement,
-                // so measuring error there makes steering anticipate centrifugal drift
-                // instead of reacting to it. Blend 0 = exact legacy behavior.
-                if (ARS.DebugToggles[Options.GsAwarePreview]
-                    && LookAheads.TryGetValue(LookAhead.OneSec, out TrackPoint oneSecPoint)
-                    && oneSecPoint != null)
-                {
-                    Vector3 projection = ProjectAhead(1f);
-                    float projectedLane = ARS.SignedLaneOffset(projection, oneSecPoint.Position, oneSecPoint.Direction);
-                    float blend = ARS.Clamp(ARS.GsAwarePreviewBlend, 0f, 1f);
-                    laneError = (clampedLane - currentLane) * (1f - blend) + (clampedLane - projectedLane) * blend;
-                }
+            float laneError = ComputeLaneError(targetLane, currentLane);
 
-                laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
-                // Scale down so the steer target represents the lane move's *average*
-                // heading over the lookahead window, not the instantaneous angle.
-                // Without this, a 5m lane error at 60m lookahead produces ~5° of steer
-                // command, which (combined with the PD's 1.0 gain) makes cars twitchy.
-                laneBiasDeg *= 1f / 2f;
-            }
+            // Scale down so the steer target represents the lane move's *average* heading over the
+            // lookahead window, not the instantaneous angle. Without this, a 5 m lane error at
+            // 60 m lookahead produces ~5° of steer command, which (combined with the PD's 1.0 gain)
+            // makes cars twitchy.
+            float laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI)) * 0.5f;
 
-            // Overlap bias: when a rival is physically inside our bounding box, add a
-            // direct steer offset pointing away from them. Measured in the velocity frame
-            // (where the car is actually moving, not where it's pointed). Activates only
-            // when cars are roughly side-by-side longitudinally AND laterally overlapping.
-            // 2° per meter of penetration. Independent of the lane target — bypasses
-            // the lane abstraction for the moment of contact.
-            Vector3 velDir = Car.Velocity.LengthSquared() > 0.01f
-                ? Car.Velocity.Normalized
-                : Car.ForwardVector;
+            laneBiasDeg += ComputeOverlapBias();
+
+            return laneBiasDeg;
+        }
+
+        float ComputeLaneError(float targetLane, float currentLane)
+        {
+            float error = targetLane - currentLane;
+
+            // Gs-aware preview: blend part of the lane error to the 1 s projection. The projection
+            // already carries the centripetal (lateral-G) displacement, so measuring error there
+            // makes steering anticipate centrifugal drift instead of reacting to it.
+            if (!ARS.DebugToggles[Options.GsAwarePreview]) return error;
+
+            if (!LookAheads.TryGetValue(LookAhead.OneSec, out TrackPoint oneSecPoint) || oneSecPoint == null)
+                return error;
+
+            Vector3 projection = ProjectAhead(1f);
+            float projectedLane = ARS.SignedLaneOffset(projection, oneSecPoint.Position, oneSecPoint.Direction);
+            float blend = ARS.Clamp(ARS.GsAwarePreviewBlend, 0f, 1f);
+            return error * (1f - blend) + (targetLane - projectedLane) * blend;
+        }
+
+        float ComputeOverlapBias()
+        {
+            // When a rival is physically inside our bounding box, add a direct steer offset pointing
+            // away from them. Measured in the velocity frame (where the car is actually moving, not
+            // where it's pointed). Activates only when cars are roughly side-by-side longitudinally
+            // AND laterally overlapping. 2° per meter of penetration.
+            Vector3 velDir = Car.Velocity.LengthSquared() > 0.01f ? Car.Velocity.Normalized : Car.ForwardVector;
             Vector3 velRight = Vector3.Cross(Vector3.WorldUp, velDir);
-            float overlapBiasDeg = 0f;
+
             float myHalfWidth = VehicleData.BoundingBox * 0.5f;
+            float totalBias = 0f;
+
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
+
                 Vector3 delta = r.RivalRacer.Car.Position - Car.Position;
                 float longComp = Vector3.Dot(delta, velDir);
                 float latComp = Vector3.Dot(delta, velRight);
@@ -461,66 +490,31 @@ namespace ARS
                 float penetration = (myHalfWidth + rivalHalfWidth) - Math.Abs(latComp);
                 if (penetration <= 0f) continue;
 
-                // latComp sign: + = rival on my right, - = rival on my left.
-                // To push *out*, steer the opposite direction.
+                // latComp sign: + = rival on my right, - = rival on my left. Push out the opposite way.
                 float awayDir = -Math.Sign(latComp);
-                overlapBiasDeg += awayDir * penetration * 2f;
+                totalBias += awayDir * penetration * 2f;
             }
-            laneBiasDeg += overlapBiasDeg;
 
+            return totalBias;
+        }
 
-            float totalTargetDeg = headingErrorDeg + laneBiasDeg + recoveryDeg;
-
-
+        float ComputePDSteer(float targetDeg)
+        {
             const float steerKP = 1.0f;
             float gripForKD = VehicleData.CurrentMechanicalGrip;
             if (float.IsNaN(gripForKD) || float.IsInfinity(gripForKD) || gripForKD <= 0f) gripForKD = 1f;
             float steerKD = 0.5f / gripForKD;
-            float pTerm = steerKP * totalTargetDeg;
-            float dTerm = steerKD * VehicleData.YawRotationPerSecondDegrees;
-            Control.SteerDegrees = pTerm - dTerm;
-
-
-            if (Math.Sign((int)VehicleData.SlideAngle) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
-            {
-                float slideCounterSteer = VehicleData.SlideAngle * ARS.Remap(
-                    Math.Abs(VehicleData.SlideAngle), 0, Handling.LateralTractionCurve * 1.2f, 0.5f, 1.2f, true);
-                Control.SteerDegrees -= slideCounterSteer;
-            }
-
-            // NaN/Inf guard: ApplySteerLimits would turn NaN into full-lock.
-            if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
-                Control.SteerDegrees = 0f;
-
-
-
-            bool TryGetSteerContext(out TrackPoint localSteerRef, out float localRoadWide)
-            {
-                localSteerRef = null;
-                localRoadWide = 0f;
-
-                if (BaseBehavior == RacerBaseBehavior.GridWait
-                    || BaseBehavior == RacerBaseBehavior.FinishedStandStill
-                    || CurrentTrackPoint.Node < 3)
-                {
-                    return false;
-                }
-
-                if (!LookAheads.TryGetValue(LookAhead.SteerRef, out localSteerRef)
-                    || localSteerRef == null)
-                {
-                    return false;
-                }
-
-                localRoadWide = localSteerRef.TrackHalfWidth;
-                return true;
-            }
+            return (steerKP * targetDeg) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
         }
 
+        void ApplySlideCounterSteer()
+        {
+            if (Math.Sign((int)VehicleData.SlideAngle) != Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
+                return;
 
-
-
-
+            float scale = ARS.Remap(Math.Abs(VehicleData.SlideAngle), 0f, Handling.LateralTractionCurve * 1.2f, 0.5f, 1.2f, true);
+            Control.SteerDegrees -= VehicleData.SlideAngle * scale;
+        }
 
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
         float ComputeHighSpeedLane(float roadWide)
@@ -550,6 +544,7 @@ namespace ARS
             float cornerDir = Math.Sign(signedAngle);
             return -cornerDir * roadWide;
         }
+
         // Hold the outside line on entry, then release it for the high-speed inside line.
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
         {
@@ -586,8 +581,7 @@ namespace ARS
             if (_approachHoldsOutside && timeToApex > holdOutsideUntil)
             {
                 // Corner-commit: sit beside the rival on the corner inside instead of the outside line.
-                bool isCornerCommit = ActiveManeuver.Target != null
-                    && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb);
+                bool isCornerCommit = ActiveManeuver.Target != null && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb);
                 if (isCornerCommit)
                 {
                     Rival target = Brain.Rivals.FirstOrDefault(r => r.RivalRacer == ActiveManeuver.Target);
@@ -603,18 +597,6 @@ namespace ARS
             return 0f;
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
         // Pick a lane to pass a rival ahead. If two rivals trigger on opposite sides, thread the needle.
         float ComputeAvoidAheadLane(float roadWide)
         {
@@ -626,33 +608,9 @@ namespace ARS
             Rival target = Brain.AvoidanceTarget;
             if (target == null || target.RivalRacer == null) return 0f;
 
-            float rivalLane = target.OccupiedLane;
-            float buffer = target.OccupiedLaneWidth + aggroBuffer;
+            if (!TryPickAvoidanceSide(target, trackBound, aggroBuffer, carHalfWidth, currentLane, out float targetLane, out bool targetGoLeft))
+                return 0f;
 
-            float roomLeft = rivalLane - buffer + trackBound;
-            float roomRight = trackBound - (rivalLane + buffer);
-            bool goLeft = roomLeft > roomRight;
-
-            float targetLane = goLeft
-                ? rivalLane - buffer - carHalfWidth
-                : rivalLane + buffer + carHalfWidth;
-
-            // If the chosen side is off-track, flip.
-            if (Math.Abs(targetLane) > trackBound)
-            {
-                targetLane = goLeft
-                    ? rivalLane + buffer + carHalfWidth
-                    : rivalLane - buffer - carHalfWidth;
-                goLeft = !goLeft;
-            }
-
-            if (Math.Abs(targetLane) > trackBound) return 0f;
-
-            // Already on the far side, no avoidance needed.
-            if (goLeft && currentLane <= targetLane) return 0f;
-            if (!goLeft && currentLane >= targetLane) return 0f;
-
-            // Thread the needle if a second ahead rival is approaching from the opposite side.
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || r == target) continue;
@@ -660,40 +618,47 @@ namespace ARS
                 if (!ARS.IsBetween(r.SecondsToReach, 0f, 5f)) continue;
                 if (!ARS.IsBetween(r.DirectionDiff, -20f, 20f)) continue;
 
-                float secondLane = r.OccupiedLane;
-                float secondBuffer = r.OccupiedLaneWidth + aggroBuffer;
+                if (!TryPickAvoidanceSide(r, trackBound, aggroBuffer, carHalfWidth, currentLane, out float secondTarget, out bool secondGoLeft))
+                    continue;
 
-                float secondRoomLeft = secondLane - secondBuffer + trackBound;
-                float secondRoomRight = trackBound - (secondLane + secondBuffer);
-                bool secondGoLeft = secondRoomLeft > secondRoomRight;
-
-                float secondTarget = secondGoLeft
-                    ? secondLane - secondBuffer - carHalfWidth
-                    : secondLane + secondBuffer + carHalfWidth;
-
-                if (Math.Abs(secondTarget) > trackBound)
-                {
-                    secondTarget = secondGoLeft
-                        ? secondLane + secondBuffer + carHalfWidth
-                        : secondLane - secondBuffer - carHalfWidth;
-                    secondGoLeft = !secondGoLeft;
-                }
-
-                if (Math.Abs(secondTarget) > trackBound) continue;
-                if (secondGoLeft && currentLane <= secondTarget) continue;
-                if (!secondGoLeft && currentLane >= secondTarget) continue;
-
-                if (secondGoLeft != goLeft) return (targetLane + secondTarget) * 0.5f;
-                return targetLane;
+                if (secondGoLeft == targetGoLeft) continue;
+                return (targetLane + secondTarget) * 0.5f;
             }
 
             return targetLane;
         }
 
+        bool TryPickAvoidanceSide(Rival rival, float trackBound, float aggroBuffer, float carHalfWidth, float currentLane, out float passLane, out bool passLeft)
+        {
+            passLane = 0f;
+            passLeft = false;
+
+            float rivalLane = rival.OccupiedLane;
+            float buffer = rival.OccupiedLaneWidth + aggroBuffer;
+
+            float roomLeft = rivalLane - buffer + trackBound;
+            float roomRight = trackBound - (rivalLane + buffer);
+            passLeft = roomLeft > roomRight;
+
+            passLane = passLeft ? rivalLane - buffer - carHalfWidth : rivalLane + buffer + carHalfWidth;
+
+            if (Math.Abs(passLane) > trackBound)
+            {
+                passLane = passLeft ? rivalLane + buffer + carHalfWidth : rivalLane - buffer - carHalfWidth;
+                passLeft = !passLeft;
+            }
+
+            if (Math.Abs(passLane) > trackBound) return false;
+
+            if (passLeft && currentLane <= passLane) return false;
+            if (!passLeft && currentLane >= passLane) return false;
+
+            return true;
+        }
+
         float ApplyRivalWalls(float targetLane, float roadWide)
         {
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-
             float trackBound = roadWide - carHalfWidth;
 
             if (!_avoidWallsInitialized)
@@ -703,7 +668,6 @@ namespace ARS
                 _avoidWallsInitialized = true;
             }
 
-
             float targetLeftWall = -trackBound;
             float targetRightWall = trackBound;
             bool leftConstrained = false;
@@ -712,52 +676,26 @@ namespace ARS
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null) continue;
-
-                bool isRelevant = false;
-                bool rivalIsLeft = false;
-
-                if (r.RelativePosition == RelativePos.Left)
-                {
-                    isRelevant = true;
-                    rivalIsLeft = true;
-                }
-                else if (r.RelativePosition == RelativePos.Right)
-                {
-                    isRelevant = true;
-                    rivalIsLeft = false;
-                }
-
-                if (!isRelevant) continue;
-
+                if (r.RelativePosition != RelativePos.Left && r.RelativePosition != RelativePos.Right) continue;
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
                 float rivalBuffer = r.OccupiedLaneWidth + aggroBuffer;
 
-                if (rivalIsLeft)
+                if (r.RelativePosition == RelativePos.Left)
                 {
-                    float wall = r.OccupiedLane + rivalBuffer;
-                    if (wall > targetLeftWall) targetLeftWall = wall;
+                    targetLeftWall = Math.Max(targetLeftWall, r.OccupiedLane + rivalBuffer);
                     leftConstrained = true;
                 }
                 else
                 {
-                    float wall = r.OccupiedLane - rivalBuffer;
-                    if (wall < targetRightWall) targetRightWall = wall;
+                    targetRightWall = Math.Min(targetRightWall, r.OccupiedLane - rivalBuffer);
                     rightConstrained = true;
                 }
             }
 
-
             float openRate = 2f * TickScale;
-            if (leftConstrained)
-                _avoidLeftWall = targetLeftWall;
-            else
-                _avoidLeftWall = Math.Max(_avoidLeftWall - openRate, -trackBound);
-
-            if (rightConstrained)
-                _avoidRightWall = targetRightWall;
-            else
-                _avoidRightWall = Math.Min(_avoidRightWall + openRate, trackBound);
+            _avoidLeftWall = leftConstrained ? targetLeftWall : Math.Max(_avoidLeftWall - openRate, -trackBound);
+            _avoidRightWall = rightConstrained ? targetRightWall : Math.Min(_avoidRightWall + openRate, trackBound);
 
             // Rival walls must remain ordered; collapse overlap to a narrow centered corridor.
             if (_avoidLeftWall > _avoidRightWall)
@@ -767,12 +705,9 @@ namespace ARS
                 _avoidRightWall = mid + 1f;
             }
 
+            float clampLeft = Math.Max(_avoidLeftWall + carHalfWidth, -trackBound);
+            float clampRight = Math.Min(_avoidRightWall - carHalfWidth, trackBound);
 
-            float clampLeft = _avoidLeftWall + carHalfWidth;
-            float clampRight = _avoidRightWall - carHalfWidth;
-            clampLeft = Math.Max(clampLeft, -trackBound);
-            clampRight = Math.Min(clampRight, trackBound);
-            // Guard: if walls crossed after car inset, Clamp(min>max) inverts. Fall back to track bound.
             if (clampLeft > clampRight) return ARS.Clamp(targetLane, -trackBound, trackBound);
             return ARS.Clamp(targetLane, clampLeft, clampRight);
         }
