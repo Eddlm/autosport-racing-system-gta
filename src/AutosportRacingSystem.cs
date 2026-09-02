@@ -204,9 +204,7 @@ namespace ARS
 
         int _raceTimedFinishMs = 0;
         float _timeScale = 1f;
-        float _idealTimeScale = 1f;
         internal float TimeScale { get => _timeScale; set => _timeScale = value; }
-        internal float IdealTimeScale { get => _idealTimeScale; set => _idealTimeScale = value; }
         int _posUpdateTickMs = 0;
         int _longTickMs = 0;
 
@@ -1195,25 +1193,6 @@ namespace ARS
 
 
                 
-                if (_shortTickMs < Game.GameTime)
-                {
-                    _shortTickMs = Game.GameTime + 50;
-
-                    if (_timeScale > _idealTimeScale)
-                    {
-                        _timeScale -= 0.01f;
-                        if (_timeScale < _idealTimeScale) _timeScale = _idealTimeScale;
-                        _timeScale = (float)Math.Round(_timeScale, 12);
-                        Game.TimeScale = _timeScale;
-                    }
-                    if (_timeScale < _idealTimeScale)
-                    {
-                        _timeScale += 0.1f;
-                        if (_timeScale > _idealTimeScale) _timeScale = _idealTimeScale;
-                        _timeScale = (float)Math.Round(_timeScale, 2);
-                        Game.TimeScale = _timeScale;
-                    }
-                }
 
 
                 

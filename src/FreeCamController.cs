@@ -48,18 +48,16 @@ namespace ARS
 
             if (Game.IsControlJustPressed(2, Control.Jump))
             {
-                if (_ars.TimeScale > 0.1f)
+                if (_ars.TimeScale < 1.0f)
                 {
-                    if (_ars.TimeScale > 0.5f) Function.Call(Hash._START_SCREEN_EFFECT, "FocusOut", 500, false);
-                    _ars.TimeScale = 0.001f;
-                    _ars.IdealTimeScale = 0.001f;
-                    Game.TimeScale = 0.001f;
+                    _ars.TimeScale = 1.0f;
+                    Game.TimeScale = 1.0f;
                 }
                 else
                 {
-                    _ars.IdealTimeScale = 1.0f;
-                    if (_ars.TimeScale < 0.1f) _ars.TimeScale = 0.1f;
-                    Game.TimeScale = _ars.TimeScale;
+                    Function.Call(Hash._START_SCREEN_EFFECT, "FocusOut", 500, false);
+                    _ars.TimeScale = 0.5f;
+                    Game.TimeScale = 0.5f;
                 }
             }
 
@@ -139,12 +137,8 @@ namespace ARS
                 Game.Player.Character.HasGravity = true;
                 Game.Player.Character.HasCollision = true;
                 Game.Player.Character.Position = ARS.FreeCamRide.Position - new Vector3(0, 0, ARS.FreeCamRide.HeightAboveGround);
-                if (_ars.IdealTimeScale != 1.0f)
-                {
-                    _ars.IdealTimeScale = 1.0f;
-                    if (_ars.TimeScale < 0.1f) _ars.TimeScale = 0.1f;
-                    Game.TimeScale = _ars.TimeScale;
-                }
+                _ars.TimeScale = 1.0f;
+                Game.TimeScale = 1.0f;
                 return;
             }
 

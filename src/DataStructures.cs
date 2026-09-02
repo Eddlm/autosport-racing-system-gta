@@ -164,8 +164,6 @@ namespace ARS
                 TimeToContact = float.PositiveInfinity;
             }
 
-            SecondsToHit = ComputeSecondsToHit(me);
-
             if (RelativeOffset.Y > CombinedSize.Y)
             {
                 RelativePosition = RelativePos.Ahead;
@@ -183,6 +181,8 @@ namespace ARS
                     else RelativePosition = RelativePos.Left;
                 }
             }
+
+            SecondsToHit = ComputeSecondsToHit(me);
 
             // DirectionDiff: angle between velocity vectors. Guard against zero velocity (NaN).
             float meSpeed = me.Car.Velocity.LengthSquared();
