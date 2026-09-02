@@ -416,8 +416,8 @@ namespace ARS
 
 
             const float steerKP = 1.0f;
-            // TEMP: hardcoded 0.33 — previous 0.5/grip felt too damped, testing.
-            const float steerKD = 0.33f;
+            // TEMP: hardcoded 0.66 — testing yaw damping.
+            const float steerKD = 0.66f;
             Control.SteerDegrees = (steerKP * (headingErrorDeg + laneBiasDeg + recoveryDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
             bool sameSignSlideYaw = Math.Sign((int)VehicleData.SlideAngle) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees);
             if (sameSignSlideYaw)
@@ -646,12 +646,13 @@ namespace ARS
         const float UtilizationFloorFactor = 0.5f;   // fraction of traction curve as utilization floor
         const float SpikeCapFactor = 1.1f;           // × declared grip = spike-rejection cap
         const float OversteerCutMargin = 10f;        // degrees past limit before throttle cut
-        // Game's player steering limiter (Automobile.cpp): speed-based reduction.
-        const float PlayerSpeedSteerFwdThreshold = 5f;   // m/s above which steering is reduced
-        // Steer reduction multiplier: 0.04 at throttle 0.5, 0.08 at throttle 0.99.
-        // Floor: TRlat/3 (degrees) so high-speed steering doesn't collapse.
         const float SteerSlewRate = 45f;                // fixed steering slew rate (degrees/second)
         const float SteerSlewRateCountersteer = 90f;    // doubled when countersteering (steer opposes yaw)
+        // Game's player steering limiter (Automobile.cpp): speed-based reduction.
+        const float PlayerSpeedSteerFwdThreshold = 0.001f;   // effectively always on
+        // Steer reduction multiplier: 0.04 at throttle 0.5, 0.08 at throttle 0.99.
+        // Floor: TRlat/3 (degrees) so high-speed steering doesn't collapse.
+
 
         void ApplySteerLimits()
         {
@@ -675,13 +676,13 @@ namespace ARS
             float absoluteSteerLimit = VehicleData.SteeringLock;
             _steerLimitDegrees = absoluteSteerLimit;
 
-            // Speed-based reduction: steer /= 1 + speedSteerReduction*(fwdSpeed - 5) for fwdSpeed > 5 m/s.
+            // Speed-based reduction: steer /= 1 + speedSteerReduction * fwdSpeed.
             // Higher speedSteerReduction = more reduction = less steering authority at speed.
             if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
             {
-                // TEMP: hardcoded 0.125 — testing higher reduction.
-                float speedSteerReduction = 0.125f;
-                float divisor = 1f + speedSteerReduction * (fwdSpeed - PlayerSpeedSteerFwdThreshold);
+                // TEMP: hardcoded 0.5 — testing reduction.
+                float speedSteerReduction = 0.5f;
+                float divisor = 1f + speedSteerReduction * fwdSpeed;
                 Control.SteerDegrees /= divisor;
                 if (Math.Abs(Control.SteerDegrees) < preLimitSteer) _steerLimitedThisFrame = true;
                 _steerLimitDegrees = absoluteSteerLimit / divisor;
@@ -691,6 +692,12 @@ namespace ARS
 
             // Throttle cut: if the speed-based limiter reduced the steer this frame,
             // zero MaxThrottle so the car coasts through the limit instead of pushing through it.
+            // Floor: keep a minimum steering angle so high-speed steering doesn't collapse.
+            const float MinSteerAngleFloorFactor = 0.3f;
+            float MinSteerAngleFloor = Handling.LateralTractionCurve * MinSteerAngleFloorFactor;
+            if (Control.SteerDegrees != 0f && Math.Abs(Control.SteerDegrees) < MinSteerAngleFloor)
+                Control.SteerDegrees = Math.Sign(Control.SteerDegrees) * MinSteerAngleFloor;
+
             if (_steerLimitedThisFrame && Control.MaxThrottle>=0.1) Control.MaxThrottle -= (float)(2 * TickScale);
         }
 
@@ -890,6 +897,9 @@ namespace ARS
             float maxDeltaPerTick = rate * TickScale;
             float delta = ARS.Clamp(error, -maxDeltaPerTick, maxDeltaPerTick);
             Control.SteerDegrees = Control.LastAppliedSteerDegrees + delta;
+
+            // Average with the previous frame's applied steer to soften twitch.
+            Control.SteerDegrees = (Control.SteerDegrees + Control.LastAppliedSteerDegrees) * 0.5f;
 
             Control.LastAppliedSteerDegrees = Control.SteerDegrees;
 
@@ -1812,7 +1822,8 @@ namespace ARS
             float y = top + 0.01f;
             if (showInputs)
             {
-                float allowedSteer = _steerLimitDegrees;
+                float minSteerFloor = Handling.LateralTractionCurve * 0.3f;
+                float allowedSteer = Math.Max(_steerLimitDegrees, minSteerFloor);
                 bool requestingMore = _requestedSteerDegrees > allowedSteer + 0.5f;
                 string steerText = "STEER " + allowedSteer.ToString("0.0") + "º";
                 ARS.DrawText(new Vector2(0.79f, y), steerText,

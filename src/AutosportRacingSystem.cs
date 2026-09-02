@@ -137,7 +137,7 @@ namespace ARS
 
         // Gs-aware preview steering: how much of the lane error is measured at the 1s
         // Gs-aware projection instead of at the car. 0 = legacy behavior, 1 = full preview.
-        public static float GsAwarePreviewBlend = 0.5f;
+        public static float GsAwarePreviewBlend = 0.33f;
 
         // Exponent of the lane-pursuit gain curve (x^exp). Below 1 boosts small errors
         // (punchier), 1 is linear, above 1 damps them (softer).
@@ -874,7 +874,7 @@ namespace ARS
                 if (args.Index >= 0 && args.Index < 10)
                     GsAwarePreviewBlend = (args.Index + 1) / 10f;
             };
-            previewBlendItem.SelectedIndex = 4; // 50%
+            previewBlendItem.SelectedIndex = 2; // 30% (closest to 0.33)
             settingsMenu.Add(previewBlendItem);
 
             NativeListItem<string> laneGainExpItem = new NativeListItem<string>("Lane Gain Exponent", "Shape of the lane-pursuit gain curve: below 1 boosts small errors (punchier), 1 is linear, above 1 damps them (softer).", new[] { "0.5", "1.0", "1.5", "2.0" });
