@@ -13,6 +13,8 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - Keep consecutive `&&` / `||` conditions on a single line; do not break them across lines.
 - Use `ARS.IsBetween(value, min, max)` for inclusive range checks instead of inline `value >= min && value <= max`.
 - **Method names must be honest.** A method should do only what its name claims; if it also filters, selects, or computes unrelated things, refactor it.
+- **Do not use scripts to edit code files.** Source edits are done with direct file tools (`read`/`edit`/`write`). Scripts may still be used for XML/meta files.
+- **Minimize comments in code.** At most one line per comment, and only when the code is not obvious on reading. Prefer honest method/variable names over explanatory comments.
 
 ## Workflow
 - **⚠️ RELEASE DEADLINE — September WIP.** The user needs to release a WIP in September. **Remind the user to stop adding features and tweaking** — the priority is shipping, not scope. When the user starts proposing new features or tuning, gently flag the deadline and ask whether it's worth the risk before the release. (User's explicit request, recorded so it persists across sessions.)
