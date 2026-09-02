@@ -112,6 +112,7 @@ namespace ARS
         public float LateralGap = 0f;          // signed: + = rival right, - = rival left
         public float ClosingRate = 0f;         // signed: + = closing on rival (along me's forward axis)
         public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals
+        public float SecondsToHit = float.PositiveInfinity;    // physical swept bounding-box hit time
 
         public Vector2 CombinedSize = Vector2.Zero;
         public float OccupiedLane=0f;
@@ -163,6 +164,8 @@ namespace ARS
                 TimeToContact = float.PositiveInfinity;
             }
 
+            SecondsToHit = ComputeSecondsToHit(me);
+
             if (RelativeOffset.Y > CombinedSize.Y)
             {
                 RelativePosition = RelativePos.Ahead;
@@ -192,6 +195,31 @@ namespace ARS
             {
                 DirectionDiff = Vector3.SignedAngle(me.Car.Velocity, RivalRacer.Car.Velocity, me.Car.UpVector);
             }
+        }
+
+        float ComputeSecondsToHit(Racer me)
+        {
+            float mySpeed = me.Car.Velocity.Length();
+            if (mySpeed < 0.1f) return float.PositiveInfinity;
+
+            Vector3 velDir = me.Car.Velocity.Normalized;
+            Vector3 toRival = RivalRacer.Car.Position - me.Car.Position;
+            if (RelativePosition != RelativePos.Ahead) return float.PositiveInfinity;
+
+            float longGap = Vector3.Dot(toRival, velDir);
+            float lateralOffset = (toRival - velDir * longGap).Length();
+            if (lateralOffset > 2f) return float.PositiveInfinity;
+
+            float rivalLongSpeed = Vector3.Dot(RivalRacer.Car.Velocity, velDir);
+            float closingLong = mySpeed - rivalLongSpeed;
+            if (closingLong <= 0.001f) return float.PositiveInfinity;
+
+            float myHalfLen = me.Car.Model.GetDimensions().Y * 0.5f;
+            float rivalHalfLen = RivalRacer.Car.Model.GetDimensions().Y * 0.5f;
+            float frontGap = longGap - (myHalfLen + rivalHalfLen);
+            if (frontGap <= 0f) return 0f;
+
+            return frontGap / closingLong;
         }
     }
 

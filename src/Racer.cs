@@ -543,7 +543,7 @@ namespace ARS
             {
                 if (r.RivalRacer == null || r == target) continue;
                 if (r.RelativePosition != RelativePos.Ahead) continue;
-                if (!ARS.IsBetween(r.SecondsToReach, 0f, 5f)) continue;
+                if (!ARS.IsBetween(r.SecondsToHit, 0f, 5f)) continue;
                 if (!ARS.IsBetween(r.DirectionDiff, -20f, 20f)) continue;
 
                 if (!TryPickAvoidanceSide(r, trackBound, aggroBuffer, carHalfWidth, currentLane, out float secondTarget, out bool secondGoLeft))
@@ -1568,6 +1568,7 @@ namespace ARS
             {
                 DrawCornerDebug();
                 DrawProjectionDebug();
+                DrawCollisionThreatDebug();
             }
             DrawDebugPanel(requestedInputs, requestedTrack);
 
@@ -1723,6 +1724,15 @@ namespace ARS
             Vector3 leftEdge = projectedTrackPoint.Position - trackRight * projectedTrackPoint.TrackHalfWidth;
             Vector3 rightEdge = projectedTrackPoint.Position + trackRight * projectedTrackPoint.TrackHalfWidth;
             ARS.DrawLine(leftEdge, rightEdge, willGoOffTrack ? Color.Red : Color.Green);
+        }
+
+        void DrawCollisionThreatDebug()
+        {
+            Rival threat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RivalRacer.Car.Exists() && !float.IsInfinity(r.SecondsToHit) && !float.IsNaN(r.SecondsToHit) && r.SecondsToHit < 5f);
+            if (threat == null) return;
+            Vector3 from = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.6f);
+            Vector3 to = threat.RivalRacer.Car.Position + new Vector3(0, 0, threat.RivalRacer.Car.Model.GetDimensions().Z * 0.6f);
+            ARS.DrawLine(from, to, Color.Magenta);
         }
 
         void DrawCornerDebug()
@@ -1973,11 +1983,25 @@ namespace ARS
             foreach (Rival r in Brain.Rivals)
             {
                 r.Update(this);
-                if (Brain.AvoidanceTarget == null && r.RelativePosition == RelativePos.Ahead && ARS.IsBetween(r.SecondsToReach, 0f, 5f) && ARS.IsBetween(r.DirectionDiff, -20f, 20f))
+                if (Brain.AvoidanceTarget == null && r.RelativePosition == RelativePos.Ahead && ARS.IsBetween(r.SecondsToHit, 0f, 5f) && ARS.IsBetween(r.DirectionDiff, -20f, 20f))
                 {
                     Brain.AvoidanceTarget = r;
                 }
             }
+        }
+
+        void ApplyRivalThrottleCap()
+        {
+            float nearestHit = float.PositiveInfinity;
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || r.RelativePosition != RelativePos.Ahead) continue;
+                if (!float.IsInfinity(r.SecondsToHit) && !float.IsNaN(r.SecondsToHit) && r.SecondsToHit < nearestHit)
+                    nearestHit = r.SecondsToHit;
+            }
+            if (nearestHit > 5f) return;
+            float cap = ARS.Remap(nearestHit, 0f, 5f, 0.05f, 1f, true);
+            Control.MaxThrottle = Math.Min(Control.MaxThrottle, cap);
         }
 
 
@@ -2526,6 +2550,7 @@ namespace ARS
             if (!ControlledByPlayer)
             {
                 UpdateRivalInfo();
+                ApplyRivalThrottleCap();
 
                 // Re-rise the speed cap before concern sources pull it down.
                 _speedCap = Math.Min(999f, _speedCap + SpeedCapRiseRate * TickScale);
