@@ -1,11 +1,5 @@
 ## Pending performance/refactor items (not yet done)
 
-## 7. Replace `AccelerationVector` List with fixed ring buffer
-**Size:** medium, ~20 lines.
-**Where:** `UpdateTickData` + `ProjectAhead`.
-**Risk:** medium — touches every-frame path; must preserve exactly the same values.
-**Win:** removes O(N) shift and LINQ every frame per car.
-
 ## 8. Orchestrator computes nearest-rival once (kill O(N²) pressure)
 **Size:** medium-large, ~30–40 lines.
 **Where:** `AutosportRacingSystem.OnTick` or new helper, plus `Racer.UpdatePressure` reads shared array.
@@ -19,4 +13,5 @@
 - 4. Gate `UpdatePressure` at 0.5s
 - 5. Gate `UpdateRivalInfo` at 0.5s
 - 6. Split apex update: leapfrog every tick, refill gated 0.5s
+- 7. Replace `AccelerationVector` List with fixed ring buffer + running sum
 - 9. Reuse `List<TrackPoint>` scratch buffer in `UpdateTrackPosition`
