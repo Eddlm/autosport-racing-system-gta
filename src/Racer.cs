@@ -1382,9 +1382,11 @@ namespace ARS
         {
             Vector3 cSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
 
-            VehicleData.AccelerationVector.Add((cSpeed - _lastSpeed) / Game.LastFrameTime);
-
-            if (VehicleData.AccelerationVector.Count > 10) VehicleData.AccelerationVector.RemoveAt(0);
+            Vector3 accel = (cSpeed - _lastSpeed) / Game.LastFrameTime;
+            VehicleData.AccelSum += accel - VehicleData.AccelerationVector[VehicleData.AccelHead];
+            VehicleData.AccelerationVector[VehicleData.AccelHead] = accel;
+            VehicleData.AccelHead = (VehicleData.AccelHead + 1) % VehicleState.AccelWindow;
+            if (VehicleData.AccelCount < VehicleState.AccelWindow) VehicleData.AccelCount++;
 
             _lastSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
             VehicleData.SpeedVectorGlobal = cSpeed;
@@ -1411,10 +1413,7 @@ namespace ARS
         // Kinematic projection: pos + v*t + 0.5*a*t^2. Default t=1 (1s).
         public Vector3 ProjectAhead(float seconds = 1f)
         {
-            Vector3 avgAccel = VehicleData.AccelerationVector.Aggregate(
-                new Vector3(0, 0, 0), (s, v) => s + v)
-                / (float)VehicleData.AccelerationVector.Count;
-            return Car.Position + Car.Velocity * seconds + 0.5f * avgAccel * seconds * seconds;
+            return Car.Position + Car.Velocity * seconds + 0.5f * VehicleData.AverageAcceleration * seconds * seconds;
         }
 
 
@@ -1572,7 +1571,7 @@ namespace ARS
                 World.DrawMarker(MarkerType.DebugSphere, Car.Position + new Vector3(0, 0, (Car.Model.GetDimensions().Z * 0.6f)), Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.1f, 0.1f, 0.1f), Color.Green, false, false, 0, false, "", "", false);
 
 
-                Vector3 avgGs = VehicleData.AccelerationVector.Aggregate(new Vector3(0, 0, 0), (s, v) => s + v) / (float)VehicleData.AccelerationVector.Count;
+                Vector3 avgGs = VehicleData.AverageAcceleration;
                 avgGs.Z = 0f;
 
                 float colorPercent = ARS.Remap(avgGs.Length() / 9.8f, 0, VehicleData.CurrentMechanicalGrip, 0, 100, true);

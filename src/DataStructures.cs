@@ -11,25 +11,21 @@ namespace ARS
     }
     public class VehicleState
     {
-        public List<Vector3> AccelerationVector = new List<Vector3> { Vector3.Zero};
+        public const int AccelWindow = 10;
+        public Vector3[] AccelerationVector = new Vector3[AccelWindow];
+        public int AccelHead = 0;
+        public int AccelCount = 0;
+        public Vector3 AccelSum = Vector3.Zero;
         public Vector3 SpeedVectorGlobal = Vector3.Zero;
         public Vector3 SpeedVectorLocal = Vector3.Zero;
         public int WheelBase = 2;
-        public float YawRotationPerSecondDegrees = 1f;        
+        public float YawRotationPerSecondDegrees = 1f;
         public float SlideAngle = 22f;
         public float BaseMechanicalGrip = 1f;
         public float CurrentMechanicalGrip = 1f;
         public float AvgGroundStability = 1;
 
-        public Vector3 AverageAcceleration
-        {
-            get
-            {
-                Vector3 total = Vector3.Zero;
-                foreach (Vector3 acceleration in AccelerationVector) total += acceleration;
-                return AccelerationVector.Count > 0 ? total / AccelerationVector.Count : Vector3.Zero;
-            }
-        }
+        public Vector3 AverageAcceleration => AccelCount > 0 ? AccelSum / AccelCount : Vector3.Zero;
 
         public float GetLongitudinalGs(Vector3 forward)
         {
