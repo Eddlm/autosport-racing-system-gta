@@ -2865,32 +2865,7 @@ namespace ARS
 
         public static float Circumradius2D(Vector2 a, Vector2 b, Vector2 midPoint)
         {
-            Vector2 point1 = a;
-            Vector2 point2 = b;
-            Vector2 point3 = midPoint;
-
-            Vector2 midpoint1 = (point1 + point2) / 2;
-            float dx1 = point2.X - point1.X;
-            float slope1 = dx1 != 0f ? (point2.Y - point1.Y) / dx1 : float.PositiveInfinity;
-
-            float perpendicularSlope1 = slope1 != 0f ? -1 / slope1 : float.PositiveInfinity;
-
-            Vector2 midpoint2 = (point2 + point3) / 2;
-            float dx2 = point3.X - point2.X;
-            float slope2 = dx2 != 0f ? (point3.Y - point2.Y) / dx2 : float.PositiveInfinity;
-
-            float perpendicularSlope2 = slope2 != 0f ? -1 / slope2 : float.PositiveInfinity;
-
-            float denom = perpendicularSlope2 - perpendicularSlope1;
-            if (denom == 0f || float.IsNaN(denom) || float.IsInfinity(denom)) return 999f;
-
-            float centerX = (midpoint1.Y - midpoint2.Y + perpendicularSlope2 * midpoint2.X - perpendicularSlope1 * midpoint1.X) / denom;
-            float centerY = midpoint1.Y + perpendicularSlope1 * (centerX - midpoint1.X);
-
-            float radius = Vector2.Distance(new Vector2(centerX, centerY), point1);
-            if (float.IsNaN(radius) || float.IsInfinity(radius)) return 999f;
-
-            return radius;
+            return TrackLoader.Circumradius2D(a, b, midPoint);
         }
 
         public static float GetPreciseRadius(TrackPoint trackPoint, int span)
