@@ -1,11 +1,5 @@
 ## Pending performance/refactor items (not yet done)
 
-## 6. Gate `UpdateNextApexes` / `UpdateTrackPosition` expensive tail at 0.5s
-**Size:** medium, ~20–30 lines.
-**Where:** split `UpdateTrackPosition` into cheap (local node search) and expensive (lookahead/radius/apex rebuild) parts.
-**Risk:** medium — more code movement, but lookaheads are time-based and apex only changes on pass.
-**Win:** removes all-corners scan + sort per core tick.
-
 ## 7. Replace `AccelerationVector` List with fixed ring buffer
 **Size:** medium, ~20 lines.
 **Where:** `UpdateTickData` + `ProjectAhead`.
