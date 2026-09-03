@@ -86,6 +86,7 @@ namespace ARS
 
 
         int _lastStuckGameTime = 0;
+        List<TrackPoint> _trackPositionScratch = new List<TrackPoint>(13);
         public bool IsStuckByThrottle = false;
         const int StuckCheckTimeMs = 2000;
         bool _isRecoveringFromStuck = false;
@@ -1995,24 +1996,24 @@ namespace ARS
 
             int refTrackpoint = (int)ARS.Clamp(CurrentTrackPoint.Node, 0, ARS.TrackPoints.Count - 1);
 
-            List<TrackPoint> points = new List<TrackPoint>();
+            _trackPositionScratch.Clear();
             int lastNode = ARS.TrackPoints.Count - 1;
             int firstCandidate = Math.Max(refTrackpoint - 6, 0);
             int lastCandidate = Math.Min(refTrackpoint + 6, lastNode);
             for (int i = firstCandidate; i <= lastCandidate; i++)
             {
-                points.Add(ARS.TrackPoints[i]);
+                _trackPositionScratch.Add(ARS.TrackPoints[i]);
             }
 
             bool hasCrossedStartLine = !ARS.IsPointToPoint
                 && CanRegisterNewLap
                 && refTrackpoint >= lastNode - 6
                 && Vector3.Dot(Car.Position - ARS.TrackPoints[0].Position, ARS.TrackPoints[0].Direction) > 0f;
-            if (hasCrossedStartLine) points.Add(ARS.TrackPoints[0]);
+            if (hasCrossedStartLine) _trackPositionScratch.Add(ARS.TrackPoints[0]);
 
-            TrackPoint closestPoint = points[0];
+            TrackPoint closestPoint = _trackPositionScratch[0];
             float closestDistance = closestPoint.Position.DistanceTo(Car.Position);
-            foreach (TrackPoint point in points)
+            foreach (TrackPoint point in _trackPositionScratch)
             {
                 float distance = point.Position.DistanceTo(Car.Position);
                 if (distance < closestDistance)
