@@ -81,6 +81,7 @@ namespace ARS
         int _oneSecondTick = 0;
         int _phaseOffsetMs = 0;
         int _pressureTick = 0;
+        int _apexUpdateTick = 0;
         int _lastCoreTick = 100;
         int TimeSince_lastCoreTick => (int)ARS.Clamp(Game.GameTime - _lastCoreTick, 1, 9999);
 
@@ -2101,14 +2102,15 @@ namespace ARS
                 else if (_hasLeftLapArmNode) CanRegisterNewLap = true;
             }
 
-
-
-
-
+            _lastApexProgressNode = CurrentTrackPoint.Node;
 
             // Route radius from three sample points.
             Brain.CurrentPerception.CurveRadiusToFollowPoint = RouteRadiusSampled();
-            UpdateNextApexes();
+            if (_apexUpdateTick + _phaseOffsetMs < Game.GameTime)
+            {
+                _apexUpdateTick = Game.GameTime + 500;
+                UpdateNextApexes();
+            }
             // High-speed lane radius: short 0.5s to 1.0s window.
             Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius((int)(Car.Velocity.Length() * 0.5f), (int)(Car.Velocity.Length() * 1.0f));
             Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius((int)(Car.Velocity.Length() * 2.5f), (int)(Car.Velocity.Length() * 4.5f));
@@ -2259,7 +2261,6 @@ namespace ARS
                 cp.Speed = NextApexSpeed;
                 Brain.Corner = new Corner(cp.Speed, cp);
             }
-            _lastApexProgressNode = CurrentTrackPoint.Node;
         }
 
         bool HasPassedApex(int apexNode)
