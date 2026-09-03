@@ -334,6 +334,12 @@ namespace ARS
             }
 
             int apexNode = scanNodes[apexPosition];
+            if (ARS.Corners.Count > 0)
+            {
+                int prevNode = ARS.Corners[ARS.Corners.Count - 1].Node;
+                int dist = ARS.IsPointToPoint ? apexNode - prevNode : Wrap(apexNode - prevNode, count);
+                if (dist <= 200) return;
+            }
             ARS.Corners.Add(new CornerPoint
             {
                 Node = apexNode,

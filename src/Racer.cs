@@ -293,7 +293,7 @@ namespace ARS
         public void Initialize()
         {
             Handling.Downforce = VehicleMemory.GetDownforce(Car);
-            if (Handling.Downforce > 100) Handling.Downforce *= 0.1f;
+            if (Handling.Downforce > 100) Handling.Downforce *= 0.01f;
 
             Handling.LateralTractionCurve = ARS.RadToDeg(VehicleMemory.GetLateralTraction(Car));
             if (Handling.LateralTractionCurve < 1 || Handling.LateralTractionCurve > 100) Handling.LateralTractionCurve = 22;
@@ -326,7 +326,7 @@ namespace ARS
             BaseBehavior = RacerBaseBehavior.GridWait;
             FinishedPointToPoint = false;
 
-            Handling.Grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
+            Handling.Grip = GetCorrectedGrip() * (Handling.Gravity / 9.8f);
 
             VehicleData.PerformanceIndex = (int)((Handling.EstimatedTopSpeed * 5) + (Handling.Grip * 100) + (Handling.Acceleration * 500));
             float modelGrip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, Car.Model.Hash);
@@ -398,11 +398,11 @@ namespace ARS
                 if (lookaheadDist < 1f) lookaheadDist = speedMps * 1.5f;
                 float laneError = targetLane - currentLane;
                 if (ARS.DebugToggles[Options.GsAwarePreview]
-                    && LookAheads.TryGetValue(LookAhead.OneSec, out TrackPoint oneSecPoint)
-                    && oneSecPoint != null)
+                    && LookAheads.TryGetValue(LookAhead.HalfSec, out TrackPoint halfSecPoint)
+                    && halfSecPoint != null)
                 {
-                    Vector3 projection = ProjectAhead(1f);
-                    float projectedLane = ARS.SignedLaneOffset(projection, oneSecPoint.Position, oneSecPoint.Direction);
+                    Vector3 projection = ProjectAhead(0.5f);
+                    float projectedLane = ARS.SignedLaneOffset(projection, halfSecPoint.Position, halfSecPoint.Direction);
                     float blend = ARS.Clamp(ARS.GsAwarePreviewBlend, 0f, 1f);
                     laneError = laneError * (1f - blend) + (targetLane - projectedLane) * blend;
                 }
@@ -1455,7 +1455,8 @@ namespace ARS
         {
             if (ControlledByPlayer) return;
 
-            _tempSpeedUp = Math.Max(0f, _tempSpeedUp - 1f * Game.LastFrameTime);
+            if (_tempSpeedUp > 0f) _tempSpeedUp = Math.Max(0f, _tempSpeedUp - 1f * Game.LastFrameTime);
+            else if (_tempSpeedUp < 0f) _tempSpeedUp = Math.Min(0f, _tempSpeedUp + 1f * Game.LastFrameTime);
 
             float latGs = Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector));
 
@@ -1487,7 +1488,7 @@ namespace ARS
                     return;
                 }
                 float offset = GetCornerSpeedOffset(_gripCheckApexNode);
-                if (_gripCheckPeakGs > 5f) offset = 0f;
+                if (_gripCheckPeakGs > 5f) offset -= 5f;
                 else if (_gripCheckPeakGs / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f) < 0.95f) offset += 2f;
                 _cornerSpeedOffsets[_gripCheckApexNode] = offset;
 
@@ -1605,6 +1606,7 @@ namespace ARS
                 DrawInputTrails();
                 DrawWheelDirectionLine();
                 DrawSteerTargetLine();
+                DrawFollowPointLine();
             }
 
             if (requestedTrack)
@@ -1830,7 +1832,7 @@ namespace ARS
 
         void DrawDebugPanel(bool showInputs, bool showTrack)
         {
-            int lineCount = (showInputs ? 1 : 0) + (showTrack ? 3 : 0);
+            int lineCount = (showInputs ? 4 : 0) + (showTrack ? 3 : 0);
             if (lineCount == 0) return;
 
             float lineHeight = 0.026f;
@@ -1852,6 +1854,21 @@ namespace ARS
                 ARS.DrawText(new Vector2(0.79f, y), steerText,
                     requestingMore ? Color.Red : Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
+
+                float dfGs = ARS.GetDownforceGsAtSpeed(this, Car.Velocity.Length());
+                ARS.DrawText(new Vector2(0.79f, y), "DF " + Handling.Downforce.ToString("0.00") + " | GS " + dfGs.ToString("0.00"),
+                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+
+                float nativeGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
+                ARS.DrawText(new Vector2(0.79f, y), "GRP " + nativeGrip.ToString("0.00"),
+                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+
+                float speedDiff = _debugFollowTrackSpd - Car.Velocity.Length();
+                ARS.DrawText(new Vector2(0.79f, y), "DIFF " + ARS.MpsToMph(speedDiff).ToString("0") + " mph",
+                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
             }
 
             if (showTrack)
@@ -1859,6 +1876,21 @@ namespace ARS
                 DrawApexPanelLine(ref y, "A1", NextApexNode, NextApexSpeed, NextApexRadius, Color.Yellow, lineHeight);
                 DrawApexPanelLine(ref y, "A2", NextApexNode2, NextApexSpeed2, NextApexRadius2, Color.Orange, lineHeight);
             }
+        }
+
+        void DrawFollowPointLine()
+        {
+            int count = ARS.TrackPoints.Count;
+            if (count < 10) return;
+
+            int o2 = (int)Car.Velocity.Length();
+            int n2 = ARS.IsPointToPoint
+                ? (int)ARS.Clamp(CurrentTrackPoint.Node + o2, 0, count - 1)
+                : ((CurrentTrackPoint.Node + o2) % count + count) % count;
+
+            Vector3 from = Car.Position + new Vector3(0, 0, 0.6f);
+            Vector3 to = ARS.TrackPoints[n2].Position + new Vector3(0, 0, 0.6f);
+            ARS.DrawLine(from, to, Color.Yellow);
         }
 
         void DrawApexPanelLine(ref float y, string label, int apexNode, float apexSpeed, float apexRadius, Color color, float lineHeight)
@@ -2193,14 +2225,12 @@ namespace ARS
         // Circumradius through three route-window sample points.
         float RouteRadiusSampled()
         {
-            float speed = Car.Velocity.Length();
             int count = ARS.TrackPoints.Count;
             if (count < 10) return 999f;
 
-            int o1 = (int)(speed * 0.5f);
-            int o3 = (int)(speed * 1.5f);
-            if (o3 < o1 + 2) o3 = o1 + 2;
-            int o2 = o1 + (o3 - o1) / 2;
+            int o1 = 0;
+            int o2 = (int)Car.Velocity.Length();
+            int o3 = (int)(Car.Velocity.Length() * 2f);
 
             int n1, n2, n3;
             if (ARS.IsPointToPoint)
@@ -2340,16 +2370,16 @@ namespace ARS
         {
             NextApexNode = nodes[0];
             NextApexRadius = radii[0];
-            NextApexSpeed = NextApexNode >= 0 ? RouteIdealSpeedForRadius(NextApexRadius) + GetCornerSpeedOffset(NextApexNode) : 999f;
+            NextApexSpeed = NextApexNode >= 0 ? ApexSpeedWithDownforce(NextApexRadius) + GetCornerSpeedOffset(NextApexNode) : 999f;
             NextApexNode2 = nodes[1];
             NextApexRadius2 = radii[1];
-            NextApexSpeed2 = NextApexNode2 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius2) + GetCornerSpeedOffset(NextApexNode2) : 999f;
+            NextApexSpeed2 = NextApexNode2 >= 0 ? ApexSpeedWithDownforce(NextApexRadius2) + GetCornerSpeedOffset(NextApexNode2) : 999f;
             NextApexNode3 = nodes[2];
             NextApexRadius3 = radii[2];
-            NextApexSpeed3 = NextApexNode3 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius3) + GetCornerSpeedOffset(NextApexNode3) : 999f;
+            NextApexSpeed3 = NextApexNode3 >= 0 ? ApexSpeedWithDownforce(NextApexRadius3) + GetCornerSpeedOffset(NextApexNode3) : 999f;
             NextApexNode4 = nodes[3];
             NextApexRadius4 = radii[3];
-            NextApexSpeed4 = NextApexNode4 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius4) + GetCornerSpeedOffset(NextApexNode4) : 999f;
+            NextApexSpeed4 = NextApexNode4 >= 0 ? ApexSpeedWithDownforce(NextApexRadius4) + GetCornerSpeedOffset(NextApexNode4) : 999f;
 
             if (NextApexNode >= 0)
             {
@@ -2541,6 +2571,16 @@ namespace ARS
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
             r = ARS.Clamp(r, 5f, 999f);
             return (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * r);
+        }
+
+        float ApexSpeedWithDownforce(float r)
+        {
+            if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
+            r = ARS.Clamp(r, 5f, 999f);
+            float baseSpeed = (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * r);
+            float dfGs = ARS.GetDownforceGsAtSpeed(this, baseSpeed);
+            float newGrip = VehicleData.CurrentMechanicalGrip + dfGs;
+            return (float)Math.Sqrt(newGrip * Handling.Gravity * r);
         }
 
         float ComputeRouteRadius(int startOffset, int endOffset)
@@ -2851,11 +2891,18 @@ namespace ARS
             _isLerpingToTrack = true;
         }
 
+        float GetCorrectedGrip()
+        {
+            float grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
+            if (grip > 10f) grip /= 10f;
+            return grip;
+        }
+
         void UpdatePerceivedGrip()
         {
 
 
-            float handlingGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
+            float handlingGrip = GetCorrectedGrip() * (Handling.Gravity / 9.8f);
             handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 5f);
 
             GroundGripMultiplier = ARS.WheelGripMultipliers(Car).Average();

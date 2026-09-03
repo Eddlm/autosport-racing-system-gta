@@ -134,7 +134,7 @@ namespace ARS
 
         // Gs-aware preview steering: how much of the lane error is measured at the 1s
         // Gs-aware projection instead of at the car. 0 = legacy behavior, 1 = full preview.
-        public static float GsAwarePreviewBlend = 0.33f;
+        public static float GsAwarePreviewBlend = 0.5f;
 
         // Exponent of the lane-pursuit gain curve (x^exp). Below 1 boosts small errors
         // (punchier), 1 is linear, above 1 damps them (softer).
@@ -872,7 +872,7 @@ namespace ARS
                 if (args.Index >= 0 && args.Index < 10)
                     GsAwarePreviewBlend = (args.Index + 1) / 10f;
             };
-            previewBlendItem.SelectedIndex = 2; // 30% (closest to 0.33)
+            previewBlendItem.SelectedIndex = 4; // 50%
             settingsMenu.Add(previewBlendItem);
 
             NativeListItem<string> laneGainExpItem = new NativeListItem<string>("Lane Gain Exponent", "Shape of the lane-pursuit gain curve: below 1 boosts small errors (punchier), 1 is linear, above 1 damps them (softer).", new[] { "0.5", "1.0", "1.5", "2.0" });
@@ -3710,6 +3710,19 @@ namespace ARS
             if (handlingAddress < 1) return 0f;
             float result = *(float*)(handlingAddress + downfOffset);
             return result;
+        }
+
+        public static float GetDownforceGsAtSpeed(Racer r, float ms)
+        {
+            float Gs = 0f;
+            int nwheels = GetNumWheels(r.Car);
+            float basedownf = 0.035f;
+
+            if (r.Car.HasBone("spoiler")) Gs = 0.035f * nwheels;
+            else if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) Gs = 0.035f * nwheels;
+            else Gs += Remap(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, basedownf, true) * r.Handling.Downforce * nwheels;
+            if (float.IsNaN(Gs) || Gs > 5f) return 0f;
+            else return Gs;
         }
 
 
