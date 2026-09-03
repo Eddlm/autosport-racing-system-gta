@@ -2106,10 +2106,11 @@ namespace ARS
 
             // Route radius from three sample points.
             Brain.CurrentPerception.CurveRadiusToFollowPoint = RouteRadiusSampled();
+            UpdateApexLeapfrog();
             if (_apexUpdateTick + _phaseOffsetMs < Game.GameTime)
             {
                 _apexUpdateTick = Game.GameTime + 500;
-                UpdateNextApexes();
+                RefillApexQueue();
             }
             // High-speed lane radius: short 0.5s to 1.0s window.
             Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius((int)(Car.Velocity.Length() * 0.5f), (int)(Car.Velocity.Length() * 1.0f));
@@ -2156,12 +2157,9 @@ namespace ARS
         const bool RouteSpeedEnabled = true;
         const bool ConfidenceEnabled = true;
 
-        // Refresh useful precomputed apexes ahead and instance Brain.Corner from the nearest.
-        void UpdateNextApexes()
+        // Cheap: drop passed apexes and invalidate stale entries every tick.
+        void UpdateApexLeapfrog()
         {
-            Brain.Corner = null;
-
-            int count = ARS.TrackPoints.Count;
             int[] heldNodes = { NextApexNode, NextApexNode2, NextApexNode3, NextApexNode4 };
             float[] heldRadii = { NextApexRadius, NextApexRadius2, NextApexRadius3, NextApexRadius4 };
 
@@ -2191,10 +2189,20 @@ namespace ARS
                 }
             }
 
+            CommitApexQueue(heldNodes, heldRadii);
+        }
+
+        // Expensive: scan all corners and refill empty queue slots. Gated to 0.5s.
+        void RefillApexQueue()
+        {
+            int[] heldNodes = { NextApexNode, NextApexNode2, NextApexNode3, NextApexNode4 };
+            float[] heldRadii = { NextApexRadius, NextApexRadius2, NextApexRadius3, NextApexRadius4 };
+
+            int count = ARS.TrackPoints.Count;
             if (count < 10 || ARS.Corners.Count == 0)
             {
-                heldNodes = new[] { -1, -1, -1, -1 };
-                heldRadii = new[] { 999f, 999f, 999f, 999f };
+                CommitApexQueue(new[] { -1, -1, -1, -1 }, new[] { 999f, 999f, 999f, 999f });
+                return;
             }
 
             List<int> selectedNodes = new List<int>();
@@ -2238,17 +2246,36 @@ namespace ARS
                 selectedRadii.Add(ARS.Corners[candidate].SupposedRadius);
             }
 
-            NextApexNode = selectedNodes.Count > 0 ? selectedNodes[0] : -1;
-            NextApexRadius = selectedRadii.Count > 0 ? selectedRadii[0] : 999f;
+            CommitApexQueue(
+                new[]
+                {
+                    selectedNodes.Count > 0 ? selectedNodes[0] : -1,
+                    selectedNodes.Count > 1 ? selectedNodes[1] : -1,
+                    selectedNodes.Count > 2 ? selectedNodes[2] : -1,
+                    selectedNodes.Count > 3 ? selectedNodes[3] : -1
+                },
+                new[]
+                {
+                    selectedRadii.Count > 0 ? selectedRadii[0] : 999f,
+                    selectedRadii.Count > 1 ? selectedRadii[1] : 999f,
+                    selectedRadii.Count > 2 ? selectedRadii[2] : 999f,
+                    selectedRadii.Count > 3 ? selectedRadii[3] : 999f
+                });
+        }
+
+        void CommitApexQueue(int[] nodes, float[] radii)
+        {
+            NextApexNode = nodes[0];
+            NextApexRadius = radii[0];
             NextApexSpeed = NextApexNode >= 0 ? RouteIdealSpeedForRadius(NextApexRadius) : 999f;
-            NextApexNode2 = selectedNodes.Count > 1 ? selectedNodes[1] : -1;
-            NextApexRadius2 = selectedRadii.Count > 1 ? selectedRadii[1] : 999f;
+            NextApexNode2 = nodes[1];
+            NextApexRadius2 = radii[1];
             NextApexSpeed2 = NextApexNode2 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius2) : 999f;
-            NextApexNode3 = selectedNodes.Count > 2 ? selectedNodes[2] : -1;
-            NextApexRadius3 = selectedRadii.Count > 2 ? selectedRadii[2] : 999f;
+            NextApexNode3 = nodes[2];
+            NextApexRadius3 = radii[2];
             NextApexSpeed3 = NextApexNode3 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius3) : 999f;
-            NextApexNode4 = selectedNodes.Count > 3 ? selectedNodes[3] : -1;
-            NextApexRadius4 = selectedRadii.Count > 3 ? selectedRadii[3] : 999f;
+            NextApexNode4 = nodes[3];
+            NextApexRadius4 = radii[3];
             NextApexSpeed4 = NextApexNode4 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius4) : 999f;
 
             if (NextApexNode >= 0)
@@ -2260,6 +2287,10 @@ namespace ARS
                 cp.SupposedRadius = NextApexRadius;
                 cp.Speed = NextApexSpeed;
                 Brain.Corner = new Corner(cp.Speed, cp);
+            }
+            else
+            {
+                Brain.Corner = null;
             }
         }
 

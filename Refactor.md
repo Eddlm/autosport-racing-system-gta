@@ -24,4 +24,5 @@
 - 3. Add `_phaseOffsetMs` and de-clump 0.5s/1s gates
 - 4. Gate `UpdatePressure` at 0.5s
 - 5. Gate `UpdateRivalInfo` at 0.5s
+- 6. Split apex update: leapfrog every tick, refill gated 0.5s
 - 9. Reuse `List<TrackPoint>` scratch buffer in `UpdateTrackPosition`
