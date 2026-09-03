@@ -147,7 +147,6 @@ namespace ARS
 
         
         public static Prop FreeCamRide = null;
-        internal readonly FreeCamController _freeCam;
 
         public static PedHash[] StreetRacerModels = { PedHash.Car3Guy2, PedHash.Vinewood02AFY, PedHash.Stwhi02AMY, PedHash.StrPunk02GMY, PedHash.Stbla02AMY };
         public static List<Model> RacerModels = new List<Model> { "a_m_y_motox_01", "a_m_y_motox_02" };
@@ -157,11 +156,14 @@ namespace ARS
 
         // Phased race instancing: track which setup phases have been completed.
         // Reset by CleanRacers (_gridInstanced) and CleanEverything (both).
-        internal bool _trackInstanced;
-        internal bool _gridInstanced;
+        bool _trackInstanced;
+        bool _gridInstanced;
+        int _intendedOpponents = 12;
+        List<int> _flareFx = new List<int>();
+        FreeCamController _freeCam;
 
 
-        
+
         static public ulong SteerOffset = 0x0;
         static public ulong ThrottleOffset = 0x0;
         static public ulong BrakeOffset = 0x0;
@@ -235,8 +237,8 @@ namespace ARS
             _loadScriptTask = Task.Run(() =>
             {
                 FillKnownDisciplines(false);
-                TrackLoader.DiscoverTracks(this, false);
-                TrackLoader.FilterKnownTracks(this, TrackFilter);
+                FillKnownTracks(false);
+                FilterKnownTracks(TrackFilter);
             });
         }
 
@@ -298,7 +300,54 @@ namespace ARS
 
             UpdateChecker.CheckLatestRelease();
         }
-        internal Dictionary<string, string> _trackTags = new Dictionary<string, string>();
+        Dictionary<string, string> _trackTags = new Dictionary<string, string>();
+
+        public void FillKnownTracks(bool allowScriptYield = true)
+        {
+            _trackTags.Clear();
+            ImmersiveJoins.Clear();
+            Log(LogImportance.Info, "Learning available tracks...");
+            List<string> folders = Directory.GetDirectories(ScriptsFolder + @"\Tracks").ToList();
+            folders.Add(ScriptsFolder + @"\Tracks");
+            foreach (string dir in folders)
+            {
+                int count = 0;
+                foreach (string st in Directory.EnumerateFiles(dir))
+                {
+                    string n = System.IO.Path.GetFileName(st);
+                    Log(LogImportance.Info, st + " - [" + string.Join(", ", TrackRepository.ReadTrackTags(st)) + "]");
+                    _trackTags.Add(st, string.Join(", ", TrackRepository.ReadTrackTags(st)));
+                    if (!ImmersiveJoins.ContainsKey(TrackRepository.ReadTrackStartPosition(st))) ImmersiveJoins.Add(TrackRepository.ReadTrackStartPosition(st), st);
+
+                    count++;
+                    if (allowScriptYield && count > 5)
+                    {
+                        DisplayHelpTextTimed("Loading " + n, 5000);
+                        count = 0;
+                        Yield();
+                    }
+                }
+            }
+
+            KnownTracks = Directory.GetFiles(ScriptsFolder + @"\Tracks").ToList();
+            Log(LogImportance.Info, "Done.");
+            Log(LogImportance.Info, "-------------");
+        }
+
+        public void FilterKnownTracks(string filter = "test")
+        {
+            FilteredTracks.Clear();
+            string[] tags = filter.ToLowerInvariant().Split(' ');
+            foreach (string file in _trackTags.Keys)
+            {
+                int score = 0;
+                foreach (string tag in tags)
+                {
+                    if (_trackTags[file].Contains(tag)) score++;
+                }
+                if (score == tags.Length) FilteredTracks.Add(file);
+            }
+        }
 
         static XmlDocument LoadXmlOrThrow(string path)
         {
@@ -681,7 +730,7 @@ namespace ARS
         // Menu track selector: the user picks a race from the list and Start Race uses it.
         NativeListItem<string> _trackListItem;
         readonly List<string> _trackListPaths = new List<string>(); // parallel to _trackListItem.Items
-        internal string _selectedTrackPath = null;
+        string _selectedTrackPath = null;
         NativeListItem<string> _gridSizeItem;
         NativeListItem<string> _powerTargetItem;
         NativeListItem<string> _powerBracketItem;
@@ -861,7 +910,26 @@ namespace ARS
         // Phase 1: load the selected track, compute route/corners, teleport the player.
         public void InstanceTrack()
         {
-            TrackLoader.InstanceTrack(this);
+            CleanRacers();
+            _gridInstanced = false;
+
+            string trackPath = _selectedTrackPath;
+            if (trackPath == null)
+            {
+                if (FilteredTracks.Count == 0)
+                {
+                    UI.Notify("~r~No tracks found. Create one with 'arscreatetrack'.");
+                    return;
+                }
+                trackPath = FilteredTracks[0];
+            }
+
+            TrackLoader.LoadTrack(this, TrackLoader.LoadTrackFile(trackPath));
+
+            if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+
+            _trackInstanced = true;
+            Log(LogImportance.Info, "Track instanced");
         }
 
         // Phase 2: spawn the AI grid with current pace/grid settings. Repeatable —
@@ -1394,7 +1462,7 @@ namespace ARS
         {
             return (current / max) * 100;
         }
-        public void SetSPLVisibility(bool state)
+        internal void SetSPLVisibility(bool state)
         {
             try { foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (state) p.Alpha = 255; else p.Alpha = 0; } catch (Exception) { }
         }
@@ -1694,6 +1762,10 @@ namespace ARS
             }
 
         }
+        internal bool IsFreeCamActive => _freeCam.IsActive;
+        internal int IntendedOpponents => _intendedOpponents;
+        internal List<int> FlareEffects => _flareFx;
+
         internal void SetLoadingPromptText(string t)
         {
             Function.Call(Hash._0xABA17D7CE615ADBF, "STRING");
@@ -1785,7 +1857,7 @@ namespace ARS
             }
 
             
-            LoadTrack(LoadTrackFile(track));
+            TrackLoader.LoadTrack(this, TrackLoader.LoadTrackFile(track));
 
             
             Log(LogImportance.Info, "Loading grid of vehicles");
@@ -2055,13 +2127,7 @@ namespace ARS
 
 
         static public List<Vector3> GridPositions = new List<Vector3>();
-        internal List<int> _flareFx = new List<int>();
         static public bool IsPointToPoint = false;
-        public void SpawnTrackLimits(List<Vector3> nodes, Dictionary<int, float> widths, int fidelity)
-        {
-            IsPointToPoint = TrackLoader.BuildTrackLimits(nodes, widths, CurrentFile, IsPointToPoint, _intendedOpponents, TrackLimits, _flareFx, GridPositions);
-        }
-
         public bool PlayerOrCameraNearPos(Vector3 pos, float dist)
         {
             if (_freeCam.IsActive) return Game.Player.Character.Position.DistanceTo(pos) < dist;
@@ -2306,8 +2372,8 @@ namespace ARS
                 
                 FillKnownDisciplines();
 
-                TrackLoader.DiscoverTracks(this);
-                TrackLoader.FilterKnownTracks(this, TrackFilter);
+                FillKnownTracks();
+                FilterKnownTracks(TrackFilter);
             }
             if (WasCheatStringJustEntered("arscarlisten"))
             {
@@ -2750,7 +2816,7 @@ namespace ARS
             document.Save(ScriptsFolder + @"\Tracks\" + filename + ".xml");
 
             DisplayHelpTextTimed("Adding to track dictionary...", 1000);
-            TrackLoader.DiscoverTracks(this);
+            FillKnownTracks();
             DisplayHelpTextTimed("~g~Done.", 2000);
         }
 
@@ -2791,25 +2857,12 @@ namespace ARS
             if (node.HasAttribute(name)) return node.GetAttribute(name);
             return "";
         }
-        public static XmlDocument LoadTrackFile(string trackname = null)
-        {
-            return TrackLoader.LoadTrackFile(trackname);
-        }
-
-        public void LoadTrack(XmlDocument xmlFile)
-        {
-            TrackLoader.LoadTrack(this, xmlFile);
-        }
-
         // Walk the track in 30m chunks. Pick the tightest node in each chunk as the apex.
         public static float Circumradius3D(Vector3 a, Vector3 b, Vector3 midpoint)
         {
-            Vector2 a2 = new Vector2(a.X, a.Y);
-            Vector2 b2 = new Vector2(b.X, b.Y);
-            Vector2 midpoint2 = new Vector2(midpoint.X, midpoint.Y);
-
-            return Circumradius2D(a2, b2, midpoint2);
+            return TrackLoader.Circumradius3D(a, b, midpoint);
         }
+
         public static float Circumradius2D(Vector2 a, Vector2 b, Vector2 midPoint)
         {
             Vector2 point1 = a;
@@ -3424,8 +3477,6 @@ namespace ARS
         {
             return Function.Call<bool>(Hash._0x557E43C447E700A8, Game.GenerateHash(cheat));
         }
-
-        internal int _intendedOpponents = 12;
 
         
         void LoadSettings()

@@ -28,7 +28,7 @@ namespace ARS
                 UI.Notify("~r~Invalid track file.");
                 return;
             }
-            if (!ars._freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_OUT, 200);
+            if (!ars.IsFreeCamActive) Function.Call(Hash.DO_SCREEN_FADE_OUT, 200);
             ars.SetLoadingPromptText("Loading track...");
             Script.Wait(500);
 
@@ -154,7 +154,7 @@ namespace ARS
             Script.Wait(1000);
             ARS.Log(ARS.LogImportance.Info, "Loading props");
             ars.SetLoadingPromptText("Loading props...");
-            BuildTrackLimits(ARS.RouteNodes, ARS.NodeHalfWidths, ARS.CurrentFile, ARS.IsPointToPoint, ars._intendedOpponents, ARS.TrackLimits, ars._flareFx, ARS.GridPositions);
+            BuildTrackLimits(ARS.RouteNodes, ARS.NodeHalfWidths, ARS.CurrentFile, ref ARS.IsPointToPoint, ars.IntendedOpponents, ARS.TrackLimits, ars.FlareEffects, ARS.GridPositions);
 
             if (ARS.CanWeUse(Game.Player.Character.CurrentVehicle)) Game.Player.Character.CurrentVehicle.Position = ARS.RouteNodes[0]; else Game.Player.Character.Position = ARS.RouteNodes[20];
             if (ARS.CanWeUse(ARS.FreeCamRide)) ARS.FreeCamRide.Position = ARS.RouteNodes[5] + new Vector3(0, 0, 20);
@@ -390,87 +390,16 @@ namespace ARS
             return float.IsNaN(radius) || float.IsInfinity(radius) ? 999f : radius;
         }
 
-        public static void InstanceTrack(ARS ars)
-        {
-            ars.CleanRacers();
-            ars._gridInstanced = false;
-
-            string trackPath = ars._selectedTrackPath;
-            if (trackPath == null)
-            {
-                if (ARS.FilteredTracks.Count == 0)
-                {
-                    UI.Notify("~r~No tracks found. Create one with 'arscreatetrack'.");
-                    return;
-                }
-                trackPath = ARS.FilteredTracks[0];
-            }
-
-            LoadTrack(ars, LoadTrackFile(trackPath));
-
-            if (!ars._freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
-
-            ars._trackInstanced = true;
-            ARS.Log(ARS.LogImportance.Info, "Track instanced");
-        }
-
-        public static void DiscoverTracks(ARS ars, bool allowScriptYield = true)
-        {
-            ars._trackTags.Clear();
-            ARS.ImmersiveJoins.Clear();
-            ARS.Log(ARS.LogImportance.Info, "Learning available tracks...");
-            List<string> folders = Directory.GetDirectories(ARS.ScriptsFolder + @"\Tracks").ToList();
-            folders.Add(ARS.ScriptsFolder + @"\Tracks");
-            foreach (string dir in folders)
-            {
-                int count = 0;
-                foreach (string st in Directory.EnumerateFiles(dir))
-                {
-                    string n = Path.GetFileName(st);
-                    ARS.Log(ARS.LogImportance.Info, st + " - [" + string.Join(", ", TrackRepository.ReadTrackTags(st)) + "]");
-                    ars._trackTags.Add(st, string.Join(", ", TrackRepository.ReadTrackTags(st)));
-                    if (!ARS.ImmersiveJoins.ContainsKey(TrackRepository.ReadTrackStartPosition(st))) ARS.ImmersiveJoins.Add(TrackRepository.ReadTrackStartPosition(st), st);
-
-                    count++;
-                    if (allowScriptYield && count > 5)
-                    {
-                        ARS.DisplayHelpTextTimed("Loading " + n, 5000);
-                        count = 0;
-                        Script.Yield();
-                    }
-                }
-            }
-
-            ARS.KnownTracks = Directory.GetFiles(ARS.ScriptsFolder + @"\Tracks").ToList();
-            ARS.Log(ARS.LogImportance.Info, "Done.");
-            ARS.Log(ARS.LogImportance.Info, "-------------");
-        }
-
-        public static void FilterKnownTracks(ARS ars, string filter = "test")
-        {
-            ARS.FilteredTracks.Clear();
-            string[] tags = filter.ToLowerInvariant().Split(' ');
-            foreach (string file in ars._trackTags.Keys)
-            {
-                int score = 0;
-                foreach (string tag in tags)
-                {
-                    if (ars._trackTags[file].Contains(tag)) score++;
-                }
-                if (score == tags.Length) ARS.FilteredTracks.Add(file);
-            }
-        }
-
         static int Wrap(int index, int count)
         {
             int wrapped = index % count;
             return wrapped < 0 ? wrapped + count : wrapped;
         }
 
-        public static bool BuildTrackLimits(List<Vector3> nodes, Dictionary<int, float> widths, XmlDocument trackFile, bool isPointToPoint, int opponents, List<Prop> trackLimits, List<int> flareEffects, List<Vector3> gridPositions)
+        public static void BuildTrackLimits(List<Vector3> nodes, Dictionary<int, float> widths, XmlDocument trackFile, ref bool isPointToPoint, int opponents, List<Prop> trackLimits, List<int> flareEffects, List<Vector3> gridPositions)
         {
             gridPositions.Clear();
-            if (nodes.Count == 0) return isPointToPoint;
+            if (nodes.Count == 0) return;
             isPointToPoint |= nodes[0].DistanceTo(nodes[nodes.Count - 1]) > 20f;
             Color flareColor = ReadFlareColor(trackFile);
 
@@ -478,7 +407,6 @@ namespace ARS
             if (isPointToPoint) BuildPointToPointGrid(nodes, widths, gridPositions);
             else BuildCircuitGrid(nodes, widths, gridPositions);
             Function.Call(Hash.CLEAR_FOCUS);
-            return isPointToPoint;
         }
 
         static void SpawnStartGates(List<Vector3> nodes, Dictionary<int, float> widths, bool isPointToPoint, int opponents, List<Prop> limits, List<int> effects, Color color)
