@@ -2126,11 +2126,11 @@ namespace ARS
 
 
         static public List<Vector3> GridPositions = new List<Vector3>();
-        List<int> _flareFx = new List<int>();
+        internal List<int> _flareFx = new List<int>();
         static public bool IsPointToPoint = false;
         public void SpawnTrackLimits(List<Vector3> nodes, Dictionary<int, float> widths, int fidelity)
         {
-            IsPointToPoint = TrackBuilder.Build(nodes, widths, CurrentFile, IsPointToPoint, _intendedOpponents, TrackLimits, _flareFx, GridPositions);
+            IsPointToPoint = TrackLoader.BuildTrackLimits(nodes, widths, CurrentFile, IsPointToPoint, _intendedOpponents, TrackLimits, _flareFx, GridPositions);
         }
 
         public bool PlayerOrCameraNearPos(Vector3 pos, float dist)
@@ -3496,7 +3496,7 @@ namespace ARS
             return Function.Call<bool>(Hash._0x557E43C447E700A8, Game.GenerateHash(cheat));
         }
 
-        int _intendedOpponents = 12;
+        internal int _intendedOpponents = 12;
 
         
         void LoadSettings()

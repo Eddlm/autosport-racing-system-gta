@@ -74,7 +74,7 @@
     <Compile Include="src\DataStructures.cs" />
     <Compile Include="src\FreeCamController.cs" />
     <Compile Include="src\TrackRepository.cs" />
-    <Compile Include="src\TrackBuilder.cs" />
+    <Compile Include="src\TrackLoader.cs" />
     <Compile Include="src\TrackVisuals.cs" />
     <Compile Include="src\GridBuilder.cs" />
     <Compile Include="src\VehicleCatalog.cs" />
