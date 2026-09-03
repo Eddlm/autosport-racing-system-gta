@@ -53,6 +53,7 @@ namespace ARS
         public float PowerScale = 0;
         public string TextPerformanceIndex = "0";
         public float BoundingBox = 0f;
+        public Vector3 ModelDimensions = Vector3.Zero;
         public float SteeringLock = 0f;
     }
     public class HandlingData
@@ -128,7 +129,7 @@ namespace ARS
             LateralGap = RelativeOffset.X;
             // More margin from a rival ahead (+1m) than behind (+0.25m).
             float yBuffer = RelativeOffset.Y >= 0f ? 1f : 0.25f;
-            CombinedSize.Y = Math.Abs((me.Car.Model.GetDimensions().Y / 2) + (RivalRacer.Car.Model.GetDimensions().Y / 2)) + yBuffer;
+            CombinedSize.Y = Math.Abs((me.VehicleData.ModelDimensions.Y / 2) + (RivalRacer.VehicleData.ModelDimensions.Y / 2)) + yBuffer;
             CombinedSize.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
             OccupiedLaneWidth = CombinedSize.X;
             OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
@@ -215,8 +216,8 @@ namespace ARS
             float closingLong = mySpeed - rivalLongSpeed;
             if (closingLong <= 0.001f) return float.PositiveInfinity;
 
-            float myHalfLen = me.Car.Model.GetDimensions().Y * 0.5f;
-            float rivalHalfLen = RivalRacer.Car.Model.GetDimensions().Y * 0.5f;
+            float myHalfLen = me.VehicleData.ModelDimensions.Y * 0.5f;
+            float rivalHalfLen = RivalRacer.VehicleData.ModelDimensions.Y * 0.5f;
             FrontGap = longGap - (myHalfLen + rivalHalfLen);
             if (FrontGap <= 2f) return 0f;
 

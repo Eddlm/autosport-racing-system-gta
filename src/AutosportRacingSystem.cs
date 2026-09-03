@@ -2858,6 +2858,27 @@ namespace ARS
             return "";
         }
         // Walk the track in 30m chunks. Pick the tightest node in each chunk as the apex.
+        public static TrackPoint FindNearestTrackPoint(Vector3 position, int referenceNode = -1)
+        {
+            if (ARS.TrackPoints.Count == 0) return null;
+            int lastNode = ARS.TrackPoints.Count - 1;
+            int center = referenceNode >= 0 && referenceNode <= lastNode ? referenceNode : 0;
+            int first = Math.Max(center - 10, 0);
+            int last = Math.Min(center + 10, lastNode);
+            TrackPoint nearest = ARS.TrackPoints[first];
+            float best = nearest.Position.DistanceTo2D(position);
+            for (int i = first + 1; i <= last; i++)
+            {
+                float dist = ARS.TrackPoints[i].Position.DistanceTo2D(position);
+                if (dist < best)
+                {
+                    best = dist;
+                    nearest = ARS.TrackPoints[i];
+                }
+            }
+            return nearest;
+        }
+
         public static float Circumradius3D(Vector3 a, Vector3 b, Vector3 midpoint)
         {
             return TrackLoader.Circumradius3D(a, b, midpoint);

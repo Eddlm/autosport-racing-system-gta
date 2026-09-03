@@ -79,6 +79,8 @@ namespace ARS
 
         int _halfSecondTick = 0;
         int _oneSecondTick = 0;
+        int _phaseOffsetMs = 0;
+        int _pressureTick = 0;
         int _lastCoreTick = 100;
         int TimeSince_lastCoreTick => (int)ARS.Clamp(Game.GameTime - _lastCoreTick, 1, 9999);
 
@@ -202,6 +204,9 @@ namespace ARS
 
             if (Driver.IsPlayer) ControlledByPlayer = true;
             _halfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));
+            _phaseOffsetMs = ARS.GetRandomInt(0, 500);
+            _pressureTick = Game.GameTime;
+            VehicleData.ModelDimensions = Car.Model.GetDimensions();
 
             if (!ControlledByPlayer)
             {
@@ -840,7 +845,7 @@ namespace ARS
         float ComputeOffshootSpeedCap()
         {
             Vector3 proj = ProjectAhead(1f);
-            TrackPoint tp = ARS.TrackPoints.OrderBy(t => t.Position.DistanceTo2D(proj)).First();
+            TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node);
             float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
             float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
             float offTrackDistance = Math.Abs(signedOffset) - safeBound;
@@ -1460,13 +1465,13 @@ namespace ARS
         {
             if (Driver.IsPlayer) return;
 
-            float myHalfLen = Math.Abs(Car.Model.GetDimensions().Y) * 0.5f;
+            float myHalfLen = Math.Abs(VehicleData.ModelDimensions.Y) * 0.5f;
 
             bool shouldPassengerize = false;
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null) continue;
-                float rivalHalfLen = Math.Abs(r.RivalRacer.Car.Model.GetDimensions().Y) * 0.5f;
+                float rivalHalfLen = Math.Abs(r.RivalRacer.VehicleData.ModelDimensions.Y) * 0.5f;
                 float threshold = myHalfLen + rivalHalfLen + 0.5f;
                 if (r.Distance < threshold)
                 {
@@ -1865,7 +1870,7 @@ namespace ARS
                 float inputTo = toSample.CombinedInput;
                  Vector3 point = to;
                 Vector3 away = segment.Normalized;
-                float dimension = Car.Model.GetDimensions().Y + 1f;
+                float dimension = VehicleData.ModelDimensions.Y + 1f;
                 Vector3 chevronScale = new Vector3(dimension / 2f, dimension / 4f, -(dimension / 2f));
                 float value = ARS.Clamp((inputFrom + inputTo) * 0.5f, -1f, 1f);
                 Color baseColor;
@@ -1910,7 +1915,7 @@ namespace ARS
             }
 
             // Start at the front of the car, slightly above the ground.
-            float halfLen = Car.Model.GetDimensions().Y * 0.5f;
+            float halfLen = VehicleData.ModelDimensions.Y * 0.5f;
             Vector3 start = Car.Position + Car.ForwardVector * halfLen + new Vector3(0, 0, 0.3f);
 
             // Red when the speed-based steering limiter actually reduced the steer
@@ -1925,7 +1930,7 @@ namespace ARS
 
             Vector3 right = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
             Vector3 target = steerRefPoint.Position + right * _targetLane + new Vector3(0, 0, 0.3f);
-            float halfLen = Car.Model.GetDimensions().Y * 0.5f;
+            float halfLen = VehicleData.ModelDimensions.Y * 0.5f;
             Vector3 start = Car.Position + Car.ForwardVector * halfLen + new Vector3(0, 0, 0.3f);
             ARS.DrawLine(start, target, Color.Cyan);
         }
@@ -2465,14 +2470,12 @@ namespace ARS
         void ProcessTimedAI()
         {
             if (Brain.Corner == null) return;
-            if (_halfSecondTick < Game.GameTime)
+            if (_halfSecondTick + _phaseOffsetMs < Game.GameTime)
             {
                 _halfSecondTick = Game.GameTime + 500 + (int)ARS.Remap(Car.Velocity.Length(), 0, 100, -250, 250, true);
             }
 
-
-
-            if (_oneSecondTick < Game.GameTime)
+            if (_oneSecondTick + _phaseOffsetMs < Game.GameTime)
             {
                 _oneSecondTick = Game.GameTime + 1000;
 
@@ -2515,13 +2518,17 @@ namespace ARS
         public void ProcessAI()
         {
             ProcessTimedAI();
-            UpdatePressure();
+            if (_pressureTick + _phaseOffsetMs < Game.GameTime)
+            {
+                _pressureTick = Game.GameTime + 500;
+                UpdatePressure();
+            }
 
             if (BaseBehavior == RacerBaseBehavior.GridWait && Control.HandBrakeTime < Game.GameTime) Control.HandBrakeTime = Game.GameTime + (100 * ARS.GetRandomInt(2, 6));
 
             if (!ControlledByPlayer)
             {
-                UpdateRivalInfo();
+                if (_halfSecondTick + _phaseOffsetMs < Game.GameTime) UpdateRivalInfo();
                 ApplyRivalThrottleCap();
 
                 // Re-rise the speed cap before concern sources pull it down.
