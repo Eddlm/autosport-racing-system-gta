@@ -82,6 +82,7 @@ namespace ARS
         int _phaseOffsetMs = 0;
         int _pressureTick = 0;
         int _apexUpdateTick = 0;
+        int _rivalInfoTick = 0;
         int _lastCoreTick = 100;
         int TimeSince_lastCoreTick => (int)ARS.Clamp(Game.GameTime - _lastCoreTick, 1, 9999);
 
@@ -2501,7 +2502,6 @@ namespace ARS
 
         void ProcessTimedAI()
         {
-            if (Brain.Corner == null) return;
             if (_halfSecondTick + _phaseOffsetMs < Game.GameTime)
             {
                 _halfSecondTick = Game.GameTime + 500 + (int)ARS.Remap(Car.Velocity.Length(), 0, 100, -250, 250, true);
@@ -2560,7 +2560,11 @@ namespace ARS
 
             if (!ControlledByPlayer)
             {
-                if (_halfSecondTick + _phaseOffsetMs < Game.GameTime) UpdateRivalInfo();
+                if (_rivalInfoTick + _phaseOffsetMs < Game.GameTime)
+                {
+                    _rivalInfoTick = Game.GameTime + 500;
+                    UpdateRivalInfo();
+                }
                 ApplyRivalThrottleCap();
 
                 // Re-rise the speed cap before concern sources pull it down.
@@ -2836,7 +2840,7 @@ namespace ARS
             {
                 Vector3 hoodPos = Car.Position + Car.ForwardVector;
                 candidates.Sort((a, b) => Vector3.Distance(a.Car.Position, hoodPos).CompareTo(Vector3.Distance(b.Car.Position, hoodPos)));
-                for (int i = 0; i < Brain.Rivals.Count - 1; i++)
+                for (int i = 0; i < Brain.Rivals.Count; i++)
                 {
                     if (i == candidates.Count) break;
                     Brain.Rivals[i].RivalRacer = candidates[i];
