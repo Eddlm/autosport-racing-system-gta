@@ -77,7 +77,6 @@
     <Compile Include="src\TrackBuilder.cs" />
     <Compile Include="src\TrackVisuals.cs" />
     <Compile Include="src\GridBuilder.cs" />
-    <Compile Include="src\RouteAnalysis.cs" />
     <Compile Include="src\VehicleCatalog.cs" />
     <Compile Include="src\VehicleSelector.cs" />
     <Compile Include="src\VehicleMemory.cs" />
