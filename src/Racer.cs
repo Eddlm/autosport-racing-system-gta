@@ -1176,7 +1176,7 @@ namespace ARS
                 }
             }
 
-            // Yield: arm if pressure is much lower than closest rival, within 5s of corner, in overlap
+            // Yield: arm if pressure is much lower than closest rival, in overlap, at the corner entrance.
             if (ActiveManeuver.Type == ManeuverType.None && Brain.Corner != null)
             {
                 Rival closestRival = Brain.Rivals
@@ -1193,7 +1193,8 @@ namespace ARS
                     float timeToEntrance = ForwardNodeDistance(entranceNode)
                         / Math.Max(Car.Velocity.Length(), 1f);
 
-                    if (pressureDiff > 30f && inOverlap && timeToEntrance <= 2f
+                    if (pressureDiff > 30f && inOverlap && ARS.IsBetween(timeToEntrance, 0.5f, 2f)
+                        && closestRival.Distance <= 20f
                         && closestRival.RivalRacer.Car.Velocity.Length() > Car.Velocity.Length())
                     {
                         ActiveManeuver.Type = ManeuverType.Yield;
@@ -1220,13 +1221,16 @@ namespace ARS
                         && r.RelativePosition == RelativePos.Ahead
                         && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
                         && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane
+                        && r.Distance <= 40f
+                        && Math.Abs(r.LateralGap) <= 6f
+                        && r.ForwardSpeedGap > 0f
                         && Math.Abs(r.RivalRacer.ForwardNodeDistance(entranceNode)
                             / Math.Max(r.RivalRacer.Car.Velocity.Length(), 1f) - myTimeToEntrance) <= 1f)
                     .OrderBy(r => r.Distance)
                     .FirstOrDefault();
 
                 if (diveTarget != null && Pressure > 30f
-                    && myTimeToEntrance >= 2f && myTimeToEntrance <= 4f)
+                    && ARS.IsBetween(myTimeToEntrance, 1f, 3f))
                 {
                     ActiveManeuver.Type = ManeuverType.DiveBomb;
                     ActiveManeuver.Target = diveTarget.RivalRacer;
@@ -1252,12 +1256,15 @@ namespace ARS
                         && r.RelativePosition == RelativePos.Behind
                         && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
                         && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane
+                        && r.Distance <= 30f
+                        && Math.Abs(r.LateralGap) <= 6f
+                        && r.ForwardSpeedGap < 0f
                         && r.RivalRacer.ForwardNodeDistance(entranceNode)
                             / Math.Max(r.RivalRacer.Car.Velocity.Length(), 1f) <= myTimeToEntrance)
                     .OrderBy(r => r.Distance)
                     .FirstOrDefault();
 
-                if (defenderTarget != null && myTimeToEntrance >= 2f && myTimeToEntrance <= 4f)
+                if (defenderTarget != null && ARS.IsBetween(myTimeToEntrance, 1f, 3f))
                 {
                     ActiveManeuver.Type = ManeuverType.DefendLane;
                     ActiveManeuver.Target = defenderTarget.RivalRacer;
@@ -2516,6 +2523,7 @@ namespace ARS
                     if (BaseBehavior == RacerBaseBehavior.Race && ARS.Racers.Count >= 1)
                     {
                         UpdateRivals();
+                        UpdateRivalInfo();
                         ConsiderManeuvers();
                     }
 

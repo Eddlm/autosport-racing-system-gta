@@ -107,7 +107,7 @@ namespace ARS
         // Decomposed proximity (in me's local frame, SHVDN convention: +X right, +Y forward).
         public float LongitudinalGap = 99f;   // signed: + = rival ahead, - = rival behind
         public float LateralGap = 0f;          // signed: + = rival right, - = rival left
-        public float ClosingRate = 0f;         // signed: + = closing on rival (along me's forward axis)
+        public float ForwardSpeedGap = 0f;      // signed: + = me faster than rival (along me's forward axis)
         public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals
         public float SecondsToHit = float.PositiveInfinity;    // physical swept bounding-box hit time
         public float FrontGap = float.PositiveInfinity;        // front-to-rear distance to rival
@@ -131,31 +131,31 @@ namespace ARS
             OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
             Distance =  (me.Car.Position -RivalRacer.Car.Position).Length();
 
-            // Closing rate: project relative velocity onto me's forward axis.
-            // Positive = me is gaining on rival (closing if rival ahead, or pulling away if rival behind).
+            // Forward speed gap: project relative velocity onto me's forward axis.
+            // Positive = me faster than rival; negative = rival faster.
             Vector3 meForward = me.Car.Velocity.LengthSquared() > 0.01f
                 ? me.Car.Velocity.Normalized
                 : me.Car.ForwardVector;
             Vector3 relativeVelocity = me.Car.Velocity - RivalRacer.Car.Velocity;
-            ClosingRate = Vector3.Dot(relativeVelocity, meForward);
+            ForwardSpeedGap = Vector3.Dot(relativeVelocity, meForward);
 
             // SecondsToReach and TimeToContact use longitudinal gap, not Euclidean.
             // Legacy SecondsToReach kept for existing consumers (avoidance filter expects 0..3 range).
             float longitudinalAbs = Math.Abs(LongitudinalGap);
-            float speedDiff = (float)Math.Round(me.Car.Velocity.Length() - RivalRacer.Car.Velocity.Length(), 4);
-            if (speedDiff <= 0.001f)
+            float absoluteSpeedGap = (float)Math.Round(me.Car.Velocity.Length() - RivalRacer.Car.Velocity.Length(), 4);
+            if (absoluteSpeedGap <= 0.001f)
             {
                 SecondsToReach = float.PositiveInfinity;
             }
             else
             {
-                SecondsToReach = longitudinalAbs / Math.Abs(speedDiff);
+                SecondsToReach = longitudinalAbs / Math.Abs(absoluteSpeedGap);
             }
 
             // TimeToContact: only meaningful for rivals ahead of me that I'm closing on.
-            if (LongitudinalGap > 0f && ClosingRate > 0.001f)
+            if (LongitudinalGap > 0f && ForwardSpeedGap > 0.001f)
             {
-                TimeToContact = LongitudinalGap / ClosingRate;
+                TimeToContact = LongitudinalGap / ForwardSpeedGap;
             }
             else
             {
