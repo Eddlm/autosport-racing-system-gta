@@ -1190,8 +1190,10 @@ namespace ARS
                         if (dist <= 5f)
                         {
                             DisplayHelpTextThisFrame("Press ~INPUT_CONTEXT~ to race at ~b~" + Path.GetFileNameWithoutExtension(nearest.TrackPath) + "~w~.");
-                            if (!_arsMenu.Visible && !Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlJustPressed(2, GTA.Control.Context))
+                            if (!_arsMenu.Visible && CanWeUse(Game.Player.Character.CurrentVehicle) && !Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlJustPressed(2, GTA.Control.Context))
                             {
+                                PowerTargetScale = ComputePlayerCarPaceIndex();
+                                PowerBracketScale = 5f;
                                 SelectTrackInMenu(nearest.TrackPath);
                                 StartRaceFromMenu();
                             }
@@ -3589,6 +3591,19 @@ namespace ARS
         public static bool CanWeUse(Entity entity)
         {
             return entity != null && entity.Exists();
+        }
+
+        // Pace index for the player's current vehicle, using the same model-level natives as the grid caches.
+        float ComputePlayerCarPaceIndex()
+        {
+            Vehicle v = Game.Player.Character.CurrentVehicle;
+            if (!CanWeUse(v)) return PowerTargetScale;
+            Model model = v.Model;
+            float grip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, model.Hash);
+            float topSpeedMph = MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, model.Hash));
+            float accel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model.Hash);
+            bool isElectric = Function.Call<int>((Hash)0xD839450756ED5A80, model.Hash) != 0;
+            return ComputePaceIndex(topSpeedMph, grip, accel, isElectric);
         }
 
 
