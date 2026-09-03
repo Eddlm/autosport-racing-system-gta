@@ -18,7 +18,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - **Corrections require sources.** When correcting the user on variable names or facts, do so only when confident and after checking the actual code; if uncertain, say so rather than guess.
 
 ## Workflow
-- **⚠️ RELEASE DEADLINE — September WIP.** The user needs to release a WIP in September. **Remind the user to stop adding features and tweaking** — the priority is shipping, not scope. When the user starts proposing new features or tuning, gently flag the deadline and ask whether it's worth the risk before the release. (User's explicit request, recorded so it persists across sessions.)
+- **⚠️ RELEASE DEADLINE — September 10.** The user needs to release a WIP by 10 September. **Remind the user to stop adding features and tweaking** — the priority is shipping, not scope. When the user starts proposing new features or tuning, gently flag the deadline and ask whether it's worth the risk before the release. (User's explicit request, recorded so it persists across sessions.)
 - **Every file change → compile (with autocopy) → user verifies in-game → then commit.** Never commit before the human confirms the change works. The human is the gatekeeper for verification; do not treat a successful compile as "verified."
 - **Documentation-only changes:** when a change is strictly comments or other non-executable documentation and the build passes, in-game verification is not required before committing. Git is the backup while the work remains undistributed.
 
