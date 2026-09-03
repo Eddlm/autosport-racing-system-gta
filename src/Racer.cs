@@ -348,7 +348,7 @@ namespace ARS
             headingErrorDeg *= 1.0f;
 
 
-            float defaultLane = ComputeHighSpeedLane(roadWide);
+            float defaultLane = ComputeHighSpeedLane(roadWide, speedMps);
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
             if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
@@ -372,7 +372,7 @@ namespace ARS
             float recoveryDeg = 0f;
             if (overshoot > 0f)
             {
-                float maxRecoveryDeg = ARS.Remap(ARS.MpsToMph(speedMps), 40f, 10f, 3f, 45f, true);
+                float maxRecoveryDeg = ARS.Remap(ARS.MpsToMph(speedMps), 100f, 10f, 3f, 45f, true);
                 float severity = ARS.Clamp(overshoot / Math.Max(carHalfWidth, 0.1f), 0f, 1f);
                 recoveryDeg = Math.Sign(Brain.CurrentPerception.DeviationFromCenter) * maxRecoveryDeg * severity;
             }
@@ -448,16 +448,17 @@ namespace ARS
         }
 
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
-        float ComputeHighSpeedLane(float roadWide)
+        float ComputeHighSpeedLane(float roadWide, float speedMps)
         {
             if (Brain.CurrentPerception.HighSpeedCurveRadius > 500f) return 0f;
 
             int count = ARS.TrackPoints.Count;
             int fwdNode;
+            int fwdOffset = Math.Max((int)(speedMps * 1.0f), 5);
             if (ARS.IsPointToPoint)
-                fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + 20, 0, count - 1);
+                fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + fwdOffset, 0, count - 1);
             else
-                fwdNode = ((CurrentTrackPoint.Node + 20) % count + count) % count;
+                fwdNode = ((CurrentTrackPoint.Node + fwdOffset) % count + count) % count;
 
             Vector3 currentDir = CurrentTrackPoint.Direction;
             Vector3 futureDir = ARS.TrackPoints[fwdNode].Direction;
@@ -487,7 +488,7 @@ namespace ARS
                 if (timeToApex > approachStartTime) return 0f;
             }
 
-            bool shouldHoldOutside = speedMps >= _cornerSpd + ARS.MphToMps(-10f);
+            bool shouldHoldOutside = true; // TEMP: always hold outside for testing
             if (!_approachOutsideDecided || (!_approachHoldsOutside && shouldHoldOutside))
             {
                 _approachHoldsOutside = shouldHoldOutside;
@@ -980,7 +981,7 @@ namespace ARS
             if (NextApexNode >= 0)
             {
                 float timeToApex = ForwardNodeDistance(NextApexNode) / Math.Max(Car.Velocity.Length(), 1f);
-                if (timeToApex <= 1f) cornerSpd = 999f;
+                if (timeToApex <= 0.33f) cornerSpd = 999f;
             }
 
             // Hill grip loss: exponential model, 15 degrees halves grip.
@@ -1016,8 +1017,8 @@ namespace ARS
                 float deltaGs = ARS.HillGripDeltaGs(crestStart, crestMid, crestEnd, Car.Velocity.Length());
                 // Crest aggression scales with route curvature: tight = cautious, straight = aggressive.
                 float routeRadius = Brain.CurrentPerception.CurveRadiusToFollowPoint;
-                float routeAggression = ARS.Remap(routeRadius, 100f, 300f, 0f, 1f, true);
-                float routeCrestFloor = ARS.Remap(routeRadius, 500f, 100f, 0.4f, 0.8f, true);
+                float routeAggression = ARS.MapGamma(routeRadius, 100f, 300f, 0f, 1f, 0.5f, true);
+                float routeCrestFloor = ARS.MapGamma(routeRadius, 100f, 500f, 0.4f, 0.8f, 0.5f, true);
                 float effectiveDeltaGs = deltaGs;
                 if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - routeAggression);
                 float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, routeCrestFloor);
@@ -1053,8 +1054,8 @@ namespace ARS
                     float cornerDeltaGs = ARS.HillGripDeltaGs(ccStart, ccMid, ccEnd, _cornerSpd);
                     float cornerEffectiveDelta = cornerDeltaGs;
                     float cornerRadius = NextApexRadius;
-                    float cornerAggression = ARS.Remap(cornerRadius, 100f, 300f, 0f, 1f, true);
-                    float cornerCrestFloor = ARS.Remap(cornerRadius, 500f, 100f, 0.4f, 0.8f, true);
+                    float cornerAggression = ARS.MapGamma(cornerRadius, 100f, 300f, 0f, 1f, 0.5f, true);
+                    float cornerCrestFloor = ARS.MapGamma(cornerRadius, 100f, 500f, 0.4f, 0.8f, 0.5f, true);
                     if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - cornerAggression);
                     float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, cornerCrestFloor);
                     float cornerVerticalSpeedFactor = (float)Math.Sqrt(cornerVerticalGrip);

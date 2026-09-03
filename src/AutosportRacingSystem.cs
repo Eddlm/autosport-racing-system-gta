@@ -523,13 +523,11 @@ namespace ARS
 
         public static float MapGamma(float value, float in_min, float in_max, float min, float max, float gamma, bool clamp = false)
         {
-            if (value > in_max) value = in_max;
-            value /= in_max; 
-            value = (float)Math.Pow(value, gamma); 
-
-            float r = Remap(value, 0.0f, 1.0f, in_min, in_max, clamp);
-            r = Remap(r, in_min, in_max, min, max);
-            return r;
+            if (in_max == in_min) return min;
+            float t = (value - in_min) / (in_max - in_min);
+            if (clamp) t = Clamp(t, 0f, 1f);
+            t = (float)Math.Pow(t, gamma);
+            return min + t * (max - min);
         }
 
         public static float Clamp(float val, float min, float max)
