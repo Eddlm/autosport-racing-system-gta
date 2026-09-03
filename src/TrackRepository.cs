@@ -1,5 +1,7 @@
 using GTA.Math;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Xml;
@@ -13,6 +15,47 @@ namespace ARS
             XmlDocument document = new XmlDocument();
             document.Load(path);
             return document;
+        }
+
+        // Pure helper: compute the world position left of a track's start line by half its width.
+        // Does not mutate global ARS state. For circuits the +/-5 indices wrap; for point-to-point they clamp.
+        public static TrackStartInfo ComputeTrackStartInfo(string path)
+        {
+            XmlDocument document = Load(path);
+            XmlNodeList points = document.SelectNodes("//Route/Point");
+            int count = points.Count;
+            if (count == 0) return null;
+
+            List<Vector3> positions = new List<Vector3>(count);
+            List<float> widths = new List<float>(count);
+            foreach (XmlElement e in points)
+            {
+                float x = 0f, y = 0f, z = 0f, w = 10f;
+                float.TryParse(e.SelectSingleNode("X")?.InnerText, NumberStyles.Float, CultureInfo.InvariantCulture, out x);
+                float.TryParse(e.SelectSingleNode("Y")?.InnerText, NumberStyles.Float, CultureInfo.InvariantCulture, out y);
+                float.TryParse(e.SelectSingleNode("Z")?.InnerText, NumberStyles.Float, CultureInfo.InvariantCulture, out z);
+                float.TryParse(e.SelectSingleNode("Wide")?.InnerText, NumberStyles.Float, CultureInfo.InvariantCulture, out w);
+                positions.Add(new Vector3(x, y, z));
+                widths.Add(w);
+            }
+
+            bool isCircuit = positions[0].DistanceTo(positions[count - 1]) <= 20f;
+            Func<int, int> clampOrWrap = node => isCircuit ? ((node % count) + count) % count : (int)ARS.Clamp(node, 0, count - 1);
+
+            Vector3 start = positions[0];
+            Vector3 ahead = positions[clampOrWrap(5)];
+            Vector3 behind = positions[clampOrWrap(-5)];
+            Vector3 forward = (ahead - behind).Normalized;
+            forward.Z = 0f;
+            Vector3 left = Vector3.Cross(Vector3.WorldUp, forward).Normalized;
+            float fullWidth = Math.Max(widths[0], 2f);
+
+            return new TrackStartInfo
+            {
+                TrackPath = path,
+                StartPosition = start,
+                JoinPosition = start + left * fullWidth
+            };
         }
 
         public static List<string> ReadTrackTags(string path)

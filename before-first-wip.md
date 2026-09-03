@@ -32,7 +32,7 @@ This file lists what must be done, verified, or documented before the first WIP 
 - [ ] Grid size can be set from small to large and is respected.
 - [ ] Pace target + pace bracket produce a field that matches the requested difficulty/speed.
 - [ ] Point-to-point vs circuit races are selectable where applicable.
-- [ ] Players can enter the ARS menu through an immersive world interaction (no hotkey required).
+- [x] Players can enter the ARS menu through an immersive world interaction (no hotkey required).
 
 ### Menu organization
 - [ ] Menu categories are logically grouped (race setup, debug, options, etc.).

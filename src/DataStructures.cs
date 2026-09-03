@@ -281,6 +281,12 @@ namespace ARS
             Point = point;
         }
     }
+    public class TrackStartInfo
+    {
+        public string TrackPath;
+        public Vector3 StartPosition;
+        public Vector3 JoinPosition;
+    }
     public enum ManeuverType { None, Nitrous, DiveBomb, DefendLane, Yield }
     public class Maneuver
     {

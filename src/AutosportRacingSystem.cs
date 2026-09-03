@@ -42,7 +42,7 @@ namespace ARS
     public class ARS : Script
     {
 
-        public static Dictionary<Vector3, string> ImmersiveJoins = new Dictionary<Vector3, string>();
+        public static List<TrackStartInfo> TrackStartInfos = new List<TrackStartInfo>();
 
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
         // Pre-computed apex table. Built in BuildApexCorners after track generation.
@@ -305,7 +305,7 @@ namespace ARS
         public void FillKnownTracks(bool allowScriptYield = true)
         {
             _trackTags.Clear();
-            ImmersiveJoins.Clear();
+            TrackStartInfos.Clear();
             Log(LogImportance.Info, "Learning available tracks...");
             List<string> folders = Directory.GetDirectories(ScriptsFolder + @"\Tracks").ToList();
             folders.Add(ScriptsFolder + @"\Tracks");
@@ -317,7 +317,8 @@ namespace ARS
                     string n = System.IO.Path.GetFileName(st);
                     Log(LogImportance.Info, st + " - [" + string.Join(", ", TrackRepository.ReadTrackTags(st)) + "]");
                     _trackTags.Add(st, string.Join(", ", TrackRepository.ReadTrackTags(st)));
-                    if (!ImmersiveJoins.ContainsKey(TrackRepository.ReadTrackStartPosition(st))) ImmersiveJoins.Add(TrackRepository.ReadTrackStartPosition(st), st);
+                    TrackStartInfo info = TrackRepository.ComputeTrackStartInfo(st);
+                    if (info != null && !TrackStartInfos.Any(existing => existing.StartPosition.DistanceTo(info.StartPosition) < 1f)) TrackStartInfos.Add(info);
 
                     count++;
                     if (allowScriptYield && count > 5)
@@ -708,7 +709,7 @@ namespace ARS
         public static string TrackFilter = "airport";
         public static string DisciplineFilter = "sports";
         public static float PowerTargetScale = 0.52f;
-        public static float PowerBracketScale = 0.02f;
+        public static float PowerBracketScale = 5f;
         // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
@@ -977,6 +978,15 @@ namespace ARS
         // (Re)build the "Select Track" list from every discovered race, keeping the current
         // choice when the file still exists. Must run after FillKnownTracks has populated
         // _trackTags (that is, after the load task completes).
+        void SelectTrackInMenu(string path)
+        {
+            if (_trackListItem == null || _trackListPaths.Count == 0 || string.IsNullOrEmpty(path)) return;
+            int idx = _trackListPaths.IndexOf(path);
+            if (idx < 0) return;
+            _trackListItem.SelectedIndex = idx;
+            _selectedTrackPath = path;
+        }
+
         void RefreshTrackList()
         {
             if (_trackListItem == null) return;
@@ -1169,6 +1179,25 @@ namespace ARS
                 if (_routeEditorActive) TrackVisuals.DrawRoute(RouteNodes, NodeHalfWidths, _routeEditorActive);
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
                 if (DebugVisual == (int)DebugDisplay.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);
+
+                if (RaceStatus == RaceState.None || RaceStatus == RaceState.NotInitiated)
+                {
+                    TrackStartInfo nearest = FindNearestTrackStartInfo(Game.Player.Character.Position);
+                    if (nearest != null)
+                    {
+                        World.DrawMarker(MarkerType.ChevronUpx1, nearest.JoinPosition + new Vector3(0, 0, 2f), new Vector3(0, 0, -1f), Vector3.Zero, new Vector3(1f, 1f, 1f), Color.Yellow, false, true, 0, false, "", "", false);
+                        float dist = nearest.JoinPosition.DistanceTo2D(Game.Player.Character.Position);
+                        if (dist <= 5f)
+                        {
+                            DisplayHelpTextThisFrame("Press ~INPUT_CONTEXT~ to race at ~b~" + Path.GetFileNameWithoutExtension(nearest.TrackPath) + "~w~.");
+                            if (!_arsMenu.Visible && !Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlJustPressed(2, GTA.Control.Context))
+                            {
+                                SelectTrackInMenu(nearest.TrackPath);
+                                StartRaceFromMenu();
+                            }
+                        }
+                    }
+                }
 
 
                 
@@ -2858,6 +2887,22 @@ namespace ARS
             return "";
         }
         // Walk the track in 30m chunks. Pick the tightest node in each chunk as the apex.
+        static TrackStartInfo FindNearestTrackStartInfo(Vector3 position)
+        {
+            TrackStartInfo nearest = null;
+            float best = 150f * 150f;
+            foreach (TrackStartInfo info in TrackStartInfos)
+            {
+                float dist = info.JoinPosition.DistanceTo2D(position);
+                if (dist < best)
+                {
+                    best = dist;
+                    nearest = info;
+                }
+            }
+            return nearest;
+        }
+
         public static TrackPoint FindNearestTrackPoint(Vector3 position, int referenceNode = -1)
         {
             if (ARS.TrackPoints.Count == 0) return null;
