@@ -235,8 +235,8 @@ namespace ARS
             _loadScriptTask = Task.Run(() =>
             {
                 FillKnownDisciplines(false);
-                FillKnownTracks(false);
-                FilterKnownTracks(TrackFilter);
+                TrackLoader.DiscoverTracks(this, false);
+                TrackLoader.FilterKnownTracks(this, TrackFilter);
             });
         }
 
@@ -298,41 +298,7 @@ namespace ARS
 
             UpdateChecker.CheckLatestRelease();
         }
-
-
-        Dictionary<string, string> _trackTags = new Dictionary<string, string>();
-        public void FillKnownTracks(bool allowScriptYield = true)
-        {
-            _trackTags.Clear();
-            ImmersiveJoins.Clear();
-            Log(LogImportance.Info, "Learning available tracks...");
-            List<string> folders = Directory.GetDirectories(ScriptsFolder + @"\Tracks").ToList();
-            folders.Add(ScriptsFolder + @"\Tracks");
-            foreach (string dir in folders)
-            {
-                int count = 0;
-                foreach (string st in Directory.EnumerateFiles(@dir))
-                {
-                    string n = System.IO.Path.GetFileName(st);
-                    Log(LogImportance.Info, st + " - [" + string.Join(", ", TrackRepository.ReadTrackTags(st)) + "]");
-                    _trackTags.Add(st, string.Join(", ", TrackRepository.ReadTrackTags(st)));
-                    if (!ImmersiveJoins.ContainsKey(TrackRepository.ReadTrackStartPosition(st))) ImmersiveJoins.Add(TrackRepository.ReadTrackStartPosition(st), st);
-
-                    count++;
-                    if (allowScriptYield && count > 5)
-                    {
-                        DisplayHelpTextTimed("Loading " + n, 5000);
-                        count = 0;
-                        Yield();
-                    }
-                }
-            }
-
-
-            KnownTracks = Directory.GetFiles(ScriptsFolder + @"\Tracks").ToList();
-            Log(LogImportance.Info, "Done.");
-            Log(LogImportance.Info, "-------------");
-        }
+        internal Dictionary<string, string> _trackTags = new Dictionary<string, string>();
 
         static XmlDocument LoadXmlOrThrow(string path)
         {
@@ -422,21 +388,7 @@ namespace ARS
                 return null;
             }
         }
-        public void FilterKnownTracks(string filter = "test")
-        {
 
-            FilteredTracks.Clear();
-            string[] tags = filter.ToLowerInvariant().Split(' ');
-            foreach (string file in _trackTags.Keys)
-            {
-                int score = 0;
-                foreach (string tag in tags)
-                {
-                    if (_trackTags[file].Contains(tag)) score++;
-                }
-                if (score == tags.Length) FilteredTracks.Add(file);
-            }
-        }
 
 
         public void FillKnownDisciplines(bool allowScriptYield = true)
@@ -729,7 +681,7 @@ namespace ARS
         // Menu track selector: the user picks a race from the list and Start Race uses it.
         NativeListItem<string> _trackListItem;
         readonly List<string> _trackListPaths = new List<string>(); // parallel to _trackListItem.Items
-        string _selectedTrackPath = null;
+        internal string _selectedTrackPath = null;
         NativeListItem<string> _gridSizeItem;
         NativeListItem<string> _powerTargetItem;
         NativeListItem<string> _powerBracketItem;
@@ -2377,8 +2329,8 @@ namespace ARS
                 
                 FillKnownDisciplines();
 
-                FillKnownTracks();
-                FilterKnownTracks(TrackFilter);
+                TrackLoader.DiscoverTracks(this);
+                TrackLoader.FilterKnownTracks(this, TrackFilter);
             }
             if (WasCheatStringJustEntered("arscarlisten"))
             {
@@ -2821,7 +2773,7 @@ namespace ARS
             document.Save(ScriptsFolder + @"\Tracks\" + filename + ".xml");
 
             DisplayHelpTextTimed("Adding to track dictionary...", 1000);
-            FillKnownTracks();
+            TrackLoader.DiscoverTracks(this);
             DisplayHelpTextTimed("~g~Done.", 2000);
         }
 

@@ -5,9 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading;
-using System.Drawing;
 using System.Xml;
 
 namespace ARS
@@ -388,6 +388,53 @@ namespace ARS
             float centerY = midpoint1.Y + perpendicular1 * (centerX - midpoint1.X);
             float radius = Vector2.Distance(new Vector2(centerX, centerY), a);
             return float.IsNaN(radius) || float.IsInfinity(radius) ? 999f : radius;
+        }
+
+        public static void DiscoverTracks(ARS ars, bool allowScriptYield = true)
+        {
+            ars._trackTags.Clear();
+            ARS.ImmersiveJoins.Clear();
+            ARS.Log(ARS.LogImportance.Info, "Learning available tracks...");
+            List<string> folders = Directory.GetDirectories(ARS.ScriptsFolder + @"\Tracks").ToList();
+            folders.Add(ARS.ScriptsFolder + @"\Tracks");
+            foreach (string dir in folders)
+            {
+                int count = 0;
+                foreach (string st in Directory.EnumerateFiles(dir))
+                {
+                    string n = Path.GetFileName(st);
+                    ARS.Log(ARS.LogImportance.Info, st + " - [" + string.Join(", ", TrackRepository.ReadTrackTags(st)) + "]");
+                    ars._trackTags.Add(st, string.Join(", ", TrackRepository.ReadTrackTags(st)));
+                    if (!ARS.ImmersiveJoins.ContainsKey(TrackRepository.ReadTrackStartPosition(st))) ARS.ImmersiveJoins.Add(TrackRepository.ReadTrackStartPosition(st), st);
+
+                    count++;
+                    if (allowScriptYield && count > 5)
+                    {
+                        ARS.DisplayHelpTextTimed("Loading " + n, 5000);
+                        count = 0;
+                        Script.Yield();
+                    }
+                }
+            }
+
+            ARS.KnownTracks = Directory.GetFiles(ARS.ScriptsFolder + @"\Tracks").ToList();
+            ARS.Log(ARS.LogImportance.Info, "Done.");
+            ARS.Log(ARS.LogImportance.Info, "-------------");
+        }
+
+        public static void FilterKnownTracks(ARS ars, string filter = "test")
+        {
+            ARS.FilteredTracks.Clear();
+            string[] tags = filter.ToLowerInvariant().Split(' ');
+            foreach (string file in ars._trackTags.Keys)
+            {
+                int score = 0;
+                foreach (string tag in tags)
+                {
+                    if (ars._trackTags[file].Contains(tag)) score++;
+                }
+                if (score == tags.Length) ARS.FilteredTracks.Add(file);
+            }
         }
 
         static int Wrap(int index, int count)
