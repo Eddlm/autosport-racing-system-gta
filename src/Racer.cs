@@ -105,6 +105,15 @@ namespace ARS
         int _lerpStartTime = 0;
         const int LerpToTrackMs = 1500;
 
+        // Grip checker experiment: track peak lateral Gs through a corner.
+        bool _gripCheckArmed = false;
+        float _gripCheckPeakGs = 0f;
+        int _gripCheckApexNode = -1;
+        int _gripCheckLastApexNode = -1;
+        Dictionary<int, float> _cornerSpeedOffsets = new Dictionary<int, float>();
+        float _tempSpeedUp = 0f;
+        bool _gripCheckLifted = false;
+
 
         struct TrailSample
         {
@@ -861,6 +870,7 @@ namespace ARS
                 return 999f;
             }
 
+            _gripCheckLifted = true;
             InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, -OffshootRangeMeters, -1f, 1f, true);
             float floorSpeed = 5f * VehicleData.CurrentMechanicalGrip;
             return ARS.Remap(InputForOffshoot, -1f, 1f, floorSpeed, 999f, true);
@@ -1073,6 +1083,7 @@ namespace ARS
             // Temporary: reduce both speed targets by 3 m/s to combat consistent overshooting.
             cornerSpd -= 3f;
             followTrackSpd -= 3f;
+            followTrackSpd += _tempSpeedUp;
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
@@ -1436,6 +1447,60 @@ namespace ARS
             {
                 ApplyInputs();
             }
+
+            RunGripChecker();
+        }
+
+        void RunGripChecker()
+        {
+            if (ControlledByPlayer) return;
+
+            _tempSpeedUp = Math.Max(0f, _tempSpeedUp - 1f * Game.LastFrameTime);
+
+            float latGs = Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector));
+
+            if (!_gripCheckArmed)
+            {
+                if (NextApexNode < 0) return;
+                float timeToApex = ForwardNodeDistance(NextApexNode) / Math.Max(Car.Velocity.Length(), 1f);
+                if (timeToApex > 2f) { _gripCheckLastApexNode = -1; return; }
+                if (NextApexNode == _gripCheckLastApexNode) return;
+                _gripCheckArmed = true;
+                _gripCheckApexNode = NextApexNode;
+                _gripCheckPeakGs = latGs;
+                _tempSpeedUp = GetCornerSpeedOffset(NextApexNode);
+                _gripCheckLifted = false;
+                return;
+            }
+
+            _gripCheckPeakGs = Math.Max(_gripCheckPeakGs, latGs);
+
+            if (Control.Throttle > 0.9f && latGs < 0.2f)
+            {
+                float timeToArmedApex = ForwardNodeDistance(_gripCheckApexNode) / Math.Max(Car.Velocity.Length(), 1f);
+                if (timeToArmedApex <= 2f) return;
+                if (_gripCheckLifted)
+                {
+                    _gripCheckLastApexNode = _gripCheckApexNode;
+                    _gripCheckArmed = false;
+                    _gripCheckPeakGs = 0f;
+                    return;
+                }
+                float offset = GetCornerSpeedOffset(_gripCheckApexNode);
+                if (_gripCheckPeakGs > 5f) offset = 0f;
+                else if (_gripCheckPeakGs / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f) < 0.95f) offset += 2f;
+                _cornerSpeedOffsets[_gripCheckApexNode] = offset;
+
+                UI.Notify(Name + " did " + _gripCheckPeakGs.ToString("0.0") + "/" + VehicleData.CurrentMechanicalGrip.ToString("0.0") + " on apex " + _gripCheckApexNode + " (+" + offset.ToString("0") + "m/s)");
+                _gripCheckLastApexNode = _gripCheckApexNode;
+                _gripCheckArmed = false;
+                _gripCheckPeakGs = 0f;
+            }
+        }
+
+        float GetCornerSpeedOffset(int apexNode)
+        {
+            return _cornerSpeedOffsets.TryGetValue(apexNode, out float o) ? o : 0f;
         }
         public void RunTimedCore()
         {
@@ -2275,16 +2340,16 @@ namespace ARS
         {
             NextApexNode = nodes[0];
             NextApexRadius = radii[0];
-            NextApexSpeed = NextApexNode >= 0 ? RouteIdealSpeedForRadius(NextApexRadius) : 999f;
+            NextApexSpeed = NextApexNode >= 0 ? RouteIdealSpeedForRadius(NextApexRadius) + GetCornerSpeedOffset(NextApexNode) : 999f;
             NextApexNode2 = nodes[1];
             NextApexRadius2 = radii[1];
-            NextApexSpeed2 = NextApexNode2 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius2) : 999f;
+            NextApexSpeed2 = NextApexNode2 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius2) + GetCornerSpeedOffset(NextApexNode2) : 999f;
             NextApexNode3 = nodes[2];
             NextApexRadius3 = radii[2];
-            NextApexSpeed3 = NextApexNode3 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius3) : 999f;
+            NextApexSpeed3 = NextApexNode3 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius3) + GetCornerSpeedOffset(NextApexNode3) : 999f;
             NextApexNode4 = nodes[3];
             NextApexRadius4 = radii[3];
-            NextApexSpeed4 = NextApexNode4 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius4) : 999f;
+            NextApexSpeed4 = NextApexNode4 >= 0 ? RouteIdealSpeedForRadius(NextApexRadius4) + GetCornerSpeedOffset(NextApexNode4) : 999f;
 
             if (NextApexNode >= 0)
             {
