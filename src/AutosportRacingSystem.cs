@@ -157,8 +157,8 @@ namespace ARS
 
         // Phased race instancing: track which setup phases have been completed.
         // Reset by CleanRacers (_gridInstanced) and CleanEverything (both).
-        bool _trackInstanced;
-        bool _gridInstanced;
+        internal bool _trackInstanced;
+        internal bool _gridInstanced;
 
 
         
@@ -861,30 +861,7 @@ namespace ARS
         // Phase 1: load the selected track, compute route/corners, teleport the player.
         public void InstanceTrack()
         {
-            // Tear down any existing race state before loading a new track.
-            CleanRacers();
-            _gridInstanced = false;
-
-            // Resolve which track file to load.
-            string trackPath = _selectedTrackPath;
-            if (trackPath == null)
-            {
-                if (FilteredTracks.Count == 0)
-                {
-                    UI.Notify("~r~No tracks found. Create one with 'arscreatetrack'.");
-                    return;
-                }
-                trackPath = FilteredTracks[0];
-            }
-
-            LoadTrack(LoadTrackFile(trackPath));
-
-            // LoadTrack fades out but never fades back in — do it here so the player
-            // can see the instanced track and interact with the menu.
-            if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
-
-            _trackInstanced = true;
-            Log(LogImportance.Info, "Track instanced");
+            TrackLoader.InstanceTrack(this);
         }
 
         // Phase 2: spawn the AI grid with current pace/grid settings. Repeatable —

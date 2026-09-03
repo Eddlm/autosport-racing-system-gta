@@ -390,6 +390,30 @@ namespace ARS
             return float.IsNaN(radius) || float.IsInfinity(radius) ? 999f : radius;
         }
 
+        public static void InstanceTrack(ARS ars)
+        {
+            ars.CleanRacers();
+            ars._gridInstanced = false;
+
+            string trackPath = ars._selectedTrackPath;
+            if (trackPath == null)
+            {
+                if (ARS.FilteredTracks.Count == 0)
+                {
+                    UI.Notify("~r~No tracks found. Create one with 'arscreatetrack'.");
+                    return;
+                }
+                trackPath = ARS.FilteredTracks[0];
+            }
+
+            LoadTrack(ars, LoadTrackFile(trackPath));
+
+            if (!ars._freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+
+            ars._trackInstanced = true;
+            ARS.Log(ARS.LogImportance.Info, "Track instanced");
+        }
+
         public static void DiscoverTracks(ARS ars, bool allowScriptYield = true)
         {
             ars._trackTags.Clear();
