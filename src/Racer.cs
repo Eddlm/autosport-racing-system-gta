@@ -293,7 +293,6 @@ namespace ARS
         public void Initialize()
         {
             Handling.Downforce = VehicleMemory.GetDownforce(Car);
-            if (Handling.Downforce > 100) Handling.Downforce *= 0.01f;
 
             Handling.LateralTractionCurve = ARS.RadToDeg(VehicleMemory.GetLateralTraction(Car));
             if (Handling.LateralTractionCurve < 1 || Handling.LateralTractionCurve > 100) Handling.LateralTractionCurve = 22;
@@ -1857,7 +1856,15 @@ namespace ARS
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
-                ARS.DrawText(new Vector2(0.79f, y), "GRP " + VehicleData.CurrentMechanicalGrip.ToString("0.00"),
+                ARS.DrawText(new Vector2(0.79f, y), "GRP " + VehicleData.BaseMechanicalGrip.ToString("0.00"),
+                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+
+                ARS.DrawText(new Vector2(0.79f, y), "GMP " + VehicleData.CurrentMechanicalGrip.ToString("0.00"),
+                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+
+                ARS.DrawText(new Vector2(0.79f, y), "DF  " + Handling.Downforce.ToString("0.00"),
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
@@ -2895,13 +2902,16 @@ namespace ARS
 
 
             float handlingGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
-            handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 5f);
+            handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 100f);
+            if (Handling.Downforce > 100f) handlingGrip /= 4f + Handling.Downforce / 100f;
 
             GroundGripMultiplier = ARS.WheelGripMultipliers(Car).Average();
 
             VehicleData.BaseMechanicalGrip = handlingGrip;
-            // Stability-aware grip: AvgGroundStability (0.8..1.0) multiplies the mechanical grip so
-            // grip loss from wheels lifting makes the AI more careful on corners and brake earlier.
+            // AvgGroundStability is currently hardcoded to 1f: the old wheels-off-ground detector
+            // (WheelSlips ~0) was unreliable and triggered on decompression, so it has been removed
+            // until a trustworthy replacement is found.
+            VehicleData.AvgGroundStability = 1f;
             VehicleData.CurrentMechanicalGrip = VehicleData.BaseMechanicalGrip * GroundGripMultiplier * VehicleData.AvgGroundStability;
 
             // Airborne vehicles temporarily lose available throttle; normal pedal processing restores it.
@@ -2914,28 +2924,13 @@ namespace ARS
                     Control.MaxThrottle = Math.Max(Control.MaxThrottle - 0.5f * TickScale, 0.1f);
             }
 
-        
+
             if (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) < CurrentTrackPoint.TrackHalfWidth && RacePosition <= 2 && !ARS.TerrainGripMultipliers.ContainsKey(CurrentTrackPoint.Node))
             {
                 ARS.TerrainGripMultipliers.Add(CurrentTrackPoint.Node, GroundGripMultiplier);
             }
 
-            // Slip-based stability: count wheels off the ground (slip ~0) while moving, then drop
-            // stability 0.1/s per wheel off, rise 1/s, clamped to 0.8..1.0.
-            bool moving = Car.Velocity.Length() > 1f;
-            _wheelsOffGround = moving ? ARS.WheelSlips(Car).Count(s => Math.Abs(s) < 0.01f) : 0;
-
-            if (_wheelsOffGround > 0)
-            {
-                VehicleData.AvgGroundStability -= 0.1f * _wheelsOffGround * TickScale;
-            }
-            else if (VehicleData.AvgGroundStability < 1f)
-            {
-                VehicleData.AvgGroundStability += 1f * TickScale;
-            }
-            VehicleData.AvgGroundStability = ARS.Clamp(VehicleData.AvgGroundStability, 0.8f, 1f);
-
-            VehicleData.YawRotationPerSecondDegrees = ARS.RadToDeg(Function.Call<Vector3>(Hash.GET_ENTITY_ROTATION_VELOCITY, Car).Z);            
+            VehicleData.YawRotationPerSecondDegrees = ARS.RadToDeg(Function.Call<Vector3>(Hash.GET_ENTITY_ROTATION_VELOCITY, Car).Z);
         }
         public void UpdateRivals()
         {
