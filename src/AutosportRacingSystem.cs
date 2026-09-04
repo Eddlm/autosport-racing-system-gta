@@ -749,7 +749,8 @@ namespace ARS
 
             NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", new[] { "3", "5", "7", "9", "11", "13", "15", "17", "19" });
             lapsItem.ItemChanged += (sender, args) => SaveOptionSetting("Laps", lapsItem.Items[args.Index]);
-            lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5).ToString()));
+            int laps = SettingsFile?.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) ?? 5;
+            lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(laps.ToString()));
             _raceMenu.Add(lapsItem);
 
             NativeItem instanceTrackItem = new NativeItem("Spawn Track", "Load the selected track and teleport to it.");
@@ -801,7 +802,7 @@ namespace ARS
             NativeItem startItem = new NativeItem("Start Race", "Add yourself to the grid and start the race.");
             startItem.Activated += (sender, args) =>
             {
-                _arsMenu.Visible = false;
+                _raceMenu.Visible = false;
                 StartRace();
             };
             _raceMenu.Add(startItem);
@@ -827,7 +828,7 @@ namespace ARS
             NativeItem freecamItem = new NativeItem("Freecam", "Toggle the ARS free camera.");
             freecamItem.Activated += (sender, args) =>
             {
-                _arsMenu.Visible = false;
+                cameraMenu.Visible = false;
                 _freeCam.Toggle();
             };
             cameraMenu.Add(freecamItem);
@@ -2410,6 +2411,7 @@ namespace ARS
                 UI.Notify("Re loading settings.");
                 SettingsFile = null;
                 DevSettingsFile = null;
+                RaceSettingsFile = null;
                 LoadSettings();
             }
 
