@@ -321,7 +321,7 @@ namespace ARS
             string flags = ARS.GetHandlingFlags(Car).ToString("X");
             int flagsHex = Convert.ToInt32(flags, 16);
             bool hasOffroad = (flagsHex & 0x800000) != 0 || (flagsHex & 0x200000) != 0;
-            if (hasOffroad) Handling.Gravity *= 1.2f;
+            if (hasOffroad) Handling.Gravity += 0.2f;
 
             BaseBehavior = RacerBaseBehavior.GridWait;
             FinishedPointToPoint = false;
@@ -1851,7 +1851,8 @@ namespace ARS
                     requestingMore ? Color.Red : Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
-                ARS.DrawText(new Vector2(0.79f, y), "GRV " + Handling.Gravity.ToString("0.00"),
+                float gravityOverEarth = Handling.Gravity / 9.8f;
+                ARS.DrawText(new Vector2(0.79f, y), "GRV " + gravityOverEarth.ToString("0.00"),
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
