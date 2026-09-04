@@ -2903,7 +2903,7 @@ namespace ARS
 
             float handlingGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
             handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 100f);
-            if (Handling.Downforce > 100f) handlingGrip /= 4f + Handling.Downforce / 100f;
+            handlingGrip /= 1f + 0.035f * Handling.Downforce;
 
             GroundGripMultiplier = ARS.WheelGripMultipliers(Car).Average();
 
