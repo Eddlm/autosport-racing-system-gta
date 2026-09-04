@@ -127,7 +127,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - *(Empty for now.)* The previous per-car lane-pursuit divisor (`_laneGainDivisor`, 90–110) was removed along with the exp-gain curve it scaled — see "Gs-aware preview steering" → "Lane-bias scale." All cars currently steer identically to lane targets; revisit if the field feels too uniform.
 
 ## Debug (LemonUI Debug submenu)
-- **ShowInputs** — per-car speed readout (current/intended, corner/route speed, `_speedCap`/`_confidenceMPS`) + pedal trail, plus the empirical steer-limit panel lines (LAT: measured lateral G vs the empirical reference = remembered peak, and utilization against it; BEST: remembered peak steer/G + explore/exploit mode). Panel shows for the closest AI racer to the player. The declared mechanical-grip native reads ~2× what cars actually achieve, so it is **not displayed** — only reality (the peak memory) is shown as the reference.
+- **ShowInputs** — per-car speed readout (current/intended, corner/route speed, `_speedCap`/`_confidenceMPS`) + pedal trail, plus the empirical steer-limit panel lines (LAT: measured lateral G vs the empirical reference = remembered peak, and utilization against it; BEST: remembered peak steer/G + explore/exploit mode). Panel shows for the closest AI racer to the player. **`GRP` displays `CurrentMechanicalGrip` (post-multiplier: `Base × Ground × AvgGroundStability`)**, not the raw native — the raw native is unit-inconsistent across cars (e.g. the panthere reads ~13 even though its real grip is ~1 G) and was unreadable as a sanity check. **`GRV` displays `Handling.Gravity / 9.8f`** (Earth-gravity ratio: 1.00 normal, 1.20 offroad).
 - **ShowTrackAnalysis** — lane-aim spheres to the final target, track-ahead radius, wall lines, corner chevrons.
 - **ShowAggro** — pressure chevron/text + 0.5s and 1s projections (white line/sphere, red when off-track).
 - **ShowPhysics** — G-force sphere/vector (legacy block, currently unreachable — `DrawRacerDebug` early-returns unless ShowInputs/ShowTrackAnalysis is on).
@@ -144,6 +144,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - Synchronous setup/loading work can pause `OnTick` and temporarily suppress per-frame debug visuals; revisit those operations later if setup stalls need to become incremental.
 - **Speed asymmetry** (above) is intentional.
 - **Some cars report >10 G of grip yet don't behave like it** (e.g. the panthere). The declared mechanical-grip read / downforce total can come in well above 10 G for these cars, but the AI drives them at normal cornering speeds. Don't "fix" the over-report by scaling grip or hard-capping downforce for these cars — treat the high number as a known quirk, not a bug to normalize.
+- **Offroad gravity bump requires a baseline reset before the multiplier.** `Racer.Initialize()` runs every race via `SetupRace` (and again on respawn paths), so without `Handling.Gravity = 9.8f` immediately before the offroad conditional, the `*= 1.2f` stacks multiplicatively across restarts — `GRV` drifts upward each race, eventually feeding inflated values into every speed/decel site. The reset line is load-bearing; do not remove it.
 
 ## Known TODOs / open items
 - Walls-collapsed avoidance (empty TODO in `ApplyRivalWalls`) — fold into a new input-domain cap when rebuilt.
