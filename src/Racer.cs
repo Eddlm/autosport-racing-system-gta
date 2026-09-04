@@ -326,7 +326,7 @@ namespace ARS
             BaseBehavior = RacerBaseBehavior.GridWait;
             FinishedPointToPoint = false;
 
-            Handling.Grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
+            Handling.Grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
 
             VehicleData.PerformanceIndex = (int)((Handling.EstimatedTopSpeed * 5) + (Handling.Grip * 100) + (Handling.Acceleration * 500));
             float modelGrip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, Car.Model.Hash);
@@ -1859,7 +1859,7 @@ namespace ARS
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
-                float nativeGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
+                float nativeGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
                 ARS.DrawText(new Vector2(0.79f, y), "GRP " + nativeGrip.ToString("0.00"),
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
@@ -2249,7 +2249,7 @@ namespace ARS
 
             float r = ARS.Circumradius3D(ARS.TrackPoints[n1].Position, ARS.TrackPoints[n3].Position, ARS.TrackPoints[n2].Position);
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
-            return ARS.Clamp(r * 0.5f, 5f, 999f);
+            return ARS.Clamp(r, 5f, 999f);
         }
 
         // Braking map close-corner filtering and entrance timing.
@@ -2897,7 +2897,7 @@ namespace ARS
         {
 
 
-            float handlingGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
+            float handlingGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
             handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 5f);
 
             GroundGripMultiplier = ARS.WheelGripMultipliers(Car).Average();

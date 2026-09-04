@@ -3718,7 +3718,7 @@ namespace ARS
             int nwheels = GetNumWheels(r.Car);
             float basedownf = 0.035f;
 
-            if (r.Car.HasBone("spoiler")) Gs = 0.035f * nwheels;
+            if (r.Car.HasBone("spoiler")) Gs = 0.035f * 2 * nwheels;
             else if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) Gs = 0.035f * nwheels;
             else Gs += Remap(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, basedownf, true) * r.Handling.Downforce * nwheels;
             if (float.IsNaN(Gs) || Gs > 5f) return 0f;
