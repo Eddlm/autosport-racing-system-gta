@@ -986,7 +986,7 @@ namespace ARS
 
             // Place AI cars on grid positions so the player can see the field.
             // PlaceCars also calls Initialize() which puts them in GridWait (handbrake on).
-            PlaceCars(true);
+            PlaceCars();
 
             _gridInstanced = true;
             Log(LogImportance.Info, "Grid instanced (" + Racers.Count + " AI cars)");
@@ -1917,89 +1917,14 @@ namespace ARS
 
 
 
-                enum GridSort
-                {
-                    Power, PowerDescendent, EstimatedTopSpeed, EstimatedTopSpeedDescendent, Random
-                }
-        void PlaceCars(bool sortbypower)
+        void PlaceCars()
         {
-            GridBuilder.Place(Racers, GridPositions, RouteNodes, IsPointToPoint, sortbypower);
-            return;
-
-            if (sortbypower)
-            {
-
-                GridSort sort = GridSort.Power;
-                foreach (GridSort g in Enum.GetValues(typeof(GridSort)))
-                {
-                    g.ToString().ToLowerInvariant().Contains(RaceSettingsFile.GetValue<string>("RACERS", "GridSorting", "Power").ToLowerInvariant());
-                    sort = g;
-                }
-
-                switch (sort)
-                {
-                    case GridSort.Power: { Racers = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList(); break; }
-                    case GridSort.PowerDescendent: { Racers = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).Reverse().ToList(); break; }
-                    case GridSort.EstimatedTopSpeed: { Racers = Racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).ToList(); break; }
-                    case GridSort.EstimatedTopSpeedDescendent: { Racers = Racers.OrderBy(v => Function.Call<float>((Hash)0xF417C2502FFFED43, v.Car.Model.Hash)).Reverse().ToList(); break; }
-                    case GridSort.Random: { Racers = Racers.OrderBy(v => v.Car.Model.Hash.ToString().Substring(0, 1) + (int)v.Car.PrimaryColor).ToList(); break; }
-                }
-
-            }
-            if (Racers.Any(r => r.TeamRole == Team.Cop))
-            {
-                UI.Notify("Cops 'n' Crooks detected");
-                Racers = Racers.OrderBy(v => (int)v.TeamRole).ToList();
-            }
-
-            Racer p = null;
-            int index = 0;
-            foreach (Racer r in Racers) if (r.Driver.IsPlayer)
-            {
-                index = Racers.IndexOf(r);
-                p = r;
-            }
-            if (p != null)
-            {
-
-                Racers.RemoveAt(index);
-                Racers.Add(p);
-            }
-
-
-
-            if (IsPointToPoint) { GridPositions.Reverse(); }
-            int pos = 0;
-            foreach (Racer r in Racers)
-            {
-                r.Initialize();
-
-                r.Car.Position = GridPositions[pos];
-                if (IsPointToPoint)
-                {
-                    r.Car.Heading = (RouteNodes[2] - RouteNodes[0]).ToHeading();
-                }
-                else
-                {
-                    if (pos > GridPositions.Count - 2)
-                    {
-                        r.Car.Heading = (GridPositions[pos - 2] - GridPositions[pos]).Normalized.ToHeading();
-                    }
-                    else
-                    {
-                        r.Car.Heading = (GridPositions[pos] - GridPositions[pos + 2]).Normalized.ToHeading();
-                    }
-                }
-
-                
-
-
-
-
-
-                pos++;
-            }
+            GridSort sort = GridSort.Power;
+            string setting = RaceSettingsFile.GetValue<string>("RACERS", "GridSorting", "Power");
+            if (!Enum.TryParse(setting, true, out sort)) sort = GridSort.Power;
+            GridBuilder.Place(Racers, GridPositions, RouteNodes, IsPointToPoint, sort);
         }
+
 
         public void SetupRace(bool placecars, bool tunecars)
         {
@@ -2035,7 +1960,7 @@ namespace ARS
             if (placecars)
             {
                 Log(LogImportance.Info, "Placing cars");
-                PlaceCars(true);
+                PlaceCars();
                 Racer mostPower = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList()[0];
                 int r = ((RouteNodes.Count / 3) * SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5)) + (Racers.Count * 100) + (int)Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, mostPower.Car) * 400, 0);
                 RaceReward = (int)(Math.Round((float)r / 100)) * 100;
