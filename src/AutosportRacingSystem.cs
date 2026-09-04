@@ -240,7 +240,6 @@ namespace ARS
             {
                 FillKnownDisciplines(false);
                 FillKnownTracks(false);
-                FilterKnownTracks(TrackFilter);
             });
         }
 
@@ -335,21 +334,6 @@ namespace ARS
             KnownTracks = Directory.GetFiles(ScriptsFolder + @"\Tracks").ToList();
             Log(LogImportance.Info, "Done.");
             Log(LogImportance.Info, "-------------");
-        }
-
-        public void FilterKnownTracks(string filter = "test")
-        {
-            FilteredTracks.Clear();
-            string[] tags = filter.ToLowerInvariant().Split(' ');
-            foreach (string file in _trackTags.Keys)
-            {
-                int score = 0;
-                foreach (string tag in tags)
-                {
-                    if (_trackTags[file].Contains(tag)) score++;
-                }
-                if (score == tags.Length) FilteredTracks.Add(file);
-            }
         }
 
         static XmlDocument LoadXmlOrThrow(string path)
@@ -705,8 +689,6 @@ namespace ARS
 
 
 
-        public static List<string> FilteredTracks = new List<string>();
-        public static string TrackFilter = "airport";
         public static string DisciplineFilter = "sports";
         public static float PowerTargetScale = 0.52f;
         public static float PowerBracketScale = 5f;
@@ -962,12 +944,12 @@ namespace ARS
             string trackPath = _selectedTrackPath;
             if (trackPath == null)
             {
-                if (FilteredTracks.Count == 0)
+                if (_trackListPaths.Count == 0)
                 {
                     UI.Notify("~r~No tracks found. Create one with 'arscreatetrack'.");
                     return;
                 }
-                trackPath = FilteredTracks[0];
+                trackPath = _trackListPaths[0];
             }
 
             TrackLoader.LoadTrack(this, TrackLoader.LoadTrackFile(trackPath));
@@ -2370,7 +2352,6 @@ namespace ARS
                 FillKnownDisciplines();
 
                 FillKnownTracks();
-                FilterKnownTracks(TrackFilter);
             }
             if (WasCheatStringJustEntered("arscarlisten"))
             {
@@ -3500,7 +3481,6 @@ namespace ARS
 
 
                 _intendedOpponents = 4;
-                TrackFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "TrackFilter", "city");
                 DisciplineFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "Disciplines", "muscle");
                 Log(LogImportance.Info, "Loaded Options.");
             }
