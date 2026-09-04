@@ -117,6 +117,7 @@ namespace ARS
 
         public static ScriptSettings SettingsFile;
         public static ScriptSettings DevSettingsFile;
+        public static ScriptSettings DevMenuFile;
 
         public static bool HideHudMode = false;
 
@@ -723,8 +724,6 @@ namespace ARS
         readonly ObjectPool _menuPool = new ObjectPool();
         NativeMenu _arsMenu;
         NativeMenu _raceMenu;
-        NativeMenu _trackMenu;
-        NativeMenu _gridMenu;
 
         // Menu track selector: the user picks a race from the list and Start Race uses it.
         NativeListItem<string> _trackListItem;
@@ -745,43 +744,31 @@ namespace ARS
             };
 
             // ── Race submenu ──
-            _raceMenu = new NativeMenu("Race", "SETUP")
+            _raceMenu = new NativeMenu("Race", "Race")
             {
                 UseMouse = false,
                 DisableControls = true
             };
 
-            // ── Track submenu (inside Race) ──
-            _trackMenu = new NativeMenu("Track", "TRACK")
-            {
-                UseMouse = false,
-                DisableControls = true
-            };
-
+            // ── Track items (flattened into Race) ──
             _trackListItem = new NativeListItem<string>("Select Track", "Pick the race to instance.", Array.Empty<string>());
             _trackListItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index < _trackListPaths.Count)
                     _selectedTrackPath = _trackListPaths[args.Index];
             };
-            _trackMenu.Add(_trackListItem);
+            _raceMenu.Add(_trackListItem);
 
-            NativeItem instanceTrackItem = new NativeItem("Instance Track", "Load the selected track and teleport to it.");
+            NativeItem instanceTrackItem = new NativeItem("Spawn Track", "Load the selected track and teleport to it.");
             instanceTrackItem.Activated += (sender, args) =>
             {
-                _trackMenu.Visible = false;
+                _raceMenu.Visible = false;
                 InstanceTrack();
-                _trackMenu.Visible = true;
+                _raceMenu.Visible = true;
             };
-            _trackMenu.Add(instanceTrackItem);
+            _raceMenu.Add(instanceTrackItem);
 
-            // ── Grid submenu (inside Race) ──
-            _gridMenu = new NativeMenu("Grid", "GRID")
-            {
-                UseMouse = false,
-                DisableControls = true
-            };
-
+            // ── Grid items (flattened into Race) ──
             _gridSizeItem = new NativeListItem<string>("Target Grid Size", "Target number of vehicles for the grid.", new[] { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12" });
             _gridSizeItem.ItemChanged += (sender, args) =>
             {
@@ -790,7 +777,7 @@ namespace ARS
             };
             _intendedOpponents = (int)Clamp(_intendedOpponents, 0, 12);
             _gridSizeItem.SelectedIndex = _intendedOpponents;
-            _gridMenu.Add(_gridSizeItem);
+            _raceMenu.Add(_gridSizeItem);
 
             _powerTargetItem = new NativeListItem<string>("Pace Target", "Target pace score for grid selection.", Array.Empty<string>());
             _powerTargetItem.ItemChanged += (sender, args) =>
@@ -798,7 +785,7 @@ namespace ARS
                 if (args.Index >= 0 && args.Index < _powerTargetValues.Count)
                     PowerTargetScale = _powerTargetValues[args.Index];
             };
-            _gridMenu.Add(_powerTargetItem);
+            _raceMenu.Add(_powerTargetItem);
 
             _powerBracketItem = new NativeListItem<string>("Pace Bracket", "Allowed pace index above or below the target.", Array.Empty<string>());
             _powerBracketItem.ItemChanged += (sender, args) =>
@@ -806,31 +793,27 @@ namespace ARS
                 if (args.Index >= 0 && args.Index < _powerBracketValues.Count)
                     PowerBracketScale = _powerBracketValues[args.Index];
             };
-            _gridMenu.Add(_powerBracketItem);
+            _raceMenu.Add(_powerBracketItem);
 
-            NativeItem instanceGridItem = new NativeItem("Instance Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing pace/size.");
+            NativeItem instanceGridItem = new NativeItem("Spawn Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing pace/size.");
             instanceGridItem.Activated += (sender, args) =>
             {
-                _gridMenu.Visible = false;
+                _raceMenu.Visible = false;
                 InstanceGrid();
-                _gridMenu.Visible = true;
+                _raceMenu.Visible = true;
             };
-            _gridMenu.Add(instanceGridItem);
+            _raceMenu.Add(instanceGridItem);
 
-            // Link Track and Grid as submenus of Race
-            _raceMenu.AddSubMenu(_trackMenu);
-            _raceMenu.AddSubMenu(_gridMenu);
-
-            // ── Root-level actions ──
-
-            // Start: add player to grid, place cars, tune, countdown.
-            NativeItem startItem = new NativeItem("Start", "Add yourself to the grid and start the race.");
+            // Start: add player to grid, place cars, tune, countdown. Lives at the end of Race.
+            NativeItem startItem = new NativeItem("Start Race", "Add yourself to the grid and start the race.");
             startItem.Activated += (sender, args) =>
             {
                 _arsMenu.Visible = false;
                 StartRace();
             };
-            _arsMenu.Add(startItem);
+            _raceMenu.Add(startItem);
+
+            // ── Root-level actions ──
 
             // End: tear down race, clean everything.
             NativeItem endItem = new NativeItem("End", "Tear down the current race and clean everything.");
@@ -840,7 +823,7 @@ namespace ARS
                 CleanEverything();
                 UI.Notify("~r~Race ended.~w~ Everything cleaned.");
             };
-            _arsMenu.Add(endItem);
+            // (End item kept but no longer listed in the root menu.)
 
             // Freecam toggle.
             NativeItem freecamItem = new NativeItem("Freecam", "Toggle the ARS free camera.");
@@ -852,7 +835,7 @@ namespace ARS
             _arsMenu.Add(freecamItem);
 
             // ── Settings submenu (root) ──
-            NativeMenu settingsMenu = new NativeMenu("Settings", "OPTIONS", "Configure ARS debug and race setup options.")
+            NativeMenu settingsMenu = new NativeMenu("Dev Settings", "Dev Settings", "Configure ARS debug and race setup options.")
             {
                 UseMouse = false,
                 DisableControls = true
@@ -866,41 +849,32 @@ namespace ARS
             AddDebugCheckbox(settingsMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
             AddDebugCheckbox(settingsMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~75% of each braking phase.");
 
-            NativeListItem<string> previewBlendItem = new NativeListItem<string>("Preview Blend", "How much of the lane error is measured at the projection (Gs-aware) rather than at the car.", new[] { "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%" });
-            previewBlendItem.ItemChanged += (sender, args) =>
-            {
-                if (args.Index >= 0 && args.Index < 10)
-                    GsAwarePreviewBlend = (args.Index + 1) / 10f;
-            };
-            previewBlendItem.SelectedIndex = 4; // 50%
-            settingsMenu.Add(previewBlendItem);
-
-            NativeListItem<string> laneGainExpItem = new NativeListItem<string>("Lane Gain Exponent", "Shape of the lane-pursuit gain curve: below 1 boosts small errors (punchier), 1 is linear, above 1 damps them (softer).", new[] { "0.5", "1.0", "1.5", "2.0" });
-            float[] laneGainExpValues = { 0.5f, 1f, 1.5f, 2f };
-            laneGainExpItem.ItemChanged += (sender, args) =>
-            {
-                if (args.Index >= 0 && args.Index < laneGainExpValues.Length)
-                    LaneGainExponent = laneGainExpValues[args.Index];
-            };
-            laneGainExpItem.SelectedIndex = 1; // 1.0
-            settingsMenu.Add(laneGainExpItem);
-
-            // Link Race and Settings as submenus of root
+            // Link Race and Dev Settings as submenus of root
             _arsMenu.AddSubMenu(_raceMenu);
             _arsMenu.AddSubMenu(settingsMenu);
 
             // Register all menus in the pool
             _menuPool.Add(_arsMenu);
             _menuPool.Add(_raceMenu);
-            _menuPool.Add(_trackMenu);
-            _menuPool.Add(_gridMenu);
             _menuPool.Add(settingsMenu);
         }
         void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description)
         {
             NativeCheckboxItem checkbox = new NativeCheckboxItem(title, description, DebugToggles[option]);
-            checkbox.CheckboxChanged += (sender, args) => DebugToggles[option] = checkbox.Checked;
+            checkbox.CheckboxChanged += (sender, args) =>
+            {
+                DebugToggles[option] = checkbox.Checked;
+                SaveDevToggle(option, checkbox.Checked);
+            };
             menu.Add(checkbox);
+        }
+        void SaveDevToggle(Options option, bool value)
+        {
+            if (DevMenuFile == null)
+                DevMenuFile = ScriptSettings.Load(ScriptsFolder + @"\DevSettings.ini");
+            if (DevMenuFile == null) return;
+            DevMenuFile.SetValue("DEBUG", option.ToString(), value);
+            DevMenuFile.Save();
         }
         // ── Phased race instancing ──
         // Each phase is a self-contained method callable individually or chained
@@ -3573,6 +3547,20 @@ namespace ARS
             {
                 Log(LogImportance.Error, " '" + ScriptsFolder + "/MemoryOffsets.ini' does not exist. ARS will try to learn the memory offsets from the game.");
                 UI.Notify("~o~Failed to load the MemoryOffsets file.~w~ Check you've installed ARS properly.");
+            }
+
+            Log(LogImportance.Info, "Loading DevSettings.ini ...");
+            DevMenuFile = null;
+            if (File.Exists(ScriptsFolder + @"\DevSettings.ini"))
+            {
+                DevMenuFile = ScriptSettings.Load(ScriptsFolder + @"\DevSettings.ini");
+                foreach (Options option in DebugToggles.Keys.ToArray())
+                    DebugToggles[option] = DevMenuFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]);
+                Log(LogImportance.Info, "Loaded DevSettings.");
+            }
+            else
+            {
+                Log(LogImportance.Error, " '" + ScriptsFolder + "/DevSettings.ini' does not exist. Debug toggles will be default.");
             }
 
         }

@@ -18,7 +18,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - **Corrections require sources.** When correcting the user on variable names or facts, do so only when confident and after checking the actual code; if uncertain, say so rather than guess.
 
 ## Workflow
-- **⚠️ RELEASE DEADLINE — September 10.** The user needs to release a WIP by 10 September. **Remind the user to stop adding features and tweaking** — the priority is shipping, not scope. When the user starts proposing new features or tuning, gently flag the deadline and ask whether it's worth the risk before the release. (User's explicit request, recorded so it persists across sessions.)
+- **⚠️ SEPT 10 — WIP release for feedback-gathering, not a freeze.** Ship a WIP by 10 September so users can play it and report back (menu work is partly to make that feedback easier). **No 1.0 is scheduled** — the plan is to keep updating over time after the WIP. So this is not a feature-freeze gate; don't reflexively talk the user out of new features or tuning. Still keep changes modest and verified (compile → in-game check → commit) since the WIP is what users will exercise.
 - **Every file change → compile (with autocopy) → user verifies in-game → then commit.** Never commit before the human confirms the change works. The human is the gatekeeper for verification; do not treat a successful compile as "verified."
 - **Documentation-only changes:** when a change is strictly comments or other non-executable documentation and the build passes, in-game verification is not required before committing. Git is the backup while the work remains undistributed.
 
@@ -39,7 +39,9 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 
 ## Dependencies and UI
 - **Script folder location is one constant**: `ARS.ScriptsFolder` (default `@"scripts\AutosportRacingSystem"`) drives every read/write path in the project (Tracks, Vehicles, Drivers, Options.ini, Log.log, etc.) — change it there and every site picks up the new folder. The `.csproj` `GtaArsScriptsDir` mirrors this independently; keep them in sync.
-- LemonUI SHVDN2 replaces the hand-drawn menu. Root actions: Start Race and Freecam; the race setup area exposes track selection, target grid size, pace target, and pace bracket; Debug submenu exposes debug toggles. If available, LSIA Test Track is selected as the default track.
+- LemonUI SHVDN2 replaces the hand-drawn menu. Root actions: Start Race and Freecam; the race setup area exposes track selection, target grid size, pace target, and pace bracket; Debug submenu ("Dev Settings", formerly Settings/OPTIONS) exposes debug toggles. If available, LSIA Test Track is selected as the default track.
+- **Debug toggles persist to `DevSettings.ini`** in the scripts folder (separate from `Developer Settings.ini`): `LoadSettings` reads each `Options` toggle into `DebugToggles` on startup, and toggling a checkbox in the Dev Settings submenu writes it back via `SaveDevToggle` (a `GTA.ScriptSettings.SetValue`+`Save`). The file isn't tracked in the git repo — it lives only in the game install.
+- **SHVDN `ScriptSettings` quirk**: `Load` never returns `null` (returns a fresh empty settings object when the file is missing) and `Save` creates the file via `File.CreateText` — so a deleted file regenerates on the next write. Booleans are serialized as `True`/`False` (capitalized) and saved values parse case-insensitively.
 - Reference: `C:\Users\Usuario\Downloads\LemonUI\SHVDN2\LemonUI.SHVDN2.dll`; deployed beside `ARS.dll`.
 - The menu opens through the existing Sprint + Context hotkey or `arsmenu`; LemonUI controls navigation/cancel/input suppression.
 
