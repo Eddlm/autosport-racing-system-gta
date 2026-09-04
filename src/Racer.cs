@@ -228,7 +228,7 @@ namespace ARS
                 Function.Call(GTA.Native.Hash.SET_DRIVER_ABILITY, Driver, 0f);
                 Function.Call(GTA.Native.Hash.SET_DRIVER_AGGRESSIVENESS, Driver, 0f);
 
-                if (ARS.DevSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1) == 2)
+                if (ARS.RaceSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1) == 2)
                 {
                     Function.Call(GTA.Native.Hash.SET_ENTITY_PROOFS, Car, true, true, true, true, true, true, true, true);
                     Function.Call(GTA.Native.Hash.SET_ENTITY_PROOFS, Driver, true, true, true, true, true, true, true, true);
@@ -240,7 +240,7 @@ namespace ARS
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_HAS_STRONG_AXLES, Car, true);
                     try { Car.EngineCanDegrade = false; } catch (Exception) { }
                 }
-                else if (ARS.DevSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1) == 1)
+                else if (ARS.RaceSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1) == 1)
                 {
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_STRONG, Car, true);
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_HAS_STRONG_AXLES, Car, true);
@@ -2653,7 +2653,7 @@ namespace ARS
                 if (Function.Call<bool>((Hash)0x3D34E80EED4AE3BE, Car) && Control.Brake > 0.1f) Function.Call((Hash)0x81E1552E35DC3839, Car, false);
 
 
-                if (ARS.DevSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1) == 2 && Function.Call<bool>(Hash._IS_VEHICLE_DAMAGED, Car))
+                if (ARS.RaceSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1) == 2 && Function.Call<bool>(Hash._IS_VEHICLE_DAMAGED, Car))
                 {
                     Car.Repair();
                 }

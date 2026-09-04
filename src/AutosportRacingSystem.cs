@@ -118,6 +118,7 @@ namespace ARS
         public static ScriptSettings SettingsFile;
         public static ScriptSettings DevSettingsFile;
         public static ScriptSettings DevMenuFile;
+        public static ScriptSettings RaceSettingsFile;
 
         public static bool HideHudMode = false;
 
@@ -712,6 +713,9 @@ namespace ARS
         // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
+        // Config .ini files (Options/Developer Settings/DevSettings/MemoryOffsets) live in a
+        // dedicated Settings subfolder, derived from ScriptsFolder so the base stays in one place.
+        public static string SettingsFolder => ScriptsFolder + @"\Settings";
         // Test-only: force a specific car into the pace-matched grid for the next few tests.
         // Match is by the XML <Model> InnerText (case-insensitive, e.g. "tiberius"). Flip to null to disable.
         public static List<string> AlwaysIncludeModelNames = new List<string> { "tiberius", "2100457220" };
@@ -815,15 +819,14 @@ namespace ARS
 
             // ── Root-level actions ──
 
-            // End: tear down race, clean everything.
-            NativeItem endItem = new NativeItem("End", "Tear down the current race and clean everything.");
+            // End Race: tear down race, clean everything. Listed last in the root.
+            NativeItem endItem = new NativeItem("End Race", "Tear down the current race and clean everything.");
             endItem.Activated += (sender, args) =>
             {
                 _arsMenu.Visible = false;
                 CleanEverything();
                 UI.Notify("~r~Race ended.~w~ Everything cleaned.");
             };
-            // (End item kept but no longer listed in the root menu.)
 
             // Freecam toggle.
             NativeItem freecamItem = new NativeItem("Freecam", "Toggle the ARS free camera.");
@@ -849,14 +852,50 @@ namespace ARS
             AddDebugCheckbox(settingsMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
             AddDebugCheckbox(settingsMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~75% of each braking phase.");
 
-            // Link Race and Dev Settings as submenus of root
+            // ── Racers submenu (root) — reads/writes Settings\Settings.ini ([RACERS]) ──
+            NativeMenu racersMenu = new NativeMenu("Racers", "Racers", "Grid sorting, race timeout, AI behaviour and tuning.")
+            {
+                UseMouse = false,
+                DisableControls = true
+            };
+            NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "How the grid is ordered.", new[] { "Power", "PowerDescendent", "TopSpeed", "TopSpeedDescendent", "Random" });
+            gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", gridSortItem.Items[args.Index]);
+            gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(RaceSettingsFile.GetValue<string>("RACERS", "GridSorting", "Random")));
+            racersMenu.Add(gridSortItem);
+
+            NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", new[] { "15", "30", "45", "60" });
+            timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
+            timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(RaceSettingsFile.GetValue<int>("RACERS", "TimeoutSeconds", 30).ToString()));
+            racersMenu.Add(timeoutItem);
+
+            NativeListItem<string> autofixItem = new NativeListItem<string>("AI Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", new[] { "0", "1", "2" });
+            autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
+            autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(RaceSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString()));
+            racersMenu.Add(autofixItem);
+
+            NativeListItem<string> tuningItem = new NativeListItem<string>("AI Tuning Level", "0 = none, 1 = visual, 2 = +performance, 3 = +engine boost.", new[] { "0", "1", "2", "3" });
+            tuningItem.ItemChanged += (sender, args) => SaveRacerSetting("AITuningLevel", tuningItem.Items[args.Index]);
+            tuningItem.SelectedIndex = Math.Max(0, tuningItem.Items.IndexOf(RaceSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 1).ToString()));
+            racersMenu.Add(tuningItem);
+
+            // Link Race, Dev Settings and Racers as submenus of root
             _arsMenu.AddSubMenu(_raceMenu);
             _arsMenu.AddSubMenu(settingsMenu);
+            _arsMenu.AddSubMenu(racersMenu);
+            _arsMenu.Add(endItem);
 
             // Register all menus in the pool
             _menuPool.Add(_arsMenu);
             _menuPool.Add(_raceMenu);
             _menuPool.Add(settingsMenu);
+            _menuPool.Add(racersMenu);
+        }
+        void SaveRacerSetting(string key, string value)
+        {
+            if (RaceSettingsFile == null)
+                RaceSettingsFile = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
+            RaceSettingsFile.SetValue("RACERS", key, value);
+            RaceSettingsFile.Save();
         }
         void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description)
         {
@@ -871,7 +910,7 @@ namespace ARS
         void SaveDevToggle(Options option, bool value)
         {
             if (DevMenuFile == null)
-                DevMenuFile = ScriptSettings.Load(ScriptsFolder + @"\DevSettings.ini");
+                DevMenuFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
             if (DevMenuFile == null) return;
             DevMenuFile.SetValue("DEBUG", option.ToString(), value);
             DevMenuFile.Save();
@@ -1303,7 +1342,7 @@ namespace ARS
                         LeaderboardFinish.Add(racer);
                         racer.BaseBehavior = RacerBaseBehavior.FinishedRace;
                         if (IsPointToPoint) racer.BaseBehavior = RacerBaseBehavior.FinishedStandStill;
-                        if (_raceTimedFinishMs == 0) _raceTimedFinishMs = Game.GameTime + (DevSettingsFile.GetValue<int>("RACERS", "TimeoutSeconds", 30) * 1000);
+                        if (_raceTimedFinishMs == 0) _raceTimedFinishMs = Game.GameTime + (RaceSettingsFile.GetValue<int>("RACERS", "TimeoutSeconds", 30) * 1000);
                     }
                 }
 
@@ -1955,7 +1994,7 @@ namespace ARS
                 GridSort sort = GridSort.Power;
                 foreach (GridSort g in Enum.GetValues(typeof(GridSort)))
                 {
-                    g.ToString().ToLowerInvariant().Contains(DevSettingsFile.GetValue<string>("RACERS", "GridSorting", "Power").ToLowerInvariant());
+                    g.ToString().ToLowerInvariant().Contains(RaceSettingsFile.GetValue<string>("RACERS", "GridSorting", "Power").ToLowerInvariant());
                     sort = g;
                 }
 
@@ -2071,7 +2110,7 @@ namespace ARS
                 {
                     if (!Game.Player.Character.IsInVehicle(r.Car) && r.Car.GetMod(VehicleMod.Engine) == -1)
                     {
-                        switch (DevSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 1))
+                        switch (RaceSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 1))
                         {
                             case 0: continue;
                             case 1: ARS.RandomTuning(r.Car, true, true, true, false, false); break;
@@ -3499,10 +3538,10 @@ namespace ARS
             Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
             Log(LogImportance.Info, "Loading Options.ini ...");
-            if (File.Exists(ScriptsFolder + @"\Options.ini"))
+            if (File.Exists(SettingsFolder + @"\Options.ini"))
             {
 
-                SettingsFile = ScriptSettings.Load(ScriptsFolder + @"\Options.ini");
+                SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
 
 
                 _intendedOpponents = 4;
@@ -3512,28 +3551,32 @@ namespace ARS
             }
             else
             {
-                Log(LogImportance.Error, " '" + ScriptsFolder + "/Options.ini' does not exist. All config values will be default.");
+                Log(LogImportance.Error, " '" + SettingsFolder + "/Options.ini' does not exist. All config values will be default.");
                 UI.Notify("~o~Failed to load the Options file.~w~ Check you've installed ARS properly.");
             }
 
             Log(LogImportance.Info, "Loading Developer Settings.ini ...");
-            if (File.Exists(ScriptsFolder + @"\Developer Settings.ini"))
+            if (File.Exists(SettingsFolder + @"\Developer Settings.ini"))
             {
 
-                DevSettingsFile = ScriptSettings.Load(ScriptsFolder + @"\Developer Settings.ini");
+                DevSettingsFile = ScriptSettings.Load(SettingsFolder + @"\Developer Settings.ini");
 
 
                 Log(LogImportance.Info, "Loaded Developer settings.");
             }
             else
             {
-                Log(LogImportance.Error, " '" + ScriptsFolder + "/Settings.ini' does not exist. All config values will be default.");
+                Log(LogImportance.Error, " '" + SettingsFolder + "/Developer Settings.ini' does not exist. All config values will be default.");
                 UI.Notify("~o~Failed to load the Settings file.~w~ Check you've installed ARS properly.");
             }
 
-            if (File.Exists(ScriptsFolder + @"\MemoryOffsets.ini"))
+            Log(LogImportance.Info, "Loading Settings.ini ...");
+            RaceSettingsFile = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
+            Log(LogImportance.Info, "Loaded Settings.");
+
+            if (File.Exists(SettingsFolder + @"\MemoryOffsets.ini"))
             {
-                ScriptSettings menOffexts = ScriptSettings.Load(ScriptsFolder + @"\MemoryOffsets.ini");
+                ScriptSettings menOffexts = ScriptSettings.Load(SettingsFolder + @"\MemoryOffsets.ini");
                 ThrottleOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Throttle", 0x0);
                 SteerOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Steer", 0x0);
                 BrakeOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Brake", 0x0);
@@ -3545,22 +3588,22 @@ namespace ARS
             }
             else
             {
-                Log(LogImportance.Error, " '" + ScriptsFolder + "/MemoryOffsets.ini' does not exist. ARS will try to learn the memory offsets from the game.");
+                Log(LogImportance.Error, " '" + SettingsFolder + "/MemoryOffsets.ini' does not exist. ARS will try to learn the memory offsets from the game.");
                 UI.Notify("~o~Failed to load the MemoryOffsets file.~w~ Check you've installed ARS properly.");
             }
 
             Log(LogImportance.Info, "Loading DevSettings.ini ...");
             DevMenuFile = null;
-            if (File.Exists(ScriptsFolder + @"\DevSettings.ini"))
+            if (File.Exists(SettingsFolder + @"\DevSettings.ini"))
             {
-                DevMenuFile = ScriptSettings.Load(ScriptsFolder + @"\DevSettings.ini");
+                DevMenuFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
                 foreach (Options option in DebugToggles.Keys.ToArray())
                     DebugToggles[option] = DevMenuFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]);
                 Log(LogImportance.Info, "Loaded DevSettings.");
             }
             else
             {
-                Log(LogImportance.Error, " '" + ScriptsFolder + "/DevSettings.ini' does not exist. Debug toggles will be default.");
+                Log(LogImportance.Error, " '" + SettingsFolder + "/DevSettings.ini' does not exist. Debug toggles will be default.");
             }
 
         }
