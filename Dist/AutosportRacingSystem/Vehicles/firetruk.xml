@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>firetruk</Name>
+    <Class>Emergency</Class>
+    <Disciplines>
+      <Discipline>emergency</Discipline>
+      <Discipline>firetruk</Discipline>
+      <Discipline>firetruk</Discipline>
+    </Disciplines>
+    <Model ModelName="firetruk">1938952078</Model>
+  </Vehicle>
+</Data>

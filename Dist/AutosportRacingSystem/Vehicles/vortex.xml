@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>vortex</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>vortex</Discipline>
+      <Discipline>vortex</Discipline>
+    </Disciplines>
+    <Model ModelName="vortex">-609625092</Model>
+  </Vehicle>
+</Data>

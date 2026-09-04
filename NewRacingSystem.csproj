@@ -100,6 +100,12 @@
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GtaArsScriptsDir)" />
     <Copy SourceFiles="$(TargetDir)LemonUI.SHVDN2.dll" DestinationFolder="$(GtaArsScriptsDir)" Condition="Exists('$(TargetDir)LemonUI.SHVDN2.dll')" />
   </Target>
+  <!-- Mirror the live install into Dist\AutosportRacingSystem (the version-controlled, ship-ready
+       set). Excludes runtime cruft: zip, log, and crash-backup files. -->
+  <Target Name="RefreshDist" AfterTargets="Build" Condition="Exists('$(GtaArsScriptsDir)')">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem" />
+    <Exec Command="robocopy &quot;$(GtaArsScriptsDir)&quot; &quot;$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem&quot; /E /XF *.zip *.log *.bak-crash /NFL /NDL /NJH /NJS" IgnoreExitCode="true" />
+  </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

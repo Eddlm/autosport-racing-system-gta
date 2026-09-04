@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>banshee</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>banshee</Discipline>
+      <Discipline>banshee</Discipline>
+    </Disciplines>
+    <Model ModelName="banshee">-1041692462</Model>
+  </Vehicle>
+</Data>

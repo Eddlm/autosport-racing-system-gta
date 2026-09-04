@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>airbus</Name>
+    <Class>Service</Class>
+    <Disciplines>
+      <Discipline>service</Discipline>
+      <Discipline>airbus</Discipline>
+      <Discipline>airbus</Discipline>
+    </Disciplines>
+    <Model ModelName="airbus">1283517198</Model>
+  </Vehicle>
+</Data>

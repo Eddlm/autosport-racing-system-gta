@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>manana</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>manana</Discipline>
+      <Discipline>manana</Discipline>
+    </Disciplines>
+    <Model ModelName="manana">-2124201592</Model>
+  </Vehicle>
+</Data>

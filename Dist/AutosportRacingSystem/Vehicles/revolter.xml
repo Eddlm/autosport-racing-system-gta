@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>revolter</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>revolter</Discipline>
+      <Discipline>revolter</Discipline>
+    </Disciplines>
+    <Model ModelName="revolter">-410205223</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>conada</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>conada</Discipline>
+      <Discipline>conada</Discipline>
+    </Disciplines>
+    <Model ModelName="conada">-477831899</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>volatus</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>volatus</Discipline>
+      <Discipline>volatus</Discipline>
+    </Disciplines>
+    <Model ModelName="volatus">-1845487887</Model>
+  </Vehicle>
+</Data>

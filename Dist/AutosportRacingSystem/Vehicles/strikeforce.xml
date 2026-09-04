@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>strikeforce</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>strikeforce</Discipline>
+      <Discipline>strikeforce</Discipline>
+    </Disciplines>
+    <Model ModelName="strikeforce">1692272545</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>landstalker2</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>landstalker2</Discipline>
+      <Discipline>landstalker2</Discipline>
+    </Disciplines>
+    <Model ModelName="landstalker2">-838099166</Model>
+  </Vehicle>
+</Data>

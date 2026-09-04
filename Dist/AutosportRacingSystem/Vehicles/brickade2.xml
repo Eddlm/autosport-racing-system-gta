@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>brickade2</Name>
+    <Class>Service</Class>
+    <Disciplines>
+      <Discipline>service</Discipline>
+      <Discipline>brickade2</Discipline>
+      <Discipline>brickade2</Discipline>
+    </Disciplines>
+    <Model ModelName="brickade2">-1576586413</Model>
+  </Vehicle>
+</Data>

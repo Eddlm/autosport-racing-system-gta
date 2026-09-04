@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>mamba</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>mamba</Discipline>
+      <Discipline>mamba</Discipline>
+    </Disciplines>
+    <Model ModelName="mamba">-1660945322</Model>
+  </Vehicle>
+</Data>

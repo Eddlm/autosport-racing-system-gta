@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>ninef</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>ninef</Discipline>
+      <Discipline>ninef</Discipline>
+    </Disciplines>
+    <Model ModelName="ninef">1032823388</Model>
+  </Vehicle>
+</Data>

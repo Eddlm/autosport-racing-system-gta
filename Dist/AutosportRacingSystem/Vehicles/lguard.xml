@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>lguard</Name>
+    <Class>Emergency</Class>
+    <Disciplines>
+      <Discipline>emergency</Discipline>
+      <Discipline>lguard</Discipline>
+      <Discipline>lguard</Discipline>
+    </Disciplines>
+    <Model ModelName="lguard">469291905</Model>
+  </Vehicle>
+</Data>

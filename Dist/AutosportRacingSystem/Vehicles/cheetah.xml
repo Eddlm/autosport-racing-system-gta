@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cheetah</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>cheetah</Discipline>
+      <Discipline>cheetah</Discipline>
+    </Disciplines>
+    <Model ModelName="cheetah">-1311154784</Model>
+  </Vehicle>
+</Data>

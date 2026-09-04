@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>prairie</Name>
+    <Class>Compacts</Class>
+    <Disciplines>
+      <Discipline>compacts</Discipline>
+      <Discipline>prairie</Discipline>
+      <Discipline>prairie</Discipline>
+    </Disciplines>
+    <Model ModelName="prairie">-1450650718</Model>
+  </Vehicle>
+</Data>

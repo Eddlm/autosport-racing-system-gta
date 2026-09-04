@@ -28,3 +28,6 @@ Thumbs.db
 
 # Utility / junk folder
 Util/
+
+# Dist mirror: keep only the data (ini/xml/docs), not the built binaries
+Dist/**/*.dll

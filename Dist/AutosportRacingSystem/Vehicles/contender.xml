@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>contender</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>contender</Discipline>
+      <Discipline>contender</Discipline>
+    </Disciplines>
+    <Model ModelName="contender">683047626</Model>
+  </Vehicle>
+</Data>

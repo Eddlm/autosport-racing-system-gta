@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>jester</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>jester</Discipline>
+      <Discipline>jester</Discipline>
+    </Disciplines>
+    <Model ModelName="jester">-1297672541</Model>
+  </Vehicle>
+</Data>

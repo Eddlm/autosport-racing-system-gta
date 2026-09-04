@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>astrale</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>astrale</Discipline>
+      <Discipline>astrale</Discipline>
+    </Disciplines>
+    <Model ModelName="astrale">1596736441</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cognoscenti</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>cognoscenti</Discipline>
+      <Discipline>cognoscenti</Discipline>
+    </Disciplines>
+    <Model ModelName="cognoscenti">-2030171296</Model>
+  </Vehicle>
+</Data>

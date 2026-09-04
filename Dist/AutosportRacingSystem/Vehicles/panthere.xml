@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>panthere</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>panthere</Discipline>
+      <Discipline>panthere</Discipline>
+    </Disciplines>
+    <Model ModelName="panthere">2100457220</Model>
+  </Vehicle>
+</Data>

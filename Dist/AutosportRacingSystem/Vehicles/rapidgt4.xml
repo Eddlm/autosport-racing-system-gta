@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>rapidgt4</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>rapidgt4</Discipline>
+      <Discipline>rapidgt4</Discipline>
+    </Disciplines>
+    <Model ModelName="rapidgt4">1761301369</Model>
+  </Vehicle>
+</Data>

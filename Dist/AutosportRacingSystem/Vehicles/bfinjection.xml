@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bfinjection</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>bfinjection</Discipline>
+      <Discipline>bfinjection</Discipline>
+    </Disciplines>
+    <Model ModelName="bfinjection">1126868326</Model>
+  </Vehicle>
+</Data>

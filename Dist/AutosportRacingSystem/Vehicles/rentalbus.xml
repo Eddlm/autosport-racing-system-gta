@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>rentalbus</Name>
+    <Class>Service</Class>
+    <Disciplines>
+      <Discipline>service</Discipline>
+      <Discipline>rentalbus</Discipline>
+      <Discipline>rentalbus</Discipline>
+    </Disciplines>
+    <Model ModelName="rentalbus">-1098802077</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>akula</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>akula</Discipline>
+      <Discipline>akula</Discipline>
+    </Disciplines>
+    <Model ModelName="akula">1181327175</Model>
+  </Vehicle>
+</Data>

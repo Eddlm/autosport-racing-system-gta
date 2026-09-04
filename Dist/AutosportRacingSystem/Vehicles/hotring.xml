@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>hotring</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>hotring</Discipline>
+      <Discipline>hotring</Discipline>
+    </Disciplines>
+    <Model ModelName="hotring">1115909093</Model>
+  </Vehicle>
+</Data>

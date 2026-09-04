@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>enduro</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>enduro</Discipline>
+      <Discipline>enduro</Discipline>
+    </Disciplines>
+    <Model ModelName="enduro">1753414259</Model>
+  </Vehicle>
+</Data>

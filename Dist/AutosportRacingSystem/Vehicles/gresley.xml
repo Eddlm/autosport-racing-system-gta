@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>gresley</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>gresley</Discipline>
+      <Discipline>gresley</Discipline>
+    </Disciplines>
+    <Model ModelName="gresley">-1543762099</Model>
+  </Vehicle>
+</Data>

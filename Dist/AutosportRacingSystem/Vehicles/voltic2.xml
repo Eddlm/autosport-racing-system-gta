@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>voltic2</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>voltic2</Discipline>
+      <Discipline>voltic2</Discipline>
+    </Disciplines>
+    <Model ModelName="voltic2">989294410</Model>
+  </Vehicle>
+</Data>

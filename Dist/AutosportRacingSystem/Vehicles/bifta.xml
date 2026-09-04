@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bifta</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>bifta</Discipline>
+      <Discipline>bifta</Discipline>
+    </Disciplines>
+    <Model ModelName="bifta">-349601129</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>faction3</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>faction3</Discipline>
+      <Discipline>faction3</Discipline>
+    </Disciplines>
+    <Model ModelName="faction3">-2039755226</Model>
+  </Vehicle>
+</Data>

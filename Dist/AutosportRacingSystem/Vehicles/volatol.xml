@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>volatol</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>volatol</Discipline>
+      <Discipline>volatol</Discipline>
+    </Disciplines>
+    <Model ModelName="volatol">447548909</Model>
+  </Vehicle>
+</Data>

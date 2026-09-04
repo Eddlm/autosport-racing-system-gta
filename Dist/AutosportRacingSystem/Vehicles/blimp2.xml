@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>blimp2</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>blimp2</Discipline>
+      <Discipline>blimp2</Discipline>
+    </Disciplines>
+    <Model ModelName="blimp2">-613725916</Model>
+  </Vehicle>
+</Data>

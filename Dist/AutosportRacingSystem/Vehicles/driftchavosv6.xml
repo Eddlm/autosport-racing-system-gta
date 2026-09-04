@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>driftchavosv6</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>driftchavosv6</Discipline>
+      <Discipline>driftchavosv6</Discipline>
+    </Disciplines>
+    <Model ModelName="driftchavosv6">457814204</Model>
+  </Vehicle>
+</Data>

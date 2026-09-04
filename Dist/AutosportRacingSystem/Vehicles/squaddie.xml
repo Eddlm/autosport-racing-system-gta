@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>squaddie</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>squaddie</Discipline>
+      <Discipline>squaddie</Discipline>
+    </Disciplines>
+    <Model ModelName="squaddie">-102335483</Model>
+  </Vehicle>
+</Data>

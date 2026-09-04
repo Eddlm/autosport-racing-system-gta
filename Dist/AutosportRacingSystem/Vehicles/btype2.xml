@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>btype2</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>btype2</Discipline>
+      <Discipline>btype2</Discipline>
+    </Disciplines>
+    <Model ModelName="btype2">-831834716</Model>
+  </Vehicle>
+</Data>

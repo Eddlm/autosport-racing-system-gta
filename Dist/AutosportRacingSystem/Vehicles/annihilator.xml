@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>annihilator</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>annihilator</Discipline>
+      <Discipline>annihilator</Discipline>
+    </Disciplines>
+    <Model ModelName="annihilator">837858166</Model>
+  </Vehicle>
+</Data>

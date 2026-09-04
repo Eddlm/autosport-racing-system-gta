@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tyrant</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>tyrant</Discipline>
+      <Discipline>tyrant</Discipline>
+    </Disciplines>
+    <Model ModelName="tyrant">-376434238</Model>
+  </Vehicle>
+</Data>

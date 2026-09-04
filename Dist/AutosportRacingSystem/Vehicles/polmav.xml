@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>polmav</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>polmav</Discipline>
+      <Discipline>polmav</Discipline>
+    </Disciplines>
+    <Model ModelName="polmav">353883353</Model>
+  </Vehicle>
+</Data>

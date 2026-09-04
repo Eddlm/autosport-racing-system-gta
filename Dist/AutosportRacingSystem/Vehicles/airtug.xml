@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>airtug</Name>
+    <Class>Utility</Class>
+    <Disciplines>
+      <Discipline>utility</Discipline>
+      <Discipline>airtug</Discipline>
+      <Discipline>airtug</Discipline>
+    </Disciplines>
+    <Model ModelName="airtug">1560980623</Model>
+  </Vehicle>
+</Data>

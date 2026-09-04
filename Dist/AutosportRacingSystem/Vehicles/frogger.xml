@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>frogger</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>frogger</Discipline>
+      <Discipline>frogger</Discipline>
+    </Disciplines>
+    <Model ModelName="frogger">744705981</Model>
+  </Vehicle>
+</Data>

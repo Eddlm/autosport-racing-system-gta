@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>toreador</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>toreador</Discipline>
+      <Discipline>toreador</Discipline>
+    </Disciplines>
+    <Model ModelName="toreador">1455990255</Model>
+  </Vehicle>
+</Data>

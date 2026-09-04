@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>terbyte</Name>
+    <Class>Commercial</Class>
+    <Disciplines>
+      <Discipline>commercial</Discipline>
+      <Discipline>terbyte</Discipline>
+      <Discipline>terbyte</Discipline>
+    </Disciplines>
+    <Model ModelName="terbyte">-1988428699</Model>
+  </Vehicle>
+</Data>

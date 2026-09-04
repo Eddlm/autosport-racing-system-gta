@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>everon2</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>everon2</Discipline>
+      <Discipline>everon2</Discipline>
+    </Disciplines>
+    <Model ModelName="everon2">-131348178</Model>
+  </Vehicle>
+</Data>

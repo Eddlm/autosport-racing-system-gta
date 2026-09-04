@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>deity</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>deity</Discipline>
+      <Discipline>deity</Discipline>
+    </Disciplines>
+    <Model ModelName="deity">1532171089</Model>
+  </Vehicle>
+</Data>

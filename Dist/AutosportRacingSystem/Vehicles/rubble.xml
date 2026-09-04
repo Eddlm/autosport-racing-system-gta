@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>rubble</Name>
+    <Class>Industrial</Class>
+    <Disciplines>
+      <Discipline>industrial</Discipline>
+      <Discipline>rubble</Discipline>
+      <Discipline>rubble</Discipline>
+    </Disciplines>
+    <Model ModelName="rubble">-1705304628</Model>
+  </Vehicle>
+</Data>

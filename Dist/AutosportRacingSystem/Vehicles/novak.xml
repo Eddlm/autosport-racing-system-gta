@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>novak</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>novak</Discipline>
+      <Discipline>novak</Discipline>
+    </Disciplines>
+    <Model ModelName="novak">-1829436850</Model>
+  </Vehicle>
+</Data>

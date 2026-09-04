@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>apc</Name>
+    <Class>Military</Class>
+    <Disciplines>
+      <Discipline>military</Discipline>
+      <Discipline>apc</Discipline>
+      <Discipline>apc</Discipline>
+    </Disciplines>
+    <Model ModelName="apc">562680400</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>rt3000</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>rt3000</Discipline>
+      <Discipline>rt3000</Discipline>
+    </Disciplines>
+    <Model ModelName="rt3000">-452604007</Model>
+  </Vehicle>
+</Data>

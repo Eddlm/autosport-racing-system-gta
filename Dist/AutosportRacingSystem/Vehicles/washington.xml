@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>washington</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>washington</Discipline>
+      <Discipline>washington</Discipline>
+    </Disciplines>
+    <Model ModelName="washington">1777363799</Model>
+  </Vehicle>
+</Data>

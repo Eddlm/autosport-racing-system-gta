@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>neon</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>neon</Discipline>
+      <Discipline>neon</Discipline>
+    </Disciplines>
+    <Model ModelName="neon">-1848994066</Model>
+  </Vehicle>
+</Data>

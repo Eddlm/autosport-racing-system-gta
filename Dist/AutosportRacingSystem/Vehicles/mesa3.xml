@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>mesa3</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>mesa3</Discipline>
+      <Discipline>mesa3</Discipline>
+    </Disciplines>
+    <Model ModelName="mesa3">-2064372143</Model>
+  </Vehicle>
+</Data>

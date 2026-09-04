@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>emperor2</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>emperor2</Discipline>
+      <Discipline>emperor2</Discipline>
+    </Disciplines>
+    <Model ModelName="emperor2">-1883002148</Model>
+  </Vehicle>
+</Data>

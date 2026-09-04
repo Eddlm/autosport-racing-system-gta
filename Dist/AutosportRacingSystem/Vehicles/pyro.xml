@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>pyro</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>pyro</Discipline>
+      <Discipline>pyro</Discipline>
+    </Disciplines>
+    <Model ModelName="pyro">-1386191424</Model>
+  </Vehicle>
+</Data>

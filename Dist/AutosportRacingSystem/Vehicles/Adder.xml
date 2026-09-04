@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>Adder</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>adder</Discipline>
+      <Discipline>adder</Discipline>
+    </Disciplines>
+    <Model ModelName="Adder">-1216765807</Model>
+  </Vehicle>
+</Data>

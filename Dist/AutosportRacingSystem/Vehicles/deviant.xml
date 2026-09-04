@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>deviant</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>deviant</Discipline>
+      <Discipline>deviant</Discipline>
+    </Disciplines>
+    <Model ModelName="deviant">1279262537</Model>
+  </Vehicle>
+</Data>

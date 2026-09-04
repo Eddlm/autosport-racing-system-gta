@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>powersurge</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>powersurge</Discipline>
+      <Discipline>powersurge</Discipline>
+    </Disciplines>
+    <Model ModelName="powersurge">-1386336041</Model>
+  </Vehicle>
+</Data>

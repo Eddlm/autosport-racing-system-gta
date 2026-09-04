@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>fr36</Name>
+    <Class>Coupes</Class>
+    <Disciplines>
+      <Discipline>coupes</Discipline>
+      <Discipline>fr36</Discipline>
+      <Discipline>fr36</Discipline>
+    </Disciplines>
+    <Model ModelName="fr36">-465825307</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>intruder</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>intruder</Discipline>
+      <Discipline>intruder</Discipline>
+    </Disciplines>
+    <Model ModelName="intruder">886934177</Model>
+  </Vehicle>
+</Data>

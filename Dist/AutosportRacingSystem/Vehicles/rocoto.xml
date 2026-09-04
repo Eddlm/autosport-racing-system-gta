@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>rocoto</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>rocoto</Discipline>
+      <Discipline>rocoto</Discipline>
+    </Disciplines>
+    <Model ModelName="rocoto">2136773105</Model>
+  </Vehicle>
+</Data>

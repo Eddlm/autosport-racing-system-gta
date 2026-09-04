@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>serrano</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>serrano</Discipline>
+      <Discipline>serrano</Discipline>
+    </Disciplines>
+    <Model ModelName="serrano">1337041428</Model>
+  </Vehicle>
+</Data>

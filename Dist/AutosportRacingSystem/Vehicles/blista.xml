@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>blista</Name>
+    <Class>Compacts</Class>
+    <Disciplines>
+      <Discipline>compacts</Discipline>
+      <Discipline>blista</Discipline>
+      <Discipline>blista</Discipline>
+    </Disciplines>
+    <Model ModelName="blista">-344943009</Model>
+  </Vehicle>
+</Data>

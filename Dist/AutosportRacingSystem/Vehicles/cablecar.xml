@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cablecar</Name>
+    <Class>Trains</Class>
+    <Disciplines>
+      <Discipline>trains</Discipline>
+      <Discipline>cablecar</Discipline>
+      <Discipline>cablecar</Discipline>
+    </Disciplines>
+    <Model ModelName="cablecar">-960289747</Model>
+  </Vehicle>
+</Data>

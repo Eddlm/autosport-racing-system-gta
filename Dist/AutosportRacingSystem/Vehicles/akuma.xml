@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>akuma</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>akuma</Discipline>
+      <Discipline>akuma</Discipline>
+    </Disciplines>
+    <Model ModelName="akuma">1672195559</Model>
+  </Vehicle>
+</Data>

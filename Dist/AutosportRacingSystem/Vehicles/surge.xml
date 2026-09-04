@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>surge</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>surge</Discipline>
+      <Discipline>surge</Discipline>
+    </Disciplines>
+    <Model ModelName="surge">-1894894188</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bus</Name>
+    <Class>Service</Class>
+    <Disciplines>
+      <Discipline>service</Discipline>
+      <Discipline>bus</Discipline>
+      <Discipline>bus</Discipline>
+    </Disciplines>
+    <Model ModelName="bus">-713569950</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>woodlander</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>woodlander</Discipline>
+      <Discipline>woodlander</Discipline>
+    </Disciplines>
+    <Model ModelName="woodlander">1966698497</Model>
+  </Vehicle>
+</Data>

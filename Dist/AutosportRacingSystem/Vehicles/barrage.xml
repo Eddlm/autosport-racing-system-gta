@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>barrage</Name>
+    <Class>Military</Class>
+    <Disciplines>
+      <Discipline>military</Discipline>
+      <Discipline>barrage</Discipline>
+      <Discipline>barrage</Discipline>
+    </Disciplines>
+    <Model ModelName="barrage">-212993243</Model>
+  </Vehicle>
+</Data>

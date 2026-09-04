@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>mammatus</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>mammatus</Discipline>
+      <Discipline>mammatus</Discipline>
+    </Disciplines>
+    <Model ModelName="mammatus">-1746576111</Model>
+  </Vehicle>
+</Data>

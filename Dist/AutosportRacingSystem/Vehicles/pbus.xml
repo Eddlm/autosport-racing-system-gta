@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>pbus</Name>
+    <Class>Emergency</Class>
+    <Disciplines>
+      <Discipline>emergency</Discipline>
+      <Discipline>pbus</Discipline>
+      <Discipline>pbus</Discipline>
+    </Disciplines>
+    <Model ModelName="pbus">-2007026063</Model>
+  </Vehicle>
+</Data>

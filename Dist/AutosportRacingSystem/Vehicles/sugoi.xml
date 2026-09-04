@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>sugoi</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>sugoi</Discipline>
+      <Discipline>sugoi</Discipline>
+    </Disciplines>
+    <Model ModelName="sugoi">987469656</Model>
+  </Vehicle>
+</Data>

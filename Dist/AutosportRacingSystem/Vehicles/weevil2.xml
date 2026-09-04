@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>weevil2</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>weevil2</Discipline>
+      <Discipline>weevil2</Discipline>
+    </Disciplines>
+    <Model ModelName="weevil2">-994371320</Model>
+  </Vehicle>
+</Data>

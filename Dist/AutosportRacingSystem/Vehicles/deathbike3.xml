@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>deathbike3</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>deathbike3</Discipline>
+      <Discipline>deathbike3</Discipline>
+    </Disciplines>
+    <Model ModelName="deathbike3">-1374500452</Model>
+  </Vehicle>
+</Data>

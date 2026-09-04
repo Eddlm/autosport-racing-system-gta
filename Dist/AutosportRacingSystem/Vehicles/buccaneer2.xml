@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>buccaneer2</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>buccaneer2</Discipline>
+      <Discipline>buccaneer2</Discipline>
+    </Disciplines>
+    <Model ModelName="buccaneer2">-1013450936</Model>
+  </Vehicle>
+</Data>

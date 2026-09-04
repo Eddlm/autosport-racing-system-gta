@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>mixer2</Name>
+    <Class>Industrial</Class>
+    <Disciplines>
+      <Discipline>industrial</Discipline>
+      <Discipline>mixer2</Discipline>
+      <Discipline>mixer2</Discipline>
+    </Disciplines>
+    <Model ModelName="mixer2">475220373</Model>
+  </Vehicle>
+</Data>

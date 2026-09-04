@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>velum</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>velum</Discipline>
+      <Discipline>velum</Discipline>
+    </Disciplines>
+    <Model ModelName="velum">-1673356438</Model>
+  </Vehicle>
+</Data>

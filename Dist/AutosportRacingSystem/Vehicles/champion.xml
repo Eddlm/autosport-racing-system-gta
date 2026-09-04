@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>champion</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>champion</Discipline>
+      <Discipline>champion</Discipline>
+    </Disciplines>
+    <Model ModelName="champion">-915234475</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bmx</Name>
+    <Class>Cycles</Class>
+    <Disciplines>
+      <Discipline>cycles</Discipline>
+      <Discipline>bmx</Discipline>
+      <Discipline>bmx</Discipline>
+    </Disciplines>
+    <Model ModelName="bmx">1131912276</Model>
+  </Vehicle>
+</Data>

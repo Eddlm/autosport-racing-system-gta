@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>infernus</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>infernus</Discipline>
+      <Discipline>infernus</Discipline>
+    </Disciplines>
+    <Model ModelName="infernus">418536135</Model>
+  </Vehicle>
+</Data>

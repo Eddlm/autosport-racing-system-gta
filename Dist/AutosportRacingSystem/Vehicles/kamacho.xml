@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>kamacho</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>kamacho</Discipline>
+      <Discipline>kamacho</Discipline>
+    </Disciplines>
+    <Model ModelName="kamacho">-121446169</Model>
+  </Vehicle>
+</Data>

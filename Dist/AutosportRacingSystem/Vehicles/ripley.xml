@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>ripley</Name>
+    <Class>Utility</Class>
+    <Disciplines>
+      <Discipline>utility</Discipline>
+      <Discipline>ripley</Discipline>
+      <Discipline>ripley</Discipline>
+    </Disciplines>
+    <Model ModelName="ripley">-845979911</Model>
+  </Vehicle>
+</Data>

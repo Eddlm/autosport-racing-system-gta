@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>supervolito2</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>supervolito2</Discipline>
+      <Discipline>supervolito2</Discipline>
+    </Disciplines>
+    <Model ModelName="supervolito2">-1671539132</Model>
+  </Vehicle>
+</Data>

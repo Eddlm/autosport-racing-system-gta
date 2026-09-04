@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>gt750</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>gt750</Discipline>
+      <Discipline>gt750</Discipline>
+    </Disciplines>
+    <Model ModelName="gt750">1380582820</Model>
+  </Vehicle>
+</Data>

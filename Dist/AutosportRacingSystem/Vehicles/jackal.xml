@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>jackal</Name>
+    <Class>Coupes</Class>
+    <Disciplines>
+      <Discipline>coupes</Discipline>
+      <Discipline>jackal</Discipline>
+      <Discipline>jackal</Discipline>
+    </Disciplines>
+    <Model ModelName="jackal">-624529134</Model>
+  </Vehicle>
+</Data>

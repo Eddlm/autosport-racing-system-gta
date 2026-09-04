@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>growler</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>growler</Discipline>
+      <Discipline>growler</Discipline>
+    </Disciplines>
+    <Model ModelName="growler">1304459735</Model>
+  </Vehicle>
+</Data>

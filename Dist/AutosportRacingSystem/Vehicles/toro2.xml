@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>toro2</Name>
+    <Class>Boats</Class>
+    <Disciplines>
+      <Discipline>boats</Discipline>
+      <Discipline>toro2</Discipline>
+      <Discipline>toro2</Discipline>
+    </Disciplines>
+    <Model ModelName="toro2">908897389</Model>
+  </Vehicle>
+</Data>

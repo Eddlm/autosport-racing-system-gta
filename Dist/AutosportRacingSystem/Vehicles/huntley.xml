@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>huntley</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>huntley</Discipline>
+      <Discipline>huntley</Discipline>
+    </Disciplines>
+    <Model ModelName="huntley">486987393</Model>
+  </Vehicle>
+</Data>

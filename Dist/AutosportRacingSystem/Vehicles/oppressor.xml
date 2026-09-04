@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>oppressor</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>oppressor</Discipline>
+      <Discipline>oppressor</Discipline>
+    </Disciplines>
+    <Model ModelName="oppressor">884483972</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>valkyrie</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>valkyrie</Discipline>
+      <Discipline>valkyrie</Discipline>
+    </Disciplines>
+    <Model ModelName="valkyrie">-1600252419</Model>
+  </Vehicle>
+</Data>

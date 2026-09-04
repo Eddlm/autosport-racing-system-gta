@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>dubsta3</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>dubsta3</Discipline>
+      <Discipline>dubsta3</Discipline>
+    </Disciplines>
+    <Model ModelName="dubsta3">-1237253773</Model>
+  </Vehicle>
+</Data>

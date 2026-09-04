@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cheburek</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>cheburek</Discipline>
+      <Discipline>cheburek</Discipline>
+    </Disciplines>
+    <Model ModelName="cheburek">-988501280</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>club</Name>
+    <Class>Compacts</Class>
+    <Disciplines>
+      <Discipline>compacts</Discipline>
+      <Discipline>club</Discipline>
+      <Discipline>club</Discipline>
+    </Disciplines>
+    <Model ModelName="club">-2098954619</Model>
+  </Vehicle>
+</Data>

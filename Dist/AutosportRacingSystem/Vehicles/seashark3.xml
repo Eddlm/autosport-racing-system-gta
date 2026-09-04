@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>seashark3</Name>
+    <Class>Boats</Class>
+    <Disciplines>
+      <Discipline>boats</Discipline>
+      <Discipline>seashark3</Discipline>
+      <Discipline>seashark3</Discipline>
+    </Disciplines>
+    <Model ModelName="seashark3">-311022263</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>issi8</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>issi8</Discipline>
+      <Discipline>issi8</Discipline>
+    </Disciplines>
+    <Model ModelName="issi8">1550581940</Model>
+  </Vehicle>
+</Data>

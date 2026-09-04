@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>granger</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>granger</Discipline>
+      <Discipline>granger</Discipline>
+    </Disciplines>
+    <Model ModelName="granger">-1775728740</Model>
+  </Vehicle>
+</Data>

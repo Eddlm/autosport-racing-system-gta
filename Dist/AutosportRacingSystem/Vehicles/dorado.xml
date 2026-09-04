@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>dorado</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>dorado</Discipline>
+      <Discipline>dorado</Discipline>
+    </Disciplines>
+    <Model ModelName="dorado">-768044142</Model>
+  </Vehicle>
+</Data>

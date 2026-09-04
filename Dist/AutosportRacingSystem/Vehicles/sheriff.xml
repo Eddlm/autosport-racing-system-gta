@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>sheriff</Name>
+    <Class>Emergency</Class>
+    <Disciplines>
+      <Discipline>emergency</Discipline>
+      <Discipline>sheriff</Discipline>
+      <Discipline>sheriff</Discipline>
+    </Disciplines>
+    <Model ModelName="sheriff">-1683328900</Model>
+  </Vehicle>
+</Data>

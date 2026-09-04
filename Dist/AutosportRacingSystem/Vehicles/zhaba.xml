@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>zhaba</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>zhaba</Discipline>
+      <Discipline>zhaba</Discipline>
+    </Disciplines>
+    <Model ModelName="zhaba">1284356689</Model>
+  </Vehicle>
+</Data>

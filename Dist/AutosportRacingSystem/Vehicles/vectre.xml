@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>vectre</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>vectre</Discipline>
+      <Discipline>vectre</Discipline>
+    </Disciplines>
+    <Model ModelName="vectre">-1540373595</Model>
+  </Vehicle>
+</Data>

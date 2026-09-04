@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>microlight</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>microlight</Discipline>
+      <Discipline>microlight</Discipline>
+    </Disciplines>
+    <Model ModelName="microlight">-1763555241</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cog552</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>cog552</Discipline>
+      <Discipline>cog552</Discipline>
+    </Disciplines>
+    <Model ModelName="cog552">704435172</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>luxor</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>luxor</Discipline>
+      <Discipline>luxor</Discipline>
+    </Disciplines>
+    <Model ModelName="luxor">621481054</Model>
+  </Vehicle>
+</Data>

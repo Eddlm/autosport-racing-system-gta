@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>dodo</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>dodo</Discipline>
+      <Discipline>dodo</Discipline>
+    </Disciplines>
+    <Model ModelName="dodo">-901163259</Model>
+  </Vehicle>
+</Data>

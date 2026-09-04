@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>penumbra</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>penumbra</Discipline>
+      <Discipline>penumbra</Discipline>
+    </Disciplines>
+    <Model ModelName="penumbra">-377465520</Model>
+  </Vehicle>
+</Data>

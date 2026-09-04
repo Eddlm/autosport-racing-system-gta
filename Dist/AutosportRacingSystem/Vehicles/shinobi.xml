@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>shinobi</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>shinobi</Discipline>
+      <Discipline>shinobi</Discipline>
+    </Disciplines>
+    <Model ModelName="shinobi">1353120668</Model>
+  </Vehicle>
+</Data>

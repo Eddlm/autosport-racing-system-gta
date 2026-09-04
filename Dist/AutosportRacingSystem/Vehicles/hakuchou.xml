@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>hakuchou</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>hakuchou</Discipline>
+      <Discipline>hakuchou</Discipline>
+    </Disciplines>
+    <Model ModelName="hakuchou">1265391242</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>reaper</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>reaper</Discipline>
+      <Discipline>reaper</Discipline>
+    </Disciplines>
+    <Model ModelName="reaper">234062309</Model>
+  </Vehicle>
+</Data>

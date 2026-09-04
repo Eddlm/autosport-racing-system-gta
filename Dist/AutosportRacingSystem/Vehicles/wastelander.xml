@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>wastelander</Name>
+    <Class>Service</Class>
+    <Disciplines>
+      <Discipline>service</Discipline>
+      <Discipline>wastelander</Discipline>
+      <Discipline>wastelander</Discipline>
+    </Disciplines>
+    <Model ModelName="wastelander">-1912017790</Model>
+  </Vehicle>
+</Data>

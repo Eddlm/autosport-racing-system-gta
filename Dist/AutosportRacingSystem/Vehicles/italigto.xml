@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>italigto</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>italigto</Discipline>
+      <Discipline>italigto</Discipline>
+    </Disciplines>
+    <Model ModelName="italigto">-331467772</Model>
+  </Vehicle>
+</Data>

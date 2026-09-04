@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>avenger</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>avenger</Discipline>
+      <Discipline>avenger</Discipline>
+    </Disciplines>
+    <Model ModelName="avenger">-2118308144</Model>
+  </Vehicle>
+</Data>

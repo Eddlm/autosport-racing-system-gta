@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>duster</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>duster</Discipline>
+      <Discipline>duster</Discipline>
+    </Disciplines>
+    <Model ModelName="duster">970356638</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>miljet</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>miljet</Discipline>
+      <Discipline>miljet</Discipline>
+    </Disciplines>
+    <Model ModelName="miljet">165154707</Model>
+  </Vehicle>
+</Data>

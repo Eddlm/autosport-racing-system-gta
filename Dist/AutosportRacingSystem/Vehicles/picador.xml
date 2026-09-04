@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>picador</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>picador</Discipline>
+      <Discipline>picador</Discipline>
+    </Disciplines>
+    <Model ModelName="picador">1507916787</Model>
+  </Vehicle>
+</Data>

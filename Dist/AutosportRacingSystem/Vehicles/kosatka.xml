@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>kosatka</Name>
+    <Class>Boats</Class>
+    <Disciplines>
+      <Discipline>boats</Discipline>
+      <Discipline>kosatka</Discipline>
+      <Discipline>kosatka</Discipline>
+    </Disciplines>
+    <Model ModelName="kosatka">1336872304</Model>
+  </Vehicle>
+</Data>

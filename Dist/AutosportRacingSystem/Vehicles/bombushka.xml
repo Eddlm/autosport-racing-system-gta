@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bombushka</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>bombushka</Discipline>
+      <Discipline>bombushka</Discipline>
+    </Disciplines>
+    <Model ModelName="bombushka">-32878452</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cypher</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>cypher</Discipline>
+      <Discipline>cypher</Discipline>
+    </Disciplines>
+    <Model ModelName="cypher">1755697647</Model>
+  </Vehicle>
+</Data>

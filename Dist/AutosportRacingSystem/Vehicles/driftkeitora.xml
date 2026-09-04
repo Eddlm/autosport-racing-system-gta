@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>driftkeitora</Name>
+    <Class>Utility</Class>
+    <Disciplines>
+      <Discipline>utility</Discipline>
+      <Discipline>driftkeitora</Discipline>
+      <Discipline>driftkeitora</Discipline>
+    </Disciplines>
+    <Model ModelName="driftkeitora">-1555091703</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>flashgt</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>flashgt</Discipline>
+      <Discipline>flashgt</Discipline>
+    </Disciplines>
+    <Model ModelName="flashgt">-1259134696</Model>
+  </Vehicle>
+</Data>

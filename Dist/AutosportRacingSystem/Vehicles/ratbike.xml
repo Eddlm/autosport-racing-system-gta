@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>ratbike</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>ratbike</Discipline>
+      <Discipline>ratbike</Discipline>
+    </Disciplines>
+    <Model ModelName="ratbike">1873600305</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>peyote3</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>peyote3</Discipline>
+      <Discipline>peyote3</Discipline>
+    </Disciplines>
+    <Model ModelName="peyote3">1107404867</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>camper</Name>
+    <Class>Vans</Class>
+    <Disciplines>
+      <Discipline>vans</Discipline>
+      <Discipline>camper</Discipline>
+      <Discipline>camper</Discipline>
+    </Disciplines>
+    <Model ModelName="camper">1876516712</Model>
+  </Vehicle>
+</Data>

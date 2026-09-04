@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>rebla</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>rebla</Discipline>
+      <Discipline>rebla</Discipline>
+    </Disciplines>
+    <Model ModelName="rebla">83136452</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>driftfuto</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>driftfuto</Discipline>
+      <Discipline>driftfuto</Discipline>
+    </Disciplines>
+    <Model ModelName="driftfuto">-181562642</Model>
+  </Vehicle>
+</Data>

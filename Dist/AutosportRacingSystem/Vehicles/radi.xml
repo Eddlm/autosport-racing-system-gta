@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>radi</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>radi</Discipline>
+      <Discipline>radi</Discipline>
+    </Disciplines>
+    <Model ModelName="radi">-1651067813</Model>
+  </Vehicle>
+</Data>

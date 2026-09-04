@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>panto</Name>
+    <Class>Compacts</Class>
+    <Disciplines>
+      <Discipline>compacts</Discipline>
+      <Discipline>panto</Discipline>
+      <Discipline>panto</Discipline>
+    </Disciplines>
+    <Model ModelName="panto">-431692672</Model>
+  </Vehicle>
+</Data>

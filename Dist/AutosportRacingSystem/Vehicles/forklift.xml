@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>forklift</Name>
+    <Class>Utility</Class>
+    <Disciplines>
+      <Discipline>utility</Discipline>
+      <Discipline>forklift</Discipline>
+      <Discipline>forklift</Discipline>
+    </Disciplines>
+    <Model ModelName="forklift">1491375716</Model>
+  </Vehicle>
+</Data>

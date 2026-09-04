@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>zentorno</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>zentorno</Discipline>
+      <Discipline>zentorno</Discipline>
+    </Disciplines>
+    <Model ModelName="zentorno">-1403128555</Model>
+  </Vehicle>
+</Data>

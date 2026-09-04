@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>freecrawler</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>freecrawler</Discipline>
+      <Discipline>freecrawler</Discipline>
+    </Disciplines>
+    <Model ModelName="freecrawler">-54332285</Model>
+  </Vehicle>
+</Data>

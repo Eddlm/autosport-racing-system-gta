@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>fixter</Name>
+    <Class>Cycles</Class>
+    <Disciplines>
+      <Discipline>cycles</Discipline>
+      <Discipline>fixter</Discipline>
+      <Discipline>fixter</Discipline>
+    </Disciplines>
+    <Model ModelName="fixter">-836512833</Model>
+  </Vehicle>
+</Data>

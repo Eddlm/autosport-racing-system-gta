@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>pariah</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>pariah</Discipline>
+      <Discipline>pariah</Discipline>
+    </Disciplines>
+    <Model ModelName="pariah">867799010</Model>
+  </Vehicle>
+</Data>

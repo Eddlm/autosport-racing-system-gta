@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cliffhanger</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>cliffhanger</Discipline>
+      <Discipline>cliffhanger</Discipline>
+    </Disciplines>
+    <Model ModelName="cliffhanger">390201602</Model>
+  </Vehicle>
+</Data>

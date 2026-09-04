@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>xls</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>xls</Discipline>
+      <Discipline>xls</Discipline>
+    </Disciplines>
+    <Model ModelName="xls">1203490606</Model>
+  </Vehicle>
+</Data>

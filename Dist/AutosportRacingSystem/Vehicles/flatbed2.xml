@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>flatbed2</Name>
+    <Class>Industrial</Class>
+    <Disciplines>
+      <Discipline>industrial</Discipline>
+      <Discipline>flatbed2</Discipline>
+      <Discipline>flatbed2</Discipline>
+    </Disciplines>
+    <Model ModelName="flatbed2">-1882910943</Model>
+  </Vehicle>
+</Data>

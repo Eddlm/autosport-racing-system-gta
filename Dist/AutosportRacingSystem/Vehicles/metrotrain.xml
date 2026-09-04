@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>metrotrain</Name>
+    <Class>Trains</Class>
+    <Disciplines>
+      <Discipline>trains</Discipline>
+      <Discipline>metrotrain</Discipline>
+      <Discipline>metrotrain</Discipline>
+    </Disciplines>
+    <Model ModelName="metrotrain">868868440</Model>
+  </Vehicle>
+</Data>

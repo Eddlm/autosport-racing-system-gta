@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>nokota</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>nokota</Discipline>
+      <Discipline>nokota</Discipline>
+    </Disciplines>
+    <Model ModelName="nokota">1036591958</Model>
+  </Vehicle>
+</Data>

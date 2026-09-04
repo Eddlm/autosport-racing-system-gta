@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>casco</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>casco</Discipline>
+      <Discipline>casco</Discipline>
+    </Disciplines>
+    <Model ModelName="casco">941800958</Model>
+  </Vehicle>
+</Data>

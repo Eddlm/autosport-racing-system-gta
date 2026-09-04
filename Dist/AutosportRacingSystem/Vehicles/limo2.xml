@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>limo2</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>limo2</Discipline>
+      <Discipline>limo2</Discipline>
+    </Disciplines>
+    <Model ModelName="limo2">-114627507</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>comet2</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>comet2</Discipline>
+      <Discipline>comet2</Discipline>
+    </Disciplines>
+    <Model ModelName="comet2">-1045541610</Model>
+  </Vehicle>
+</Data>

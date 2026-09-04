@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>baller4</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>baller4</Discipline>
+      <Discipline>baller4</Discipline>
+    </Disciplines>
+    <Model ModelName="baller4">634118882</Model>
+  </Vehicle>
+</Data>

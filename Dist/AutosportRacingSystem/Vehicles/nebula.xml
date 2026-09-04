@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>nebula</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>nebula</Discipline>
+      <Discipline>nebula</Discipline>
+    </Disciplines>
+    <Model ModelName="nebula">-882629065</Model>
+  </Vehicle>
+</Data>

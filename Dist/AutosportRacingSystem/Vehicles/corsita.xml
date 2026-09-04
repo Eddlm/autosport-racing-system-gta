@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>corsita</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>corsita</Discipline>
+      <Discipline>corsita</Discipline>
+    </Disciplines>
+    <Model ModelName="corsita">-754687673</Model>
+  </Vehicle>
+</Data>

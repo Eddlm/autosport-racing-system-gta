@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>stanier</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>stanier</Discipline>
+      <Discipline>stanier</Discipline>
+    </Disciplines>
+    <Model ModelName="stanier">-1477580979</Model>
+  </Vehicle>
+</Data>

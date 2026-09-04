@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>ardent</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>ardent</Discipline>
+      <Discipline>ardent</Discipline>
+    </Disciplines>
+    <Model ModelName="ardent">159274291</Model>
+  </Vehicle>
+</Data>

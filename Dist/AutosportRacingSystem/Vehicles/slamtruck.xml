@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>slamtruck</Name>
+    <Class>Utility</Class>
+    <Disciplines>
+      <Discipline>utility</Discipline>
+      <Discipline>slamtruck</Discipline>
+      <Discipline>slamtruck</Discipline>
+    </Disciplines>
+    <Model ModelName="slamtruck">-1045911276</Model>
+  </Vehicle>
+</Data>

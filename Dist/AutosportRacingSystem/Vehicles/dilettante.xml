@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>dilettante</Name>
+    <Class>Compacts</Class>
+    <Disciplines>
+      <Discipline>compacts</Discipline>
+      <Discipline>dilettante</Discipline>
+      <Discipline>dilettante</Discipline>
+    </Disciplines>
+    <Model ModelName="dilettante">-1130810103</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>slamvan5</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>slamvan5</Discipline>
+      <Discipline>slamvan5</Discipline>
+    </Disciplines>
+    <Model ModelName="slamvan5">373261600</Model>
+  </Vehicle>
+</Data>

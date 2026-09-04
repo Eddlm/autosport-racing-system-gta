@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>alkonost</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>alkonost</Discipline>
+      <Discipline>alkonost</Discipline>
+    </Disciplines>
+    <Model ModelName="alkonost">-365873403</Model>
+  </Vehicle>
+</Data>

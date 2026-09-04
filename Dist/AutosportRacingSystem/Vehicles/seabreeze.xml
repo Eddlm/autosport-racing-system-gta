@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>seabreeze</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>seabreeze</Discipline>
+      <Discipline>seabreeze</Discipline>
+    </Disciplines>
+    <Model ModelName="seabreeze">-392675425</Model>
+  </Vehicle>
+</Data>

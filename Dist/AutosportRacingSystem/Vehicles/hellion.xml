@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>hellion</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>hellion</Discipline>
+      <Discipline>hellion</Discipline>
+    </Disciplines>
+    <Model ModelName="hellion">-362150785</Model>
+  </Vehicle>
+</Data>

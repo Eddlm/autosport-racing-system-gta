@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>vestra</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>vestra</Discipline>
+      <Discipline>vestra</Discipline>
+    </Disciplines>
+    <Model ModelName="vestra">1341619767</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>lm87</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>lm87</Discipline>
+      <Discipline>lm87</Discipline>
+    </Disciplines>
+    <Model ModelName="lm87">-10917683</Model>
+  </Vehicle>
+</Data>

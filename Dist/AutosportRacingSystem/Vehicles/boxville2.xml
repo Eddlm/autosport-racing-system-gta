@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>boxville2</Name>
+    <Class>Vans</Class>
+    <Disciplines>
+      <Discipline>vans</Discipline>
+      <Discipline>boxville2</Discipline>
+      <Discipline>boxville2</Discipline>
+    </Disciplines>
+    <Model ModelName="boxville2">-233098306</Model>
+  </Vehicle>
+</Data>

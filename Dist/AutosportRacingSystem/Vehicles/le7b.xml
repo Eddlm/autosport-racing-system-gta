@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>le7b</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>le7b</Discipline>
+      <Discipline>le7b</Discipline>
+    </Disciplines>
+    <Model ModelName="le7b">-1232836011</Model>
+  </Vehicle>
+</Data>

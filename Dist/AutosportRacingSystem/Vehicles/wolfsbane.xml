@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>wolfsbane</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>wolfsbane</Discipline>
+      <Discipline>wolfsbane</Discipline>
+    </Disciplines>
+    <Model ModelName="wolfsbane">-618617997</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>lynx</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>lynx</Discipline>
+      <Discipline>lynx</Discipline>
+    </Disciplines>
+    <Model ModelName="lynx">482197771</Model>
+  </Vehicle>
+</Data>

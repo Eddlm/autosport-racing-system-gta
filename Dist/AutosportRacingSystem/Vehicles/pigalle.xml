@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>pigalle</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>pigalle</Discipline>
+      <Discipline>pigalle</Discipline>
+    </Disciplines>
+    <Model ModelName="pigalle">1078682497</Model>
+  </Vehicle>
+</Data>

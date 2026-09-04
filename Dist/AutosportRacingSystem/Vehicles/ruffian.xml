@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>ruffian</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>ruffian</Discipline>
+      <Discipline>ruffian</Discipline>
+    </Disciplines>
+    <Model ModelName="ruffian">-893578776</Model>
+  </Vehicle>
+</Data>

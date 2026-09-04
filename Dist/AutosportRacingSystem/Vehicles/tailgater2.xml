@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tailgater2</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>tailgater2</Discipline>
+      <Discipline>tailgater2</Discipline>
+    </Disciplines>
+    <Model ModelName="tailgater2">-1244461404</Model>
+  </Vehicle>
+</Data>

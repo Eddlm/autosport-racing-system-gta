@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tiptruck2</Name>
+    <Class>Industrial</Class>
+    <Disciplines>
+      <Discipline>industrial</Discipline>
+      <Discipline>tiptruck2</Discipline>
+      <Discipline>tiptruck2</Discipline>
+    </Disciplines>
+    <Model ModelName="tiptruck2">-947761570</Model>
+  </Vehicle>
+</Data>

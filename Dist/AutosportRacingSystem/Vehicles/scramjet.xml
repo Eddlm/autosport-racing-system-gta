@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>scramjet</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>scramjet</Discipline>
+      <Discipline>scramjet</Discipline>
+    </Disciplines>
+    <Model ModelName="scramjet">-638562243</Model>
+  </Vehicle>
+</Data>

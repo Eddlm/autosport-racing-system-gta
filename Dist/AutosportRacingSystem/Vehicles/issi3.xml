@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>issi3</Name>
+    <Class>Compacts</Class>
+    <Disciplines>
+      <Discipline>compacts</Discipline>
+      <Discipline>issi3</Discipline>
+      <Discipline>issi3</Discipline>
+    </Disciplines>
+    <Model ModelName="issi3">931280609</Model>
+  </Vehicle>
+</Data>

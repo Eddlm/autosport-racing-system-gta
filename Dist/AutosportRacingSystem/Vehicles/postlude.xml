@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>postlude</Name>
+    <Class>Coupes</Class>
+    <Disciplines>
+      <Discipline>coupes</Discipline>
+      <Discipline>postlude</Discipline>
+      <Discipline>postlude</Discipline>
+    </Disciplines>
+    <Model ModelName="postlude">-294678663</Model>
+  </Vehicle>
+</Data>

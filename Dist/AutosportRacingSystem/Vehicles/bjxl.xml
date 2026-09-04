@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bjxl</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>bjxl</Discipline>
+      <Discipline>bjxl</Discipline>
+    </Disciplines>
+    <Model ModelName="bjxl">850565707</Model>
+  </Vehicle>
+</Data>

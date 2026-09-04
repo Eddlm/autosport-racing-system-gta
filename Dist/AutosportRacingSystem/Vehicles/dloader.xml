@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>dloader</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>dloader</Discipline>
+      <Discipline>dloader</Discipline>
+    </Disciplines>
+    <Model ModelName="dloader">1770332643</Model>
+  </Vehicle>
+</Data>

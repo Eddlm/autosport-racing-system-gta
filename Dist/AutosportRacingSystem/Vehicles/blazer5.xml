@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>blazer5</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>blazer5</Discipline>
+      <Discipline>blazer5</Discipline>
+    </Disciplines>
+    <Model ModelName="blazer5">-1590337689</Model>
+  </Vehicle>
+</Data>

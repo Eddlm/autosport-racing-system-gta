@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>kanjo</Name>
+    <Class>Compacts</Class>
+    <Disciplines>
+      <Discipline>compacts</Discipline>
+      <Discipline>kanjo</Discipline>
+      <Discipline>kanjo</Discipline>
+    </Disciplines>
+    <Model ModelName="kanjo">409049982</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>eudora</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>eudora</Discipline>
+      <Discipline>eudora</Discipline>
+    </Disciplines>
+    <Model ModelName="eudora">-1249788006</Model>
+  </Vehicle>
+</Data>

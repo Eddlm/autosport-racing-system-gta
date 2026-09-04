@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>sm722</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>sm722</Discipline>
+      <Discipline>sm722</Discipline>
+    </Disciplines>
+    <Model ModelName="sm722">775514032</Model>
+  </Vehicle>
+</Data>

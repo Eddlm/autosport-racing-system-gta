@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>hydra</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>hydra</Discipline>
+      <Discipline>hydra</Discipline>
+    </Disciplines>
+    <Model ModelName="hydra">970385471</Model>
+  </Vehicle>
+</Data>

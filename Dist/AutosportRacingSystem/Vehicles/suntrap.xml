@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>suntrap</Name>
+    <Class>Boats</Class>
+    <Disciplines>
+      <Discipline>boats</Discipline>
+      <Discipline>suntrap</Discipline>
+      <Discipline>suntrap</Discipline>
+    </Disciplines>
+    <Model ModelName="suntrap">-282946103</Model>
+  </Vehicle>
+</Data>

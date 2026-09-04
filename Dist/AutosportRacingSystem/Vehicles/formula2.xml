@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>formula2</Name>
+    <Class>OpenWheel</Class>
+    <Disciplines>
+      <Discipline>openwheel</Discipline>
+      <Discipline>formula2</Discipline>
+      <Discipline>formula2</Discipline>
+    </Disciplines>
+    <Model ModelName="formula2">-1960756985</Model>
+  </Vehicle>
+</Data>

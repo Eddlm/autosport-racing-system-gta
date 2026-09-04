@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>driftyosemite</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>driftyosemite</Discipline>
+      <Discipline>driftyosemite</Discipline>
+    </Disciplines>
+    <Model ModelName="driftyosemite">-1681653521</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>remus</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>remus</Discipline>
+      <Discipline>remus</Discipline>
+    </Disciplines>
+    <Model ModelName="remus">1377217886</Model>
+  </Vehicle>
+</Data>

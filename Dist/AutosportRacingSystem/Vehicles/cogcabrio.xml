@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cogcabrio</Name>
+    <Class>Coupes</Class>
+    <Disciplines>
+      <Discipline>coupes</Discipline>
+      <Discipline>cogcabrio</Discipline>
+      <Discipline>cogcabrio</Discipline>
+    </Disciplines>
+    <Model ModelName="cogcabrio">330661258</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cavalcade2</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>cavalcade2</Discipline>
+      <Discipline>cavalcade2</Discipline>
+    </Disciplines>
+    <Model ModelName="cavalcade2">-789894171</Model>
+  </Vehicle>
+</Data>

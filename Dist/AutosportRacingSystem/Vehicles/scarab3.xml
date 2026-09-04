@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>scarab3</Name>
+    <Class>Military</Class>
+    <Disciplines>
+      <Discipline>military</Discipline>
+      <Discipline>scarab3</Discipline>
+      <Discipline>scarab3</Discipline>
+    </Disciplines>
+    <Model ModelName="scarab3">-579747861</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>stratum</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>stratum</Discipline>
+      <Discipline>stratum</Discipline>
+    </Disciplines>
+    <Model ModelName="stratum">1723137093</Model>
+  </Vehicle>
+</Data>

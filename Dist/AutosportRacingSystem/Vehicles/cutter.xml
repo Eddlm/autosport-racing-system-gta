@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cutter</Name>
+    <Class>Industrial</Class>
+    <Disciplines>
+      <Discipline>industrial</Discipline>
+      <Discipline>cutter</Discipline>
+      <Discipline>cutter</Discipline>
+    </Disciplines>
+    <Model ModelName="cutter">-1006919392</Model>
+  </Vehicle>
+</Data>

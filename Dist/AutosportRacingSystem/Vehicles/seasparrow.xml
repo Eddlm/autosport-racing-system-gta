@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>seasparrow</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>seasparrow</Discipline>
+      <Discipline>seasparrow</Discipline>
+    </Disciplines>
+    <Model ModelName="seasparrow">-726768679</Model>
+  </Vehicle>
+</Data>

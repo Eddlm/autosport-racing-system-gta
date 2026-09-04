@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>viseris</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>viseris</Discipline>
+      <Discipline>viseris</Discipline>
+    </Disciplines>
+    <Model ModelName="viseris">-391595372</Model>
+  </Vehicle>
+</Data>

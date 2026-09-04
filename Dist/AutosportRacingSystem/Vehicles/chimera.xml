@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>chimera</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>chimera</Discipline>
+      <Discipline>chimera</Discipline>
+    </Disciplines>
+    <Model ModelName="chimera">6774487</Model>
+  </Vehicle>
+</Data>

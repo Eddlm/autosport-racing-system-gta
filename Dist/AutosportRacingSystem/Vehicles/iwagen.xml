@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>iwagen</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>iwagen</Discipline>
+      <Discipline>iwagen</Discipline>
+    </Disciplines>
+    <Model ModelName="iwagen">662793086</Model>
+  </Vehicle>
+</Data>

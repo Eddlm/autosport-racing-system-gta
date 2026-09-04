@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bagger</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>bagger</Discipline>
+      <Discipline>bagger</Discipline>
+    </Disciplines>
+    <Model ModelName="bagger">-2140431165</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>l352</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>l352</Discipline>
+      <Discipline>l352</Discipline>
+    </Disciplines>
+    <Model ModelName="l352">691148275</Model>
+  </Vehicle>
+</Data>

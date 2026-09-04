@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>moonbeam</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>moonbeam</Discipline>
+      <Discipline>moonbeam</Discipline>
+    </Disciplines>
+    <Model ModelName="moonbeam">525509695</Model>
+  </Vehicle>
+</Data>

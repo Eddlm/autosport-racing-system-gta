@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>halftrack</Name>
+    <Class>Military</Class>
+    <Disciplines>
+      <Discipline>military</Discipline>
+      <Discipline>halftrack</Discipline>
+      <Discipline>halftrack</Discipline>
+    </Disciplines>
+    <Model ModelName="halftrack">-32236122</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>coquette</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>coquette</Discipline>
+      <Discipline>coquette</Discipline>
+    </Disciplines>
+    <Model ModelName="coquette">108773431</Model>
+  </Vehicle>
+</Data>

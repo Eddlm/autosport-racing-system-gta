@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>rhapsody</Name>
+    <Class>Compacts</Class>
+    <Disciplines>
+      <Discipline>compacts</Discipline>
+      <Discipline>rhapsody</Discipline>
+      <Discipline>rhapsody</Discipline>
+    </Disciplines>
+    <Model ModelName="rhapsody">841808271</Model>
+  </Vehicle>
+</Data>

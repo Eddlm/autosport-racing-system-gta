@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tropos</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>tropos</Discipline>
+      <Discipline>tropos</Discipline>
+    </Disciplines>
+    <Model ModelName="tropos">1887331236</Model>
+  </Vehicle>
+</Data>

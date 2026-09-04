@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>cerberus2</Name>
+    <Class>Commercial</Class>
+    <Disciplines>
+      <Discipline>commercial</Discipline>
+      <Discipline>cerberus2</Discipline>
+      <Discipline>cerberus2</Discipline>
+    </Disciplines>
+    <Model ModelName="cerberus2">679453769</Model>
+  </Vehicle>
+</Data>

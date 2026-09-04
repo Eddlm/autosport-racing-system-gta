@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>longfin</Name>
+    <Class>Boats</Class>
+    <Disciplines>
+      <Discipline>boats</Discipline>
+      <Discipline>longfin</Discipline>
+      <Discipline>longfin</Discipline>
+    </Disciplines>
+    <Model ModelName="longfin">1861786828</Model>
+  </Vehicle>
+</Data>

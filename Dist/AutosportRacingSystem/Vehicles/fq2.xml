@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>fq2</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>fq2</Discipline>
+      <Discipline>fq2</Discipline>
+    </Disciplines>
+    <Model ModelName="fq2">-1137532101</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>euros</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>euros</Discipline>
+      <Discipline>euros</Discipline>
+    </Disciplines>
+    <Model ModelName="euros">2038480341</Model>
+  </Vehicle>
+</Data>

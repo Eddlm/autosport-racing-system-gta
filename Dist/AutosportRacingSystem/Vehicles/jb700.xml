@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>jb700</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>jb700</Discipline>
+      <Discipline>jb700</Discipline>
+    </Disciplines>
+    <Model ModelName="jb700">1051415893</Model>
+  </Vehicle>
+</Data>

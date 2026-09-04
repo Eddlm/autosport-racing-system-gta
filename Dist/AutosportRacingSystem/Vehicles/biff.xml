@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>biff</Name>
+    <Class>Commercial</Class>
+    <Disciplines>
+      <Discipline>commercial</Discipline>
+      <Discipline>biff</Discipline>
+      <Discipline>biff</Discipline>
+    </Disciplines>
+    <Model ModelName="biff">850991848</Model>
+  </Vehicle>
+</Data>

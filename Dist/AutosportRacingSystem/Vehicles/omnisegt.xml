@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>omnisegt</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>omnisegt</Discipline>
+      <Discipline>omnisegt</Discipline>
+    </Disciplines>
+    <Model ModelName="omnisegt">-505223465</Model>
+  </Vehicle>
+</Data>

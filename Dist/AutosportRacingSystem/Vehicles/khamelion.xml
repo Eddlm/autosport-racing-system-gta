@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>khamelion</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>khamelion</Discipline>
+      <Discipline>khamelion</Discipline>
+    </Disciplines>
+    <Model ModelName="khamelion">544021352</Model>
+  </Vehicle>
+</Data>

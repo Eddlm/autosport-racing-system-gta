@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>dump</Name>
+    <Class>Industrial</Class>
+    <Disciplines>
+      <Discipline>industrial</Discipline>
+      <Discipline>dump</Discipline>
+      <Discipline>dump</Discipline>
+    </Disciplines>
+    <Model ModelName="dump">-2130482718</Model>
+  </Vehicle>
+</Data>

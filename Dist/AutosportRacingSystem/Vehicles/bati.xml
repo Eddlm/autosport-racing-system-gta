@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bati</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>bati</Discipline>
+      <Discipline>bati</Discipline>
+    </Disciplines>
+    <Model ModelName="bati">-114291515</Model>
+  </Vehicle>
+</Data>

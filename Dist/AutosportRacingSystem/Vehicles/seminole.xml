@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>seminole</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>seminole</Discipline>
+      <Discipline>seminole</Discipline>
+    </Disciplines>
+    <Model ModelName="seminole">1221512915</Model>
+  </Vehicle>
+</Data>

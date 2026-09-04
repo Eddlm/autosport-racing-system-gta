@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>asterope</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>asterope</Discipline>
+      <Discipline>asterope</Discipline>
+    </Disciplines>
+    <Model ModelName="asterope">-1903012613</Model>
+  </Vehicle>
+</Data>

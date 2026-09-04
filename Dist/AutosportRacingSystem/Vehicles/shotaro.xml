@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>shotaro</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>shotaro</Discipline>
+      <Discipline>shotaro</Discipline>
+    </Disciplines>
+    <Model ModelName="shotaro">-405626514</Model>
+  </Vehicle>
+</Data>

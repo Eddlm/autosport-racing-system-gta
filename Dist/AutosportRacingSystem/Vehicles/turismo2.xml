@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>turismo2</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>turismo2</Discipline>
+      <Discipline>turismo2</Discipline>
+    </Disciplines>
+    <Model ModelName="turismo2">-982130927</Model>
+  </Vehicle>
+</Data>

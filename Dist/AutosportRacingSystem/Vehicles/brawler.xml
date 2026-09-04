@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>brawler</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>brawler</Discipline>
+      <Discipline>brawler</Discipline>
+    </Disciplines>
+    <Model ModelName="brawler">-1479664699</Model>
+  </Vehicle>
+</Data>

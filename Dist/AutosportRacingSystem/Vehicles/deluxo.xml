@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>deluxo</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>deluxo</Discipline>
+      <Discipline>deluxo</Discipline>
+    </Disciplines>
+    <Model ModelName="deluxo">1483171323</Model>
+  </Vehicle>
+</Data>

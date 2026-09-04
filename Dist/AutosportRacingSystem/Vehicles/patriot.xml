@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>patriot</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>patriot</Discipline>
+      <Discipline>patriot</Discipline>
+    </Disciplines>
+    <Model ModelName="patriot">-808457413</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>vigilante</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>vigilante</Discipline>
+      <Discipline>vigilante</Discipline>
+    </Disciplines>
+    <Model ModelName="vigilante">-1242608589</Model>
+  </Vehicle>
+</Data>

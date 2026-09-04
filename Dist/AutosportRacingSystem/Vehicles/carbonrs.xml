@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>carbonrs</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>carbonrs</Discipline>
+      <Discipline>carbonrs</Discipline>
+    </Disciplines>
+    <Model ModelName="carbonrs">11251904</Model>
+  </Vehicle>
+</Data>

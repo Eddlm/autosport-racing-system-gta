@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>avarus</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>avarus</Discipline>
+      <Discipline>avarus</Discipline>
+    </Disciplines>
+    <Model ModelName="avarus">-2115793025</Model>
+  </Vehicle>
+</Data>

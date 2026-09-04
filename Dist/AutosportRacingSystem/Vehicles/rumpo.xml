@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>rumpo</Name>
+    <Class>Vans</Class>
+    <Disciplines>
+      <Discipline>vans</Discipline>
+      <Discipline>rumpo</Discipline>
+      <Discipline>rumpo</Discipline>
+    </Disciplines>
+    <Model ModelName="rumpo">1162065741</Model>
+  </Vehicle>
+</Data>

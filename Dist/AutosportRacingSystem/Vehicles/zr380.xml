@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>zr380</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>zr380</Discipline>
+      <Discipline>zr380</Discipline>
+    </Disciplines>
+    <Model ModelName="zr380">540101442</Model>
+  </Vehicle>
+</Data>

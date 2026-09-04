@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>paragon</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>paragon</Discipline>
+      <Discipline>paragon</Discipline>
+    </Disciplines>
+    <Model ModelName="paragon">-447711397</Model>
+  </Vehicle>
+</Data>

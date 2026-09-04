@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>ruston</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>ruston</Discipline>
+      <Discipline>ruston</Discipline>
+    </Disciplines>
+    <Model ModelName="ruston">719660200</Model>
+  </Vehicle>
+</Data>

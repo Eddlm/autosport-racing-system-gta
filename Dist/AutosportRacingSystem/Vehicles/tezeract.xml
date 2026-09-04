@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tezeract</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>tezeract</Discipline>
+      <Discipline>tezeract</Discipline>
+    </Disciplines>
+    <Model ModelName="tezeract">1031562256</Model>
+  </Vehicle>
+</Data>

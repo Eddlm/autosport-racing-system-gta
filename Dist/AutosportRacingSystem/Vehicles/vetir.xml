@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>vetir</Name>
+    <Class>Military</Class>
+    <Disciplines>
+      <Discipline>military</Discipline>
+      <Discipline>vetir</Discipline>
+      <Discipline>vetir</Discipline>
+    </Disciplines>
+    <Model ModelName="vetir">2014313426</Model>
+  </Vehicle>
+</Data>

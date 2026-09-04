@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>coureur</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>coureur</Discipline>
+      <Discipline>coureur</Discipline>
+    </Disciplines>
+    <Model ModelName="coureur">610429990</Model>
+  </Vehicle>
+</Data>

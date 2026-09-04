@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>ingot</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>ingot</Discipline>
+      <Discipline>ingot</Discipline>
+    </Disciplines>
+    <Model ModelName="ingot">-1289722222</Model>
+  </Vehicle>
+</Data>

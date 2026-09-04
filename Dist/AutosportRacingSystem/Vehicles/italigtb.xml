@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>italigtb</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>italigtb</Discipline>
+      <Discipline>italigtb</Discipline>
+    </Disciplines>
+    <Model ModelName="italigtb">-2048333973</Model>
+  </Vehicle>
+</Data>

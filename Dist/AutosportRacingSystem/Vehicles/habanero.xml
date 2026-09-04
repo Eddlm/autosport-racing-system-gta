@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>habanero</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>habanero</Discipline>
+      <Discipline>habanero</Discipline>
+    </Disciplines>
+    <Model ModelName="habanero">884422927</Model>
+  </Vehicle>
+</Data>

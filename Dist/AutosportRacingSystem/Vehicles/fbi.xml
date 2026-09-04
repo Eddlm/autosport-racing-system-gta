@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>fbi</Name>
+    <Class>Emergency</Class>
+    <Disciplines>
+      <Discipline>emergency</Discipline>
+      <Discipline>fbi</Discipline>
+      <Discipline>fbi</Discipline>
+    </Disciplines>
+    <Model ModelName="fbi">1127131465</Model>
+  </Vehicle>
+</Data>

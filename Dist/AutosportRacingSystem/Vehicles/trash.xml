@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>trash</Name>
+    <Class>Service</Class>
+    <Disciplines>
+      <Discipline>service</Discipline>
+      <Discipline>trash</Discipline>
+      <Discipline>trash</Discipline>
+    </Disciplines>
+    <Model ModelName="trash">1917016601</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>sandking</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>sandking</Discipline>
+      <Discipline>sandking</Discipline>
+    </Disciplines>
+    <Model ModelName="sandking">-1189015600</Model>
+  </Vehicle>
+</Data>

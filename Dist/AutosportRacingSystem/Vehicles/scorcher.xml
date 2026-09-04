@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>scorcher</Name>
+    <Class>Cycles</Class>
+    <Disciplines>
+      <Discipline>cycles</Discipline>
+      <Discipline>scorcher</Discipline>
+      <Discipline>scorcher</Discipline>
+    </Disciplines>
+    <Model ModelName="scorcher">-186537451</Model>
+  </Vehicle>
+</Data>

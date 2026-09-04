@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tug</Name>
+    <Class>Boats</Class>
+    <Disciplines>
+      <Discipline>boats</Discipline>
+      <Discipline>tug</Discipline>
+      <Discipline>tug</Discipline>
+    </Disciplines>
+    <Model ModelName="tug">-2100640717</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>khanjali</Name>
+    <Class>Military</Class>
+    <Disciplines>
+      <Discipline>military</Discipline>
+      <Discipline>khanjali</Discipline>
+      <Discipline>khanjali</Discipline>
+    </Disciplines>
+    <Model ModelName="khanjali">-1435527158</Model>
+  </Vehicle>
+</Data>

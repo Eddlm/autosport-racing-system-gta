@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>oracle2</Name>
+    <Class>Coupes</Class>
+    <Disciplines>
+      <Discipline>coupes</Discipline>
+      <Discipline>oracle2</Discipline>
+      <Discipline>oracle2</Discipline>
+    </Disciplines>
+    <Model ModelName="oracle2">-511601230</Model>
+  </Vehicle>
+</Data>

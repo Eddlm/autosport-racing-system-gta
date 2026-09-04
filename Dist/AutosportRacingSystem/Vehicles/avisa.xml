@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>avisa</Name>
+    <Class>Boats</Class>
+    <Disciplines>
+      <Discipline>boats</Discipline>
+      <Discipline>avisa</Discipline>
+      <Discipline>avisa</Discipline>
+    </Disciplines>
+    <Model ModelName="avisa">-1706603682</Model>
+  </Vehicle>
+</Data>

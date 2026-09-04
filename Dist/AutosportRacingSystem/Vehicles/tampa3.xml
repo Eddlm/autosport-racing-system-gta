@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tampa3</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>tampa3</Discipline>
+      <Discipline>tampa3</Discipline>
+    </Disciplines>
+    <Model ModelName="tampa3">-1210451983</Model>
+  </Vehicle>
+</Data>

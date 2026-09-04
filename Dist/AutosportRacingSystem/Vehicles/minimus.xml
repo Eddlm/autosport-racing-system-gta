@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>minimus</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>minimus</Discipline>
+      <Discipline>minimus</Discipline>
+    </Disciplines>
+    <Model ModelName="minimus">-1101107018</Model>
+  </Vehicle>
+</Data>

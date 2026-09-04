@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>neo</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>neo</Discipline>
+      <Discipline>neo</Discipline>
+    </Disciplines>
+    <Model ModelName="neo">-1620126302</Model>
+  </Vehicle>
+</Data>

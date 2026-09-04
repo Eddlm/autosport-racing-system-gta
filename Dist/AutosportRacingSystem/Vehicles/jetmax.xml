@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>jetmax</Name>
+    <Class>Boats</Class>
+    <Disciplines>
+      <Discipline>boats</Discipline>
+      <Discipline>jetmax</Discipline>
+      <Discipline>jetmax</Discipline>
+    </Disciplines>
+    <Model ModelName="jetmax">861409633</Model>
+  </Vehicle>
+</Data>

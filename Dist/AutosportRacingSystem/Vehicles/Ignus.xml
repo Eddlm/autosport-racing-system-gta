@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>Ignus</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>ignus</Discipline>
+      <Discipline>ignus</Discipline>
+    </Disciplines>
+    <Model ModelName="Ignus">-1444114309</Model>
+  </Vehicle>
+</Data>

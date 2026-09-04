@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>stretch</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>stretch</Discipline>
+      <Discipline>stretch</Discipline>
+    </Disciplines>
+    <Model ModelName="stretch">-1961627517</Model>
+  </Vehicle>
+</Data>

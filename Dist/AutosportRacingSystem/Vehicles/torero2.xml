@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>torero2</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>torero2</Discipline>
+      <Discipline>torero2</Discipline>
+    </Disciplines>
+    <Model ModelName="torero2">-165394758</Model>
+  </Vehicle>
+</Data>

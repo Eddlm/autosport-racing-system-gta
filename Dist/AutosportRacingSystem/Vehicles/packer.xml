@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>packer</Name>
+    <Class>Commercial</Class>
+    <Disciplines>
+      <Discipline>commercial</Discipline>
+      <Discipline>packer</Discipline>
+      <Discipline>packer</Discipline>
+    </Disciplines>
+    <Model ModelName="packer">569305213</Model>
+  </Vehicle>
+</Data>

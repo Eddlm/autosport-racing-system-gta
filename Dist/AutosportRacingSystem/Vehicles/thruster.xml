@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>thruster</Name>
+    <Class>Military</Class>
+    <Disciplines>
+      <Discipline>military</Discipline>
+      <Discipline>thruster</Discipline>
+      <Discipline>thruster</Discipline>
+    </Disciplines>
+    <Model ModelName="thruster">1489874736</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>jugular</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>jugular</Discipline>
+      <Discipline>jugular</Discipline>
+    </Disciplines>
+    <Model ModelName="jugular">-208911803</Model>
+  </Vehicle>
+</Data>

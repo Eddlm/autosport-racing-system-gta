@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>chino</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>chino</Discipline>
+      <Discipline>chino</Discipline>
+    </Disciplines>
+    <Model ModelName="chino">349605904</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>openwheel1</Name>
+    <Class>OpenWheel</Class>
+    <Disciplines>
+      <Discipline>openwheel</Discipline>
+      <Discipline>openwheel1</Discipline>
+      <Discipline>openwheel1</Discipline>
+    </Disciplines>
+    <Model ModelName="openwheel1">1492612435</Model>
+  </Vehicle>
+</Data>

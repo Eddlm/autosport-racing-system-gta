@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>sovereign</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>sovereign</Discipline>
+      <Discipline>sovereign</Discipline>
+    </Disciplines>
+    <Model ModelName="sovereign">743478836</Model>
+  </Vehicle>
+</Data>

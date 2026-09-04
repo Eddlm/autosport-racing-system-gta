@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bodhi2</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>bodhi2</Discipline>
+      <Discipline>bodhi2</Discipline>
+    </Disciplines>
+    <Model ModelName="bodhi2">-1435919434</Model>
+  </Vehicle>
+</Data>

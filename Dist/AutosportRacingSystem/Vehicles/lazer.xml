@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>lazer</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>lazer</Discipline>
+      <Discipline>lazer</Discipline>
+    </Disciplines>
+    <Model ModelName="lazer">-1281684762</Model>
+  </Vehicle>
+</Data>

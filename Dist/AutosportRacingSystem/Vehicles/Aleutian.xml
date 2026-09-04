@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>Aleutian</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>aleutian</Discipline>
+      <Discipline>aleutian</Discipline>
+    </Disciplines>
+    <Model ModelName="Aleutian">-38879449</Model>
+  </Vehicle>
+</Data>

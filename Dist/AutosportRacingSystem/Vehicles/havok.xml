@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>havok</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>havok</Discipline>
+      <Discipline>havok</Discipline>
+    </Disciplines>
+    <Model ModelName="havok">-1984275979</Model>
+  </Vehicle>
+</Data>

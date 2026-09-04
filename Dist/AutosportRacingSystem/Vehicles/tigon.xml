@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tigon</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>tigon</Discipline>
+      <Discipline>tigon</Discipline>
+    </Disciplines>
+    <Model ModelName="tigon">-1358197432</Model>
+  </Vehicle>
+</Data>

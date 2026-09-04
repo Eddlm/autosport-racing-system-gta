@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>regina</Name>
+    <Class>Sedans</Class>
+    <Disciplines>
+      <Discipline>sedans</Discipline>
+      <Discipline>regina</Discipline>
+      <Discipline>regina</Discipline>
+    </Disciplines>
+    <Model ModelName="regina">-14495224</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>mesa</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>mesa</Discipline>
+      <Discipline>mesa</Discipline>
+    </Disciplines>
+    <Model ModelName="mesa">914654722</Model>
+  </Vehicle>
+</Data>

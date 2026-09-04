@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>pcj</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>pcj</Discipline>
+      <Discipline>pcj</Discipline>
+    </Disciplines>
+    <Model ModelName="pcj">-909201658</Model>
+  </Vehicle>
+</Data>

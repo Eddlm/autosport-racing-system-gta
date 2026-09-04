@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>faggio</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>faggio</Discipline>
+      <Discipline>faggio</Discipline>
+    </Disciplines>
+    <Model ModelName="faggio">-1842748181</Model>
+  </Vehicle>
+</Data>

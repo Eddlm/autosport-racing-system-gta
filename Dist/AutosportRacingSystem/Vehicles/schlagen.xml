@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>schlagen</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>schlagen</Discipline>
+      <Discipline>schlagen</Discipline>
+    </Disciplines>
+    <Model ModelName="schlagen">-507495760</Model>
+  </Vehicle>
+</Data>

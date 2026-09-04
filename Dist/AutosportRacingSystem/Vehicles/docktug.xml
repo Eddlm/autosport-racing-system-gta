@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>docktug</Name>
+    <Class>Utility</Class>
+    <Disciplines>
+      <Discipline>utility</Discipline>
+      <Discipline>docktug</Discipline>
+      <Discipline>docktug</Discipline>
+    </Disciplines>
+    <Model ModelName="docktug">-884690486</Model>
+  </Vehicle>
+</Data>

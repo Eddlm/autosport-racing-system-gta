@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tula</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>tula</Discipline>
+      <Discipline>tula</Discipline>
+    </Disciplines>
+    <Model ModelName="tula">1043222410</Model>
+  </Vehicle>
+</Data>

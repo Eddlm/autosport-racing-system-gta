@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tribike2</Name>
+    <Class>Cycles</Class>
+    <Disciplines>
+      <Discipline>cycles</Discipline>
+      <Discipline>tribike2</Discipline>
+      <Discipline>tribike2</Discipline>
+    </Disciplines>
+    <Model ModelName="tribike2">-1233807380</Model>
+  </Vehicle>
+</Data>

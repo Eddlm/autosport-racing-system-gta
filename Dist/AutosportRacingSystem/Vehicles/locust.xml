@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>locust</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>locust</Discipline>
+      <Discipline>locust</Discipline>
+    </Disciplines>
+    <Model ModelName="locust">-941272559</Model>
+  </Vehicle>
+</Data>

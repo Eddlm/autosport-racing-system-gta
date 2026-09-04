@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>ztype</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>ztype</Discipline>
+      <Discipline>ztype</Discipline>
+    </Disciplines>
+    <Model ModelName="ztype">758895617</Model>
+  </Vehicle>
+</Data>

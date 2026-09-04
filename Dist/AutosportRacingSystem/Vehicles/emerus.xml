@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>emerus</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>emerus</Discipline>
+      <Discipline>emerus</Discipline>
+    </Disciplines>
+    <Model ModelName="emerus">1323778901</Model>
+  </Vehicle>
+</Data>

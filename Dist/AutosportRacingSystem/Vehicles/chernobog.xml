@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>chernobog</Name>
+    <Class>Military</Class>
+    <Disciplines>
+      <Discipline>military</Discipline>
+      <Discipline>chernobog</Discipline>
+      <Discipline>chernobog</Discipline>
+    </Disciplines>
+    <Model ModelName="chernobog">-692292317</Model>
+  </Vehicle>
+</Data>

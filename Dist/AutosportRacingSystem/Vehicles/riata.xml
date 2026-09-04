@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>riata</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>riata</Discipline>
+      <Discipline>riata</Discipline>
+    </Disciplines>
+    <Model ModelName="riata">-1532697517</Model>
+  </Vehicle>
+</Data>

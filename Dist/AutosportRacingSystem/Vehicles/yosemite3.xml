@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>yosemite3</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>yosemite3</Discipline>
+      <Discipline>yosemite3</Discipline>
+    </Disciplines>
+    <Model ModelName="yosemite3">67753863</Model>
+  </Vehicle>
+</Data>

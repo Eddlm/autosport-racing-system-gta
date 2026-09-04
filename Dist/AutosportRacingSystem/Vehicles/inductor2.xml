@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>inductor2</Name>
+    <Class>Cycles</Class>
+    <Disciplines>
+      <Discipline>cycles</Discipline>
+      <Discipline>inductor2</Discipline>
+      <Discipline>inductor2</Discipline>
+    </Disciplines>
+    <Model ModelName="inductor2">-1983622024</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>polbuffalo6</Name>
+    <Class>Emergency</Class>
+    <Disciplines>
+      <Discipline>emergency</Discipline>
+      <Discipline>polbuffalo6</Discipline>
+      <Discipline>polbuffalo6</Discipline>
+    </Disciplines>
+    <Model ModelName="polbuffalo6">617517171</Model>
+  </Vehicle>
+</Data>

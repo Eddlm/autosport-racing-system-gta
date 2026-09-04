@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>astron</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>astron</Discipline>
+      <Discipline>astron</Discipline>
+    </Disciplines>
+    <Model ModelName="astron">629969764</Model>
+  </Vehicle>
+</Data>

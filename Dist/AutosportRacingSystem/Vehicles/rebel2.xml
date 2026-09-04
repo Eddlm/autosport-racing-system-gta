@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>rebel2</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>rebel2</Discipline>
+      <Discipline>rebel2</Discipline>
+    </Disciplines>
+    <Model ModelName="rebel2">-2045594037</Model>
+  </Vehicle>
+</Data>

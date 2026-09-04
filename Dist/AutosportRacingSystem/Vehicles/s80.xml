@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>s80</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>s80</Discipline>
+      <Discipline>s80</Discipline>
+    </Disciplines>
+    <Model ModelName="s80">-324618589</Model>
+  </Vehicle>
+</Data>

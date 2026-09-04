@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>defiler</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>defiler</Discipline>
+      <Discipline>defiler</Discipline>
+    </Disciplines>
+    <Model ModelName="defiler">822018448</Model>
+  </Vehicle>
+</Data>

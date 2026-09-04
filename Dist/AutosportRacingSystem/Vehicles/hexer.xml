@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>hexer</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>hexer</Discipline>
+      <Discipline>hexer</Discipline>
+    </Disciplines>
+    <Model ModelName="hexer">301427732</Model>
+  </Vehicle>
+</Data>

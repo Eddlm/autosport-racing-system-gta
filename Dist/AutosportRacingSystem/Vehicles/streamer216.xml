@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>streamer216</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>streamer216</Discipline>
+      <Discipline>streamer216</Discipline>
+    </Disciplines>
+    <Model ModelName="streamer216">191916658</Model>
+  </Vehicle>
+</Data>

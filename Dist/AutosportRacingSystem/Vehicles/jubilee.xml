@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>jubilee</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>jubilee</Discipline>
+      <Discipline>jubilee</Discipline>
+    </Disciplines>
+    <Model ModelName="jubilee">461465043</Model>
+  </Vehicle>
+</Data>

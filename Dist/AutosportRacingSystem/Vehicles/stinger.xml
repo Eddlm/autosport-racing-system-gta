@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>stinger</Name>
+    <Class>SportsClassics</Class>
+    <Disciplines>
+      <Discipline>sportsclassics</Discipline>
+      <Discipline>stinger</Discipline>
+      <Discipline>stinger</Discipline>
+    </Disciplines>
+    <Model ModelName="stinger">1545842587</Model>
+  </Vehicle>
+</Data>

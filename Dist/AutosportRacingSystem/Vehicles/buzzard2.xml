@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>buzzard2</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>buzzard2</Discipline>
+      <Discipline>buzzard2</Discipline>
+    </Disciplines>
+    <Model ModelName="buzzard2">745926877</Model>
+  </Vehicle>
+</Data>

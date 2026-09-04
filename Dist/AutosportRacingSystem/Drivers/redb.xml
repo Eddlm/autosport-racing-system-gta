@@ -1,0 +1,34 @@
+<Data>
+  <Driver>
+    <Name>redb</Name>
+    <Model>1885233650</Model>
+    <Clothes>
+      <Cloth ComponentID="0" DrawableID="0">-1</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">0</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">1</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">2</Cloth>
+      <Cloth ComponentID="46" DrawableID="0">3</Cloth>
+      <Cloth ComponentID="67" DrawableID="1">4</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">5</Cloth>
+      <Cloth ComponentID="55" DrawableID="5">6</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">7</Cloth>
+      <Cloth ComponentID="15" DrawableID="0">8</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">9</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">10</Cloth>
+      <Cloth ComponentID="148" DrawableID="1">11</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">12</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">13</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">14</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">15</Cloth>
+      <Cloth ComponentID="327681" DrawableID="0">16</Cloth>
+      <Cloth ComponentID="16777216" DrawableID="0">17</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">18</Cloth>
+      <Cloth ComponentID="0" DrawableID="0">19</Cloth>
+      <Prop TextureID="4" PropID="62">0</Prop>
+    </Clothes>
+    <Skills>
+      <Skill value="25">ExampleSkill</Skill>
+      <Skill value2="50">ExampleSkill2</Skill>
+    </Skills>
+  </Driver>
+</Data>

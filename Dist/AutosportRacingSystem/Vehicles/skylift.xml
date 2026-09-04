@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>skylift</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>skylift</Discipline>
+      <Discipline>skylift</Discipline>
+    </Disciplines>
+    <Model ModelName="skylift">1044954915</Model>
+  </Vehicle>
+</Data>

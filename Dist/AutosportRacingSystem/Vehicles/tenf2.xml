@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>tenf2</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>tenf2</Discipline>
+      <Discipline>tenf2</Discipline>
+    </Disciplines>
+    <Model ModelName="tenf2">274946574</Model>
+  </Vehicle>
+</Data>

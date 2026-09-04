@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>minitank</Name>
+    <Class>Military</Class>
+    <Disciplines>
+      <Discipline>military</Discipline>
+      <Discipline>minitank</Discipline>
+      <Discipline>minitank</Discipline>
+    </Disciplines>
+    <Model ModelName="minitank">-1254331310</Model>
+  </Vehicle>
+</Data>

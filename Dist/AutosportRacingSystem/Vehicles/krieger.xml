@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>krieger</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>krieger</Discipline>
+      <Discipline>krieger</Discipline>
+    </Disciplines>
+    <Model ModelName="krieger">-664141241</Model>
+  </Vehicle>
+</Data>

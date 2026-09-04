@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>kuruma</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>kuruma</Discipline>
+      <Discipline>kuruma</Discipline>
+    </Disciplines>
+    <Model ModelName="kuruma">-1372848492</Model>
+  </Vehicle>
+</Data>

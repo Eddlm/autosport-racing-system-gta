@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>hunter</Name>
+    <Class>Helicopters</Class>
+    <Disciplines>
+      <Discipline>helicopters</Discipline>
+      <Discipline>hunter</Discipline>
+      <Discipline>hunter</Discipline>
+    </Disciplines>
+    <Model ModelName="hunter">-42959138</Model>
+  </Vehicle>
+</Data>

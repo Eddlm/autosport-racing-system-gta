@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>gargoyle</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>gargoyle</Discipline>
+      <Discipline>gargoyle</Discipline>
+    </Disciplines>
+    <Model ModelName="gargoyle">741090084</Model>
+  </Vehicle>
+</Data>

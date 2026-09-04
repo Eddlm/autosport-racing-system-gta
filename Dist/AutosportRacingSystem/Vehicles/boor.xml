@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>boor</Name>
+    <Class>OffRoad</Class>
+    <Disciplines>
+      <Discipline>offroad</Discipline>
+      <Discipline>boor</Discipline>
+      <Discipline>boor</Discipline>
+    </Disciplines>
+    <Model ModelName="boor">996383885</Model>
+  </Vehicle>
+</Data>

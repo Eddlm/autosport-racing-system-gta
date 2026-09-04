@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>dubsta</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>dubsta</Discipline>
+      <Discipline>dubsta</Discipline>
+    </Disciplines>
+    <Model ModelName="dubsta">1177543287</Model>
+  </Vehicle>
+</Data>

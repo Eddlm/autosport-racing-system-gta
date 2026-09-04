@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>innovation</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>innovation</Discipline>
+      <Discipline>innovation</Discipline>
+    </Disciplines>
+    <Model ModelName="innovation">-159126838</Model>
+  </Vehicle>
+</Data>

@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>turismor</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>turismor</Discipline>
+      <Discipline>turismor</Discipline>
+    </Disciplines>
+    <Model ModelName="turismor">408192225</Model>
+  </Vehicle>
+</Data>

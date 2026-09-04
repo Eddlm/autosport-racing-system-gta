@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>vigero</Name>
+    <Class>Muscle</Class>
+    <Disciplines>
+      <Discipline>muscle</Discipline>
+      <Discipline>vigero</Discipline>
+      <Discipline>vigero</Discipline>
+    </Disciplines>
+    <Model ModelName="vigero">-825837129</Model>
+  </Vehicle>
+</Data>

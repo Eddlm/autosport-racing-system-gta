@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>omnis</Name>
+    <Class>Sports</Class>
+    <Disciplines>
+      <Discipline>sports</Discipline>
+      <Discipline>omnis</Discipline>
+      <Discipline>omnis</Discipline>
+    </Disciplines>
+    <Model ModelName="omnis">-777172681</Model>
+  </Vehicle>
+</Data>

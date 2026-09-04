@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>manchez</Name>
+    <Class>Motorcycles</Class>
+    <Disciplines>
+      <Discipline>motorcycles</Discipline>
+      <Discipline>manchez</Discipline>
+      <Discipline>manchez</Discipline>
+    </Disciplines>
+    <Model ModelName="manchez">-1523428744</Model>
+  </Vehicle>
+</Data>

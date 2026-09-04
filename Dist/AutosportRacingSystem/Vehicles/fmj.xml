@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>fmj</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>fmj</Discipline>
+      <Discipline>fmj</Discipline>
+    </Disciplines>
+    <Model ModelName="fmj">1426219628</Model>
+  </Vehicle>
+</Data>

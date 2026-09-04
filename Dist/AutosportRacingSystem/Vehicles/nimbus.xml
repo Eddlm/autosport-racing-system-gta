@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>nimbus</Name>
+    <Class>Planes</Class>
+    <Disciplines>
+      <Discipline>planes</Discipline>
+      <Discipline>nimbus</Discipline>
+      <Discipline>nimbus</Discipline>
+    </Disciplines>
+    <Model ModelName="nimbus">-1295027632</Model>
+  </Vehicle>
+</Data>

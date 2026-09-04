@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>everon3</Name>
+    <Class>SUVs</Class>
+    <Disciplines>
+      <Discipline>suvs</Discipline>
+      <Discipline>everon3</Discipline>
+      <Discipline>everon3</Discipline>
+    </Disciplines>
+    <Model ModelName="everon3">554408685</Model>
+  </Vehicle>
+</Data>

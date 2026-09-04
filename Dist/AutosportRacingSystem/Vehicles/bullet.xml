@@ -1,0 +1,12 @@
+<Data>
+  <Vehicle>
+    <Name>bullet</Name>
+    <Class>Super</Class>
+    <Disciplines>
+      <Discipline>super</Discipline>
+      <Discipline>bullet</Discipline>
+      <Discipline>bullet</Discipline>
+    </Disciplines>
+    <Model ModelName="bullet">-1696146015</Model>
+  </Vehicle>
+</Data>
