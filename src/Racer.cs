@@ -1212,7 +1212,6 @@ namespace ARS
                         ActiveManeuver.Type = ManeuverType.Yield;
                         ActiveManeuver.Target = closestRival.RivalRacer;
                         ActiveManeuver.LastEnabled = Game.GameTime;
-                        UI.Notify("~y~" + Name + "~w~ yields to ~y~" + closestRival.RivalRacer.Name);
                     }
                 }
             }
@@ -1248,7 +1247,6 @@ namespace ARS
                     ActiveManeuver.Target = diveTarget.RivalRacer;
                     ActiveManeuver.LastEnabled = Game.GameTime;
                     _divebombApexNode = apexNode;
-                    UI.Notify("~y~" + Name + "~w~ divebombs ~y~" + diveTarget.RivalRacer.Name);
                 }
             }
 
@@ -1282,7 +1280,6 @@ namespace ARS
                     ActiveManeuver.Target = defenderTarget.RivalRacer;
                     ActiveManeuver.LastEnabled = Game.GameTime;
                     _defendApexNode = apexNode;
-                    UI.Notify("~y~" + Name + "~w~ defends the inside from ~y~" + defenderTarget.RivalRacer.Name);
                 }
             }
         }
@@ -1492,7 +1489,6 @@ namespace ARS
                 else if (_gripCheckPeakGs / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f) < 0.95f) offset += 2f;
                 _cornerSpeedOffsets[_gripCheckApexNode] = offset;
 
-                UI.Notify(Name + " did " + _gripCheckPeakGs.ToString("0.0") + "/" + VehicleData.CurrentMechanicalGrip.ToString("0.0") + " on apex " + _gripCheckApexNode + " (+" + offset.ToString("0") + "m/s)");
                 _gripCheckLastApexNode = _gripCheckApexNode;
                 _gripCheckArmed = false;
                 _gripCheckPeakGs = 0f;

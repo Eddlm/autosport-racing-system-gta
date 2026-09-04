@@ -132,6 +132,11 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **ShowAggro** — pressure chevron/text + 0.5s and 1s projections (white line/sphere, red when off-track).
 - **ShowPhysics** — G-force sphere/vector (legacy block, currently unreachable — `DrawRacerDebug` early-returns unless ShowInputs/ShowTrackAnalysis is on).
 
+## Leaderboard (DRAWING REMOVED — rebuild from zero)
+- **Removed** the on-screen race leaderboard in `OnTick` (the `positions` string-building + `DrawText` loop that rendered it). It was messy and is slated for a from-zero rebuild.
+- **What remains (logic, not visuals):** the finish/reward block in `OnTick` — `LeaderboardFinish` gets racers when they pass the lap threshold, and when `LeaderboardFinish.Count == Racers.Count` (or the timed finish elapses) it awards `RaceReward` to the winner, sets `RaceStatus = Finished`, and calls `CleanEverything()`. `Racers = Racers.OrderBy(vl => vl.RacePosition)` still sorts the field; all that logic is intact.
+- **Data that survives for the rebuild:** `Racer.RacePosition`, `Racer.Name`, `Racer.Lap`, `Racer.LapTimes` (List<TimeSpan>), `Racer.LapStartTime`, `Racer.VehicleData.TextPerformanceIndex` (the blue pace-index prefix), `Racer.Pressure`, `_raceTimedFinishMs`, `RaceReward`, `Language` format of times via `ARS.ParseToTimeSpan`/`TimeSpan.ToString`. Use these to rebuild the leaderboard; do not recreate the old string-mash + `DrawText` renderer.
+
 ## Durable gotchas — do not "fix" these
 - **Remap with a descending output range + `clamp=true` is inverted** by `Clamp(val, min, max)` when `min > max` (NaN also compares less-than-anything). Keep output clamps ascending — use a descending *input* range when you want a reversed map. (This bit us repeatedly.)
 - **NaN discipline**: `Clamp(NaN, -limit, +limit)` returns the min bound → instant full-lock. Guard steering outputs and any clamp input that can be non-finite.

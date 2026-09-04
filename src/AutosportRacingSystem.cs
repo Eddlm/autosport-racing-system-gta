@@ -1379,90 +1379,11 @@ namespace ARS
                 }
 
                 
-                List<string> positions = new List<string>();
-                if (LeaderboardFinish.Count > 0)
+                if (LeaderboardFinish.Count > 0 && (LeaderboardFinish.Count == Racers.Count || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs)))
                 {
-                    foreach (Racer r in LeaderboardFinish)
-                    {
-
-                        TimeSpan totaltime = new TimeSpan();
-                        foreach (TimeSpan t in r.LapTimes) totaltime += t;
-
-
-                        string fTime = totaltime.ToString("m':'ss'.'fff"); 
-                        if (r.Driver.IsPlayer) positions.Add("~g~" + r.RacePosition + "º~w~ " + r.Name + " T" + fTime + "~n~");
-                        else positions.Add("~y~" + r.RacePosition + "º~w~ " + r.Name + " T" + fTime + "~n~");
-                    }
-
-                    if (LeaderboardFinish.Count == Racers.Count || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs))
-                    {
-                        if (LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
-                        RaceStatus = RaceState.Finished;
-
-                        CleanEverything();
-                    }
-                }
-                else
-                {
-
-                    if (Game.IsControlPressed(2, GTA.Control.Sprint))
-                    {
-                        foreach (Racer r in Racers)
-                        {
-                            TimeSpan totaltime = new TimeSpan();
-
-                            totaltime = ParseToTimeSpan(Game.GameTime - r.LapStartTime);
-                            string fTime = totaltime.ToString("m':'ss'.'fff");
-
-                            string text = "";
-                            if (r.Driver.IsPlayer) text = "~b~" + r.RacePosition + "º~y~ " + r.Name + " T" + fTime + "~n~";
-                            else text = "~b~" + r.RacePosition + "º~w~ " + r.Name + "~p~(" + r.Pressure.ToString("0") + ")~w~ " + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + " -  ~y~T" + fTime + "~n~";
-
-
-                            positions.Add(text);
-
-                            
-
-                        }
-                    }
-                    else
-                    {
-                        foreach (Racer r in Racers)
-                        {
-                            string text = "~b~" + r.RacePosition + "º~g~ " + r.Name + "~p~(" + r.Pressure.ToString("0") + ")~w~ L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                            
-                            text = "~b~" + r.VehicleData.TextPerformanceIndex + " - ~g~ " + r.Name + "~p~(" + r.Pressure.ToString("0") + ")~w~ L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-
-
-                            if (r.Driver.IsPlayer)
-                            {
-                                
-                                text = "~b~" + r.VehicleData.TextPerformanceIndex + " - ~y~ " + r.Name + " ~w~L" + r.Lap + "/" + SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) + "~n~~w~";
-                            }
-
-                            positions.Add(text);
-
-                        }
-                    }
-                }
-
-
-                
-                if (positions.Count > 0 && !_arsMenu.Visible)
-                {
-                    float z = 0.15f;
-                    float scale = 0.4f;
-
-                    float height = scale * 0.06f;
-                    float width = 0f;
-                    Vector2 point = new Vector2(0.016f, 0.008f);
-                    foreach (string st in positions)
-                    {
-                        float w = DrawText(point + new Vector2(0f, z), "~u~" + st, Color.White, DrawTextFont.Default, DrawTextAlign.Left, scale);
-                        if (w > width) width = w;
-                        z += scale * 0.06f;
-                    }
-                    
+                    if (LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
+                    RaceStatus = RaceState.Finished;
+                    CleanEverything();
                 }
 
                 if (_longTickMs < Game.GameTime)
