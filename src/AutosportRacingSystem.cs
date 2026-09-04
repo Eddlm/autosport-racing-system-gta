@@ -744,14 +744,16 @@ namespace ARS
             _arsMenu = new NativeMenu("ARS", "RACING")
             {
                 UseMouse = false,
-                DisableControls = true
+                DisableControls = true,
+                Alignment = Alignment.Right
             };
 
             // ── Race submenu ──
             _raceMenu = new NativeMenu("Race", "Race")
             {
                 UseMouse = false,
-                DisableControls = true
+                DisableControls = true,
+                Alignment = Alignment.Right
             };
 
             // ── Track items (flattened into Race) ──
@@ -762,6 +764,11 @@ namespace ARS
                     _selectedTrackPath = _trackListPaths[args.Index];
             };
             _raceMenu.Add(_trackListItem);
+
+            NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", new[] { "3", "5", "7", "9", "11", "13", "15", "17", "19" });
+            lapsItem.ItemChanged += (sender, args) => SaveOptionSetting("Laps", lapsItem.Items[args.Index]);
+            lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5).ToString()));
+            _raceMenu.Add(lapsItem);
 
             NativeItem instanceTrackItem = new NativeItem("Spawn Track", "Load the selected track and teleport to it.");
             instanceTrackItem.Activated += (sender, args) =>
@@ -828,20 +835,27 @@ namespace ARS
                 UI.Notify("~r~Race ended.~w~ Everything cleaned.");
             };
 
-            // Freecam toggle.
+            // ── Other submenu (root) ──
+            NativeMenu cameraMenu = new NativeMenu("Other", "Other", "Miscellaneous controls.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
             NativeItem freecamItem = new NativeItem("Freecam", "Toggle the ARS free camera.");
             freecamItem.Activated += (sender, args) =>
             {
                 _arsMenu.Visible = false;
                 _freeCam.Toggle();
             };
-            _arsMenu.Add(freecamItem);
+            cameraMenu.Add(freecamItem);
 
             // ── Settings submenu (root) ──
             NativeMenu settingsMenu = new NativeMenu("Dev Settings", "Dev Settings", "Configure ARS debug and race setup options.")
             {
                 UseMouse = false,
-                DisableControls = true
+                DisableControls = true,
+                Alignment = Alignment.Right
             };
             AddDebugCheckbox(settingsMenu, Options.ShowAggro, "Show Pressure", "Show each racer's pressure on the leaderboard and above their car.");
             AddDebugCheckbox(settingsMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
@@ -856,7 +870,8 @@ namespace ARS
             NativeMenu racersMenu = new NativeMenu("Racers", "Racers", "Grid sorting, race timeout, AI behaviour and tuning.")
             {
                 UseMouse = false,
-                DisableControls = true
+                DisableControls = true,
+                Alignment = Alignment.Right
             };
             NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "How the grid is ordered.", new[] { "Power", "PowerDescendent", "TopSpeed", "TopSpeedDescendent", "Random" });
             gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", gridSortItem.Items[args.Index]);
@@ -878,17 +893,29 @@ namespace ARS
             tuningItem.SelectedIndex = Math.Max(0, tuningItem.Items.IndexOf(RaceSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 1).ToString()));
             racersMenu.Add(tuningItem);
 
-            // Link Race, Dev Settings and Racers as submenus of root
+            // ── Options submenu (root) — hosts Dev Settings and Racers ──
+            NativeMenu optionsMenu = new NativeMenu("Options", "Options", "Race setup and AI behaviour.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+            optionsMenu.AddSubMenu(racersMenu);
+            optionsMenu.AddSubMenu(settingsMenu);
+
+            // Link Race, Options and Other as submenus of root
             _arsMenu.AddSubMenu(_raceMenu);
-            _arsMenu.AddSubMenu(settingsMenu);
-            _arsMenu.AddSubMenu(racersMenu);
+            _arsMenu.AddSubMenu(optionsMenu);
+            _arsMenu.AddSubMenu(cameraMenu);
             _arsMenu.Add(endItem);
 
             // Register all menus in the pool
             _menuPool.Add(_arsMenu);
             _menuPool.Add(_raceMenu);
+            _menuPool.Add(optionsMenu);
             _menuPool.Add(settingsMenu);
             _menuPool.Add(racersMenu);
+            _menuPool.Add(cameraMenu);
         }
         void SaveRacerSetting(string key, string value)
         {
@@ -914,6 +941,13 @@ namespace ARS
             if (DevMenuFile == null) return;
             DevMenuFile.SetValue("DEBUG", option.ToString(), value);
             DevMenuFile.Save();
+        }
+        void SaveOptionSetting(string key, string value)
+        {
+            if (SettingsFile == null)
+                SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
+            SettingsFile.SetValue("GENERAL_SETTINGS", key, value);
+            SettingsFile.Save();
         }
         // ── Phased race instancing ──
         // Each phase is a self-contained method callable individually or chained
@@ -1251,7 +1285,7 @@ namespace ARS
                 }
 
                 
-                if (!_arsMenu.Visible)
+                if (!_menuPool.AreAnyVisible)
                 {
                     if ((DevSettingsFile.GetValue<bool>("GENERAL", "Hotkeys", true) && Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlPressed(2, GTA.Control.Context)) || WasCheatStringJustEntered("arsmenu"))
                     {
