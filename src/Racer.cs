@@ -1868,6 +1868,11 @@ namespace ARS
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
+                float dfGs = ARS.GetDownforceGsAtSpeed(this, Car.Velocity.Length());
+                ARS.DrawText(new Vector2(0.79f, y), "DFG " + dfGs.ToString("0.00"),
+                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+
                 float speedDiff = _debugFollowTrackSpd - Car.Velocity.Length();
                 ARS.DrawText(new Vector2(0.79f, y), "DIFF " + ARS.MpsToMph(speedDiff).ToString("0") + " mph",
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);

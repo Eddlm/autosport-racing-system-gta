@@ -3608,17 +3608,35 @@ namespace ARS
         public static float GetDownforceGsAtSpeed(Racer r, float ms)
         {
             int nwheels = GetNumWheels(r.Car);
-            
-            if (r.Handling.Downforce <= 1.0f)
+            float df = r.Handling.Downforce;
+
+            if (df <= 1.0f)
             {
                 if (r.Car.HasBone("spoiler")) return 0.035f * 2 * nwheels;
                 else return 0.035f * nwheels;
             }
-            if (ARS.IsBetween(r.Handling.Downforce, 1.01f, 99.9f)) return GsOrZero(Remap(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, 0.035f, true) * r.Handling.Downforce * nwheels);
-            
-            
-            if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) return 0.035f * nwheels;
-            return 0f;
+
+            float topSpeed = Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash);
+            float maxVel = Math.Max(topSpeed, 1f);
+            float normalizedDf = df > 100f ? df / 100f : df;
+
+            float downForceScale;
+            if (df > 100f)
+            {
+                float vRatio = Math.Min(ms / (maxVel * 0.9f), 1f);
+                vRatio = Math.Max(vRatio * vRatio - 0.2f, 0f);
+                downForceScale = (0.3f + 0.7f * vRatio) * normalizedDf;
+            }
+            else
+            {
+                float vFactor = Math.Min(ms / maxVel, 1f);
+                downForceScale = vFactor * df;
+            }
+
+            bool hasSpoiler = r.Car.HasBone("spoiler") && !r.Car.HasBone("spflap_l") && !r.Car.HasBone("spflap_r");
+            float perWheel = hasSpoiler ? 0.035f + 0.070f * downForceScale : 0.035f * downForceScale;
+
+            return GsOrZero(perWheel * nwheels);
         }
 
         private static float GsOrZero(float gs) => (float.IsNaN(gs) || gs > 5f) ? 0f : gs;
