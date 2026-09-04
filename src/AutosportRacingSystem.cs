@@ -3714,16 +3714,21 @@ namespace ARS
 
         public static float GetDownforceGsAtSpeed(Racer r, float ms)
         {
-            float Gs = 0f;
             int nwheels = GetNumWheels(r.Car);
-            float basedownf = 0.035f;
-
-            if (r.Car.HasBone("spoiler")) Gs = 0.035f * 2 * nwheels;
-            else if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) Gs = 0.035f * nwheels;
-            else Gs += Remap(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, basedownf, true) * r.Handling.Downforce * nwheels;
-            if (float.IsNaN(Gs) || Gs > 5f) return 0f;
-            else return Gs;
+            
+            if (r.Handling.Downforce <= 1.0f)
+            {
+                if (r.Car.HasBone("spoiler")) return 0.035f * 2 * nwheels;
+                else return 0.035f * nwheels;
+            }
+            if (ARS.IsBetween(r.Handling.Downforce, 1.01f, 99.9f)) return GsOrZero(Remap(ms, 0, Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash), 0f, 0.035f, true) * r.Handling.Downforce * nwheels);
+            
+            
+            if (r.Car.HasBone("spflap_l") || r.Car.HasBone("spflap_r")) return 0.035f * nwheels;
+            return 0f;
         }
+
+        private static float GsOrZero(float gs) => (float.IsNaN(gs) || gs > 5f) ? 0f : gs;
 
 
         

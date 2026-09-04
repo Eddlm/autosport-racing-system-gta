@@ -132,6 +132,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **Sub-200 ms lag** acceptable; don't add plumbing for one-frame quirks.
 - Synchronous setup/loading work can pause `OnTick` and temporarily suppress per-frame debug visuals; revisit those operations later if setup stalls need to become incremental.
 - **Speed asymmetry** (above) is intentional.
+- **Some cars report >10 G of grip yet don't behave like it** (e.g. the panthere). The declared mechanical-grip read / downforce total can come in well above 10 G for these cars, but the AI drives them at normal cornering speeds. Don't "fix" the over-report by scaling grip or hard-capping downforce for these cars — treat the high number as a known quirk, not a bug to normalize.
 
 ## Known TODOs / open items
 - Walls-collapsed avoidance (empty TODO in `ApplyRivalWalls`) — fold into a new input-domain cap when rebuilt.
