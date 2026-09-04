@@ -326,7 +326,7 @@ namespace ARS
             BaseBehavior = RacerBaseBehavior.GridWait;
             FinishedPointToPoint = false;
 
-            Handling.Grip = GetCorrectedGrip() * (Handling.Gravity / 9.8f);
+            Handling.Grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
 
             VehicleData.PerformanceIndex = (int)((Handling.EstimatedTopSpeed * 5) + (Handling.Grip * 100) + (Handling.Acceleration * 500));
             float modelGrip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, Car.Model.Hash);
@@ -1855,12 +1855,11 @@ namespace ARS
                     requestingMore ? Color.Red : Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
-                float dfGs = ARS.GetDownforceGsAtSpeed(this, Car.Velocity.Length());
-                ARS.DrawText(new Vector2(0.79f, y), "DF " + Handling.Downforce.ToString("0.00") + " | GS " + dfGs.ToString("0.00"),
+                ARS.DrawText(new Vector2(0.79f, y), "GRV " + Handling.Gravity.ToString("0.00"),
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
-                float nativeGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
+                float nativeGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
                 ARS.DrawText(new Vector2(0.79f, y), "GRP " + nativeGrip.ToString("0.00"),
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
@@ -1883,7 +1882,8 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             if (count < 10) return;
 
-            int o2 = (int)Car.Velocity.Length();
+            float traction = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
+            int o2 = (int)(Car.Velocity.Length() / traction);
             int n2 = ARS.IsPointToPoint
                 ? (int)ARS.Clamp(CurrentTrackPoint.Node + o2, 0, count - 1)
                 : ((CurrentTrackPoint.Node + o2) % count + count) % count;
@@ -2228,9 +2228,10 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             if (count < 10) return 999f;
 
+            float traction = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
             int o1 = 0;
-            int o2 = (int)Car.Velocity.Length();
-            int o3 = (int)(Car.Velocity.Length() * 2f);
+            int o2 = (int)(Car.Velocity.Length() / traction);
+            int o3 = (int)(Car.Velocity.Length() * 2f / traction);
 
             int n1, n2, n3;
             if (ARS.IsPointToPoint)
@@ -2248,7 +2249,7 @@ namespace ARS
 
             float r = ARS.Circumradius3D(ARS.TrackPoints[n1].Position, ARS.TrackPoints[n3].Position, ARS.TrackPoints[n2].Position);
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
-            return ARS.Clamp(r, 5f, 999f);
+            return ARS.Clamp(r * 0.5f, 5f, 999f);
         }
 
         // Braking map close-corner filtering and entrance timing.
@@ -2578,6 +2579,7 @@ namespace ARS
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
             r = ARS.Clamp(r, 5f, 999f);
             float baseSpeed = (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * r);
+            if (Handling.Downforce < 1f) return baseSpeed;
             float dfGs = ARS.GetDownforceGsAtSpeed(this, baseSpeed);
             float newGrip = VehicleData.CurrentMechanicalGrip + dfGs;
             return (float)Math.Sqrt(newGrip * Handling.Gravity * r);
@@ -2891,18 +2893,11 @@ namespace ARS
             _isLerpingToTrack = true;
         }
 
-        float GetCorrectedGrip()
-        {
-            float grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
-            if (grip > 10f) grip /= 10f;
-            return grip;
-        }
-
         void UpdatePerceivedGrip()
         {
 
 
-            float handlingGrip = GetCorrectedGrip() * (Handling.Gravity / 9.8f);
+            float handlingGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car) * (Handling.Gravity / 9.8f);
             handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 5f);
 
             GroundGripMultiplier = ARS.WheelGripMultipliers(Car).Average();

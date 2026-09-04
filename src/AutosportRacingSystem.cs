@@ -158,7 +158,7 @@ namespace ARS
         // Reset by CleanRacers (_gridInstanced) and CleanEverything (both).
         bool _trackInstanced;
         bool _gridInstanced;
-        int _intendedOpponents = 12;
+        int _intendedOpponents = 4;
         List<int> _flareFx = new List<int>();
         FreeCamController _freeCam;
 
@@ -713,7 +713,7 @@ namespace ARS
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
         // Test-only: force a specific car into the pace-matched grid for the next few tests.
         // Match is by the XML <Model> InnerText (case-insensitive, e.g. "tiberius"). Flip to null to disable.
-        public static string AlwaysIncludeModelName = "tiberius";
+        public static List<string> AlwaysIncludeModelNames = new List<string> { "tiberius", "2100457220" };
         // Temp: bypass pace matching entirely and load only these models into the grid.
         // Set to null (or empty list) to re-enable pace-matched selection.
         public static List<string> HardcodedRoster = null;
@@ -3531,7 +3531,7 @@ namespace ARS
                 SettingsFile = ScriptSettings.Load(ScriptsFolder + @"\Options.ini");
 
 
-                _intendedOpponents = SettingsFile.GetValue<int>("GENERAL_SETTINGS", "GridSize", 12);
+                _intendedOpponents = 4;
                 TrackFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "TrackFilter", "city");
                 DisciplineFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "Disciplines", "muscle");
                 Log(LogImportance.Info, "Loaded Options.");
@@ -3975,7 +3975,7 @@ namespace ARS
             }
             else
             {
-                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale, AlwaysIncludeModelName);
+                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale, AlwaysIncludeModelNames);
             }
         }
 
@@ -4238,7 +4238,7 @@ namespace ARS
                     try { ApplyCarAppearance(file, car, tags); } catch (Exception ex) { Log(LogImportance.Info, "Appearance skipped: " + ex.Message); }
                     // Menyoo livery override: if a matching Menyoo tuning file exists for this model,
                     // apply one at random (cosmetic only, separate from the ARS supplier pool).
-                    MenyooAppearance.Apply(car);
+                    // MenyooAppearance.Apply(car); // TEMP: skipped entirely
                     ApplyAccelerationOverride(file, car);
 
                     XmlDocument driverXml;
