@@ -22,6 +22,7 @@ namespace ARS
         public float YawRotationPerSecondDegrees = 1f;
         public float SlideAngle = 22f;
         public float BaseMechanicalGrip = 1f;
+        public float DownforceGripBonus = 0f;
         public float CurrentMechanicalGrip = 1f;
         public float AvgGroundStability = 1;
 

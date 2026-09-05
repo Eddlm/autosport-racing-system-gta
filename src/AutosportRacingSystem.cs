@@ -32,7 +32,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline
     }
 
     public enum DebugDisplay
@@ -131,7 +131,8 @@ namespace ARS
         { Options.UseNearbyCars, true },
         { Options.ReverseRoute, false },
         { Options.GsAwarePreview, true },
-        { Options.BrakeLearning, true }
+        { Options.BrakeLearning, true },
+        { Options.HighDownforceOnline, true }
     };
 
         // Gs-aware preview steering: how much of the lane error is measured at the 1s
@@ -848,6 +849,7 @@ namespace ARS
             AddDebugCheckbox(settingsMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.");
             AddDebugCheckbox(settingsMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
             AddDebugCheckbox(settingsMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~75% of each braking phase.");
+            AddDebugCheckbox(settingsMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
 
             // ── Racers submenu (root) — reads/writes Settings\Settings.ini ([RACERS]) ──
             NativeMenu racersMenu = new NativeMenu("Racers", "Racers", "Grid sorting, race timeout, AI behaviour and tuning.")
@@ -3605,41 +3607,80 @@ namespace ARS
             return result;
         }
 
-        public static float GetDownforceGsAtSpeed(Racer r, float ms)
+        // Engine reference: wheel.cpp UpdateDownforce() lines 7625-7670 + the per-tick application at 8194-8199.
+        // Two velocities drive downforce: forward speed scales downForceScale (how strong the downforce CAN be),
+        // and lateral speed scales the actual vertical acceleration. We approximate the lateral input with
+        // centripetal acceleration (v²/r) instead of world-frame velocity·right because ARS drives via
+        // pure-pursuit and rarely slides — world-frame lateral velocity is near zero under good driving,
+        // which would zero out the bonus. Centripetal acceleration is what determines tire grip load
+        // in steady-state cornering; that's the load the downforce actually counteracts.
+        // forwardMs: |velocity·forward| (m/s). lateralMs: centripetal accel v²/r (m/s²).
+        // Returns total extra grip in Gs that should be added to mechanical grip under this load.
+        public static float GetDownforceGsAtSpeed(Racer r, float forwardMs, float lateralMs)
         {
-            int nwheels = GetNumWheels(r.Car);
+            if (lateralMs <= 0f || float.IsNaN(lateralMs)) return 0f;
             float df = r.Handling.Downforce;
 
             if (df <= 1.0f)
             {
-                if (r.Car.HasBone("spoiler")) return 0.035f * 2 * nwheels;
-                else return 0.035f * nwheels;
+                float basePerWheel = r.Car.HasBone("spoiler") ? 0.070f : 0.035f;
+                return GsOrZero(basePerWheel * lateralMs / 9.8f);
             }
 
             float topSpeed = Function.Call<float>((Hash)0xF417C2502FFFED43, r.Car.Model.Hash);
             float maxVel = Math.Max(topSpeed, 1f);
-            float normalizedDf = df > 100f ? df / 100f : df;
+            float vFactor = Math.Min(Math.Max(forwardMs, 0f) / (maxVel * 0.9f), 1f);
+            vFactor *= vFactor;
 
             float downForceScale;
             if (df > 100f)
             {
-                float vRatio = Math.Min(ms / (maxVel * 0.9f), 1f);
-                vRatio = Math.Max(vRatio * vRatio - 0.2f, 0f);
-                downForceScale = (0.3f + 0.7f * vRatio) * normalizedDf;
+                if (DebugToggles[Options.HighDownforceOnline])
+                {
+                    float vRatio = Math.Max(vFactor - 0.2f, 0f);
+                    downForceScale = (0.3f + 0.7f * vRatio) * (df / 100f);
+                }
+                else
+                {
+                    downForceScale = 0.3f;
+                }
             }
             else
             {
-                float vFactor = Math.Min(ms / maxVel, 1f);
                 downForceScale = vFactor * df;
             }
 
             bool hasSpoiler = r.Car.HasBone("spoiler") && !r.Car.HasBone("spflap_l") && !r.Car.HasBone("spflap_r");
             float perWheel = hasSpoiler ? 0.035f + 0.070f * downForceScale : 0.035f * downForceScale;
 
-            return GsOrZero(perWheel * nwheels);
+            // perWheel (unitless) × lateralMs (m/s²) → m/s² of downforce acceleration → /9.8 for Gs.
+            return GsOrZero(perWheel * lateralMs / 9.8f);
         }
 
         private static float GsOrZero(float gs) => (float.IsNaN(gs) || gs > 5f) ? 0f : gs;
+
+        // Engine uses |velocity·right| as the lateral component for downforce application (wheel.cpp:8194-8199).
+        public static float GetLateralSpeed(Vehicle v)
+        {
+            if (!CanWeUse(v)) return 0f;
+            Vector3 right = v.RightVector;
+            right.Z = 0f;
+            float rightLen = right.Length();
+            if (rightLen < 0.0001f) return 0f;
+            right /= rightLen;
+            return Math.Abs(Vector3.Dot(v.Velocity, right));
+        }
+
+        public static float GetForwardSpeed(Vehicle v)
+        {
+            if (!CanWeUse(v)) return 0f;
+            Vector3 forward = v.ForwardVector;
+            forward.Z = 0f;
+            float forwardLen = forward.Length();
+            if (forwardLen < 0.0001f) return 0f;
+            forward /= forwardLen;
+            return Vector3.Dot(v.Velocity, forward);
+        }
 
 
         

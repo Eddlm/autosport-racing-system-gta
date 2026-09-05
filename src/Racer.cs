@@ -1083,6 +1083,11 @@ namespace ARS
             // Temporary: reduce both speed targets by 3 m/s to combat consistent overshooting.
             cornerSpd -= 3f;
             followTrackSpd -= 3f;
+
+            float pressureSpeedBias = ARS.Remap(Pressure, 0f, PressureRange, 0f, 4f, true);
+            cornerSpd += pressureSpeedBias;
+            followTrackSpd += pressureSpeedBias;
+
             followTrackSpd += _tempSpeedUp;
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
@@ -1868,7 +1873,12 @@ namespace ARS
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
-                float dfGs = ARS.GetDownforceGsAtSpeed(this, Car.Velocity.Length());
+                float forwardMsPanel = ARS.GetForwardSpeed(Car);
+                float routeRadiusPanel = Brain.CurrentPerception.CurveRadiusToFollowPoint;
+                float lateralMsPanel = (routeRadiusPanel > 1f && !float.IsNaN(routeRadiusPanel) && !float.IsInfinity(routeRadiusPanel))
+                    ? (forwardMsPanel * forwardMsPanel) / routeRadiusPanel
+                    : 0f;
+                float dfGs = ARS.GetDownforceGsAtSpeed(this, forwardMsPanel, lateralMsPanel);
                 ARS.DrawText(new Vector2(0.79f, y), "DFG " + dfGs.ToString("0.00"),
                     Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
@@ -2585,13 +2595,11 @@ namespace ARS
 
         float ApexSpeedWithDownforce(float r)
         {
+            // CurrentMechanicalGrip already includes the per-tick downforce bonus (see UpdatePerceivedGrip),
+            // so this is just the cornering-speed-from-grip formula with a sanity clamp on the radius.
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
             r = ARS.Clamp(r, 5f, 999f);
-            float baseSpeed = (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * r);
-            if (Handling.Downforce < 1f) return baseSpeed;
-            float dfGs = ARS.GetDownforceGsAtSpeed(this, baseSpeed);
-            float newGrip = VehicleData.CurrentMechanicalGrip + dfGs;
-            return (float)Math.Sqrt(newGrip * Handling.Gravity * r);
+            return (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * r);
         }
 
         float ComputeRouteRadius(int startOffset, int endOffset)
@@ -2910,14 +2918,30 @@ namespace ARS
             handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 100f);
             handlingGrip /= 1f + 0.035f * Handling.Downforce;
 
+            // TEMP experiment: bake the gravity multiplier into base grip when the off-road
+            // flag pushes gravity in Gs above 1 (normally 1.2).
+            float gravityGs = Handling.Gravity / 9.8f;
+            if (gravityGs > 1f) handlingGrip *= gravityGs;
+
             GroundGripMultiplier = ARS.WheelGripMultipliers(Car).Average();
 
+            // Centripetal acceleration v²/r is the proxy for cornering load (engine applies
+            // downforce scaled by lateral speed, but pure-pursuit driving keeps world-frame lateral
+            // velocity near zero — centripetal accel captures the same load physically).
+            float forwardMs = ARS.GetForwardSpeed(Car);
+            float routeRadius = Brain.CurrentPerception.CurveRadiusToFollowPoint;
+            float lateralMs = 0f;
+            if (routeRadius > 1f && !float.IsNaN(routeRadius) && !float.IsInfinity(routeRadius))
+                lateralMs = (forwardMs * forwardMs) / routeRadius;
+            float dfGs = ARS.GetDownforceGsAtSpeed(this, forwardMs, lateralMs);
+
             VehicleData.BaseMechanicalGrip = handlingGrip;
+            VehicleData.DownforceGripBonus = dfGs;
             // AvgGroundStability is currently hardcoded to 1f: the old wheels-off-ground detector
             // (WheelSlips ~0) was unreliable and triggered on decompression, so it has been removed
             // until a trustworthy replacement is found.
             VehicleData.AvgGroundStability = 1f;
-            VehicleData.CurrentMechanicalGrip = VehicleData.BaseMechanicalGrip * GroundGripMultiplier * VehicleData.AvgGroundStability;
+            VehicleData.CurrentMechanicalGrip = (VehicleData.BaseMechanicalGrip + VehicleData.DownforceGripBonus) * GroundGripMultiplier * VehicleData.AvgGroundStability;
 
             // Airborne vehicles temporarily lose available throttle; normal pedal processing restores it.
             if (Game.GameTime - _lastStabilityCheck >= 333) // ~3 Hz
