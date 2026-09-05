@@ -192,6 +192,9 @@ namespace ARS
         const float NitrousCornerLookaheadSeconds = 8f;
         const int NitrousDurationMs = 3000;
         const float RocketBoostMinimumCurveRadius = 600f;
+        const float SideBySideAssistRange = 5f;
+        const float SideBySideFullAssistExtraGap = 1f;
+        const float SideBySideMinimumAssist = 0.1f;
         const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
         const ulong CheatPowerIncreaseHash = 0xB59E4BD37AE292DB;
         const ulong FullyChargeNitrousHash = 0x1A2BCC8C636F9226;
@@ -427,11 +430,12 @@ namespace ARS
                 }
             }
 
+            float sideBySideHeadingDeg = ComputeSideBySideHeadingCorrection(carForward);
 
             const float steerKP = 1.0f;
             // TEMP: hardcoded 0.66 — testing yaw damping.
             const float steerKD = 0.66f;
-            Control.SteerDegrees = (steerKP * (headingErrorDeg + laneBiasDeg + recoveryDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
+            Control.SteerDegrees = (steerKP * (headingErrorDeg + laneBiasDeg + recoveryDeg + sideBySideHeadingDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
             bool sameSignSlideYaw = Math.Sign((int)VehicleData.SlideAngle) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees);
             if (sameSignSlideYaw)
             {
@@ -455,6 +459,30 @@ namespace ARS
                 localRoadWide = localSteerRef.TrackHalfWidth;
                 return true;
             }
+        }
+
+        // Phase 1: match an overlapping rival's heading so side-by-side cars follow the same arc.
+        float ComputeSideBySideHeadingCorrection(Vector3 carForward)
+        {
+            float correction = 0f;
+            foreach (Rival rival in Brain.Rivals)
+            {
+                if (rival.RivalRacer == null || !rival.RivalRacer.Car.Exists()) continue;
+
+                Vector3 relativeOffset = ARS.EntityRelativeOffset(Car, rival.RivalRacer.Car);
+                if (Math.Abs(relativeOffset.Y) > rival.CombinedSize.Y) continue;
+
+                float lateralDistance = Math.Abs(relativeOffset.X);
+                if (lateralDistance > SideBySideAssistRange) continue;
+
+                float fullAssistDistance = rival.CombinedSize.X + SideBySideFullAssistExtraGap;
+                float proximity = ARS.Remap(lateralDistance, SideBySideAssistRange, fullAssistDistance, SideBySideMinimumAssist, 1f, true);
+                float headingDifference = -Vector3.SignedAngle(rival.RivalRacer.Car.ForwardVector, carForward, Vector3.WorldUp);
+                if (float.IsNaN(headingDifference) || float.IsInfinity(headingDifference)) continue;
+
+                correction += headingDifference * proximity;
+            }
+            return correction;
         }
 
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
