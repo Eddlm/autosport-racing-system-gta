@@ -2130,6 +2130,20 @@ namespace ARS
                 _trackPositionScratch.Add(ARS.TrackPoints[i]);
             }
 
+            if (!ARS.IsPointToPoint)
+            {
+                if (refTrackpoint <= 6)
+                {
+                    for (int i = Math.Max(lastNode - 6, 0); i <= lastNode; i++)
+                        _trackPositionScratch.Add(ARS.TrackPoints[i]);
+                }
+                else if (refTrackpoint >= lastNode - 6)
+                {
+                    for (int i = 0; i <= Math.Min(6, lastNode); i++)
+                        _trackPositionScratch.Add(ARS.TrackPoints[i]);
+                }
+            }
+
             bool hasCrossedStartLine = !ARS.IsPointToPoint
                 && CanRegisterNewLap
                 && refTrackpoint >= lastNode - 6

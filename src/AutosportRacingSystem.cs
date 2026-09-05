@@ -32,7 +32,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline, StagedSpawns
     }
 
     public enum DebugDisplay
@@ -132,7 +132,8 @@ namespace ARS
         { Options.ReverseRoute, false },
         { Options.GsAwarePreview, true },
         { Options.BrakeLearning, true },
-        { Options.HighDownforceOnline, true }
+        { Options.HighDownforceOnline, true },
+        { Options.StagedSpawns, true }
     };
 
         // Gs-aware preview steering: how much of the lane error is measured at the 1s
@@ -850,6 +851,24 @@ namespace ARS
             AddDebugCheckbox(settingsMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
             AddDebugCheckbox(settingsMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~75% of each braking phase.");
             AddDebugCheckbox(settingsMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
+            AddDebugCheckbox(settingsMenu, Options.StagedSpawns, "Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", value =>
+            {
+                if (value)
+                {
+                    if (!_raceMenu.Items.Contains(instanceTrackItem)) _raceMenu.Add(instanceTrackItem);
+                    if (!_raceMenu.Items.Contains(instanceGridItem)) _raceMenu.Add(instanceGridItem);
+                }
+                else
+                {
+                    if (_raceMenu.Items.Contains(instanceTrackItem)) _raceMenu.Remove(instanceTrackItem);
+                    if (_raceMenu.Items.Contains(instanceGridItem)) _raceMenu.Remove(instanceGridItem);
+                }
+            });
+            if (!DebugToggles[Options.StagedSpawns])
+            {
+                _raceMenu.Remove(instanceTrackItem);
+                _raceMenu.Remove(instanceGridItem);
+            }
 
             // ── Racers submenu (root) — reads/writes Settings\Settings.ini ([RACERS]) ──
             NativeMenu racersMenu = new NativeMenu("Racers", "Racers", "Grid sorting, race timeout, AI behaviour and tuning.")
@@ -909,13 +928,14 @@ namespace ARS
             RaceSettingsFile.SetValue("RACERS", key, value);
             RaceSettingsFile.Save();
         }
-        void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description)
+        void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description, Action<bool> onChanged = null)
         {
             NativeCheckboxItem checkbox = new NativeCheckboxItem(title, description, DebugToggles[option]);
             checkbox.CheckboxChanged += (sender, args) =>
             {
                 DebugToggles[option] = checkbox.Checked;
                 SaveDevToggle(option, checkbox.Checked);
+                onChanged?.Invoke(checkbox.Checked);
             };
             menu.Add(checkbox);
         }
