@@ -191,6 +191,7 @@ namespace ARS
         const float NitrousPowerMultiplier = 2.5f;
         const float NitrousCornerLookaheadSeconds = 8f;
         const int NitrousDurationMs = 3000;
+        const float RocketBoostMinimumCurveRadius = 600f;
         const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
         const ulong CheatPowerIncreaseHash = 0xB59E4BD37AE292DB;
         const ulong FullyChargeNitrousHash = 0x1A2BCC8C636F9226;
@@ -2679,8 +2680,10 @@ namespace ARS
                     }
                 }
 
-                if (BaseBehavior == RacerBaseBehavior.Race && Math.Abs(VehicleData.SlideAngle) < 0.5f && Math.Abs(Control.Throttle) > 0.9f) Function.Call((Hash)0x81E1552E35DC3839, Car, true);
+                // Independent rocket/boost control: enable boost on a stable, full-throttle run.
+                if (BaseBehavior == RacerBaseBehavior.Race && Brain.CurrentPerception.HighSpeedCurveRadius > RocketBoostMinimumCurveRadius && Math.Abs(VehicleData.SlideAngle) < 0.5f && Math.Abs(Control.Throttle) > 0.9f) Function.Call((Hash)0x81E1552E35DC3839, Car, true);
 
+                // Independent rocket/boost control: disable boost when braking.
                 if (Function.Call<bool>((Hash)0x3D34E80EED4AE3BE, Car) && Control.Brake > 0.1f) Function.Call((Hash)0x81E1552E35DC3839, Car, false);
 
 

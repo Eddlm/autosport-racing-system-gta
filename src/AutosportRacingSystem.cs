@@ -693,7 +693,7 @@ namespace ARS
 
         public static string DisciplineFilter = "sports";
         public static float PowerTargetScale = 0.52f;
-        public static float PowerBracketScale = 5f;
+        public static float PowerBracketScale = 2f;
         // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
@@ -1243,7 +1243,7 @@ namespace ARS
                             if (!_arsMenu.Visible && CanWeUse(Game.Player.Character.CurrentVehicle) && !Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlJustPressed(2, GTA.Control.Context))
                             {
                                 PowerTargetScale = ComputePlayerCarPaceIndex();
-                                PowerBracketScale = 5f;
+                                PowerBracketScale = 2f;
                                 SelectTrackInMenu(nearest.TrackPath);
                                 StartRaceFromMenu();
                             }
