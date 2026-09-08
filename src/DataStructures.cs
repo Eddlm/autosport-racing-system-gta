@@ -295,7 +295,7 @@ namespace ARS
         public Vector3 StartPosition;
         public Vector3 JoinPosition;
     }
-    public enum ManeuverType { None, Nitrous, DiveBomb, DefendLane, Yield }
+    public enum ManeuverType { None, DiveBomb, DefendLane, Yield, ChillOut }
     public class Maneuver
     {
         public ManeuverType Type = ManeuverType.None;

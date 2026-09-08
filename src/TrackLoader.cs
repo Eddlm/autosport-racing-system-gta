@@ -331,7 +331,7 @@ namespace ARS
             if (float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
 
             // Gentle bends are kept but flagged: no outside approach, the high-speed line handles them.
-            bool suppressByRadius = apexRadius > 100f;
+            bool suppressByRadius = apexRadius > 50f;
 
             float entranceRadiusTarget = apexRadius * 2f;
             for (int position = startPosition; position < apexPosition; position++)

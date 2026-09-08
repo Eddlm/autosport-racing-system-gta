@@ -849,7 +849,7 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(settingsMenu, Options.ShowAggro, "Show Pressure", "Show each racer's pressure on the leaderboard and above their car.");
+            AddDebugCheckbox(settingsMenu, Options.ShowAggro, "Show Card State", "Show a chevron above each racer colored by its maneuver card: green none, blue passive (Yield/ChillOut), orange active (DiveBomb/DefendLane).");
             AddDebugCheckbox(settingsMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
             AddDebugCheckbox(settingsMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
             AddDebugCheckbox(settingsMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
@@ -1262,7 +1262,7 @@ namespace ARS
                     TrackStartInfo nearest = FindNearestTrackStartInfo(Game.Player.Character.Position);
                     if (nearest != null)
                     {
-                        World.DrawMarker(MarkerType.ChevronUpx1, nearest.JoinPosition + new Vector3(0, 0, 2f), new Vector3(0, 0, -1f), Vector3.Zero, new Vector3(1f, 1f, 1f), Color.Yellow, false, true, 0, false, "", "", false);
+                        World.DrawMarker(MarkerType.ChevronUpx1, nearest.JoinPosition + new Vector3(0, 0, 2f), Vector3.Zero, Vector3.Zero, new Vector3(1f, 1f, 1f), Color.Yellow, false, true, 0, false, "", "", false);
                         float dist = nearest.JoinPosition.DistanceTo2D(Game.Player.Character.Position);
                         if (dist <= 5f)
                         {

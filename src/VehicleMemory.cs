@@ -19,6 +19,7 @@ namespace ARS
 
         public static float GetLateralTraction(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0098);
         public static float GetSteerLock(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0080);
+        public static float GetDriveBiasFront(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0048);
         public static float GetDownforce(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0014);
         public static int GetHandlingFlags(Vehicle vehicle)
         {
