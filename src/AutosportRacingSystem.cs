@@ -32,7 +32,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline, StagedSpawns
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints
     }
 
     public enum DebugDisplay
@@ -133,7 +133,8 @@ namespace ARS
         { Options.GsAwarePreview, true },
         { Options.BrakeLearning, true },
         { Options.HighDownforceOnline, true },
-        { Options.StagedSpawns, true }
+        { Options.StagedSpawns, true },
+        { Options.ShowCheckpoints, false }
     };
 
         // Gs-aware preview steering: how much of the lane error is measured at the 1s
@@ -846,6 +847,7 @@ namespace ARS
             AddDebugCheckbox(settingsMenu, Options.ShowAggro, "Show Pressure", "Show each racer's pressure on the leaderboard and above their car.");
             AddDebugCheckbox(settingsMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
             AddDebugCheckbox(settingsMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
+            AddDebugCheckbox(settingsMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(settingsMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
             AddDebugCheckbox(settingsMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
             AddDebugCheckbox(settingsMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.");
@@ -1228,6 +1230,11 @@ namespace ARS
 
                 
                 if (_routeEditorActive) TrackVisuals.DrawRoute(RouteNodes, NodeHalfWidths, _routeEditorActive);
+                if (DebugToggles[Options.ShowCheckpoints] && ARS.Corners.Count > 0)
+                {
+                    Racer playerRacer = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
+                    if (playerRacer != null) TrackVisuals.DrawCornerCheckpoints(playerRacer, ARS.Corners, ARS.TrackPoints);
+                }
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
                 if (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) DrawRaceHud();
                 if (DebugVisual == (int)DebugDisplay.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);
