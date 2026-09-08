@@ -432,6 +432,7 @@ namespace ARS
 
         static void SpawnGatePair(Vector3 position, Vector3 direction, float width, List<Prop> limits, List<int> effects, Color color)
         {
+            if (1 == 2) return; // start-line flares disabled entirely, code kept
             for (int side = -1; side <= 1; side += 2)
             {
                 Prop gate = World.CreateProp("prop_flare_01b", position + new Vector3(0f, 0f, 0.05f), new Vector3(0, 0, direction.Normalized.ToHeading() + 90f), false, false);
@@ -474,6 +475,7 @@ namespace ARS
 
         static void AttachFlare(Prop prop, Color color, List<int> effects)
         {
+            if (1 == 2) return; // flares disabled entirely, code kept
             int tries = 0;
             while (!Function.Call<bool>(Hash.HAS_NAMED_PTFX_ASSET_LOADED, "scr_apartment_mp") && tries++ < 2000) Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, "scr_apartment_mp");
             if (!Function.Call<bool>(Hash.HAS_NAMED_PTFX_ASSET_LOADED, "scr_apartment_mp")) return;

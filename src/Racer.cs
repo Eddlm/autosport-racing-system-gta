@@ -92,20 +92,13 @@ namespace ARS
         int _lastStuckGameTime = 0;
         List<TrackPoint> _trackPositionScratch = new List<TrackPoint>(13);
         public bool IsStuckByThrottle = false;
-        const int StuckCheckTimeMs = 2000;
+        const int StuckCheckTimeMs = 800;
         bool _isRecoveringFromStuck = false;
         int _stuckRecoveryEndTime = 0;
-        const int StuckRecoveryTimeMs = 2000;
+        const int StuckRecoveryTimeMs = 600;
         int _stuckRecoveryAttempts = 0;
         public int StuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
         public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
-
-        // State for smooth recovery repositioning toward the track.
-        bool _isLerpingToTrack = false;
-        Vector3 _lerpStartPos = Vector3.Zero;
-        Vector3 _lerpTargetPos = Vector3.Zero;
-        int _lerpStartTime = 0;
-        const int LerpToTrackMs = 1500;
 
         // Grip checker experiment: track peak lateral Gs through a corner.
         bool _gripCheckArmed = false;
@@ -800,8 +793,6 @@ namespace ARS
             _isRecoveringFromStuck = false;
             _stuckRecoveryEndTime = 0;
             _stuckRecoveryAttempts = 0;
-            _isLerpingToTrack = false;
-            _lerpStartTime = 0;
             Control.LastAppliedSteerDegrees = 0f;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
@@ -819,11 +810,10 @@ namespace ARS
             Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
 
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
-            bool wantsReverse = Brain.CurrentIntention.Speed < -0.1f;
 
-            float combinedInput = ComputeCombinedInput(intendedSpeedChange, currentForwardSpeed, wantsReverse);
-            combinedInput = ApplyThrottleCap(combinedInput, wantsReverse, currentForwardSpeed);
-            SplitCombinedInput(combinedInput, wantsReverse, currentForwardSpeed, ref newThrottle, ref newBrake);
+            float combinedInput = ComputeCombinedInput(intendedSpeedChange, currentForwardSpeed);
+            combinedInput = ApplyThrottleCap(combinedInput);
+            SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
 
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
@@ -836,28 +826,23 @@ namespace ARS
 
         }
 
-        float ComputeCombinedInput(float intendedSpeedChange, float currentForwardSpeed, bool wantsReverse)
+        float ComputeCombinedInput(float intendedSpeedChange, float currentForwardSpeed)
         {
             if (intendedSpeedChange > 0f && ShouldBrakeBeforeDrivingForward(currentForwardSpeed))
                 return -ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, 0f, 1f);
 
-            if (intendedSpeedChange < 0f && wantsReverse && ShouldBrakeBeforeReversing(currentForwardSpeed))
-                return -ARS.Clamp((-intendedSpeedChange) / FullPedalSpeedErrorMps, 0f, 1f);
-
             return ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, -1f, 1f);
         }
 
-        float ApplyThrottleCap(float combinedInput, bool wantsReverse, float currentForwardSpeed)
+        float ApplyThrottleCap(float combinedInput)
         {
             float throttleCap = Math.Min(Control.MaxThrottleFromTCS, 1f);
-            bool isReverseThrottle = wantsReverse && !ShouldBrakeBeforeReversing(currentForwardSpeed);
 
             if (combinedInput > 0f) return Math.Min(combinedInput, throttleCap);
-            if (combinedInput < 0f && isReverseThrottle) return -Math.Min(-combinedInput, throttleCap);
             return combinedInput;
         }
 
-        void SplitCombinedInput(float combinedInput, bool wantsReverse, float currentForwardSpeed, ref float newThrottle, ref float newBrake)
+        void SplitCombinedInput(float combinedInput, ref float newThrottle, ref float newBrake)
         {
             if (combinedInput > 0f)
             {
@@ -865,17 +850,10 @@ namespace ARS
                 return;
             }
 
-            if (combinedInput < 0f)
-            {
-                bool isReverseThrottle = wantsReverse && !ShouldBrakeBeforeReversing(currentForwardSpeed);
-                if (isReverseThrottle) newThrottle = combinedInput;
-                else newBrake = -combinedInput;
-            }
+            if (combinedInput < 0f) newBrake = -combinedInput;
         }
 
         bool ShouldBrakeBeforeDrivingForward(float speed) => speed < -StationarySpeedThresholdMps;
-
-        bool ShouldBrakeBeforeReversing(float speed) => speed > StationarySpeedThresholdMps;
 
         void FindLowestIntendedSpeed()
         {
@@ -2785,7 +2763,6 @@ namespace ARS
             {
                 _isRecoveringFromStuck = true;
                 _stuckRecoveryAttempts++;
-                HandleRecoveryAttemptEscalation();
                 _stuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
                 IsStuckByThrottle = false;
                 _lastStuckGameTime = 0;
@@ -2805,7 +2782,6 @@ namespace ARS
             {
                 _isRecoveringFromStuck = true;
                 _stuckRecoveryAttempts++;
-                HandleRecoveryAttemptEscalation();
                 _stuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
                 IsStuckByThrottle = false;
             }
@@ -2823,22 +2799,6 @@ namespace ARS
 
         void ApplyStuckRecoveryOverride()
         {
-            // Smoothly reposition to the track edge after repeated failed recovery attempts.
-            if (_isLerpingToTrack)
-            {
-                float elapsed = Game.GameTime - _lerpStartTime;
-                float t = ARS.Clamp(elapsed / LerpToTrackMs, 0f, 1f);
-                float smooth = t * t * (3f - 2f * t);
-                Car.Position = _lerpStartPos + (_lerpTargetPos - _lerpStartPos) * smooth;
-                Car.Velocity = Vector3.Zero;
-                if (t >= 1f)
-                {
-                    _isLerpingToTrack = false;
-                    _lerpStartTime = 0;
-                }
-                return; // skip the reverse-rock while lerping
-            }
-
             if (!_isRecoveringFromStuck) return;
 
             if (Game.GameTime >= _stuckRecoveryEndTime)
@@ -2851,25 +2811,8 @@ namespace ARS
 
 
             Control.SteerInput = 0f;
-            Control.Throttle = -1f;
+            Control.Throttle = -0.33f;
             Control.Brake = 0f;
-        }
-
-        void HandleRecoveryAttemptEscalation()
-        {
-            if (_stuckRecoveryAttempts < 2) return;
-
-            // Smoothly reposition to the track edge after repeated failed recovery attempts.
-            Vector3 toTrack = CurrentTrackPoint.Position - Car.Position;
-            if (toTrack.Length() < 0.01f) return;
-
-            Vector3 trackRight = Vector3.Cross(CurrentTrackPoint.Direction, Vector3.WorldUp).Normalized;
-            float sideOffset = Vector3.Dot(Car.Position - CurrentTrackPoint.Position, trackRight);
-            float edgeOffset = Math.Sign(sideOffset) * (CurrentTrackPoint.TrackHalfWidth - 1f);
-            _lerpTargetPos = CurrentTrackPoint.Position + trackRight * edgeOffset;
-            _lerpStartPos = Car.Position;
-            _lerpStartTime = Game.GameTime;
-            _isLerpingToTrack = true;
         }
 
         void UpdatePerceivedGrip()
