@@ -175,6 +175,14 @@ namespace ARS
                 ARS.TrackPoints.Add(new TrackPoint { Node = node, Position = ARS.RouteNodes[node] });
             }
 
+            float cumulative = 0f;
+            for (int i = 0; i < ARS.TrackPoints.Count; i++)
+            {
+                ARS.TrackPoints[i].CumulativeDistance = cumulative;
+                int next = (i + 1) % ARS.TrackPoints.Count;
+                cumulative += ARS.TrackPoints[i].Position.DistanceTo(ARS.TrackPoints[next].Position);
+            }
+
             int nodeCount = ARS.RouteNodes.Count;
             foreach (TrackPoint point in ARS.TrackPoints)
             {

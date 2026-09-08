@@ -62,6 +62,8 @@ namespace ARS
 
         // Racer progress along the route.
         public TrackPoint CurrentTrackPoint = new TrackPoint();
+        public float TrackProgress = 0f;
+        public int RaceProgress = 0;
 
         // Time-based route references used by steering and speed calculations.
         public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
@@ -73,7 +75,7 @@ namespace ARS
         public int Lap = 0;
         public int RacePosition = 0;
         public bool CanRegisterNewLap = true;
-        bool _hasLeftLapArmNode = false;
+        int _previousNode = -1;
         public bool FinishedPointToPoint = false;
 
 
@@ -318,8 +320,9 @@ namespace ARS
             LapTimes.Clear();
             LapStartTime = 0;
             Lap = 0;
+            RacePosition = 0;
             CanRegisterNewLap = true;
-            _hasLeftLapArmNode = false;
+            _previousNode = -1;
 
             string flags = ARS.GetHandlingFlags(Car).ToString("X");
             int flagsHex = Convert.ToInt32(flags, 16);
@@ -786,10 +789,10 @@ namespace ARS
             ResetRouteProbe();
             VehicleData.AvgGroundStability = 1;
             BaseBehavior = RacerBaseBehavior.Race;
-            LapStartTime = Game.GameTime;
-            Lap = 1;
+            Lap = ARS.IsPointToPoint ? 1 : 0;
+            LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
             CanRegisterNewLap = false;
-            _hasLeftLapArmNode = false;
+            _previousNode = -1;
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             Control.MaxThrottle = 1f;
             IsStuckByThrottle = false;
@@ -1764,24 +1767,24 @@ namespace ARS
                 bool requestingMore = _requestedSteerDegrees > allowedSteer + 0.5f;
                 string steerText = "STEER " + allowedSteer.ToString("0.0") + "º";
                 ARS.DrawText(new Vector2(0.79f, y), steerText,
-                    requestingMore ? Color.Red : Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                    requestingMore ? Color.Red : Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
                 float gravityOverEarth = Handling.Gravity / 9.8f;
                 ARS.DrawText(new Vector2(0.79f, y), "GRV " + gravityOverEarth.ToString("0.00"),
-                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                    Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
                 ARS.DrawText(new Vector2(0.79f, y), "GRP " + VehicleData.BaseMechanicalGrip.ToString("0.00"),
-                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                    Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
                 ARS.DrawText(new Vector2(0.79f, y), "GMP " + VehicleData.CurrentMechanicalGrip.ToString("0.00"),
-                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                    Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
                 ARS.DrawText(new Vector2(0.79f, y), "DF  " + Handling.Downforce.ToString("0.00"),
-                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                    Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
                 float forwardMsPanel = ARS.GetForwardSpeed(Car);
@@ -1791,12 +1794,12 @@ namespace ARS
                     : 0f;
                 float dfGs = ARS.GetDownforceGsAtSpeed(this, forwardMsPanel, lateralMsPanel);
                 ARS.DrawText(new Vector2(0.79f, y), "DFG " + dfGs.ToString("0.00"),
-                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                    Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
                 float speedDiff = _debugFollowTrackSpd - Car.Velocity.Length();
                 ARS.DrawText(new Vector2(0.79f, y), "DIFF " + ARS.MpsToMph(speedDiff).ToString("0") + " mph",
-                    Color.White, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+                    Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
             }
 
@@ -1828,7 +1831,7 @@ namespace ARS
             string value = apexNode >= 0
                 ? label + "   " + ARS.MpsToMph(apexSpeed).ToString("0") + " mph | " + apexRadius.ToString("0") + " m"
                 : label + "   --";
-            ARS.DrawText(new Vector2(0.79f, y), value, color, ARS.DrawTextFont.Default, ARS.DrawTextAlign.Left, 0.35f);
+            ARS.DrawText(new Vector2(0.79f, y), value, color, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
             y += lineHeight;
         }
 
@@ -2026,6 +2029,35 @@ namespace ARS
 
 
 
+        public void InitializeTrackPosition()
+        {
+            if (ARS.TrackPoints.Count == 0) return;
+
+            TrackPoint closestPoint = ARS.TrackPoints[0];
+            float closestDistance = closestPoint.Position.DistanceTo(Car.Position);
+            foreach (TrackPoint point in ARS.TrackPoints)
+            {
+                float distance = point.Position.DistanceTo(Car.Position);
+                if (distance < closestDistance)
+                {
+                    closestPoint = point;
+                    closestDistance = distance;
+                }
+            }
+
+            CurrentTrackPoint = closestPoint;
+            UpdateRaceProgress();
+        }
+
+        void UpdateRaceProgress()
+        {
+            float alongTrack = Vector3.Dot(Car.Position - CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
+            TrackProgress = CurrentTrackPoint.CumulativeDistance + alongTrack;
+            if (!ARS.IsPointToPoint && Lap == 0)
+                TrackProgress -= ARS.TrackPoints.Last().CumulativeDistance + ARS.TrackPoints.Last().Position.DistanceTo(ARS.TrackPoints[0].Position);
+            RaceProgress = Lap * 1000000 + (int)TrackProgress;
+        }
+
         public void UpdateTrackPosition()
         {
 
@@ -2054,12 +2086,6 @@ namespace ARS
                         _trackPositionScratch.Add(ARS.TrackPoints[i]);
                 }
             }
-
-            bool hasCrossedStartLine = !ARS.IsPointToPoint
-                && CanRegisterNewLap
-                && refTrackpoint >= lastNode - 6
-                && Vector3.Dot(Car.Position - ARS.TrackPoints[0].Position, ARS.TrackPoints[0].Direction) > 0f;
-            if (hasCrossedStartLine) _trackPositionScratch.Add(ARS.TrackPoints[0]);
 
             TrackPoint closestPoint = _trackPositionScratch[0];
             float closestDistance = closestPoint.Position.DistanceTo(Car.Position);
@@ -2124,19 +2150,29 @@ namespace ARS
 
 
 
+            int nodeCount = ARS.TrackPoints.Count;
+            int currentNode = CurrentTrackPoint.Node;
+            float currentPct = ARS.GetPercent(currentNode, nodeCount);
+            float previousPct = _previousNode >= 0 ? ARS.GetPercent(_previousNode, nodeCount) : 0f;
+            bool wrappedStartLine = !ARS.IsPointToPoint && _previousNode >= 0 && previousPct > 90f && currentPct < 10f;
+
             if (CanRegisterNewLap)
             {
-                if (hasCrossedStartLine || (ARS.IsPointToPoint && ARS.GetPercent(CurrentTrackPoint.Node, ARS.TrackPoints.Count) > 99 && ARS.EntityRelativeOffset(Car, ARS.TrackPoints.Last().Position).Y < 0f))
+                if (wrappedStartLine || (ARS.IsPointToPoint && currentPct > 99f && ARS.EntityRelativeOffset(Car, ARS.TrackPoints.Last().Position).Y < 0f))
                 {
                     CanRegisterNewLap = false;
-                    _hasLeftLapArmNode = false;
                     Lap++;
+                    ARS.Log(ARS.LogImportance.Info, "Lap++ " + Name + " -> lap " + Lap + " (node " + currentNode + ")");
                     if (Lap > ARS.SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5))
                     {
                         if (Car.CurrentBlip != null) Car.CurrentBlip.Color = BlipColor.Green;
                     }
 
-                    if (Lap > 1)
+                    if (Lap == 1 && !ARS.IsPointToPoint)
+                    {
+                        LapStartTime = Game.GameTime;
+                    }
+                    else if (Lap > 1)
                     {
                         TimeSpan lapTime = ARS.ParseToTimeSpan(Game.GameTime - LapStartTime);
                         UI.Notify(Name + "'s laptime: ~b~" + lapTime.ToString("m':'ss'.'f"));
@@ -2147,11 +2183,13 @@ namespace ARS
             }
             else if (BaseBehavior == RacerBaseBehavior.Race)
             {
-                if (CurrentTrackPoint.Node < 100) _hasLeftLapArmNode = true;
-                else if (_hasLeftLapArmNode) CanRegisterNewLap = true;
+                if (currentPct > 20f) CanRegisterNewLap = true;
             }
 
-            _lastApexProgressNode = CurrentTrackPoint.Node;
+            UpdateRaceProgress();
+
+            _previousNode = currentNode;
+            _lastApexProgressNode = currentNode;
 
             // Route radius from three sample points.
             Brain.CurrentPerception.CurveRadiusToFollowPoint = RouteRadiusSampled();

@@ -26,6 +26,8 @@ namespace ARS
                 racer.Initialize();
                 racer.Car.Position = positions[index];
                 racer.Car.Heading = pointToPoint ? (route[2] - route[0]).ToHeading() : (index > positions.Count - 2 ? (positions[index - 2] - positions[index]).Normalized : (positions[index] - positions[index + 2]).Normalized).ToHeading();
+                racer.InitializeTrackPosition();
+                racer.UpdateTrackPosition();
             }
         }
 

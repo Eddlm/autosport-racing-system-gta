@@ -157,6 +157,7 @@ namespace ARS
 
 
         public static RaceState RaceStatus = RaceState.None;
+        public static int RaceStartTime = 0;
 
         // Phased race instancing: track which setup phases have been completed.
         // Reset by CleanRacers (_gridInstanced) and CleanEverything (both).
@@ -1228,6 +1229,7 @@ namespace ARS
                 
                 if (_routeEditorActive) TrackVisuals.DrawRoute(RouteNodes, NodeHalfWidths, _routeEditorActive);
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
+                if (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) DrawRaceHud();
                 if (DebugVisual == (int)DebugDisplay.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);
 
                 if (RaceStatus == RaceState.None || RaceStatus == RaceState.NotInitiated)
@@ -1350,6 +1352,7 @@ namespace ARS
                             }
                             _countdown = _maxCountdown;
                             RaceStatus = RaceState.InProgress;
+                            RaceStartTime = Game.GameTime;
                         }
                     }
                 }
@@ -1374,7 +1377,8 @@ namespace ARS
                 foreach (Racer racer in Racers)
                 {
                     racer.ProcessTick();
-                    if ((racer.Lap > SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5) || (IsPointToPoint && racer.Lap > 1)) && !LeaderboardFinish.Contains(racer))
+                    int laps = SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5);
+                    if (((!IsPointToPoint && racer.Lap >= laps) || (IsPointToPoint && racer.Lap > 1)) && !LeaderboardFinish.Contains(racer))
                     {
                         if (racer.Car.CurrentBlip != null) racer.Car.CurrentBlip.Color = BlipColor.Green;
 
@@ -1394,27 +1398,14 @@ namespace ARS
                     foreach (Racer r in ARS.Racers) if (GlobalTraffic.Contains(r.Car)) GlobalTraffic.Remove(r.Car);
 
                     List<Racer> LapPos = new List<Racer>();
-                    List<Racer> RPositions = Racers;
                     if (Racers.Any())
                     {
-                        RPositions = RPositions.OrderBy(d => d.Lap).Reverse().ToList();
-                        int L = RPositions[0].Lap;
-
-                        int pos = 1;
-
-                        while (pos < Racers.Count)
-                        {
-                            LapPos = RPositions.Where(vl => vl.Lap == L).ToList();
-                            LapPos = LapPos.OrderBy(vl => vl.CurrentTrackPoint.Node).Reverse().ToList();
-                            foreach (Racer r in LapPos)
-                            {
-                                r.RacePosition = pos;
-                                pos++;
-                            }
-                            L--;
-                        }
+                        var sorted = Racers
+                            .OrderByDescending(r => r.RaceProgress)
+                            .ToList();
+                        for (int i = 0; i < sorted.Count; i++)
+                            sorted[i].RacePosition = i + 1;
                     }
-                    Racers = Racers.OrderBy(vl => vl.RacePosition).ToList();
                 }
 
                 
@@ -1458,7 +1449,40 @@ namespace ARS
         {
             TimeSpan t = new TimeSpan();
             t = TimeSpan.FromMilliseconds(gameTime);
-            return t; 
+            return t;
+        }
+
+        static string Ordinal(int n)
+        {
+            int mod100 = n % 100;
+            if (mod100 >= 11 && mod100 <= 13) return n + "th";
+            switch (n % 10)
+            {
+                case 1: return n + "st";
+                case 2: return n + "nd";
+                case 3: return n + "rd";
+                default: return n + "th";
+            }
+        }
+
+        static void DrawRaceHud()
+        {
+            Racer player = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
+            if (player == null) return;
+
+            int raceElapsed = RaceStatus == RaceState.InProgress ? Game.GameTime - RaceStartTime : 0;
+            int lapElapsed = player.LapStartTime > 0 ? Game.GameTime - player.LapStartTime : raceElapsed;
+            if (lapElapsed < 0) lapElapsed = 0;
+
+            string position = Ordinal(player.RacePosition).ToUpper();
+            string lapTime = TimeSpan.FromMilliseconds(lapElapsed).ToString(@"mm\:ss\.ff");
+            string totalTime = TimeSpan.FromMilliseconds(raceElapsed).ToString(@"mm\:ss\.ff");
+
+            Color hudColor = Color.White;
+            float leftX = 0.85f;
+            DrawText(new Vector2(leftX, 0.72f), position, hudColor, DrawTextFont.Pricedown, DrawTextAlign.Left, 2.0f);
+            DrawText(new Vector2(leftX, 0.83f), "CURRENT LAP    " + lapTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
+            DrawText(new Vector2(leftX, 0.87f), "TIME    " + totalTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
         }
         public static float GetPercent(float current, float max)
         {
@@ -3539,7 +3563,11 @@ namespace ARS
         }
 
         public enum DrawTextAlign { Center, Left, Right }
-        public enum DrawTextFont { Default, Italics, Squared }
+        // Font IDs match GTA V's FONT_STYLE enum (src\dev_ng\game\text\text.h):
+        // 0 = Standard, 1 = Cursive, 2 = RockstarTag, 3 = Leaderboard,
+        // 4 = Condensed, 5 = FixedWidthNumbers, 6 = CondensedNotGamername,
+        // 7 = Pricedown, 8 = Taxi
+        public enum DrawTextFont { Standard = 0, Cursive = 1, Condensed = 4, FixedWidthNumbers = 5, Pricedown = 7 }
         public static void DrawText(Vector3 pos, string t, Color c, float scale)
         {
             Vector2 screeninfo = World3DToScreen2d(pos);
@@ -3558,7 +3586,6 @@ namespace ARS
             Function.Call(Hash._SET_TEXT_ENTRY, "STRING");
             Function.Call(Hash.SET_TEXT_COLOUR, c.R, c.G, c.B, c.A);
             Function.Call(Hash.SET_TEXT_SCALE, 1f, scale);
-            Function.Call(Hash.SET_TEXT_RIGHT_JUSTIFY, align == DrawTextAlign.Right);
             Function.Call(Hash.SET_TEXT_DROP_SHADOW, true);
             Function.Call(Hash.SET_TEXT_JUSTIFICATION, (int)align);
             Function.Call(Hash.SET_TEXT_FONT, (int)font);

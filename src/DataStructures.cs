@@ -251,6 +251,7 @@ namespace ARS
         public float PreciseCurveRadius = 999f;
         public float Elevation = 0f;
         public float TrackHalfWidth = 5f;
+        public float CumulativeDistance = 0f;
     }
 
     public class CornerPoint
