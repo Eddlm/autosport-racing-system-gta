@@ -121,6 +121,9 @@ namespace ARS
         public static ScriptSettings RaceSettingsFile;
 
         public static bool HideHudMode = false;
+        // True when the player demonstrably has nitrous: bottle mod installed (slot 17) OR fired nitro
+        // once this session (IS_NITROUS_ACTIVE latch — trainer-forced nitro has no detectable installed state).
+        public static bool PlayerHasNitro = false;
 
         public static Dictionary<Options, bool> DebugToggles = new Dictionary<Options, bool>()
     {
@@ -681,6 +684,7 @@ namespace ARS
         int _countdownTickMs = 0;
         int _maxCountdown = 7;
         int _countdown = 7;
+        int _nitroProbeAt = 0;
 
         Vector3 _freeCamMovement = Vector3.Zero;
         Vector3 _freeCamRotation = Vector3.Zero;
@@ -1237,6 +1241,18 @@ namespace ARS
                     TrackVisuals.DrawCornerCheckpoints(playerRacer, ARS.Corners, ARS.TrackPoints);
                 if (DebugToggles[Options.ShowEdgeChevrons] && playerRacer != null)
                     TrackVisuals.DrawEdgeChevrons(playerRacer, ARS.TrackPoints);
+
+                // Nitro presence probe: latches PlayerHasNitro on a fired boost, a below-full charge
+                // (charge is 3.0 while untouched; only firing drains it), or an installed bottle mod.
+                if (CanWeUse(Game.Player.Character.CurrentVehicle) && Game.GameTime - _nitroProbeAt > 500)
+                {
+                    _nitroProbeAt = Game.GameTime;
+                    Vehicle probeVeh = Game.Player.Character.CurrentVehicle;
+                    PlayerHasNitro |= Function.Call<int>(Hash.GET_VEHICLE_MOD, probeVeh, 17) != -1;
+                    bool active = Function.Call<bool>((Hash)0x491E822B2C464FE4, probeVeh);
+                    float charge = Function.Call<float>((Hash)0xBEC4B8653462450E, probeVeh);
+                    if (active || charge < 2.99f) PlayerHasNitro = true;
+                }
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
                 if (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) DrawRaceHud();
                 if (DebugVisual == (int)DebugDisplay.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);
@@ -1877,6 +1893,7 @@ namespace ARS
             if (CanWeUse(cv))
             {
                 Racers.Add(new Racer(cv, Game.Player.Character));
+                PlayerHasNitro |= Function.Call<int>(Hash.GET_VEHICLE_MOD, cv, 17) != -1;
                 return true;
             }
             return false;

@@ -328,7 +328,10 @@ namespace ARS
                 }
             }
 
-            if (apexRadius >= 100f || float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
+            if (float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
+
+            // Gentle bends are kept but flagged: no outside approach, the high-speed line handles them.
+            bool suppressByRadius = apexRadius > 100f;
 
             float entranceRadiusTarget = apexRadius * 2f;
             for (int position = startPosition; position < apexPosition; position++)
@@ -342,12 +345,17 @@ namespace ARS
             }
 
             int apexNode = scanNodes[apexPosition];
+            bool suppressOutside = false;
             if (ARS.Corners.Count > 0)
             {
                 int prevNode = ARS.Corners[ARS.Corners.Count - 1].Node;
                 int dist = ARS.IsPointToPoint ? apexNode - prevNode : Wrap(apexNode - prevNode, count);
-                if (dist <= 200) return;
+                // Inside 30 nodes the two apexes read as one corner: drop it. Up to 200, keep it but
+                // flag it — the outside approach would fight over the same braking/line window.
+                if (dist <= 30) return;
+                if (dist <= 100) suppressOutside = true;
             }
+            suppressOutside |= suppressByRadius;
             ARS.Corners.Add(new CornerPoint
             {
                 Node = apexNode,
@@ -357,7 +365,8 @@ namespace ARS
                 LengthStart = apexPosition - startPosition,
                 LengthEnd = endPosition - apexPosition,
                 SupposedRadius = apexRadius,
-                Speed = (float)Math.Sqrt(9.81f * apexRadius)
+                Speed = (float)Math.Sqrt(9.81f * apexRadius),
+                SuppressOutsideApproach = suppressOutside
             });
         }
 

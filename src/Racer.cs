@@ -182,7 +182,7 @@ namespace ARS
         bool _isPassengerized = false;
 
         // Feature gate for AI nitrous.
-        const bool AiNitrousEnabled = false;
+        const bool AiNitrousEnabled = true;
         const float NitrousPowerMultiplier = 2.5f;
         const float NitrousCornerLookaheadSeconds = 8f;
         const int NitrousDurationMs = 3000;
@@ -197,6 +197,7 @@ namespace ARS
 
         public Maneuver ActiveManeuver = new Maneuver();
         int _nitrousActiveUntil = 0;
+        int _nitrousLapUsed = -1;
 
 
         public float Aggression = 50f;
@@ -313,6 +314,7 @@ namespace ARS
             LapTimes.Clear();
             LapStartTime = 0;
             Lap = 0;
+            _nitrousLapUsed = -1;
             RacePosition = 0;
             CanRegisterNewLap = false;
             _previousNode = -1;
@@ -524,7 +526,9 @@ namespace ARS
                 if (timeToApex > approachStartTime) return 0f;
             }
 
-            bool shouldHoldOutside = true; // TEMP: always hold outside for testing
+            // Flagged corners are too close to the previous one: no outside hold, no corner-commit.
+            bool suppressOutside = ARS.Corners.Exists(cp => cp.Node == apexNode && cp.SuppressOutsideApproach);
+            bool shouldHoldOutside = !suppressOutside; // TEMP: hold outside unless flagged, for testing
             if (!_approachOutsideDecided || (!_approachHoldsOutside && shouldHoldOutside))
             {
                 _approachHoldsOutside = shouldHoldOutside;
@@ -537,7 +541,7 @@ namespace ARS
             if (entranceNode >= 0 && entranceNode < ARS.TrackPoints.Count)
             {
                 float entranceHeading = Vector3.SignedAngle(ARS.TrackPoints[entranceNode].Direction, CurrentTrackPoint.Direction, Vector3.WorldUp);
-                if (!float.IsNaN(entranceHeading) && !float.IsInfinity(entranceHeading) && Math.Abs(entranceHeading) > 45f)
+                if (!float.IsNaN(entranceHeading) && !float.IsInfinity(entranceHeading) && Math.Abs(entranceHeading) > 60f)
                     return 0f;
             }
 
@@ -1205,8 +1209,8 @@ namespace ARS
                 }
             }
 
-            // Nitrous: arm if nearby cars exist or position >= 3rd, and not recently used
-            if (AiNitrousEnabled && ActiveManeuver.Type == ManeuverType.None && Game.GameTime - ActiveManeuver.LastEnabled > 20000)
+            // Nitrous: only if the player brought nitro; one shot per lap, arm if nearby cars exist or position >= 3rd
+            if (AiNitrousEnabled && ARS.PlayerHasNitro && ActiveManeuver.Type == ManeuverType.None && Lap > _nitrousLapUsed)
             {
                 bool hasNearbyCars = Brain.Rivals.Any(r => r.RivalRacer != null);
                 if (hasNearbyCars || RacePosition >= 3)
@@ -1344,7 +1348,7 @@ namespace ARS
 
         void UpdateNitrous()
         {
-            if (ControlledByPlayer || !AiNitrousEnabled) return;
+            if (ControlledByPlayer || !AiNitrousEnabled || !ARS.PlayerHasNitro) return;
 
             // Apply power boost while nitrous is active.
             if (Game.GameTime < _nitrousActiveUntil)
@@ -1394,6 +1398,7 @@ namespace ARS
             Function.Call((Hash)FullyChargeNitrousHash, Car);
             Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 50.0f, 100.0f, false);
             _nitrousActiveUntil = Game.GameTime + NitrousDurationMs;
+            _nitrousLapUsed = Lap;
         }
 
         void StopNitrous()

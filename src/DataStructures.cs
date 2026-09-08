@@ -271,6 +271,8 @@ namespace ARS
         public int RampEndNode = -1;
         // Vertical curvature Gs at the apex (negative = crest, positive = dip).
         public float CrestGs = 0f;
+        // Corner is too close to the previous one: racers must not hold the outside line into it.
+        public bool SuppressOutsideApproach = false;
         // The corner radius from its region limits. Used for apex-speed calculation.
         public float SupposedRadius = 999f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
