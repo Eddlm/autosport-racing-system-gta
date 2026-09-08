@@ -74,7 +74,7 @@ namespace ARS
         public int LapStartTime = 0;
         public int Lap = 0;
         public int RacePosition = 0;
-        public bool CanRegisterNewLap = true;
+        public bool CanRegisterNewLap = false;
         int _previousNode = -1;
         public bool FinishedPointToPoint = false;
 
@@ -321,7 +321,7 @@ namespace ARS
             LapStartTime = 0;
             Lap = 0;
             RacePosition = 0;
-            CanRegisterNewLap = true;
+            CanRegisterNewLap = false;
             _previousNode = -1;
 
             string flags = ARS.GetHandlingFlags(Car).ToString("X");
@@ -2051,11 +2051,8 @@ namespace ARS
 
         void UpdateRaceProgress()
         {
-            float alongTrack = Vector3.Dot(Car.Position - CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
-            TrackProgress = CurrentTrackPoint.CumulativeDistance + alongTrack;
-            if (!ARS.IsPointToPoint && Lap == 0)
-                TrackProgress -= ARS.TrackPoints.Last().CumulativeDistance + ARS.TrackPoints.Last().Position.DistanceTo(ARS.TrackPoints[0].Position);
-            RaceProgress = Lap * 1000000 + (int)TrackProgress;
+            TrackProgress = Lap * ARS.TrackPoints.Count + CurrentTrackPoint.Node;
+            RaceProgress = (int)TrackProgress;
         }
 
         public void UpdateTrackPosition()
@@ -2181,9 +2178,9 @@ namespace ARS
                     }
                 }
             }
-            else if (BaseBehavior == RacerBaseBehavior.Race)
+            else if (BaseBehavior == RacerBaseBehavior.Race && ARS.IsBetween(currentPct, 40f, 60f))
             {
-                if (currentPct > 20f) CanRegisterNewLap = true;
+                CanRegisterNewLap = true;
             }
 
             UpdateRaceProgress();

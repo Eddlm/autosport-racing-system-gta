@@ -14,6 +14,7 @@ Constants, thresholds, conditions, windows and knob names get tuned constantly a
 - Use `ARS.IsBetween(value, min, max)` for inclusive range checks instead of inline `value >= min && value <= max`.
 - **Method names must be honest.** A method should do only what its name claims; if it also filters, selects, or computes unrelated things, refactor it.
 - **Do not use scripts to edit code files.** Source edits are done with direct file tools (`read`/`edit`/`write`). Scripts may still be used for XML/meta files.
+- **C# 7.3 ceiling.** Project targets .NET Framework 4.8 with no `LangVersion` override, so default language version is **C# 7.3**. Switch expressions, tuples with names, records, init-only properties, top-level statements, and `??=` are unavailable — use classic `if`/`else`, `Dictionary<,>`, plain auto-properties, etc.
 - **Minimize comments in code.** At most one line per comment, and only when the code is not obvious on reading. Prefer honest method/variable names over explanatory comments.
 - **Corrections require sources.** When correcting the user on variable names or facts, do so only when confident and after checking the actual code; if uncertain, say so rather than guess.
 
