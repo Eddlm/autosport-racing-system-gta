@@ -91,6 +91,10 @@ namespace ARS
             public float Speed;
             public float MaxSpeed;
             public float IntendedSpeedChange;
+            // Physics-limited cornering speed for the current track radius: v = √(g × grip × r)
+            public float CorneringSpeedLimit;
+            // Max speed for the current steering input before exceeding available grip: v = √(grip × g × L / tan(δ))
+            public float SteerLimitedSpeed;
 
         }
 

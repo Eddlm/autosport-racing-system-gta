@@ -192,7 +192,7 @@ namespace ARS
         const float NitrousCornerLookaheadSeconds = 8f;
         const int NitrousDurationMs = 3000;
         const float RocketBoostMinimumCurveRadius = 600f;
-        const float SideBySideAssistRange = 5f;
+        const float SideBySideAssistRangeExtra = 3f;
         const float SideBySideFullAssistExtraGap = 1f;
         const float SideBySideMinimumAssist = 0.1f;
         const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
@@ -473,10 +473,12 @@ namespace ARS
                 if (Math.Abs(relativeOffset.Y) > rival.CombinedSize.Y) continue;
 
                 float lateralDistance = Math.Abs(relativeOffset.X);
-                if (lateralDistance > SideBySideAssistRange) continue;
 
                 float fullAssistDistance = rival.CombinedSize.X + SideBySideFullAssistExtraGap;
-                float proximity = ARS.Remap(lateralDistance, SideBySideAssistRange, fullAssistDistance, SideBySideMinimumAssist, 1f, true);
+                float wideDistance = rival.CombinedSize.X + SideBySideAssistRangeExtra;
+                if (lateralDistance > wideDistance) continue;
+
+                float proximity = ARS.Remap(lateralDistance, wideDistance, fullAssistDistance, SideBySideMinimumAssist, 1f, true);
                 float headingDifference = -Vector3.SignedAngle(rival.RivalRacer.Car.ForwardVector, carForward, Vector3.WorldUp);
                 if (float.IsNaN(headingDifference) || float.IsInfinity(headingDifference)) continue;
 
@@ -588,9 +590,8 @@ namespace ARS
             {
                 if (r.RivalRacer == null || r == target) continue;
                 if (r.RelativePosition != RelativePos.Ahead) continue;
-                if (!ARS.IsBetween(r.SecondsToHit, 0f, 5f)) continue;
-                if (!ARS.IsBetween(r.FrontGap, 0f, 5f)) continue;
-                if (!ARS.IsBetween(r.DirectionDiff, -20f, 20f)) continue;
+                if (!ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, 30f)) continue;
+                if (!ARS.IsBetween(r.FrontGap, 0f, 3f) && !ARS.IsBetween(r.SecondsToHit, 0f, 5f)) continue;
 
                 if (!TryPickAvoidanceSide(r, trackBound, aggroBuffer, carHalfWidth, currentLane, out float secondTarget, out bool secondGoLeft))
                     continue;
@@ -722,7 +723,7 @@ namespace ARS
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
             // Max steer angle = 2 + max(slide angle, TRlat × 0.2), so low-slide cars keep a grip-based minimum allowance.
             float maxSteerAngle = 2f + Math.Max(slideAngle, Handling.LateralTractionCurve * 0.2f);
-            float maxSteer = ARS.Remap(fwdMph, 60f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
+            float maxSteer = ARS.Remap(fwdMph, 30f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
             _steerLimitDegrees = maxSteer;
             if (Math.Abs(requestedSteer) > maxSteer)
             {
@@ -1016,12 +1017,8 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
-            // Once the car has turned in, let route speed govern the corner instead of the apex braking plan.
-            if (NextApexNode >= 0)
-            {
-                float timeToApex = ForwardNodeDistance(NextApexNode) / Math.Max(Car.Velocity.Length(), 1f);
-                if (timeToApex <= 0.33f) cornerSpd = 999f;
-            }
+            // Once route curvature is the tighter constraint, let it govern the corner instead of the apex braking plan.
+            if (NextApexNode >= 0 && followTrackSpd <= cornerSpd + 10f) cornerSpd = 999f;
 
             // Hill grip loss: exponential model, 15 degrees halves grip.
             {
@@ -1118,9 +1115,25 @@ namespace ARS
             followTrackSpd += pressureSpeedBias;
 
             followTrackSpd += _tempSpeedUp;
+
+            // Steer-limited speed: max speed for current steer angle before sliding. Blended into route speed so an outside car (less steering) may carry more speed.
+            float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
+            if (steerRad > 0.001f)
+            {
+                float turnRadius = VehicleData.WheelBase / (float)Math.Tan(steerRad);
+                Brain.CurrentIntention.SteerLimitedSpeed = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Math.Max(turnRadius, 1f));
+                followTrackSpd = 0.7f * Brain.CurrentIntention.SteerLimitedSpeed + 0.3f * followTrackSpd;
+            }
+            else
+            {
+                Brain.CurrentIntention.SteerLimitedSpeed = 999f; // Straight = no steer limit
+            }
+
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
+            // Physics-limited cornering speed for the current high-speed curve radius.
+            Brain.CurrentIntention.CorneringSpeedLimit = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Brain.CurrentPerception.HighSpeedCurveRadius);
 
             // Yield: cap throttle to 0.5 to stay behind.
             if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
@@ -1624,12 +1637,8 @@ namespace ARS
             bool requestedTrack = ARS.DebugToggles[Options.ShowTrackAnalysis];
             if (!requestedInputs && !requestedTrack) return;
 
-            // During focused debugging, use the closest AI racer so input data is available.
-            Racer closestAiToPlayer = ARS.Racers
-                .Where(r => r != null && r.Driver != null && !r.Driver.IsPlayer && r.Car != null && r.Car.Exists())
-                .OrderBy(r => r.Car.Position.DistanceTo(Game.Player.Character.Position))
-                .FirstOrDefault();
-            if (closestAiToPlayer != this) return;
+            // Allow any car within 50m of the camera to render debug visuals.
+            if (Car.Position.DistanceTo(Game.Player.Character.Position) > 50f) return;
 
             if (requestedInputs)
             {
@@ -1645,135 +1654,8 @@ namespace ARS
                 DrawProjectionDebug();
                 DrawCollisionThreatDebug();
             }
+
             DrawDebugPanel(requestedInputs, requestedTrack);
-
-            // Legacy debug visuals remain below for later reintroduction, but are not called for now.
-            return;
-
-            bool showAggro = ARS.DebugToggles[Options.ShowAggro];
-            bool showInputs = ARS.DebugToggles[Options.ShowInputs];
-            bool showTrack = ARS.DebugToggles[Options.ShowTrackAnalysis];
-            bool showPhysics = ARS.DebugToggles[Options.ShowPhysics];
-            bool showAny = showAggro || showInputs || showTrack || showPhysics;
-            if (!showAny) return;
-
-            Racer closestToPlayer = ARS.Racers
-                .Where(r => r != null && r.Car != null && r.Car.Exists())
-                .OrderBy(r => r.Car.Position.DistanceTo(Game.Player.Character.Position))
-                .FirstOrDefault();
-            if (closestToPlayer != this) return;
-
-
-            if (showTrack && Driver.IsPlayer && Lap >= ARS.SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) && CanRegisterNewLap)
-            {
-                World.DrawMarker(MarkerType.CheckeredFlagRect, ARS.TrackPoints.First().Position + new Vector3(0, 0, 5f), ARS.TrackPoints.First().Direction, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);
-            }
-
-
-            if (showPhysics)
-            {
-
-
-                World.DrawMarker(MarkerType.DebugSphere, Car.Position + new Vector3(0, 0, (Car.Model.GetDimensions().Z * 0.6f)), Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.1f, 0.1f, 0.1f), Color.Green, false, false, 0, false, "", "", false);
-
-
-                Vector3 avgGs = VehicleData.AverageAcceleration;
-                avgGs.Z = 0f;
-
-                float colorPercent = ARS.Remap(avgGs.Length() / 9.8f, 0, VehicleData.CurrentMechanicalGrip, 0, 100, true);
-                Color gColor = ARS.GradientAtoBtoC(Color.White, Color.Yellow, Color.Red, colorPercent);
-
-                World.DrawMarker(MarkerType.DebugSphere, Car.Position + new Vector3(0, 0, (Car.Model.GetDimensions().Z * 0.6f)) + (avgGs / 9.8f), Vector3.Zero, new Vector3(0, 0, 0), new Vector3(0.15f, 0.15f, 0.15f), gColor, false, false, 0, false, "", "", false);
-                ARS.DrawLine(Car.Position + new Vector3(0, 0, (Car.Model.GetDimensions().Z * 0.6f)) + (avgGs / 9.8f), Car.Position + new Vector3(0, 0, (Car.Model.GetDimensions().Z * 0.6f)), gColor);
-
-
-                Vector3 maxValues = new Vector3(VehicleData.CurrentMechanicalGrip * 9.8f, VehicleData.CurrentMechanicalGrip * 9.8f, VehicleData.CurrentMechanicalGrip * 9.8f);
-                Vector3 max = Vector3.Clamp(avgGs, -maxValues, maxValues);
-
-
-
-                Vector3 source = Car.Position + new Vector3(0, 0, 0.5f + (Car.Model.GetDimensions().Z * 0.6f));
-                ARS.DrawText(source, "~b~" + Math.Round(ARS.MpsToMph(Car.Velocity.Length())).ToString() + "~w~mph~n~~y~" + (avgGs.Length() / 9.8f).ToString("0.0") + " Gs", Color.White, 0.5f);
-
-
-            }
-
-            if (!Driver.IsPlayer)
-            {
-
-                if (!Car.IsInRangeOf(Game.Player.Character.Position, 500)) return;
-                if (showInputs)
-                {
-                    DrawInputTrails();
-
-                    // Speed readout (mph).
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2f),
-                        "~w~SPD ~g~" + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + "~w~/~b~" + ARS.MpsToMph(Brain.CurrentIntention.Speed).ToString("0") + "mph",
-                        Color.White, 0.4f);
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f),
-                        "~w~corn ~o~" + ARS.MpsToMph(_debugCornerSpd).ToString("0") + "~w~ rte ~c~" + ARS.MpsToMph(_debugFollowTrackSpd).ToString("0"),
-                        Color.White, 0.4f);
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f),
-                        "~w~spdCap ~p~" + ARS.MpsToMph(_speedCap).ToString("0"),
-                        Color.White, 0.4f);
-                }
-                if (showTrack)
-                {
-                    Vector3 trackCenter = CurrentTrackPoint.Position;
-                    Vector3 trackRight = Vector3.Cross(CurrentTrackPoint.Direction, Vector3.WorldUp);
-                    Vector3 leftWallPos = trackCenter + trackRight * _avoidLeftWall;
-                    Vector3 rightWallPos = trackCenter + trackRight * _avoidRightWall;
-                    Vector3 up = new Vector3(0, 0, 0.1f);
-                    float wallHeight = 1.5f;
-                    Vector3 leftTop = leftWallPos + up + new Vector3(0, 0, wallHeight);
-                    Vector3 rightTop = rightWallPos + up + new Vector3(0, 0, wallHeight);
-                    ARS.DrawLine(leftWallPos + up, leftTop, Color.Blue);
-                    ARS.DrawLine(rightWallPos + up, rightTop, Color.Red);
-                    ARS.DrawLine(leftTop, rightTop, Color.White);
-
-                    // Lane aim spheres: car to final clamped lane target.
-                    if (LookAheads.TryGetValue(LookAhead.SteerRef, out TrackPoint laneRef) && laneRef != null)
-                    {
-                        Vector3 laneRight = Vector3.Cross(laneRef.Direction, Vector3.WorldUp).Normalized;
-                        Vector3 laneAim = laneRef.Position + laneRight * _targetLane;
-                        for (int s = 1; s <= 10; s++)
-                        {
-                            float t = s / 10f;
-                            Vector3 spherePos = Car.Position + (laneAim - Car.Position) * t;
-                            World.DrawMarker(MarkerType.DebugSphere, spherePos, Vector3.Zero, Vector3.Zero, new Vector3(0.2f, 0.2f, 0.2f), Color.White, false, false, 0, false, "", "", false);
-                        }
-                    }
-
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.4f), "~o~R: ~w~" + Brain.CurrentPerception.HighSpeedCurveRadius.ToString("0"), Color.White, 0.4f);
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2.8f), "~p~pitch ~w~" + _debugHillPitch.ToString("0.0"), Color.White, 0.4f);
-
-                    // Projection debug is also shown with Track Analysis.
-                    DrawProjectionDebug();
-                }
-
-                if (showAggro)
-                {
-                    Color pressureColor = ARS.GradientAtoBtoC(Color.Green, Color.Yellow, Color.Red, Pressure);
-                    World.DrawMarker(MarkerType.ChevronUpx1, Car.Position + new Vector3(0f, 0f, 1.5f), Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, -0.5f), pressureColor, false, true, 0, false, "", "", false);
-
-                    ARS.DrawText(Car.Position + new Vector3(0, 0, 2f), ((int)Pressure).ToString(), Color.White, 0.4f);
-
-                    DrawProjectionDebug();
-                }
-
-                if (showTrack)
-                {
-                    DrawRouteFollowLine();
-                }
-
-            }
-            else
-            {
-                if (showTrack)
-                {
-                    DrawRouteFollowLine();
-                }
-            }
         }
 
         void DrawProjectionDebug()
@@ -1803,7 +1685,7 @@ namespace ARS
 
         void DrawCollisionThreatDebug()
         {
-            Rival threat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RivalRacer.Car.Exists() && !float.IsInfinity(r.SecondsToHit) && !float.IsNaN(r.SecondsToHit) && r.SecondsToHit < 5f);
+            Rival threat = Brain.Rivals.FirstOrDefault(r => r.RivalRacer != null && r.RivalRacer.Car.Exists() && ARS.IsBetween(r.FrontGap, 0f, 50f));
             if (threat == null) return;
             Vector3 from = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.6f);
             Vector3 to = threat.RivalRacer.Car.Position + new Vector3(0, 0, threat.RivalRacer.Car.Model.GetDimensions().Z * 0.6f);
@@ -2105,9 +1987,9 @@ namespace ARS
             {
                 r.Update(this);
                 bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead
-                    && ARS.IsBetween(r.SecondsToHit, 0f, 5f)
-                    && ARS.IsBetween(r.FrontGap, 0f, 5f)
-                    && ARS.IsBetween(r.DirectionDiff, -20f, 20f);
+                    && (ARS.IsBetween(r.FrontGap, 0f, 3f)
+                        || ARS.IsBetween(r.SecondsToHit, 0f, 5f))
+                    && ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, 30f);
                 if (Brain.AvoidanceTarget == null && isAvoidanceCandidate)
                 {
                     Brain.AvoidanceTarget = r;
