@@ -134,6 +134,7 @@ namespace ARS
         bool _avoidWallsInitialized = false;
         float _targetLane = 0f;
         float _rawCornerLane = 0f;
+        float _slideCountersteerDegrees = 0f;
         float _cornerSpd = 999f;
         float _debugCornerSpd = 999f;
         float _debugFollowTrackSpd = 999f;
@@ -148,7 +149,7 @@ namespace ARS
 
         float InputForOffshoot = 1f;
         const float OffshootRangeMeters = 2f;
-        const float FullPedalSpeedErrorMps = 6.47f;
+        const float FullPedalSpeedErrorMps = 3f;
         static readonly float StationarySpeedThresholdMps = ARS.MphToMps(5f);
         float _speedCap = 999f;
         const float SpeedCapRiseRate = 30f;
@@ -369,6 +370,10 @@ namespace ARS
             VehicleData.PowerScale = ARS.ComputePaceIndex(modelTopSpeedMph, modelGrip, modelAccel, modelElectric);
             VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.00");
 
+            _brakeFactorsByApex.Clear();
+            foreach (CornerPoint corner in ARS.Corners)
+                _brakeFactorsByApex[corner.Node] = ARS.Remap(corner.SupposedRadius, 30f, 60f, 0.8f, 1f, true);
+
             Car.Repair();
         }
 
@@ -464,12 +469,22 @@ namespace ARS
             const float steerKP = 1.0f;
             // TEMP: hardcoded 0.66 — testing yaw damping.
             const float steerKD = 0.66f;
-            Control.SteerDegrees = (steerKP * (headingErrorDeg + laneBiasDeg + recoveryDeg + sideBySideHeadingDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
-            bool sameSignSlideYaw = Math.Sign((int)VehicleData.SlideAngle) == Math.Sign((int)VehicleData.YawRotationPerSecondDegrees);
+            float trajectorySteer = (steerKP * (headingErrorDeg + recoveryDeg + sideBySideHeadingDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
+            Control.SteerDegrees = trajectorySteer + (steerKP * laneBiasDeg);
+            bool sameSignSlideYaw = Math.Sign(VehicleData.SlideAngle) == Math.Sign(VehicleData.YawRotationPerSecondDegrees);
+            _slideCountersteerDegrees = 0f;
             if (sameSignSlideYaw)
             {
                 float slideScale = ARS.Remap(Math.Abs(VehicleData.SlideAngle), 0f, Handling.LateralTractionCurve * 1.2f, 0.5f, 1.2f, true);
-                Control.SteerDegrees -= VehicleData.SlideAngle * slideScale;
+                _slideCountersteerDegrees = VehicleData.SlideAngle * slideScale;
+                Control.SteerDegrees -= _slideCountersteerDegrees;
+                // Slide priority: blend toward trajectory steering + full countersteer, dropping the lane pursuit.
+                if (Handling.LateralTractionCurve > 1f)
+                {
+                    float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * 0.5f, Handling.LateralTractionCurve * 1.2f, 0f, 1f, true);
+                    float countersteerTarget = trajectorySteer - _slideCountersteerDegrees;
+                    Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
+                }
             }
 
 
@@ -523,7 +538,7 @@ namespace ARS
 
             int count = ARS.TrackPoints.Count;
             int fwdNode;
-            int fwdOffset = Math.Max((int)(speedMps * 1.0f), 5);
+            int fwdOffset = Math.Max((int)(speedMps * 1.25f), 5);
             if (ARS.IsPointToPoint)
                 fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + fwdOffset, 0, count - 1);
             else
@@ -596,7 +611,7 @@ namespace ARS
                 }
             }
 
-            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.2f;
+            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.5f;
             if (_approachHoldsOutside && timeToApex > releaseSeconds)
             {
                 return cornerDir * halfWidth;
@@ -759,7 +774,7 @@ namespace ARS
             // Brake rampdown: once slide exceeds the grip-based steer allowance, ease brake so tires regain lateral grip.
             float gripSteerAngle = 2f + Handling.LateralTractionCurve * 0.2f;
             Control.MaxBrake = slideAngle > gripSteerAngle ? ARS.Remap(slideAngle, gripSteerAngle * 2f, gripSteerAngle, 0.8f, 1f, true) : 1f;
-            float maxSteer = ARS.Remap(fwdMph, 30f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
+            float maxSteer = ARS.Remap(fwdMph, 50f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
             _steerLimitDegrees = maxSteer;
             if (Math.Abs(requestedSteer) > maxSteer)
             {
@@ -1060,7 +1075,7 @@ namespace ARS
             if (cornerSpd <= 5) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
             // Hold the apex braking plan until the braking target (entrance) is reached; route speed takes over inside the corner.
-            if (NextApexNode >= 0 && HasPassedBrakingTarget() && followTrackSpd <= cornerSpd + 10f) cornerSpd = 999f;
+            if (NextApexNode >= 0 && HasPassedBrakingTarget()) cornerSpd = 999f;
 
             // Hill grip loss: exponential model, 15 degrees halves grip.
             {
@@ -1157,6 +1172,8 @@ namespace ARS
             followTrackSpd += pressureSpeedBias;
 
             followTrackSpd += _tempSpeedUp;
+            followTrackSpd += ARS.MphToMps(5f);
+            cornerSpd += ARS.MphToMps(5f);
 
             // Steer-limited speed: max speed for current steer angle before sliding. Blended into route speed so an outside car (less steering) may carry more speed.
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
@@ -1231,8 +1248,8 @@ namespace ARS
             else
             {
                 // On-track: allow more wheelspin as the car slides (slide angle in degrees, /10).
-                IdealWheelspin = -1f - Math.Abs(VehicleData.SlideAngle) / 10f;
-                IdealWheelspin = ARS.Clamp(IdealWheelspin, -3f, 0f);  // magnitude capped at 3
+                IdealWheelspin = -3f - Math.Abs(VehicleData.SlideAngle) / 10f;
+                IdealWheelspin = ARS.Clamp(IdealWheelspin, -6f, 0f);  // magnitude capped at 6
             }
 
             float error = wheelspin - IdealWheelspin;
