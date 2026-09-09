@@ -1895,6 +1895,9 @@ namespace ARS
         {
             Log(LogImportance.Info, "Starting race");
 
+            // Nitro presence is a per-race latch: default to no nitro, let the checks flip it.
+            PlayerHasNitro = false;
+
             // Auto-call missing phases: if no track, instance one; if no grid, spawn one.
             // InstanceGrid already requires the track, so order is implicit.
             if (!_trackInstanced)
@@ -1958,6 +1961,7 @@ namespace ARS
             {
                 Racers.Add(new Racer(cv, Game.Player.Character));
                 PlayerHasNitro |= Function.Call<int>(Hash.GET_VEHICLE_MOD, cv, 17) != -1;
+                PlayerParticipating = true;
                 return true;
             }
             return false;
@@ -3602,14 +3606,14 @@ namespace ARS
         }
 
         // May this AI racer use nitrous? Always/Never are absolute; IfPlayerHas allows it only when
-        // the player isn't racing, or is racing and demonstrably has nitrous (fairness).
+        // the player demonstrably has nitrous (fairness), regardless of whether the player is racing.
         public static bool AiNitroAllowed()
         {
             switch (AiNitro)
             {
                 case TriState.Never: return false;
                 case TriState.Always: return true;
-                default: return !PlayerParticipating || PlayerHasNitro;
+                default: return PlayerHasNitro;
             }
         }
 
