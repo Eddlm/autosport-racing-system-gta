@@ -147,12 +147,9 @@ namespace ARS
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
 
-        float InputForOffshoot = 1f;
         const float OffshootRangeMeters = 2f;
         const float FullPedalSpeedErrorMps = 3f;
         static readonly float StationarySpeedThresholdMps = ARS.MphToMps(5f);
-        float _speedCap = 999f;
-        const float SpeedCapRiseRate = 30f;
 
         // Empirical steer-limit memory: peak lateral G reference and the steer that produced it.
         float _latGRef = 0f;
@@ -918,7 +915,6 @@ namespace ARS
             {
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, Brain.CurrentIntention.MaxSpeed);
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, _speedCap);
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ComputeOffshootSpeedCap());
             }
         }
@@ -932,16 +928,12 @@ namespace ARS
             float offTrackDistance = Math.Abs(signedOffset) - safeBound;
             bool isOutsideCorner = tp.PreciseCurveRadius < 400f && Math.Sign(signedOffset) == Math.Sign(CurrentTrackPoint.Angle);
 
-            if (offTrackDistance <= 0f || !isOutsideCorner)
-            {
-                InputForOffshoot = 1f;
-                return 999f;
-            }
+            if (offTrackDistance <= 0f || !isOutsideCorner) return 999f;
 
             _gripCheckLifted = true;
-            InputForOffshoot = ARS.Remap(offTrackDistance, OffshootRangeMeters, -OffshootRangeMeters, -1f, 1f, true);
+            float offshootInput = ARS.Remap(offTrackDistance, OffshootRangeMeters, -OffshootRangeMeters, -1f, 1f, true);
             float floorSpeed = 5f * VehicleData.CurrentMechanicalGrip;
-            return ARS.Remap(InputForOffshoot, -1f, 1f, floorSpeed, 999f, true);
+            return ARS.Remap(offshootInput, -1f, 1f, floorSpeed, 999f, true);
         }
 
         // Samples braking quality across the approach to the current apex; the factor is
@@ -1010,9 +1002,9 @@ namespace ARS
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees)) Control.SteerDegrees = 0f;
 
             // Fixed slew-rate limiter: the applied steer moves toward the target at a
-            // fixed rate (45°/s), doubled to 90°/s when countersteering (steer opposes yaw).
+            // fixed rate (180°/s), doubled to 360°/s when countersteering (steer opposes yaw).
             float error = Control.SteerDegrees - Control.LastAppliedSteerDegrees;
-            bool countersteering = Math.Sign(Control.SteerDegrees) != Math.Sign((int)VehicleData.YawRotationPerSecondDegrees);
+            bool countersteering = Math.Sign(Control.SteerDegrees) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float rate = countersteering ? SteerSlewRateCountersteer : SteerSlewRate;
             float maxDeltaPerTick = rate * TickScale;
             float delta = ARS.Clamp(error, -maxDeltaPerTick, maxDeltaPerTick);
@@ -1172,7 +1164,7 @@ namespace ARS
             followTrackSpd += pressureSpeedBias;
 
             followTrackSpd += _tempSpeedUp;
-            followTrackSpd += ARS.MphToMps(5f);
+            followTrackSpd += ARS.MphToMps(15f);
             cornerSpd += ARS.MphToMps(5f);
 
             // Steer-limited speed: max speed for current steer angle before sliding. Blended into route speed so an outside car (less steering) may carry more speed.
@@ -2395,7 +2387,6 @@ namespace ARS
         const float SecondaryApexSpeedDifference = 5f;
         const float BrakingTargetFactor = 0.5f;
         const bool RouteSpeedEnabled = true;
-        const bool ConfidenceEnabled = true;
 
         // Cheap: drop passed apexes and invalidate stale entries every tick.
         void UpdateApexLeapfrog()
@@ -2815,9 +2806,6 @@ namespace ARS
                     UpdateRivalInfo();
                 }
                 ApplyRivalThrottleCap();
-
-                // Re-rise the speed cap before concern sources pull it down.
-                _speedCap = Math.Min(999f, _speedCap + SpeedCapRiseRate * TickScale);
 
                 ComputeTargetSpeed();
                 ComputeSteering();

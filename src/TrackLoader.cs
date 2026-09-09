@@ -350,7 +350,7 @@ namespace ARS
             {
                 int prevNode = ARS.Corners[ARS.Corners.Count - 1].Node;
                 int dist = ARS.IsPointToPoint ? apexNode - prevNode : Wrap(apexNode - prevNode, count);
-                // Inside 30 nodes the two apexes read as one corner: drop it. Up to 200, keep it but
+                // Inside 30 nodes the two apexes read as one corner: drop it. Up to 100, keep it but
                 // flag it — the outside approach would fight over the same braking/line window.
                 if (dist <= 30) return;
                 if (dist <= 100) suppressOutside = true;
