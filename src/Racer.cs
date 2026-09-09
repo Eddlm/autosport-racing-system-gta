@@ -162,18 +162,18 @@ namespace ARS
         float _steerLimitDegrees = 999f;
         float _requestedSteerDegrees = 0f;
 
-        // Brake learning (Phase 1): learn the effective decel factor that keeps the car
-        // at full brake ~75% of each braking phase. Toggle off → factor pinned at 1.
-        float _brakeDecelFactor = 1f;
-        int _brakePhaseFrames = 0;
-        int _brakePhaseFullFrames = 0;
-        bool _inBrakePhase = false;
+        // Brake learning (Phase 1): learn the effective decel factor per corner.
+        float _brakeDecelFactor = 1.05f;
+        float _brakeSampleSeconds = 0f;
+        float _brakeSampleFullSeconds = 0f;
+        int _brakeSampleApexNode = -1;
+        bool _brakeSampleReachedFull = false;
         const float FullBrakeThreshold = 0.9f;   // brake input at/above this counts as "full"
-        const float BrakeFractionTarget = 0.75f; // target share of the phase at full brake
-        const float BrakeEaseOffRate = 0.98f;    // reduce factor when fraction too high
-        const float BrakeLeanOnRate = 1.02f;     // increase factor when fraction too low
-        const float MinBrakeDecelFactor = 0.3f;
-        const float MaxBrakeDecelFactor = 1.5f;
+        const float BrakeSampleThreshold = 0.5f; // only samples above this count toward the average
+        const float BrakeFractionTarget = 0.5f;  // target share of the corner's braking time at full brake
+        const float BrakeAdjustGain = 0.1f;      // proportional factor step; full error ≈ ±5% per corner
+        const float BrakeMinFactor = 0.8f;       // learned factor range floor
+        const float BrakeMaxFactor = 1.2f;
         // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
         public float BrakeDecelFactor => _brakeDecelFactor;
 
@@ -744,6 +744,9 @@ namespace ARS
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
             // Max steer angle = 2 + max(slide angle, TRlat × 0.2), so low-slide cars keep a grip-based minimum allowance.
             float maxSteerAngle = 2f + Math.Max(slideAngle, Handling.LateralTractionCurve * 0.2f);
+            // Brake rampdown: once slide exceeds the grip-based steer allowance, ease brake so tires regain lateral grip.
+            float gripSteerAngle = 2f + Handling.LateralTractionCurve * 0.2f;
+            Control.MaxBrake = slideAngle > gripSteerAngle ? ARS.Remap(slideAngle, gripSteerAngle * 2f, gripSteerAngle, 0.8f, 1f, true) : 1f;
             float maxSteer = ARS.Remap(fwdMph, 30f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
             _steerLimitDegrees = maxSteer;
             if (Math.Abs(requestedSteer) > maxSteer)
@@ -813,6 +816,7 @@ namespace ARS
             _previousNode = -1;
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             Control.MaxThrottle = 1f;
+            Control.MaxBrake = 1f;
             IsStuckByThrottle = false;
             _lastStuckGameTime = 0;
             _isRecoveringFromStuck = false;
@@ -844,6 +848,7 @@ namespace ARS
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
 
             UpdateBrakeLearning();
+            Control.Brake = Math.Min(Control.Brake, Control.MaxBrake);
             Control.Throttle = Math.Min(Control.Throttle, Control.MaxThrottle);
             if (Control.MaxThrottle < 1.00f) Control.MaxThrottle += 2 * TickScale;
 
@@ -912,40 +917,62 @@ namespace ARS
             return ARS.Remap(InputForOffshoot, -1f, 1f, floorSpeed, 999f, true);
         }
 
+        // Samples braking quality across the approach to the current apex; the factor is
+        // only committed when that apex is passed — in-progress braking never adjusts live.
         void UpdateBrakeLearning()
         {
             if (!ARS.DebugToggles[Options.BrakeLearning])
             {
-                _inBrakePhase = false;
-                _brakeDecelFactor = 1f;
+                _brakeDecelFactor = 1.05f;
                 return;
             }
 
-            if (ActiveManeuver.Type != ManeuverType.None)
+            if (ActiveManeuver.Type != ManeuverType.None) return;
+
+            if (HasPassedBrakingTarget()) return;
+
+            if (NextApexNode != _brakeSampleApexNode)
             {
-                _inBrakePhase = false;
-                return;
+                _brakeSampleApexNode = NextApexNode;
+                _brakeSampleSeconds = 0f;
+                _brakeSampleFullSeconds = 0f;
+                _brakeSampleReachedFull = false;
             }
 
-            if (Control.Brake > 0f && !_inBrakePhase)
+            if (Control.Brake <= BrakeSampleThreshold) return;
+            _brakeSampleSeconds += TickScale;
+            if (Control.Brake >= FullBrakeThreshold)
             {
-                _inBrakePhase = true;
-                _brakePhaseFrames = 0;
-                _brakePhaseFullFrames = 0;
+                _brakeSampleFullSeconds += TickScale;
+                _brakeSampleReachedFull = true;
             }
-            if (_inBrakePhase)
-            {
-                _brakePhaseFrames++;
-                if (Control.Brake >= FullBrakeThreshold) _brakePhaseFullFrames++;
-            }
-            if (Control.Brake <= 0f && _inBrakePhase)
-            {
-                _inBrakePhase = false;
-                float fraction = _brakePhaseFrames > 0 ? (float)_brakePhaseFullFrames / _brakePhaseFrames : 0f;
-                if (fraction > BrakeFractionTarget) _brakeDecelFactor *= BrakeEaseOffRate;
-                else if (fraction < BrakeFractionTarget) _brakeDecelFactor *= BrakeLeanOnRate;
-                _brakeDecelFactor = ARS.Clamp(_brakeDecelFactor, MinBrakeDecelFactor, MaxBrakeDecelFactor);
-            }
+        }
+
+        void CommitBrakeLearning()
+        {
+            if (!ARS.DebugToggles[Options.BrakeLearning]) return;
+            if (_brakeSampleSeconds < MinimumBrakeSampleSeconds || !_brakeSampleReachedFull) return;
+            float fraction = _brakeSampleFullSeconds / _brakeSampleSeconds;
+            float step = (BrakeFractionTarget - fraction) * BrakeAdjustGain;
+            _brakeDecelFactor *= 1f + step;
+            _brakeDecelFactor = ARS.Clamp(_brakeDecelFactor, BrakeMinFactor, BrakeMaxFactor);
+        }
+
+        int CornerEntranceNode(CornerPoint corner, int apexNode)
+        {
+            return corner == null ? apexNode : (corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(apexNode, -corner.LengthStart));
+        }
+
+        // Past the braking target (entrance node) the plan expects apex speed; later braking is corner-exit scrub, not approach.
+        bool HasPassedBrakingTarget()
+        {
+            if (NextApexNode < 0) return true;
+            CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode);
+            int entranceNode = CornerEntranceNode(corner, NextApexNode);
+            if (entranceNode < 0) return true;
+            int entranceDistance = ForwardNodeDistance(entranceNode);
+            int apexDistance = ForwardNodeDistance(NextApexNode);
+            return entranceDistance <= 0 || (!ARS.IsPointToPoint && entranceDistance > apexDistance);
         }
 
         float TickScale => (0.001f * TimeSince_lastCoreTick);
@@ -1023,8 +1050,8 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
-            // Once route curvature is the tighter constraint, let it govern the corner instead of the apex braking plan.
-            if (NextApexNode >= 0 && followTrackSpd <= cornerSpd + 10f) cornerSpd = 999f;
+            // Hold the apex braking plan until the braking target (entrance) is reached; route speed takes over inside the corner.
+            if (NextApexNode >= 0 && HasPassedBrakingTarget() && followTrackSpd <= cornerSpd + 10f) cornerSpd = 999f;
 
             // Hill grip loss: exponential model, 15 degrees halves grip.
             {
@@ -1396,7 +1423,7 @@ namespace ARS
 
         void UpdateNitrous()
         {
-            if (ControlledByPlayer || !AiNitrousEnabled || !ARS.PlayerHasNitro) return;
+            if (ControlledByPlayer || !AiNitrousEnabled || (ARS.PlayerParticipating && !ARS.PlayerHasNitro)) return;
 
             if (Game.GameTime < _nitrousActiveUntil)
             {
@@ -1412,7 +1439,7 @@ namespace ARS
         // near the finish with a rival nearby.
         bool TryPlayNitrousCard()
         {
-            if (!AiNitrousEnabled || !ARS.PlayerHasNitro || Lap <= _nitrousLapUsed) return false;
+            if (!AiNitrousEnabled || (ARS.PlayerParticipating && !ARS.PlayerHasNitro) || Lap <= _nitrousLapUsed) return false;
             if (Control.Brake > 0f) return false;
             if (OutOfTrackDistance() > 0f) return false;
             if (Math.Abs(Control.SteerDegrees) >= NitrousMaxSteerDegrees) return false;
@@ -1835,7 +1862,7 @@ namespace ARS
 
         void DrawDebugPanel(bool showInputs, bool showTrack)
         {
-            int lineCount = (showInputs ? 4 : 0) + (showTrack ? 3 : 0);
+            int lineCount = (showInputs ? 8 : 0) + (showTrack ? 2 : 0);
             if (lineCount == 0) return;
 
             float lineHeight = 0.026f;
@@ -1888,6 +1915,13 @@ namespace ARS
                 float speedDiff = _debugFollowTrackSpd - Car.Velocity.Length();
                 ARS.DrawText(new Vector2(0.79f, y), "DIFF " + ARS.MpsToMph(speedDiff).ToString("0") + " mph",
                     Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+
+                // Learned brake strength: >1 leans braking on (AI brakes under-achieves), <1 eases off (lockup/overslowing).
+                bool learning = ARS.DebugToggles[Options.BrakeLearning];
+                Color brakeColor = !learning ? Color.Gray : _brakeDecelFactor > 1.01f ? Color.Green : _brakeDecelFactor < 0.99f ? Color.Red : Color.White;
+                ARS.DrawText(new Vector2(0.79f, y), "BRK  " + _brakeDecelFactor.ToString("0.00") + " x",
+                    brakeColor, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
             }
 
@@ -2321,7 +2355,8 @@ namespace ARS
 
         // Braking map close-corner filtering and entrance timing.
         const float ApexBufferSeconds = 2f;
-        const float EntranceBrakeBufferSeconds = 1f;
+        const float MinimumBrakeSampleSeconds = 0.25f;
+        const float EntranceBrakeBufferSeconds = 0.6f;
         const float EntranceBrakeExtraDistance = 0f;
         const float SecondaryApexSpeedDifference = 5f;
         const float BrakingTargetFactor = 0.66f;
@@ -2345,6 +2380,7 @@ namespace ARS
                 // Leapfrog passed apexes forward through the held queue.
                 int shift = 0;
                 while (shift < heldNodes.Length && heldNodes[shift] >= 0 && HasPassedApex(heldNodes[shift])) shift++;
+                if (shift > 0) CommitBrakeLearning();
                 if (shift > 0)
                 {
                     for (int i = 0; i < heldNodes.Length - shift; i++)
@@ -2502,11 +2538,7 @@ namespace ARS
             float velTarget = apexSpeed;
 
             CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
-            int entranceNode = corner == null
-                ? apexNode
-                : (corner.StartNode >= 0
-                    ? corner.StartNode
-                    : OffsetCornerNode(apexNode, -corner.LengthStart));
+            int entranceNode = CornerEntranceNode(corner, apexNode);
             int targetNode = ActiveManeuver.Type == ManeuverType.DiveBomb
                 ? BrakingTargetNode(corner, BrakingTargetFactor)
                 : entranceNode;

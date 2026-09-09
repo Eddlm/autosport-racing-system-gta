@@ -124,6 +124,9 @@ namespace ARS
         // True when the player demonstrably has nitrous: bottle mod installed (slot 17) OR fired nitro
         // once this session (IS_NITROUS_ACTIVE latch — trainer-forced nitro has no detectable installed state).
         public static bool PlayerHasNitro = false;
+        // True when the player's own car is on the current race grid; AI nitro is gated on the
+        // player having nitro, unless the player isn't racing at all.
+        public static bool PlayerParticipating = false;
 
         public static Dictionary<Options, bool> DebugToggles = new Dictionary<Options, bool>()
     {
@@ -1170,6 +1173,7 @@ namespace ARS
             EditNodeHalfWidths.Clear();
 
             RaceStatus = RaceState.None;
+            PlayerParticipating = false;
             _countdown = _maxCountdown;
             _trackInstanced = false;
             _gridInstanced = false;
@@ -1508,6 +1512,20 @@ namespace ARS
             DrawText(new Vector2(leftX, 0.72f), position, hudColor, DrawTextFont.Pricedown, DrawTextAlign.Left, 2.0f);
             DrawText(new Vector2(leftX, 0.83f), "CURRENT LAP    " + lapTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
             DrawText(new Vector2(leftX, 0.87f), "TIME    " + totalTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
+            DrawLeaderboard();
+        }
+
+        static void DrawLeaderboard()
+        {
+            float x = 0.03f;
+            float y = 0.2f;
+            const float step = 0.031f;
+            foreach (Racer r in Racers.OrderBy(v => v.RacePosition))
+            {
+                Color c = r.Driver != null && r.Driver.IsPlayer ? Color.Yellow : Color.White;
+                DrawText(new Vector2(x, y), r.RacePosition + "º - " + r.Name, c, DrawTextFont.Condensed, DrawTextAlign.Left, 0.46f);
+                y += step;
+            }
         }
         public static float GetPercent(float current, float max)
         {
@@ -4010,9 +4028,33 @@ namespace ARS
             }
         }
 
+        static readonly List<string> _sillyNames = new List<string>();
+        static readonly Random _sillyNameRandom = new Random();
+
+        // Reloads sillynames.txt and reshuffles the pick pool each race; players edit the file in the script folder.
+        static void ResetSillyNames()
+        {
+            _sillyNames.Clear();
+            try
+            {
+                _sillyNames.AddRange(File.ReadAllLines(Path.Combine(ScriptsFolder, "sillynames.txt")).Select(l => l.Trim()).Where(l => l.Length > 0));
+            }
+            catch (Exception) { }
+            for (int i = _sillyNames.Count - 1; i > 0; i--) { int j = _sillyNameRandom.Next(i + 1); string t = _sillyNames[i]; _sillyNames[i] = _sillyNames[j]; _sillyNames[j] = t; }
+        }
+
+        static string NextSillyName()
+        {
+            if (_sillyNames.Count == 0) return null;
+            string name = _sillyNames[_sillyNames.Count - 1];
+            _sillyNames.RemoveAt(_sillyNames.Count - 1);
+            return name;
+        }
+
         void LoadGrid(string dlist, int maxcars)
         {
             SetLoadingPromptText("Loading vehicles...");
+            ResetSillyNames();
 
             Log(LogImportance.Info, "Loading vehicle models");
             Vehicle lastCar = null;
@@ -4235,6 +4277,7 @@ namespace ARS
                     if (file.SelectSingleNode("//Nickname") != null) r.Name = file.SelectSingleNode("//Nickname").InnerText;
                     if (r.Name == "NULL" || r.Name == null) r.Name = r.Car.DisplayName.ToString()[0].ToString().ToUpper() + r.Car.DisplayName.ToString().Substring(1).ToLowerInvariant();
                     if (car == Game.Player.Character.CurrentVehicle) r.Name = Game.Player.Name;
+                    else r.Name = NextSillyName() ?? r.Name;
 
                     
 
@@ -4303,7 +4346,9 @@ namespace ARS
                     if (Racers.Count >= maxcars) break;
                     Ped driver = veh.CreateRandomPedOnSeat(VehicleSeat.Driver);
                     if (driver == null || !CanWeUse(driver)) continue;
-                    Racers.Add(new Racer(veh, driver));
+                    Racer nearbyRacer = new Racer(veh, driver);
+                    nearbyRacer.Name = NextSillyName() ?? nearbyRacer.Name;
+                    Racers.Add(nearbyRacer);
                     added++;
                 }
                 Log(LogImportance.Info, "Added " + added + " nearby cars to the grid.");
@@ -4314,6 +4359,7 @@ namespace ARS
             // Stay in None — the race isn't ready to start until SetupRace (phase 3)
             // explicitly moves to NotInitiated. Setting it here caused auto-start.
             RaceStatus = RaceState.None;
+            PlayerParticipating = Racers.Any(r => r.Driver != null && r.Driver.IsPlayer);
             Function.Call(Hash._0x10D373323E5B9C0D);
         }
 
