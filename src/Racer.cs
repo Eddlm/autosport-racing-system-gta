@@ -96,7 +96,7 @@ namespace ARS
         const int StuckCheckTimeMs = 800;
         bool _isRecoveringFromStuck = false;
         int _stuckRecoveryEndTime = 0;
-        const int StuckRecoveryTimeMs = 600;
+        const int StuckRecoveryTimeMs = 1000;
         int _stuckRecoveryAttempts = 0;
         public int StuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
         public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
@@ -140,6 +140,7 @@ namespace ARS
         int _defendApexNode = -1;
 
         const float OffshootRangeMeters = 2f;
+        const float OffshootBlendBrake = 0.5f; // projection blend target: 0.5 brake
         const float FullPedalSpeedErrorMps = 3f;
         static readonly float StationarySpeedThresholdMps = ARS.MphToMps(5f);
 
@@ -757,8 +758,8 @@ namespace ARS
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // Max steer angle = 2 + max(slide angle × 0.5, TRlat × 0.2), so low-slide cars keep a grip-based minimum allowance.
-            float maxSteerAngle = 2f + Math.Max(slideAngle * 0.5f, Handling.LateralTractionCurve * 0.2f);
+            // Max steer angle = 3° base, plus slide, capped at TRlat × 0.5.
+            float maxSteerAngle = Math.Min(3f + slideAngle, Handling.LateralTractionCurve * 0.5f);
             // Brake rampdown: once slide exceeds the grip-based steer allowance, ease brake so tires regain lateral grip.
             float gripSteerAngle = 2f + Handling.LateralTractionCurve * 0.2f;
             Control.MaxBrake = slideAngle > gripSteerAngle ? ARS.Remap(slideAngle, gripSteerAngle * 2f, gripSteerAngle, 0.8f, 1f, true) : 1f;
@@ -856,6 +857,7 @@ namespace ARS
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange, currentForwardSpeed);
+            combinedInput = ApplyOffshootBlend(combinedInput);
             combinedInput = ApplyThrottleCap(combinedInput);
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
 
@@ -906,11 +908,13 @@ namespace ARS
             {
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, Brain.CurrentIntention.MaxSpeed);
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ComputeOffshootSpeedCap());
             }
         }
 
-        float ComputeOffshootSpeedCap()
+        // Projection response: when the 1s projection nears the outside edge of a corner (within
+        // ±OffshootRangeMeters of the safe bound), blend the current input toward 0.5 brake. Only
+        // eases off if the input is "faster" than 0.5 brake (throttle or lighter braking).
+        float ApplyOffshootBlend(float combinedInput)
         {
             Vector3 proj = ProjectAhead(1f);
             TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node);
@@ -919,11 +923,11 @@ namespace ARS
             float offTrackDistance = Math.Abs(signedOffset) - safeBound;
             bool isOutsideCorner = tp.PreciseCurveRadius < 400f && Math.Sign(signedOffset) == Math.Sign(CurrentTrackPoint.Angle);
 
-            if (offTrackDistance <= 0f || !isOutsideCorner) return 999f;
+            if (!isOutsideCorner || offTrackDistance < -OffshootRangeMeters || offTrackDistance > OffshootRangeMeters) return combinedInput;
+            if (combinedInput <= -OffshootBlendBrake) return combinedInput;
 
-            float offshootInput = ARS.Remap(offTrackDistance, OffshootRangeMeters, -OffshootRangeMeters, -1f, 1f, true);
-            float floorSpeed = 5f * VehicleData.CurrentMechanicalGrip;
-            return ARS.Remap(offshootInput, -1f, 1f, floorSpeed, 999f, true);
+            float blend = ARS.Remap(offTrackDistance, -OffshootRangeMeters, OffshootRangeMeters, 0f, 1f, true);
+            return combinedInput + (-OffshootBlendBrake - combinedInput) * blend;
         }
 
         // Samples braking quality across the approach to the current apex; the factor is
@@ -1158,7 +1162,7 @@ namespace ARS
 
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
-            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd);
+            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd) + ARS.MphToMps(8f);
             // Physics-limited cornering speed for the current high-speed curve radius.
             Brain.CurrentIntention.CorneringSpeedLimit = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Brain.CurrentPerception.HighSpeedCurveRadius);
 
