@@ -361,7 +361,7 @@ namespace ARS
 
             _brakeFactorsByApex.Clear();
             foreach (CornerPoint corner in ARS.Corners)
-                _brakeFactorsByApex[corner.Node] = ARS.Remap(corner.SupposedRadius, 30f, 60f, 0.8f, 1f, true);
+                _brakeFactorsByApex[corner.Node] = ARS.Remap(corner.SupposedRadius, 25f, 250f, 0.5f, 1f, true);
 
             Car.Repair();
         }
@@ -523,11 +523,9 @@ namespace ARS
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
         float ComputeHighSpeedLane(float roadWide, float speedMps)
         {
-            if (Brain.CurrentPerception.HighSpeedCurveRadius > 500f) return 0f;
-
             int count = ARS.TrackPoints.Count;
             int fwdNode;
-            int fwdOffset = Math.Max((int)(speedMps * 1.25f), 5);
+            int fwdOffset = (int)(speedMps * 0.9f);
             if (ARS.IsPointToPoint)
                 fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + fwdOffset, 0, count - 1);
             else
@@ -538,6 +536,7 @@ namespace ARS
 
             float signedAngle = Vector3.SignedAngle(currentDir, futureDir, Vector3.WorldUp);
             if (float.IsNaN(signedAngle) || float.IsInfinity(signedAngle)) return 0f;
+            if (Math.Abs(signedAngle) <= 15f) return 0f;
 
             float cornerDir = Math.Sign(signedAngle);
             return -cornerDir * roadWide;
