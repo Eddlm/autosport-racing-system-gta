@@ -130,6 +130,7 @@ namespace ARS
 
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
+        int _activeRivalWallCount = 0;
         bool _avoidWallsInitialized = false;
         float _targetLane = 0f;
         float _rawCornerLane = 0f;
@@ -162,20 +163,29 @@ namespace ARS
         float _steerLimitDegrees = 999f;
         float _requestedSteerDegrees = 0f;
 
-        // Brake learning (Phase 1): learn the effective decel factor per corner.
-        float _brakeDecelFactor = 1.05f;
+        // Brake learning (Phase 1): learn the effective decel factor per corner apex.
+        const float BrakeFactorDefault = 0.95f;
+        readonly Dictionary<int, float> _brakeFactorsByApex = new Dictionary<int, float>();
         float _brakeSampleSeconds = 0f;
-        float _brakeSampleFullSeconds = 0f;
+        float _brakeSampleInput = 0f;
+        float _brakeSampleFullInput = 0f;
         int _brakeSampleApexNode = -1;
-        bool _brakeSampleReachedFull = false;
-        const float FullBrakeThreshold = 0.9f;   // brake input at/above this counts as "full"
         const float BrakeSampleThreshold = 0.5f; // only samples above this count toward the average
-        const float BrakeFractionTarget = 0.5f;  // target share of the corner's braking time at full brake
-        const float BrakeAdjustGain = 0.1f;      // proportional factor step; full error ≈ ±5% per corner
+        const float BrakeFullShareTarget = 0.2f; // target share of sampled brake input delivered at full brake
+        const float BrakeAdjustGain = 0.3f;      // proportional factor step; full error ≈ ±15% per corner
         const float BrakeMinFactor = 0.8f;       // learned factor range floor
         const float BrakeMaxFactor = 1.2f;
         // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
-        public float BrakeDecelFactor => _brakeDecelFactor;
+        public float BrakeFactorForApex(int apexNode) => _brakeFactorsByApex.TryGetValue(apexNode, out float f) ? f : BrakeFactorDefault;
+        float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
+
+        // While diving, a temp bonus is appended to the learned factor; the stored factor itself never changes.
+        public float EffectiveBrakeFactor(int apexNode)
+        {
+            return ActiveManeuver.Type == ManeuverType.DiveBomb
+                ? BrakeFactorForApex(apexNode) + _divebombBrakeBonus
+                : BrakeFactorForApex(apexNode);
+        }
 
 
 
@@ -573,21 +583,22 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = halfWidth - carHalfWidth;
 
+            // Corner-commit: hold the defend/dive line for the card's whole life, not just the outside phase.
+            bool isCornerCommit = ActiveManeuver.Target != null && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb);
+            if (isCornerCommit)
+            {
+                Rival target = Brain.Rivals.FirstOrDefault(r => r.RivalRacer == ActiveManeuver.Target);
+                if (target != null && target.RivalRacer.Car.Exists())
+                {
+                    float gap = target.OccupiedLaneWidth + 0.6f;
+                    float commitLane = target.OccupiedLane + (-cornerDir) * gap;
+                    return ARS.Clamp(commitLane, -safeBound, safeBound);
+                }
+            }
+
             float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.2f;
             if (_approachHoldsOutside && timeToApex > releaseSeconds)
             {
-                // Corner-commit: sit beside the rival on the corner inside instead of the outside line.
-                bool isCornerCommit = ActiveManeuver.Target != null && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb);
-                if (isCornerCommit)
-                {
-                    Rival target = Brain.Rivals.FirstOrDefault(r => r.RivalRacer == ActiveManeuver.Target);
-                    if (target != null && target.RivalRacer.Car.Exists())
-                    {
-                        float gap = target.OccupiedLaneWidth + 0.6f;
-                        float commitLane = target.OccupiedLane + (-cornerDir) * gap;
-                        return ARS.Clamp(commitLane, -safeBound, safeBound);
-                    }
-                }
                 return cornerDir * halfWidth;
             }
             return 0f;
@@ -692,6 +703,7 @@ namespace ARS
             float openRate = 2f * TickScale;
             _avoidLeftWall = leftConstrained ? targetLeftWall : Math.Max(_avoidLeftWall - openRate, -trackBound);
             _avoidRightWall = rightConstrained ? targetRightWall : Math.Min(_avoidRightWall + openRate, trackBound);
+            _activeRivalWallCount = (_avoidLeftWall > -trackBound ? 1 : 0) + (_avoidRightWall < trackBound ? 1 : 0);
 
             // Rival walls must remain ordered; collapse overlap to a narrow centered corridor.
             if (_avoidLeftWall > _avoidRightWall)
@@ -923,7 +935,7 @@ namespace ARS
         {
             if (!ARS.DebugToggles[Options.BrakeLearning])
             {
-                _brakeDecelFactor = 1.05f;
+                _brakeFactorsByApex.Clear();
                 return;
             }
 
@@ -935,27 +947,24 @@ namespace ARS
             {
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleSeconds = 0f;
-                _brakeSampleFullSeconds = 0f;
-                _brakeSampleReachedFull = false;
+                _brakeSampleInput = 0f;
+                _brakeSampleFullInput = 0f;
             }
 
             if (Control.Brake <= BrakeSampleThreshold) return;
             _brakeSampleSeconds += TickScale;
-            if (Control.Brake >= FullBrakeThreshold)
-            {
-                _brakeSampleFullSeconds += TickScale;
-                _brakeSampleReachedFull = true;
-            }
+            _brakeSampleInput += Control.Brake * TickScale;
+            if (Control.Brake >= 1f) _brakeSampleFullInput += Control.Brake * TickScale;
         }
 
         void CommitBrakeLearning()
         {
             if (!ARS.DebugToggles[Options.BrakeLearning]) return;
-            if (_brakeSampleSeconds < MinimumBrakeSampleSeconds || !_brakeSampleReachedFull) return;
-            float fraction = _brakeSampleFullSeconds / _brakeSampleSeconds;
-            float step = (BrakeFractionTarget - fraction) * BrakeAdjustGain;
-            _brakeDecelFactor *= 1f + step;
-            _brakeDecelFactor = ARS.Clamp(_brakeDecelFactor, BrakeMinFactor, BrakeMaxFactor);
+            if (_brakeSampleSeconds < MinimumBrakeSampleSeconds || _brakeSampleFullInput <= 0f || _brakeSampleApexNode < 0) return;
+            float fullShare = _brakeSampleFullInput / _brakeSampleInput;
+            float step = (BrakeFullShareTarget - fullShare) * BrakeAdjustGain;
+            float factor = BrakeFactorForApex(_brakeSampleApexNode) * (1f + step);
+            _brakeFactorsByApex[_brakeSampleApexNode] = ARS.Clamp(factor, BrakeMinFactor, BrakeMaxFactor);
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
@@ -1254,17 +1263,17 @@ namespace ARS
                 }
             }
 
-            // DefendLane cleanup: off once we pass the defended apex or the target overtakes us.
+            // DefendLane fold: off once we pass the defended apex or the target gets past us.
             if (ActiveManeuver.Type == ManeuverType.DefendLane)
             {
-                bool overtaken = ActiveManeuver.Target == null
+                bool lostTarget = ActiveManeuver.Target == null
                     || !ActiveManeuver.Target.Car.Exists()
-                    || !Brain.Rivals.Any(r => r.RivalRacer == ActiveManeuver.Target && r.RelativePosition == RelativePos.Behind);
+                    || !Brain.Rivals.Any(r => r.RivalRacer == ActiveManeuver.Target && r.RelativePosition != RelativePos.Ahead);
 
                 int passed = CurrentTrackPoint.Node - _defendApexNode;
                 if (!ARS.IsPointToPoint && passed < 0) passed += ARS.TrackPoints.Count;
 
-                if (overtaken || (_defendApexNode >= 0 && passed >= 0))
+                if (lostTarget || (_defendApexNode >= 0 && passed >= 0))
                 {
                     ActiveManeuver.Type = ManeuverType.None;
                     ActiveManeuver.Target = null;
@@ -1291,104 +1300,15 @@ namespace ARS
                 }
             }
 
-            // Card model: while no card is in play, the hand is evaluated and the best card plays.
+            // Card model: while no card is in play, the hand is evaluated in priority order.
             // Nitro resolves instantly (burn lives in _nitrousActiveUntil), so it never occupies the slot.
             if (ActiveManeuver.Type == ManeuverType.None) TryPlayNitrousCard();
 
-            // Yield: arm if pressure is much lower than closest rival, in overlap, at the corner entrance.
-            if (ActiveManeuver.Type == ManeuverType.None && Brain.Corner != null)
-            {
-                Rival closestRival = Brain.Rivals
-                    .Where(r => r.RivalRacer != null)
-                    .OrderBy(r => r.Distance)
-                    .FirstOrDefault();
-                if (closestRival != null)
-                {
-                    float pressureDiff = closestRival.RivalRacer.Pressure - Pressure;
-                    bool inOverlap = closestRival.RelativePosition == RelativePos.Left || closestRival.RelativePosition == RelativePos.Right;
-                    int entranceNode = Brain.Corner.Point.StartNode >= 0
-                        ? Brain.Corner.Point.StartNode
-                        : OffsetCornerNode(Brain.Corner.Point.Node, -Brain.Corner.Point.LengthStart);
-                    float timeToEntrance = ForwardNodeDistance(entranceNode)
-                        / Math.Max(Car.Velocity.Length(), 1f);
+            if (ActiveManeuver.Type == ManeuverType.None) TryPlayDefendLaneCard();
 
-                    if (pressureDiff > 30f && inOverlap && ARS.IsBetween(timeToEntrance, 0.5f, 2f)
-                        && closestRival.Distance <= 20f
-                        && closestRival.RivalRacer.Car.Velocity.Length() > Car.Velocity.Length())
-                    {
-                        ActiveManeuver.Type = ManeuverType.Yield;
-                        ActiveManeuver.Target = closestRival.RivalRacer;
-                        ActiveManeuver.LastEnabled = Game.GameTime;
-                    }
-                }
-            }
+            if (ActiveManeuver.Type == ManeuverType.None) TryPlayDivebombCard();
 
-            // Divebomb: commit to a rival's inside to out-brake them at the apex.
-            if (ActiveManeuver.Type == ManeuverType.None && Brain.Corner != null)
-            {
-                int apexNode = Brain.Corner.Point.Node;
-                int entranceNode = Brain.Corner.Point.StartNode >= 0
-                    ? Brain.Corner.Point.StartNode
-                    : OffsetCornerNode(apexNode, -Brain.Corner.Point.LengthStart);
-                float myTimeToEntrance = ForwardNodeDistance(entranceNode)
-                    / Math.Max(Car.Velocity.Length(), 1f);
-
-                Rival diveTarget = Brain.Rivals
-                    .Where(r =>
-                        r.RivalRacer != null
-                        && r.RelativePosition == RelativePos.Ahead
-                        && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
-                        && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane
-                        && r.Distance <= 40f
-                        && Math.Abs(r.LateralGap) <= 6f
-                        && r.ForwardSpeedGap > 0f
-                        && Math.Abs(r.RivalRacer.ForwardNodeDistance(entranceNode)
-                            / Math.Max(r.RivalRacer.Car.Velocity.Length(), 1f) - myTimeToEntrance) <= 1f)
-                    .OrderBy(r => r.Distance)
-                    .FirstOrDefault();
-
-                if (diveTarget != null && Pressure > 30f
-                    && ARS.IsBetween(myTimeToEntrance, 1f, 3f))
-                {
-                    ActiveManeuver.Type = ManeuverType.DiveBomb;
-                    ActiveManeuver.Target = diveTarget.RivalRacer;
-                    ActiveManeuver.LastEnabled = Game.GameTime;
-                    _divebombApexNode = apexNode;
-                }
-            }
-
-            // DefendLane: cover the inside so a rival behind can't dive underneath.
-            if (ActiveManeuver.Type == ManeuverType.None && Brain.Corner != null)
-            {
-                int apexNode = Brain.Corner.Point.Node;
-                int entranceNode = Brain.Corner.Point.StartNode >= 0
-                    ? Brain.Corner.Point.StartNode
-                    : OffsetCornerNode(apexNode, -Brain.Corner.Point.LengthStart);
-                float myTimeToEntrance = ForwardNodeDistance(entranceNode)
-                    / Math.Max(Car.Velocity.Length(), 1f);
-
-                Rival defenderTarget = Brain.Rivals
-                    .Where(r =>
-                        r.RivalRacer != null
-                        && r.RelativePosition == RelativePos.Behind
-                        && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
-                        && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane
-                        && r.Distance <= 30f
-                        && Math.Abs(r.LateralGap) <= 6f
-                        && r.ForwardSpeedGap < 0f
-                        && r.RivalRacer.ForwardNodeDistance(entranceNode)
-                            / Math.Max(r.RivalRacer.Car.Velocity.Length(), 1f) <= myTimeToEntrance)
-                    .OrderBy(r => r.Distance)
-                    .FirstOrDefault();
-
-                if (defenderTarget != null && ARS.IsBetween(myTimeToEntrance, 1f, 3f))
-                {
-                    ActiveManeuver.Type = ManeuverType.DefendLane;
-                    ActiveManeuver.Target = defenderTarget.RivalRacer;
-                    ActiveManeuver.LastEnabled = Game.GameTime;
-                    _defendApexNode = apexNode;
-                }
-            }
+            if (ActiveManeuver.Type == ManeuverType.None) TryPlayYieldCard();
         }
 
         int ForwardNodeDistance(int targetNode)
@@ -1478,6 +1398,98 @@ namespace ARS
             if (!rivalNearbyFaster && !rivalBehindIncoming && !lonelyClear && !finishSpender) return false;
 
             StartNitrous();
+            return true;
+        }
+
+        const float DivebombEntranceSeconds = 5f;
+        const float DivebombFullThrottle = 0.99f;
+        const float DivebombOverlapReachSeconds = 2f;
+
+        // Divebomb card: at full throttle into a corner under 5s away, with an open side to commit
+        // into (at most one rival wall active), dive the closest rival we overlap or will reach within 2s.
+        bool TryPlayDivebombCard()
+        {
+            if (Brain.Corner == null) return false;
+            if (Control.Throttle < DivebombFullThrottle) return false;
+            if (_activeRivalWallCount > 1) return false;
+
+            int apexNode = Brain.Corner.Point.Node;
+            int entranceNode = CornerEntranceNode(Brain.Corner.Point, apexNode);
+            if (entranceNode < 0) return false;
+            float timeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
+            if (timeToEntrance > DivebombEntranceSeconds) return false;
+
+            Rival diveTarget = Brain.Rivals
+                .Where(r => r.RivalRacer != null
+                    && r.RivalRacer.Car.Exists()
+                    && (r.RelativePosition == RelativePos.Left || r.RelativePosition == RelativePos.Right
+                        || r.TimeToContact <= DivebombOverlapReachSeconds))
+                .OrderBy(r => r.Distance)
+                .FirstOrDefault();
+            if (diveTarget == null) return false;
+
+            ActiveManeuver.Type = ManeuverType.DiveBomb;
+            ActiveManeuver.Target = diveTarget.RivalRacer;
+            ActiveManeuver.LastEnabled = Game.GameTime;
+            _divebombApexNode = apexNode;
+            _divebombBrakeBonus = ARS.GetRandomInt(2, 9) / 100f;
+            return true;
+        }
+
+        // DefendLane card: cover the inside so a faster chaser that reaches the entrance no later
+        // than we do can't dive underneath.
+        bool TryPlayDefendLaneCard()
+        {
+            if (Brain.Corner == null) return false;
+
+            int apexNode = Brain.Corner.Point.Node;
+            int entranceNode = CornerEntranceNode(Brain.Corner.Point, apexNode);
+            if (entranceNode < 0) return false;
+            float myTimeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
+            if (!ARS.IsBetween(myTimeToEntrance, 1f, 3f)) return false;
+
+            Rival defenderTarget = Brain.Rivals
+                .Where(r => r.RivalRacer != null
+                    && r.RivalRacer.Car.Exists()
+                    && r.RelativePosition == RelativePos.Behind
+                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
+                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane
+                    && r.Distance <= 30f
+                    && r.ForwardSpeedGap < 0f
+                    && r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.RivalRacer.Car.Velocity.Length(), 1f) <= myTimeToEntrance)
+                .OrderBy(r => r.Distance)
+                .FirstOrDefault();
+            if (defenderTarget == null) return false;
+
+            ActiveManeuver.Type = ManeuverType.DefendLane;
+            ActiveManeuver.Target = defenderTarget.RivalRacer;
+            ActiveManeuver.LastEnabled = Game.GameTime;
+            _defendApexNode = apexNode;
+            return true;
+        }
+
+        // Yield card: let a faster overlapping rival by when they carry far more pressure into the entrance.
+        bool TryPlayYieldCard()
+        {
+            if (Brain.Corner == null) return false;
+
+            Rival closestRival = Brain.Rivals
+                .Where(r => r.RivalRacer != null && r.RivalRacer.Car.Exists())
+                .OrderBy(r => r.Distance)
+                .FirstOrDefault();
+            if (closestRival == null) return false;
+
+            float pressureDiff = closestRival.RivalRacer.Pressure - Pressure;
+            bool inOverlap = closestRival.RelativePosition == RelativePos.Left || closestRival.RelativePosition == RelativePos.Right;
+            int entranceNode = CornerEntranceNode(Brain.Corner.Point, Brain.Corner.Point.Node);
+            float timeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
+            if (pressureDiff <= 30f || !inOverlap || !ARS.IsBetween(timeToEntrance, 0.5f, 2f)
+                || closestRival.Distance > 20f
+                || closestRival.RivalRacer.Car.Velocity.Length() <= Car.Velocity.Length()) return false;
+
+            ActiveManeuver.Type = ManeuverType.Yield;
+            ActiveManeuver.Target = closestRival.RivalRacer;
+            ActiveManeuver.LastEnabled = Game.GameTime;
             return true;
         }
 
@@ -1721,8 +1733,14 @@ namespace ARS
             bool requestedAggro = ARS.DebugToggles[Options.ShowAggro];
             if (!requestedInputs && !requestedTrack && !requestedAggro) return;
 
-            // Allow any car within 50m of the camera to render debug visuals.
-            if (Car.Position.DistanceTo(Game.Player.Character.Position) > 50f) return;
+            // Card-state chevrons stay per-car, within 50m of the player.
+            if (requestedAggro && !Driver.IsPlayer)
+            {
+                if (Car.Position.DistanceTo(Game.Player.Character.Position) <= 50f) DrawManeuverStateChevron();
+            }
+
+            // Panel and lane/projection visuals belong to the AI racer closest to the player.
+            if (ARS.DebugFocusRacer != this) return;
 
             if (requestedInputs)
             {
@@ -1738,8 +1756,6 @@ namespace ARS
                 DrawProjectionDebug();
                 DrawCollisionThreatDebug();
             }
-
-            if (requestedAggro) DrawManeuverStateChevron();
 
             DrawDebugPanel(requestedInputs, requestedTrack);
         }
@@ -1917,10 +1933,11 @@ namespace ARS
                     Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
 
-                // Learned brake strength: >1 leans braking on (AI brakes under-achieves), <1 eases off (lockup/overslowing).
+                // Learned brake strength for the next apex (dive bonus included): >1 leans braking on, <1 eases off.
                 bool learning = ARS.DebugToggles[Options.BrakeLearning];
-                Color brakeColor = !learning ? Color.Gray : _brakeDecelFactor > 1.01f ? Color.Green : _brakeDecelFactor < 0.99f ? Color.Red : Color.White;
-                ARS.DrawText(new Vector2(0.79f, y), "BRK  " + _brakeDecelFactor.ToString("0.00") + " x",
+                float brakeFactor = EffectiveBrakeFactor(NextApexNode);
+                Color brakeColor = !learning ? Color.Gray : brakeFactor > 1.01f ? Color.Green : brakeFactor < 0.99f ? Color.Red : Color.White;
+                ARS.DrawText(new Vector2(0.79f, y), "BRK  " + brakeFactor.ToString("0.00") + " x",
                     brakeColor, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
             }
@@ -2356,10 +2373,10 @@ namespace ARS
         // Braking map close-corner filtering and entrance timing.
         const float ApexBufferSeconds = 2f;
         const float MinimumBrakeSampleSeconds = 0.25f;
-        const float EntranceBrakeBufferSeconds = 0.6f;
+        const float EntranceBrakeBufferSeconds = 0.25f;
         const float EntranceBrakeExtraDistance = 0f;
         const float SecondaryApexSpeedDifference = 5f;
-        const float BrakingTargetFactor = 0.66f;
+        const float BrakingTargetFactor = 0.5f;
         const bool RouteSpeedEnabled = true;
         const bool ConfidenceEnabled = true;
 
@@ -2559,7 +2576,7 @@ namespace ARS
                 : 0f;
 
             float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
-            float decel = brakingAbility * Handling.Gravity * _brakeDecelFactor;
+            float decel = brakingAbility * Handling.Gravity * EffectiveBrakeFactor(apexNode);
             if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);

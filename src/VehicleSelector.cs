@@ -6,7 +6,7 @@ namespace ARS
 {
     public static class VehicleSelector
     {
-        public static List<XmlDocument> Select(Dictionary<string, string> files, Dictionary<string, float> paceIndex, int maxCars, bool allowDuplicates, bool allowYield, Action yield, Func<int, int, int> random, Action<string> log, float powerTarget, float powerBracket, List<string> alwaysIncludeModelNames)
+        public static List<XmlDocument> Select(Dictionary<string, string> files, Dictionary<string, float> paceIndex, int maxCars, bool allowDuplicates, bool allowYield, Action yield, Func<int, int, int> random, Action<string> log, float powerTarget, float powerBracket)
         {
             List<XmlDocument> candidates = new List<XmlDocument>();
             int cooldown = 0;
@@ -24,65 +24,12 @@ namespace ARS
 
             log("Pace-matched candidates: " + candidates.Count);
             Shuffle(candidates, random);
-            // Pin AFTER shuffle so the pinned model is at the top before the trim — shuffle
-            // can otherwise drift it toward the tail and have the maxCars trim drop it.
-            PinModel(candidates, alwaysIncludeModelNames, log, files);
-            int total = maxCars + (alwaysIncludeModelNames == null ? 0 : alwaysIncludeModelNames.Count);
-            if (candidates.Count > total) candidates.RemoveRange(total, candidates.Count - total);
+            if (candidates.Count > maxCars) candidates.RemoveRange(maxCars, candidates.Count - maxCars);
             return candidates;
         }
 
-        // Test-only hook: lift the named model out of the qualified pool to the front so the trim
-        // can't drop it. If the pinned model isn't pace-qualified (e.g. mod cars with a non-numeric
-        // <Model> string that never enters the pace cache), fall back to loading it directly from
-        // the source files so the pin still applies.
-        static void PinModel(List<XmlDocument> candidates, List<string> pinNames, Action<string> log, Dictionary<string, string> files)
-        {
-            if (pinNames == null || pinNames.Count == 0) return;
-            foreach (string pinName in pinNames)
-            {
-                if (string.IsNullOrWhiteSpace(pinName)) continue;
-                bool pinned = false;
-                for (int i = 0; i < candidates.Count; i++)
-                {
-                    string model = candidates[i].SelectSingleNode("//Model")?.InnerText?.Trim();
-                    if (!string.IsNullOrWhiteSpace(model) && string.Equals(model, pinName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (i != 0)
-                        {
-                            XmlDocument doc = candidates[i];
-                            candidates.RemoveAt(i);
-                            candidates.Insert(0, doc);
-                        }
-                        log("Pinned " + pinName + " into the grid (test override).");
-                        pinned = true;
-                        break;
-                    }
-                }
-                if (pinned) continue;
-
-                // Not in the qualified pool — try the source files directly.
-                foreach (string path in files.Keys)
-                {
-                    string model = TrackRepository.ReadVehicleModel(path);
-                    if (string.IsNullOrWhiteSpace(model) || !string.Equals(model, pinName, StringComparison.OrdinalIgnoreCase)) continue;
-                    try
-                    {
-                        XmlDocument document = new XmlDocument();
-                        document.Load(path);
-                        candidates.Insert(0, document);
-                        log("Pinned " + pinName + " into the grid (test override, bypassed pace filter).");
-                        pinned = true;
-                        break;
-                    }
-                    catch (Exception) { }
-                }
-                if (!pinned) log("Always-include model '" + pinName + "' not found in vehicle pool; skipping.");
-            }
-        }
-
         // Temp: bypass pace matching and XML lookup — create minimal XML docs from model names directly.
-        // Used for hardcoded roster testing — mirrors the AlwaysIncludeModelName pin but for the full grid.
+        // Used for hardcoded roster testing — bypasses pace matching for the full grid.
         public static List<XmlDocument> SelectHardcoded(List<string> roster, Dictionary<string, string> files, int maxCars, bool allowDuplicates, Action yield, Func<int, int, int> random, Action<string> log)
         {
             List<XmlDocument> candidates = new List<XmlDocument>();

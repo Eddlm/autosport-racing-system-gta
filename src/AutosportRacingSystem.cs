@@ -127,6 +127,8 @@ namespace ARS
         // True when the player's own car is on the current race grid; AI nitro is gated on the
         // player having nitro, unless the player isn't racing at all.
         public static bool PlayerParticipating = false;
+        // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowTrackAnalysis visuals.
+        public static Racer DebugFocusRacer;
 
         public static Dictionary<Options, bool> DebugToggles = new Dictionary<Options, bool>()
     {
@@ -710,9 +712,6 @@ namespace ARS
         // Config .ini files (Options/Developer Settings/DevSettings/MemoryOffsets) live in a
         // dedicated Settings subfolder, derived from ScriptsFolder so the base stays in one place.
         public static string SettingsFolder => ScriptsFolder + @"\Settings";
-        // Test-only: force a specific car into the pace-matched grid for the next few tests.
-        // Match is by the XML <Model> InnerText (case-insensitive, e.g. "tiberius"). Flip to null to disable.
-        public static List<string> AlwaysIncludeModelNames = new List<string> { "tiberius", "2100457220" };
         // Temp: bypass pace matching entirely and load only these models into the grid.
         // Set to null (or empty list) to re-enable pace-matched selection.
         public static List<string> HardcodedRoster = null;
@@ -1403,6 +1402,8 @@ namespace ARS
                 }
 
                 
+                Vector3 playerPos = Game.Player.Character.Position;
+                DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(playerPos)).FirstOrDefault();
                 foreach (Racer racer in Racers)
                 {
                     racer.ProcessTick();
@@ -3417,7 +3418,7 @@ namespace ARS
 
             float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip);
             
-            float decel = brakingAbility * r.Handling.Gravity * r.BrakeDecelFactor;
+            float decel = brakingAbility * r.Handling.Gravity * r.EffectiveBrakeFactor(apexNode);
             // Yielding cars perceive half the deceleration, so they brake earlier.
             if (r.ActiveManeuver.Type == ManeuverType.Yield)
                 decel *= 0.5f;
@@ -4024,7 +4025,7 @@ namespace ARS
             }
             else
             {
-                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale, AlwaysIncludeModelNames);
+                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale);
             }
         }
 
@@ -4312,7 +4313,7 @@ namespace ARS
                     try { ApplyCarAppearance(file, car, tags); } catch (Exception ex) { Log(LogImportance.Info, "Appearance skipped: " + ex.Message); }
                     // Menyoo livery override: if a matching Menyoo tuning file exists for this model,
                     // apply one at random (cosmetic only, separate from the ARS supplier pool).
-                    // MenyooAppearance.Apply(car); // TEMP: skipped entirely
+                    MenyooAppearance.Apply(car);
                     ApplyAccelerationOverride(file, car);
 
                     XmlDocument driverXml;
