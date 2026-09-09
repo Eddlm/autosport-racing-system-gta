@@ -53,10 +53,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="ScriptHookVDotNet2">
-      <HintPath>D:\SteamLibrary\steamapps\common\Grand Theft Auto V\ScriptHookVDotNet2.dll</HintPath>
+      <HintPath Condition="Exists('D:\SteamLibrary\steamapps\common\Grand Theft Auto V\ScriptHookVDotNet2.dll')">D:\SteamLibrary\steamapps\common\Grand Theft Auto V\ScriptHookVDotNet2.dll</HintPath>
+      <HintPath Condition="!Exists('D:\SteamLibrary\steamapps\common\Grand Theft Auto V\ScriptHookVDotNet2.dll')">libs\ScriptHookVDotNet2.dll</HintPath>
     </Reference>
     <Reference Include="LemonUI.SHVDN2">
-      <HintPath>C:\Users\Usuario\Downloads\LemonUI\SHVDN2\LemonUI.SHVDN2.dll</HintPath>
+      <HintPath Condition="Exists('C:\Users\Usuario\Downloads\LemonUI\SHVDN2\LemonUI.SHVDN2.dll')">C:\Users\Usuario\Downloads\LemonUI\SHVDN2\LemonUI.SHVDN2.dll</HintPath>
+      <HintPath Condition="!Exists('C:\Users\Usuario\Downloads\LemonUI\SHVDN2\LemonUI.SHVDN2.dll')">libs\LemonUI.SHVDN2.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />

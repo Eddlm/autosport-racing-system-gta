@@ -17,7 +17,9 @@ obj/
 .clineignore
 .context/
 .continue/
-.github/
+# GitHub Actions workflows are version-controlled
+.github/*
+!.github/workflows/
 
 # GTA runtime logs
 ScriptHookV.log

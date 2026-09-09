@@ -1,0 +1,51 @@
+name: Deploy build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (Release)
+        shell: pwsh
+        run: dotnet build NewRacingSystem.sln -c Release -p:Platform="Any CPU" -consoleloggerparameters:ErrorsOnly
+
+      - name: Stage deploy folder
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'deploy'
+          $ars = Join-Path $stage 'AutosportRacingSystem'
+          New-Item -ItemType Directory -Force -Path $ars | Out-Null
+          Copy-Item -Path 'Dist\AutosportRacingSystem\*' -Destination $ars -Recurse -Force
+          Copy-Item 'bin\Release\ARS.dll' $ars -Force
+          Copy-Item 'bin\Release\LemonUI.SHVDN2.dll' $ars -Force
+          @'
+          Autosport Racing System (ARS) - WIP build
+
+          Install: extract the AutosportRacingSystem folder into
+          Grand Theft Auto V\Scripts\ (overwrite if updating).
+
+          Requires: ScriptHookV + ScriptHookVDotNet 2 installed.
+          Menu: Sprint + Context hotkey, or type arsmenu in the chat console.
+          '@ | Set-Content -Encoding UTF8 (Join-Path $stage 'README.txt')
+          $zip = "AutosportRacingSystem-$($env:GITHUB_SHA.Substring(0,7)).zip"
+          Compress-Archive -Path "$stage\*" -DestinationPath $zip -Force
+          "ZIPFILE=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutosportRacingSystem-${{ github.sha }}
+          path: AutosportRacingSystem-*.zip
+
+      - name: Attach to release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: AutosportRacingSystem-*.zip
