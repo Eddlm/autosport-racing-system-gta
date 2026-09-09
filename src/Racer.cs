@@ -189,8 +189,7 @@ namespace ARS
 
         bool _isPassengerized = false;
 
-        // Feature gate for AI nitrous.
-        const bool AiNitrousEnabled = true;
+        // Feature gate for AI nitrous (permission resolved via ARS.AiNitro setting).
         const float NitrousPowerMultiplier = 2.5f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
@@ -1352,7 +1351,7 @@ namespace ARS
 
         void UpdateNitrous()
         {
-            if (ControlledByPlayer || !AiNitrousEnabled || (ARS.PlayerParticipating && !ARS.PlayerHasNitro)) return;
+            if (ControlledByPlayer || !ARS.AiNitroAllowed()) return;
 
             if (Game.GameTime < _nitrousActiveUntil)
             {
@@ -1368,7 +1367,7 @@ namespace ARS
         // near the finish with a rival nearby.
         bool TryPlayNitrousCard()
         {
-            if (!AiNitrousEnabled || (ARS.PlayerParticipating && !ARS.PlayerHasNitro) || Lap <= _nitrousLapUsed) return false;
+            if (!ARS.AiNitroAllowed() || Lap <= _nitrousLapUsed) return false;
             if (Control.Brake > 0f) return false;
             if (OutOfTrackDistance() > 0f) return false;
             if (Math.Abs(Control.SteerDegrees) >= NitrousMaxSteerDegrees) return false;

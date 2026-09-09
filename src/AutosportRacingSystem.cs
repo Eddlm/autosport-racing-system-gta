@@ -29,6 +29,13 @@ namespace ARS
         None, NotInitiated, Countdown, InProgress, Finished,
     }
 
+    // Player-facing AI fairness tri-state (currently used by the AiNitro option).
+    // IfPlayerHas = only when the player's own car qualifies.
+    public enum TriState
+    {
+        Never, IfPlayerHas, Always,
+    }
+
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
@@ -123,9 +130,14 @@ namespace ARS
         // True when the player demonstrably has nitrous: bottle mod installed (slot 17) OR fired nitro
         // once this session (IS_NITROUS_ACTIVE latch — trainer-forced nitro has no detectable installed state).
         public static bool PlayerHasNitro = false;
-        // True when the player's own car is on the current race grid; AI nitro is gated on the
-        // player having nitro, unless the player isn't racing at all.
+        // True when the player's own car is on the current race grid (feeds AI nitrous fairness gating).
         public static bool PlayerParticipating = false;
+
+        // Player-facing AI/grid options (Settings.ini [RACERS]).
+        // AiNitro: may AI racers use nitrous? IfPlayerHas = only when the player has it.
+        public static TriState AiNitro = TriState.IfPlayerHas;
+        // Apply Menyoo vehicle-appearance skins to grid cars when a matching file exists.
+        public static bool UseMenyooSkins = true;
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowTrackAnalysis visuals.
         public static Racer DebugFocusRacer;
 
@@ -909,6 +921,25 @@ namespace ARS
             tuningItem.ItemChanged += (sender, args) => SaveRacerSetting("AITuningLevel", tuningItem.Items[args.Index]);
             tuningItem.SelectedIndex = Math.Max(0, tuningItem.Items.IndexOf(RaceSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 1).ToString()));
             racersMenu.Add(tuningItem);
+
+            // ── AI nitrous enablement (player fairness) ──
+            NativeListItem<string> aiNitroItem = new NativeListItem<string>("AI Nitrous", "Whether AI racers may use nitrous. IfPlayerHas lets them only when the player's own car has it. AI never fires more than one shot per lap.", new[] { "Never", "IfPlayerHas", "Always" });
+            aiNitroItem.ItemChanged += (sender, args) =>
+            {
+                AiNitro = (TriState)args.Index;
+                SaveRacerSetting("AiNitro", AiNitro.ToString());
+            };
+            aiNitroItem.SelectedIndex = Math.Max(0, aiNitroItem.Items.IndexOf(AiNitro.ToString()));
+            racersMenu.Add(aiNitroItem);
+
+            // ── Menyoo vehicle skins on grid cars ──
+            NativeCheckboxItem menyooItem = new NativeCheckboxItem("Use Menyoo Skins", "Apply Menyoo vehicle-appearance files (menyooStuff\\Vehicle) to grid cars that have a matching skin.", UseMenyooSkins);
+            menyooItem.CheckboxChanged += (sender, args) =>
+            {
+                UseMenyooSkins = menyooItem.Checked;
+                SaveRacerSetting("UseMenyooSkins", UseMenyooSkins.ToString());
+            };
+            racersMenu.Add(menyooItem);
 
             // ── Options submenu (root) — hosts Dev Settings and Racers ──
             NativeMenu optionsMenu = new NativeMenu("Options", "Options", "Race setup and AI behaviour.")
@@ -3525,6 +3556,8 @@ namespace ARS
 
             Log(LogImportance.Info, "Loading Settings.ini ...");
             RaceSettingsFile = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
+            AiNitro = ParseTriState(RaceSettingsFile.GetValue<string>("RACERS", "AiNitro", AiNitro.ToString()), AiNitro);
+            UseMenyooSkins = RaceSettingsFile.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins);
             Log(LogImportance.Info, "Loaded Settings.");
 
             if (File.Exists(SettingsFolder + @"\MemoryOffsets.ini"))
@@ -3561,6 +3594,25 @@ namespace ARS
 
         }
         public enum LogImportance { Info, Error, Fatal }
+        static TriState ParseTriState(string value, TriState fallback)
+        {
+            foreach (TriState s in Enum.GetValues(typeof(TriState)))
+                if (string.Equals(value, s.ToString(), StringComparison.OrdinalIgnoreCase)) return s;
+            return fallback;
+        }
+
+        // May this AI racer use nitrous? Always/Never are absolute; IfPlayerHas allows it only when
+        // the player isn't racing, or is racing and demonstrably has nitrous (fairness).
+        public static bool AiNitroAllowed()
+        {
+            switch (AiNitro)
+            {
+                case TriState.Never: return false;
+                case TriState.Always: return true;
+                default: return !PlayerParticipating || PlayerHasNitro;
+            }
+        }
+
         public static void Log(LogImportance i, string text, bool forced = false)
         {
             if (DevSettingsFile != null && DevSettingsFile.GetValue<LogImportance>("GENERAL", "LogLevel", LogImportance.Info) > i && !forced) return;
@@ -4310,9 +4362,12 @@ namespace ARS
 
                     List<string> tags = GetVehicleTags(file);
                     try { ApplyCarAppearance(file, car, tags); } catch (Exception ex) { Log(LogImportance.Info, "Appearance skipped: " + ex.Message); }
-                    // Menyoo livery override: if a matching Menyoo tuning file exists for this model,
-                    // apply one at random (cosmetic only, separate from the ARS supplier pool).
-                    MenyooAppearance.Apply(car);
+                    if (UseMenyooSkins)
+                    {
+                        // Menyoo livery override: if a matching Menyoo tuning file exists for this model,
+                        // apply one at random (cosmetic only, separate from the ARS supplier pool).
+                        MenyooAppearance.Apply(car);
+                    }
                     ApplyAccelerationOverride(file, car);
 
                     XmlDocument driverXml;
