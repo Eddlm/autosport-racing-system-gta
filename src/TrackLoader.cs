@@ -314,6 +314,9 @@ namespace ARS
             if (startPosition < 0 || endPosition < startPosition || endPosition - startPosition + 1 < minimumCornerNodes)
                 return;
 
+            int regionStart = startPosition;
+            int regionEnd = endPosition;
+
             int apexPosition = startPosition;
             float apexRadius = float.MaxValue;
             for (int position = startPosition; position <= endPosition; position++)
@@ -345,6 +348,10 @@ namespace ARS
             }
 
             int apexNode = scanNodes[apexPosition];
+            // Enforce a minimum entrance/exit distance from the apex: full track width at the apex + 10 m.
+            float minEntranceExit = ARS.TrackPoints[apexNode].TrackHalfWidth * 2f + 10f;
+            if (apexPosition - startPosition < minEntranceExit) startPosition = Math.Max(regionStart, apexPosition - (int)minEntranceExit);
+            if (endPosition - apexPosition < minEntranceExit) endPosition = Math.Min(regionEnd, apexPosition + (int)minEntranceExit);
             bool suppressOutside = false;
             if (ARS.Corners.Count > 0)
             {

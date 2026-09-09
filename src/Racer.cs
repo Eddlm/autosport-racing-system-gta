@@ -536,7 +536,7 @@ namespace ARS
 
             float signedAngle = Vector3.SignedAngle(currentDir, futureDir, Vector3.WorldUp);
             if (float.IsNaN(signedAngle) || float.IsInfinity(signedAngle)) return 0f;
-            if (Math.Abs(signedAngle) <= 15f) return 0f;
+            if (Math.Abs(signedAngle) <= 5f) return 0f;
 
             float cornerDir = Math.Sign(signedAngle);
             return -cornerDir * roadWide;
@@ -920,7 +920,7 @@ namespace ARS
             float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
             float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
             float offTrackDistance = Math.Abs(signedOffset) - safeBound;
-            bool isOutsideCorner = tp.PreciseCurveRadius < 400f && Math.Sign(signedOffset) == Math.Sign(CurrentTrackPoint.Angle);
+            bool isOutsideCorner = Math.Sign(signedOffset) == Math.Sign(CurrentTrackPoint.Angle);
 
             if (!isOutsideCorner || offTrackDistance < -OffshootRangeMeters || offTrackDistance > OffshootRangeMeters) return combinedInput;
             if (combinedInput <= -OffshootBlendBrake) return combinedInput;
@@ -1158,6 +1158,8 @@ namespace ARS
             {
                 Brain.CurrentIntention.SteerLimitedSpeed = 999f; // Straight = no steer limit
             }
+
+            followTrackSpd += ARS.MphToMps(100f); // TEMP diagnostic: push follow-track speed out
 
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
