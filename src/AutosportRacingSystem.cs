@@ -39,7 +39,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard
     }
 
     public enum DebugDisplay
@@ -154,7 +154,8 @@ namespace ARS
         { Options.HighDownforceOnline, true },
         { Options.StagedSpawns, true },
         { Options.ShowCheckpoints, false },
-        { Options.ShowEdgeChevrons, true }
+        { Options.ShowEdgeChevrons, true },
+        { Options.ShowLeaderboard, true }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -870,11 +871,12 @@ namespace ARS
             AddDebugCheckbox(settingsMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
             AddDebugCheckbox(settingsMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(settingsMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
+            AddDebugCheckbox(settingsMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
             AddDebugCheckbox(settingsMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
             AddDebugCheckbox(settingsMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
             AddDebugCheckbox(settingsMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.");
             AddDebugCheckbox(settingsMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
-            AddDebugCheckbox(settingsMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~75% of each braking phase.");
+            AddDebugCheckbox(settingsMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.");
             AddDebugCheckbox(settingsMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
             AddDebugCheckbox(settingsMenu, Options.StagedSpawns, "Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", value =>
             {
@@ -1543,6 +1545,10 @@ namespace ARS
         static void DrawRaceHud()
         {
             Racer player = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
+
+            // Leaderboard draws even when the player is off the grid (spectating), gated by the toggle.
+            if (DebugToggles[Options.ShowLeaderboard]) DrawLeaderboard();
+
             if (player == null) return;
 
             int raceElapsed = RaceStatus == RaceState.InProgress ? Game.GameTime - RaceStartTime : 0;
@@ -1558,7 +1564,6 @@ namespace ARS
             DrawText(new Vector2(leftX, 0.72f), position, hudColor, DrawTextFont.Pricedown, DrawTextAlign.Left, 2.0f);
             DrawText(new Vector2(leftX, 0.83f), "CURRENT LAP    " + lapTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
             DrawText(new Vector2(leftX, 0.87f), "TIME    " + totalTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
-            DrawLeaderboard();
         }
 
         static void DrawLeaderboard()
@@ -4334,6 +4339,7 @@ namespace ARS
                     if (r.Name == "NULL" || r.Name == null) r.Name = r.Car.DisplayName.ToString()[0].ToString().ToUpper() + r.Car.DisplayName.ToString().Substring(1).ToLowerInvariant();
                     if (car == Game.Player.Character.CurrentVehicle) r.Name = Game.Player.Name;
                     else r.Name = NextSillyName() ?? r.Name;
+                    r._baseName = r.Name;
 
                     
 
@@ -4407,6 +4413,7 @@ namespace ARS
                     if (driver == null || !CanWeUse(driver)) continue;
                     Racer nearbyRacer = new Racer(veh, driver);
                     nearbyRacer.Name = NextSillyName() ?? nearbyRacer.Name;
+                    nearbyRacer._baseName = nearbyRacer.Name;
                     Racers.Add(nearbyRacer);
                     added++;
                 }

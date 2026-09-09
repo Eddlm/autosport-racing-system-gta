@@ -18,6 +18,7 @@ namespace ARS
 
 
         public string Name = "Racer";
+        internal string _baseName = "Racer";
         public Ped Driver;
         public Vehicle Car;
         public Team TeamRole = Team.None;
@@ -100,15 +101,6 @@ namespace ARS
         public int StuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
         public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
 
-        // Grip checker experiment: track peak lateral Gs through a corner.
-        bool _gripCheckArmed = false;
-        float _gripCheckPeakGs = 0f;
-        int _gripCheckApexNode = -1;
-        int _gripCheckLastApexNode = -1;
-        Dictionary<int, float> _cornerSpeedOffsets = new Dictionary<int, float>();
-        float _tempSpeedUp = 0f;
-        bool _gripCheckLifted = false;
-
 
         struct TrailSample
         {
@@ -165,12 +157,11 @@ namespace ARS
         const float BrakeFactorDefault = 0.95f;
         readonly Dictionary<int, float> _brakeFactorsByApex = new Dictionary<int, float>();
         float _brakeSampleSeconds = 0f;
-        float _brakeSampleInput = 0f;
         float _brakeSampleFullInput = 0f;
         int _brakeSampleApexNode = -1;
         const float BrakeSampleThreshold = 0.5f; // only samples above this count toward the average
-        const float BrakeFullShareTarget = 0.2f; // target share of sampled brake input delivered at full brake
-        const float BrakeAdjustGain = 0.3f;      // proportional factor step; full error ≈ ±15% per corner
+        const float BrakeFullTimeTarget = 0.33f; // target seconds at full brake per braking phase
+        const float BrakeAdjustGain = 0.3f;      // proportional factor step on the full-brake-time error
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
         const float BrakeMaxFactor = 1.2f;
         // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
@@ -365,6 +356,7 @@ namespace ARS
             bool modelElectric = Function.Call<int>((Hash)0xD839450756ED5A80, Car.Model.Hash) != 0;
             VehicleData.PowerScale = ARS.ComputePaceIndex(modelTopSpeedMph, modelGrip, modelAccel, modelElectric);
             VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.00");
+            if (!ControlledByPlayer) Name = _baseName + " (" + VehicleData.PowerScale.ToString("0.00") + ")";
 
             _brakeFactorsByApex.Clear();
             foreach (CornerPoint corner in ARS.Corners)
@@ -765,8 +757,8 @@ namespace ARS
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // Max steer angle = 2 + max(slide angle, TRlat × 0.2), so low-slide cars keep a grip-based minimum allowance.
-            float maxSteerAngle = 2f + Math.Max(slideAngle, Handling.LateralTractionCurve * 0.2f);
+            // Max steer angle = 2 + max(slide angle × 0.5, TRlat × 0.2), so low-slide cars keep a grip-based minimum allowance.
+            float maxSteerAngle = 2f + Math.Max(slideAngle * 0.5f, Handling.LateralTractionCurve * 0.2f);
             // Brake rampdown: once slide exceeds the grip-based steer allowance, ease brake so tires regain lateral grip.
             float gripSteerAngle = 2f + Handling.LateralTractionCurve * 0.2f;
             Control.MaxBrake = slideAngle > gripSteerAngle ? ARS.Remap(slideAngle, gripSteerAngle * 2f, gripSteerAngle, 0.8f, 1f, true) : 1f;
@@ -929,7 +921,6 @@ namespace ARS
 
             if (offTrackDistance <= 0f || !isOutsideCorner) return 999f;
 
-            _gripCheckLifted = true;
             float offshootInput = ARS.Remap(offTrackDistance, OffshootRangeMeters, -OffshootRangeMeters, -1f, 1f, true);
             float floorSpeed = 5f * VehicleData.CurrentMechanicalGrip;
             return ARS.Remap(offshootInput, -1f, 1f, floorSpeed, 999f, true);
@@ -953,13 +944,11 @@ namespace ARS
             {
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleSeconds = 0f;
-                _brakeSampleInput = 0f;
                 _brakeSampleFullInput = 0f;
             }
 
             if (Control.Brake <= BrakeSampleThreshold) return;
             _brakeSampleSeconds += TickScale;
-            _brakeSampleInput += Control.Brake * TickScale;
             if (Control.Brake >= 1f) _brakeSampleFullInput += Control.Brake * TickScale;
         }
 
@@ -967,8 +956,8 @@ namespace ARS
         {
             if (!ARS.DebugToggles[Options.BrakeLearning]) return;
             if (_brakeSampleSeconds < MinimumBrakeSampleSeconds || _brakeSampleFullInput <= 0f || _brakeSampleApexNode < 0) return;
-            float fullShare = _brakeSampleFullInput / _brakeSampleInput;
-            float step = (BrakeFullShareTarget - fullShare) * BrakeAdjustGain;
+            float fullTime = _brakeSampleFullInput; // seconds at full brake
+            float step = (BrakeFullTimeTarget - fullTime) * BrakeAdjustGain;
             float factor = BrakeFactorForApex(_brakeSampleApexNode) * (1f + step);
             _brakeFactorsByApex[_brakeSampleApexNode] = ARS.Clamp(factor, BrakeMinFactor, BrakeMaxFactor);
         }
@@ -1153,18 +1142,6 @@ namespace ARS
                 ? ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode)
                 : null;
 
-
-            // Temporary: reduce both speed targets by 3 m/s to combat consistent overshooting.
-            cornerSpd -= 3f;
-            followTrackSpd -= 3f;
-
-            float pressureSpeedBias = ARS.Remap(Pressure, 0f, PressureRange, 0f, 4f, true);
-            cornerSpd += pressureSpeedBias;
-            followTrackSpd += pressureSpeedBias;
-
-            followTrackSpd += _tempSpeedUp;
-            followTrackSpd += ARS.MphToMps(15f);
-            cornerSpd += ARS.MphToMps(5f);
 
             // Steer-limited speed: max speed for current steer angle before sliding. Blended into route speed so an outside car (less steering) may carry more speed.
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
@@ -1594,61 +1571,8 @@ namespace ARS
             {
                 ApplyInputs();
             }
-
-            RunGripChecker();
         }
 
-        void RunGripChecker()
-        {
-            if (ControlledByPlayer) return;
-
-            if (_tempSpeedUp > 0f) _tempSpeedUp = Math.Max(0f, _tempSpeedUp - 1f * Game.LastFrameTime);
-            else if (_tempSpeedUp < 0f) _tempSpeedUp = Math.Min(0f, _tempSpeedUp + 1f * Game.LastFrameTime);
-
-            float latGs = Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector));
-
-            if (!_gripCheckArmed)
-            {
-                if (NextApexNode < 0) return;
-                float timeToApex = ForwardNodeDistance(NextApexNode) / Math.Max(Car.Velocity.Length(), 1f);
-                if (timeToApex > 2f) { _gripCheckLastApexNode = -1; return; }
-                if (NextApexNode == _gripCheckLastApexNode) return;
-                _gripCheckArmed = true;
-                _gripCheckApexNode = NextApexNode;
-                _gripCheckPeakGs = latGs;
-                _tempSpeedUp = GetCornerSpeedOffset(NextApexNode);
-                _gripCheckLifted = false;
-                return;
-            }
-
-            _gripCheckPeakGs = Math.Max(_gripCheckPeakGs, latGs);
-
-            if (Control.Throttle > 0.9f && latGs < 0.2f)
-            {
-                float timeToArmedApex = ForwardNodeDistance(_gripCheckApexNode) / Math.Max(Car.Velocity.Length(), 1f);
-                if (timeToArmedApex <= 2f) return;
-                if (_gripCheckLifted)
-                {
-                    _gripCheckLastApexNode = _gripCheckApexNode;
-                    _gripCheckArmed = false;
-                    _gripCheckPeakGs = 0f;
-                    return;
-                }
-                float offset = GetCornerSpeedOffset(_gripCheckApexNode);
-                if (_gripCheckPeakGs > 5f) offset -= 5f;
-                else if (_gripCheckPeakGs / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f) < 0.95f) offset += 2f;
-                _cornerSpeedOffsets[_gripCheckApexNode] = offset;
-
-                _gripCheckLastApexNode = _gripCheckApexNode;
-                _gripCheckArmed = false;
-                _gripCheckPeakGs = 0f;
-            }
-        }
-
-        float GetCornerSpeedOffset(int apexNode)
-        {
-            return _cornerSpeedOffsets.TryGetValue(apexNode, out float o) ? o : 0f;
-        }
         public void RunTimedCore()
         {
             UpdateTrackPosition();
@@ -2498,16 +2422,16 @@ namespace ARS
         {
             NextApexNode = nodes[0];
             NextApexRadius = radii[0];
-            NextApexSpeed = NextApexNode >= 0 ? ApexSpeedWithDownforce(NextApexRadius) + GetCornerSpeedOffset(NextApexNode) : 999f;
+            NextApexSpeed = NextApexNode >= 0 ? ApexSpeedWithDownforce(NextApexRadius) : 999f;
             NextApexNode2 = nodes[1];
             NextApexRadius2 = radii[1];
-            NextApexSpeed2 = NextApexNode2 >= 0 ? ApexSpeedWithDownforce(NextApexRadius2) + GetCornerSpeedOffset(NextApexNode2) : 999f;
+            NextApexSpeed2 = NextApexNode2 >= 0 ? ApexSpeedWithDownforce(NextApexRadius2) : 999f;
             NextApexNode3 = nodes[2];
             NextApexRadius3 = radii[2];
-            NextApexSpeed3 = NextApexNode3 >= 0 ? ApexSpeedWithDownforce(NextApexRadius3) + GetCornerSpeedOffset(NextApexNode3) : 999f;
+            NextApexSpeed3 = NextApexNode3 >= 0 ? ApexSpeedWithDownforce(NextApexRadius3) : 999f;
             NextApexNode4 = nodes[3];
             NextApexRadius4 = radii[3];
-            NextApexSpeed4 = NextApexNode4 >= 0 ? ApexSpeedWithDownforce(NextApexRadius4) + GetCornerSpeedOffset(NextApexNode4) : 999f;
+            NextApexSpeed4 = NextApexNode4 >= 0 ? ApexSpeedWithDownforce(NextApexRadius4) : 999f;
 
             if (NextApexNode >= 0)
             {
