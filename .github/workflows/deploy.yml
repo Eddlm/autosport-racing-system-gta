@@ -24,14 +24,17 @@ jobs:
           New-Item -ItemType Directory -Force -Path $ars | Out-Null
           Copy-Item -Path 'Dist\AutosportRacingSystem\*' -Destination $ars -Recurse -Force
           Copy-Item 'bin\Release\ARS.dll' $ars -Force
-          Copy-Item 'bin\Release\LemonUI.SHVDN2.dll' $ars -Force
           @'
           Autosport Racing System (ARS) - WIP build
 
           Install: extract the AutosportRacingSystem folder into
           Grand Theft Auto V\Scripts\ (overwrite if updating).
 
-          Requires: ScriptHookV + ScriptHookVDotNet 2 installed.
+          Required (install separately, we do not bundle them):
+            - ScriptHookV (Alexander Blade)
+            - ScriptHookVDotNet 2
+            - LemonUI.SHVDN2
+
           Menu: Sprint + Context hotkey, or type arsmenu in the chat console.
           '@ | Set-Content -Encoding UTF8 (Join-Path $stage 'README.txt')
           $zip = "AutosportRacingSystem-$($env:GITHUB_SHA.Substring(0,7)).zip"
