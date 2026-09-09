@@ -171,7 +171,7 @@ namespace ARS
         const float BrakeSampleThreshold = 0.5f; // only samples above this count toward the average
         const float BrakeFullShareTarget = 0.2f; // target share of sampled brake input delivered at full brake
         const float BrakeAdjustGain = 0.3f;      // proportional factor step; full error ≈ ±15% per corner
-        const float BrakeMinFactor = 0.8f;       // learned factor range floor
+        const float BrakeMinFactor = 0.5f;       // learned factor range floor
         const float BrakeMaxFactor = 1.2f;
         // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
         public float BrakeFactorForApex(int apexNode) => _brakeFactorsByApex.TryGetValue(apexNode, out float f) ? f : BrakeFactorDefault;

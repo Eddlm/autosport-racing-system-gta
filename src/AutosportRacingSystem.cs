@@ -117,7 +117,6 @@ namespace ARS
 
         public static ScriptSettings SettingsFile;
         public static ScriptSettings DevSettingsFile;
-        public static ScriptSettings DevMenuFile;
         public static ScriptSettings RaceSettingsFile;
 
         public static bool HideHudMode = false;
@@ -145,6 +144,9 @@ namespace ARS
         { Options.ShowCheckpoints, false },
         { Options.ShowEdgeChevrons, true }
     };
+
+        // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
+        public const float SpectateCheckpointRadiusMeters = 400f;
 
         // Gs-aware preview steering: how much of the lane error is measured at the 1s
         // Gs-aware projection instead of at the car. 0 = legacy behavior, 1 = full preview.
@@ -709,7 +711,7 @@ namespace ARS
         // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
-        // Config .ini files (Options/Developer Settings/DevSettings/MemoryOffsets) live in a
+        // Config .ini files (Options/DevSettings/Settings/MemoryOffsets) live in a
         // dedicated Settings subfolder, derived from ScriptsFolder so the base stays in one place.
         public static string SettingsFolder => ScriptsFolder + @"\Settings";
         // Temp: bypass pace matching entirely and load only these models into the grid.
@@ -952,11 +954,11 @@ namespace ARS
         }
         void SaveDevToggle(Options option, bool value)
         {
-            if (DevMenuFile == null)
-                DevMenuFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
-            if (DevMenuFile == null) return;
-            DevMenuFile.SetValue("DEBUG", option.ToString(), value);
-            DevMenuFile.Save();
+            if (DevSettingsFile == null)
+                DevSettingsFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
+            if (DevSettingsFile == null) return;
+            DevSettingsFile.SetValue("DEBUG", option.ToString(), value);
+            DevSettingsFile.Save();
         }
         void SaveOptionSetting(string key, string value)
         {
@@ -1240,10 +1242,22 @@ namespace ARS
                 
                 if (_routeEditorActive) TrackVisuals.DrawRoute(RouteNodes, NodeHalfWidths, _routeEditorActive);
                 Racer playerRacer = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
-                if (DebugToggles[Options.ShowCheckpoints] && playerRacer != null && ARS.Corners.Count > 0)
-                    TrackVisuals.DrawCornerCheckpoints(playerRacer, ARS.Corners, ARS.TrackPoints);
-                if (DebugToggles[Options.ShowEdgeChevrons] && playerRacer != null)
-                    TrackVisuals.DrawEdgeChevrons(playerRacer, ARS.TrackPoints);
+                bool raceLive = RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress;
+
+                if (DebugToggles[Options.ShowCheckpoints] && ARS.Corners.Count > 0)
+                {
+                    if (playerRacer != null)
+                        TrackVisuals.DrawCornerCheckpoints(playerRacer, ARS.Corners, ARS.TrackPoints);
+                    else if (raceLive)
+                        TrackVisuals.DrawCornerCheckpoints(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
+                }
+                if (DebugToggles[Options.ShowEdgeChevrons])
+                {
+                    if (playerRacer != null)
+                        TrackVisuals.DrawEdgeChevrons(playerRacer, ARS.TrackPoints);
+                    else if (raceLive)
+                        TrackVisuals.DrawEdgeChevrons(Game.Player.Character.Position, ARS.TrackPoints);
+                }
 
                 // Nitro presence probe: latches PlayerHasNitro on a fired boost, a below-full charge
                 // (charge is 3.0 while untouched; only firing drains it), or an installed bottle mod.
@@ -3509,21 +3523,6 @@ namespace ARS
                 UI.Notify("~o~Failed to load the Options file.~w~ Check you've installed ARS properly.");
             }
 
-            Log(LogImportance.Info, "Loading Developer Settings.ini ...");
-            if (File.Exists(SettingsFolder + @"\Developer Settings.ini"))
-            {
-
-                DevSettingsFile = ScriptSettings.Load(SettingsFolder + @"\Developer Settings.ini");
-
-
-                Log(LogImportance.Info, "Loaded Developer settings.");
-            }
-            else
-            {
-                Log(LogImportance.Error, " '" + SettingsFolder + "/Developer Settings.ini' does not exist. All config values will be default.");
-                UI.Notify("~o~Failed to load the Settings file.~w~ Check you've installed ARS properly.");
-            }
-
             Log(LogImportance.Info, "Loading Settings.ini ...");
             RaceSettingsFile = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
             Log(LogImportance.Info, "Loaded Settings.");
@@ -3547,12 +3546,12 @@ namespace ARS
             }
 
             Log(LogImportance.Info, "Loading DevSettings.ini ...");
-            DevMenuFile = null;
+            DevSettingsFile = null;
             if (File.Exists(SettingsFolder + @"\DevSettings.ini"))
             {
-                DevMenuFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
+                DevSettingsFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
                 foreach (Options option in DebugToggles.Keys.ToArray())
-                    DebugToggles[option] = DevMenuFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]);
+                    DebugToggles[option] = DevSettingsFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]);
                 Log(LogImportance.Info, "Loaded DevSettings.");
             }
             else
