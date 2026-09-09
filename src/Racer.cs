@@ -550,7 +550,8 @@ namespace ARS
 
             float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
             float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
-            const float approachStartTime = 5.0f;
+            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.33f;
+            float approachStartTime = releaseSeconds + 2f;
 
             if (apexNode != _approachCornerNode || timeToApex > approachStartTime)
             {
@@ -599,7 +600,6 @@ namespace ARS
                 }
             }
 
-            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.5f;
             if (_approachHoldsOutside && timeToApex > releaseSeconds)
             {
                 return cornerDir * halfWidth;
@@ -910,23 +910,32 @@ namespace ARS
             }
         }
 
-        // Projection response: when the 1s projection nears the outside edge of a corner (within
-        // ±OffshootRangeMeters of the safe bound), blend the current input toward 0.5 brake. Only
-        // eases off if the input is "faster" than 0.5 brake (throttle or lighter braking).
+        // Projection response: when the 1s projection nears the outside edge of a corner, cap the
+        // maximum combined input — full throttle at -2m inside the edge, 0.5 brake at +2m past it.
         float ApplyOffshootBlend(float combinedInput)
         {
+            // Only meaningful when the car is aiming at a lane; with no target lane there is no
+            // hug-inside expectation to enforce, so the outside sanity check must not fire.
+            if (_targetLane == 0f) return combinedInput;
+
             Vector3 proj = ProjectAhead(1f);
             TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node);
             float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
             float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
             float offTrackDistance = Math.Abs(signedOffset) - safeBound;
-            bool isOutsideCorner = Math.Sign(signedOffset) == Math.Sign(CurrentTrackPoint.Angle);
 
-            if (!isOutsideCorner || offTrackDistance < -OffshootRangeMeters || offTrackDistance > OffshootRangeMeters) return combinedInput;
-            if (combinedInput <= -OffshootBlendBrake) return combinedInput;
+            // Outside is judged from the track angle 1s behind, so it stays relevant through the corner.
+            int count = ARS.TrackPoints.Count;
+            int behindOffset = (int)(Car.Velocity.Length() * 1f);
+            int behindNode = ARS.IsPointToPoint
+                ? (int)ARS.Clamp(CurrentTrackPoint.Node - behindOffset, 0, count - 1)
+                : ((CurrentTrackPoint.Node - behindOffset) % count + count) % count;
+            bool isOutsideCorner = Math.Sign(signedOffset) == Math.Sign(ARS.TrackPoints[behindNode].Angle);
 
-            float blend = ARS.Remap(offTrackDistance, -OffshootRangeMeters, OffshootRangeMeters, 0f, 1f, true);
-            return combinedInput + (-OffshootBlendBrake - combinedInput) * blend;
+            if (!isOutsideCorner) return combinedInput;
+
+            float maxInput = ARS.Remap(offTrackDistance, OffshootRangeMeters, -OffshootRangeMeters, -OffshootBlendBrake, 1f, true);
+            return Math.Min(combinedInput, maxInput);
         }
 
         // Samples braking quality across the approach to the current apex; the factor is
@@ -1057,8 +1066,9 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
-            // Hold the apex braking plan until the braking target (entrance) is reached; route speed takes over inside the corner.
-            if (NextApexNode >= 0 && HasPassedBrakingTarget()) cornerSpd = 999f;
+            // Hold the apex braking plan until the braking target (entrance) is reached AND the car has
+            // actually braked down to the corner speed; route speed takes over inside the corner.
+            if (NextApexNode >= 0 && HasPassedBrakingTarget() && Car.Velocity.Length() <= NextApexSpeed + ARS.MphToMps(1f)) cornerSpd = 999f;
 
             // Hill grip loss: exponential model, 15 degrees halves grip.
             {
@@ -1159,7 +1169,7 @@ namespace ARS
                 Brain.CurrentIntention.SteerLimitedSpeed = 999f; // Straight = no steer limit
             }
 
-            followTrackSpd += ARS.MphToMps(100f); // TEMP diagnostic: push follow-track speed out
+            followTrackSpd += ARS.MphToMps(6f); // TEMP diagnostic: push follow-track speed out
 
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
