@@ -158,7 +158,7 @@ namespace ARS
         float _requestedSteerDegrees = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
-        const float BrakeFactorDefault = 0.95f;
+        const float BrakeFactorDefault = 0.8f; // TEMP: hardcoded for testing
         readonly Dictionary<int, float> _brakeFactorsByApex = new Dictionary<int, float>();
         float _brakeSampleSeconds = 0f;
         float _brakeSampleFullInput = 0f;
@@ -366,7 +366,7 @@ namespace ARS
 
             _brakeFactorsByApex.Clear();
             foreach (CornerPoint corner in ARS.Corners)
-                _brakeFactorsByApex[corner.Node] = ARS.Remap(corner.SupposedRadius, 25f, 250f, 0.5f, 1f, true);
+                _brakeFactorsByApex[corner.Node] = 0.8f; // TEMP: uniform starting assumption
 
             Car.Repair();
         }
@@ -1175,6 +1175,15 @@ namespace ARS
 
             followTrackSpd += ARS.MphToMps(6f); // TEMP diagnostic: push follow-track speed out
 
+            // Chicane boost: +10 mph to both corner and route speed while the chicane corner
+            // is the active target. No node gate — Brain.Corner updates naturally on apex pass.
+            if (Brain.Corner != null && Brain.Corner.Point.IsChicane)
+            {
+                float chicaneBoost = ARS.MphToMps(10f);
+                cornerSpd += chicaneBoost;
+                followTrackSpd += chicaneBoost;
+            }
+
             _debugCornerSpd = cornerSpd;
             _debugFollowTrackSpd = followTrackSpd;
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd) + ARS.MphToMps(8f);
@@ -1235,8 +1244,7 @@ namespace ARS
             else
             {
                 // On-track: allow more wheelspin as the car slides (slide angle in degrees, /10).
-                IdealWheelspin = -3f - Math.Abs(VehicleData.SlideAngle) / 10f;
-                IdealWheelspin = ARS.Clamp(IdealWheelspin, -6f, 0f);  // magnitude capped at 6
+                IdealWheelspin = -1f - ARS.Clamp(Math.Abs(VehicleData.SlideAngle) / 30f, 0f, 3f);
             }
 
             float error = wheelspin - IdealWheelspin;
@@ -2464,12 +2472,15 @@ namespace ARS
             if (NextApexNode >= 0)
             {
                 // Instance Brain.Corner from the nearest apex.
-                CornerPoint cp = new CornerPoint();
-                cp.Node = NextApexNode;
-                cp.Angle = ARS.TrackPoints[NextApexNode].Angle;
-                cp.SupposedRadius = NextApexRadius;
-                cp.Speed = NextApexSpeed;
-                Brain.Corner = new Corner(cp.Speed, cp);
+                CornerPoint original = ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode);
+                CornerPoint cp = original ?? new CornerPoint();
+                if (original == null)
+                {
+                    cp.Node = NextApexNode;
+                    cp.Angle = ARS.TrackPoints[NextApexNode].Angle;
+                    cp.SupposedRadius = NextApexRadius;
+                }
+                Brain.Corner = new Corner(NextApexSpeed, cp);
             }
             else
             {
