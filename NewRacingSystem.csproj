@@ -84,6 +84,7 @@
     <Compile Include="src\VehicleMemory.cs" />
     <Compile Include="src\PersonalitySet.cs" />
     <Compile Include="src\Racer.cs" />
+    <Compile Include="src\MenuSettings.cs" />
     <Compile Include="src\Properties\AssemblyInfo.cs" />
     <Compile Include="src\AutosportRacingSystem.cs" />
     <Compile Include="src\TrackLoader.cs" />

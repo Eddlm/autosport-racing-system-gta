@@ -124,7 +124,10 @@ namespace ARS
 
         public static ScriptSettings SettingsFile;
         public static ScriptSettings DevSettingsFile;
-        public static ScriptSettings RaceSettingsFile;
+        // One ini per menu (Settings\Menu-*.ini), created in LoadSettings.
+        public static MenuSettings RaceMenuStore;
+        public static MenuSettings RacersMenuStore;
+        public static MenuSettings DevMenuStore;
 
         public static bool HideHudMode = false;
         // True when the player demonstrably has nitrous: bottle mod installed (slot 17) OR fired nitro
@@ -705,6 +708,7 @@ namespace ARS
         int _maxCountdown = 7;
         int _countdown = 7;
         int _nitroProbeAt = 0;
+        int _nitroTopUpAt = 0;
 
         Vector3 _freeCamMovement = Vector3.Zero;
         Vector3 _freeCamRotation = Vector3.Zero;
@@ -749,6 +753,8 @@ namespace ARS
 
         void InitializeMenu()
         {
+            _selectedTrackPath = RaceMenuStore.Get("Track", null);
+
             _arsMenu = new NativeMenu("ARS", "RACING")
             {
                 UseMouse = false,
@@ -769,13 +775,16 @@ namespace ARS
             _trackListItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index < _trackListPaths.Count)
+                {
                     _selectedTrackPath = _trackListPaths[args.Index];
+                    RaceMenuStore.Set("Track", _selectedTrackPath);
+                }
             };
             _raceMenu.Add(_trackListItem);
 
             NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", new[] { "3", "5", "7", "9", "11", "13", "15", "17", "19" });
-            lapsItem.ItemChanged += (sender, args) => SaveOptionSetting("Laps", lapsItem.Items[args.Index]);
-            int laps = SettingsFile?.GetValue<int>("GENERAL_SETTINGS", "Laps", 5) ?? 5;
+            lapsItem.ItemChanged += (sender, args) => RaceMenuStore.Set("Laps", lapsItem.Items[args.Index]);
+            int laps = RaceMenuStore.GetInt("Laps", 5);
             lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(laps.ToString()));
             _raceMenu.Add(lapsItem);
 
@@ -793,9 +802,12 @@ namespace ARS
             _gridSizeItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index <= 12)
+                {
                     _intendedOpponents = args.Index;
+                    RaceMenuStore.Set("GridSize", args.Index);
+                }
             };
-            _intendedOpponents = (int)Clamp(_intendedOpponents, 0, 12);
+            _intendedOpponents = (int)Clamp(RaceMenuStore.GetInt("GridSize", 4), 0, 12);
             _gridSizeItem.SelectedIndex = _intendedOpponents;
             _raceMenu.Add(_gridSizeItem);
 
@@ -803,7 +815,10 @@ namespace ARS
             _powerTargetItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index < _powerTargetValues.Count)
+                {
                     PowerTargetScale = _powerTargetValues[args.Index];
+                    RaceMenuStore.Set("PaceTarget", PowerTargetScale);
+                }
             };
             _raceMenu.Add(_powerTargetItem);
 
@@ -811,7 +826,10 @@ namespace ARS
             _powerBracketItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index < _powerBracketValues.Count)
+                {
                     PowerBracketScale = _powerBracketValues[args.Index];
+                    RaceMenuStore.Set("PaceBracket", PowerBracketScale);
+                }
             };
             _raceMenu.Add(_powerBracketItem);
 
@@ -906,22 +924,22 @@ namespace ARS
             };
             NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "How the grid is ordered.", new[] { "Power", "PowerDescendent", "TopSpeed", "TopSpeedDescendent", "Random" });
             gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", gridSortItem.Items[args.Index]);
-            gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(RaceSettingsFile.GetValue<string>("RACERS", "GridSorting", "Random")));
+            gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(RacersMenuStore.Get("GridSorting", "Random")));
             racersMenu.Add(gridSortItem);
 
             NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", new[] { "15", "30", "45", "60" });
             timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
-            timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(RaceSettingsFile.GetValue<int>("RACERS", "TimeoutSeconds", 30).ToString()));
+            timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(RacersMenuStore.GetInt("TimeoutSeconds", 30).ToString()));
             racersMenu.Add(timeoutItem);
 
             NativeListItem<string> autofixItem = new NativeListItem<string>("AI Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", new[] { "0", "1", "2" });
             autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
-            autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(RaceSettingsFile.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString()));
+            autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(RacersMenuStore.GetInt("AIRacerAutofix", 1).ToString()));
             racersMenu.Add(autofixItem);
 
             NativeListItem<string> tuningItem = new NativeListItem<string>("AI Tuning Level", "0 = none, 1 = visual, 2 = +performance, 3 = +engine boost.", new[] { "0", "1", "2", "3" });
             tuningItem.ItemChanged += (sender, args) => SaveRacerSetting("AITuningLevel", tuningItem.Items[args.Index]);
-            tuningItem.SelectedIndex = Math.Max(0, tuningItem.Items.IndexOf(RaceSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 1).ToString()));
+            tuningItem.SelectedIndex = Math.Max(0, tuningItem.Items.IndexOf(RacersMenuStore.GetInt("AITuningLevel", 1).ToString()));
             racersMenu.Add(tuningItem);
 
             // ── AI nitrous enablement (player fairness) ──
@@ -969,10 +987,7 @@ namespace ARS
         }
         void SaveRacerSetting(string key, string value)
         {
-            if (RaceSettingsFile == null)
-                RaceSettingsFile = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
-            RaceSettingsFile.SetValue("RACERS", key, value);
-            RaceSettingsFile.Save();
+            RacersMenuStore.Set(key, value);
         }
         void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description, Action<bool> onChanged = null)
         {
@@ -987,18 +1002,7 @@ namespace ARS
         }
         void SaveDevToggle(Options option, bool value)
         {
-            if (DevSettingsFile == null)
-                DevSettingsFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
-            if (DevSettingsFile == null) return;
-            DevSettingsFile.SetValue("DEBUG", option.ToString(), value);
-            DevSettingsFile.Save();
-        }
-        void SaveOptionSetting(string key, string value)
-        {
-            if (SettingsFile == null)
-                SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
-            SettingsFile.SetValue("GENERAL_SETTINGS", key, value);
-            SettingsFile.Save();
+            DevMenuStore.Set(option.ToString(), value.ToString());
         }
         // ── Phased race instancing ──
         // Each phase is a self-contained method callable individually or chained
@@ -1138,6 +1142,10 @@ namespace ARS
             }
             if (min == float.MaxValue) { min = 0f; max = 1f; }
 
+            float storedTarget = RaceMenuStore.GetFloat("PaceTarget", float.NaN);
+            if (!float.IsNaN(storedTarget)) PowerTargetScale = RoundToNearestEven(Clamp(storedTarget, min, max));
+            float storedBracket = RaceMenuStore.GetFloat("PaceBracket", float.NaN);
+            if (!float.IsNaN(storedBracket)) PowerBracketScale = RoundToNearestEven(Clamp(storedBracket, 0f, max - min));
             PowerTargetScale = RoundToNearestEven(Clamp(PowerTargetScale, min, max));
             PowerBracketScale = RoundToNearestEven(Clamp(PowerBracketScale, 0f, max - min));
 
@@ -1148,7 +1156,7 @@ namespace ARS
 
             _powerTargetItem.Items.Clear();
             foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0"));
-            _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
+            _powerTargetItem.SelectedIndex = _powerTargetValues.Count > 0 ? FindNearestPowerValue(_powerTargetValues, PowerTargetScale) : 0;
             if (_powerTargetValues.Count > 0) PowerTargetScale = _powerTargetValues[_powerTargetItem.SelectedIndex];
 
             _powerBracketItem.Items.Clear();
@@ -1303,6 +1311,17 @@ namespace ARS
                     float charge = Function.Call<float>((Hash)0xBEC4B8653462450E, probeVeh);
                     if (active || charge < 2.99f) PlayerHasNitro = true;
                 }
+
+                // Nitro top-up: while nothing is firing, hold every bottle at the target charge.
+                if (AiNitro != TriState.Never && Game.GameTime - _nitroTopUpAt > 1000)
+                {
+                    _nitroTopUpAt = Game.GameTime;
+                    foreach (Racer racer in Racers)
+                        TopUpNitrous(racer.Car);
+                    Vehicle playerVeh = Game.Player.Character.CurrentVehicle;
+                    if (CanWeUse(playerVeh) && Racers.All(r => !CanWeUse(r.Car) || r.Car != playerVeh))
+                        TopUpNitrous(playerVeh);
+                }
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
                 if (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) DrawRaceHud();
                 if (DebugVisual == (int)DebugDisplay.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);
@@ -1312,7 +1331,7 @@ namespace ARS
                     TrackStartInfo nearest = FindNearestTrackStartInfo(Game.Player.Character.Position);
                     if (nearest != null)
                     {
-                        World.DrawMarker(MarkerType.ChevronUpx1, nearest.JoinPosition + new Vector3(0, 0, 2f), Vector3.Zero, Vector3.Zero, new Vector3(1f, 1f, 1f), Color.Yellow, false, true, 0, false, "", "", false);
+                        World.DrawMarker(MarkerType.ChevronUpx1, nearest.JoinPosition + new Vector3(0, 0, 2f), Vector3.Zero, new Vector3(180f, 0f, 0f), new Vector3(1f, 1f, 1f), Color.Yellow, false, false, 0, false, "", "", false);
                         float dist = nearest.JoinPosition.DistanceTo2D(Game.Player.Character.Position);
                         if (dist <= 5f)
                         {
@@ -1462,7 +1481,7 @@ namespace ARS
                         LeaderboardFinish.Add(racer);
                         racer.BaseBehavior = RacerBaseBehavior.FinishedRace;
                         if (IsPointToPoint) racer.BaseBehavior = RacerBaseBehavior.FinishedStandStill;
-                        if (_raceTimedFinishMs == 0) _raceTimedFinishMs = Game.GameTime + (RaceSettingsFile.GetValue<int>("RACERS", "TimeoutSeconds", 30) * 1000);
+                        if (_raceTimedFinishMs == 0) _raceTimedFinishMs = Game.GameTime + (RacersMenuStore.GetInt("TimeoutSeconds", 30) * 1000);
                     }
                 }
 
@@ -2065,7 +2084,7 @@ namespace ARS
         void PlaceCars()
         {
             GridSort sort = GridSort.Power;
-            string setting = RaceSettingsFile.GetValue<string>("RACERS", "GridSorting", "Power");
+            string setting = RacersMenuStore.Get("GridSorting", "Power");
             if (!Enum.TryParse(setting, true, out sort)) sort = GridSort.Power;
             GridBuilder.Place(Racers, GridPositions, RouteNodes, IsPointToPoint, sort);
         }
@@ -2118,7 +2137,7 @@ namespace ARS
                 {
                     if (!Game.Player.Character.IsInVehicle(r.Car) && r.Car.GetMod(VehicleMod.Engine) == -1)
                     {
-                        switch (RaceSettingsFile.GetValue<int>("RACERS", "AITuningLevel", 1))
+                        switch (RacersMenuStore.GetInt("AITuningLevel", 1))
                         {
                             case 0: continue;
                             case 1: ARS.RandomTuning(r.Car, true, true, true, false, false); break;
@@ -2481,7 +2500,6 @@ namespace ARS
                 UI.Notify("Re loading settings.");
                 SettingsFile = null;
                 DevSettingsFile = null;
-                RaceSettingsFile = null;
                 LoadSettings();
             }
 
@@ -3547,13 +3565,15 @@ namespace ARS
             Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
             Log(LogImportance.Info, "Loading Options.ini ...");
+            RaceMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Race.ini");
+            RacersMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Racers.ini");
+            DevMenuStore = new MenuSettings(SettingsFolder + @"\Menu-DevSettings.ini");
             if (File.Exists(SettingsFolder + @"\Options.ini"))
             {
 
                 SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
 
-
-                _intendedOpponents = 4;
+                RaceMenuStore.Migrate("Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5).ToString());
                 DisciplineFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "Disciplines", "muscle");
                 Log(LogImportance.Info, "Loaded Options.");
             }
@@ -3563,11 +3583,17 @@ namespace ARS
                 UI.Notify("~o~Failed to load the Options file.~w~ Check you've installed ARS properly.");
             }
 
-            Log(LogImportance.Info, "Loading Settings.ini ...");
-            RaceSettingsFile = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
-            AiNitro = ParseTriState(RaceSettingsFile.GetValue<string>("RACERS", "AiNitro", AiNitro.ToString()), AiNitro);
-            UseMenyooSkins = RaceSettingsFile.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins);
-            Log(LogImportance.Info, "Loaded Settings.");
+            Log(LogImportance.Info, "Loading per-menu settings (Menu-*.ini) ...");
+            ScriptSettings legacyRacers = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
+            RacersMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", "Power"));
+            RacersMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<int>("RACERS", "TimeoutSeconds", 30).ToString());
+            RacersMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString());
+            RacersMenuStore.Migrate("AITuningLevel", legacyRacers.GetValue<int>("RACERS", "AITuningLevel", 1).ToString());
+            RacersMenuStore.Migrate("AiNitro", legacyRacers.GetValue<string>("RACERS", "AiNitro", AiNitro.ToString()));
+            RacersMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
+            AiNitro = ParseTriState(RacersMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
+            UseMenyooSkins = RacersMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
+            Log(LogImportance.Info, "Loaded per-menu settings.");
 
             if (File.Exists(SettingsFolder + @"\MemoryOffsets.ini"))
             {
@@ -3592,14 +3618,16 @@ namespace ARS
             if (File.Exists(SettingsFolder + @"\DevSettings.ini"))
             {
                 DevSettingsFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
-                foreach (Options option in DebugToggles.Keys.ToArray())
-                    DebugToggles[option] = DevSettingsFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]);
-                Log(LogImportance.Info, "Loaded DevSettings.");
             }
             else
             {
-                Log(LogImportance.Error, " '" + SettingsFolder + "/DevSettings.ini' does not exist. Debug toggles will be default.");
+                Log(LogImportance.Error, " '" + SettingsFolder + "/DevSettings.ini' does not exist. Dev config will be default.");
             }
+            foreach (Options option in DebugToggles.Keys.ToArray())
+                DevMenuStore.Migrate(option.ToString(), (DevSettingsFile != null ? DevSettingsFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]) : DebugToggles[option]).ToString());
+            foreach (Options option in DebugToggles.Keys.ToArray())
+                DebugToggles[option] = DevMenuStore.GetBool(option.ToString(), DebugToggles[option]);
+            Log(LogImportance.Info, "Loaded dev toggles.");
 
         }
         public enum LogImportance { Info, Error, Fatal }
@@ -3620,6 +3648,13 @@ namespace ARS
                 case TriState.Always: return true;
                 default: return PlayerHasNitro;
             }
+        }
+
+        void TopUpNitrous(Vehicle car)
+        {
+            if (!CanWeUse(car)) return;
+            if (Function.Call<bool>((Hash)0x491E822B2C464FE4, car)) return;
+            Function.Call((Hash)0x1AD0F63A94E10EFF, car, 3.1f);
         }
 
         public static void Log(LogImportance i, string text, bool forced = false)
