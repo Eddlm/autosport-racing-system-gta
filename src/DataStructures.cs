@@ -26,6 +26,12 @@ namespace ARS
         public float CurrentMechanicalGrip = 1f;
         public float AvgGroundStability = 1;
 
+        // Overspeed debug — filled by the overspeed detector, read by the debug panel.
+        public float OverspeedMeasuredGs;
+        public float OverspeedWheelGs;
+        public float OverspeedExcessGs;
+        public bool OverspeedThisTick;
+
         public Vector3 AverageAcceleration => AccelCount > 0 ? AccelSum / AccelCount : Vector3.Zero;
 
         public float GetLongitudinalGs(Vector3 forward)

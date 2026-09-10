@@ -49,7 +49,7 @@ namespace ARS
         public int NextApexNode4 = -1;
         public float NextApexRadius4 = 999f;
         public float NextApexSpeed4 = 999f;
-        int _lastApexProgressNode = -1;
+
 
 
         public VehicleState VehicleData = new VehicleState();
@@ -826,7 +826,6 @@ namespace ARS
             NextApexNode4 = -1;
             NextApexRadius4 = 999f;
             NextApexSpeed4 = 999f;
-            _lastApexProgressNode = -1;
             ResetRouteProbe();
             VehicleData.AvgGroundStability = 1;
             BaseBehavior = RacerBaseBehavior.Race;
@@ -871,7 +870,7 @@ namespace ARS
             UpdateBrakeLearning();
             Control.Brake = Math.Min(Control.Brake, Control.MaxBrake);
             Control.Throttle = Math.Min(Control.Throttle, Control.MaxThrottle);
-            if (Control.MaxThrottle < 1.00f) Control.MaxThrottle += 2 * TickScale;
+            if (Control.MaxThrottle < 1.00f && !VehicleData.OverspeedThisTick) Control.MaxThrottle += 2 * TickScale;
 
             if (Brain.CurrentIntention.MaxSpeed < AiConstants.MaxSpeed) Brain.CurrentIntention.MaxSpeed += 15 * TickScale;
 
@@ -1734,7 +1733,7 @@ namespace ARS
             Vector3 pos = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z + 0.3f);
             bool isAwd = IsAwd();
             MarkerType marker = isAwd ? MarkerType.ChevronUpx2 : MarkerType.ChevronUpx1;
-            World.DrawMarker(marker, pos, Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), stateColor, false, true, 0, false, "", "", false);
+            World.DrawMarker(marker, pos, Vector3.Zero, new Vector3(180f, 0f, 0f), new Vector3(0.5f, 0.5f, 0.5f), stateColor, false, true, 0, false, "", "", false);
         }
 
         // Handling fDriveBiasFront: 0 = RWD, 1 = FWD, anything between = AWD.
@@ -1830,7 +1829,7 @@ namespace ARS
 
         void DrawDebugPanel(bool showInputs, bool showTrack)
         {
-            int lineCount = (showInputs ? 8 : 0) + (showTrack ? 2 : 0);
+            int lineCount = (showInputs ? 10 : 0) + (showTrack ? 2 : 0);
             if (lineCount == 0) return;
 
             float lineHeight = 0.026f;
@@ -1891,6 +1890,16 @@ namespace ARS
                 Color brakeColor = !learning ? Color.Gray : brakeFactor > 1.01f ? Color.Green : brakeFactor < 0.99f ? Color.Red : Color.White;
                 ARS.DrawText(new Vector2(0.79f, y), "BRK  " + brakeFactor.ToString("0.00") + " x",
                     brakeColor, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+
+                // Overspeed: excess Gs (positive = more measured than wheel power).
+                float diff = VehicleData.OverspeedMeasuredGs - VehicleData.OverspeedWheelGs;
+                ARS.DrawText(new Vector2(0.79f, y), "OVR  " + (diff >= 0 ? "+" : "") + diff.ToString("0.00") + "G",
+                    VehicleData.OverspeedThisTick ? Color.Red : Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
+                y += lineHeight;
+
+                ARS.DrawText(new Vector2(0.79f, y), "THR  " + Control.MaxThrottle.ToString("0.00"),
+                    VehicleData.OverspeedThisTick ? Color.Red : Color.White, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Left, 0.35f);
                 y += lineHeight;
             }
 
@@ -2277,7 +2286,6 @@ namespace ARS
             UpdateRaceProgress();
 
             _previousNode = currentNode;
-            _lastApexProgressNode = currentNode;
 
             // Route radius from three sample points.
             Brain.CurrentPerception.CurveRadiusToFollowPoint = RouteRadiusSampled();
@@ -2471,15 +2479,10 @@ namespace ARS
 
         bool HasPassedApex(int apexNode)
         {
-            if (apexNode < 0 || _lastApexProgressNode < 0) return false;
+            if (apexNode < 0) return false;
             if (ARS.IsPointToPoint) return CurrentTrackPoint.Node >= apexNode;
-
-            int count = ARS.TrackPoints.Count;
-            int moved = CurrentTrackPoint.Node - _lastApexProgressNode;
-            if (moved < 0) moved += count;
-            int distanceToApex = apexNode - _lastApexProgressNode;
-            if (distanceToApex < 0) distanceToApex += count;
-            return distanceToApex <= moved;
+            // On circuits, the apex is behind us when the forward distance exceeds half the track.
+            return ForwardNodeDistance(apexNode) > ARS.TrackPoints.Count / 2;
         }
 
         // Kinematic braking map reaches apex speed at the corner entrance.
@@ -2908,6 +2911,37 @@ namespace ARS
         {
             if (!_isRecoveringFromStuck) return;
 
+            // Find nearest track point (shared by teleport and steering-align).
+            TrackPoint nearest = ARS.TrackPoints[0];
+            float best = float.MaxValue;
+            foreach (TrackPoint point in ARS.TrackPoints)
+            {
+                float distance = point.Position.DistanceTo(Car.Position);
+                if (distance >= best) continue;
+                best = distance;
+                nearest = point;
+            }
+
+            // After 5 failed reverse attempts, teleport to the nearest track edge.
+            if (_stuckRecoveryAttempts >= 5)
+            {
+                Vector3 direction = new Vector3(nearest.Direction.X, nearest.Direction.Y, 0f);
+                if (direction == Vector3.Zero) direction = Vector3.WorldNorth;
+                direction.Normalize();
+                Vector3 right = Vector3.Cross(direction, Vector3.WorldUp);
+                float side = ARS.SignedLaneOffset(Car.Position, nearest.Position, nearest.Direction) >= 0f ? 1f : -1f;
+                Car.Position = nearest.Position + right * (nearest.TrackHalfWidth * side) + new Vector3(0f, 0f, 0.5f);
+                Car.Heading = direction.ToHeading();
+                Car.Velocity = direction * ARS.MphToMps(10f);
+
+                _isRecoveringFromStuck = false;
+                _stuckRecoveryEndTime = 0;
+                _lastStuckGameTime = 0;
+                _stuckRecoveryAttempts = 0;
+                IsStuckByThrottle = false;
+                return;
+            }
+
             if (Game.GameTime >= _stuckRecoveryEndTime)
             {
                 _isRecoveringFromStuck = false;
@@ -2916,10 +2950,29 @@ namespace ARS
                 return;
             }
 
-
-            Control.SteerInput = 0f;
-            Control.Throttle = -0.33f;
+            Control.Throttle = -0.5f;
             Control.Brake = 0f;
+
+            // Even recovery = straight reverse. Odd = steer toward nearest track point.
+            if (_stuckRecoveryAttempts % 2 == 0)
+            {
+                Control.SteerInput = 0f;
+            }
+            else
+            {
+                Vector3 toTrack = nearest.Position - Car.Position;
+                toTrack.Z = 0f;
+                if (toTrack.LengthSquared() > 0.01f)
+                {
+                    toTrack.Normalize();
+                    float angleDeg = Vector3.SignedAngle(Car.ForwardVector, toTrack, Vector3.WorldUp);
+                    Control.SteerInput = ARS.Clamp(angleDeg / VehicleData.SteeringLock, -1f, 1f);
+                }
+                else
+                {
+                    Control.SteerInput = 0f;
+                }
+            }
         }
 
         void UpdatePerceivedGrip()
@@ -2963,6 +3016,31 @@ namespace ARS
                 bool allDown = wheelsOnGround.Count > 0 && wheelsOnGround.All(w => w);
                 if (!allDown)
                     Control.MaxThrottle = Math.Max(Control.MaxThrottle - 0.5f * TickScale, 0.1f);
+
+                // Overspeed detection: compare measured forward Gs against wheel-pushed Gs.
+                // GTA bug — uphill cars accelerate beyond what wheel power should produce.
+                // 0.1G leeway; each 0.1G excess cuts MaxThrottle by 0.5, floor 0.
+                if (ARS.OverspeedEnabled)
+                {
+                    List<float> wheelPowers = ARS.WheelPowers(Car);
+                    float wheelGs = 0f;
+                    foreach (float p in wheelPowers) wheelGs += p;
+                    float measuredGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
+                    float excess = measuredGs - wheelGs - 0.1f;
+                    VehicleData.OverspeedMeasuredGs = measuredGs;
+                    VehicleData.OverspeedWheelGs = wheelGs;
+                    VehicleData.OverspeedExcessGs = excess;
+                    VehicleData.OverspeedThisTick = excess > 0f;
+                    if (excess > 0f)
+                    {
+                        float penalty = (float)Math.Floor(excess / 0.1f) * 0.5f;
+                        Control.MaxThrottle = Math.Max(Control.MaxThrottle - penalty * TickScale, 0f);
+                    }
+                }
+                else
+                {
+                    VehicleData.OverspeedThisTick = false;
+                }
             }
 
 

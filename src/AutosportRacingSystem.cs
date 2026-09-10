@@ -119,6 +119,7 @@ namespace ARS
         public static TriState AiNitro = TriState.IfPlayerHas;
         // Apply Menyoo vehicle-appearance skins to grid cars when a matching file exists.
         public static bool UseMenyooSkins = true;
+        public static bool OverspeedEnabled = true;
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowTrackAnalysis visuals.
         public static Racer DebugFocusRacer;
 
@@ -182,6 +183,7 @@ namespace ARS
         public static ulong HandlingPtr = 0x0;
         public static ulong WheelsPtr = 0x0;
         public static ulong NumWheelsOffset = 0x0;
+        public static ulong WheelPowerOffset = 0x0;
 
         
         public static List<int> Other = new List<int> { 555004797, -399872228, -1447280105, 722686013 };
@@ -944,8 +946,8 @@ namespace ARS
                 _raceMenu.Remove(instanceGridItem);
             }
 
-            // ── AI Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
-            NativeMenu racersMenu = new NativeMenu("AI Settings", "AI Settings", "Standing preferences: grid sorting, timeout, AI behaviour and tuning.")
+            // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
+            NativeMenu racersMenu = new NativeMenu("General Settings", "General Settings", "Standing preferences: grid sorting, timeout, racer behaviour and tuning.")
             {
                 UseMouse = false,
                 DisableControls = true,
@@ -961,18 +963,18 @@ namespace ARS
             timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(RacersMenuStore.GetInt("TimeoutSeconds", 30).ToString()));
             racersMenu.Add(timeoutItem);
 
-            NativeListItem<string> autofixItem = new NativeListItem<string>("AI Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", new[] { "0", "1", "2" });
+            NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", new[] { "0", "1", "2" });
             autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
             autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(RacersMenuStore.GetInt("AIRacerAutofix", 1).ToString()));
             racersMenu.Add(autofixItem);
 
-            NativeListItem<string> tuningItem = new NativeListItem<string>("AI Tuning Level", "0 = none, 1 = visual, 2 = +performance, 3 = +engine boost.", new[] { "0", "1", "2", "3" });
+            NativeListItem<string> tuningItem = new NativeListItem<string>("Racer Tuning Level", "0 = none, 1 = visual, 2 = +performance, 3 = +engine boost.", new[] { "0", "1", "2", "3" });
             tuningItem.ItemChanged += (sender, args) => SaveRacerSetting("AITuningLevel", tuningItem.Items[args.Index]);
             tuningItem.SelectedIndex = Math.Max(0, tuningItem.Items.IndexOf(RacersMenuStore.GetInt("AITuningLevel", 1).ToString()));
             racersMenu.Add(tuningItem);
 
-            // ── AI nitrous enablement (player fairness) ──
-            NativeListItem<string> aiNitroItem = new NativeListItem<string>("AI Nitrous", "Whether AI racers may use nitrous. IfPlayerHas lets them only when the player's own car has it. AI never fires more than one shot per lap.", new[] { "Never", "IfPlayerHas", "Always" });
+            // ── Racer nitrous enablement (player fairness) ──
+            NativeListItem<string> aiNitroItem = new NativeListItem<string>("Racer Nitrous", "Whether racers may use nitrous. IfPlayerHas lets them only when the player's own car has it. Racers never fire more than one shot per lap.", new[] { "Never", "IfPlayerHas", "Always" });
             aiNitroItem.ItemChanged += (sender, args) =>
             {
                 AiNitro = (TriState)args.Index;
@@ -990,6 +992,21 @@ namespace ARS
             };
             racersMenu.Add(menyooItem);
 
+            // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
+            NativeMenu advancedMenu = new NativeMenu("Advanced Settings", "Advanced Settings", "Low-level physics overrides and AI corrections.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+            NativeCheckboxItem overspeedItem = new NativeCheckboxItem("Overspeed Correction", "Clamp AI throttle when measured Gs exceed wheel-pushed Gs (GTA uphill acceleration bug).", OverspeedEnabled);
+            overspeedItem.CheckboxChanged += (sender, args) =>
+            {
+                OverspeedEnabled = overspeedItem.Checked;
+                SaveRacerSetting("OverspeedEnabled", OverspeedEnabled.ToString());
+            };
+            advancedMenu.Add(overspeedItem);
+
             // ── Pace Mode — standing preference on Settings, own store (Menu-Settings.ini) ──
             _paceModeItem = new NativeListItem<string>("Pace Mode", "Absolute = fixed pace target (spectating). Relative = your car's pace + offset (racing), resolved at Spawn Grid.", new[] { "Absolute", "Relative" });
             _paceModeItem.ItemChanged += (sender, args) =>
@@ -1000,7 +1017,7 @@ namespace ARS
             };
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(PaceModeRelative ? "Relative" : "Absolute"));
 
-            // ── Settings submenu (root) — hosts Pace Mode, AI Settings and Debug ──
+            // ── Settings submenu (root) — hosts Pace Mode, General Settings and Debug ──
             NativeMenu settingsMenu = new NativeMenu("Settings", "Settings", "Racer behaviour and debug options.")
             {
                 UseMouse = false,
@@ -1009,6 +1026,7 @@ namespace ARS
             };
             settingsMenu.Add(_paceModeItem);
             settingsMenu.AddSubMenu(racersMenu);
+            settingsMenu.AddSubMenu(advancedMenu);
             settingsMenu.AddSubMenu(debugMenu);
 
             // End Race goes at the tail of the Race menu
@@ -1026,6 +1044,7 @@ namespace ARS
             _menuPool.Add(settingsMenu);
             _menuPool.Add(debugMenu);
             _menuPool.Add(racersMenu);
+            _menuPool.Add(advancedMenu);
             _menuPool.Add(cameraMenu);
         }
         void SaveRacerSetting(string key, string value)
@@ -1481,12 +1500,13 @@ namespace ARS
                 
 
                 
-                if ((_routeEditorActive || RouteNodes.Count > 0) && DevSettingsFile.GetValue("GENERAL_SETTINGS", "Traffic", false) == false)
+                // Suppress all ambient traffic while a track is loaded — AI racers cannot avoid it.
+                if (_routeEditorActive || RouteNodes.Count > 0)
                 {
                     Function.Call(Hash.SET_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
                     Function.Call(Hash.SET_RANDOM_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
                     Function.Call(Hash.SET_PARKED_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
-                    if (Racers.Count() > 0) Function.Call(Hash._0x90B6DA738A9A25DA, 0f); 
+                    if (Racers.Count() > 0) Function.Call(Hash._0x90B6DA738A9A25DA, 0f);
                     Function.Call(Hash.SET_PED_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
                     Function.Call(Hash.SET_SCENARIO_PED_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
                 }
@@ -3388,6 +3408,45 @@ namespace ARS
             return w;
         }
 
+        // Per-wheel drive power (offset 0x1C4). Raw Gs — the force the drivetrain actually
+        // applies to each wheel this frame. Sum across driven wheels for total wheel-pushed accel.
+        // Source: ikt32/GTAVManualTransmission VehicleExtensions — pattern resolves
+        // Per-wheel drive power. Offset discovered at runtime via pattern scan
+        // (FiveM's VehicleExtraNatives: COMISS xmm0,[rcx+<steerOffset>] → steer+8 = power).
+        // Cached after first discovery. Falls back to 0x1D8 (b2060 default) if pattern not found.
+        static public unsafe List<float> WheelPowers(Vehicle handle)
+        {
+            if (WheelPowerOffset == 0x0)
+            {
+                // Pattern: COMISS xmm, [r/m+disp32] ; SETNBE al ; JMP short ; (SHL/SHR)
+                // FiveM >= b2060: "0F 2F ? ? ? 00 00 0F 97 C0 EB ? D1"
+                // The 4-byte displacement at +3 is wheelSteeringAngleOffset; +8 = wheelPowerOffset.
+                IntPtr addr = (IntPtr)FindPattern(
+                    "\x0F\x2F\x00\x00\x00\x00\x00\x0F\x97\xC0\xEB\x00\xD1",
+                    "xx???xx???x?x");
+                if (addr != null)
+                {
+                    uint steerOffset = *(uint*)(addr + 3);
+                    WheelPowerOffset = steerOffset + 8;
+                    Log(LogImportance.Info, "[MEMORY] Learned wheel power offset: 0x" + WheelPowerOffset.ToString("X") + " (steer 0x" + steerOffset.ToString("X") + ")");
+                }
+                else
+                {
+                    WheelPowerOffset = 0x1D8; // b2060 fallback
+                    Log(LogImportance.Info, "[MEMORY] Wheel power pattern not found, using fallback 0x1D8");
+                }
+            }
+
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            List<float> powers = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                float p = *((float*)(wheel + WheelPowerOffset));
+                powers.Add(p);
+            }
+            return powers;
+        }
+
         // Per-wheel slip (offset 0x174, same data TCS uses). A lifted wheel reads 0.00 slip, so
         // counting wheels with ~0 slip detects ground contact for the stability factor.
         static public unsafe List<float> WheelSlips(Vehicle handle)
@@ -3715,6 +3774,7 @@ namespace ARS
             RacersMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
             AiNitro = ParseTriState(RacersMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
             UseMenyooSkins = RacersMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
+            OverspeedEnabled = RacersMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
             PaceModeRelative = string.Equals(SettingsMenuStore.Get("PaceMode", PaceModeRelative ? "Relative" : "Absolute"), "Relative", StringComparison.OrdinalIgnoreCase);
             PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
             Log(LogImportance.Info, "Loaded per-menu settings.");
