@@ -1,0 +1,26 @@
+# ARS — Duel model, full deferred design (companion to AGENTS.md)
+
+> Split from `AGENTS.md` on 2026-10 to keep AGENTS.md under the DSH auto-load size cap
+> (~65 KB — AGENTS.md had grown to ~73 KB and its tail was silently truncated).
+> AGENTS.md keeps a one-line pointer to this file. The design below is verbatim, unedited.
+> Status: designed via Council, **not yet implemented**. Read this before touching any card logic.
+
+**Duel model (designed via Council, not yet implemented).** The plan for making every card physics-aware instead of reacting to instantaneous rival speed. One shared primitive: predicted time-to-apex per rival, closed-form (~4 sqrt per rival, evaluated at the 1 Hz `ConsiderManeuvers` cadence — effectively free). Inputs come from each car's *own live plan*, not model-stat recomputation: rival `Racer` objects expose `NextApexSpeed` (already bakes in downforce + the per-car learned corner-speed offsets), `CurrentMechanicalGrip`, `Handling.BrakingAbility`, `Handling.EstimatedTopSpeed`, `Handling.Acceleration`, `Gravity`, and their own `ForwardNodeDistance` — all populated in `Initialize()` for every spawned racer. Decel is the exact `ApexBrakingSpeed` expression (`min(BrakingAbility×4, CurrentMechanicalGrip) × Gravity × _brakeDecelFactor`); extract it into one shared helper so the duel and the speed pipeline cannot drift apart. Model-hash natives (braking `0xDC53FD41B4ED944C` etc.) are only the fallback for the **player** (no AI plan exists for them) — and against the player require a wider margin (never dive the player on a coin-flip). Segment variant for straights: per-car `vEnd = min(topSpeed, √(v² + 2·a·L))` over the distance to the next corner entrance; nitro effectively multiplies my accel (calibrate the approximation in-game once).
+
+Card upgrades this enables (all Council-endorsed):
+- **DiveBomb gate**: arm only when the exchange completes — predicted arrival level-or-ahead at the braking target AND my apex speed carries the corner beside the target. Today the dive shortens the braking target with *our* decel and never validates against the rival's braking map; "I'm faster right now" conflates drag race with braking duel.
+- **DefendLane threat check**: defend only when the chaser's own grip/braking predicts they genuinely pass (beat/match us to this apex). A chaser who merely out-drag-races but under-brakes is beaten by the normal outside hold + our own braking plan.
+- **Yield corner-superiority**: arm only when the rival out-brakes OR out-corners us *for the specific upcoming corner*; a straight-line rocket that loses every corner gets no yield. Plus a race-progress-ahead gate (today Yield arms on any overlap rival, even behind on race progress).
+- **Nitro segment advantage**: replace "rival faster right now" with "the burn converts a losing exchange into a pass completed *before* the entrance" (a pass completing inside the braking window is a dive-in-progress → veto). **Known bug to fix with it**: `rivalNearbyFaster` never filters `RelativePosition`, so a faster rival behind double-counts with the defended rule. Also gate "defended" on the chaser being straight-superior over the burn window.
+
+Hazards / guard rails (Council consensus — respect all of these):
+- **Self-consistency**: predictions must model the *post-commit* state on my side — a dive shortens its own braking target; Yield halves my decel — otherwise dives get green-lit that overshoot and Yield gets under-armed.
+- **Line-radius correction**: the commit lane is ~half a track width inside; corner-phase comparisons need radius ± the lateral gap (decisive at hairpins, negligible at 200 m).
+- **Slipstream is invisible** to the duel → defender predictions systematically under-estimate chasers; inflate chaser closing estimates or add a cheap tow term (chaser close behind + near-zero lateral → effective top-speed bonus; also improves nitro logic). Never resurrect the old 30 m artificial-traffic follow mistake when using long-horizon follow ideas.
+- **Surface transients**: rival `CurrentMechanicalGrip` carries their one-tick `GroundGripMultiplier` (dirt/kerb); mitigate with margins, or use `BaseMechanicalGrip` + `DownforceGripBonus` for comparisons.
+- **Latch verdicts** once per (apex, rival) like the existing arm-once approach pattern — two AIs running the same duel must not flip-flop at each other.
+- **Mutual nitro**: the rival's `_nitrousLapUsed` is readable — include their possible burn in the prediction.
+- **Margin floors**: declare a winner only beyond a tunable seconds margin; ties → conservative action. NaN-guard radii/speeds (Clamp(NaN) → min-bound gotcha).
+- **Downforce is speed-dependent** — accept as uncertainty, demand margin rather than modeling it.
+
+Sequencing (each step verified in-game before the next): 1) nitro segment-advantage + `RelativePosition` fix; 2) shared decel helper + time-to-apex helper + DiveBomb gate + DefendLane threat check; 3) Yield corner-superiority (+ self-consistency amendment); 4) extras later: "pick the fight where we're superior" playbook, dive-target selection ordered by duel margin instead of raw distance, tow term, yield exit on confirmed pass, duel line in the ShowInputs debug panel.

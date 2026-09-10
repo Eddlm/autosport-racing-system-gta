@@ -74,6 +74,7 @@ namespace ARS
         public List<TimeSpan> LapTimes = new List<TimeSpan>();
         public int LapStartTime = 0;
         public int Lap = 0;
+        public int NitroChargedLap = -1;
         public int RacePosition = 0;
         public bool CanRegisterNewLap = false;
         int _previousNode = -1;
@@ -334,6 +335,7 @@ namespace ARS
             LapTimes.Clear();
             LapStartTime = 0;
             Lap = 0;
+            NitroChargedLap = -1;
             _nitrousLapUsed = -1;
             RacePosition = 0;
             CanRegisterNewLap = false;

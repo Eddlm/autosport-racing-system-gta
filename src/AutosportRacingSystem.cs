@@ -64,52 +64,29 @@ namespace ARS
         // Raw estimated top speed (mph) per model, keyed same as ModelGripCache.
         public static Dictionary<string, float> ModelTopSpeedMphCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Raw acceleration (G, ~0-0.5) per model from GET_VEHICLE_MODEL_ACCELERATION. Coded but
-        // not yet weighted into the pace index (PaceWeightPower = 0) — activate by raising the
-        // weight and rebalancing the others so the weights still sum to 1.0.
+        // Raw acceleration (G, ~0-0.5) per model from GET_VEHICLE_MODEL_ACCELERATION.
         public static Dictionary<string, float> ModelAccelCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Per-model electric flag from GET_IS_VEHICLE_ELECTRIC (0xD839450756ED5A80). Electric
-        // cars use a different first-gear multiplier (×5.0 vs ×3.33 for ICE), so the same raw
-        // acceleration stat yields different real thrust. Used when computing the effective
-        // acceleration component (currently weight 0).
+        // Per-model electric flag from GET_IS_VEHICLE_ELECTRIC (0xD839450756ED5A80). Used for the
+        // electric corrections in ComputePaceIndex.
         public static Dictionary<string, bool> ModelElectricCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
-        // Pace index per model (0-1), keyed same as the stat caches. Built in BuildPowerCache
-        // from a normalized, weighted blend of top speed (0-200 mph) and grip (0-3 G).
+        // Pace score per model (raw units, reaches ~124+), keyed same as the stat caches.
         public static Dictionary<string, float> ModelPaceIndexCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Pace-index weights. Top speed carries 0.75, power (acceleration) 0.25. Grip is
-        // ignored (weight 0) for now. Sum is 1.0; rebalance when activating grip.
-        public static readonly float PaceWeightTopSpeed = 0.75f;
-        public static readonly float PaceWeightGrip = 0f;
-        public static readonly float PaceWeightPower = 0.25f;
-
-        // Normalization ceilings — raw native values divided by these to produce a 0-1 component.
-        public const float TopSpeedMphCeiling = 200f;
-        public const float GripCeiling = 3f;
-
-        // Acceleration normalization. The raw stat (GET_VEHICLE_MODEL_ACCELERATION) reads in G
-        // over a ~0-0.5 range. First-gear multiplier differs by drivetrain: ICE ×3.33, electric
-        // ×5.0. For the pace index, ICE is the baseline (no multiplier); electric gets the
-        // difference (5.0 - 3.33 = 1.67) as its effective multiplier. The effective ceiling is
-        // the raw ceiling × the electric multiplier (the highest any car can reach).
-        public const float AccelRawCeiling = 0.5f;
-        public const float IceFirstGear = 3.33f;
-        public const float ElectricFirstGear = 5.0f;
-        public static readonly float ElectricAccelMultiplier = ElectricFirstGear - IceFirstGear; // 1.67
-        public static readonly float AccelEffectiveCeiling = AccelRawCeiling * ElectricAccelMultiplier;
-
-        // Normalized, weighted pace index from raw native values. Top speed against 0-200 mph,
-        // power (effective accel, electric-aware) against the effective ceiling — all clamped
-        // 0-1 then weighted. Grip is read but weighted 0 (ignored) for now.
+        // Pace score from raw native values: effectiveAccel × 30 + topSpeed (mph) + grip × 4.
+        // Effective accel: electric real power is ~3× the reported raw G (the native
+        // under-reports electrics — a comparable ICE sports car reads ~0.3 G, the electric ~0.15),
+        // so electric raw × 3; ICE raw as-is. Electric top speed also counts at ×0.9 of reported.
         public static float ComputePaceIndex(float topSpeedMph, float grip, float accelRaw, bool isElectric)
         {
-            float accelEffective = accelRaw * (isElectric ? 10f : 30f);
-            return topSpeedMph + grip * 4f + accelEffective;
+            if (isElectric)
+            {
+                topSpeedMph *= 0.9f;
+                accelRaw *= 3f;
+            }
+            return topSpeedMph + grip * 4f + accelRaw * 30f;
         }
-
-        public const float TopSpeedScaleDivisor = 466.67f;
 
         // Vehicle classes we never race.
         static readonly HashSet<VehicleClass> BlacklistedVehicleClasses = new HashSet<VehicleClass>
@@ -833,12 +810,12 @@ namespace ARS
             };
             _raceMenu.Add(_paceModeItem);
 
-            _paceOffsetItem = new NativeListItem<string>("Pace Offset", "Field pace = your car's pace + this offset, resolved at Spawn Grid.", Array.Empty<string>());
-            for (int offset = -50; offset <= 50; offset += 2)
+            _paceOffsetItem = new NativeListItem<string>("Pace Offset", "Field pace = your car's pace + this offset, resolved at Spawn Grid (clamped to the fleet's pace range).", Array.Empty<string>());
+            for (int halfStep = -20; halfStep <= 20; halfStep++)
             {
+                float offset = halfStep * 0.5f;
                 _paceOffsetValues.Add(offset);
-                string label = offset == 0 ? "0" : (offset > 0 ? "+" : "-") + Math.Abs(offset).ToString("0");
-                _paceOffsetItem.Items.Add(label);
+                _paceOffsetItem.Items.Add(offset.ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture));
             }
             _paceOffsetItem.ItemChanged += (sender, args) =>
             {
@@ -1086,12 +1063,13 @@ namespace ARS
             // Tear down any existing AI grid (player is not a racer yet at this point).
             CleanRacers();
 
-            // Resolve the effective pace target once per grid: relative = player's car + offset.
+            // Resolve the effective pace target once per grid: relative = player's car + offset, clamped to the fleet's real pace span.
+            GetPaceSpan(out float paceMin, out float paceMax);
             _resolvedPaceTarget = PowerTargetScale;
             if (PaceModeRelative)
             {
-                if (TryComputePlayerCarPaceIndex(out float playerPace)) { _lastKnownPlayerPace = playerPace; _resolvedPaceTarget = Clamp(playerPace + PaceOffsetScale, 0f, 200f); }
-                else if (!float.IsNaN(_lastKnownPlayerPace)) _resolvedPaceTarget = Clamp(_lastKnownPlayerPace + PaceOffsetScale, 0f, 200f);
+                if (TryComputePlayerCarPaceIndex(out float playerPace)) { _lastKnownPlayerPace = playerPace; _resolvedPaceTarget = Clamp(playerPace + PaceOffsetScale, paceMin, paceMax); }
+                else if (!float.IsNaN(_lastKnownPlayerPace)) _resolvedPaceTarget = Clamp(_lastKnownPlayerPace + PaceOffsetScale, paceMin, paceMax);
                 else UI.Notify("~o~No vehicle to pace from - using the fixed pace target.");
             }
 
@@ -1209,6 +1187,7 @@ namespace ARS
             else _powerTargetItem.SelectedIndex = _powerTargetValues.Count > 0 ? FindNearestPowerValue(_powerTargetValues, PowerTargetScale) : 0;
             if (_powerTargetItem.SelectedIndex < 0 && _powerTargetValues.Count > 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
             if (_powerTargetValues.Count > 0) PowerTargetScale = _powerTargetValues[_powerTargetItem.SelectedIndex];
+            _resolvedPaceTarget = PowerTargetScale;
 
             _powerBracketItem.Items.Clear();
             foreach (float value in _powerBracketValues) _powerBracketItem.Items.Add(value.ToString("0"));
@@ -1380,15 +1359,17 @@ namespace ARS
                     if (active || charge < 2.99f) PlayerHasNitro = true;
                 }
 
-                // Nitro top-up: while nothing is firing, hold every bottle at the target charge.
-                if (AiNitro != TriState.Never && Game.GameTime - _nitroTopUpAt > 1000)
+                // Nitro: one charge at launch, then a fresh bottle each lap. AI cars follow the AiNitro setting; the player's own bottle is not gated by it.
+                if ((RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) && Game.GameTime - _nitroTopUpAt > 1000)
                 {
                     _nitroTopUpAt = Game.GameTime;
                     foreach (Racer racer in Racers)
-                        TopUpNitrous(racer.Car);
-                    Vehicle playerVeh = Game.Player.Character.CurrentVehicle;
-                    if (CanWeUse(playerVeh) && Racers.All(r => !CanWeUse(r.Car) || r.Car != playerVeh))
-                        TopUpNitrous(playerVeh);
+                    {
+                        if (!CanWeUse(racer.Car) || racer.NitroChargedLap >= racer.Lap) continue;
+                        bool isPlayer = racer.Driver != null && racer.Driver.IsPlayer;
+                        if (!isPlayer && AiNitro == TriState.Never) continue;
+                        if (TopUpNitrous(racer.Car)) racer.NitroChargedLap = racer.Lap;
+                    }
                 }
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
                 if (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) DrawRaceHud();
@@ -3724,11 +3705,12 @@ namespace ARS
             }
         }
 
-        void TopUpNitrous(Vehicle car)
+        bool TopUpNitrous(Vehicle car)
         {
-            if (!CanWeUse(car)) return;
-            if (Function.Call<bool>((Hash)0x491E822B2C464FE4, car)) return;
+            if (!CanWeUse(car)) return false;
+            if (Function.Call<bool>((Hash)0x491E822B2C464FE4, car)) return false;
             Function.Call((Hash)0x1AD0F63A94E10EFF, car, 3.1f);
+            return true;
         }
 
         public static void Log(LogImportance i, string text, bool forced = false)
@@ -3745,15 +3727,30 @@ namespace ARS
             return entity != null && entity.Exists();
         }
 
-        // True when the player's current vehicle pace resolves from the model-level natives.
+        // Actual pace-score span of the indexed fleet; the honest clamp bounds for resolved targets.
+        void GetPaceSpan(out float min, out float max)
+        {
+            min = float.MaxValue; max = float.MinValue;
+            foreach (float value in ModelPaceIndexCache.Values)
+            {
+                if (value < min) min = value;
+                if (value > max) max = value;
+            }
+            if (min > max) { min = 0f; max = 200f; }
+        }
+
+        // True when the player's current vehicle pace resolves: cache first (same authority as the
+        // grid), then model-level natives. Zero native readings mean an unresolvable model — invalid.
         bool TryComputePlayerCarPaceIndex(out float pace)
         {
             pace = 0f;
             Vehicle v = Game.Player.Character.CurrentVehicle;
             if (!CanWeUse(v)) return false;
+            if (ModelPaceIndexCache.TryGetValue(v.Model.Hash.ToString(), out pace)) return true;
             Model model = v.Model;
             float grip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, model.Hash);
             float topSpeedMph = MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, model.Hash));
+            if (grip <= 0f || topSpeedMph <= 0f) return false;
             float accel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model.Hash);
             bool isElectric = Function.Call<int>((Hash)0xD839450756ED5A80, model.Hash) != 0;
             pace = ComputePaceIndex(topSpeedMph, grip, accel, isElectric);
@@ -4203,15 +4200,22 @@ namespace ARS
             }
             else
             {
-                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget, PowerBracketScale);
+                GetPaceSpan(out float paceMin, out float paceMax);
+                float effectiveTarget = _resolvedPaceTarget;
+                if (ModelPaceIndexCache.Count > 0 && !ARS.IsBetween(effectiveTarget, paceMin, paceMax))
+                {
+                    effectiveTarget = Clamp(effectiveTarget, paceMin, paceMax);
+                    Log(LogImportance.Info, "Pace target " + _resolvedPaceTarget + " outside fleet span " + paceMin + ".." + paceMax + " - clamped to " + effectiveTarget);
+                }
+                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), effectiveTarget, PowerBracketScale);
                 if (DebugToggles[Options.WidenBracketFill])
                 {
                     float widened = PowerBracketScale;
                     while (_cachedCandidates.Count < maxcars && widened < 300f)
                     {
-                        widened *= 2f;
+                        widened += 0.5f;
                         Log(LogImportance.Info, "Pace pool short (" + _cachedCandidates.Count + "/" + maxcars + ") - widening bracket to " + widened);
-                        _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget, widened);
+                        _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), effectiveTarget, widened);
                     }
                     if (_cachedCandidates.Count == 0) Log(LogImportance.Error, "No pace candidates even at a wide bracket.");
                 }
