@@ -862,6 +862,24 @@ namespace ARS
             };
             _raceMenu.Add(startItem);
 
+            // Restart: same cars, re-placed on the grid; falls back to a fresh start when no race is running.
+            NativeItem restartItem = new NativeItem("Restart Race", "Re-place the same cars on the grid and restart the race.");
+            restartItem.Activated += (sender, args) =>
+            {
+                _raceMenu.Visible = false;
+                if (!PlayerParticipating) { StartRaceFromMenu(); return; }
+                _raceTimedFinishMs = 0;
+                SetupRace(true, true);
+            };
+            _raceMenu.Add(restartItem);
+
+            // Reset: teleport the player's car to the side of the closest track node, moving forward at low speed.
+            NativeItem resetItem = new NativeItem("Reset To Track", "Teleport your car to the side of the closest track node, facing the route at 10 mph.");
+            resetItem.Activated += (sender, args) =>
+            {
+                _raceMenu.Visible = false;
+                ResetToTrack();
+            };
             // ── Root-level actions ──
 
             // End Race: tear down race, clean everything. Listed last in the root.
@@ -993,11 +1011,14 @@ namespace ARS
             settingsMenu.AddSubMenu(racersMenu);
             settingsMenu.AddSubMenu(debugMenu);
 
+            // End Race goes at the tail of the Race menu
+            _raceMenu.Add(endItem);
+
             // Link Race, Settings and Other as submenus of root
             _arsMenu.AddSubMenu(_raceMenu);
             _arsMenu.AddSubMenu(settingsMenu);
             _arsMenu.AddSubMenu(cameraMenu);
-            _arsMenu.Add(endItem);
+            _arsMenu.Add(resetItem);
 
             // Register all menus in the pool
             _menuPool.Add(_arsMenu);
@@ -1108,6 +1129,30 @@ namespace ARS
             StartRace();
         }
 
+        public void ResetToTrack()
+        {
+            Vehicle car = Game.Player.Character.CurrentVehicle;
+            if (car == null || !car.Exists()) { UI.Notify("~r~Reset to track:~w~ you must be in a vehicle."); return; }
+            if (TrackPoints.Count == 0) { UI.Notify("~r~Reset to track:~w~ no track loaded."); return; }
+            TrackPoint nearest = TrackPoints[0];
+            float best = float.MaxValue;
+            foreach (TrackPoint point in TrackPoints)
+            {
+                float distance = point.Position.DistanceTo(car.Position);
+                if (distance >= best) continue;
+                best = distance;
+                nearest = point;
+            }
+            Vector3 direction = new Vector3(nearest.Direction.X, nearest.Direction.Y, 0f);
+            if (direction == Vector3.Zero) direction = Vector3.WorldNorth;
+            direction.Normalize();
+            Vector3 right = Vector3.Cross(direction, Vector3.WorldUp);
+            float side = ARS.SignedLaneOffset(car.Position, nearest.Position, nearest.Direction) >= 0f ? 1f : -1f;
+            car.Position = nearest.Position + right * (nearest.TrackHalfWidth * side) + new Vector3(0f, 0f, 0.5f);
+            car.Heading = direction.ToHeading();
+            car.Velocity = direction * MphToMps(10f);
+        }
+
         // (Re)build the "Select Track" list from every discovered race, keeping the current
         // choice when the file still exists. Must run after FillKnownTracks has populated
         // _trackTags (that is, after the load task completes).
@@ -1199,6 +1244,9 @@ namespace ARS
             foreach (float value in _powerBracketValues) _powerBracketItem.Items.Add(value.ToString("0"));
             _powerBracketItem.SelectedIndex = FindNearestPowerValue(_powerBracketValues, PowerBracketScale);
             if (_powerBracketItem.SelectedIndex < 0 && _powerBracketValues.Count > 0) _powerBracketItem.SelectedIndex = _powerBracketValues.Count / 2;
+            // Ensure the bracket is never zero — a 0-wide bracket picks nothing.
+            if (_powerBracketItem.SelectedIndex == 0 && _powerBracketValues.Count > 1) _powerBracketItem.SelectedIndex = 1;
+            if (_powerBracketValues.Count > 0) PowerBracketScale = _powerBracketValues[_powerBracketItem.SelectedIndex];
 
             _paceOffsetItem.SelectedIndex = FindNearestPowerValue(_paceOffsetValues, PaceOffsetScale);
             if (_paceOffsetItem.SelectedIndex < 0 && _paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = _paceOffsetValues.Count / 2;
