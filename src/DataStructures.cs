@@ -24,7 +24,6 @@ namespace ARS
         public float BaseMechanicalGrip = 1f;
         public float DownforceGripBonus = 0f;
         public float CurrentMechanicalGrip = 1f;
-        public float AvgGroundStability = 1;
 
         // Overspeed debug — filled by the overspeed detector, read by the debug panel.
         public float OverspeedMeasuredGs;
@@ -280,6 +279,8 @@ namespace ARS
         public float CrestGs = 0f;
         // Corner is too close to the previous one: racers must not hold the outside line into it.
         public bool SuppressOutsideApproach = false;
+        // Part of a chicane: two close corners with opposite curvature signs.
+        public bool IsChicane = false;
         // The corner radius from its region limits. Used for apex-speed calculation.
         public float SupposedRadius = 999f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;

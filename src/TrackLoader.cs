@@ -307,6 +307,35 @@ namespace ARS
                 AddCornerRegion(scanNodes, cornerStartPosition, scanNodes.Count - 1, count, smoothingNodes, minimumCornerNodes);
 
             ARS.Log(ARS.LogImportance.Info, "Apex table: " + ARS.Corners.Count + " corners");
+
+            // Chicane detection: walk trackwidth × 4 nodes backward and forward from the
+            // apex, find the peak signed angle in each direction. If they differ in sign
+            // the track reverses curvature = chicane.
+            int nodeCount = ARS.TrackPoints.Count;
+            for (int i = 0; i < ARS.Corners.Count; i++)
+            {
+                CornerPoint corner = ARS.Corners[i];
+                int apex = corner.Node;
+                int walkDist = (int)(ARS.TrackPoints[apex].TrackHalfWidth * 4f); // full width × 2
+                Vector3 apexDir = ARS.TrackPoints[apex].Direction;
+
+                int backNode = apex - walkDist;
+                if (!ARS.IsPointToPoint) backNode = ((backNode % nodeCount) + nodeCount) % nodeCount;
+                if (backNode < 0 || backNode >= nodeCount) continue;
+
+                int fwdNode = apex + walkDist;
+                if (!ARS.IsPointToPoint) fwdNode = fwdNode % nodeCount;
+                if (fwdNode < 0 || fwdNode >= nodeCount) continue;
+
+                float angleBack = Vector3.SignedAngle(apexDir, ARS.TrackPoints[backNode].Direction, Vector3.WorldUp);
+                float angleFwd = Vector3.SignedAngle(apexDir, ARS.TrackPoints[fwdNode].Direction, Vector3.WorldUp);
+
+                if (Math.Abs(angleBack) > 1f && Math.Abs(angleFwd) > 1f && Math.Sign(angleBack) == Math.Sign(angleFwd))
+                {
+                    corner.IsChicane = true;
+                    corner.SuppressOutsideApproach = true;
+                }
+            }
         }
 
         static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int smoothingNodes, int minimumCornerNodes)

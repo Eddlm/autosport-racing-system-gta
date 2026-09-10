@@ -129,7 +129,7 @@ namespace ARS
         bool _avoidWallsInitialized = false;
         float _targetLane = 0f;
         float _rawCornerLane = 0f;
-        float _slideCountersteerDegrees = 0f;
+
         float _cornerSpd = 999f;
         float _debugCornerSpd = 999f;
         float _debugFollowTrackSpd = 999f;
@@ -145,7 +145,7 @@ namespace ARS
         const float OffshootRangeMeters = 2f;
         const float OffshootBlendBrake = 0.5f; // projection blend target: 0.5 brake
         const float FullPedalSpeedErrorMps = 3f;
-        static readonly float StationarySpeedThresholdMps = ARS.MphToMps(5f);
+
 
         // Empirical steer-limit memory: peak lateral G reference and the steer that produced it.
         float _latGRef = 0f;
@@ -465,18 +465,12 @@ namespace ARS
             const float steerKD = 0.66f;
             float trajectorySteer = (steerKP * (headingErrorDeg + recoveryDeg + sideBySideHeadingDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
             Control.SteerDegrees = trajectorySteer + (steerKP * laneBiasDeg);
-            bool sameSignSlideYaw = Math.Sign(VehicleData.SlideAngle) == Math.Sign(VehicleData.YawRotationPerSecondDegrees);
-            _slideCountersteerDegrees = 0f;
-            if (sameSignSlideYaw)
+            if (Handling.LateralTractionCurve > 1f)
             {
-                float slideScale = ARS.Remap(Math.Abs(VehicleData.SlideAngle), 0f, Handling.LateralTractionCurve * 1.2f, 0.5f, 1.2f, true);
-                _slideCountersteerDegrees = VehicleData.SlideAngle * slideScale;
-                Control.SteerDegrees -= _slideCountersteerDegrees;
-                // Slide priority: blend toward trajectory steering + full countersteer, dropping the lane pursuit.
-                if (Handling.LateralTractionCurve > 1f)
+                float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * 0.3f, Handling.LateralTractionCurve * 0.6f, 0f, 1f, true);
+                if (slidePriority > 0f)
                 {
-                    float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * 0.5f, Handling.LateralTractionCurve * 1.2f, 0f, 1f, true);
-                    float countersteerTarget = trajectorySteer - _slideCountersteerDegrees;
+                    float countersteerTarget = trajectorySteer - VehicleData.SlideAngle;
                     Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
                 }
             }
@@ -691,12 +685,11 @@ namespace ARS
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null) continue;
-                if (r.RelativePosition != RelativePos.Left && r.RelativePosition != RelativePos.Right) continue;
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
                 float rivalBuffer = r.OccupiedLaneWidth + aggroBuffer;
 
-                if (r.RelativePosition == RelativePos.Left)
+                if (r.OccupiedLane <= 0f)
                 {
                     targetLeftWall = Math.Max(targetLeftWall, r.OccupiedLane + rivalBuffer);
                     leftConstrained = true;
@@ -763,7 +756,7 @@ namespace ARS
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
             // Max steer angle = 3° base, plus slide, capped at TRlat × 0.5.
-            float maxSteerAngle = Math.Min(3f + slideAngle, Handling.LateralTractionCurve * 0.5f);
+            float maxSteerAngle = Math.Min(2f + slideAngle, Handling.LateralTractionCurve * 0.3f);
             // Brake rampdown: once slide exceeds the grip-based steer allowance, ease brake so tires regain lateral grip.
             float gripSteerAngle = 2f + Handling.LateralTractionCurve * 0.2f;
             Control.MaxBrake = slideAngle > gripSteerAngle ? ARS.Remap(slideAngle, gripSteerAngle * 2f, gripSteerAngle, 0.8f, 1f, true) : 1f;
@@ -827,7 +820,6 @@ namespace ARS
             NextApexRadius4 = 999f;
             NextApexSpeed4 = 999f;
             ResetRouteProbe();
-            VehicleData.AvgGroundStability = 1;
             BaseBehavior = RacerBaseBehavior.Race;
             Lap = ARS.IsPointToPoint ? 1 : 0;
             LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
@@ -878,8 +870,11 @@ namespace ARS
 
         float ComputeCombinedInput(float intendedSpeedChange, float currentForwardSpeed)
         {
-            if (intendedSpeedChange > 0f && ShouldBrakeBeforeDrivingForward(currentForwardSpeed))
-                return -ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, 0f, 1f);
+            bool signsDisagree = (intendedSpeedChange > 0f && currentForwardSpeed < 0f)
+                              || (intendedSpeedChange < 0f && currentForwardSpeed > 0f);
+
+            if (signsDisagree && Math.Abs(currentForwardSpeed) > ARS.MphToMps(10f))
+                return currentForwardSpeed > 0f ? -1f : 1f;
 
             return ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, -1f, 1f);
         }
@@ -903,7 +898,7 @@ namespace ARS
             if (combinedInput < 0f) newBrake = -combinedInput;
         }
 
-        bool ShouldBrakeBeforeDrivingForward(float speed) => speed < -StationarySpeedThresholdMps;
+
 
         void FindLowestIntendedSpeed()
         {
@@ -1707,6 +1702,7 @@ namespace ARS
                 DrawWheelDirectionLine();
                 DrawSteerTargetLine();
                 DrawFollowPointLine();
+                DrawRivalWalls();
             }
 
             if (requestedTrack)
@@ -1932,6 +1928,17 @@ namespace ARS
             Vector3 from = Car.Position + new Vector3(0, 0, 0.6f);
             Vector3 to = ARS.TrackPoints[n2].Position + new Vector3(0, 0, 0.6f);
             ARS.DrawLine(from, to, Color.Yellow);
+        }
+
+        void DrawRivalWalls()
+        {
+            Vector3 trackRight = Vector3.Cross(CurrentTrackPoint.Direction, Vector3.WorldUp).Normalized;
+            float wallHeight = Car.Model.GetDimensions().Z + 0.5f;
+            Vector3 basePos = Car.Position + new Vector3(0, 0, 0.3f);
+            Vector3 leftWallPos = CurrentTrackPoint.Position + trackRight * _avoidLeftWall;
+            Vector3 rightWallPos = CurrentTrackPoint.Position + trackRight * _avoidRightWall;
+            ARS.DrawLine(leftWallPos, leftWallPos + new Vector3(0, 0, wallHeight), Color.Red);
+            ARS.DrawLine(rightWallPos, rightWallPos + new Vector3(0, 0, wallHeight), Color.Red);
         }
 
         void DrawApexPanelLine(ref float y, string label, int apexNode, float apexSpeed, float apexRadius, Color color, float lineHeight)
@@ -3013,11 +3020,7 @@ namespace ARS
 
             VehicleData.BaseMechanicalGrip = handlingGrip;
             VehicleData.DownforceGripBonus = dfGs;
-            // AvgGroundStability is currently hardcoded to 1f: the old wheels-off-ground detector
-            // (WheelSlips ~0) was unreliable and triggered on decompression, so it has been removed
-            // until a trustworthy replacement is found.
-            VehicleData.AvgGroundStability = 1f;
-            VehicleData.CurrentMechanicalGrip = (VehicleData.BaseMechanicalGrip + VehicleData.DownforceGripBonus) * GroundGripMultiplier * VehicleData.AvgGroundStability;
+            VehicleData.CurrentMechanicalGrip = (VehicleData.BaseMechanicalGrip + VehicleData.DownforceGripBonus) * GroundGripMultiplier;
 
             // Airborne vehicles temporarily lose available throttle; normal pedal processing restores it.
             if (Game.GameTime - _lastStabilityCheck >= 333) // ~3 Hz

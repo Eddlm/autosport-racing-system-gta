@@ -75,6 +75,8 @@ namespace ARS
             Vector3 apex = apexGround + new Vector3(0f, 0f, -1.5f);
             Color ringColor = Color.FromArgb(220, 255, 225, 80);
             Color chevronColor = Color.FromArgb(242, 255, 140, 0);
+            MarkerType chevronMarker = corner.IsChicane ? MarkerType.ChevronUpx2 : (MarkerType)20;
+            if (corner.IsChicane) chevronColor = Color.FromArgb(242, 0, 200, 255);
 
             int nextCornerIndex = cornerIndex == corners.Count - 1 ? (ARS.IsPointToPoint ? -1 : 0) : cornerIndex + 1;
             Vector3 nextApex = nextCornerIndex >= 0 ? trackPoints[corners[nextCornerIndex].Node].Position : apexGround;
@@ -91,7 +93,7 @@ namespace ARS
 
             Vector3 chevronPos = apexGround + new Vector3(0f, 0f, 2.35f);
             float chevronSize = ARS.Clamp(trackWidth * 0.18f, 1.2f, 2.2f);
-            World.DrawMarker((MarkerType)20, chevronPos, toNext, new Vector3(89f, 0f, -90f), new Vector3(chevronSize, chevronSize, chevronSize), chevronColor, false, false, 2, false, "", "", false);
+            World.DrawMarker(chevronMarker, chevronPos, toNext, new Vector3(89f, 0f, -90f), new Vector3(chevronSize, chevronSize, chevronSize), chevronColor, false, false, 2, false, "", "", false);
         }
 
         // Small blue chevrons on both track edges, pointing ahead, on odd absolute nodes within ±30 of the given node.
