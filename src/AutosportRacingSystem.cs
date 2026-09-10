@@ -39,7 +39,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, WidenBracketFill
     }
 
     public enum DebugDisplay
@@ -158,7 +158,8 @@ namespace ARS
         { Options.StagedSpawns, true },
         { Options.ShowCheckpoints, false },
         { Options.ShowEdgeChevrons, true },
-        { Options.ShowLeaderboard, true }
+        { Options.ShowLeaderboard, true },
+        { Options.WidenBracketFill, true }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -725,6 +726,10 @@ namespace ARS
         public static string DisciplineFilter = "sports";
         public static float PowerTargetScale = 0.52f;
         public static float PowerBracketScale = 2f;
+        // Pace mode: Relative resolves the target from the player's car + offset at Spawn Grid;
+        // Absolute uses the fixed target. The resolved value never writes back into PowerTargetScale.
+        public static bool PaceModeRelative = true;
+        public static float PaceOffsetScale = 0f;
         // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
@@ -748,8 +753,15 @@ namespace ARS
         NativeListItem<string> _gridSizeItem;
         NativeListItem<string> _powerTargetItem;
         NativeListItem<string> _powerBracketItem;
+        NativeListItem<string> _paceModeItem;
+        NativeListItem<string> _paceOffsetItem;
         readonly List<float> _powerTargetValues = new List<float>();
         readonly List<float> _powerBracketValues = new List<float>();
+        readonly List<float> _paceOffsetValues = new List<float>();
+        // Effective pace target resolved at Spawn Grid (relative mode) — never written back into PowerTargetScale.
+        float _resolvedPaceTarget = 0.52f;
+        // Most recent valid player-vehicle pace reading; relative-mode fallback when the player has no vehicle.
+        float _lastKnownPlayerPace = float.NaN;
 
         void InitializeMenu()
         {
@@ -810,6 +822,33 @@ namespace ARS
             _intendedOpponents = (int)Clamp(RaceMenuStore.GetInt("GridSize", 4), 0, 12);
             _gridSizeItem.SelectedIndex = _intendedOpponents;
             _raceMenu.Add(_gridSizeItem);
+
+            // ── Pace mode / offset (merged Council design) ──
+            _paceModeItem = new NativeListItem<string>("Pace Mode", "Absolute = fixed pace target (spectating). Relative = your car's pace + offset (racing), resolved at Spawn Grid.", new[] { "Absolute", "Relative" });
+            _paceModeItem.ItemChanged += (sender, args) =>
+            {
+                PaceModeRelative = _paceModeItem.Items[args.Index] == "Relative";
+                RaceMenuStore.Set("PaceMode", _paceModeItem.Items[args.Index]);
+                ApplyPaceModeUI();
+            };
+            _raceMenu.Add(_paceModeItem);
+
+            _paceOffsetItem = new NativeListItem<string>("Pace Offset", "Field pace = your car's pace + this offset, resolved at Spawn Grid.", Array.Empty<string>());
+            for (int offset = -50; offset <= 50; offset += 2)
+            {
+                _paceOffsetValues.Add(offset);
+                string label = offset == 0 ? "0" : (offset > 0 ? "+" : "-") + Math.Abs(offset).ToString("0");
+                _paceOffsetItem.Items.Add(label);
+            }
+            _paceOffsetItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index >= 0 && args.Index < _paceOffsetValues.Count)
+                {
+                    PaceOffsetScale = _paceOffsetValues[args.Index];
+                    RaceMenuStore.Set("PaceOffset", PaceOffsetScale.ToString(CultureInfo.InvariantCulture));
+                }
+            };
+            _raceMenu.Add(_paceOffsetItem);
 
             _powerTargetItem = new NativeListItem<string>("Pace Target", "Target pace score for grid selection.", Array.Empty<string>());
             _powerTargetItem.ItemChanged += (sender, args) =>
@@ -890,6 +929,7 @@ namespace ARS
             AddDebugCheckbox(settingsMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(settingsMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(settingsMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
+            AddDebugCheckbox(settingsMenu, Options.WidenBracketFill, "Widen Bracket To Fill Grid", "When bracket-matched candidates are fewer than the target grid size, keep doubling the bracket until the grid can be filled. Off = strictly respect the bracket.");
             AddDebugCheckbox(settingsMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
             AddDebugCheckbox(settingsMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
             AddDebugCheckbox(settingsMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.");
@@ -1046,6 +1086,15 @@ namespace ARS
             // Tear down any existing AI grid (player is not a racer yet at this point).
             CleanRacers();
 
+            // Resolve the effective pace target once per grid: relative = player's car + offset.
+            _resolvedPaceTarget = PowerTargetScale;
+            if (PaceModeRelative)
+            {
+                if (TryComputePlayerCarPaceIndex(out float playerPace)) { _lastKnownPlayerPace = playerPace; _resolvedPaceTarget = Clamp(playerPace + PaceOffsetScale, 0f, 200f); }
+                else if (!float.IsNaN(_lastKnownPlayerPace)) _resolvedPaceTarget = Clamp(_lastKnownPlayerPace + PaceOffsetScale, 0f, 200f);
+                else UI.Notify("~o~No vehicle to pace from - using the fixed pace target.");
+            }
+
             FillCachedCandidates(DisciplineFilter, _intendedOpponents, true);
             LoadGrid(DisciplineFilter, _intendedOpponents);
 
@@ -1156,12 +1205,31 @@ namespace ARS
 
             _powerTargetItem.Items.Clear();
             foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0"));
-            _powerTargetItem.SelectedIndex = _powerTargetValues.Count > 0 ? FindNearestPowerValue(_powerTargetValues, PowerTargetScale) : 0;
+            if (RaceMenuStore.Get("PaceTarget", null) == null && _powerTargetValues.Count > 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
+            else _powerTargetItem.SelectedIndex = _powerTargetValues.Count > 0 ? FindNearestPowerValue(_powerTargetValues, PowerTargetScale) : 0;
+            if (_powerTargetItem.SelectedIndex < 0 && _powerTargetValues.Count > 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
             if (_powerTargetValues.Count > 0) PowerTargetScale = _powerTargetValues[_powerTargetItem.SelectedIndex];
 
             _powerBracketItem.Items.Clear();
             foreach (float value in _powerBracketValues) _powerBracketItem.Items.Add(value.ToString("0"));
             _powerBracketItem.SelectedIndex = FindNearestPowerValue(_powerBracketValues, PowerBracketScale);
+            if (_powerBracketItem.SelectedIndex < 0 && _powerBracketValues.Count > 0) _powerBracketItem.SelectedIndex = _powerBracketValues.Count / 2;
+
+            _paceOffsetItem.SelectedIndex = FindNearestPowerValue(_paceOffsetValues, PaceOffsetScale);
+            if (_paceOffsetItem.SelectedIndex < 0 && _paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = _paceOffsetValues.Count / 2;
+            _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(PaceModeRelative ? "Relative" : "Absolute"));
+            RaceMenuStore.Migrate("PaceTarget", PowerTargetScale.ToString(CultureInfo.InvariantCulture));
+            RaceMenuStore.Migrate("PaceOffset", PaceOffsetScale.ToString(CultureInfo.InvariantCulture));
+            RaceMenuStore.Migrate("PaceMode", PaceModeRelative ? "Relative" : "Absolute");
+            ApplyPaceModeUI();
+        }
+
+        void ApplyPaceModeUI()
+        {
+            _powerTargetItem.Enabled = !PaceModeRelative;
+            _powerTargetItem.Description = PaceModeRelative ? "Disabled in Relative mode - resolves at Spawn Grid: your car's pace + offset." : "Fixed pace target for the grid (spectating).";
+            _paceOffsetItem.Enabled = PaceModeRelative;
+            _paceOffsetItem.Description = PaceModeRelative ? "Field pace = your car's pace + this offset, resolved at Spawn Grid." : "Disabled in Absolute mode - the fixed Pace Target governs.";
         }
 
         static void AddPowerValues(List<float> values, float min, float max, float step)
@@ -1338,8 +1406,12 @@ namespace ARS
                             DisplayHelpTextThisFrame("Press ~INPUT_CONTEXT~ to race at ~b~" + Path.GetFileNameWithoutExtension(nearest.TrackPath) + "~w~.");
                             if (!_arsMenu.Visible && CanWeUse(Game.Player.Character.CurrentVehicle) && !Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlJustPressed(2, GTA.Control.Context))
                             {
-                                PowerTargetScale = ComputePlayerCarPaceIndex();
-                                PowerBracketScale = 2f;
+                                // Absolute E-join keeps the "race the car you're in" override; Relative resolves at Spawn Grid.
+                                if (!PaceModeRelative)
+                                {
+                                    PowerTargetScale = ComputePlayerCarPaceIndex();
+                                    PowerBracketScale = 2f;
+                                }
                                 SelectTrackInMenu(nearest.TrackPath);
                                 StartRaceFromMenu();
                             }
@@ -3593,6 +3665,8 @@ namespace ARS
             RacersMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
             AiNitro = ParseTriState(RacersMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
             UseMenyooSkins = RacersMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
+            PaceModeRelative = string.Equals(RaceMenuStore.Get("PaceMode", PaceModeRelative ? "Relative" : "Absolute"), "Relative", StringComparison.OrdinalIgnoreCase);
+            PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
             Log(LogImportance.Info, "Loaded per-menu settings.");
 
             if (File.Exists(SettingsFolder + @"\MemoryOffsets.ini"))
@@ -3671,17 +3745,26 @@ namespace ARS
             return entity != null && entity.Exists();
         }
 
-        // Pace index for the player's current vehicle, using the same model-level natives as the grid caches.
-        float ComputePlayerCarPaceIndex()
+        // True when the player's current vehicle pace resolves from the model-level natives.
+        bool TryComputePlayerCarPaceIndex(out float pace)
         {
+            pace = 0f;
             Vehicle v = Game.Player.Character.CurrentVehicle;
-            if (!CanWeUse(v)) return PowerTargetScale;
+            if (!CanWeUse(v)) return false;
             Model model = v.Model;
             float grip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, model.Hash);
             float topSpeedMph = MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, model.Hash));
             float accel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model.Hash);
             bool isElectric = Function.Call<int>((Hash)0xD839450756ED5A80, model.Hash) != 0;
-            return ComputePaceIndex(topSpeedMph, grip, accel, isElectric);
+            pace = ComputePaceIndex(topSpeedMph, grip, accel, isElectric);
+            return !float.IsNaN(pace) && !float.IsInfinity(pace);
+        }
+
+        // Pace index for the player's current vehicle, using the same model-level natives as the grid caches.
+        float ComputePlayerCarPaceIndex()
+        {
+            if (TryComputePlayerCarPaceIndex(out float pace)) { _lastKnownPlayerPace = pace; return pace; }
+            return PowerTargetScale;
         }
 
 
@@ -4120,7 +4203,18 @@ namespace ARS
             }
             else
             {
-                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), PowerTargetScale, PowerBracketScale);
+                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget, PowerBracketScale);
+                if (DebugToggles[Options.WidenBracketFill])
+                {
+                    float widened = PowerBracketScale;
+                    while (_cachedCandidates.Count < maxcars && widened < 300f)
+                    {
+                        widened *= 2f;
+                        Log(LogImportance.Info, "Pace pool short (" + _cachedCandidates.Count + "/" + maxcars + ") - widening bracket to " + widened);
+                        _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget, widened);
+                    }
+                    if (_cachedCandidates.Count == 0) Log(LogImportance.Error, "No pace candidates even at a wide bracket.");
+                }
             }
         }
 
