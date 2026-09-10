@@ -76,6 +76,8 @@ namespace ARS
         public int Lap = 0;
         public int NitroChargedLap = -1;
         public int RacePosition = 0;
+        // Frozen finish rank, assigned once when the racer crosses the line; 0 = still racing.
+        public int FinalPosition = 0;
         public bool CanRegisterNewLap = false;
         int _previousNode = -1;
         public bool FinishedPointToPoint = false;
@@ -338,6 +340,7 @@ namespace ARS
             NitroChargedLap = -1;
             _nitrousLapUsed = -1;
             RacePosition = 0;
+            FinalPosition = 0;
             CanRegisterNewLap = false;
             _previousNode = -1;
 

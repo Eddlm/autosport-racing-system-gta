@@ -22,22 +22,34 @@ namespace ARS
 
         public string Get(string key, string fallback)
         {
+            SeedIfMissing(key, fallback);
             return File.GetValue<string>("MENU", key, fallback);
         }
 
         public bool GetBool(string key, bool fallback)
         {
+            SeedIfMissing(key, fallback.ToString());
             return File.GetValue<bool>("MENU", key, fallback);
         }
 
         public int GetInt(string key, int fallback)
         {
+            SeedIfMissing(key, fallback.ToString(CultureInfo.InvariantCulture));
             return File.GetValue<int>("MENU", key, fallback);
         }
 
         public float GetFloat(string key, float fallback)
         {
+            SeedIfMissing(key, fallback.ToString(CultureInfo.InvariantCulture));
             return File.GetValue<float>("MENU", key, fallback);
+        }
+
+        // Seed-on-read: the ini mirrors the live key set after the first load.
+        void SeedIfMissing(string key, string value)
+        {
+            if (value == null || File.GetValue<string>("MENU", key, null) != null) return;
+            File.SetValue("MENU", key, value);
+            File.Save();
         }
 
         public void Set(string key, string value)

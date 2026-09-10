@@ -104,6 +104,7 @@ namespace ARS
         // One ini per menu (Settings\Menu-*.ini), created in LoadSettings.
         public static MenuSettings RaceMenuStore;
         public static MenuSettings RacersMenuStore;
+        public static MenuSettings SettingsMenuStore;
         public static MenuSettings DevMenuStore;
 
         public static bool HideHudMode = false;
@@ -777,6 +778,9 @@ namespace ARS
             lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(laps.ToString()));
             _raceMenu.Add(lapsItem);
 
+            // Reverse Route: player-facing race option, persisted in Menu-Race.ini.
+            AddDebugCheckbox(_raceMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.", null, RaceMenuStore);
+
             NativeItem instanceTrackItem = new NativeItem("Spawn Track", "Load the selected track and teleport to it.");
             instanceTrackItem.Activated += (sender, args) =>
             {
@@ -800,16 +804,7 @@ namespace ARS
             _gridSizeItem.SelectedIndex = _intendedOpponents;
             _raceMenu.Add(_gridSizeItem);
 
-            // ── Pace mode / offset (merged Council design) ──
-            _paceModeItem = new NativeListItem<string>("Pace Mode", "Absolute = fixed pace target (spectating). Relative = your car's pace + offset (racing), resolved at Spawn Grid.", new[] { "Absolute", "Relative" });
-            _paceModeItem.ItemChanged += (sender, args) =>
-            {
-                PaceModeRelative = _paceModeItem.Items[args.Index] == "Relative";
-                RaceMenuStore.Set("PaceMode", _paceModeItem.Items[args.Index]);
-                ApplyPaceModeUI();
-            };
-            _raceMenu.Add(_paceModeItem);
-
+            // ── Pace offset / target (merged Council design; mode lives in Settings) ──
             _paceOffsetItem = new NativeListItem<string>("Pace Offset", "Field pace = your car's pace + this offset, resolved at Spawn Grid (clamped to the fleet's pace range).", Array.Empty<string>());
             for (int halfStep = -20; halfStep <= 20; halfStep++)
             {
@@ -893,27 +888,26 @@ namespace ARS
             };
             cameraMenu.Add(freecamItem);
 
-            // ── Settings submenu (root) ──
-            NativeMenu settingsMenu = new NativeMenu("Dev Settings", "Dev Settings", "Configure ARS debug and race setup options.")
+            // ── Settings submenu (root) — standing preferences, set once ──
+            NativeMenu debugMenu = new NativeMenu("Debug", "Debug", "Configure ARS debug and race setup options.")
             {
                 UseMouse = false,
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(settingsMenu, Options.ShowAggro, "Show Card State", "Show a chevron above each racer colored by its maneuver card: green none, blue passive (Yield/ChillOut), orange active (DiveBomb/DefendLane).");
-            AddDebugCheckbox(settingsMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
-            AddDebugCheckbox(settingsMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
-            AddDebugCheckbox(settingsMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
-            AddDebugCheckbox(settingsMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
-            AddDebugCheckbox(settingsMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
-            AddDebugCheckbox(settingsMenu, Options.WidenBracketFill, "Widen Bracket To Fill Grid", "When bracket-matched candidates are fewer than the target grid size, keep doubling the bracket until the grid can be filled. Off = strictly respect the bracket.");
-            AddDebugCheckbox(settingsMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
-            AddDebugCheckbox(settingsMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
-            AddDebugCheckbox(settingsMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.");
-            AddDebugCheckbox(settingsMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
-            AddDebugCheckbox(settingsMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.");
-            AddDebugCheckbox(settingsMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
-            AddDebugCheckbox(settingsMenu, Options.StagedSpawns, "Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", value =>
+            AddDebugCheckbox(debugMenu, Options.ShowAggro, "Show Card State", "Show a chevron above each racer colored by its maneuver card: green none, blue passive (Yield/ChillOut), orange active (DiveBomb/DefendLane).");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
+            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
+            AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
+            AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
+            AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
+            AddDebugCheckbox(debugMenu, Options.WidenBracketFill, "Widen Bracket To Fill Grid", "When bracket-matched candidates are fewer than the target grid size, keep doubling the bracket until the grid can be filled. Off = strictly respect the bracket.");
+            AddDebugCheckbox(debugMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
+            AddDebugCheckbox(debugMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
+            AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
+            AddDebugCheckbox(debugMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.");
+            AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
+            AddDebugCheckbox(debugMenu, Options.StagedSpawns, "Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", value =>
             {
                 if (value)
                 {
@@ -932,8 +926,8 @@ namespace ARS
                 _raceMenu.Remove(instanceGridItem);
             }
 
-            // ── Racers submenu (root) — reads/writes Settings\Settings.ini ([RACERS]) ──
-            NativeMenu racersMenu = new NativeMenu("Racers", "Racers", "Grid sorting, race timeout, AI behaviour and tuning.")
+            // ── AI Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
+            NativeMenu racersMenu = new NativeMenu("AI Settings", "AI Settings", "Standing preferences: grid sorting, timeout, AI behaviour and tuning.")
             {
                 UseMouse = false,
                 DisableControls = true,
@@ -978,27 +972,38 @@ namespace ARS
             };
             racersMenu.Add(menyooItem);
 
-            // ── Options submenu (root) — hosts Dev Settings and Racers ──
-            NativeMenu optionsMenu = new NativeMenu("Options", "Options", "Race setup and AI behaviour.")
+            // ── Pace Mode — standing preference on Settings, own store (Menu-Settings.ini) ──
+            _paceModeItem = new NativeListItem<string>("Pace Mode", "Absolute = fixed pace target (spectating). Relative = your car's pace + offset (racing), resolved at Spawn Grid.", new[] { "Absolute", "Relative" });
+            _paceModeItem.ItemChanged += (sender, args) =>
+            {
+                PaceModeRelative = _paceModeItem.Items[args.Index] == "Relative";
+                SettingsMenuStore.Set("PaceMode", _paceModeItem.Items[args.Index]);
+                ApplyPaceModeUI();
+            };
+            _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(PaceModeRelative ? "Relative" : "Absolute"));
+
+            // ── Settings submenu (root) — hosts Pace Mode, AI Settings and Debug ──
+            NativeMenu settingsMenu = new NativeMenu("Settings", "Settings", "Racer behaviour and debug options.")
             {
                 UseMouse = false,
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            optionsMenu.AddSubMenu(racersMenu);
-            optionsMenu.AddSubMenu(settingsMenu);
+            settingsMenu.Add(_paceModeItem);
+            settingsMenu.AddSubMenu(racersMenu);
+            settingsMenu.AddSubMenu(debugMenu);
 
-            // Link Race, Options and Other as submenus of root
+            // Link Race, Settings and Other as submenus of root
             _arsMenu.AddSubMenu(_raceMenu);
-            _arsMenu.AddSubMenu(optionsMenu);
+            _arsMenu.AddSubMenu(settingsMenu);
             _arsMenu.AddSubMenu(cameraMenu);
             _arsMenu.Add(endItem);
 
             // Register all menus in the pool
             _menuPool.Add(_arsMenu);
             _menuPool.Add(_raceMenu);
-            _menuPool.Add(optionsMenu);
             _menuPool.Add(settingsMenu);
+            _menuPool.Add(debugMenu);
             _menuPool.Add(racersMenu);
             _menuPool.Add(cameraMenu);
         }
@@ -1006,13 +1011,14 @@ namespace ARS
         {
             RacersMenuStore.Set(key, value);
         }
-        void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description, Action<bool> onChanged = null)
+        void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description, Action<bool> onChanged = null, MenuSettings store = null)
         {
             NativeCheckboxItem checkbox = new NativeCheckboxItem(title, description, DebugToggles[option]);
             checkbox.CheckboxChanged += (sender, args) =>
             {
                 DebugToggles[option] = checkbox.Checked;
-                SaveDevToggle(option, checkbox.Checked);
+                if (store != null) store.Set(option.ToString(), checkbox.Checked.ToString());
+                else SaveDevToggle(option, checkbox.Checked);
                 onChanged?.Invoke(checkbox.Checked);
             };
             menu.Add(checkbox);
@@ -1199,7 +1205,6 @@ namespace ARS
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(PaceModeRelative ? "Relative" : "Absolute"));
             RaceMenuStore.Migrate("PaceTarget", PowerTargetScale.ToString(CultureInfo.InvariantCulture));
             RaceMenuStore.Migrate("PaceOffset", PaceOffsetScale.ToString(CultureInfo.InvariantCulture));
-            RaceMenuStore.Migrate("PaceMode", PaceModeRelative ? "Relative" : "Absolute");
             ApplyPaceModeUI();
         }
 
@@ -1531,6 +1536,8 @@ namespace ARS
                     {
                         if (racer.Car.CurrentBlip != null) racer.Car.CurrentBlip.Color = BlipColor.Green;
 
+                        racer.FinalPosition = LeaderboardFinish.Count + 1;
+                        racer.RacePosition = racer.FinalPosition;
                         LeaderboardFinish.Add(racer);
                         racer.BaseBehavior = RacerBaseBehavior.FinishedRace;
                         if (IsPointToPoint) racer.BaseBehavior = RacerBaseBehavior.FinishedStandStill;
@@ -1547,9 +1554,10 @@ namespace ARS
                     foreach (Racer r in ARS.Racers) if (GlobalTraffic.Contains(r.Car)) GlobalTraffic.Remove(r.Car);
 
                     List<Racer> LapPos = new List<Racer>();
-                    if (Racers.Any())
+                    var unfinished = Racers.Where(r => r.FinalPosition == 0).ToList();
+                    if (unfinished.Any())
                     {
-                        var sorted = Racers
+                        var sorted = unfinished
                             .OrderByDescending(r => r.RaceProgress)
                             .ToList();
                         for (int i = 0; i < sorted.Count; i++)
@@ -1560,6 +1568,8 @@ namespace ARS
                 
                 if (LeaderboardFinish.Count > 0 && (LeaderboardFinish.Count == Racers.Count || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs)))
                 {
+                    foreach (Racer r in Racers.Where(r => r.FinalPosition == 0).OrderByDescending(r => r.RaceProgress))
+                        r.FinalPosition = LeaderboardFinish.Count + 1;
                     if (LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
                     RaceStatus = RaceState.Finished;
                     CleanEverything();
@@ -1643,10 +1653,20 @@ namespace ARS
             float x = 0.03f;
             float y = 0.2f;
             const float step = 0.031f;
-            foreach (Racer r in Racers.OrderBy(v => v.RacePosition))
+            // Frozen block first: finishers in finish order, positions locked.
+            foreach (Racer r in LeaderboardFinish)
             {
                 Color c = r.Driver != null && r.Driver.IsPlayer ? Color.Yellow : Color.White;
-                DrawText(new Vector2(x, y), r.RacePosition + "º - " + r.Name, c, DrawTextFont.Condensed, DrawTextAlign.Left, 0.46f);
+                DrawText(new Vector2(x, y), r.FinalPosition + "º - " + r.Name, c, DrawTextFont.Condensed, DrawTextAlign.Left, 0.46f);
+                y += step;
+            }
+            // Still racing: numbered after the finishers, ordered by live progress.
+            List<Racer> racing = Racers.Where(v => v.FinalPosition == 0).OrderByDescending(v => v.RaceProgress).ToList();
+            for (int i = 0; i < racing.Count; i++)
+            {
+                Racer r = racing[i];
+                Color c = r.Driver != null && r.Driver.IsPlayer ? Color.Yellow : Color.White;
+                DrawText(new Vector2(x, y), (LeaderboardFinish.Count + i + 1) + "º - " + r.Name, c, DrawTextFont.Condensed, DrawTextAlign.Left, 0.46f);
                 y += step;
             }
         }
@@ -3620,6 +3640,7 @@ namespace ARS
             Log(LogImportance.Info, "Loading Options.ini ...");
             RaceMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Race.ini");
             RacersMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Racers.ini");
+            SettingsMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Settings.ini");
             DevMenuStore = new MenuSettings(SettingsFolder + @"\Menu-DevSettings.ini");
             if (File.Exists(SettingsFolder + @"\Options.ini"))
             {
@@ -3646,7 +3667,7 @@ namespace ARS
             RacersMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
             AiNitro = ParseTriState(RacersMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
             UseMenyooSkins = RacersMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
-            PaceModeRelative = string.Equals(RaceMenuStore.Get("PaceMode", PaceModeRelative ? "Relative" : "Absolute"), "Relative", StringComparison.OrdinalIgnoreCase);
+            PaceModeRelative = string.Equals(SettingsMenuStore.Get("PaceMode", PaceModeRelative ? "Relative" : "Absolute"), "Relative", StringComparison.OrdinalIgnoreCase);
             PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
             Log(LogImportance.Info, "Loaded per-menu settings.");
 
@@ -3682,6 +3703,7 @@ namespace ARS
                 DevMenuStore.Migrate(option.ToString(), (DevSettingsFile != null ? DevSettingsFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]) : DebugToggles[option]).ToString());
             foreach (Options option in DebugToggles.Keys.ToArray())
                 DebugToggles[option] = DevMenuStore.GetBool(option.ToString(), DebugToggles[option]);
+            DebugToggles[Options.ReverseRoute] = RaceMenuStore.GetBool("ReverseRoute", DebugToggles[Options.ReverseRoute]);
             Log(LogImportance.Info, "Loaded dev toggles.");
 
         }
