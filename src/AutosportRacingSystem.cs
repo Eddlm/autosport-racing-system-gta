@@ -2963,7 +2963,7 @@ namespace ARS
 
         public void AttachFlare(Prop p, Color color)
         {
-            if (1 == 2) return; // flares disabled entirely, code kept
+            return; // flares disabled entirely, code kept
             int d = 0;
             while (!Function.Call<bool>(Hash.HAS_NAMED_PTFX_ASSET_LOADED, "scr_apartment_mp") && d < 2000)
             {
