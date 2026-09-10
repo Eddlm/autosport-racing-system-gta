@@ -5871,17 +5871,4 @@
       <Wide>10</Wide>
     </Point>
   </Route>
-  <Objects>
-    <Prop>
-      <Model>-165867930</Model>
-      <TextureVariation>0</TextureVariation>
-      <X>1159.78</X>
-      <Y>260.62</Y>
-      <Z>80.88</Z>
-      <RotX>0.01</RotX>
-      <RotY>-1.14</RotY>
-      <RotZ>-34.58</RotZ>
-      <IsDynamic>True</IsDynamic>
-    </Prop>
-  </Objects>
 </Data>
