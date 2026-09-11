@@ -384,12 +384,7 @@ namespace ARS
             if (cornerLane != 0f) defaultLane = cornerLane;
             _rawCornerLane = cornerLane;
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
-            float avoidLookaheadDist = 0f;
-            if (avoidAheadLane != 0f)
-            {
-                defaultLane = avoidAheadLane;
-                if (Brain.AvoidanceTarget != null) avoidLookaheadDist = Brain.AvoidanceTarget.SecondsToReach * speedMps;
-            }
+            if (avoidAheadLane != 0f) defaultLane = avoidAheadLane;
             float targetLane = ApplyRivalWalls(defaultLane, roadWide);
             _targetLane = targetLane;
 
@@ -420,9 +415,6 @@ namespace ARS
             if (hasActiveGuidance)
             {
                 float currentLane = Brain.CurrentPerception.DeviationFromCenter;
-                float lookaheadDist = steerRefPoint.Position.DistanceTo(Car.Position);
-                if (avoidLookaheadDist > 0f) lookaheadDist = avoidLookaheadDist;
-                if (lookaheadDist < 1f) lookaheadDist = speedMps * 1.5f;
                 float laneError = targetLane - currentLane;
                 if (LookAheads.TryGetValue(LookAhead.HalfSec, out TrackPoint halfSecPoint) && halfSecPoint != null)
                 {
@@ -431,11 +423,16 @@ namespace ARS
                     const float blend = 0.5f;
                     laneError = laneError * (1f - blend) + (targetLane - projectedLane) * blend;
                 }
-                laneBiasDeg = -(float)(Math.Atan2(laneError, lookaheadDist) * (180.0 / Math.PI));
+                if (float.IsNaN(laneError)) laneError = 0f;
+                // Proportional lane pursuit: degrees per meter of lane error, ceiling easing with speed.
+                const float laneGainDegPerMeter = 2f;
+                float maxLaneDeg = ARS.Remap(ARS.MpsToMph(speedMps), 100f, 10f, 7f, 25f, true);
+                laneBiasDeg = -ARS.Clamp(laneError * laneGainDegPerMeter, -maxLaneDeg, maxLaneDeg);
             }
-            // Physical repulsion: hard binary — within the "no touching" box, match the heading difference.
+            // Physical repulsion: inside the "no touching" box, steer away from rivals
+            // actually closing laterally; parallel traffic must not kill the lane pursuit.
             Vector3 velDir = speedMps > 0.5f ? Car.Velocity / speedMps : carForward;
-            Vector3 velRight = Vector3.Cross(Vector3.WorldUp, velDir);
+            Vector3 velRight = Vector3.Cross(velDir, Vector3.WorldUp);
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
@@ -447,13 +444,13 @@ namespace ARS
                 if (longDist > longGate || latDist > latGate) continue;
                 Vector3 rivalVel = r.RivalRacer.Car.Velocity;
                 if (rivalVel.LengthSquared() < 0.01f) continue;
-                // Only react if the rival is heading toward our side (signs of side and velocity angle match).
-                float sideAngle = Vector3.SignedAngle(carForward, delta.Normalized, Vector3.WorldUp);
-                float velAngle = Vector3.SignedAngle(carForward, rivalVel.Normalized, Vector3.WorldUp);
-                if (sideAngle * velAngle >= 0f) continue;
+                float latSide = Vector3.Dot(delta, velRight);
+                float latRelVel = Vector3.Dot(rivalVel - Car.Velocity, velRight);
+                if (latSide * latRelVel >= 0f) continue;
                 float dist = delta.Length();
                 float distScale = ARS.Remap(dist, 6f, 2f, 0.5f, 2f, true);
-                laneBiasDeg = velAngle * 2f * distScale;
+                float strength = ARS.Remap(Math.Abs(latRelVel), 0.3f, 3f, 0f, 15f, true) * distScale;
+                laneBiasDeg += Math.Sign(latSide) * strength;
             }
 
 
@@ -1582,7 +1579,8 @@ namespace ARS
             if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
             {
                 Vector3 from = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.5f);
-                ARS.DrawLine(from, _steerAimPoint, Color.White);
+                if (Math.Abs(_targetLane) > 0.01f)
+                    ARS.DrawLine(from, _steerAimPoint, Color.White);
 
                 if (LookAheads.TryGetValue(LookAhead.SteerRef, out TrackPoint steerRef) && steerRef != null)
                 {
