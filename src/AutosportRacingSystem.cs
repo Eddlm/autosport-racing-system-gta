@@ -39,7 +39,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, GsAwarePreview, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, WidenBracketFill
+        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, WidenBracketFill
     }
 
     public enum DebugDisplay
@@ -131,7 +131,6 @@ namespace ARS
         { Options.ShowPhysics, false },
         { Options.UseNearbyCars, true },
         { Options.ReverseRoute, false },
-        { Options.GsAwarePreview, true },
         { Options.BrakeLearning, true },
         { Options.HighDownforceOnline, true },
         { Options.StagedSpawns, true },
@@ -144,9 +143,6 @@ namespace ARS
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
         public const float SpectateCheckpointRadiusMeters = 400f;
 
-        // Gs-aware preview steering: how much of the lane error is measured at the 1s
-        // Gs-aware projection instead of at the car. 0 = legacy behavior, 1 = full preview.
-        public static float GsAwarePreviewBlend = 0.5f;
 
         // Exponent of the lane-pursuit gain curve (x^exp). Below 1 boosts small errors
         // (punchier), 1 is linear, above 1 damps them (softer).
@@ -924,7 +920,6 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.WidenBracketFill, "Widen Bracket To Fill Grid", "When bracket-matched candidates are fewer than the target grid size, keep doubling the bracket until the grid can be filled. Off = strictly respect the bracket.");
             AddDebugCheckbox(debugMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
             AddDebugCheckbox(debugMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
-            AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Measure lane steering error at the 1s Gs-aware projection instead of the car's current position.");
             AddDebugCheckbox(debugMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.");
             AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
             AddDebugCheckbox(debugMenu, Options.StagedSpawns, "Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", value =>
