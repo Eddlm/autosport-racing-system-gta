@@ -35,7 +35,9 @@ When a block here grows past a few KB, move its full text to the matching compan
 - **Documentation-only changes** (comments/non-executable docs): commit without in-game verification if the build passes — git is the backup while work remains undistributed.
 
 ## The Council (on-demand subagent review)
-- **The Council** = two background subagents via Ollama Cloud (`deepseek-v4-flash` + `glm-5.3-flash`) that review diffs, explore the codebase, and suggest design alternatives. **Never dispatched automatically** — only when the user asks to "dispatch the council". Dispatch both with the recent commit diff + relevant files; summarize findings without applying changes unless explicitly approved.
+- **The Council** = four background subagents via Ollama Cloud that review diffs, explore the codebase, and suggest design alternatives. **Never dispatched automatically** — only when the user asks to "dispatch the council". Dispatch all four with the recent commit diff + relevant files; summarize findings without applying changes unless explicitly approved.
+  - **Grunt reviewers** (low effort): `deepseek-v4-flash:0731`, `glm-5.3-flash`
+  - **Full reviewers** (medium effort): `glm-5.2`; (low effort): `deepseek-v4-pro:0813`
 
 ## Build & deploy
 - **The project auto-copies on build** (`PostBuildEvent` + `CopyArsDll` target in the csproj): every build drops `ARS.dll` into `D:\SteamLibrary\...\Scripts\AutosportRacingSystem\`. **Quirk:** Debug and Release both fire the copy — *whichever configuration builds last wins*; run Release last when Release deployment is needed.

@@ -4334,16 +4334,8 @@ namespace ARS
                 }
                 _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), effectiveTarget, PowerBracketScale);
                 if (DebugToggles[Options.WidenBracketFill])
-                {
-                    float widened = PowerBracketScale;
-                    while (_cachedCandidates.Count < maxcars && widened < 300f)
-                    {
-                        widened += 0.5f;
-                        Log(LogImportance.Info, "Pace pool short (" + _cachedCandidates.Count + "/" + maxcars + ") - widening bracket to " + widened);
-                        _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), effectiveTarget, widened);
-                    }
-                    if (_cachedCandidates.Count == 0) Log(LogImportance.Error, "No pace candidates even at a wide bracket.");
-                }
+                    _cachedCandidates = VehicleSelector.SelectClosestByPace(_racerTagLookup, ModelPaceIndexCache, maxcars, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), effectiveTarget);
+                if (_cachedCandidates.Count == 0) Log(LogImportance.Error, "No vehicles in the pool with a pace index.");
             }
         }
 

@@ -648,13 +648,20 @@ namespace ARS
             float rivalLane = rival.OccupiedLane;
             float buffer = rival.OccupiedLaneWidth + aggroBuffer;
 
-            float roomLeft = rivalLane - buffer + trackBound;
-            float roomRight = trackBound - (rivalLane + buffer);
-            passLeft = roomLeft > roomRight;
+            // Pass on the side the rival sits on relative to our predicted line (0.5s→1s projection segment).
+            Vector3 predHalf = ProjectAhead(0.5f);
+            Vector3 predDir = ProjectAhead(1f) - predHalf;
+            float predLen = predDir.Length();
+            if (predLen > 1f) predDir /= predLen;
+            else predDir = Car.Velocity.Length() > 0.5f ? Car.Velocity.Normalized : Car.ForwardVector;
+            float rivalSide = Vector3.Dot(Vector3.Cross(predDir, Vector3.WorldUp), rival.RivalRacer.Car.Position - predHalf);
+            passLeft = rivalSide > 0f;
 
             passLane = passLeft ? rivalLane - buffer - carHalfWidth : rivalLane + buffer + carHalfWidth;
 
-            if (Math.Abs(passLane) > trackBound)
+            // Side flip only on near-straights: route radius above the floor, never inside corners.
+            const float SideFlipRadiusFloor = 200f;
+            if (Math.Abs(passLane) > trackBound && Brain.CurrentPerception.CurveRadiusToFollowPoint > SideFlipRadiusFloor)
             {
                 passLane = passLeft ? rivalLane + buffer + carHalfWidth : rivalLane - buffer - carHalfWidth;
                 passLeft = !passLeft;
@@ -708,7 +715,7 @@ namespace ARS
                 }
             }
 
-            float openRate = 2f * TickScale;
+            float openRate = 10f * TickScale;
             _avoidLeftWall = leftConstrained ? targetLeftWall : Math.Max(_avoidLeftWall - openRate, -trackBound);
             _avoidRightWall = rightConstrained ? targetRightWall : Math.Min(_avoidRightWall + openRate, trackBound);
             _activeRivalWallCount = (_avoidLeftWall > -trackBound ? 1 : 0) + (_avoidRightWall < trackBound ? 1 : 0);
