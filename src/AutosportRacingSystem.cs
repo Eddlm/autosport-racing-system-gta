@@ -4482,7 +4482,7 @@ namespace ARS
             if (auto) name = car.FriendlyName;
             else
             {
-                UI.ShowSubtitle("~b~Enter your car's name, or leave empty to auto-generate one. ~w~~n~This will be the filename name.");
+                UI.ShowSubtitle("~b~Enter your car's name, or leave empty to auto-generate one. ~w~~n~This will be the filename.");
                 name = Game.GetUserInput(32);
             }
             if (name == null || name == "") name = car.FriendlyName;
@@ -4669,7 +4669,7 @@ namespace ARS
             xmlFile.AppendChild(data);
 
             xmlFile.Save(ScriptsFolder + @"\Vehicles\" + name + ".xml");
-            UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
+            UI.ShowSubtitle("~b~Vehicle saved successfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
 
         void CreateVehicleFromName(string modelName)
@@ -4766,7 +4766,7 @@ namespace ARS
             xmlFile.AppendChild(data);
 
             xmlFile.Save(ScriptsFolder + @"\Vehicles\" + name + ".xml");
-            UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
+            UI.ShowSubtitle("~b~Vehicle saved successfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
 
         void CreateVehicleFromHash(VehicleHash h)
@@ -4859,7 +4859,7 @@ namespace ARS
             xmlFile.AppendChild(data);
 
             xmlFile.Save(ScriptsFolder + @"\Vehicles\" + name + ".xml");
-            UI.ShowSubtitle("~b~Vehicle saved succesfully.~w~~n~Filename: ~g~" + name + ".xml");
+            UI.ShowSubtitle("~b~Vehicle saved successfully.~w~~n~Filename: ~g~" + name + ".xml");
         }
         
         
