@@ -19,7 +19,7 @@ namespace ARS
                 float pace;
                 if (!string.IsNullOrWhiteSpace(model) && paceIndex.TryGetValue(model, out pace))
                     ranked.Add(new KeyValuePair<float, string>(Math.Abs(pace - powerTarget), path));
-                if (++inspected % 100 == 0) log("Ranking progress: " + inspected + "/" + pool.Count);
+                if (++inspected % 10 == 0) log("Ranking progress: " + inspected + "/" + pool.Count);
                 if (allowYield && ++cooldown > 20) { cooldown = 0; yield(); }
             }
 
