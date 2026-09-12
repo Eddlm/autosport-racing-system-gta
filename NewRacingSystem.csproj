@@ -89,6 +89,7 @@
     <Compile Include="src\Properties\AssemblyInfo.cs" />
     <Compile Include="src\AutosportRacingSystem.cs" />
     <Compile Include="src\AutosportRacingSystem.TrackCreator.cs" />
+    <Compile Include="src\AutosportRacingSystem.TrackFile.cs" />
     <Compile Include="src\TrackLoader.cs" />
     <Compile Include="src\UpdateChecker.cs" />
     <Compile Include="src\SkillSet.cs" />
