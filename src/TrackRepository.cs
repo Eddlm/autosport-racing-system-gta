@@ -81,16 +81,6 @@ namespace ARS
             return position;
         }
 
-        public static List<string> ReadVehicleTags(string path)
-        {
-            XmlDocument document = Load(path);
-            string folder = Path.GetDirectoryName(path).Split(Path.DirectorySeparatorChar).Last().ToLowerInvariant();
-            List<string> tags = new List<string>();
-            if (folder != "vehicles") tags.Add(folder);
-            foreach (XmlNode node in document.SelectNodes("//Disciplines/*")) tags.Add(node.InnerText.ToLowerInvariant());
-            return tags;
-        }
-
         public static string ReadVehicleModel(string path)
         {
             try { return Load(path).SelectSingleNode("//Model")?.InnerText?.Trim(); }

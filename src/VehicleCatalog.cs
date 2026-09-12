@@ -9,30 +9,27 @@ namespace ARS
 {
     public static class VehicleCatalog
     {
-        public static void Scan(Dictionary<string, string> tagsByFile, List<Model> knownModels, Action<string> log, Action<string> showLoading, Action yield, bool allowYield)
+        // Every supplier XML in the pool: Vehicles\ and its first-level subfolders.
+        static IEnumerable<string> PoolFiles()
         {
-            tagsByFile.Clear();
-            knownModels.Clear();
-            HashSet<string> seenModels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             List<string> folders = Directory.GetDirectories(ARS.ScriptsFolder + @"\Vehicles").ToList();
             folders.Add(ARS.ScriptsFolder + @"\Vehicles");
-
             foreach (string folder in folders)
-            {
-                int count = 0;
                 foreach (string path in Directory.EnumerateFiles(folder))
-                {
-                    List<string> tags = TrackRepository.ReadVehicleTags(path);
-                    string model = TrackRepository.ReadVehicleModel(path);
-                    log(path + " - [" + string.Join(", ", tags) + "]");
-                    tagsByFile.Add(path, string.Join(" ", tags));
-                    if (!string.IsNullOrWhiteSpace(model) && seenModels.Add(model)) knownModels.Add(new Model(model));
-                    if (allowYield && ++count > 20) { showLoading("Loading " + Path.GetFileName(path)); count = 0; yield(); }
-                }
-            }
+                    yield return path;
         }
 
-        public static void BuildPowerCache(Dictionary<string, string> tagsByFile, Dictionary<string, float> gripByModel, Dictionary<string, float> topSpeedMphByModel, Dictionary<string, float> accelByModel, Dictionary<string, bool> electricByModel, HashSet<VehicleClass> blacklistedClasses, Action<string> log)
+        // Discovery only — no natives, so it is safe on the background load thread.
+        public static void FillPool(List<string> pool)
+        {
+            pool.Clear();
+            foreach (string path in PoolFiles()) pool.Add(path);
+        }
+
+        // Called on the main script thread (NOT from the background load task).
+        // GTA natives are not safe to call off the main thread, so we fill the
+        // modelName -> power cache here rather than during the pool scan.
+        public static void BuildPowerCache(List<string> pool, Dictionary<string, float> gripByModel, Dictionary<string, float> topSpeedMphByModel, Dictionary<string, float> accelByModel, Dictionary<string, bool> electricByModel, HashSet<VehicleClass> blacklistedClasses, Action<string> log)
         {
             gripByModel.Clear();
             topSpeedMphByModel.Clear();
@@ -40,7 +37,7 @@ namespace ARS
             electricByModel.Clear();
             int cached = 0;
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (string path in tagsByFile.Keys)
+            foreach (string path in pool)
             {
                 string modelText = TrackRepository.ReadVehicleModel(path);
                 if (string.IsNullOrWhiteSpace(modelText) || !seen.Add(modelText)) continue;

@@ -39,7 +39,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, Disciplines, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, WidenBracketFill
+        SaveThisCar, SaveDriverModel, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard
     }
 
     public enum DebugDisplay
@@ -57,7 +57,6 @@ namespace ARS
         public static List<Vehicle> GlobalTraffic = new List<Vehicle>();
 
         public static List<string> KnownTracks = new List<string>();
-        public static List<Model> KnownVehicleModels = new List<Model>();
         // Raw grip (max traction, in G) per model, keyed by the XML <Model> hash text.
         public static Dictionary<string, float> ModelGripCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
@@ -136,8 +135,7 @@ namespace ARS
         { Options.StagedSpawns, true },
         { Options.ShowCheckpoints, false },
         { Options.ShowEdgeChevrons, true },
-        { Options.ShowLeaderboard, true },
-        { Options.WidenBracketFill, true }
+        { Options.ShowLeaderboard, true }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -246,7 +244,7 @@ namespace ARS
             _isLoadingScript = true;
             _loadScriptTask = Task.Run(() =>
             {
-                FillKnownDisciplines(false);
+                RefreshCatalogs();
                 FillKnownTracks(false);
             });
         }
@@ -268,7 +266,7 @@ namespace ARS
                 
                 BuildPowerCache();
                 RefreshPowerControls();
-                FillCachedCandidates(DisciplineFilter, _intendedOpponents, true);
+                FillCachedCandidates(_intendedOpponents, true);
                 RefreshTrackList(); // tracks are now discovered in _trackTags. Populate the menu list.
                 Log(LogImportance.Info, "Initialization complete.", true);
                 DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
@@ -396,27 +394,6 @@ namespace ARS
             return Vector3.Zero;
         }
 
-        public static List<string> GetRacerTags(string _routeNodes)
-        {
-            return TrackRepository.ReadVehicleTags(_routeNodes);
-            XmlDocument document = LoadXmlOrThrow(_routeNodes);
-
-            List<string> tags = new List<string>();
-            string dir = System.IO.Path.GetDirectoryName(_routeNodes);
-
-            dir = dir.Split(System.IO.Path.DirectorySeparatorChar).Last().ToLowerInvariant();
-            if (dir != "vehicles") tags.Add(dir);
-            XmlNodeList nl = document.SelectNodes("//Disciplines/*");
-            foreach (XmlNode node in nl)
-            {
-                tags.Add(node.InnerText.ToLowerInvariant());
-            }
-
-
-            return tags;
-
-        }
-
         public static string GetRacerModel(string _routeNodes)
         {
             return TrackRepository.ReadVehicleModel(_routeNodes);
@@ -435,7 +412,9 @@ namespace ARS
 
 
 
-        public void FillKnownDisciplines(bool allowScriptYield = true)
+        // Clears the learned stat caches and re-discovers the vehicle pool + track folder.
+        // Runs on the background load task, so it must not call natives.
+        public void RefreshCatalogs()
         {
             ModelGripCache.Clear();
             ModelTopSpeedMphCache.Clear();
@@ -443,24 +422,24 @@ namespace ARS
             ModelElectricCache.Clear();
             ModelPaceIndexCache.Clear();
             Log(LogImportance.Info, "-------------");
-            Log(LogImportance.Info, "Learning available disciplines...");
-            VehicleCatalog.Scan(_racerTagLookup, KnownVehicleModels, text => Log(LogImportance.Info, text), text => DisplayHelpTextTimed(text, 5000), Yield, allowScriptYield);
+            Log(LogImportance.Info, "Discovering the vehicle pool and tracks...");
+            VehicleCatalog.FillPool(_vehiclePool);
             KnownTracks = Directory.GetFiles(ScriptsFolder + @"\Tracks").ToList();
-            Log(LogImportance.Info, "Done.");
+            Log(LogImportance.Info, "Found " + _vehiclePool.Count + " vehicle files and " + KnownTracks.Count + " tracks.");
             Log(LogImportance.Info, "-------------");
         }
 
         // Called on the main script thread (NOT from the background load task).
         // GTA natives are not safe to call off the main thread, so we fill the
-        // modelName -> power cache here rather than during the XML scan.
+        // modelName -> power cache here rather than during the pool scan.
         public void BuildPowerCache()
         {
-            VehicleCatalog.BuildPowerCache(_racerTagLookup, ModelGripCache, ModelTopSpeedMphCache, ModelAccelCache, ModelElectricCache, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
+            VehicleCatalog.BuildPowerCache(_vehiclePool, ModelGripCache, ModelTopSpeedMphCache, ModelAccelCache, ModelElectricCache, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
             BuildPaceIndex();
         }
 
-        // Second pass over the raw stat caches: compute the 0-1 pace index per model from top
-        // speed (0-200 mph) and grip (0-3 G), weighted 2:1. Power is read and cached but weighted 0.
+        // Second pass over the raw stat caches: the raw pace score per model (see ComputePaceIndex).
+        // Only finite scores enter — a NaN key would rank first in the closest-N fill.
         void BuildPaceIndex()
         {
             ModelPaceIndexCache.Clear();
@@ -476,7 +455,9 @@ namespace ARS
                 ModelAccelCache.TryGetValue(kv.Key, out accel);
                 bool isElectric = false;
                 ModelElectricCache.TryGetValue(kv.Key, out isElectric);
-                ModelPaceIndexCache[kv.Key] = ComputePaceIndex(mph, grip, accel, isElectric);
+                float pace = ComputePaceIndex(mph, grip, accel, isElectric);
+                if (float.IsNaN(pace) || float.IsInfinity(pace)) continue; // accel is the one raw stat with no filter of its own
+                ModelPaceIndexCache[kv.Key] = pace;
                 indexed++;
             }
             Log(LogImportance.Info, "BuildPaceIndex: " + indexed + " models indexed.");
@@ -699,11 +680,9 @@ namespace ARS
 
 
 
-        public static string DisciplineFilter = "sports";
         public static float PowerTargetScale = 0.52f;
-        public static float PowerBracketScale = 2f;
-        // Pace mode: Relative resolves the target from the player's car + offset at Spawn Grid;
-        // Absolute uses the fixed target. The resolved value never writes back into PowerTargetScale.
+        // Pace mode: Relative resolves the target from the player's car + offset at Spawn Grid; Absolute uses the
+        // fixed target, except the immersive join which anchors at the player's car for that grid. Neither writes back here.
         public static bool PaceModeRelative = true;
         public static float PaceOffsetScale = 0f;
         // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
@@ -716,7 +695,8 @@ namespace ARS
         // Set to null (or empty list) to re-enable pace-matched selection.
         public static List<string> HardcodedRoster = null;
 
-        Dictionary<string, string> _racerTagLookup = new Dictionary<string, string>();
+        // The vehicle pool: every supplier XML path, discovered by RefreshCatalogs on the load thread.
+        List<string> _vehiclePool = new List<string>();
         public static int TrackListPos = 0;
         readonly ObjectPool _menuPool = new ObjectPool();
         NativeMenu _arsMenu;
@@ -728,13 +708,11 @@ namespace ARS
         string _selectedTrackPath = null;
         NativeListItem<string> _gridSizeItem;
         NativeListItem<string> _powerTargetItem;
-        NativeListItem<string> _powerBracketItem;
         NativeListItem<string> _paceModeItem;
         NativeListItem<string> _paceOffsetItem;
         readonly List<float> _powerTargetValues = new List<float>();
-        readonly List<float> _powerBracketValues = new List<float>();
         readonly List<float> _paceOffsetValues = new List<float>();
-        // Effective pace target resolved at Spawn Grid (relative mode) — never written back into PowerTargetScale.
+        // Effective pace target resolved at Spawn Grid (Relative mode, or the Absolute immersive join) — never written back into PowerTargetScale.
         float _resolvedPaceTarget = 0.52f;
         // Most recent valid player-vehicle pace reading; relative-mode fallback when the player has no vehicle.
         float _lastKnownPlayerPace = float.NaN;
@@ -831,17 +809,6 @@ namespace ARS
             };
             _raceMenu.Add(_powerTargetItem);
 
-            _powerBracketItem = new NativeListItem<string>("Pace Bracket", "Allowed pace index above or below the target.", Array.Empty<string>());
-            _powerBracketItem.ItemChanged += (sender, args) =>
-            {
-                if (args.Index >= 0 && args.Index < _powerBracketValues.Count)
-                {
-                    PowerBracketScale = _powerBracketValues[args.Index];
-                    RaceMenuStore.Set("PaceBracket", PowerBracketScale);
-                }
-            };
-            _raceMenu.Add(_powerBracketItem);
-
             NativeItem instanceGridItem = new NativeItem("Spawn Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing pace/size.");
             instanceGridItem.Activated += (sender, args) =>
             {
@@ -917,7 +884,6 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
-            AddDebugCheckbox(debugMenu, Options.WidenBracketFill, "Widen Bracket To Fill Grid", "When bracket-matched candidates are fewer than the target grid size, keep doubling the bracket until the grid can be filled. Off = strictly respect the bracket.");
             AddDebugCheckbox(debugMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
             AddDebugCheckbox(debugMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
             AddDebugCheckbox(debugMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.");
@@ -1093,7 +1059,9 @@ namespace ARS
 
         // Phase 2: spawn the AI grid with current pace/grid settings. Repeatable —
         // calling again tears down the old grid and respawns with updated settings.
-        public void InstanceGrid()
+        // anchorToPlayerCar = the immersive join's "race the car you're in" anchor (ignored in Relative mode,
+        // which already resolves from the player's car).
+        public void InstanceGrid(bool anchorToPlayerCar = false)
         {
             if (!_trackInstanced)
             {
@@ -1101,26 +1069,29 @@ namespace ARS
                 return;
             }
 
+            if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_OUT, 200);
+
             // Tear down any existing AI grid (player is not a racer yet at this point).
             CleanRacers();
 
-            // Resolve the effective pace target once per grid: relative = player's car + offset, clamped to the fleet's real pace span.
-            GetPaceSpan(out float paceMin, out float paceMax);
+            // Resolve the effective pace target once per grid. An anchor outside the fleet span is harmless — ranking starts from the closest end.
             _resolvedPaceTarget = PowerTargetScale;
             if (PaceModeRelative)
             {
-                if (TryComputePlayerCarPaceIndex(out float playerPace)) { _lastKnownPlayerPace = playerPace; _resolvedPaceTarget = Clamp(playerPace + PaceOffsetScale, paceMin, paceMax); }
-                else if (!float.IsNaN(_lastKnownPlayerPace)) _resolvedPaceTarget = Clamp(_lastKnownPlayerPace + PaceOffsetScale, paceMin, paceMax);
+                if (TryComputePlayerCarPaceIndex(out float playerPace)) { _lastKnownPlayerPace = playerPace; _resolvedPaceTarget = playerPace + PaceOffsetScale; }
+                else if (!float.IsNaN(_lastKnownPlayerPace)) _resolvedPaceTarget = _lastKnownPlayerPace + PaceOffsetScale;
                 else UI.Notify("~o~No vehicle to pace from - using the fixed pace target.");
             }
+            else if (anchorToPlayerCar) _resolvedPaceTarget = ComputePlayerCarPaceIndex();
 
-            FillCachedCandidates(DisciplineFilter, _intendedOpponents, true);
-            LoadGrid(DisciplineFilter, _intendedOpponents);
+            FillCachedCandidates(_intendedOpponents, true);
+            LoadGrid(_intendedOpponents);
 
             if (Racers.Count == 0)
             {
-                UI.Notify("~o~No vehicles found with current pace settings. Try widening the bracket.");
+                UI.Notify("~o~No vehicles found with a pace index. Check the Vehicles folder.");
                 _gridInstanced = false;
+                if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
                 return;
             }
 
@@ -1130,15 +1101,16 @@ namespace ARS
 
             _gridInstanced = true;
             Log(LogImportance.Info, "Grid instanced (" + Racers.Count + " AI cars)");
+            if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
         }
 
         // All-in-one chain: runs all three phases back-to-back with no UI stops.
         // Used by future presets; also the backward-compatible single-call path.
-        public void StartRaceFromMenu()
+        public void StartRaceFromMenu(bool anchorToPlayerCar = false)
         {
             InstanceTrack();
             if (!_trackInstanced) return;
-            InstanceGrid();
+            InstanceGrid(anchorToPlayerCar);
             if (!_gridInstanced) return;
             StartRace();
         }
@@ -1195,9 +1167,11 @@ namespace ARS
 
             // The list item shows the file name (without extension). _trackListPaths holds the
             // full paths in the same order so selection maps back cleanly.
-            _trackListItem.Items.Clear();
+            // Use the property setter (not direct .Items manipulation) so LemonUI's UpdateIndex() fires.
+            List<string> names = new List<string>();
             foreach (string path in sorted)
-                _trackListItem.Items.Add(System.IO.Path.GetFileNameWithoutExtension(path));
+                names.Add(System.IO.Path.GetFileNameWithoutExtension(path));
+            _trackListItem.Items = names;
 
             int idx = -1;
             if (keepVisible != null) idx = _trackListItem.Items.IndexOf(keepVisible);
@@ -1220,10 +1194,9 @@ namespace ARS
 
         void RefreshPowerControls()
         {
-            if (_powerTargetItem == null || _powerBracketItem == null) return;
+            if (_powerTargetItem == null) return;
 
-            // The pace index is 0-1 by construction; take the actual cache span so the sliders
-            // don't offer values no car can match.
+            // Take the actual cache span so the Pace Target list doesn't offer values no car can match.
             float min = float.MaxValue;
             float max = float.MinValue;
             foreach (float pace in ModelPaceIndexCache.Values)
@@ -1236,15 +1209,10 @@ namespace ARS
 
             float storedTarget = RaceMenuStore.GetFloat("PaceTarget", float.NaN);
             if (!float.IsNaN(storedTarget)) PowerTargetScale = RoundToNearestEven(Clamp(storedTarget, min, max));
-            float storedBracket = RaceMenuStore.GetFloat("PaceBracket", float.NaN);
-            if (!float.IsNaN(storedBracket)) PowerBracketScale = RoundToNearestEven(Clamp(storedBracket, 0f, max - min));
             PowerTargetScale = RoundToNearestEven(Clamp(PowerTargetScale, min, max));
-            PowerBracketScale = RoundToNearestEven(Clamp(PowerBracketScale, 0f, max - min));
 
             _powerTargetValues.Clear();
             AddPowerValues(_powerTargetValues, min, max, 2.0f);
-            _powerBracketValues.Clear();
-            AddPowerValues(_powerBracketValues, 0f, max - min, 2.0f);
 
             _powerTargetItem.Items.Clear();
             foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0"));
@@ -1253,14 +1221,6 @@ namespace ARS
             if (_powerTargetItem.SelectedIndex < 0 && _powerTargetValues.Count > 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
             if (_powerTargetValues.Count > 0) PowerTargetScale = _powerTargetValues[_powerTargetItem.SelectedIndex];
             _resolvedPaceTarget = PowerTargetScale;
-
-            _powerBracketItem.Items.Clear();
-            foreach (float value in _powerBracketValues) _powerBracketItem.Items.Add(value.ToString("0"));
-            _powerBracketItem.SelectedIndex = FindNearestPowerValue(_powerBracketValues, PowerBracketScale);
-            if (_powerBracketItem.SelectedIndex < 0 && _powerBracketValues.Count > 0) _powerBracketItem.SelectedIndex = _powerBracketValues.Count / 2;
-            // Ensure the bracket is never zero — a 0-wide bracket picks nothing.
-            if (_powerBracketItem.SelectedIndex == 0 && _powerBracketValues.Count > 1) _powerBracketItem.SelectedIndex = 1;
-            if (_powerBracketValues.Count > 0) PowerBracketScale = _powerBracketValues[_powerBracketItem.SelectedIndex];
 
             _paceOffsetItem.SelectedIndex = FindNearestPowerValue(_paceOffsetValues, PaceOffsetScale);
             if (_paceOffsetItem.SelectedIndex < 0 && _paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = _paceOffsetValues.Count / 2;
@@ -1454,14 +1414,9 @@ namespace ARS
                             DisplayHelpTextThisFrame("Press ~INPUT_CONTEXT~ to race at ~b~" + Path.GetFileNameWithoutExtension(nearest.TrackPath) + "~w~.");
                             if (!_arsMenu.Visible && CanWeUse(Game.Player.Character.CurrentVehicle) && !Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlJustPressed(2, GTA.Control.Context))
                             {
-                                // Absolute E-join keeps the "race the car you're in" override; Relative resolves at Spawn Grid.
-                                if (!PaceModeRelative)
-                                {
-                                    PowerTargetScale = ComputePlayerCarPaceIndex();
-                                    PowerBracketScale = 2f;
-                                }
+                                // E-join races the car you're in — anchored per grid, never written into the persisted target.
                                 SelectTrackInMenu(nearest.TrackPath);
-                                StartRaceFromMenu();
+                                StartRaceFromMenu(true);
                             }
                         }
                     }
@@ -1641,15 +1596,6 @@ namespace ARS
                 if (_longTickMs < Game.GameTime)
                 {
                     _longTickMs = Game.GameTime + 3000;
-
-                    Vehicle playerVeh = Game.Player.Character.CurrentVehicle;
-                    if (1==2 && CanWeUse(playerVeh) && !KnownVehicleModels.Contains(playerVeh.Model))
-                    {
-                        KnownVehicleModels.Add(playerVeh.Model);
-
-                        CreateVehicle(playerVeh, true);
-                        UI.Notify("New vehicle model detected, added to the list of known models: " + playerVeh.Model.ToString());
-                    }
 
                     if (HelpMessages.Count > 0 && !HideHudMode)
                     {
@@ -2127,96 +2073,6 @@ namespace ARS
             return false;
         }
 
-        void LoadRace(string track, string disciplines, int gridSize)
-        {
-            Log(LogImportance.Info, "Loading race (" + track + ")");
-            if (!KnownTracks.Contains(track))
-            {
-                UI.Notify("Track does not exist.");
-                return;
-            }
-
-            
-            TrackLoader.LoadTrack(this, TrackLoader.LoadTrackFile(track));
-
-            
-            Log(LogImportance.Info, "Loading grid of vehicles");
-
-            if (disciplines == null)
-            {
-                List<VehicleHash> hashes = Enum.GetValues(typeof(VehicleHash)).Cast<VehicleHash>().ToList();
-
-                Vehicle playerveh = Game.Player.Character.LastVehicle;
-                float acc = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, playerveh.Model.Hash);
-                float spd = Function.Call<float>(Hash._GET_VEHICLE_MAX_SPEED, playerveh.Model.Hash);
-
-                hashes.RemoveAll(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h) < acc - 0.075f);
-                hashes.RemoveAll(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h) > acc + 0.075f);
-
-                hashes.RemoveAll(h => Function.Call<float>(Hash._GET_VEHICLE_MAX_SPEED, (int)h) > spd + ARS.MphToMps(20));
-                hashes.RemoveAll(h => Function.Call<float>(Hash._GET_VEHICLE_MAX_SPEED, (int)h) < spd - ARS.MphToMps(20));
-
-                hashes.OrderByDescending(h => Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, (int)h));
-
-
-
-
-                List<VehicleHash> final = new List<VehicleHash>();
-
-                foreach (VehicleHash hash in hashes)
-                {
-                    Model m = new Model(hash);
-
-                    
-                    if (Math.Abs(m.GetDimensions().Length() - playerveh.Model.GetDimensions().Length()) < 5f &&
-                        (m.IsCar && playerveh.Model.IsCar) ||
-                        (m.IsQuadbike && playerveh.Model.IsQuadbike) ||
-                        (m.IsBike && playerveh.Model.IsBike) ||
-                        (m.IsBicycle && playerveh.Model.IsBicycle))
-                    {
-                        final.Add(hash);
-                    }
-                }
-
-
-                while (final.Count > gridSize) final.RemoveAt(GetRandomInt(0, final.Count - 1));
-
-                foreach (VehicleHash h in final)
-                {
-                    Model m = new Model(h);
-
-                    Vehicle v = World.CreateVehicle(m, RouteNodes[Racers.Count * 5]);
-                    Ped p = v.CreateRandomPedOnSeat(VehicleSeat.Driver);
-                    Racer r = new Racer(v, p);
-
-                    Racers.Add(r);
-                    
-
-                }
-
-            }
-            else LoadGrid(disciplines, gridSize);
-            StartRace();
-        }
-
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         void PlaceCars()
         {
             GridSort sort = GridSort.Power;
@@ -2575,7 +2431,7 @@ namespace ARS
             {
                 
                 
-                FillKnownDisciplines();
+                RefreshCatalogs();
 
                 FillKnownTracks();
             }
@@ -3739,25 +3595,18 @@ namespace ARS
         {
             Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
+            Log(LogImportance.Info, "Checking the Settings folder ...");
+            SettingsRepair.CreateMissingFiles();
+            SettingsRepair.PruneOwnedFiles();
+
             Log(LogImportance.Info, "Loading Options.ini ...");
             RaceMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Race.ini");
             RacersMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Racers.ini");
             SettingsMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Settings.ini");
             DevMenuStore = new MenuSettings(SettingsFolder + @"\Menu-DevSettings.ini");
-            if (File.Exists(SettingsFolder + @"\Options.ini"))
-            {
-
-                SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
-
-                RaceMenuStore.Migrate("Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5).ToString());
-                DisciplineFilter = SettingsFile.GetValue<string>("GENERAL_SETTINGS", "Disciplines", "muscle");
-                Log(LogImportance.Info, "Loaded Options.");
-            }
-            else
-            {
-                Log(LogImportance.Error, " '" + SettingsFolder + "/Options.ini' does not exist. All config values will be default.");
-                UI.Notify("~o~Failed to load the Options file.~w~ Check you've installed ARS properly.");
-            }
+            SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
+            RaceMenuStore.Migrate("Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5).ToString());
+            Log(LogImportance.Info, "Loaded Options.");
 
             Log(LogImportance.Info, "Loading per-menu settings (Menu-*.ini) ...");
             ScriptSettings legacyRacers = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
@@ -3774,41 +3623,24 @@ namespace ARS
             PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
             Log(LogImportance.Info, "Loaded per-menu settings.");
 
-            if (File.Exists(SettingsFolder + @"\MemoryOffsets.ini"))
-            {
-                ScriptSettings menOffexts = ScriptSettings.Load(SettingsFolder + @"\MemoryOffsets.ini");
-                ThrottleOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Throttle", 0x0);
-                SteerOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Steer", 0x0);
-                BrakeOffset = menOffexts.GetValue<ulong>("MEMORY_OFFSETS", "Brake", 0x0);
-                Log(LogImportance.Info, "Loaded Memory Offsets.");
-
-                
-                Log(LogImportance.Info, "[MEMORY] Learned the steer offset from file: " + SteerOffset);
-
-            }
-            else
-            {
-                Log(LogImportance.Error, " '" + SettingsFolder + "/MemoryOffsets.ini' does not exist. ARS will try to learn the memory offsets from the game.");
-                UI.Notify("~o~Failed to load the MemoryOffsets file.~w~ Check you've installed ARS properly.");
-            }
+            ScriptSettings memOffsets = ScriptSettings.Load(SettingsFolder + @"\MemoryOffsets.ini");
+            ThrottleOffset = memOffsets.GetValue<ulong>("MEMORY_OFFSETS", "Throttle", 0x0);
+            SteerOffset = memOffsets.GetValue<ulong>("MEMORY_OFFSETS", "Steer", 0x0);
+            BrakeOffset = memOffsets.GetValue<ulong>("MEMORY_OFFSETS", "Brake", 0x0);
+            Log(LogImportance.Info, "Loaded Memory Offsets.");
+            Log(LogImportance.Info, "[MEMORY] Learned the steer offset from file: " + SteerOffset);
 
             Log(LogImportance.Info, "Loading DevSettings.ini ...");
-            DevSettingsFile = null;
-            if (File.Exists(SettingsFolder + @"\DevSettings.ini"))
-            {
-                DevSettingsFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
-            }
-            else
-            {
-                Log(LogImportance.Error, " '" + SettingsFolder + "/DevSettings.ini' does not exist. Dev config will be default.");
-            }
+            DevSettingsFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
             foreach (Options option in DebugToggles.Keys.ToArray())
-                DevMenuStore.Migrate(option.ToString(), (DevSettingsFile != null ? DevSettingsFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]) : DebugToggles[option]).ToString());
+                DevMenuStore.Migrate(option.ToString(), DevSettingsFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]).ToString());
             foreach (Options option in DebugToggles.Keys.ToArray())
                 DebugToggles[option] = DevMenuStore.GetBool(option.ToString(), DebugToggles[option]);
             DebugToggles[Options.ReverseRoute] = RaceMenuStore.GetBool("ReverseRoute", DebugToggles[Options.ReverseRoute]);
             Log(LogImportance.Info, "Loaded dev toggles.");
 
+            SettingsRepair.CompleteOwnedKeys(RaceMenuStore, RacersMenuStore, SettingsMenuStore, DevMenuStore);
+            Log(LogImportance.Info, "Checked the Settings folder.");
         }
         public enum LogImportance { Info, Error, Fatal }
         static TriState ParseTriState(string value, TriState fallback)
@@ -4316,25 +4148,19 @@ namespace ARS
 
         List<XmlDocument> _cachedCandidates = new List<XmlDocument>();
 
-        void FillCachedCandidates(string dlist, int maxcars, bool allowScriptYield = true)
+        void FillCachedCandidates(int maxcars, bool allowScriptYield = true)
         {
-            bool allowDuplicates = SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "AllowDuplicates", true);
             if (HardcodedRoster != null && HardcodedRoster.Count > 0)
             {
-                _cachedCandidates = VehicleSelector.SelectHardcoded(HardcodedRoster, _racerTagLookup, maxcars, allowDuplicates, Yield, GetRandomInt, text => Log(LogImportance.Info, text));
+                _cachedCandidates = VehicleSelector.SelectHardcoded(HardcodedRoster, maxcars, Yield, GetRandomInt, text => Log(LogImportance.Info, text));
             }
             else
             {
+                // Ranking is invariant to an anchor outside the fleet span — it just starts from the closest end.
                 GetPaceSpan(out float paceMin, out float paceMax);
-                float effectiveTarget = _resolvedPaceTarget;
-                if (ModelPaceIndexCache.Count > 0 && !ARS.IsBetween(effectiveTarget, paceMin, paceMax))
-                {
-                    effectiveTarget = Clamp(effectiveTarget, paceMin, paceMax);
-                    Log(LogImportance.Info, "Pace target " + _resolvedPaceTarget + " outside fleet span " + paceMin + ".." + paceMax + " - clamped to " + effectiveTarget);
-                }
-                _cachedCandidates = VehicleSelector.Select(_racerTagLookup, ModelPaceIndexCache, maxcars, allowDuplicates, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), effectiveTarget, PowerBracketScale);
-                if (DebugToggles[Options.WidenBracketFill])
-                    _cachedCandidates = VehicleSelector.SelectClosestByPace(_racerTagLookup, ModelPaceIndexCache, maxcars, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), effectiveTarget);
+                if (ModelPaceIndexCache.Count > 0 && !ARS.IsBetween(_resolvedPaceTarget, paceMin, paceMax))
+                    Log(LogImportance.Info, "Pace target " + _resolvedPaceTarget + " outside fleet span " + paceMin + ".." + paceMax + " - ranking from the closest end");
+                _cachedCandidates = VehicleSelector.SelectClosestByPace(_vehiclePool, ModelPaceIndexCache, maxcars, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget);
                 if (_cachedCandidates.Count == 0) Log(LogImportance.Error, "No vehicles in the pool with a pace index.");
             }
         }
@@ -4362,7 +4188,7 @@ namespace ARS
             return name;
         }
 
-        void LoadGrid(string dlist, int maxcars)
+        void LoadGrid(int maxcars)
         {
             SetLoadingPromptText("Loading vehicles...");
             ResetSillyNames();

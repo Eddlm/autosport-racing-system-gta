@@ -1514,7 +1514,7 @@ namespace ARS
         {
             int nodeCount = ARS.TrackPoints.Count;
             if (ARS.IsPointToPoint) return nodeCount - CurrentTrackPoint.Node;
-            float totalLaps = ARS.SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5);
+            float totalLaps = ARS.RaceMenuStore.GetInt("Laps", 5);
             return Math.Max(0f, (totalLaps + 1f - Lap) * nodeCount - CurrentTrackPoint.Node);
         }
 
@@ -1893,7 +1893,7 @@ namespace ARS
                     CanRegisterNewLap = false;
                     Lap++;
                     ARS.Log(ARS.LogImportance.Info, "Lap++ " + Name + " -> lap " + Lap + " (node " + currentNode + ")");
-                    if (Lap > ARS.SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5))
+                    if (Lap > ARS.RaceMenuStore.GetInt("Laps", 5))
                     {
                         if (Car.CurrentBlip != null) Car.CurrentBlip.Color = BlipColor.Green;
                     }
