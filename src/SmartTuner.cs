@@ -133,6 +133,27 @@ namespace ARS
         };
 
         static readonly string[] ColourWords = { "white", "black", "red", "blue", "green", "yellow", "orange", "silver", "gold", "purple", "brown", "cream", "grey", "gray" };
+        static readonly string[] AllFamilies = { "white", "black", "red", "blue", "green", "yellow", "orange", "silver", "gold", "purple", "brown", "cream" };
+        static readonly string[] Neutrals = { "black", "white", "silver" };
+
+        // WHITELIST: the body colours that sit well with a livery of this colour. Anything unlisted is out - a
+        // blacklist ("anything but white") plus a uniform draw is what produced muddy pairings, while these sets
+        // stay broad enough (4+ families) that a pick is still a surprise.
+        static readonly Dictionary<string, string[]> BodyWith = new Dictionary<string, string[]>
+        {
+            { "white", new[] { "red", "black", "blue", "orange", "green", "purple", "gold" } },
+            { "black", new[] { "white", "silver", "red", "yellow", "blue", "orange", "green" } },
+            { "red", new[] { "black", "white", "silver", "blue", "gold", "cream" } },
+            { "blue", new[] { "white", "silver", "orange", "yellow", "red", "black", "gold" } },
+            { "green", new[] { "black", "white", "cream", "gold", "brown", "silver" } },
+            { "yellow", new[] { "black", "red", "blue", "green", "silver", "orange" } },
+            { "orange", new[] { "black", "blue", "white", "brown", "silver", "green" } },
+            { "silver", new[] { "black", "red", "blue", "green", "purple", "orange" } },
+            { "gold", new[] { "black", "white", "green", "blue", "brown", "red" } },
+            { "purple", new[] { "black", "silver", "white", "yellow", "gold" } },
+            { "brown", new[] { "cream", "white", "black", "orange", "silver", "gold" } },
+            { "cream", new[] { "black", "brown", "red", "green", "gold", "blue" } },
+        };
 
         static readonly Queue<Vehicle> Pending = new Queue<Vehicle>();
 
@@ -262,33 +283,82 @@ namespace ARS
 
         static void ApplyPaint(Vehicle veh, string liveryName, Func<int, int, int> random)
         {
-            string stated = StatedColour(liveryName);
+            List<string> named = ColoursIn(liveryName);
+            string key = named.Count > 0 ? named[0] : null;
 
-            List<VehicleColor> body = new List<VehicleColor>();
-            foreach (KeyValuePair<VehicleColor, string> entry in Palette)
+            VehicleColor body;
+            VehicleColor accent;
+            if (named.Count >= 2)
             {
-                if (stated != null && entry.Value == stated) continue;
-                body.Add(entry.Key);
+                // A name like "Black Pfister White Stripe" states its own base and its own accent - honour it.
+                body = ColourOf(named[0]);
+                accent = ColourOf(named[named.Count - 1]);
             }
-            if (body.Count == 0) body.Add(VehicleColor.MetallicBlack);
+            else if (named.Count == 1)
+            {
+                body = PickPaint(FamiliesFor(named[0]), random);
+                accent = ColourOf(named[0]);
+            }
+            else
+            {
+                // No livery, or a livery that names no colour: body stays a free pick, accent goes neutral so the
+                // two draws cannot clash, and the rims never follow the accent.
+                body = PickPaint(AllFamilies, random);
+                accent = PickPaint(Neutrals, random);
+            }
 
-            veh.PrimaryColor = body[random(0, body.Count - 1)];
-            veh.SecondaryColor = stated != null ? ColourOf(stated) : Palette[random(0, Palette.Length - 1)].Key;
-            veh.PearlescentColor = body[random(0, body.Count - 1)];
-            veh.RimColor = veh.SecondaryColor;
+            veh.PrimaryColor = body;
+            veh.SecondaryColor = accent;
+            veh.PearlescentColor = PickPaint(FamiliesFor(key), random);
+            veh.RimColor = PickPaint(Neutrals, random);
         }
 
-        // The colour named by the livery, if it names one. Only used as a veto on the body and as the accent -
-        // never as a mandate, so "White Stripes" can land on any body colour that is not near-white.
-        static string StatedColour(string liveryName)
+        static string[] FamiliesFor(string family)
         {
-            if (string.IsNullOrEmpty(liveryName)) return null;
-            string lower = liveryName.ToLowerInvariant();
-            foreach (string word in ColourWords)
+            if (family == null) return AllFamilies;
+            string[] families;
+            return BodyWith.TryGetValue(family, out families) ? families : AllFamilies;
+        }
+
+        static VehicleColor PickPaint(string[] families, Func<int, int, int> random)
+        {
+            List<VehicleColor> options = new List<VehicleColor>();
+            foreach (KeyValuePair<VehicleColor, string> entry in Palette)
             {
-                if (lower.Contains(word)) return word == "grey" || word == "gray" ? "white" : word;
+                if (Array.IndexOf(families, entry.Value) >= 0) options.Add(entry.Key);
             }
-            return null;
+            if (options.Count == 0) return VehicleColor.MetallicBlack;
+            return options[random(0, options.Count - 1)];
+        }
+
+        // Every colour the name mentions, in the order the name mentions them (the word list's own order is
+        // irrelevant here - "Black Pfister White Stripe" must read as black-then-white, not white-first).
+        static List<string> ColoursIn(string liveryName)
+        {
+            List<string> found = new List<string>();
+            if (string.IsNullOrEmpty(liveryName)) return found;
+            string lower = liveryName.ToLowerInvariant();
+            int at = 0;
+            while (at < lower.Length)
+            {
+                int best = -1;
+                string bestWord = null;
+                foreach (string word in ColourWords)
+                {
+                    int hit = lower.IndexOf(word, at);
+                    if (hit < 0) continue;
+                    if (best < 0 || hit < best || (hit == best && word.Length > bestWord.Length))
+                    {
+                        best = hit;
+                        bestWord = word;
+                    }
+                }
+                if (best < 0) break;
+                string family = bestWord == "grey" || bestWord == "gray" ? "white" : bestWord;
+                if (!found.Contains(family)) found.Add(family);
+                at = best + bestWord.Length;
+            }
+            return found;
         }
 
         static VehicleColor ColourOf(string family)
