@@ -68,3 +68,43 @@ Where the gap shows:
 ## Rear-end prevention — open ideas
 
 **Rear-end prevention** (`ComputeTargetSpeed`): current live behavior (closest rival ahead within 6 m on roughly the same line, lateral offset within `r.CombinedSize.X`, speed blend saturating at 1 m, floored at `rivalSpeed`) is summarized in AGENTS.md; the corner-specific **Yield** maneuver is separate — it arms only when trailing a *faster* rival near a corner entrance **and overrides the speed blend locally**. No further open-idea notes existed in the original file beyond the summary itself (honest note, 2026-10 restructure).
+
+## Details moved out of AGENTS.md (2026-10 trim)
+
+AGENTS.md is the auto-loaded file and sits closest to its hard size cap, so its open-items list now carries one-line pointers and the full text lives here. Nothing was dropped in the trim — these are the entries whose detail used to sit in AGENTS.md in full.
+
+### Start-line flares — disabled, and why
+The flare prop/particle pipeline (`TrackLoader.SpawnGatePair` + both `AttachFlare`s) is disabled by an unconditional `return;` at each method top. The code is kept for a later rebuild, but the **placement/heading alignment must be fixed first** — the misalignment is why they were disabled. **The original disable was broken**: it used `if (1 == 2) return;`, which never returns, so the pipeline stayed live in every build until a grunt audit found it (the inverted-gate gotcha in AGENTS.md came from this). Unrelated: the Horsetrack `<Objects>` prop removal was *not* a flare. Also confirmed while checking: the creator's `Trackside` Model/Frecuency is written but has **no reader** — the trackside-prop feature is dead in the loader, and a point-to-point track would get a second flare pair at the finish if the pipeline were re-enabled.
+
+### Stability awareness — partially implemented
+Only the throttle-side rules are live: not all wheels on ground → reduce `MaxThrottle` (rates and floor in code); and steer angle exceeding the grip-based limit → the same reduction. The steer-into-airborne-side rule is **disabled** (`if (1 == 2)`-gated in `Racer.cs`). `AvgGroundStability` itself is hardcoded to 1 (see the per-racer bullet in AGENTS.md).
+
+### Stuck recovery — the single system, and the planned escalation
+One system only: the reverse-rock (steer straight, reverse throttle) for a fixed window; if still stuck when the window ends, detection re-arms after the stuck-check time and a new attempt starts. The old position-lerp-to-track escalation was **removed entirely** (the velocity punt went long before it). **Planned AI escalation (2026-10)**: once `ARS.ResetToTrack` is player-verified, wire a per-racer variant (not `Game.Player.Character`) into `ApplyStuckRecoveryOverride`'s window-end branch as the still-stuck fallback for AI racers.
+
+### TCS — the controller
+A P-controller on `MaxThrottleFromTCS` targeting an ideal wheelspin: a tame fixed target off-track, more permissive on-track as the slide angle grows (values in code), with the output clamped well above zero — it never cuts below a floor fraction of throttle. Wheelspin is signed: negative = spin, positive = lockup.
+
+### Steer-limiter throttle tie-in
+When `ApplySteerLimits` actually cuts the steer (`_steerLimitedThisFrame`), `MaxThrottle` drops at a slow rate with a floor and recovers once the limiter disengages. **TODO: revisit the cut rate** — tuned to "feels right", with no grounded justification.
+
+### Snap-oversteer counter — TODO, deferred to a dedicated session
+Slide response is purely proportional (countersteer = slideAngle × scale); there is no derivative term to catch the *rate of yaw acceleration*. A snap-oversteer situation spikes yaw faster than a proportional correction can track — a D-term or a yaw-rate change threshold would catch it before the car snaps around.
+
+### Gravity vs grip & speed — a design decision to set in stone
+A TEMP experiment bakes the gravity multiplier into the base grip (`UpdatePerceivedGrip`). It feels good in-game but is **not settled**: `CurrentMechanicalGrip` also feeds sites that separately multiply by `Handling.Gravity` (route speed, corner speed, braking decel) — a possible double-count. The decision to make: define how gravity scales grip versus each speed/decel consumption site, principled rather than this temporary bake.
+
+### Side-by-side heading assist — unverified in-game
+Per steering update, for longitudinally overlapping rivals: mirror their live forward-heading angle, ramping from a small effect at wide lateral separation to the full effect near the combined vehicle width + buffer.
+
+### The reverse throttle path is gone from the pedal pipeline
+No writer ever commands a negative `Intention.Speed`, so the `wantsReverse` branch in `ConvertSpeedToPedals` was dead code and was deleted — a negative intended speed simply brakes. The only reverse left in the AI is the stuck-recovery override.
+
+### Nitro pacing — the charging rule
+Every car is charged once at race launch and recharged on each lap increase (`Racer.NitroChargedLap` stamp, reset in `Initialize`; a mid-burn lap crossing retries until `IS_NITROUS_ACTIVE` clears). AI bottles are gated on `AiNitro != Never`; the player's own bottle is never gated; there is no free-roam refill. The charge target sits slightly above full so the below-full detection latch stays meaningful.
+
+### Corrections are corrections — never reuse one as an absolute target
+A value stored as a correction ("subtract this from the PD", like `_slideCountersteerDegrees`) carries the **opposite sign** of the steer direction it wants. Lerping the final steer *toward* it as a target steers **into** the slide — caught in-game 2026-09 (car sliding rightwards steered leftwards). When blending toward a slide-response target, reconstruct the full target (trajectory terms with the correction applied), never the bare correction value.
+
+### Menu persistence — thorough in-game verification still pending (release gate)
+The 2026-10 menu restructure (per-menu ini stores, Pace Mode under Settings, Reverse Route in the Race menu), the seed-on-read tidy-up and the dropped auto-migrations were only spot-checked. Before trusting persistence for a release, verify on both a fresh install and an existing one: delete each `Menu-*.ini` → it regenerates fully on load; toggles survive restarts; live readers still pick up store values. `5edc8b6` is the restructure commit; the settings-repair paths added afterwards *have* since been verified in-game (snap, fill, drop, create — see the repair evidence in AGENTS-TECHNOTES.md).
