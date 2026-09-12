@@ -113,3 +113,13 @@ Two wrinkles worth knowing: `ReverseRoute` lives in `Menu-Race.ini` (the Race me
 **One resurrection path** (narrow, cosmetic): `InitializeMenu` captures store objects in the `store`-overload checkboxes, and an `arssettings` reload re-runs `LoadSettings` (new stores) *without* rebuilding the menu — so a stale handler can `Save()` a pre-prune in-memory view and briefly bring a pruned key back. The next load prunes it again. Same family as the already-known "`arssettings` reload leaves pace-mode enable-states stale until next refresh".
 
 **What the repair does not do**: it does not validate that a `Track` path still exists on disk, does not reorder or reformat foreign files, and does not touch `Settings.ini`, `Tracks\`, `Vehicles\`, `Drivers\` or `sillynames.txt`.
+
+## Vehicle livery/mod naming (2026-10, verified in game)
+
+Reading a car's livery *names* is what the smart tuner keys off, and there are **two livery spaces** - enumerating the wrong one yields no names at all, silently (this cost a test cycle):
+
+- **Modern cars expose liveries as mod slot 48** (`VMT_LIVERY_MOD`): enumerate `GET_NUM_VEHICLE_MODS(veh, 48)`, name each with `GET_MOD_TEXT_LABEL(veh, 48, i)` -> `_GET_LABEL_TEXT` (`0x7B5280EBA9840C72`), apply with `SET_VEHICLE_MOD(veh, 48, i, false)`.
+- **Older cars (e.g. the Sanchez) use the livery list**: `GET_VEHICLE_LIVERY_COUNT` -> `GET_LIVERY_NAME(veh, i)` -> `_GET_LABEL_TEXT`, applied with `SET_VEHICLE_LIVERY`.
+- `GET_MOD_TEXT_LABEL` and `SET_VEHICLE_MOD` both want the mod kit installed first (`InstallModKit()`).
+- Add-ons usually have **no GXT entries**, so labels resolve to nothing even when liveries exist; and some cars genuinely have none (reaper, tyrant, t20, osiris, tempesta, turismor carry no livery entries at all).
+- Offline alternative for label -> text, and for model -> livery mapping without spawning: the DLCMagic tables at `D:\Projects\DLCMagic\gtav_rpf\tables\` (`modshop_labels.csv` has `source, variant, modShopLabel, hash, category, display, alt_display, text_source, kind, origin, kitName, kit_id, modelNames`; `master_new_deduped.txt` is the lighter `source - label - hash - display` form). 3822 distinct livery labels; the `modelNames`/`kitName` columns are what map a model to its liveries.
