@@ -1253,6 +1253,8 @@ namespace ARS
                     return;
                 }
 
+                SmartTuner.Tick(GetRandomInt);
+
                 
 
 
@@ -1792,15 +1794,8 @@ namespace ARS
 
             if (tunecars && SmartTuning)
             {
-                Log(LogImportance.Info, "Tuning cars");
-                foreach (Racer r in Racers)
-                {
-                    if (!Game.Player.Character.IsInVehicle(r.Car) && r.Car.GetMod(VehicleMod.Engine) == -1)
-                    {
-                        // Placeholder: visual tuning as before, so the toggle is live while the smart pass is built.
-                        ARS.RandomTuning(r.Car, true, true, true, false, false);
-                    }
-                }
+                Log(LogImportance.Info, "Smart tuning queued for " + Racers.Count + " cars");
+                SmartTuner.Enqueue(Racers);
             }
 
             foreach (Racer r in Racers) if (r.Car.CurrentBlip != null) r.Car.CurrentBlip.Color = BlipColor.Blue;
