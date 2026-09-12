@@ -72,6 +72,15 @@ namespace ARS
             { Style.Beater, new[] { VehicleMod.Exhaust, VehicleMod.PlateHolder, VehicleMod.Ornaments, VehicleMod.Trunk, VehicleMod.Hydraulics, VehicleMod.VanityPlates } },
         };
 
+        // Brand liveries imply their own colours: the artwork is the brand's, so the paint should be too. The
+        // value is (preferred body families, the colour the livery artwork carries). Redwood's artwork is red
+        // and reads best on white (user, 2026-10). Add brands here as they come up - the keyword table already
+        // sends them to a Racing build, so the parts follow for free.
+        static readonly Dictionary<string, KeyValuePair<string[], string>> Brands = new Dictionary<string, KeyValuePair<string[], string>>
+        {
+            { "redwood", new KeyValuePair<string[], string>(new[] { "white" }, "red") },
+        };
+
         // Body paints, grouped so a livery that names a colour can pull from its whitelist. **Metallic only, by
         // request** - no matte/worn/util/chrome variants. Every member was checked against GTA.VehicleColor by
         // reflection; keep that rule when adding colours, and keep at least one member per family.
@@ -286,10 +295,19 @@ namespace ARS
         static void ApplyPaint(Vehicle veh, string liveryName, Func<int, int, int> random)
         {
             List<string> named = ColoursIn(liveryName);
+            string brand = BrandIn(liveryName);
 
             VehicleColor body;
             VehicleColor accent;
-            if (named.Count >= 2)
+            if (brand != null)
+            {
+                // A brand livery dictates the paint outright: body from the brand's preferred families, accent
+                // from the colour its artwork carries.
+                KeyValuePair<string[], string> rule = Brands[brand];
+                body = PickPaint(rule.Key, random);
+                accent = ColourOf(rule.Value);
+            }
+            else if (named.Count >= 2)
             {
                 // A name like "Black Pfister White Stripe" states its own base and its own accent - honour it.
                 body = ColourOf(named[0]);
@@ -312,6 +330,17 @@ namespace ARS
             veh.SecondaryColor = accent;
             veh.PearlescentColor = VehicleColor.MetallicBlack;   // black pearl = no pearl tint, by request for now
             veh.RimColor = PickPaint(Neutrals, random);
+        }
+
+        static string BrandIn(string liveryName)
+        {
+            if (string.IsNullOrEmpty(liveryName)) return null;
+            string lower = liveryName.ToLowerInvariant();
+            foreach (string brand in Brands.Keys)
+            {
+                if (lower.Contains(brand)) return brand;
+            }
+            return null;
         }
 
         static string[] FamiliesFor(string family)
