@@ -47,6 +47,8 @@ namespace ARS
             new KeyValuePair<string, Style>("tenshun", Style.Racing),
             new KeyValuePair<string, Style>("kabel", Style.Racing),
             new KeyValuePair<string, Style>("hyper function", Style.Racing),
+            new KeyValuePair<string, Style>("yogarishima", Style.Tuner),
+            new KeyValuePair<string, Style>("teast", Style.Tuner),
             new KeyValuePair<string, Style>("stripe", Style.Stripes),
             new KeyValuePair<string, Style>("pinstripe", Style.Stripes),
             new KeyValuePair<string, Style>("flame", Style.Muscle),
@@ -74,15 +76,46 @@ namespace ARS
 
         // Brand liveries imply their own colours: the artwork is the brand's, so the paint should be too. The
         // value is (preferred body families, the artwork's colours). Both are LISTS on purpose - most brand
-        // liveries are two- or three-tone (Atomic is yellow on blue, Pisswasser yellow on black, Redwood
-        // red/white/yellow), so a single accent string would drop half of the identity. Accent is picked at
-        // random from the artwork colours, which keeps variety inside the brand's own palette.
-        // Redwood's artwork is red and reads best on white (user, 2026-10). Add brands here as they come up -
-        // the keyword table already sends brand names to a Racing build, so the parts follow for free.
+        // liveries are two- or three-tone (Atomic yellow on blue, Redwood red/white/yellow), so a single accent
+        // string would drop half the identity. Accent and rims are picked at random from the artwork colours,
+        // keeping variety inside the brand's own palette.
+        // Evidence: a research pass over the GTA Wiki, Rockstar's respray-colour pages and the fan livery DB
+        // (2026-10). Real-world marque folklore is ignored on purpose - the game's own artwork wins (Ocelot's
+        // works livery is red/white/blue, not Jaguar green). Two canonical pairings anchor the set: the Sprunk
+        // Buffalo ships white with green wheels, the Redwood Gauntlet white with red wheels. Body choices marked
+        // medium here are inferred from artwork rather than stated, so treat them as taste, not fact.
         static readonly Dictionary<string, KeyValuePair<string[], string[]>> Brands = new Dictionary<string, KeyValuePair<string[], string[]>>
         {
             { "redwood", new KeyValuePair<string[], string[]>(new[] { "white" }, new[] { "red", "yellow" }) },
+            { "sprunk", new KeyValuePair<string[], string[]>(new[] { "white", "green" }, new[] { "green" }) },
+            { "ecola", new KeyValuePair<string[], string[]>(new[] { "white", "red" }, new[] { "red" }) },
+            { "pisswasser", new KeyValuePair<string[], string[]>(new[] { "black", "white" }, new[] { "red", "white", "gold" }) },
+            { "globe oil", new KeyValuePair<string[], string[]>(new[] { "white", "orange" }, new[] { "orange", "blue" }) },
+            { "xero gas", new KeyValuePair<string[], string[]>(new[] { "white", "black" }, new[] { "red", "white", "blue" }) },
+            { "fukaru", new KeyValuePair<string[], string[]>(new[] { "white", "red" }, new[] { "red", "white" }) },
+            { "atomic", new KeyValuePair<string[], string[]>(new[] { "blue", "yellow", "white" }, new[] { "yellow", "blue" }) },
+            { "ron", new KeyValuePair<string[], string[]>(new[] { "blue", "orange" }, new[] { "orange", "yellow", "blue" }) },
+            { "ltd", new KeyValuePair<string[], string[]>(new[] { "white", "blue" }, new[] { "blue", "white" }) },
+            { "prolaps", new KeyValuePair<string[], string[]>(new[] { "black", "white" }, new[] { "orange", "white" }) },
+            { "sessanta", new KeyValuePair<string[], string[]>(new[] { "black", "cream" }, new[] { "brown", "gold" }) },
+            { "meinmacht", new KeyValuePair<string[], string[]>(new[] { "blue", "white" }, new[] { "blue", "white" }) },
+            { "hardstand", new KeyValuePair<string[], string[]>(new[] { "black", "white" }, new[] { "yellow", "orange" }) },
+            { "yogarishima", new KeyValuePair<string[], string[]>(new[] { "blue", "white" }, new[] { "blue", "white" }) },
+            { "grotti", new KeyValuePair<string[], string[]>(new[] { "red", "white" }, new[] { "red", "white" }) },
+            { "ocelot", new KeyValuePair<string[], string[]>(new[] { "white", "blue" }, new[] { "blue", "red", "white" }) },
+            { "dewbauchee", new KeyValuePair<string[], string[]>(new[] { "white", "black" }, new[] { "yellow", "black", "white" }) },
+            { "karin", new KeyValuePair<string[], string[]>(new[] { "white", "blue" }, new[] { "blue", "gold" }) },
+            { "maibatsu", new KeyValuePair<string[], string[]>(new[] { "white", "black", "silver" }, new[] { "red" }) },
+            { "vulcar", new KeyValuePair<string[], string[]>(new[] { "blue", "black" }, new[] { "orange" }) },
+            { "annis", new KeyValuePair<string[], string[]>(new[] { "white", "silver", "black" }, new[] { "blue" }) },
+            { "vapid", new KeyValuePair<string[], string[]>(new[] { "white", "black", "silver" }, new[] { "red" }) },
         };
+
+        // Marques whose liveries carry no brand palette - the artwork is per-livery, or it is a plain monochrome
+        // badge (Ubermacht is orange/yellow/white on a Zion Classic but a flat diamond on a Sentinel XS4, and
+        // Benefactor has no works livery at all). They stay monochrome, which is what a works livery looks like,
+        // and only pick up colours the livery name itself states.
+        static readonly string[] Marques = { "ubermacht", "benefactor", "pegassi", "truffade", "coil", "willard", "dinka", "obey", "bravado", "declasse", "fathom" };
 
         // Body paints, grouped so a livery that names a colour can pull from its whitelist. **Metallic only, by
         // request** - no matte/worn/util/chrome variants. Every member was checked against GTA.VehicleColor by
@@ -314,6 +347,13 @@ namespace ARS
                 accent = PickPaint(rule.Value, random);
                 rims = PickPaint(rule.Value, random);
             }
+            else if (IsMarque(liveryName))
+            {
+                // Works liveries are per-livery, not per-marque: stay monochrome and let the artwork speak, but
+                // still honour a colour the name itself states.
+                body = PickPaint(Neutrals, random);
+                accent = named.Count > 0 ? ColourOf(named[named.Count - 1]) : PickPaint(Neutrals, random);
+            }
             else if (named.Count >= 2)
             {
                 // A name like "Black Pfister White Stripe" states its own base and its own accent - honour it.
@@ -345,9 +385,36 @@ namespace ARS
             string lower = liveryName.ToLowerInvariant();
             foreach (string brand in Brands.Keys)
             {
-                if (lower.Contains(brand)) return brand;
+                if (ContainsWord(lower, brand)) return brand;
             }
             return null;
+        }
+
+        static bool IsMarque(string liveryName)
+        {
+            if (string.IsNullOrEmpty(liveryName)) return false;
+            string lower = liveryName.ToLowerInvariant();
+            foreach (string marque in Marques)
+            {
+                if (ContainsWord(lower, marque)) return true;
+            }
+            return false;
+        }
+
+        // Whole-word match on purpose: a plain Contains would fire "ron" inside "Chevron" and "ltd" inside
+        // unrelated words, and a mis-firing brand rule is invisible - it just quietly paints the wrong car.
+        static bool ContainsWord(string haystack, string word)
+        {
+            int at = haystack.IndexOf(word, StringComparison.Ordinal);
+            while (at >= 0)
+            {
+                bool leftOk = at == 0 || !char.IsLetter(haystack[at - 1]);
+                int after = at + word.Length;
+                bool rightOk = after >= haystack.Length || !char.IsLetter(haystack[after]);
+                if (leftOk && rightOk) return true;
+                at = haystack.IndexOf(word, at + 1, StringComparison.Ordinal);
+            }
+            return false;
         }
 
         static string[] FamiliesFor(string family)
