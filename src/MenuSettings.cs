@@ -44,6 +44,15 @@ namespace ARS
             return File.GetValue<float>("MENU", key, fallback);
         }
 
+        // Read without seeding, for keys whose absence is a meaningful state (see PaceTarget: absent
+        // means "auto-pick", and seeding a sentinel like NaN would write that sentinel into the file).
+        public bool TryGetFloat(string key, out float value)
+        {
+            value = 0f;
+            string text = Get(key, null);
+            return text != null && float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        }
+
         // Seed-on-read: the ini mirrors the live key set after the first load.
         void SeedIfMissing(string key, string value)
         {

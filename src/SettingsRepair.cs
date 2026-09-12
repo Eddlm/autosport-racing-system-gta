@@ -51,6 +51,7 @@ namespace ARS
                 {
                     float value;
                     if (!float.TryParse(current, NumberStyles.Float, CultureInfo.InvariantCulture, out value)) return Default;
+                    if (float.IsNaN(value) || float.IsInfinity(value)) return Default;   // a non-finite number is not a value
                     string snapped = SnappedToList(value);
                     if (snapped != null) return snapped;
                     if (_max > _min && (value < _min || value > _max)) return Clamp(value).ToString("0.###", CultureInfo.InvariantCulture);
@@ -60,6 +61,14 @@ namespace ARS
                 if (_domain.Contains(current, StringComparer.Ordinal)) return null;
                 string canonical = _domain.FirstOrDefault(d => string.Equals(d, current, StringComparison.OrdinalIgnoreCase));
                 return canonical ?? Default;
+            }
+
+            // A key the schema cannot repair (no default to fall back on) has to hold a finite number, or its line goes.
+            public bool HasUnusableValue(string text)
+            {
+                if (Default != null || _kind != Kind.Number) return false;
+                float value;
+                return !float.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) || float.IsNaN(value) || float.IsInfinity(value);
             }
 
             // Numeric keys the menu offers as a fixed list snap to the nearest offered value, so the
@@ -215,9 +224,11 @@ namespace ARS
                 if (!file.Owned || !File.Exists(file.Path)) continue;
                 try
                 {
-                    HashSet<string> declared = new HashSet<string>(file.Specs.Select(s => s.Key), StringComparer.OrdinalIgnoreCase);
+                    Dictionary<string, KeySpec> declared = new Dictionary<string, KeySpec>(StringComparer.OrdinalIgnoreCase);
+                    foreach (KeySpec spec in file.Specs) declared[spec.Key] = spec;
                     List<string> kept = new List<string>();
-                    List<string> dropped = new List<string>();
+                    List<string> stale = new List<string>();
+                    List<string> unusable = new List<string>();
                     string section = null;
                     foreach (string line in File.ReadAllLines(file.Path))
                     {
@@ -228,12 +239,15 @@ namespace ARS
                         bool isKeyLine = opened == null && separator > 0 && string.Equals(section, "MENU", StringComparison.OrdinalIgnoreCase);
                         if (!isKeyLine) { kept.Add(line); continue; }
                         string key = trimmed.Substring(0, separator).Trim();
-                        if (declared.Contains(key)) kept.Add(line);
-                        else dropped.Add(key);
+                        KeySpec spec;
+                        if (!declared.TryGetValue(key, out spec)) { stale.Add(key); continue; }
+                        if (spec.HasUnusableValue(trimmed.Substring(separator + 1))) { unusable.Add(key); continue; }
+                        kept.Add(line);
                     }
-                    if (dropped.Count == 0) continue;
+                    if (stale.Count == 0 && unusable.Count == 0) continue;
                     WriteAtomic(file.Path, kept);
-                    ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped stale " + string.Join(", ", dropped.ToArray()));
+                    if (stale.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped stale " + string.Join(", ", stale.ToArray()));
+                    if (unusable.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped unusable " + string.Join(", ", unusable.ToArray()));
                 }
                 catch (Exception ex)
                 {

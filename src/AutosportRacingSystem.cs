@@ -1205,8 +1205,8 @@ namespace ARS
             }
             if (min == float.MaxValue) { min = 0f; max = 1f; }
 
-            float storedTarget = RaceMenuStore.GetFloat("PaceTarget", float.NaN);
-            if (!float.IsNaN(storedTarget)) PowerTargetScale = RoundToNearestEven(Clamp(storedTarget, min, max));
+            bool targetStored = RaceMenuStore.TryGetFloat("PaceTarget", out float storedTarget) && !float.IsNaN(storedTarget);
+            if (targetStored) PowerTargetScale = RoundToNearestEven(Clamp(storedTarget, min, max));
             PowerTargetScale = RoundToNearestEven(Clamp(PowerTargetScale, min, max));
 
             _powerTargetValues.Clear();
@@ -1214,7 +1214,7 @@ namespace ARS
 
             _powerTargetItem.Items.Clear();
             foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0"));
-            if (RaceMenuStore.Get("PaceTarget", null) == null && _powerTargetValues.Count > 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
+            if (!targetStored && _powerTargetValues.Count > 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
             else _powerTargetItem.SelectedIndex = _powerTargetValues.Count > 0 ? FindNearestPowerValue(_powerTargetValues, PowerTargetScale) : 0;
             if (_powerTargetItem.SelectedIndex < 0 && _powerTargetValues.Count > 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
             if (_powerTargetValues.Count > 0) PowerTargetScale = _powerTargetValues[_powerTargetItem.SelectedIndex];
