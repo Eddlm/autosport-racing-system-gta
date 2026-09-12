@@ -173,6 +173,7 @@ namespace ARS
             Style style = PickStyle(names, random, out livery);
 
             if (livery >= 0) veh.Livery = livery;
+            ARS.Log(ARS.LogImportance.Info, "Smart tune " + veh.DisplayName + ": " + style + ", livery " + (livery >= 0 ? names[livery] : "(none)"));
             ApplyParts(veh, style, random);
             ApplyPaint(veh, livery >= 0 ? names[livery] : null, random);
         }
