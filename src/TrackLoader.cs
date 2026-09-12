@@ -106,7 +106,6 @@ namespace ARS
             if (ARS.DebugToggles[Options.ReverseRoute])
             {
                 routeNodes.Reverse();
-                UI.Notify("~g~Route is reversed.");
             }
 
             int i = 0;

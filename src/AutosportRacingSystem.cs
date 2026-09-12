@@ -853,7 +853,6 @@ namespace ARS
             {
                 _arsMenu.Visible = false;
                 CleanEverything();
-                UI.Notify("~r~Race ended.~w~ Everything cleaned.");
             };
 
             // ── Other submenu (root) ──
@@ -2400,20 +2399,6 @@ namespace ARS
         {
 
 
-
-            if (WasCheatStringJustEntered("combo"))
-            {
-                Vehicle v = Game.Player.Character.CurrentVehicle;
-                string t = "";
-                t += (int)v.PrimaryColor + "~n~";
-                t += (int)v.SecondaryColor + "~n~";
-                t += (int)v.PearlescentColor + "~n~";
-                t += (int)v.RimColor + "~n~";
-                t += (int)v.TrimColor + "~n~";
-                t += (int)v.DashboardColor + "~n~";
-
-                UI.Notify(t);
-            }
 
             if (WasCheatStringJustEntered("arson"))
             {
@@ -4301,7 +4286,6 @@ namespace ARS
 
                     if (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc && car.HighGear > 2)
                     {
-                        UI.Notify(car.DisplayName + " powers up");
                         float mul = 10f;
                         while (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc && mul < 500)
                         {
