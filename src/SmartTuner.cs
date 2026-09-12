@@ -73,12 +73,15 @@ namespace ARS
         };
 
         // Brand liveries imply their own colours: the artwork is the brand's, so the paint should be too. The
-        // value is (preferred body families, the colour the livery artwork carries). Redwood's artwork is red
-        // and reads best on white (user, 2026-10). Add brands here as they come up - the keyword table already
-        // sends them to a Racing build, so the parts follow for free.
-        static readonly Dictionary<string, KeyValuePair<string[], string>> Brands = new Dictionary<string, KeyValuePair<string[], string>>
+        // value is (preferred body families, the artwork's colours). Both are LISTS on purpose - most brand
+        // liveries are two- or three-tone (Atomic is yellow on blue, Pisswasser yellow on black, Redwood
+        // red/white/yellow), so a single accent string would drop half of the identity. Accent is picked at
+        // random from the artwork colours, which keeps variety inside the brand's own palette.
+        // Redwood's artwork is red and reads best on white (user, 2026-10). Add brands here as they come up -
+        // the keyword table already sends brand names to a Racing build, so the parts follow for free.
+        static readonly Dictionary<string, KeyValuePair<string[], string[]>> Brands = new Dictionary<string, KeyValuePair<string[], string[]>>
         {
-            { "redwood", new KeyValuePair<string[], string>(new[] { "white" }, "red") },
+            { "redwood", new KeyValuePair<string[], string[]>(new[] { "white" }, new[] { "red", "yellow" }) },
         };
 
         // Body paints, grouped so a livery that names a colour can pull from its whitelist. **Metallic only, by
@@ -302,10 +305,10 @@ namespace ARS
             if (brand != null)
             {
                 // A brand livery dictates the paint outright: body from the brand's preferred families, accent
-                // from the colour its artwork carries.
-                KeyValuePair<string[], string> rule = Brands[brand];
+                // from the colours its artwork carries (picked at random, so the brand's palette still varies).
+                KeyValuePair<string[], string[]> rule = Brands[brand];
                 body = PickPaint(rule.Key, random);
-                accent = ColourOf(rule.Value);
+                accent = PickPaint(rule.Value, random);
             }
             else if (named.Count >= 2)
             {
