@@ -472,7 +472,8 @@ namespace ARS
                 float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * 0.3f, Handling.LateralTractionCurve * 0.6f, 0f, 1f, true);
                 if (slidePriority > 0f)
                 {
-                    float countersteerTarget = trajectorySteer - VehicleData.SlideAngle;
+                    // Countersteer output doubled (user, 2026-10) - the correction term only, not the slidePriority ramp.
+                    float countersteerTarget = trajectorySteer - (2f * VehicleData.SlideAngle);
                     Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
                 }
             }
