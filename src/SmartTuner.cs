@@ -162,18 +162,55 @@ namespace ARS
             Apply(veh, random);
         }
 
+        // A livery the car actually offers, and which space it came from: modern cars carry liveries as mod slot
+        // 48 (GET_MOD_TEXT_LABEL, applied with SET_VEHICLE_MOD), older ones in the livery list (GET_LIVERY_NAME,
+        // applied with SET_VEHICLE_LIVERY). Enumerating only the latter is why the first test found no names.
+        struct LiveryOption
+        {
+            public int Index;
+            public string Name;
+            public bool IsMod;
+        }
+
+        static List<LiveryOption> Options(Vehicle veh)
+        {
+            List<LiveryOption> options = new List<LiveryOption>();
+            int modCount = veh.GetModCount(VehicleMod.Livery);
+            for (int i = 0; i < modCount; i++)
+            {
+                string label = Function.Call<string>(Hash.GET_MOD_TEXT_LABEL, veh, (int)VehicleMod.Livery, i);
+                options.Add(new LiveryOption { Index = i, Name = LabelText(label), IsMod = true });
+            }
+            if (options.Count == 0)
+            {
+                for (int i = 0; i < veh.LiveryCount; i++)
+                {
+                    string label = Function.Call<string>(Hash.GET_LIVERY_NAME, veh, i);
+                    options.Add(new LiveryOption { Index = i, Name = LabelText(label), IsMod = false });
+                }
+            }
+            return options;
+        }
+
         static void Apply(Vehicle veh, Func<int, int, int> random)
         {
             veh.InstallModKit();
 
+            List<LiveryOption> options = Options(veh);
             List<string> names = new List<string>();
-            for (int i = 0; i < veh.LiveryCount; i++) names.Add(LiveryName(veh, i));
+            foreach (LiveryOption option in options) names.Add(option.Name);
 
             int livery;
             Style style = PickStyle(names, random, out livery);
 
-            if (livery >= 0) veh.Livery = livery;
-            ARS.Log(ARS.LogImportance.Info, "Smart tune " + veh.DisplayName + ": " + style + ", livery " + (livery >= 0 ? names[livery] : "(none)"));
+            if (livery >= 0)
+            {
+                if (options[livery].IsMod) veh.SetMod(VehicleMod.Livery, options[livery].Index, false);
+                else veh.Livery = options[livery].Index;
+            }
+
+            ARS.Log(ARS.LogImportance.Info, "Smart tune " + veh.DisplayName + ": " + style + ", " + options.Count
+                + " liveries, " + (livery >= 0 ? names[livery] : "none named"));
             ApplyParts(veh, style, random);
             ApplyPaint(veh, livery >= 0 ? names[livery] : null, random);
         }
@@ -263,10 +300,9 @@ namespace ARS
             return VehicleColor.MetallicBlack;
         }
 
-        // GET_LIVERY_NAME gives the GXT label; _GET_LABEL_TEXT turns it into the game's own text.
-        static string LiveryName(Vehicle veh, int index)
+        // The natives hand back a GXT label; _GET_LABEL_TEXT turns it into the game's own text.
+        static string LabelText(string label)
         {
-            string label = Function.Call<string>(Hash.GET_LIVERY_NAME, veh, index);
             if (string.IsNullOrEmpty(label)) return null;
             string text = Function.Call<string>((Hash)0x7B5280EBA9840C72, label);
             return string.IsNullOrEmpty(text) || text == "NULL" ? null : text;
