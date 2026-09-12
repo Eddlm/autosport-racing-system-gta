@@ -1042,7 +1042,7 @@ namespace ARS
             {
                 if (_trackListPaths.Count == 0)
                 {
-                    UI.Notify("~r~No tracks found. Create one with 'arscreatetrack'.");
+                    UI.Notify("~r~No tracks found.~w~ Put track files in the Tracks folder.");
                     return;
                 }
                 trackPath = _trackListPaths[0];
