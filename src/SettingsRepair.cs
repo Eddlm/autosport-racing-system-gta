@@ -206,7 +206,7 @@ namespace ARS
                 {
                     if (file.Owned || file.DefaultText == null || File.Exists(file.Path)) continue;
                     File.WriteAllText(file.Path, file.DefaultText);
-                    ARS.Log(ARS.LogImportance.Error, "Settings repair: created missing " + file.Name + " with defaults.");
+                    ARS.Log(ARS.LogImportance.Info, "Settings repair: created missing " + file.Name + " with defaults.");
                     GTA.UI.Notify("~o~ARS restored a missing settings file:~w~ " + file.Name);
                 }
             }
