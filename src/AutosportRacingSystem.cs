@@ -4102,6 +4102,7 @@ namespace ARS
             xmlFile.AppendChild(data);
 
             xmlFile.Save(ScriptsFolder + @"\Drivers\" + name + ".xml");
+            UI.ShowSubtitle("~b~Driver saved successfully.~w~~n~Filename: ~g~" + name + ".xml");
             return "Finished";
 
         }

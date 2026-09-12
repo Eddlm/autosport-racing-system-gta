@@ -158,7 +158,6 @@ namespace ARS
             if (ARS.InstructionalScaleform == null || !ARS.InstructionalScaleform.IsLoaded)
             {
                 ARS.InstructionalScaleform = new Scaleform("INSTRUCTIONAL_BUTTONS");
-                UI.ShowSubtitle("~o~Scaleform not loaded", 500);
                 return false;
             }
 
