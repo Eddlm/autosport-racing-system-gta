@@ -682,7 +682,7 @@ namespace ARS
 
         public static float PowerTargetScale = 0.52f;
         // Pace mode: Relative resolves the target from the player's car + offset at Spawn Grid; Absolute uses the
-        // fixed target, except the immersive join which anchors at the player's car for that grid. Neither writes back here.
+        // fixed target. Neither writes back here.
         public static bool PaceModeRelative = true;
         public static float PaceOffsetScale = 0f;
         // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
@@ -712,7 +712,7 @@ namespace ARS
         NativeListItem<string> _paceOffsetItem;
         readonly List<float> _powerTargetValues = new List<float>();
         readonly List<float> _paceOffsetValues = new List<float>();
-        // Effective pace target resolved at Spawn Grid (Relative mode, or the Absolute immersive join) — never written back into PowerTargetScale.
+        // Effective pace target resolved at Spawn Grid from Pace Mode — never written back into PowerTargetScale.
         float _resolvedPaceTarget = 0.52f;
         // Most recent valid player-vehicle pace reading; relative-mode fallback when the player has no vehicle.
         float _lastKnownPlayerPace = float.NaN;
@@ -969,7 +969,7 @@ namespace ARS
             advancedMenu.Add(overspeedItem);
 
             // ── Pace Mode — standing preference on Settings, own store (Menu-Settings.ini) ──
-            _paceModeItem = new NativeListItem<string>("Pace Mode", "Absolute = fixed pace target (spectating). Relative = your car's pace + offset (racing), resolved at Spawn Grid.", new[] { "Absolute", "Relative" });
+            _paceModeItem = new NativeListItem<string>("Pace Mode", "Absolute = every grid uses the fixed Pace Target. Relative = every grid uses your car's pace + offset. Governs menu starts and E-joins alike.", new[] { "Absolute", "Relative" });
             _paceModeItem.ItemChanged += (sender, args) =>
             {
                 PaceModeRelative = _paceModeItem.Items[args.Index] == "Relative";
@@ -1059,9 +1059,7 @@ namespace ARS
 
         // Phase 2: spawn the AI grid with current pace/grid settings. Repeatable —
         // calling again tears down the old grid and respawns with updated settings.
-        // anchorToPlayerCar = the immersive join's "race the car you're in" anchor (ignored in Relative mode,
-        // which already resolves from the player's car).
-        public void InstanceGrid(bool anchorToPlayerCar = false)
+        public void InstanceGrid()
         {
             if (!_trackInstanced)
             {
@@ -1074,7 +1072,8 @@ namespace ARS
             // Tear down any existing AI grid (player is not a racer yet at this point).
             CleanRacers();
 
-            // Resolve the effective pace target once per grid. An anchor outside the fleet span is harmless — ranking starts from the closest end.
+            // Resolve the effective pace target once per grid from Pace Mode — the menu is the only authority on the anchor.
+            // An anchor outside the fleet span is harmless: the ranking starts from the closest end.
             _resolvedPaceTarget = PowerTargetScale;
             if (PaceModeRelative)
             {
@@ -1082,7 +1081,6 @@ namespace ARS
                 else if (!float.IsNaN(_lastKnownPlayerPace)) _resolvedPaceTarget = _lastKnownPlayerPace + PaceOffsetScale;
                 else UI.Notify("~o~No vehicle to pace from - using the fixed pace target.");
             }
-            else if (anchorToPlayerCar) _resolvedPaceTarget = ComputePlayerCarPaceIndex();
 
             FillCachedCandidates(_intendedOpponents, true);
             LoadGrid(_intendedOpponents);
@@ -1106,11 +1104,11 @@ namespace ARS
 
         // All-in-one chain: runs all three phases back-to-back with no UI stops.
         // Used by future presets; also the backward-compatible single-call path.
-        public void StartRaceFromMenu(bool anchorToPlayerCar = false)
+        public void StartRaceFromMenu()
         {
             InstanceTrack();
             if (!_trackInstanced) return;
-            InstanceGrid(anchorToPlayerCar);
+            InstanceGrid();
             if (!_gridInstanced) return;
             StartRace();
         }
@@ -1414,9 +1412,9 @@ namespace ARS
                             DisplayHelpTextThisFrame("Press ~INPUT_CONTEXT~ to race at ~b~" + Path.GetFileNameWithoutExtension(nearest.TrackPath) + "~w~.");
                             if (!_arsMenu.Visible && CanWeUse(Game.Player.Character.CurrentVehicle) && !Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlJustPressed(2, GTA.Control.Context))
                             {
-                                // E-join races the car you're in — anchored per grid, never written into the persisted target.
+                                // Pace Mode governs this grid like any other — the join adds no pace override of its own.
                                 SelectTrackInMenu(nearest.TrackPath);
-                                StartRaceFromMenu(true);
+                                StartRaceFromMenu();
                             }
                         }
                     }
@@ -3714,12 +3712,6 @@ namespace ARS
             return !float.IsNaN(pace) && !float.IsInfinity(pace);
         }
 
-        // Pace index for the player's current vehicle, using the same model-level natives as the grid caches.
-        float ComputePlayerCarPaceIndex()
-        {
-            if (TryComputePlayerCarPaceIndex(out float pace)) { _lastKnownPlayerPace = pace; return pace; }
-            return PowerTargetScale;
-        }
 
 
         void DisplayHelpTextThisFrame(string text)
