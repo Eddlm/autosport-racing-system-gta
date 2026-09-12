@@ -89,6 +89,8 @@ Only location changed: `partial class` means no visibility plumbing and no call-
 - `SaveRoute` writes `Flares="false"` where `TrackLoader.ReadFlareColor` expects the documented 9-digit RGB form; the two disagree.
 - The csproj lists `src\TrackLoader.cs` twice.
 
+**Mutation policy — the first WIP release ships with NO track mutation (2026-10)**: no create, edit/update or delete. It is a property of the build, not a promise: the creator is unreachable (above), and the only live writer, `UpdateRoute`, has its sole entry point — the `arsupdroute` cheat in `HandleCheats` — gated with `if (1 == 2)` and a log line that says the cheat is ignored. `SaveRoute` has no callers. Verified by grep: every `Tracks\*.xml` write lives in `AutosportRacingSystem.TrackFile.cs`, and the only `File.Delete` in the codebase is SettingsRepair's own temp-file cleanup (unrelated). Re-enabling means removing that gate deliberately — and settling the `Wide` off-by-one first.
+
 **Revival (the refinement pass)**: with the code isolated, reviving creator mode is a deliberate design step — an entry point (cheat and/or menu item) plus a decision about what the feature should become — rather than restoring a hint for a cheat that never existed.
 
 ## Rear-end prevention — open ideas

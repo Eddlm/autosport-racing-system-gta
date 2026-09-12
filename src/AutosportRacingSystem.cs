@@ -1889,7 +1889,8 @@ namespace ARS
             if (WasCheatStringJustEntered("arsupdroute"))
             {
                 
-                UpdateRoute(true, true, true);
+                Log(LogImportance.Info, "arsupdroute ignored: track mutation is disabled in this build (no create, edit/update or delete).");
+                if (1 == 2) UpdateRoute(true, true, true);
 
             }
             if (WasCheatStringJustEntered("arsbuildcarlist"))
