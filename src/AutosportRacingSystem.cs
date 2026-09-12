@@ -2472,7 +2472,6 @@ namespace ARS
 
             if (WasCheatStringJustEntered("arssettings"))
             {
-                UI.Notify("Re loading settings.");
                 SettingsFile = null;
                 DevSettingsFile = null;
                 LoadSettings();
@@ -2517,7 +2516,6 @@ namespace ARS
             Log(LogImportance.Info, "-- UPDATING CURRENT ROUTE --");
             if (path || raceline)
             {
-                UI.Notify("Updating path and raceline.");
                 XmlNode route = CurrentFile.SelectSingleNode("//Route");
                 Log(LogImportance.Info, "Removing original _routeNodes.");
                 route.RemoveAll();
@@ -2574,7 +2572,6 @@ namespace ARS
 
             if (props)
             {
-                UI.Notify("Updating objects.");
                 XmlElement info = null;
                 Log(LogImportance.Info, "Removing all object references.");
 
@@ -4117,7 +4114,6 @@ namespace ARS
             xmlFile.AppendChild(data);
 
             xmlFile.Save(ScriptsFolder + @"\Drivers\" + name + ".xml");
-            UI.Notify("Saved");
             return "Finished";
 
         }
