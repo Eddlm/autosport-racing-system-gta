@@ -119,9 +119,7 @@ namespace ARS
             { "grotti", new KeyValuePair<string[], string[]>(new[] { "red", "white" }, new[] { "red", "white" }) },
             { "ocelot", new KeyValuePair<string[], string[]>(new[] { "white", "blue" }, new[] { "blue", "red", "white" }) },
             { "dewbauchee", new KeyValuePair<string[], string[]>(new[] { "white", "black" }, new[] { "yellow", "black", "white" }) },
-            // Karin: user override - the yellow brand, and deep blue for its rally cars (Subaru-style). Supersedes
-            // the research pass's inferred white/blue + blue/gold.
-            { "karin", new KeyValuePair<string[], string[]>(new[] { "blue" }, new[] { "yellow" }) },
+            { "karin", new KeyValuePair<string[], string[]>(new[] { "white", "blue" }, new[] { "blue", "gold" }) },
             { "maibatsu", new KeyValuePair<string[], string[]>(new[] { "white", "black", "silver" }, new[] { "red" }) },
             { "vulcar", new KeyValuePair<string[], string[]>(new[] { "blue", "black" }, new[] { "orange" }) },
             { "annis", new KeyValuePair<string[], string[]>(new[] { "white", "silver", "black" }, new[] { "blue" }) },
@@ -355,13 +353,15 @@ namespace ARS
             VehicleColor accent;
             if (brand != null)
             {
-                // A brand livery dictates the paint outright: body from the brand's preferred families, accent
-                // from the colours its artwork carries (picked at random, so the brand's palette still varies).
-                // Rims take the brand too - R*'s own Sprunk Buffalo is white/white with green wheels. Trial for
-                // now; the user may drop it back to neutrals after seeing it in the field.
+                // A brand livery dictates the paint: body from the brand's preferred families, accent and rims
+                // from the colours its artwork carries. Rims take the brand because R*'s own Sprunk Buffalo is
+                // white/white with green wheels (trial - may go back to neutrals).
+                // The name often says which variant it is ("Karin Performance White", "Xero Gas Black"), and a
+                // brand rule alone cannot know whether this car is the white one or the gold one - so a colour the
+                // name states narrows the brand's sets rather than being ignored.
                 KeyValuePair<string[], string[]> rule = Brands[brand];
-                body = PickPaint(rule.Key, random);
-                accent = PickPaint(rule.Value, random);
+                body = PreferStated(rule.Key, named, random);
+                accent = PreferStated(rule.Value, named, random);
                 rims = PickPaint(rule.Value, random);
             }
             else if (IsMarque(liveryName))
@@ -450,6 +450,17 @@ namespace ARS
             }
             if (options.Count == 0) return VehicleColor.MetallicBlack;
             return options[random(0, options.Count - 1)];
+        }
+
+        // Uses a colour the livery name states when the given set contains it, and picks freely otherwise. This is
+        // what settles "is this car the white Karin or the gold one" from the name when the name says so.
+        static VehicleColor PreferStated(string[] families, List<string> named, Func<int, int, int> random)
+        {
+            foreach (string colour in named)
+            {
+                if (Array.IndexOf(families, colour) >= 0) return PickPaint(new[] { colour }, random);
+            }
+            return PickPaint(families, random);
         }
 
         // Every colour the name mentions, in the order the name mentions them (the word list's own order is
