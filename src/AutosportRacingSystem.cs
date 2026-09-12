@@ -2020,7 +2020,6 @@ namespace ARS
             AddPlayerToGrid();
             if (Racers.Count == 0)
             {
-                UI.Notify("~r~No vehicles found with those tags.");
                 if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
                 return;
             }
@@ -3998,13 +3997,6 @@ namespace ARS
             XmlDocument xmlFile = new XmlDocument();
             xmlFile.Load(fileRouteNodes);
 
-            if (xmlFile == null)
-            {
-                UI.Notify("~r~cannot find file");
-                return xmlFile;
-            }
-
-
             info.Add(xmlFile);
             return xmlFile;
         }
@@ -4017,10 +4009,6 @@ namespace ARS
             File.AppendAllText(fileRouteNodes, "");
 
             XmlDocument xmlFile = new XmlDocument();
-            if (xmlFile == null)
-            {
-                UI.Notify("~r~cannot find file");
-            }
 
             XmlNode data = xmlFile.CreateNode(XmlNodeType.Element, "Data", null);
             xmlFile.AppendChild(data);
@@ -4487,7 +4475,7 @@ namespace ARS
 
             if (!CanWeUse(car))
             {
-                UI.Notify("~o~Weird error.~w~Car doesn't seem to exist, try reentering.");
+                UI.Notify("~o~No vehicle to save.~w~ Get in a car and try again.");
                 return;
             }
             string name = "";

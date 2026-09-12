@@ -1905,7 +1905,8 @@ namespace ARS
                     else if (Lap > 1)
                     {
                         TimeSpan lapTime = ARS.ParseToTimeSpan(Game.GameTime - LapStartTime);
-                        UI.Notify(Name + "'s laptime: ~b~" + lapTime.ToString("m':'ss'.'f"));
+                        ARS.Log(ARS.LogImportance.Info, "Laptime " + Name + ": " + lapTime.ToString("m':'ss'.'f"));
+                        if (Driver.IsPlayer) UI.Notify(Name + "'s laptime: ~b~" + lapTime.ToString("m':'ss'.'f"));
                         LapTimes.Add(lapTime);
                         LapStartTime = Game.GameTime;
                     }
