@@ -154,7 +154,7 @@ namespace ARS
 
             FileSpec race = Owned("Menu-Race.ini");
             race.Specs.Add(new KeySpec("Track", null));                     // optional: absent = no track chosen yet
-            race.Specs.Add(new KeySpec("Laps", "5", Kind.Text, new[] { "3", "5", "7", "9", "11", "13", "15", "17", "19" }));
+            race.Specs.Add(new KeySpec("Laps", "4", Kind.Number, new[] { "2", "4", "6", "8", "10" }));   // numeric: a retired lap count snaps to the nearest offer instead of resetting
             race.Specs.Add(new KeySpec("GridSize", "4", Kind.Number, null, 0f, 12f));
             race.Specs.Add(new KeySpec("PaceOffset", "0", Kind.Number));
             race.Specs.Add(new KeySpec("PaceTarget", null, Kind.Number));   // optional: absent triggers the fleet-span middle autoselect

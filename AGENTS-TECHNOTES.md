@@ -106,7 +106,7 @@ A 3-way "Weaponized Cars" menu option + `DOES_VEHICLE_HAVE_WEAPONS`-based LoadGr
 
 | File | Keys (default) |
 | --- | --- |
-| `Menu-Race.ini` | `Track` *(optional)*, `Laps` (5), `GridSize` (4), `PaceOffset` (0), `PaceTarget` *(optional)*, `ReverseRoute` (False) |
+| `Menu-Race.ini` | `Track` *(optional)*, `Laps` (4), `GridSize` (4), `PaceOffset` (0), `PaceTarget` *(optional)*, `ReverseRoute` (False) |
 | `Menu-Racers.ini` | `GridSorting` (Power), `TimeoutSeconds` (30), `AIRacerAutofix` (1), `AITuningLevel` (1), `AiNitro` (IfPlayerHas), `UseMenyooSkins` (True), `OverspeedEnabled` (True) |
 | `Menu-Settings.ini` | `PaceMode` (Relative) |
 | `Menu-DevSettings.ini` | one key per `DebugToggles` entry — the table *is* the schema, so retiring a toggle retires its key automatically |

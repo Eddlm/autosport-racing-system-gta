@@ -748,9 +748,9 @@ namespace ARS
             };
             _raceMenu.Add(_trackListItem);
 
-            NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", new[] { "3", "5", "7", "9", "11", "13", "15", "17", "19" });
+            NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", new[] { "2", "4", "6", "8", "10" });
             lapsItem.ItemChanged += (sender, args) => RaceMenuStore.Set("Laps", lapsItem.Items[args.Index]);
-            int laps = RaceMenuStore.GetInt("Laps", 5);
+            int laps = RaceMenuStore.GetInt("Laps", 4);
             lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(laps.ToString()));
             _raceMenu.Add(lapsItem);
 
@@ -1544,11 +1544,11 @@ namespace ARS
                 
                 Vector3 playerPos = Game.Player.Character.Position;
                 DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(playerPos)).FirstOrDefault();
+                int raceLaps = RaceMenuStore.GetInt("Laps", 4);
                 foreach (Racer racer in Racers)
                 {
                     racer.ProcessTick();
-                    int laps = SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5);
-                    if (((!IsPointToPoint && racer.Lap >= laps) || (IsPointToPoint && racer.Lap > 1)) && !LeaderboardFinish.Contains(racer))
+                    if (((!IsPointToPoint && racer.Lap >= raceLaps) || (IsPointToPoint && racer.Lap > 1)) && !LeaderboardFinish.Contains(racer))
                     {
                         if (racer.Car.CurrentBlip != null) racer.Car.CurrentBlip.Color = BlipColor.Green;
 
@@ -2116,7 +2116,7 @@ namespace ARS
                 Log(LogImportance.Info, "Placing cars");
                 PlaceCars();
                 Racer mostPower = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList()[0];
-                int r = ((RouteNodes.Count / 3) * SettingsFile.GetValue("GENERAL_SETTINGS", "Laps", 5)) + (Racers.Count * 100) + (int)Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, mostPower.Car) * 400, 0);
+                int r = ((RouteNodes.Count / 3) * RaceMenuStore.GetInt("Laps", 4)) + (Racers.Count * 100) + (int)Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, mostPower.Car) * 400, 0);
                 RaceReward = (int)(Math.Round((float)r / 100)) * 100;
             }
 
@@ -3603,7 +3603,7 @@ namespace ARS
             SettingsMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Settings.ini");
             DevMenuStore = new MenuSettings(SettingsFolder + @"\Menu-DevSettings.ini");
             SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
-            RaceMenuStore.Migrate("Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 5).ToString());
+            RaceMenuStore.Migrate("Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 4).ToString());
             Log(LogImportance.Info, "Loaded Options.");
 
             Log(LogImportance.Info, "Loading per-menu settings (Menu-*.ini) ...");
