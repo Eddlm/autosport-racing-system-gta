@@ -340,73 +340,6 @@ namespace ARS
             Log(LogImportance.Info, "-------------");
         }
 
-        static XmlDocument LoadXmlOrThrow(string path)
-        {
-            XmlDocument document = new XmlDocument();
-            document.Load(path);
-            return document;
-        }
-
-        public static List<string> GetTrackTags(string _routeNodes)
-        {
-            return TrackRepository.ReadTrackTags(_routeNodes);
-            XmlDocument document = LoadXmlOrThrow(_routeNodes);
-
-            List<string> tags = new List<string>();
-            tags.Add(System.IO.Path.GetFileName(_routeNodes).ToLowerInvariant());
-            XmlNodeList nl = document.SelectNodes("//Tags/*");
-            foreach (XmlNode node in nl)
-            {
-                tags.Add(node.InnerText.ToLowerInvariant());
-            }
-
-            return tags;
-        }
-
-        public static Vector3 GetTrackStartPos(string _routeNodes)
-        {
-            return TrackRepository.ReadTrackStartPosition(_routeNodes);
-            XmlDocument document = LoadXmlOrThrow(_routeNodes);
-
-            List<string> tags = new List<string>();
-            tags.Add(System.IO.Path.GetFileName(_routeNodes).ToLowerInvariant());
-            XmlNode point = document.SelectNodes("//Route/Point")[0];
-            XmlNodeList nl = point.ChildNodes;
-
-            if (nl != null)
-            {
-                Vector3 p = Vector3.Zero;
-
-                foreach (XmlNode node in nl)
-                {
-                    string t = node.InnerText;
-
-                    float i = 0;
-                    float.TryParse(t.Replace('.', ','), out i);
-                    if (node.Name == "X") p.X = i;
-                    if (node.Name == "Y") p.Y = i;
-                    if (node.Name == "Z") p.Z = i;
-                }
-                return p;
-            }
-            return Vector3.Zero;
-        }
-
-        public static string GetRacerModel(string _routeNodes)
-        {
-            return TrackRepository.ReadVehicleModel(_routeNodes);
-            try
-            {
-                XmlDocument document = new XmlDocument();
-                document.Load(_routeNodes);
-                XmlNode modelNode = document.SelectSingleNode("//Model");
-                return modelNode?.InnerText?.Trim();
-            }
-            catch
-            {
-                return null;
-            }
-        }
 
 
 
@@ -1683,13 +1616,6 @@ namespace ARS
         
         
 
-        public static Vector3 QuadraticBezier(Vector3 a, Vector3 b, Vector3 c, float t)
-        {
-            Vector3 ab = Vector3.Lerp(a, b, t);
-            Vector3 bc = Vector3.Lerp(b, c, t);
-            Vector3 abc = Vector3.Lerp(ab, bc, t);
-            return abc;
-        }
 
         
 
