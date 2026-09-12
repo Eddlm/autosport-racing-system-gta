@@ -284,7 +284,6 @@ namespace ARS
         static void ApplyPaint(Vehicle veh, string liveryName, Func<int, int, int> random)
         {
             List<string> named = ColoursIn(liveryName);
-            string key = named.Count > 0 ? named[0] : null;
 
             VehicleColor body;
             VehicleColor accent;
@@ -309,7 +308,7 @@ namespace ARS
 
             veh.PrimaryColor = body;
             veh.SecondaryColor = accent;
-            veh.PearlescentColor = PickPaint(FamiliesFor(key), random);
+            veh.PearlescentColor = VehicleColor.MetallicBlack;   // black pearl = no pearl tint, by request for now
             veh.RimColor = PickPaint(Neutrals, random);
         }
 
