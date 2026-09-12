@@ -119,6 +119,7 @@ namespace ARS
         // Apply Menyoo vehicle-appearance skins to grid cars when a matching file exists.
         public static bool UseMenyooSkins = true;
         public static bool OverspeedEnabled = true;
+        public static bool SmartTuning = true;
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowTrackAnalysis visuals.
         public static Racer DebugFocusRacer;
 
@@ -855,9 +856,12 @@ namespace ARS
             autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(RacersMenuStore.GetInt("AIRacerAutofix", 1).ToString()));
             racersMenu.Add(autofixItem);
 
-            NativeListItem<string> tuningItem = new NativeListItem<string>("Racer Tuning Level", "0 = none, 1 = visual, 2 = +performance, 3 = +engine boost.", new[] { "0", "1", "2", "3" });
-            tuningItem.ItemChanged += (sender, args) => SaveRacerSetting("AITuningLevel", tuningItem.Items[args.Index]);
-            tuningItem.SelectedIndex = Math.Max(0, tuningItem.Items.IndexOf(RacersMenuStore.GetInt("AITuningLevel", 1).ToString()));
+            NativeCheckboxItem tuningItem = new NativeCheckboxItem("Smart Tuning", "Pick the livery that fits a style, then the body parts that go with it, then paint to suit. Runs during the countdown so it adds no load time.", SmartTuning);
+            tuningItem.CheckboxChanged += (sender, args) =>
+            {
+                SmartTuning = tuningItem.Checked;
+                SaveRacerSetting("SmartTuning", SmartTuning.ToString());
+            };
             racersMenu.Add(tuningItem);
 
             // ── Racer nitrous enablement (player fairness) ──
@@ -1786,20 +1790,15 @@ namespace ARS
                 RaceReward = (int)(Math.Round((float)r / 100)) * 100;
             }
 
-            if (tunecars)
+            if (tunecars && SmartTuning)
             {
                 Log(LogImportance.Info, "Tuning cars");
                 foreach (Racer r in Racers)
                 {
                     if (!Game.Player.Character.IsInVehicle(r.Car) && r.Car.GetMod(VehicleMod.Engine) == -1)
                     {
-                        switch (RacersMenuStore.GetInt("AITuningLevel", 1))
-                        {
-                            case 0: continue;
-                            case 1: ARS.RandomTuning(r.Car, true, true, true, false, false); break;
-                            case 2: ARS.RandomTuning(r.Car, true, true, true, true, false); break;
-                            case 3: ARS.RandomTuning(r.Car, true, true, true, true, false); r.Car.EnginePowerMultiplier = GetRandomInt(1, 5) * 10; break;
-                        }
+                        // Placeholder: visual tuning as before, so the toggle is live while the smart pass is built.
+                        ARS.RandomTuning(r.Car, true, true, true, false, false);
                     }
                 }
             }
@@ -2687,12 +2686,12 @@ namespace ARS
             RacersMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", "Power"));
             RacersMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<int>("RACERS", "TimeoutSeconds", 30).ToString());
             RacersMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString());
-            RacersMenuStore.Migrate("AITuningLevel", legacyRacers.GetValue<int>("RACERS", "AITuningLevel", 1).ToString());
             RacersMenuStore.Migrate("AiNitro", legacyRacers.GetValue<string>("RACERS", "AiNitro", AiNitro.ToString()));
             RacersMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
             AiNitro = ParseTriState(RacersMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
             UseMenyooSkins = RacersMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
             OverspeedEnabled = RacersMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
+            SmartTuning = RacersMenuStore.GetBool("SmartTuning", SmartTuning);
             PaceModeRelative = string.Equals(SettingsMenuStore.Get("PaceMode", PaceModeRelative ? "Relative" : "Absolute"), "Relative", StringComparison.OrdinalIgnoreCase);
             PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
             Log(LogImportance.Info, "Loaded per-menu settings.");

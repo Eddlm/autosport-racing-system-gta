@@ -174,7 +174,7 @@ namespace ARS
             racers.Specs.Add(new KeySpec("GridSorting", "Power", Kind.Text, new[] { "Power", "PowerDescendent", "TopSpeed", "TopSpeedDescendent", "Random" }));
             racers.Specs.Add(new KeySpec("TimeoutSeconds", "30", Kind.Number, new[] { "15", "30", "45", "60" }));
             racers.Specs.Add(new KeySpec("AIRacerAutofix", "1", Kind.Number, new[] { "0", "1", "2" }));
-            racers.Specs.Add(new KeySpec("AITuningLevel", "1", Kind.Number, new[] { "0", "1", "2", "3" }));
+            racers.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
             racers.Specs.Add(new KeySpec("AiNitro", "IfPlayerHas", Kind.Text, new[] { "Never", "IfPlayerHas", "Always" }));
             racers.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
             racers.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
