@@ -40,17 +40,10 @@ namespace ARS
             new KeyValuePair<string, Style>("pisswasser", Style.Racing),
             new KeyValuePair<string, Style>("meinmacht", Style.Racing),
             new KeyValuePair<string, Style>("sessanta", Style.Racing),
-            new KeyValuePair<string, Style>("jackal", Style.Racing),
             new KeyValuePair<string, Style>("globe oil", Style.Racing),
             new KeyValuePair<string, Style>("ragga rum", Style.Racing),
             new KeyValuePair<string, Style>("atomic", Style.Racing),
-            new KeyValuePair<string, Style>("tenshun", Style.Racing),
-            new KeyValuePair<string, Style>("kabel", Style.Racing),
-            new KeyValuePair<string, Style>("hyper function", Style.Racing),
-            new KeyValuePair<string, Style>("yogarishima", Style.Tuner),
-            new KeyValuePair<string, Style>("teast", Style.Tuner),
             new KeyValuePair<string, Style>("stripe", Style.Stripes),
-            new KeyValuePair<string, Style>("pinstripe", Style.Stripes),
             new KeyValuePair<string, Style>("flame", Style.Muscle),
             new KeyValuePair<string, Style>("scallop", Style.Muscle),
             new KeyValuePair<string, Style>("tribal", Style.Muscle),
@@ -59,6 +52,28 @@ namespace ARS
             new KeyValuePair<string, Style>("abstraction", Style.Tuner),
             new KeyValuePair<string, Style>("geometric", Style.Tuner),
             new KeyValuePair<string, Style>("halftone", Style.Tuner),
+            // Tuner and Japanese-street brands. Before this block their liveries matched nothing and fell through
+            // to a Clean build. Tenshun, Kabel, Hyper Function and Jackal were in the Racing block above and moved
+            // here - they are tuner brands, not race sponsors. No colour evidence exists for any of these, so
+            // they stay on the generic colour paths.
+            new KeyValuePair<string, Style>("yogarishima", Style.Tuner),
+            new KeyValuePair<string, Style>("teast", Style.Tuner),
+            new KeyValuePair<string, Style>("tenshun", Style.Tuner),
+            new KeyValuePair<string, Style>("kabel", Style.Tuner),
+            new KeyValuePair<string, Style>("hyper function", Style.Tuner),
+            new KeyValuePair<string, Style>("jackal", Style.Tuner),
+            new KeyValuePair<string, Style>("wasabi", Style.Tuner),
+            new KeyValuePair<string, Style>("dense", Style.Tuner),
+            new KeyValuePair<string, Style>("hardstand", Style.Tuner),
+            new KeyValuePair<string, Style>("stance andreas", Style.Tuner),
+            new KeyValuePair<string, Style>("haiso", Style.Tuner),
+            new KeyValuePair<string, Style>("higashi", Style.Tuner),
+            new KeyValuePair<string, Style>("minami", Style.Tuner),
+            new KeyValuePair<string, Style>("nishi", Style.Tuner),
+            new KeyValuePair<string, Style>("kita", Style.Tuner),
+            new KeyValuePair<string, Style>("missile", Style.Tuner),
+            new KeyValuePair<string, Style>("prolaps", Style.Tuner),
+            new KeyValuePair<string, Style>("neds", Style.Tuner),
         };
 
         // Cosmetic slots per style. Performance slots (Engine, Brakes, Transmission, Suspension) and their
@@ -104,7 +119,9 @@ namespace ARS
             { "grotti", new KeyValuePair<string[], string[]>(new[] { "red", "white" }, new[] { "red", "white" }) },
             { "ocelot", new KeyValuePair<string[], string[]>(new[] { "white", "blue" }, new[] { "blue", "red", "white" }) },
             { "dewbauchee", new KeyValuePair<string[], string[]>(new[] { "white", "black" }, new[] { "yellow", "black", "white" }) },
-            { "karin", new KeyValuePair<string[], string[]>(new[] { "white", "blue" }, new[] { "blue", "gold" }) },
+            // Karin: user override - the yellow brand, and deep blue for its rally cars (Subaru-style). Supersedes
+            // the research pass's inferred white/blue + blue/gold.
+            { "karin", new KeyValuePair<string[], string[]>(new[] { "blue" }, new[] { "yellow" }) },
             { "maibatsu", new KeyValuePair<string[], string[]>(new[] { "white", "black", "silver" }, new[] { "red" }) },
             { "vulcar", new KeyValuePair<string[], string[]>(new[] { "blue", "black" }, new[] { "orange" }) },
             { "annis", new KeyValuePair<string[], string[]>(new[] { "white", "silver", "black" }, new[] { "blue" }) },
