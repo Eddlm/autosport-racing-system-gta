@@ -1249,8 +1249,15 @@ namespace ARS
             }
             else
             {
-                // On-track: allow more wheelspin as the car slides (slide angle in degrees, /10).
-                IdealWheelspin = -1f - ARS.Clamp(Math.Abs(VehicleData.SlideAngle) / 30f, 0f, 3f);
+                // Slide modulates the allowed spin: -1 base, deepest allowance (-2) at the traction limit, then back
+                // to strict (-1) at twice that - a car sliding that far needs the throttle back, not more of it.
+                // Descending *input* with ascending output on purpose: a descending output is inverted by Remap's
+                // clamp (Clamp(r, min, max) with min > max collapses to min), and trlat == 0 would divide by zero.
+                float trlat = Handling.LateralTractionCurve;
+                float slide = Math.Abs(VehicleData.SlideAngle);
+                if (trlat <= 0.01f) IdealWheelspin = -1f;
+                else if (slide <= trlat) IdealWheelspin = ARS.Remap(slide, trlat, 0f, -2f, -1f, true);
+                else IdealWheelspin = ARS.Remap(slide, trlat, trlat * 2f, -2f, -1f, true);
             }
 
             float error = wheelspin - IdealWheelspin;
