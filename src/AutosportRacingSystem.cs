@@ -1424,7 +1424,7 @@ namespace ARS
                 if (CountdownScaleform.IsLoaded && _countdown != _maxCountdown) CountdownScaleform.Render2D();
 
                 
-                if (DebugVisual == (int)DebugDisplay.PropEdit) DisplayHelpTextThisFrame("Add or remove any ~g~prop~w~ with the tool of your prefence. They must be ~y~persistent~w~.");
+                if (DebugVisual == (int)DebugDisplay.PropEdit) DisplayHelpTextThisFrame("Add or remove any ~g~prop~w~ with the tool of your preference. They must be ~y~persistent~w~.");
 
 
 
