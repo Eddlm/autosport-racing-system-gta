@@ -2854,7 +2854,7 @@ namespace ARS
 
             document.Save(ScriptsFolder + @"\Tracks\" + filename + ".xml");
 
-            DisplayHelpTextTimed("Adding to track dictionary...", 1000);
+            DisplayHelpTextTimed("Refreshing the track list...", 1000);
             FillKnownTracks();
             DisplayHelpTextTimed("~g~Done.", 2000);
         }
@@ -3557,6 +3557,7 @@ namespace ARS
             }
             InstructionalScaleform.Unload();
             InstructionalScaleform.Dispose();
+            InstructionalScaleform = null;   // the freecam re-creates it on demand
             Function.Call(Hash._0x10D373323E5B9C0D);
             Game.Player.Character.HasGravity = true;
             

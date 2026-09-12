@@ -155,11 +155,8 @@ namespace ARS
 
         bool DrawInstructions(bool routeEditorActive, int routeNodeCount)
         {
-            if (ARS.InstructionalScaleform == null || !ARS.InstructionalScaleform.IsLoaded)
-            {
-                ARS.InstructionalScaleform = new Scaleform("INSTRUCTIONAL_BUTTONS");
-                return false;
-            }
+            if (ARS.InstructionalScaleform == null) ARS.InstructionalScaleform = new Scaleform("INSTRUCTIONAL_BUTTONS");
+            if (!ARS.InstructionalScaleform.IsLoaded) return false;
 
             ARS.InstructionalScaleform.CallFunction("CLEAR_ALL", true);
             ARS.InstructionalScaleform.CallFunction("CREATE_CONTAINER");
