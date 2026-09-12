@@ -1008,6 +1008,7 @@ namespace ARS
                 else UI.Notify("~o~No vehicle to pace from - using the fixed pace target.");
             }
 
+            Log(LogImportance.Info, "Grid: ranking " + _vehiclePool.Count + " pool files, target " + _resolvedPaceTarget.ToString(CultureInfo.InvariantCulture));
             FillCachedCandidates(_intendedOpponents, true);
             LoadGrid(_intendedOpponents);
 
