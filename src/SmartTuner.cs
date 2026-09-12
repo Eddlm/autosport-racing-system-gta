@@ -300,15 +300,19 @@ namespace ARS
             List<string> named = ColoursIn(liveryName);
             string brand = BrandIn(liveryName);
 
+            VehicleColor rims = PickPaint(Neutrals, random);
             VehicleColor body;
             VehicleColor accent;
             if (brand != null)
             {
                 // A brand livery dictates the paint outright: body from the brand's preferred families, accent
                 // from the colours its artwork carries (picked at random, so the brand's palette still varies).
+                // Rims take the brand too - R*'s own Sprunk Buffalo is white/white with green wheels. Trial for
+                // now; the user may drop it back to neutrals after seeing it in the field.
                 KeyValuePair<string[], string[]> rule = Brands[brand];
                 body = PickPaint(rule.Key, random);
                 accent = PickPaint(rule.Value, random);
+                rims = PickPaint(rule.Value, random);
             }
             else if (named.Count >= 2)
             {
@@ -332,7 +336,7 @@ namespace ARS
             veh.PrimaryColor = body;
             veh.SecondaryColor = accent;
             veh.PearlescentColor = VehicleColor.MetallicBlack;   // black pearl = no pearl tint, by request for now
-            veh.RimColor = PickPaint(Neutrals, random);
+            veh.RimColor = rims;
         }
 
         static string BrandIn(string liveryName)
