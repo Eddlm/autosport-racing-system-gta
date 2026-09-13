@@ -169,6 +169,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **Offroad gravity needs a baseline reset before the multiplier.** `Racer.Initialize()` runs every race (and on respawn), so `Handling.Gravity = 9.8f` must be set immediately before the offroad `*= 1.2f`, or it stacks across restarts and inflates every speed/decel site. The reset line is load-bearing.
 - **Speed asymmetry is intentional** (see the Speed pipeline). Don't "fix" it.
 - **`Intention.CorneringSpeedLimit` is write-only dead state** — assigned in `ComputeTargetSpeed`, read by nobody (not even the debug panel). Changing it, including via Speed Offset, does nothing; the physics cap that actually binds is `followTrackSpd` via `RouteIdealSpeedForRadius`. Wire it into a consumer or prune it — don't tune it.
+- **`Options` enum values are positional** — retiring a member renumbers the rest, so never persist or exchange one as an int. Nothing does today (the debug dictionary is keyed on the member, and each toggle's `Menu-DevSettings.ini` key is its name), which is why past removals stayed harmless; re-check before any numeric consumer appears.
 
 ## Known TODOs / open items
 One line each; the detail for every one of these is in `AGENTS-BACKLOG.md` or `AGENTS-TECHNOTES.md` (section names in the companion index above); **a simplest→most-complex ranking of the whole list sits at the top of `AGENTS-BACKLOG.md`**.
