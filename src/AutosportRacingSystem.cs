@@ -45,7 +45,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard
+        FindCustomProps, ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail
     }
 
     public enum DebugDisplay
@@ -134,20 +134,19 @@ namespace ARS
         public static bool StagedSpawns = true;
         // Flat mph added to every racer's intended speed plan; 0 = the physics plan alone.
         public static int SpeedOffsetMph = 0;
-        // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowTrackAnalysis visuals.
+        // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowProjection/ShowInputTrail visuals.
         public static Racer DebugFocusRacer;
 
         public static Dictionary<Options, bool> DebugToggles = new Dictionary<Options, bool>()
     {
-        { Options.ShowAggro, false },
         { Options.ShowInputs, false },
-        { Options.ShowTrackAnalysis, false },
-        { Options.ShowPhysics, false },
         { Options.ReverseRoute, false },
         { Options.HighDownforceOnline, true },
         { Options.ShowCheckpoints, false },
         { Options.ShowEdgeChevrons, true },
-        { Options.ShowLeaderboard, true }
+        { Options.ShowLeaderboard, true },
+        { Options.ShowProjection, false },
+        { Options.ShowInputTrail, false }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -846,13 +845,12 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(debugMenu, Options.ShowAggro, "Show Card State", "Show a chevron above each racer colored by its maneuver card: green none, blue passive (Yield/ChillOut), orange active (DiveBomb/DefendLane).");
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Show the AI throttle and brake trail.");
-            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Show corner start, apex, and exit markers.");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's lane aim line and its wall limits at the steering reference node.");
+            AddDebugCheckbox(debugMenu, Options.ShowProjection, "Show Projection", "Draw the closest AI car's 1.5s kinematic projection in three slices: 0.5s (the lane pursuit's read), 1s (the off-track cap's read) and 1.5s (read-ahead, nothing consumes it yet).");
+            AddDebugCheckbox(debugMenu, Options.ShowInputTrail, "Show Input Trail", "Drop a sphere every metre of travel, coloured by the pedal input applied there: green full throttle, yellow neutral, red full brake. Closest AI car.");
             AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
-            AddDebugCheckbox(debugMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
             AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
 
             // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
@@ -1563,8 +1561,8 @@ namespace ARS
                 }
 
                 
-                Vector3 playerPos = Game.Player.Character.Position;
-                DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(playerPos)).FirstOrDefault();
+                Vector3 focusPos = Game.Player.Character.Position;
+                DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
                 int raceLaps = RaceMenuStore.GetInt("Laps", 4);
                 foreach (Racer racer in Racers)
                 {
@@ -2137,22 +2135,25 @@ namespace ARS
             return nearest;
         }
 
-        public static TrackPoint FindNearestTrackPoint(Vector3 position, int referenceNode = -1)
+        // Nearest node to a point, searched in a window around the reference node. Circuits wrap, so a
+        // window spanning the start line still resolves; point-to-point clamps at the ends.
+        public static TrackPoint FindNearestTrackPoint(Vector3 position, int referenceNode, int behind, int ahead)
         {
-            if (ARS.TrackPoints.Count == 0) return null;
-            int lastNode = ARS.TrackPoints.Count - 1;
-            int center = referenceNode >= 0 && referenceNode <= lastNode ? referenceNode : 0;
-            int first = Math.Max(center - 10, 0);
-            int last = Math.Min(center + 10, lastNode);
-            TrackPoint nearest = ARS.TrackPoints[first];
-            float best = nearest.Position.DistanceTo2D(position);
-            for (int i = first + 1; i <= last; i++)
+            int count = ARS.TrackPoints.Count;
+            if (count == 0) return null;
+            int center = referenceNode >= 0 && referenceNode < count ? referenceNode : 0;
+            int first = ARS.IsPointToPoint ? Math.Max(center - behind, 0) : center - behind;
+            int last = ARS.IsPointToPoint ? Math.Min(center + ahead, count - 1) : center + ahead;
+            TrackPoint nearest = null;
+            float best = float.MaxValue;
+            for (int i = first; i <= last; i++)
             {
-                float dist = ARS.TrackPoints[i].Position.DistanceTo2D(position);
+                int node = ARS.IsPointToPoint ? i : ((i % count) + count) % count;
+                float dist = ARS.TrackPoints[node].Position.DistanceTo2D(position);
                 if (dist < best)
                 {
                     best = dist;
-                    nearest = ARS.TrackPoints[i];
+                    nearest = ARS.TrackPoints[node];
                 }
             }
             return nearest;

@@ -232,6 +232,13 @@ namespace ARS
     }
 
 
+    // One sample of the applied pedal input, kept every metre of travel for the debug trail.
+    public struct InputTrailSample
+    {
+        public Vector3 Position;
+        public float Input;
+    }
+
     public class VehicleControl
     {
         public float SteerDegrees = 0f;

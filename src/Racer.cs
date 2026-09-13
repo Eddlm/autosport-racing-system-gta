@@ -130,6 +130,10 @@ namespace ARS
         const float OffshootBlendBrake = 0.5f; // projection blend target: 0.5 brake
         const float FullPedalSpeedErrorMps = 3f;
 
+        // Applied pedal input sampled every metre of travel, for the debug trail.
+        readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
+        const int InputTrailMaxSamples = 40;
+
 
         // Empirical steer-limit memory: peak lateral G reference and the steer that produced it.
         float _latGRef = 0f;
@@ -327,6 +331,7 @@ namespace ARS
             FinalPosition = 0;
             CanRegisterNewLap = false;
             _previousNode = -1;
+            _inputTrail.Clear();
 
             string flags = ARS.GetHandlingFlags(Car).ToString("X");
             int flagsHex = Convert.ToInt32(flags, 16);
@@ -933,7 +938,9 @@ namespace ARS
             if (_targetLane == 0f) return combinedInput;
 
             Vector3 proj = ProjectAhead(1f);
-            TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node);
+            // 1 node ≈ 1 m: the window has to reach the projected node ~1s of travel ahead.
+            int projectionWindow = (int)Car.Velocity.Length() + 10;
+            TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node, 0, projectionWindow);
             float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
             float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
             float offTrackDistance = Math.Abs(signedOffset) - safeBound;
@@ -1589,6 +1596,8 @@ namespace ARS
         {
             UpdateTickData();
 
+            if (ARS.DebugToggles[Options.ShowInputTrail] && !Driver.IsPlayer) SampleInputTrail();
+
             if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
             {
                 Vector3 from = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.5f);
@@ -1606,10 +1615,66 @@ namespace ARS
                 }
             }
 
+            // The same ProjectAhead the pipeline reads, cut into the three debug slices.
+            if (ARS.DebugToggles[Options.ShowProjection] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
+            {
+                Vector3 halfSec = ProjectAhead(0.5f);
+                Vector3 fullSec = ProjectAhead(1f);
+                Vector3 extraSec = ProjectAhead(1.5f);
+                ARS.DrawLine(Car.Position, halfSec, Color.Cyan);
+                ARS.DrawLine(halfSec, fullSec, Color.Cyan);
+                ARS.DrawLine(fullSec, extraSec, Color.Cyan);
+                DrawPointMarker(halfSec, 0.4f, Color.Cyan);
+                DrawPointMarker(fullSec, 0.6f, Color.Magenta);
+                DrawPointMarker(extraSec, 0.6f, Color.Orange);
+            }
+
+            if (ARS.DebugToggles[Options.ShowInputTrail] && !Driver.IsPlayer && ARS.DebugFocusRacer == this) DrawInputTrail();
+
             if (!Driver.IsPlayer)
             {
                 ApplyInputs();
             }
+        }
+
+        // Sphere plus a drop line, so a marked point can be placed against the ground.
+        void DrawPointMarker(Vector3 point, float radius, Color color)
+        {
+            World.DrawMarker(MarkerType.DebugSphere, point, Vector3.Zero, Vector3.Zero, new Vector3(radius, radius, radius), color);
+            ARS.DrawLine(point, point - new Vector3(0, 0, 2f), color);
+        }
+
+        // One sample per metre travelled measured against the last recorded point; the oldest drops off at the cap.
+        void SampleInputTrail()
+        {
+            Vector3 position = Car.Position;
+            if (_inputTrail.Count > 0 && position.DistanceTo2D(_inputTrail[_inputTrail.Count - 1].Position) < 1f) return;
+            _inputTrail.Add(new InputTrailSample { Position = position, Input = Control.Throttle - Control.Brake });
+            if (_inputTrail.Count > InputTrailMaxSamples) _inputTrail.RemoveAt(0);
+        }
+
+        void DrawInputTrail()
+        {
+            if (_inputTrail.Count == 0) return;
+            for (int i = 1; i < _inputTrail.Count; i++)
+            {
+                InputTrailSample sample = _inputTrail[i];
+                Color color = InputTrailColour(sample.Input);
+                ARS.DrawLine(_inputTrail[i - 1].Position, sample.Position, color);
+                World.DrawMarker(MarkerType.DebugSphere, sample.Position, Vector3.Zero, Vector3.Zero, new Vector3(0.35f, 0.35f, 0.35f), color);
+            }
+            // Head of the trail: the white line from the car and its readout show how far the newest sample lags it.
+            InputTrailSample newest = _inputTrail[_inputTrail.Count - 1];
+            ARS.DrawLine(Car.Position, newest.Position, Color.White);
+            DrawPointMarker(newest.Position, 0.6f, Color.White);
+            ARS.DrawText(newest.Position + new Vector3(0, 0, 1.5f), _inputTrail.Count + " pts, head " + Car.Position.DistanceTo(newest.Position).ToString("0.0") + "m", Color.White, 0.3f);
+        }
+
+        // Full throttle green, neutral yellow, full brake red.
+        static Color InputTrailColour(float input)
+        {
+            float v = ARS.Clamp(input, -1f, 1f);
+            return Color.FromArgb((int)(255f * (1f - Math.Max(v, 0f))), (int)(255f * (1f + Math.Min(v, 0f))), 0);
         }
 
         public void RunTimedCore()

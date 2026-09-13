@@ -36,7 +36,7 @@
 **Tier 3 — single-method changes**
 
 10. Electric slow-electrics class question — data plus a balance judgment (see the electric section).
-11. Off-track projection aggressiveness — three candidate fixes, all inside `ApplyOffshootBlend`.
+11. Off-track projection ↔ reaction relationship — **ACTIVE** (user's pick): the projection debug ladder exists and the reference-node truncation is fixed; the band/gate/cap-shape questions are on file below.
 
 **Tier 4 — coupled systems**
 
@@ -126,9 +126,16 @@ Where the gap shows:
 
 **Corner approach tied to braking plan (idea)**: start the outside-line move ~1 s before the car must brake for the apex (computed from current speed, apex speed, braking decel) instead of a fixed seconds-to-apex gate — matches the lane transition to each corner's actual speed profile.
 
-## Off-track projection behaviour — braking is right but too aggressive (TODO, next session)
+## Off-track projection — the projection↔reaction relationship (ACTIVE — user's pick)
 
-**Off-track projection behaviour (TODO — user's pick for the next session)**: verdict is that the projection's off-track response **does** brake and the braking is correct in principle, but it is **too aggressive**. The mechanism to change is `ApplyOffshootBlend` (shape in `AGENTS.md` → Speed pipeline; the ramp endpoints and floor are in the code). Candidates, roughly in the order worth trying: (1) make it a **decay** instead of the instant clamp — the clamp is the likely jerk source, and a short slew should keep the safety while removing the stab; (2) soften the **ramp itself** (where the ramp begins past the edge, and the brake floor it ramps to) rather than the trigger, since the trigger fires on a projection the user considers correct; (3) gate by **how far** past the edge the projection lands (depth) instead of a past-the-edge boolean, so a marginal projection is nudged rather than stamped on. Related idea in `AGENTS-TECHNOTES.md`: the pessimistic projection (ease speed *before* the edge rather than an after-the-fact cap) — the better end state if this keeps fighting.
+**State (2026-11)**: the cap **does** brake and the braking is correct in principle, but it reads **too aggressive** (user verdict). Two things have changed since that verdict: (a) the debug ladder exists — Debug → Show Projection, three slices, where the **1 s magenta sphere is literally the point the cap judges**; (b) the cap's reference node was **truncated** — `FindNearestTrackPoint` searched only ±10 nodes around the car, so every moving car had its projection measured against the track direction ~10 m ahead of it, amplifying any heading error by the `(speed − 10 m)` lever arm. The window is now the caller's (`behind: 0`, `ahead: ~1 s of travel`, circuits wrapping). **Re-judge the aggressiveness after that fix** before touching the ramp — the speed-scaled false positives should be gone.
+
+**What the relationship pass has to settle** (i.e. what the reaction should be a function of):
+- **Absolute vs angular band** — the ramp is in metres past the edge at every speed, so the same heading error trips it far harder at 200 km/h than at 40. A speed-scaled or angle-based band is the leading candidate: "expecting to be off track" is arguably an angular fact, not a metric one.
+- **Binary gate on a sliding reference** — the outside test is a sign comparison against the node 1 s *behind* the car, and its two sides sit at different places on the track (offset measured near the car, angle taken behind it). A sign flip through a transition or at corner exit flickers the cap while its value moves smoothly → hysteresis or a graduated verdict.
+- **Cap vs target** — applied as a `Min` on the combined input, so a negative cap **commands brake** over the plan's own throttle; its onset reads as a ramp only because the pedal slew sits downstream. Whether the reaction belongs in the input cap or in the plan's target is the framing question.
+- **Deprioritised**: (old #1) a decay — the pedals already slew, so it adds lag on top of a ramp; (old #3) depth-gating instead of a past-the-edge boolean — the cap's *value* is already depth-graded, only the outside gate is binary.
+- **Pessimistic projection** (`AGENTS-TECHNOTES.md`) — ease speed *before* the edge instead of capping after it: the better end state if the cap keeps fighting the plan.
 
 **Do not confuse it with Speed Offset**: the projection cap governs **input**, the offset governs the **target**. While the cap is active a raised `Intention.Speed` produces no extra pedal, so "the offset does nothing" in a corner is expected there — the tell is the debug HUD's intended speed moving while the pedal trail doesn't.
 
