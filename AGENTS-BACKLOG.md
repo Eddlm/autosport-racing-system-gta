@@ -78,7 +78,7 @@ Same class, lower stakes: `Options.ini` was documented as "legacy-only, read onc
 
 Where the gap shows:
 - **The player's own car.** A tuned player car is paced at its stock number, so the Relative anchor (and any `PaceTarget` picked to match it) describes a car that no longer exists — the field gets matched against a fiction. Note the cache is checked *before* anything else, so a cache hit on the model hash **precludes** any instance read by construction.
-- **AI grid cars.** They are built with upgrades (`AITuningLevel` 0–3 = none / visual / +performance / +engine boost) and a supplier-XML `<Acceleration>` node drives the `EnginePowerMultiplier` loop in `ApplyAccelerationOverride` — so their real pace can exceed the number they were selected on.
+- **AI grid cars — no longer a gap (corrected 2026-11).** This bullet used to be the other half of the problem: AI cars were built with upgrades (`AITuningLevel` 0–3, plus a supplier-XML `<Acceleration>` node driving the `EnginePowerMultiplier` loop in `ApplyAccelerationOverride`), so their real pace could exceed the number they were selected on. **All three are gone** — those paths died with the vehicle-XML teardown, and `RandomTuning` (the only other performance applier) was already unreachable before it was deleted. AI grid cars are stock models today, so the model-theoretical number describes them correctly and **the live gap is the player's car alone**.
 
 **The machinery for the precise reading already exists** — this is the useful part. `Racer.Initialize` already reads *instance* data (`Handling.Grip` from the spawned-handle native `0xA132FB5370554DB0`, plus `Handling.EstimatedTopSpeed` and `Handling.Acceleration` out of the handling struct) to build `VehicleData.PerformanceIndex`, a separate integer index that no selection path uses. So the work isn't "invent instance reads"; it's "route the pace through the instance reads the Racer already performs".
 
@@ -118,7 +118,7 @@ Where the gap shows:
 
 **Superseded (2026-11)**: this section used to describe hand-fitted corrections (accelRaw ×3 before the common slope, top speed ×0.9) derived from a two-car G sample, with the in-game check pending. Both multipliers are gone and the check happened: the flag comes from a verified model-hash native and the raw G is scored at the **midpoint of the game's own drive-force ramp** (×5 at standstill falling linearly to ×0.9 at top speed) with **no top-speed discount**. Live detail is in `AGENTS.md` → pace score — trust that side if the two ever disagree; do not resurrect the old numbers.
 
-**Open sub-item**: the slow electrics *classed* as Super (Cyclone, Voltic, Rocket Voltic) sit ~40 PI under their class median, i.e. the class overstates them. Unsettled: whether class membership should influence an electric's treatment at all, or whether those three are simply mis-classed. Settle that before touching the ramp.
+**Settled (2026-11, user decision)**: class membership must **not** influence an electric's treatment — no class-aware special-casing. Cyclone / Voltic / Rocket Voltic are simply mis-classed by R* and keep their ramp-derived numbers (sitting ~40 PI under the Super median is accepted). Recorded so it does not get re-opened.
 
 ## Corner approach tied to braking plan (idea)
 
