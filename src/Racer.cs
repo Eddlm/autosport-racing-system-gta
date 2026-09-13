@@ -852,10 +852,13 @@ namespace ARS
 
         }
 
+        const float PedalSlewRate = 12f;            // pedal slew rate (units/second: full range in ~83ms)
+        const float PedalSlewMaxPerTick = 0.5f;     // hitch guard: never step more than this in one tick
+
         void ConvertSpeedToPedals()
         {
             float currentForwardSpeed = VehicleData.SpeedVectorLocal.Y;
-            float inputChange = 2f * TickScale;
+            float inputChange = Math.Min(PedalSlewRate * TickScale, PedalSlewMaxPerTick);
             float newThrottle = 0f;
             float newBrake = 0f;
 
