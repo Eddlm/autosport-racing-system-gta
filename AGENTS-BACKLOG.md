@@ -23,7 +23,7 @@
 **Tier 1 — localised edits, low risk**
 
 3. Council minors — save-per-scroll dirty flag; the per-tick store reads; `arssettings` reload staleness; join-chevron marker; `GridSize` index-vs-value; the silent pace fallback.
-4. Six unreachable writers prune — mechanical; the risk is the file tools (whitespace-only lines), not the logic.
+4. ~~Six unreachable writers prune~~ — **DONE (2026-11)**, see the teardown section below; the file tools turned out to be usable (drive them from a `line=length` map).
 5. Weaponized grid filter — a marker in `cars.txt`; small, deferred by choice.
 6. Update checker as a separate DLL — self-contained extraction.
 
@@ -88,17 +88,15 @@ Where the gap shows:
 
 **The real design tension** (worth settling before either direction): reading the *stock* model is what makes pre-race evaluation free and spawn-free — the grid is chosen *before* any car exists. The moment pace needs an instance, AI selection either has to spawn-and-read (expensive, and structurally too late) or keep inferring from an upgrade set. That choice, not the native selection, is the decision to make when this is picked up.
 
-## Vehicle XML teardown — six writers left unreachable (2026-11)
+## Vehicle XML teardown — writers pruned (2026-11)
 
 **What happened**: the roster moved to `Vehicles\cars.txt` (one model key per line) and the whole XML car-info system was retired — save-car, driver save, discipline tags and the per-car appearance reads. The *entry points* are gone: cheats (`arssavecar`, `arssavedriver`, `arscarlisten`), the listen-mode Jump trigger, the `ListenMode` field, `Options.SaveThisCar`/`SaveDriverModel`, and every consumer of the XML reads.
 
-**What is left**: six methods are now unreachable but still in `src\AutosportRacingSystem.cs` — `RandomTuning`, `LoadDriver`, `CreateDriver`, `CreateVehicle`, `CreateVehicleFromName`, `CreateVehicleFromHash` (roughly 600 lines, including the two XML list writers that the build cheats used to call).
+**Pruned (2026-11, DONE)**: the six writers that outlived their entry points — `RandomTuning`, `LoadDriver`, `CreateDriver`, `CreateVehicle`, `CreateVehicleFromName`, `CreateVehicleFromHash` — are **deleted** from `src\AutosportRacingSystem.cs`: 590 lines, a **pure deletion** (numstat 0 added / 590 deleted, exactly three hunks), file 3979 → 3389 lines. Build green and a race verified in game (script loads, grid spawns, no exception in either log). `DisplayHelpText`/`DisplayHelpTextTimed` sat *between* the first two regions and survived — reading each span before cutting is what made that boundary safe. Nothing was orphaned: the six used only natives, `ScriptsFolder`, `Log`, `UI`, `CanWeUse` and `GetRandomInt`, all live elsewhere, and `Drivers\` no longer appears anywhere in the code.
 
-**Why they were not deleted in the same pass**: several of them contain *whitespace-only lines with trailing spaces*, which makes a literal exact-match deletion unsafe with the file tools — a mis-typed space run either fails to match or, worse, matches the wrong span. The honest options are a dedicated pass that rewrites those methods whole (read the region, replace it in one `write`), or normalising the trailing whitespace first. The user's tooling rule is "no scripts to edit code files", so it was deferred rather than botched.
+**Correction to the note this section used to carry**: the whitespace-only lines were **not** the blocker. Exact-match edits are fail-safe — a mismatched `old_string` changes nothing — so the deletion was driven by a `line=length` map of each region (`Get-Content` + `.Length`, which makes blank runs and trailing-space lines unambiguous); what actually failed in the early attempts was **miscounting blank-line runs by eye**, never the spaces. Neither option proposed here (rewrite the methods whole with `write`, or normalise the trailing whitespace first) was needed, and the "no scripts to edit code files" rule held throughout.
 
-**When**: with the rebuild, or as a standalone cleanup before the WIP ships — dead private writers ship fine but they are 600 lines of noise and two of them still name the retired `Drivers\` folder.
-
-**Also left on disk**: the 844 `Vehicles\*.xml` files (game folder and `Dist`) are no longer read by anything; `Dist\AutosportRacingSystem\Vehicles\` should ship `cars.txt` alone once the XMLs are deleted, and `Drivers\` is now unused too.
+**Still on disk**: the 844 `Vehicles\*.xml` files (game folder and `Dist`) are read by nothing, and `Drivers\` is unused; `Dist\AutosportRacingSystem\Vehicles\` should ship `cars.txt` alone once the XMLs are deleted. Deleting them is a *data* change touching the live install and `Dist` together — not done yet.
 
 ## Dist shipped defaults — pending decision (noted 2026-10)
 
