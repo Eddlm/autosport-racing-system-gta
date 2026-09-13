@@ -120,6 +120,8 @@ namespace ARS
         public static bool UseMenyooSkins = true;
         public static bool OverspeedEnabled = true;
         public static bool SmartTuning = true;
+        // Flat mph added to every racer's intended speed plan; 0 = the physics plan alone.
+        public static int SpeedOffsetMph = 0;
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowTrackAnalysis visuals.
         public static Racer DebugFocusRacer;
 
@@ -855,6 +857,15 @@ namespace ARS
             autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
             autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(RacersMenuStore.GetInt("AIRacerAutofix", 1).ToString()));
             racersMenu.Add(autofixItem);
+
+            NativeListItem<string> speedOffsetItem = new NativeListItem<string>("Speed Offset (mph)", "Flat mph added to a racer's intended speed, on top of the corner and route plans. 0 = the physics plan alone; negative slows the field.", new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" });
+            speedOffsetItem.ItemChanged += (sender, args) =>
+            {
+                SpeedOffsetMph = int.Parse(speedOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SpeedOffset", speedOffsetItem.Items[args.Index]);
+            };
+            speedOffsetItem.SelectedIndex = Math.Max(0, speedOffsetItem.Items.IndexOf(RacersMenuStore.GetInt("SpeedOffset", SpeedOffsetMph).ToString(CultureInfo.InvariantCulture)));
+            racersMenu.Add(speedOffsetItem);
 
             NativeCheckboxItem tuningItem = new NativeCheckboxItem("Smart Tuning", "Pick the livery that fits a style, then the body parts that go with it, then paint to suit. Runs during the countdown so it adds no load time.", SmartTuning);
             tuningItem.CheckboxChanged += (sender, args) =>
@@ -2687,6 +2698,7 @@ namespace ARS
             UseMenyooSkins = RacersMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
             OverspeedEnabled = RacersMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
             SmartTuning = RacersMenuStore.GetBool("SmartTuning", SmartTuning);
+            SpeedOffsetMph = RacersMenuStore.GetInt("SpeedOffset", SpeedOffsetMph);
             PaceModeRelative = string.Equals(SettingsMenuStore.Get("PaceMode", PaceModeRelative ? "Relative" : "Absolute"), "Relative", StringComparison.OrdinalIgnoreCase);
             PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
             Log(LogImportance.Info, "Loaded per-menu settings.");

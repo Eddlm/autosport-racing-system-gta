@@ -61,6 +61,12 @@ Where the gap shows:
 
 **Corner approach tied to braking plan (idea)**: start the outside-line move ~1 s before the car must brake for the apex (computed from current speed, apex speed, braking decel) instead of a fixed seconds-to-apex gate — matches the lane transition to each corner's actual speed profile.
 
+## Off-track projection behaviour — braking is right but too aggressive (TODO, next session)
+
+**Off-track projection behaviour (TODO — user's pick for the next session)**: verdict is that the projection's off-track response **does** brake and the braking is correct in principle, but it is **too aggressive**. The mechanism to change is `ApplyOffshootBlend` (shape in `AGENTS.md` → Speed pipeline; the ramp endpoints and floor are in the code). Candidates, roughly in the order worth trying: (1) make it a **decay** instead of the instant clamp — the clamp is the likely jerk source, and a short slew should keep the safety while removing the stab; (2) soften the **ramp itself** (where the ramp begins past the edge, and the brake floor it ramps to) rather than the trigger, since the trigger fires on a projection the user considers correct; (3) gate by **how far** past the edge the projection lands (depth) instead of a past-the-edge boolean, so a marginal projection is nudged rather than stamped on. Related idea in `AGENTS-TECHNOTES.md`: the pessimistic projection (ease speed *before* the edge rather than an after-the-fact cap) — the better end state if this keeps fighting.
+
+**Do not confuse it with Speed Offset**: the projection cap governs **input**, the offset governs the **target**. While the cap is active a raised `Intention.Speed` produces no extra pedal, so "the offset does nothing" in a corner is expected there — the tell is the debug HUD's intended speed moving while the pedal trail doesn't.
+
 ## Optional update checker as a separate DLL (idea)
 
 **Optional update checker as a separate DLL (idea)**: extract the compiled-in update checker into a small `ARS.UpdateChecker.dll` loaded via reflection only if present (users who dislike network checks delete the DLL); simpler alternative: an `Options.ini` toggle.

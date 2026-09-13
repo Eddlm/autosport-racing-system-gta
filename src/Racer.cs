@@ -1181,8 +1181,6 @@ namespace ARS
                 Brain.CurrentIntention.SteerLimitedSpeed = 999f; // Straight = no steer limit
             }
 
-            followTrackSpd += ARS.MphToMps(6f); // TEMP diagnostic: push follow-track speed out
-
             // Chicane boost: +10 mph to both corner and route speed while the chicane corner
             // is the active target. No node gate — Brain.Corner updates naturally on apex pass.
             if (Brain.Corner != null && Brain.Corner.Point.IsChicane)
@@ -1192,9 +1190,9 @@ namespace ARS
                 followTrackSpd += chicaneBoost;
             }
 
-            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd) + ARS.MphToMps(8f);
+            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd) + ARS.MphToMps(ARS.SpeedOffsetMph);
             // Physics-limited cornering speed for the current high-speed curve radius.
-            Brain.CurrentIntention.CorneringSpeedLimit = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Brain.CurrentPerception.HighSpeedCurveRadius);
+            Brain.CurrentIntention.CorneringSpeedLimit = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Brain.CurrentPerception.HighSpeedCurveRadius) + ARS.MphToMps(ARS.SpeedOffsetMph);
 
             // Yield: cap throttle to 0.5 to stay behind.
             if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
