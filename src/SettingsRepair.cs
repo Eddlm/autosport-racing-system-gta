@@ -181,6 +181,7 @@ namespace ARS
             racers.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
             racers.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
             racers.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
+            racers.Specs.Add(new KeySpec("RouteSpeedLimit", "True", Kind.Bool));
             racers.Specs.Add(new KeySpec("StagedSpawns", "True", Kind.Bool));
             files.Add(racers);
 

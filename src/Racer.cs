@@ -127,7 +127,7 @@ namespace ARS
         int _defendApexNode = -1;
 
         const float OffshootRangeMeters = 2f;
-        const float OffshootBlendBrake = 0.5f; // projection blend target: 0.5 brake
+        const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
         const float FullPedalSpeedErrorMps = 3f;
 
         // Applied pedal input sampled every metre of travel, for the debug trail.
@@ -558,7 +558,7 @@ namespace ARS
 
             float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
             float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
-            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.33f;
+            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.495f;
             float approachStartTime = releaseSeconds + 2f;
 
             if (apexNode != _approachCornerNode || timeToApex > approachStartTime)
@@ -929,8 +929,8 @@ namespace ARS
             }
         }
 
-        // Projection response: when the 1s projection nears the outside edge of a corner, cap the
-        // maximum combined input — full throttle at -2m inside the edge, 0.5 brake at +2m past it.
+        // Projection response: on a corner's outside, cap the maximum combined input by how far off-centre
+        // the 1s projection lands — full throttle on the centre line, none at the track edge, light brake beyond.
         float ApplyOffshootBlend(float combinedInput)
         {
             // Only meaningful when the car is aiming at a lane; with no target lane there is no
@@ -942,8 +942,7 @@ namespace ARS
             int projectionWindow = (int)Car.Velocity.Length() + 10;
             TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node, 0, projectionWindow);
             float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
-            float safeBound = tp.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
-            float offTrackDistance = Math.Abs(signedOffset) - safeBound;
+            float halfWidth = Math.Max(tp.TrackHalfWidth, 0.1f);
 
             // Outside is judged from the track angle 1s behind, so it stays relevant through the corner.
             int count = ARS.TrackPoints.Count;
@@ -951,11 +950,15 @@ namespace ARS
             int behindNode = ARS.IsPointToPoint
                 ? (int)ARS.Clamp(CurrentTrackPoint.Node - behindOffset, 0, count - 1)
                 : ((CurrentTrackPoint.Node - behindOffset) % count + count) % count;
-            bool isOutsideCorner = Math.Sign(signedOffset) == Math.Sign(ARS.TrackPoints[behindNode].Angle);
+            float turnDirection = Math.Sign(ARS.TrackPoints[behindNode].Angle);
 
-            if (!isOutsideCorner) return combinedInput;
+            if (Math.Sign(signedOffset) != turnDirection) return combinedInput;
 
-            float maxInput = ARS.Remap(offTrackDistance, OffshootRangeMeters, -OffshootRangeMeters, -OffshootBlendBrake, 1f, true);
+            // Inside half keeps full throttle; the cap ramps from the centre line to the edge, then brakes.
+            float outsideOffset = signedOffset * turnDirection;
+            float maxInput = 1f;
+            if (outsideOffset > halfWidth) maxInput = -OffshootBlendBrake * Math.Min((outsideOffset - halfWidth) / OffshootRangeMeters, 1f);
+            else if (outsideOffset > 0f) maxInput = 1f - outsideOffset / halfWidth;
             return Math.Min(combinedInput, maxInput);
         }
 
@@ -1079,7 +1082,8 @@ namespace ARS
             else if (Brain.Corner != null) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
 
             // Route speed from the triple-check circumradius window.
-            float followTrackSpd = RouteSpeedEnabled
+            // Route speed from the triple-check circumradius window; the AI toggle can drop it entirely.
+            float followTrackSpd = ARS.RouteSpeedLimit
                 ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint)
                 : 999f;
 
@@ -1228,6 +1232,8 @@ namespace ARS
 
         const float SlopeGripLossK = 3f;
         const float SlopeGripLossExp = 2f;
+        // TrackPoint.Elevation is 90·sin(pitch), so this converts it back to the slope sine.
+        const float ElevationToSlopeSine = 1f / 90f;
         // Reduces crest-induced grip loss as curvature allows more aggressive traversal.
 
         float GetFollowPointSlopeAngle()
@@ -2033,7 +2039,6 @@ namespace ARS
         const float EntranceBrakeExtraDistance = 0f;
         const float SecondaryApexSpeedDifference = 5f;
         const float BrakingTargetFactor = 0.5f;
-        const bool RouteSpeedEnabled = true;
 
         // Cheap: drop passed apexes and invalidate stale entries every tick.
         void UpdateApexLeapfrog()
@@ -2228,13 +2233,39 @@ namespace ARS
                     - EntranceBrakeExtraDistance)
                 : 0f;
 
-            float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
-            float decel = brakingAbility * Handling.Gravity * EffectiveBrakeFactor(apexNode);
-            if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
+            float decel = BrakingDecel(apexNode, rawDistance);
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
             if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
             return spd;
+        }
+
+        // Braking decel over a span: grip-limited base plus the gravity component of the span's mean grade.
+        // The solve is v² = vApex² + 2∫a·ds, so the mean decel over the span is the exact quantity.
+        public float BrakingDecel(int apexNode, float spanMeters)
+        {
+            float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
+            float decel = brakingAbility * Handling.Gravity * EffectiveBrakeFactor(apexNode)
+                + Handling.Gravity * BrakingGradeSine(spanMeters);
+            if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
+            return Math.Max(decel, 0.1f);
+        }
+
+        // Mean grade over the braking span as sin(pitch): negative downhill loses decel, positive uphill gains it.
+        float BrakingGradeSine(float spanMeters)
+        {
+            int spanNodes = (int)spanMeters;
+            if (spanNodes < 1) return 0f;
+            int count = ARS.TrackPoints.Count;
+            int samples = Math.Min(spanNodes, 8);
+            float sum = 0f;
+            for (int i = 1; i <= samples; i++)
+            {
+                int node = CurrentTrackPoint.Node + (int)(spanNodes * (float)i / samples);
+                int sample = ARS.IsPointToPoint ? (int)ARS.Clamp(node, 0, count - 1) : ((node % count) + count) % count;
+                sum += ARS.TrackPoints[sample].Elevation;
+            }
+            return sum / samples * ElevationToSlopeSine;
         }
 
         // Dormant legacy route-probe state; the static apex table now supplies braking targets.

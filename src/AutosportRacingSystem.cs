@@ -130,6 +130,8 @@ namespace ARS
         public static bool SmartTuning = true;
         // Learn the effective braking decel that keeps the car at full brake through a braking phase.
         public static bool BrakeLearning = true;
+        // On = route curvature limits speed (sweeping corners); off = the corner braking plan alone.
+        public static bool RouteSpeedLimit = true;
         // Show or hide the staged Spawn Track / Spawn Grid items in the Race menu.
         public static bool StagedSpawns = true;
         // Flat mph added to every racer's intended speed plan; 0 = the physics plan alone.
@@ -925,6 +927,14 @@ namespace ARS
                 SaveRacerSetting("BrakeLearning", BrakeLearning.ToString());
             };
             aiMenu.Add(brakeLearningItem);
+
+            NativeCheckboxItem routeSpeedItem = new NativeCheckboxItem("Route Speed Limit", "On = route curvature limits speed through sweeping corners. Off = the corner braking plan alone governs speed.", RouteSpeedLimit);
+            routeSpeedItem.CheckboxChanged += (sender, args) =>
+            {
+                RouteSpeedLimit = routeSpeedItem.Checked;
+                SaveRacerSetting("RouteSpeedLimit", RouteSpeedLimit.ToString());
+            };
+            aiMenu.Add(routeSpeedItem);
 
             // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
             NativeMenu advancedMenu = new NativeMenu("Advanced Settings", "Advanced Settings", "Low-level physics overrides and AI corrections.")
@@ -2718,12 +2728,7 @@ namespace ARS
             float distance = rawDistance - coastReserve;
             if (distance < 0f) distance = 0f;
 
-            float brakingAbility = Math.Min(r.Handling.BrakingAbility * 4, r.VehicleData.CurrentMechanicalGrip);
-            
-            float decel = brakingAbility * r.Handling.Gravity * r.EffectiveBrakeFactor(apexNode);
-            // Yielding cars perceive half the deceleration, so they brake earlier.
-            if (r.ActiveManeuver.Type == ManeuverType.Yield)
-                decel *= 0.5f;
+            float decel = r.BrakingDecel(apexNode, rawDistance);
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
             if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
@@ -2827,6 +2832,7 @@ namespace ARS
             RacersMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             RacersMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = RacersMenuStore.GetBool("BrakeLearning", BrakeLearning);
+            RouteSpeedLimit = RacersMenuStore.GetBool("RouteSpeedLimit", RouteSpeedLimit);
             StagedSpawns = RacersMenuStore.GetBool("StagedSpawns", StagedSpawns);
             // Menu-Settings.ini is retired (Pace Mode moved to the Race menu): carry its one key over once.
             ScriptSettings retiredMenuSettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Settings.ini");

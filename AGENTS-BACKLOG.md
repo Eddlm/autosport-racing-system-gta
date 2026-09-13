@@ -55,6 +55,16 @@
 18. Two-projection route speed — replaces the geometric route speed, the sweeping-corner authority.
 19. Track-creator revival — entry point, shared-statics ownership, mutation policy, the `Wide` off-by-one.
 
+**Tier 7 — just added, wants a second look**
+
+20. Downhill braking term — shipped and driving well, but the user wants to revisit it (span buffering, per-node profile, brake-learning re-adaptation). Detail below.
+
+## Downhill braking term — shipped, wants a second look (2026-11)
+
+**Shipped (user verdict: "kinda works", then the same session confirmed the corner work overall)**: the corner braking solve now uses `BrakingDecel` = grip-limited base + the gravity component of the **mean grade over the braking span** (car → that apex's braking target, up to 8 samples across it). `TrackPoint.Elevation` is exactly `90·sin(pitch)`, so the slope sine is a direct conversion rather than a curve fit. Downhill subtracts from the decel, uphill adds; the result is floored positive because a steep enough descent would otherwise push it to zero/negative and the `√` would return NaN — which the pipeline reads as 999, i.e. *no braking at all*. The same helper now feeds the fallback `MaxSpeedForBrakingDistance`, which used to carry its own copy of the decel expression (including the Yield halving) — the drift risk is gone; the Yield halving lives inside the helper.
+
+**Open when revisited**: (a) the grade is averaged over the *unbuffered* span while the solve's `distance` is trimmed by the entrance brake buffer, so the average includes a few metres the car has already decided not to brake in; (b) the mean is exact for the constant-decel kinematic form, but the per-node decel *profile* is discarded — a steep patch early vs late in the span reads the same; (c) brake learning samples achieved decel per apex and will re-adapt, so its learned factors may now be absorbing slope where they used to absorb something else; (d) keep it distinct from the *lateral* hill-grip model (unsigned pitch lowering apex/route speed) — the two compose, they do not double-count, and conflating them during tuning would be a mistake.
+
 ## Council review backlog (2026-10, commits 9783143 + b845170)
 
 Deferred findings to check out when touched again:
