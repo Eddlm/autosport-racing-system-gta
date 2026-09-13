@@ -26,6 +26,7 @@ This file is auto-loaded on every session and is capped (DSH truncates at ~65 KB
 - **Corrections require sources**: correct the user only when confident and after checking the code; if uncertain, say so.
 
 ## Workflow
+- **Docs drift; the code wins** (user's rule, 2026-11): these memory files are best-effort and may lag the source — check a claim against the code before relying on it, and correct the line you are touching rather than reconciling a file wholesale.
 - **Scrutinize, never rubber-stamp.** When an instruction conflicts with physics, known invariants, or the code's actual behavior, say so *before* implementing (inverted mappings, targets fighting the stated goal, unit mismatches). Standing rule from the user, 2026-09: "call me out on these, never be a yes-man."
 - **Ask for clarification when an instruction is open to interpretation** (thresholds, which rule it replaces, kept-vs-dropped) — a wrong guess costs a build cycle. The user also asks for judgment calls to be raised rather than guessed; the ask tool is welcome for those.
 - **No 1.0 is scheduled** — ongoing updates, not a feature-freeze gate; don't reflexively talk the user out of new features/tuning, but keep changes modest and verified (compile → in-game check → commit).
@@ -169,7 +170,7 @@ Track facts: **1 node = 1 m**. Circuit lookaheads use modulo; point-to-point cla
 - **`Intention.CorneringSpeedLimit` is write-only dead state** — assigned in `ComputeTargetSpeed`, read by nobody (not even the debug panel). Changing it, including via Speed Offset, does nothing; the physics cap that actually binds is `followTrackSpd` via `RouteIdealSpeedForRadius`. Wire it into a consumer or prune it — don't tune it.
 
 ## Known TODOs / open items
-One line each; the detail for every one of these is in `AGENTS-BACKLOG.md` or `AGENTS-TECHNOTES.md` (section names in the companion index above).
+One line each; the detail for every one of these is in `AGENTS-BACKLOG.md` or `AGENTS-TECHNOTES.md` (section names in the companion index above); **a simplest→most-complex ranking of the whole list sits at the top of `AGENTS-BACKLOG.md`**.
 - **Track creation and mutation are OFF for the WIP release (2026-10)** — the creator never runs (no writer sets `_routeEditorActive` true; no menu item, cheat or hotkey enters creator mode) and lives in `AutosportRacingSystem.TrackCreator.cs`; the track-XML writer `UpdateRoute` sits in `AutosportRacingSystem.TrackFile.cs` with its one entry point (the `arsupdroute` cheat) **gated off**, so nothing creates, edits/updates or deletes a track. The `Wide` off-by-one in `UpdateRoute` waits for whoever deliberately re-enables it. Prune list + revival notes in `AGENTS-BACKLOG.md`.
 - **Dist shipped defaults — decision due at release**: the ship mirror's settings hold live session knobs, not deliberate values; decide them on purpose before publishing (files stay dirty until then; the robocopy direction is game → Dist).
 - **Menu persistence — thorough in-game verification still pending**: only spot-checked; verify fresh + existing installs before trusting it (release gate).

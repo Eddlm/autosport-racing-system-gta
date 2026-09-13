@@ -6,6 +6,55 @@
 > (the electric-pace item is new, 2026-10). New deferred TODO details go here,
 > with a one-liner mirrored in AGENTS.md.
 
+## Complexity ladder — the open items, simplest → most complex (2026-11)
+
+> Ordering by effort × design uncertainty × risk, not by importance. Item names match the
+> `AGENTS.md` open-items list and each one's detail lives in its own section below.
+> Tiers are meant to be pickable: **0–2 need no wheel time** (code, menus, or a decision);
+> **3+ need the user driving to verify**, or a design call first.
+> **Docs drift — the code wins.** Any line here may lag the source; check before relying on it,
+> and correct the line you are touching rather than reconciling the file wholesale.
+
+**Tier 0 — decisions, no code**
+
+1. Dist shipped defaults — pick the values in the live install, build so `RefreshDist` propagates, commit.
+2. Menu-persistence verification — delete each `Menu-*.ini`, restart, click every toggle; fresh install and existing one.
+
+**Tier 1 — localised edits, low risk**
+
+3. Council minors — save-per-scroll dirty flag; the per-tick store reads; `arssettings` reload staleness; join-chevron marker; `GridSize` index-vs-value; the silent pace fallback.
+4. Six unreachable writers prune — mechanical; the risk is the file tools (whitespace-only lines), not the logic.
+5. Weaponized grid filter — a marker in `cars.txt`; small, deferred by choice.
+6. Update checker as a separate DLL — self-contained extraction.
+
+**Tier 2 — verify in game, then tune**
+
+7. Side-by-side heading assist — implemented, never checked.
+8. Start-line flare placement — geometry on a disabled pipeline.
+9. Stuck-recovery escalation — one wiring change, gated on `ResetToTrack` being player-verified.
+
+**Tier 3 — single-method changes**
+
+10. Electric slow-electrics class question — data plus a balance judgment (see the electric section).
+11. Off-track projection aggressiveness — three candidate fixes, all inside `ApplyOffshootBlend`.
+
+**Tier 4 — coupled systems**
+
+12. Corner approach tied to the braking plan — lane timing starts reading the braking map.
+13. Entrance brake buffer vs brake learning — root-cause hunting across two systems that mask each other.
+14. Steer-limiter throttle cut rate — needs a grounded derivation for values tuned by feel.
+
+**Tier 5 — new controllers and design decisions**
+
+15. Snap-oversteer D-term — a term that does not exist yet; dedicated session.
+16. Gravity vs grip & speed — settle how gravity scales grip against each site that multiplies it again.
+17. Pace: model-theoretical vs instance — structural: pre-race selection is spawn-free by design.
+
+**Tier 6 — subsystem reworks**
+
+18. Two-projection route speed — replaces the geometric route speed, the sweeping-corner authority.
+19. Track-creator revival — entry point, shared-statics ownership, mutation policy, the `Wide` off-by-one.
+
 ## Council review backlog (2026-10, commits 9783143 + b845170)
 
 Deferred findings to check out when touched again:
@@ -65,9 +114,11 @@ Where the gap shows:
 
 **Entrance brake buffer vs brake learning — revisit together.** The corner-overshoot symptoms ("blows one specific corner", slide-offs at angled entrances) appeared when the entrance brake buffer was shortened from ~1 s to ~0.6 s. The brake-learning rework (per-corner committed factor, sampling gated at the entrance node, **input-share target** — the share of sampled brake *input integral* delivered at full brake, not a time-share of full-brake moments: the time-share target overshot even when tuned low — proportional gain, factor range, mid default) was built as compensation and masks part of it. When revisiting: the buffer decides how much pre-entrance braking authority the map keeps; the learning factor only scales assumed decel ±. Root-cause candidates: entrance-node detection on square/angled corners (StartNode ≈ apex → almost no planned braking distance), and the all-or-nothing apex-queue invalidation (low-speed rule) leaving cars planless mid-slide. **(2026-09, leading hypothesis: under-braking via the pedal gain.** The speed→pedal loop's full-pedal speed-error divisor was ~6.5 m/s — brakes ramped proportionally weakly through the whole braking zone, so the car entered the corner with a decel deficit it could not recover; the learning rework was compensating for this. The divisor was cut to 3 m/s in the same session — if overshoot symptoms largely vanish, this TODO collapses to just the buffer/entrance-node question.)
 
-## Electric pace balancing — unverified (2026-10)
+## Electric pace balancing — resolved, one sub-item open (2026-11)
 
-**Electric pace balancing — unverified (2026-10)**: the electric corrections (accelRaw ×3 pre-multiplier before the common ×30 slope, top speed ×0.9) are user estimates from a two-car sample (ICE sports car ~0.3 G raw, equivalent electric ~0.15 G); in-game check of electric pace numbers vs comparable ICE pending; if off, sample more electric models' raw natives before touching the multipliers again. (The pace-score bullet's old "if wrong in-game, sample real electrics' raw natives first (Electric TODO)" phrasing points here.)
+**Superseded (2026-11)**: this section used to describe hand-fitted corrections (accelRaw ×3 before the common slope, top speed ×0.9) derived from a two-car G sample, with the in-game check pending. Both multipliers are gone and the check happened: the flag comes from a verified model-hash native and the raw G is scored at the **midpoint of the game's own drive-force ramp** (×5 at standstill falling linearly to ×0.9 at top speed) with **no top-speed discount**. Live detail is in `AGENTS.md` → pace score — trust that side if the two ever disagree; do not resurrect the old numbers.
+
+**Open sub-item**: the slow electrics *classed* as Super (Cyclone, Voltic, Rocket Voltic) sit ~40 PI under their class median, i.e. the class overstates them. Unsettled: whether class membership should influence an electric's treatment at all, or whether those three are simply mis-classed. Settle that before touching the ramp.
 
 ## Corner approach tied to braking plan (idea)
 
