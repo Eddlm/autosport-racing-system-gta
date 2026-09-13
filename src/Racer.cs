@@ -132,7 +132,6 @@ namespace ARS
         const float OffshootRangeMeters = 2f;
         const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
         const float FullPedalSpeedErrorMps = 3f;
-        const float BrakeDemandScale = 0.9f; // < 1: the plan under-demands decel, so the pedal undershoots it
 
         // Applied pedal input sampled every metre of travel, for the debug trail.
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
@@ -471,7 +470,7 @@ namespace ARS
 
             if (Handling.LateralTractionCurve > 1f)
             {
-                float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * 0.3f, Handling.LateralTractionCurve * 0.6f, 0f, 1f, true);
+                float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * CountersteerBlendStartFraction, Handling.LateralTractionCurve * CountersteerFullFraction, 0f, 1f, true);
                 if (slidePriority > 0f)
                 {
                     // Countersteer output doubled (user, 2026-10) - the correction term only, not the slidePriority ramp.
@@ -741,6 +740,13 @@ namespace ARS
         }
 
         const float ThrottleCutSteerLimitFraction = 0.75f;
+        // Countersteer blend: starts at TRlat × this, fully engaged at TRlat × the full fraction.
+        const float CountersteerBlendStartFraction = 0.3f;
+        const float CountersteerFullFraction = 0.6f;
+        // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
+        const float CountersteerRollThrottle = 0.05f;
+        // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
+        const float CountersteerMinSpeedMph = 10f;
         const float SteerSlewRate = 180f;                // fixed steering slew rate (degrees/second)
         const float SteerSlewRateCountersteer = 360f;    // doubled when countersteering (steer opposes yaw)
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
@@ -762,18 +768,22 @@ namespace ARS
 
             // Slide-angle steer limit ramps in with speed: full lock at standstill, collapsing to the
             // grip-derived allowance by the ramp speed, staying at that value above.
-            // Applies in either steering direction (steering-in or countersteer).
+            // Steering-in only: capping the countersteer would fight the correction that saves the car.
             float requestedSteer = Control.SteerDegrees;
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // Max steer angle = 3° base, plus slide, capped at TRlat × 0.5.
+            // Max steer angle = 2° base, plus slide, capped at TRlat × 0.3.
             float maxSteerAngle = Math.Min(2f + slideAngle, Handling.LateralTractionCurve * 0.3f);
             // Brake rampdown: once slide exceeds the grip-based steer allowance, ease brake so tires regain lateral grip.
             float gripSteerAngle = 2f + Handling.LateralTractionCurve * 0.2f;
             Control.MaxBrake = slideAngle > gripSteerAngle ? ARS.Remap(slideAngle, gripSteerAngle * 2f, gripSteerAngle, 0.8f, 1f, true) : 1f;
+            // Full countersteer: release the brake outright, immediately, so the tires can roll again.
+            if (IsFullCountersteer()) Control.MaxBrake = 0f;
             float maxSteer = ARS.Remap(fwdMph, 50f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
-            if (Math.Abs(requestedSteer) > maxSteer)
+            // Countersteer is exempt from the limit — same steer-vs-yaw test the slew rate uses.
+            bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
+            if (!countersteering && Math.Abs(requestedSteer) > maxSteer)
             {
                 Control.SteerDegrees = Math.Sign(requestedSteer) * maxSteer;
                 _steerLimitedThisFrame = true;
@@ -811,6 +821,15 @@ namespace ARS
 
             if (_steerLimitedThisFrame && Control.MaxThrottle>=0.1) Control.MaxThrottle -= (float)(2 * TickScale);
             */
+        }
+
+
+        // True when the slide has saturated the countersteer blend (same threshold ComputeSteering uses).
+        // Forward speed gates it: reversing reads as a ~180° slide, and a reversed car must never be starved.
+        bool IsFullCountersteer()
+        {
+            if (Vector3.Dot(Car.Velocity, Car.ForwardVector) < ARS.MphToMps(CountersteerMinSpeedMph)) return false;
+            return Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * CountersteerFullFraction;
         }
 
 
@@ -870,6 +889,8 @@ namespace ARS
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange, currentForwardSpeed);
             combinedInput = ApplyOffshootBlend(combinedInput);
+            // Full countersteer: no brake, just enough throttle to keep the wheels rolling. TCS still caps it.
+            if (IsFullCountersteer()) combinedInput = CountersteerRollThrottle;
             combinedInput = ApplyThrottleCap(combinedInput);
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
 
@@ -1128,6 +1149,7 @@ namespace ARS
                 float effectiveDeltaGs = deltaGs;
                 if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - routeAggression);
                 float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, routeCrestFloor);
+                if (verticalGripFactor < 1f) verticalGripFactor = 1f - Math.Min((1f - verticalGripFactor) * ARS.CrestEffect, 0.9f);
                 followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
             }
 
@@ -1164,6 +1186,7 @@ namespace ARS
                     float cornerCrestFloor = ARS.MapGamma(cornerRadius, 100f, 500f, 0.4f, 0.8f, 0.5f, true);
                     if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - cornerAggression);
                     float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, cornerCrestFloor);
+                    if (cornerVerticalGrip < 1f) cornerVerticalGrip = 1f - Math.Min((1f - cornerVerticalGrip) * ARS.CrestEffect, 0.9f);
                     float cornerVerticalSpeedFactor = (float)Math.Sqrt(cornerVerticalGrip);
                     cornerSpd *= cornerVerticalSpeedFactor;
                     cornerApexSpeedWithVerticalGrip *= cornerVerticalSpeedFactor;
@@ -1914,7 +1937,9 @@ namespace ARS
             LookAheads.Clear();
             float speed = Car.Velocity.Length();
 
-            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f)), (int)SteerLookaheadMinMeters, 500);
+            // Manual grip -> lead scale: low grip shortens the steer reference, high grip lengthens it.
+            float leadScale = ARS.Remap(VehicleData.CurrentMechanicalGrip, 1f, 3f, 0.8f, 1.2f, true);
+            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f) * leadScale), (int)SteerLookaheadMinMeters, 500);
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
             int threeQuarterSec = (int)(speed * 0.75f);
@@ -2204,20 +2229,6 @@ namespace ARS
             return OffsetCornerNode(entranceNode, (int)Math.Round(distance * factor));
         }
 
-        // The pedal holds a decel only at a steady speed error of the full-pedal error times the brake
-        // fraction it is applying, so the plan aims that far below the ballistic profile to land on it.
-        public float PedalTrackingOffsetMps(int apexNode)
-        {
-            return FullPedalSpeedErrorMps * PlannedBrakeFraction(apexNode);
-        }
-
-        // Brake fraction the plan budgets for. BrakeDemandScale < 1 makes the plan under-demand decel,
-        // so the pedal applies less brake than the model's own figure; > 1 leans the other way.
-        float PlannedBrakeFraction(int apexNode)
-        {
-            return EffectiveBrakeFactor(apexNode) * BrakeDemandScale;
-        }
-
         float ApexBrakingSpeed(int apexNode, float apexSpeed)
         {
             if (apexNode < 0) return 999f;
@@ -2248,7 +2259,7 @@ namespace ARS
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
             if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
-            return Math.Max(velTarget, spd - PedalTrackingOffsetMps(apexNode));
+            return spd;
         }
 
         // Braking decel over a span: grip-limited base plus the gravity component of the span's mean grade.
@@ -2256,7 +2267,7 @@ namespace ARS
         public float BrakingDecel(int apexNode, float spanMeters)
         {
             float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
-            float decel = brakingAbility * Handling.Gravity * PlannedBrakeFraction(apexNode)
+            float decel = brakingAbility * Handling.Gravity * EffectiveBrakeFactor(apexNode)
                 + Handling.Gravity * BrakingGradeSine(spanMeters);
             if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
             return Math.Max(decel, 0.1f);
