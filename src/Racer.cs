@@ -109,6 +109,7 @@ namespace ARS
 
         public float RouteLookAheadSeconds = 0.5f;
         public float RouteLookaheadSizeSeconds = 2.0f;
+        const float SteerLookaheadMinMeters = 3f; // 1 node ≈ 1 m
 
 
         float _avoidLeftWall = 0f;
@@ -131,6 +132,7 @@ namespace ARS
         const float OffshootRangeMeters = 2f;
         const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
         const float FullPedalSpeedErrorMps = 3f;
+        const float BrakeDemandScale = 0.9f; // < 1: the plan under-demands decel, so the pedal undershoots it
 
         // Applied pedal input sampled every metre of travel, for the debug trail.
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
@@ -1909,7 +1911,7 @@ namespace ARS
             LookAheads.Clear();
             float speed = Car.Velocity.Length();
 
-            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f)), (int)(CurrentTrackPoint.TrackHalfWidth * 2f), 500);
+            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f)), (int)SteerLookaheadMinMeters, 500);
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
             int threeQuarterSec = (int)(speed * 0.75f);
@@ -2199,6 +2201,20 @@ namespace ARS
             return OffsetCornerNode(entranceNode, (int)Math.Round(distance * factor));
         }
 
+        // The pedal holds a decel only at a steady speed error of the full-pedal error times the brake
+        // fraction it is applying, so the plan aims that far below the ballistic profile to land on it.
+        public float PedalTrackingOffsetMps(int apexNode)
+        {
+            return FullPedalSpeedErrorMps * PlannedBrakeFraction(apexNode);
+        }
+
+        // Brake fraction the plan budgets for. BrakeDemandScale < 1 makes the plan under-demand decel,
+        // so the pedal applies less brake than the model's own figure; > 1 leans the other way.
+        float PlannedBrakeFraction(int apexNode)
+        {
+            return EffectiveBrakeFactor(apexNode) * BrakeDemandScale;
+        }
+
         float ApexBrakingSpeed(int apexNode, float apexSpeed)
         {
             if (apexNode < 0) return 999f;
@@ -2229,7 +2245,7 @@ namespace ARS
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
             if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
-            return spd;
+            return Math.Max(velTarget, spd - PedalTrackingOffsetMps(apexNode));
         }
 
         // Braking decel over a span: grip-limited base plus the gravity component of the span's mean grade.
@@ -2237,7 +2253,7 @@ namespace ARS
         public float BrakingDecel(int apexNode, float spanMeters)
         {
             float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
-            float decel = brakingAbility * Handling.Gravity * EffectiveBrakeFactor(apexNode)
+            float decel = brakingAbility * Handling.Gravity * PlannedBrakeFraction(apexNode)
                 + Handling.Gravity * BrakingGradeSine(spanMeters);
             if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
             return Math.Max(decel, 0.1f);

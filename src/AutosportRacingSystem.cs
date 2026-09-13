@@ -2732,7 +2732,7 @@ namespace ARS
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
             if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
-            return spd;
+            return Math.Max(velTarget, spd - r.PedalTrackingOffsetMps(apexNode));
         }
 
         
