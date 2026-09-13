@@ -137,15 +137,8 @@ namespace ARS
         const int InputTrailMaxSamples = 40;
 
 
-        // Empirical steer-limit memory: peak lateral G reference and the steer that produced it.
-        float _latGRef = 0f;
-        float _peakSteerDeg = 15f;
-        bool _nearGripPeak = false;
-
-        // True when the speed-based steering limiter actually reduced the steer this frame.
+        // True when the steer limiter actually reduced the steer this frame.
         bool _steerLimitedThisFrame = false;
-        float _steerLimitDegrees = 999f;
-        float _requestedSteerDegrees = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
         const float BrakeFactorDefault = 0.8f; // TEMP: hardcoded for testing
@@ -745,13 +738,7 @@ namespace ARS
             return ARS.Clamp(targetLane, clampLeft, clampRight);
         }
 
-        const float FullSteerThrottleCap = 0.9f;
-        const float GripRefGain = 5f;               // proportional reference time constant (~0.2s)
-        const float MinSteerLimit = 8f;             // floor for the steer clamp (degrees)
-        const float ExploitUtilization = 0.9f;       // utilization at/above → exploit mode
-        const float UtilizationFloorFactor = 0.5f;   // fraction of traction curve as utilization floor
-        const float SpikeCapFactor = 1.1f;           // × declared grip = spike-rejection cap
-        const float OversteerCutMargin = 10f;        // degrees past limit before throttle cut
+        const float ThrottleCutSteerLimitFraction = 0.75f;
         const float SteerSlewRate = 180f;                // fixed steering slew rate (degrees/second)
         const float SteerSlewRateCountersteer = 360f;    // doubled when countersteering (steer opposes yaw)
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
@@ -771,11 +758,10 @@ namespace ARS
                 return;
             }
 
-            // Slide-angle steer limit ramps in with speed: full lock at standstill,
-            // collapsing to |slide angle| + 2 by 10 m/s, staying at that value above.
+            // Slide-angle steer limit ramps in with speed: full lock at standstill, collapsing to the
+            // grip-derived allowance by the ramp speed, staying at that value above.
             // Applies in either steering direction (steering-in or countersteer).
             float requestedSteer = Control.SteerDegrees;
-            _requestedSteerDegrees = Math.Abs(requestedSteer);
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
@@ -785,12 +771,13 @@ namespace ARS
             float gripSteerAngle = 2f + Handling.LateralTractionCurve * 0.2f;
             Control.MaxBrake = slideAngle > gripSteerAngle ? ARS.Remap(slideAngle, gripSteerAngle * 2f, gripSteerAngle, 0.8f, 1f, true) : 1f;
             float maxSteer = ARS.Remap(fwdMph, 50f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
-            _steerLimitDegrees = maxSteer;
             if (Math.Abs(requestedSteer) > maxSteer)
             {
                 Control.SteerDegrees = Math.Sign(requestedSteer) * maxSteer;
                 _steerLimitedThisFrame = true;
-                if (Control.MaxThrottle >= 0.1) Control.MaxThrottle -= (float)(2 * TickScale);
+                // Starve throttle only once the limiter has real authority: near lock it would fight
+                // slow-speed maneuvering and the recovery reverse.
+                if (maxSteer < VehicleData.SteeringLock * ThrottleCutSteerLimitFraction && Control.MaxThrottle >= 0.1) Control.MaxThrottle -= (float)(2 * TickScale);
             }
 
             /* ZOMBIE — speed-based reduction, disabled while trialing slide-angle steer limit.
