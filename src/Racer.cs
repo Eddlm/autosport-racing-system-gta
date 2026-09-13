@@ -100,6 +100,8 @@ namespace ARS
         bool _isRecoveringFromStuck = false;
         int _stuckRecoveryEndTime = 0;
         const int StuckRecoveryTimeMs = 1000;
+        int _stuckRecoveryCooldownEndTime = 0;
+        const int StuckRecoveryCooldownMs = 2000;
         int _stuckRecoveryAttempts = 0;
         public int StuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
         public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
@@ -852,6 +854,7 @@ namespace ARS
             _lastStuckGameTime = 0;
             _isRecoveringFromStuck = false;
             _stuckRecoveryEndTime = 0;
+            _stuckRecoveryCooldownEndTime = 0;
             _stuckRecoveryAttempts = 0;
             Control.LastAppliedSteerDegrees = 0f;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
@@ -2523,6 +2526,7 @@ namespace ARS
                 _lastStuckGameTime = 0;
                 _isRecoveringFromStuck = false;
                 _stuckRecoveryEndTime = 0;
+                _stuckRecoveryCooldownEndTime = 0;
             }
         }
 
@@ -2568,6 +2572,14 @@ namespace ARS
             }
 
             if (_isRecoveringFromStuck)
+            {
+                IsStuckByThrottle = false;
+                _lastStuckGameTime = 0;
+                return;
+            }
+
+            // Cooldown after each recovery ends: the car must get a real chance to drive away.
+            if (Game.GameTime < _stuckRecoveryCooldownEndTime)
             {
                 IsStuckByThrottle = false;
                 _lastStuckGameTime = 0;
@@ -2630,11 +2642,17 @@ namespace ARS
 
             if (Game.GameTime >= _stuckRecoveryEndTime)
             {
-                _isRecoveringFromStuck = false;
-                _stuckRecoveryEndTime = 0;
-                _lastStuckGameTime = 0;
+                FinishStuckRecovery();
                 return;
             }
+        }
+
+        void FinishStuckRecovery()
+        {
+            _isRecoveringFromStuck = false;
+            _stuckRecoveryEndTime = 0;
+            _lastStuckGameTime = 0;
+            _stuckRecoveryCooldownEndTime = Game.GameTime + StuckRecoveryCooldownMs;
         }
 
         void ApplyStuckRecoveryOverride()
@@ -2664,19 +2682,15 @@ namespace ARS
                 Car.Heading = direction.ToHeading();
                 Car.Velocity = direction * ARS.MphToMps(10f);
 
-                _isRecoveringFromStuck = false;
-                _stuckRecoveryEndTime = 0;
-                _lastStuckGameTime = 0;
                 _stuckRecoveryAttempts = 0;
                 IsStuckByThrottle = false;
+                FinishStuckRecovery();
                 return;
             }
 
             if (Game.GameTime >= _stuckRecoveryEndTime)
             {
-                _isRecoveringFromStuck = false;
-                _stuckRecoveryEndTime = 0;
-                _lastStuckGameTime = 0;
+                FinishStuckRecovery();
                 return;
             }
 
