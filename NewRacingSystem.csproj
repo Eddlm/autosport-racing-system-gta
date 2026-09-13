@@ -110,7 +110,7 @@
        set). Excludes runtime cruft: zip, log, and crash-backup files. -->
   <Target Name="RefreshDist" AfterTargets="Build" Condition="Exists('$(GtaArsScriptsDir)')">
     <MakeDir Directories="$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem" />
-    <Exec Command="robocopy &quot;$(GtaArsScriptsDir)&quot; &quot;$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem&quot; /E /XF *.zip *.log *.bak-crash /NFL /NDL /NJH /NJS" IgnoreExitCode="true" />
+    <Exec Command="robocopy &quot;$(GtaArsScriptsDir)&quot; &quot;$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem&quot; /E /XF *.zip *.log *.bak-crash pidump.txt /NFL /NDL /NJH /NJS" IgnoreExitCode="true" />
   </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

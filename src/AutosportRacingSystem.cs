@@ -71,8 +71,8 @@ namespace ARS
         // Raw acceleration (G, ~0-0.5) per model from GET_VEHICLE_MODEL_ACCELERATION.
         public static Dictionary<string, float> ModelAccelCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Per-model electric flag from GET_IS_VEHICLE_ELECTRIC (0xD839450756ED5A80). Used for the
-        // electric corrections in ComputePaceIndex.
+        // Per-model electric flag from GET_IS_VEHICLE_ELECTRIC (0x1FCB07FE230B6639 — a model-hash native,
+        // build 3258+). Used for the electric corrections in ComputePaceIndex.
         public static Dictionary<string, bool> ModelElectricCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
         // Display name per model, keyed same as ModelGripCache. Used by the PI ballpark descriptions.
@@ -82,16 +82,17 @@ namespace ARS
         public static Dictionary<string, float> ModelPaceIndexCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
         // Pace score from raw native values: effectiveAccel × 30 + topSpeed (mph) + grip × 4.
-        // Effective accel: electric real power is ~3× the reported raw G (the native
-        // under-reports electrics — a comparable ICE sports car reads ~0.3 G, the electric ~0.15),
-        // so electric raw × 3; ICE raw as-is. Electric top speed also counts at ×0.9 of reported.
+        // Electric drive force is not constant: the game multiplies it by 5 at standstill and ramps it
+        // linearly down to 0.9 at top speed. The reported raw G is the pre-ramp value (a Virtue at
+        // 0.26 G × 5 = 1.3 G matches its ~2 s launch), so the honest single-number accel for a pace
+        // score is the ramp's midpoint — the average of a linear ramp. Top speed is NOT discounted:
+        // 0.9 is the ramp's endpoint, not a reduction of the car's top speed.
+        const float ElectricDrivePeak = 5f;
+        const float ElectricDriveAtTopSpeed = 0.9f;
+
         public static float ComputePaceIndex(float topSpeedMph, float grip, float accelRaw, bool isElectric)
         {
-            if (isElectric)
-            {
-                topSpeedMph *= 0.9f;
-                accelRaw *= 3f;
-            }
+            if (isElectric) accelRaw *= (ElectricDrivePeak + ElectricDriveAtTopSpeed) * 0.5f;
             return topSpeedMph + grip * 4f + accelRaw * 30f;
         }
 
@@ -1966,6 +1967,60 @@ namespace ARS
                 Log(LogImportance.Info, "arsupdroute ignored: track mutation is disabled in this build (no create, edit/update or delete).");
                 if (1 == 2) UpdateRoute(true, true, true);
 
+            }
+            if (WasCheatStringJustEntered("arsepidump"))
+            {
+                // The pacing numbers behind the grid: one row per cached model, so the electric
+                // corrections can be weighed against ICE cars of the same class instead of guessed at.
+                // electricNative probes GET_IS_VEHICLE_ELECTRIC (0x1FCB07FE230B6639), the game's own
+                // model-hash native (build 3258+); cacheFlag is the old, unverified flag for comparison.
+                List<string> rows = new List<string>();
+                rows.Add("model\telectricNative\tcacheFlag\tclass\taccelRaw\ttopMph\tgrip\tpiCurrent\tpiNoCorrection\tname");
+                int electricCount = 0;
+                int probeErrors = 0;
+                foreach (KeyValuePair<string, float> entry in ModelPaceIndexCache)
+                {
+                    float topMph, grip, accel;
+                    if (!ModelTopSpeedMphCache.TryGetValue(entry.Key, out topMph)) continue;
+                    if (!ModelGripCache.TryGetValue(entry.Key, out grip)) continue;
+                    if (!ModelAccelCache.TryGetValue(entry.Key, out accel)) continue;
+                    bool cacheFlag = false;
+                    ModelElectricCache.TryGetValue(entry.Key, out cacheFlag);
+                    string name;
+                    if (!ModelNameCache.TryGetValue(entry.Key, out name)) name = entry.Key;
+                    int hash;
+                    bool numeric = int.TryParse(entry.Key, out hash);
+                    string vehicleClass = numeric ? Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, hash).ToString() : "?";
+                    string electricNative = "n/a";
+                    if (numeric)
+                    {
+                        try
+                        {
+                            electricNative = Function.Call<int>((Hash)0x1FCB07FE230B6639, hash) == 0 ? "0" : "1";
+                            if (electricNative == "1") electricCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            probeErrors++;
+                            if (probeErrors == 1) Log(LogImportance.Error, "GET_IS_VEHICLE_ELECTRIC probe failed: " + ex.Message, true);
+                        }
+                    }
+                    rows.Add(string.Join("\t", new[]
+                    {
+                        entry.Key,
+                        electricNative,
+                        cacheFlag ? "electric" : "ice",
+                        vehicleClass,
+                        accel.ToString("0.####", CultureInfo.InvariantCulture),
+                        topMph.ToString("0.##", CultureInfo.InvariantCulture),
+                        grip.ToString("0.###", CultureInfo.InvariantCulture),
+                        entry.Value.ToString("0.##", CultureInfo.InvariantCulture),
+                        ComputePaceIndex(topMph, grip, accel, false).ToString("0.##", CultureInfo.InvariantCulture),
+                        name
+                    }));
+                }
+                File.WriteAllLines(ScriptsFolder + @"\pidump.txt", rows.ToArray());
+                UI.Notify("~b~[ARS]:~w~ pidump.txt - " + (rows.Count - 1) + " models, " + electricCount + " electric by GET_IS_VEHICLE_ELECTRIC" + (probeErrors > 0 ? ", " + probeErrors + " probe errors" : ""));
             }
             if (WasCheatStringJustEntered("arsbuildcarlist"))
             {

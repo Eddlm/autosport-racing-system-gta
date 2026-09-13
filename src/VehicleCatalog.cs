@@ -37,6 +37,16 @@ namespace ARS
             accelByModel.Clear();
             electricByModel.Clear();
             nameByModel.Clear();
+            // GET_IS_VEHICLE_ELECTRIC (0x1FCB07FE230B6639) is a model-hash native that only exists from
+            // game build 3258. Probe it once: on a build without it, every car must degrade to ICE rather
+            // than throwing inside the loop, where the catch would swallow that model's stats entirely.
+            bool canAskElectric = true;
+            try { Function.Call<int>((Hash)0x1FCB07FE230B6639, new Model(VehicleHash.Adder).Hash); }
+            catch (Exception)
+            {
+                canAskElectric = false;
+                log("GET_IS_VEHICLE_ELECTRIC is unavailable on this game build - no car will be treated as electric.");
+            }
             int cached = 0;
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < pool.Count; i++)
@@ -57,7 +67,7 @@ namespace ARS
                     float grip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, model.Hash);
                     float topSpeedMph = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, model.Hash));
                     float accel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model.Hash);
-                    bool isElectric = Function.Call<int>((Hash)0xD839450756ED5A80, model.Hash) != 0;
+                    bool isElectric = canAskElectric && Function.Call<int>((Hash)0x1FCB07FE230B6639, model.Hash) != 0;
                     gripByModel[key] = grip;
                     topSpeedMphByModel[key] = topSpeedMph;
                     accelByModel[key] = accel;
