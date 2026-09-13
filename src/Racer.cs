@@ -1644,11 +1644,11 @@ namespace ARS
             ARS.DrawLine(point, point - new Vector3(0, 0, 2f), color);
         }
 
-        // One sample per metre travelled measured against the last recorded point; the oldest drops off at the cap.
+        // One sample every half metre travelled measured against the last recorded point; the oldest drops off at the cap.
         void SampleInputTrail()
         {
             Vector3 position = Car.Position;
-            if (_inputTrail.Count > 0 && position.DistanceTo2D(_inputTrail[_inputTrail.Count - 1].Position) < 1f) return;
+            if (_inputTrail.Count > 0 && position.DistanceTo2D(_inputTrail[_inputTrail.Count - 1].Position) < 0.5f) return;
             _inputTrail.Add(new InputTrailSample { Position = position, Input = Control.Throttle - Control.Brake });
             if (_inputTrail.Count > InputTrailMaxSamples) _inputTrail.RemoveAt(0);
         }
@@ -1656,18 +1656,9 @@ namespace ARS
         void DrawInputTrail()
         {
             if (_inputTrail.Count == 0) return;
-            for (int i = 1; i < _inputTrail.Count; i++)
-            {
-                InputTrailSample sample = _inputTrail[i];
-                Color color = InputTrailColour(sample.Input);
-                ARS.DrawLine(_inputTrail[i - 1].Position, sample.Position, color);
-                World.DrawMarker(MarkerType.DebugSphere, sample.Position, Vector3.Zero, Vector3.Zero, new Vector3(0.35f, 0.35f, 0.35f), color);
-            }
-            // Head of the trail: the white line from the car and its readout show how far the newest sample lags it.
-            InputTrailSample newest = _inputTrail[_inputTrail.Count - 1];
-            ARS.DrawLine(Car.Position, newest.Position, Color.White);
-            DrawPointMarker(newest.Position, 0.6f, Color.White);
-            ARS.DrawText(newest.Position + new Vector3(0, 0, 1.5f), _inputTrail.Count + " pts, head " + Car.Position.DistanceTo(newest.Position).ToString("0.0") + "m", Color.White, 0.3f);
+            foreach (InputTrailSample sample in _inputTrail)
+                World.DrawMarker(MarkerType.DebugSphere, sample.Position, Vector3.Zero, Vector3.Zero, new Vector3(0.21f, 0.21f, 0.21f), InputTrailColour(sample.Input));
+            ARS.DrawLine(Car.Position, _inputTrail[_inputTrail.Count - 1].Position, Color.White);
         }
 
         // Full throttle green, neutral yellow, full brake red.
