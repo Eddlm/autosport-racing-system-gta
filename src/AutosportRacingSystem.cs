@@ -132,6 +132,10 @@ namespace ARS
         public static bool BrakeLearning = true;
         // On = route curvature limits speed (sweeping corners); off = the corner braking plan alone.
         public static bool RouteSpeedLimit = true;
+        // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
+        // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
+        public static float CrestEffect = 1f;
+        public static float HillGripEffect = 1f;
         // Show or hide the staged Spawn Track / Spawn Grid items in the Race menu.
         public static bool StagedSpawns = true;
         // Flat mph added to every racer's intended speed plan; 0 = the physics plan alone.
@@ -935,6 +939,25 @@ namespace ARS
                 SaveRacerSetting("RouteSpeedLimit", RouteSpeedLimit.ToString());
             };
             aiMenu.Add(routeSpeedItem);
+
+            string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
+            NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
+            crestEffectItem.ItemChanged += (sender, args) =>
+            {
+                CrestEffect = int.Parse(crestEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
+                SaveRacerSetting("CrestEffect", crestEffectItem.Items[args.Index]);
+            };
+            crestEffectItem.SelectedIndex = Math.Max(0, crestEffectItem.Items.IndexOf(RacersMenuStore.GetInt("CrestEffect", 100).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(crestEffectItem);
+
+            NativeListItem<string> hillEffectItem = new NativeListItem<string>("Hill Effect (%)", "How much a hill's pitch cuts a racer's intended speed. 0% ignores slopes, 100% is the tuned default (15 degrees halves grip).", terrainEffectOptions);
+            hillEffectItem.ItemChanged += (sender, args) =>
+            {
+                HillGripEffect = int.Parse(hillEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
+                SaveRacerSetting("HillGripEffect", hillEffectItem.Items[args.Index]);
+            };
+            hillEffectItem.SelectedIndex = Math.Max(0, hillEffectItem.Items.IndexOf(RacersMenuStore.GetInt("HillGripEffect", 100).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(hillEffectItem);
 
             // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
             NativeMenu advancedMenu = new NativeMenu("Advanced Settings", "Advanced Settings", "Low-level physics overrides and AI corrections.")
@@ -2351,7 +2374,8 @@ namespace ARS
             float effectiveDeg = Math.Abs(pitchDegrees) * Math.Max(gravityRatio, 0.1f);
             float factor = (float)Math.Exp(-HillGripKPerDegree * effectiveDeg);
             if (float.IsNaN(factor) || float.IsInfinity(factor)) return 1f;
-            return Clamp(factor, HillGripMin, 1f);
+            factor = Clamp(factor, HillGripMin, 1f);
+            return 1f - Math.Min((1f - factor) * HillGripEffect, 0.9f);
         }
 
         public static float CornerApexSpeed(CornerPoint c, Racer r)
@@ -2732,7 +2756,7 @@ namespace ARS
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
             if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
-            return Math.Max(velTarget, spd - r.PedalTrackingOffsetMps(apexNode));
+            return spd;
         }
 
         
@@ -2833,6 +2857,8 @@ namespace ARS
             RacersMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = RacersMenuStore.GetBool("BrakeLearning", BrakeLearning);
             RouteSpeedLimit = RacersMenuStore.GetBool("RouteSpeedLimit", RouteSpeedLimit);
+            CrestEffect = RacersMenuStore.GetInt("CrestEffect", 100) * 0.01f;
+            HillGripEffect = RacersMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             StagedSpawns = RacersMenuStore.GetBool("StagedSpawns", StagedSpawns);
             // Menu-Settings.ini is retired (Pace Mode moved to the Race menu): carry its one key over once.
             ScriptSettings retiredMenuSettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Settings.ini");

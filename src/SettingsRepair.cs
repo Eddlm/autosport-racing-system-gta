@@ -182,6 +182,8 @@ namespace ARS
             racers.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
             racers.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
             racers.Specs.Add(new KeySpec("RouteSpeedLimit", "True", Kind.Bool));
+            racers.Specs.Add(new KeySpec("CrestEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
+            racers.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             racers.Specs.Add(new KeySpec("StagedSpawns", "True", Kind.Bool));
             files.Add(racers);
 
