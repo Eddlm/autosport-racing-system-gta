@@ -640,7 +640,7 @@ namespace ARS
         // fixed target. Neither writes back here.
         public static PaceMode CurrentPaceMode = PaceMode.RelativeToMine;
         public static float PaceOffsetScale = 0f;
-        // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
+        // Default script folder under GTA's `scripts\` (Tracks/, Vehicles/cars.txt, sillynames.txt,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
         // Config .ini files (Options/DevSettings/Settings/MemoryOffsets) live in a
