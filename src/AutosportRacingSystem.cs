@@ -36,10 +36,16 @@ namespace ARS
         Never, IfPlayerHas, Always,
     }
 
+    // Which performance index every grid is built around (the menu's "Grid PI Mode").
+    public enum PaceMode
+    {
+        Absolute, RelativeToMine,
+    }
+
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, UseNearbyCars, ReloadSettings, ReverseRoute, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard
+        SaveThisCar, SaveDriverModel, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, ReloadSettings, ReverseRoute, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard
     }
 
     public enum DebugDisplay
@@ -54,7 +60,6 @@ namespace ARS
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
         // Pre-computed apex table. Built in BuildApexCorners after track generation.
         public static List<CornerPoint> Corners = new List<CornerPoint>();
-        public static List<Vehicle> GlobalTraffic = new List<Vehicle>();
 
         public static List<string> KnownTracks = new List<string>();
         // Raw grip (max traction, in G) per model, keyed by the XML <Model> hash text.
@@ -103,7 +108,6 @@ namespace ARS
         // One ini per menu (Settings\Menu-*.ini), created in LoadSettings.
         public static MenuSettings RaceMenuStore;
         public static MenuSettings RacersMenuStore;
-        public static MenuSettings SettingsMenuStore;
         public static MenuSettings DevMenuStore;
 
         public static bool HideHudMode = false;
@@ -131,7 +135,6 @@ namespace ARS
         { Options.ShowInputs, false },
         { Options.ShowTrackAnalysis, false },
         { Options.ShowPhysics, false },
-        { Options.UseNearbyCars, true },
         { Options.ReverseRoute, false },
         { Options.BrakeLearning, true },
         { Options.HighDownforceOnline, true },
@@ -611,9 +614,9 @@ namespace ARS
 
 
         public static float PowerTargetScale = 0.52f;
-        // Pace mode: Relative resolves the target from the player's car + offset at Spawn Grid; Absolute uses the
+        // Relative resolves the target from the player's car + offset at Spawn Grid; Absolute uses the
         // fixed target. Neither writes back here.
-        public static bool PaceModeRelative = true;
+        public static PaceMode CurrentPaceMode = PaceMode.RelativeToMine;
         public static float PaceOffsetScale = 0f;
         // Default script folder under GTA's `scripts\` (Drivers/, Tracks/, Vehicles/, Options.ini,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
@@ -710,8 +713,18 @@ namespace ARS
             _gridSizeItem.SelectedIndex = _intendedOpponents;
             _raceMenu.Add(_gridSizeItem);
 
-            // ── Pace offset / target (merged Council design; mode lives in Settings) ──
-            _paceOffsetItem = new NativeListItem<string>("Pace Offset", "Field pace = your car's pace + this offset, resolved at Spawn Grid (clamped to the fleet's pace range).", Array.Empty<string>());
+            // ── Grid PI Mode — the anchor the two PI controls below obey (Race owns all three keys) ──
+            _paceModeItem = new NativeListItem<string>("Grid PI Mode", "How the grid's performance index (PI - the score the leaderboard shows) is chosen. Absolute = every grid uses the fixed PI Target. Relative To Mine = your car's own PI + PI Offset. Governs menu starts and E-joins alike.", EnumLabels<PaceMode>());
+            _paceModeItem.ItemChanged += (sender, args) =>
+            {
+                CurrentPaceMode = (PaceMode)args.Index;
+                RaceMenuStore.Set("PaceMode", CurrentPaceMode.ToString());
+                ApplyPaceModeUI();
+            };
+            _raceMenu.Add(_paceModeItem);
+
+            // ── PI offset / target (merged Council design; the mode above decides which one governs) ──
+            _paceOffsetItem = new NativeListItem<string>("PI Offset", "Field PI = your car's performance index + this offset, resolved at Spawn Grid (clamped to the fleet's range).", Array.Empty<string>());
             for (int halfStep = -20; halfStep <= 20; halfStep++)
             {
                 float offset = halfStep * 0.5f;
@@ -728,7 +741,7 @@ namespace ARS
             };
             _raceMenu.Add(_paceOffsetItem);
 
-            _powerTargetItem = new NativeListItem<string>("Pace Target", "Target pace score for grid selection.", Array.Empty<string>());
+            _powerTargetItem = new NativeListItem<string>("PI Target", "Fixed performance index the grid is selected around.", Array.Empty<string>());
             _powerTargetItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index >= 0 && args.Index < _powerTargetValues.Count)
@@ -738,8 +751,10 @@ namespace ARS
                 }
             };
             _raceMenu.Add(_powerTargetItem);
+            // Set last: assigning SelectedIndex fires ItemChanged, and the mode's handler rewrites both PI items.
+            _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
 
-            NativeItem instanceGridItem = new NativeItem("Spawn Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing pace/size.");
+            NativeItem instanceGridItem = new NativeItem("Spawn Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing PI/size.");
             instanceGridItem.Activated += (sender, args) =>
             {
                 _raceMenu.Visible = false;
@@ -814,7 +829,6 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
             AddDebugCheckbox(debugMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
-            AddDebugCheckbox(debugMenu, Options.UseNearbyCars, "Use Nearby Cars", "Use nearby vehicles when creating a race grid.");
             AddDebugCheckbox(debugMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.");
             AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
             AddDebugCheckbox(debugMenu, Options.StagedSpawns, "Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", value =>
@@ -843,9 +857,9 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "How the grid is ordered.", new[] { "Power", "PowerDescendent", "TopSpeed", "TopSpeedDescendent", "Random" });
-            gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", gridSortItem.Items[args.Index]);
-            gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(RacersMenuStore.Get("GridSorting", "Random")));
+            NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "How the grid is ordered.", EnumLabels<GridSort>());
+            gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", ((GridSort)args.Index).ToString());
+            gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(EnumLabel(ParseEnum(RacersMenuStore.Get("GridSorting", "Random"), GridSort.Random))));
             racersMenu.Add(gridSortItem);
 
             NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", new[] { "15", "30", "45", "60" });
@@ -858,15 +872,6 @@ namespace ARS
             autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(RacersMenuStore.GetInt("AIRacerAutofix", 1).ToString()));
             racersMenu.Add(autofixItem);
 
-            NativeListItem<string> speedOffsetItem = new NativeListItem<string>("Speed Offset (mph)", "Flat mph added to a racer's intended speed, on top of the corner and route plans. 0 = the physics plan alone; negative slows the field.", new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" });
-            speedOffsetItem.ItemChanged += (sender, args) =>
-            {
-                SpeedOffsetMph = int.Parse(speedOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SpeedOffset", speedOffsetItem.Items[args.Index]);
-            };
-            speedOffsetItem.SelectedIndex = Math.Max(0, speedOffsetItem.Items.IndexOf(RacersMenuStore.GetInt("SpeedOffset", SpeedOffsetMph).ToString(CultureInfo.InvariantCulture)));
-            racersMenu.Add(speedOffsetItem);
-
             NativeCheckboxItem tuningItem = new NativeCheckboxItem("Smart Tuning", "Pick the livery that fits a style, then the body parts that go with it, then paint to suit. Runs during the countdown so it adds no load time.", SmartTuning);
             tuningItem.CheckboxChanged += (sender, args) =>
             {
@@ -876,13 +881,13 @@ namespace ARS
             racersMenu.Add(tuningItem);
 
             // ── Racer nitrous enablement (player fairness) ──
-            NativeListItem<string> aiNitroItem = new NativeListItem<string>("Racer Nitrous", "Whether racers may use nitrous. IfPlayerHas lets them only when the player's own car has it. Racers never fire more than one shot per lap.", new[] { "Never", "IfPlayerHas", "Always" });
+            NativeListItem<string> aiNitroItem = new NativeListItem<string>("Racer Nitrous", "Whether racers may use nitrous. If Player Has lets them only when the player's own car has it. Racers never fire more than one shot per lap.", EnumLabels<TriState>());
             aiNitroItem.ItemChanged += (sender, args) =>
             {
                 AiNitro = (TriState)args.Index;
                 SaveRacerSetting("AiNitro", AiNitro.ToString());
             };
-            aiNitroItem.SelectedIndex = Math.Max(0, aiNitroItem.Items.IndexOf(AiNitro.ToString()));
+            aiNitroItem.SelectedIndex = Math.Max(0, aiNitroItem.Items.IndexOf(EnumLabel(AiNitro)));
             racersMenu.Add(aiNitroItem);
 
             // ── Menyoo vehicle skins on grid cars ──
@@ -893,6 +898,22 @@ namespace ARS
                 SaveRacerSetting("UseMenyooSkins", UseMenyooSkins.ToString());
             };
             racersMenu.Add(menyooItem);
+
+            // ── AI Settings submenu (under Settings) — how the AI racers drive; shares Settings\Menu-Racers.ini ──
+            NativeMenu aiMenu = new NativeMenu("AI Settings", "AI Settings", "How the AI racers behave on track.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+            NativeListItem<string> speedOffsetItem = new NativeListItem<string>("Speed Offset (mph)", "Flat mph added to a racer's intended speed, on top of the corner and route plans. 0 = the physics plan alone; negative slows the field.", new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" });
+            speedOffsetItem.ItemChanged += (sender, args) =>
+            {
+                SpeedOffsetMph = int.Parse(speedOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SpeedOffset", speedOffsetItem.Items[args.Index]);
+            };
+            speedOffsetItem.SelectedIndex = Math.Max(0, speedOffsetItem.Items.IndexOf(RacersMenuStore.GetInt("SpeedOffset", SpeedOffsetMph).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(speedOffsetItem);
 
             // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
             NativeMenu advancedMenu = new NativeMenu("Advanced Settings", "Advanced Settings", "Low-level physics overrides and AI corrections.")
@@ -909,26 +930,16 @@ namespace ARS
             };
             advancedMenu.Add(overspeedItem);
 
-            // ── Pace Mode — standing preference on Settings, own store (Menu-Settings.ini) ──
-            _paceModeItem = new NativeListItem<string>("Pace Mode", "Absolute = every grid uses the fixed Pace Target. Relative = every grid uses your car's pace + offset. Governs menu starts and E-joins alike.", new[] { "Absolute", "Relative" });
-            _paceModeItem.ItemChanged += (sender, args) =>
-            {
-                PaceModeRelative = _paceModeItem.Items[args.Index] == "Relative";
-                SettingsMenuStore.Set("PaceMode", _paceModeItem.Items[args.Index]);
-                ApplyPaceModeUI();
-            };
-            _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(PaceModeRelative ? "Relative" : "Absolute"));
-
-            // ── Settings submenu (root) — hosts Pace Mode, General Settings and Debug ──
+            // ── Settings submenu (root) — hosts General, AI, Advanced and Debug ──
             NativeMenu settingsMenu = new NativeMenu("Settings", "Settings", "Racer behaviour and debug options.")
             {
                 UseMouse = false,
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            settingsMenu.Add(_paceModeItem);
             settingsMenu.AddSubMenu(racersMenu);
             settingsMenu.AddSubMenu(advancedMenu);
+            settingsMenu.AddSubMenu(aiMenu);
             settingsMenu.AddSubMenu(debugMenu);
 
             // End Race goes at the tail of the Race menu
@@ -944,6 +955,7 @@ namespace ARS
             _menuPool.Add(_arsMenu);
             _menuPool.Add(_raceMenu);
             _menuPool.Add(settingsMenu);
+            _menuPool.Add(aiMenu);
             _menuPool.Add(debugMenu);
             _menuPool.Add(racersMenu);
             _menuPool.Add(advancedMenu);
@@ -1016,11 +1028,11 @@ namespace ARS
             // Resolve the effective pace target once per grid from Pace Mode — the menu is the only authority on the anchor.
             // An anchor outside the fleet span is harmless: the ranking starts from the closest end.
             _resolvedPaceTarget = PowerTargetScale;
-            if (PaceModeRelative)
+            if (CurrentPaceMode == PaceMode.RelativeToMine)
             {
                 if (TryComputePlayerCarPaceIndex(out float playerPace)) { _lastKnownPlayerPace = playerPace; _resolvedPaceTarget = playerPace + PaceOffsetScale; }
                 else if (!float.IsNaN(_lastKnownPlayerPace)) _resolvedPaceTarget = _lastKnownPlayerPace + PaceOffsetScale;
-                else UI.Notify("~o~No vehicle to pace from - using the fixed pace target.");
+                else UI.Notify("~o~No vehicle to read a performance index from - using the fixed PI Target.");
             }
 
             Log(LogImportance.Info, "Grid: ranking " + _vehiclePool.Count + " pool files, target " + _resolvedPaceTarget.ToString(CultureInfo.InvariantCulture));
@@ -1029,7 +1041,7 @@ namespace ARS
 
             if (Racers.Count == 0)
             {
-                UI.Notify("~o~No vehicles found with a pace index. Check the Vehicles folder.");
+                UI.Notify("~o~No vehicles found with a performance index. Check the Vehicles folder.");
                 _gridInstanced = false;
                 if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
                 return;
@@ -1164,7 +1176,7 @@ namespace ARS
 
             _paceOffsetItem.SelectedIndex = FindNearestPowerValue(_paceOffsetValues, PaceOffsetScale);
             if (_paceOffsetItem.SelectedIndex < 0 && _paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = _paceOffsetValues.Count / 2;
-            _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(PaceModeRelative ? "Relative" : "Absolute"));
+            _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
             RaceMenuStore.Migrate("PaceTarget", PowerTargetScale.ToString(CultureInfo.InvariantCulture));
             RaceMenuStore.Migrate("PaceOffset", PaceOffsetScale.ToString(CultureInfo.InvariantCulture));
             ApplyPaceModeUI();
@@ -1172,10 +1184,10 @@ namespace ARS
 
         void ApplyPaceModeUI()
         {
-            _powerTargetItem.Enabled = !PaceModeRelative;
-            _powerTargetItem.Description = PaceModeRelative ? "Disabled in Relative mode - resolves at Spawn Grid: your car's pace + offset." : "Fixed pace target for the grid (spectating).";
-            _paceOffsetItem.Enabled = PaceModeRelative;
-            _paceOffsetItem.Description = PaceModeRelative ? "Field pace = your car's pace + this offset, resolved at Spawn Grid." : "Disabled in Absolute mode - the fixed Pace Target governs.";
+            _powerTargetItem.Enabled = CurrentPaceMode == PaceMode.Absolute;
+            _powerTargetItem.Description = CurrentPaceMode == PaceMode.RelativeToMine ? "Disabled in Relative To Mine - resolves at Spawn Grid: your car's PI + offset." : "Fixed performance index for the grid (spectating).";
+            _paceOffsetItem.Enabled = CurrentPaceMode == PaceMode.RelativeToMine;
+            _paceOffsetItem.Description = CurrentPaceMode == PaceMode.RelativeToMine ? "Field PI = your car's performance index + this offset, resolved at Spawn Grid." : "Disabled in Absolute mode - the fixed PI Target governs.";
         }
 
         static void AddPowerValues(List<float> values, float min, float max, float step)
@@ -1510,8 +1522,6 @@ namespace ARS
                 if (_posUpdateTickMs < Game.GameTime)
                 {
                     _posUpdateTickMs = Game.GameTime + 200;
-                    try { GlobalTraffic = World.GetAllVehicles().ToList(); } catch (Exception) { GlobalTraffic = new List<Vehicle>(); }
-                    foreach (Racer r in ARS.Racers) if (GlobalTraffic.Contains(r.Car)) GlobalTraffic.Remove(r.Car);
 
                     List<Racer> LapPos = new List<Racer>();
                     var unfinished = Racers.Where(r => r.FinalPosition == 0).ToList();
@@ -2681,7 +2691,6 @@ namespace ARS
             Log(LogImportance.Info, "Loading Options.ini ...");
             RaceMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Race.ini");
             RacersMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Racers.ini");
-            SettingsMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Settings.ini");
             DevMenuStore = new MenuSettings(SettingsFolder + @"\Menu-DevSettings.ini");
             SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
             RaceMenuStore.Migrate("Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 4).ToString());
@@ -2694,12 +2703,19 @@ namespace ARS
             RacersMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString());
             RacersMenuStore.Migrate("AiNitro", legacyRacers.GetValue<string>("RACERS", "AiNitro", AiNitro.ToString()));
             RacersMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
-            AiNitro = ParseTriState(RacersMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
+            AiNitro = ParseEnum(RacersMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
             UseMenyooSkins = RacersMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
             OverspeedEnabled = RacersMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
             SmartTuning = RacersMenuStore.GetBool("SmartTuning", SmartTuning);
             SpeedOffsetMph = RacersMenuStore.GetInt("SpeedOffset", SpeedOffsetMph);
-            PaceModeRelative = string.Equals(SettingsMenuStore.Get("PaceMode", PaceModeRelative ? "Relative" : "Absolute"), "Relative", StringComparison.OrdinalIgnoreCase);
+            // Menu-Settings.ini is retired (Pace Mode moved to the Race menu): carry its one key over once.
+            ScriptSettings retiredMenuSettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Settings.ini");
+            RaceMenuStore.Migrate("PaceMode", retiredMenuSettings.GetValue<string>("MENU", "PaceMode", null));
+            // The mode's option was relabelled and then re-spelled as an enum name; rewrite either older
+            // spelling so the repair pass cannot reset a stored mode to the default.
+            string storedMode = RaceMenuStore.Get("PaceMode", null);
+            if (string.Equals(storedMode, "Relative", StringComparison.OrdinalIgnoreCase) || string.Equals(storedMode, "Relative To Mine", StringComparison.OrdinalIgnoreCase)) RaceMenuStore.Set("PaceMode", PaceMode.RelativeToMine.ToString());
+            CurrentPaceMode = ParseEnum(RaceMenuStore.Get("PaceMode", CurrentPaceMode.ToString()), CurrentPaceMode);
             PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
             Log(LogImportance.Info, "Loaded per-menu settings.");
 
@@ -2719,15 +2735,39 @@ namespace ARS
             DebugToggles[Options.ReverseRoute] = RaceMenuStore.GetBool("ReverseRoute", DebugToggles[Options.ReverseRoute]);
             Log(LogImportance.Info, "Loaded dev toggles.");
 
-            SettingsRepair.CompleteOwnedKeys(RaceMenuStore, RacersMenuStore, SettingsMenuStore, DevMenuStore);
+            SettingsRepair.CompleteOwnedKeys(RaceMenuStore, RacersMenuStore, DevMenuStore);
             Log(LogImportance.Info, "Checked the Settings folder.");
         }
         public enum LogImportance { Info, Error, Fatal }
-        static TriState ParseTriState(string value, TriState fallback)
+
+        // Stored text -> enum value; unknown or undefined text falls back.
+        static T ParseEnum<T>(string value, T fallback) where T : struct
         {
-            foreach (TriState s in Enum.GetValues(typeof(TriState)))
-                if (string.Equals(value, s.ToString(), StringComparison.OrdinalIgnoreCase)) return s;
-            return fallback;
+            T parsed;
+            return Enum.TryParse(value, true, out parsed) && Enum.IsDefined(typeof(T), parsed) ? parsed : fallback;
+        }
+
+        // The menu shows a member's name spaced out: "RelativeToMine" -> "Relative To Mine". The stored value
+        // stays the enum name, so a label may be reworded freely; only renaming a member needs a migration.
+        static string EnumLabel(Enum value)
+        {
+            string name = value.ToString();
+            string label = string.Empty;
+            for (int i = 0; i < name.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(name[i]) && !char.IsUpper(name[i - 1])) label += " ";
+                label += name[i];
+            }
+            return label;
+        }
+
+        // One menu option per member, in declaration order.
+        static string[] EnumLabels<T>() where T : struct
+        {
+            Array values = Enum.GetValues(typeof(T));
+            string[] labels = new string[values.Length];
+            for (int i = 0; i < values.Length; i++) labels[i] = EnumLabel((Enum)values.GetValue(i));
+            return labels;
         }
 
         // May this AI racer use nitrous? Always/Never are absolute; IfPlayerHas allows it only when
@@ -3539,25 +3579,6 @@ namespace ARS
                 }
             }
 
-            // Add nearby vehicles as additional racers after the roster grid is built.
-            if (DebugToggles[Options.UseNearbyCars])
-            {
-                var nearby = GetNearbyCandidates();
-                int added = 0;
-                foreach (Vehicle veh in nearby)
-                {
-                    if (Racers.Count >= maxcars) break;
-                    Ped driver = veh.CreateRandomPedOnSeat(VehicleSeat.Driver);
-                    if (driver == null || !CanWeUse(driver)) continue;
-                    Racer nearbyRacer = new Racer(veh, driver);
-                    nearbyRacer.Name = NextSillyName() ?? nearbyRacer.Name;
-                    nearbyRacer._baseName = nearbyRacer.Name;
-                    Racers.Add(nearbyRacer);
-                    added++;
-                }
-                Log(LogImportance.Info, "Added " + added + " nearby cars to the grid.");
-            }
-
             result.Add(lastCar);
 
             // Stay in None — the race isn't ready to start until SetupRace (phase 3)
@@ -3568,10 +3589,6 @@ namespace ARS
         }
 
 
-        List<Vehicle> GetNearbyCandidates()
-        {
-            return GlobalTraffic.Where(s => s.Health > 0 && s.IsDriveable && s.IsInRangeOf(Game.Player.Character.Position, 30f) && !CanWeUse(s.GetPedOnSeat(VehicleSeat.Driver))).ToList();
-        }
         void CreateVehicle(Vehicle car, bool auto = false)
         {
 

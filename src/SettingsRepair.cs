@@ -165,25 +165,22 @@ namespace ARS
             race.Specs.Add(new KeySpec("Track", null));                     // optional: absent = no track chosen yet
             race.Specs.Add(new KeySpec("Laps", "4", Kind.Number, new[] { "2", "4", "6", "8", "10" }));   // numeric: a retired lap count snaps to the nearest offer instead of resetting
             race.Specs.Add(new KeySpec("GridSize", "4", Kind.Number, null, 0f, 12f));
+            race.Specs.Add(new KeySpec("PaceMode", PaceMode.RelativeToMine.ToString(), Kind.Text, Enum.GetNames(typeof(PaceMode))));
             race.Specs.Add(new KeySpec("PaceOffset", "0", Kind.Number));
             race.Specs.Add(new KeySpec("PaceTarget", null, Kind.Number));   // optional: absent triggers the fleet-span middle autoselect
             race.Specs.Add(new KeySpec("ReverseRoute", "False", Kind.Bool));
             files.Add(race);
 
             FileSpec racers = Owned("Menu-Racers.ini");
-            racers.Specs.Add(new KeySpec("GridSorting", "Power", Kind.Text, new[] { "Power", "PowerDescendent", "TopSpeed", "TopSpeedDescendent", "Random" }));
+            racers.Specs.Add(new KeySpec("GridSorting", GridSort.Power.ToString(), Kind.Text, Enum.GetNames(typeof(GridSort))));
             racers.Specs.Add(new KeySpec("TimeoutSeconds", "30", Kind.Number, new[] { "15", "30", "45", "60" }));
             racers.Specs.Add(new KeySpec("AIRacerAutofix", "1", Kind.Number, new[] { "0", "1", "2" }));
             racers.Specs.Add(new KeySpec("SpeedOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
             racers.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
-            racers.Specs.Add(new KeySpec("AiNitro", "IfPlayerHas", Kind.Text, new[] { "Never", "IfPlayerHas", "Always" }));
+            racers.Specs.Add(new KeySpec("AiNitro", TriState.IfPlayerHas.ToString(), Kind.Text, Enum.GetNames(typeof(TriState))));
             racers.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
             racers.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
             files.Add(racers);
-
-            FileSpec settings = Owned("Menu-Settings.ini");
-            settings.Specs.Add(new KeySpec("PaceMode", "Relative", Kind.Text, new[] { "Absolute", "Relative" }));
-            files.Add(settings);
 
             // The dev file's key set is the debug toggle table itself: retiring a toggle retires its key.
             FileSpec dev = Owned("Menu-DevSettings.ini");
@@ -259,13 +256,12 @@ namespace ARS
 
         // Pass 3: every declared key exists and holds a value the schema accepts. Runs after the legacy
         // migrations, so a repaired default can never shadow a value carried over from an older install.
-        public static void CompleteOwnedKeys(MenuSettings race, MenuSettings racers, MenuSettings settings, MenuSettings dev)
+        public static void CompleteOwnedKeys(MenuSettings race, MenuSettings racers, MenuSettings dev)
         {
             Dictionary<string, MenuSettings> stores = new Dictionary<string, MenuSettings>(StringComparer.OrdinalIgnoreCase)
             {
                 { "Menu-Race.ini", race },
                 { "Menu-Racers.ini", racers },
-                { "Menu-Settings.ini", settings },
                 { "Menu-DevSettings.ini", dev },
             };
             foreach (FileSpec file in Schema)

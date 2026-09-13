@@ -101,10 +101,11 @@ A 3-way "Weaponized Cars" menu option + `DOES_VEHICLE_HAVE_WEAPONS`-based LoadGr
 
 | File | Keys (default) |
 | --- | --- |
-| `Menu-Race.ini` | `Track` *(optional)*, `Laps` (4), `GridSize` (4), `PaceOffset` (0), `PaceTarget` *(optional)*, `ReverseRoute` (False) |
-| `Menu-Racers.ini` | `GridSorting` (Power), `TimeoutSeconds` (30), `AIRacerAutofix` (1), `AITuningLevel` (1), `AiNitro` (IfPlayerHas), `UseMenyooSkins` (True), `OverspeedEnabled` (True) |
-| `Menu-Settings.ini` | `PaceMode` (Relative) |
+| `Menu-Race.ini` | `Track` *(optional)*, `Laps` (4), `GridSize` (4), `PaceMode` (`RelativeToMine` — the menu calls the item `Grid PI Mode` and spaces the option to "Relative To Mine"), `PaceOffset` (0), `PaceTarget` *(optional)*, `ReverseRoute` (False) |
+| `Menu-Racers.ini` | `GridSorting` (Power), `TimeoutSeconds` (30), `AIRacerAutofix` (1), `SmartTuning` (True), `SpeedOffset` (0), `AiNitro` (IfPlayerHas), `UseMenyooSkins` (True), `OverspeedEnabled` (True) |
 | `Menu-DevSettings.ini` | one key per `DebugToggles` entry — the table *is* the schema, so retiring a toggle retires its key automatically |
+
+`Menu-Settings.ini` is **retired** (2026-11): Pace Mode was its only key and moved into the Race menu, so `LoadSettings` carries that key into `Menu-Race.ini` once from the leftover file and nothing reads it again.
 
 Foreign files created when missing: `Options.ini` (`GENERAL_SETTINGS` Laps/ReverseRoutes, `CATCHUP` OnlyLastHalf/OnlyBehindPlayer), `DevSettings.ini` (`GENERAL` Hotkeys/LoadAtStart/LogLevel, `CREATOR_DEFAULTS` TracksideModel/TracksideModelFrecuency), `MemoryOffsets.ini` (comment header + three `0x0` offsets). A `Disciplines` key is no longer created or read anywhere — the discipline *selection* filter was retired 2026-10 (see the selection bullet in AGENTS.md); the `<Disciplines>` XML tags remain appearance data for `ApplyCarAppearance`/`CreateDriverPed`/`ApplyDriverClothes`.
 
