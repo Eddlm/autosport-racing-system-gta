@@ -180,6 +180,8 @@ namespace ARS
             racers.Specs.Add(new KeySpec("AiNitro", TriState.IfPlayerHas.ToString(), Kind.Text, Enum.GetNames(typeof(TriState))));
             racers.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
             racers.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
+            racers.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
+            racers.Specs.Add(new KeySpec("StagedSpawns", "True", Kind.Bool));
             files.Add(racers);
 
             // The dev file's key set is the debug toggle table itself: retiring a toggle retires its key.

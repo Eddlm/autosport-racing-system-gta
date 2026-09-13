@@ -71,7 +71,7 @@ The old dead-code `PlaceCars` body (local `GridSort` enum, `Team.Cop` reorder, i
 
 ## Weaponized grid filter — full note (restored verbatim from b845170)
 
-A 3-way "Weaponized Cars" menu option + `DOES_VEHICLE_HAVE_WEAPONS`-based LoadGrid filter were implemented then **removed/never shipped** because reliable per-model weapon detection is unavailable (no model-hash native exists; the spawned-handle native is spawn/state-dependent). Reimplement only once we can reliably know which car models carry weapons — the durable approach is a per-model marker in the supplier XML, not native probing.
+A 3-way "Weaponized Cars" menu option + `DOES_VEHICLE_HAVE_WEAPONS`-based LoadGrid filter were implemented then **removed/never shipped** because reliable per-model weapon detection is unavailable (no model-hash native exists; the spawned-handle native is spawn/state-dependent). Reimplement only once we can reliably know which car models carry weapons — the durable approach is a per-model marker in the roster file (`cars.txt`), not native probing.
 
 ## Pace selection — current state, and two lessons from the window→ranking switch
 
@@ -102,12 +102,12 @@ A 3-way "Weaponized Cars" menu option + `DOES_VEHICLE_HAVE_WEAPONS`-based LoadGr
 | File | Keys (default) |
 | --- | --- |
 | `Menu-Race.ini` | `Track` *(optional)*, `Laps` (4), `GridSize` (4), `PaceMode` (`RelativeToMine` — the menu calls the item `Grid PI Mode` and spaces the option to "Relative To Mine"), `PaceOffset` (0), `PaceTarget` *(optional)*, `ReverseRoute` (False) |
-| `Menu-Racers.ini` | `GridSorting` (Power), `TimeoutSeconds` (30), `AIRacerAutofix` (1), `SmartTuning` (True), `SpeedOffset` (0), `AiNitro` (IfPlayerHas), `UseMenyooSkins` (True), `OverspeedEnabled` (True) |
+| `Menu-Racers.ini` | `GridSorting` (Power), `TimeoutSeconds` (30), `AIRacerAutofix` (1), `SmartTuning` (True), `SpeedOffset` (0), `AiNitro` (IfPlayerHas), `UseMenyooSkins` (True), `OverspeedEnabled` (True), `BrakeLearning` (True), `StagedSpawns` (True) |
 | `Menu-DevSettings.ini` | one key per `DebugToggles` entry — the table *is* the schema, so retiring a toggle retires its key automatically |
 
 `Menu-Settings.ini` is **retired** (2026-11): Pace Mode was its only key and moved into the Race menu, so `LoadSettings` carries that key into `Menu-Race.ini` once from the leftover file and nothing reads it again.
 
-Foreign files created when missing: `Options.ini` (`GENERAL_SETTINGS` Laps/ReverseRoutes, `CATCHUP` OnlyLastHalf/OnlyBehindPlayer), `DevSettings.ini` (`GENERAL` Hotkeys/LoadAtStart/LogLevel, `CREATOR_DEFAULTS` TracksideModel/TracksideModelFrecuency), `MemoryOffsets.ini` (comment header + three `0x0` offsets). A `Disciplines` key is no longer created or read anywhere — the discipline *selection* filter was retired 2026-10 (see the selection bullet in AGENTS.md); the `<Disciplines>` XML tags remain appearance data for `ApplyCarAppearance`/`CreateDriverPed`/`ApplyDriverClothes`.
+Foreign files created when missing: `Options.ini` (`GENERAL_SETTINGS` Laps/ReverseRoutes, `CATCHUP` OnlyLastHalf/OnlyBehindPlayer), `DevSettings.ini` (`GENERAL` Hotkeys/LoadAtStart/LogLevel, `CREATOR_DEFAULTS` TracksideModel/TracksideModelFrecuency), `MemoryOffsets.ini` (comment header + three `0x0` offsets). Neither a `Disciplines` key nor any per-car appearance data survives: the discipline selection filter was retired 2026-10 and the `<Disciplines>` tags followed the whole vehicle-XML system out in 2026-11 (see the roster bullet in AGENTS.md).
 
 Two wrinkles worth knowing: `ReverseRoute` lives in `Menu-Race.ini` (the Race menu's checkbox passes `RaceMenuStore` through the optional `store` overload), yet a `ReverseRoute` key **also** keeps appearing in `Menu-DevSettings.ini` because the load loop reads every `DebugToggles` key from the dev store before overriding that one from the race store — so the dev schema must keep it or the repair and the load loop would fight on every start. And `OverspeedEnabled` has no `Migrate` call at all; it is seeded purely by the `LoadSettings` read (seed-on-read), which is exactly the kind of key the completeness pass now guarantees.
 

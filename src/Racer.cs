@@ -956,7 +956,7 @@ namespace ARS
         // only committed when that apex is passed — in-progress braking never adjusts live.
         void UpdateBrakeLearning()
         {
-            if (!ARS.DebugToggles[Options.BrakeLearning])
+            if (!ARS.BrakeLearning)
             {
                 _brakeFactorsByApex.Clear();
                 return;
@@ -980,7 +980,7 @@ namespace ARS
 
         void CommitBrakeLearning()
         {
-            if (!ARS.DebugToggles[Options.BrakeLearning]) return;
+            if (!ARS.BrakeLearning) return;
             if (_brakeSampleSeconds < MinimumBrakeSampleSeconds || _brakeSampleFullInput <= 0f || _brakeSampleApexNode < 0) return;
             float fullTime = _brakeSampleFullInput; // seconds at full brake
             float step = (BrakeFullTimeTarget - fullTime) * BrakeAdjustGain;

@@ -81,10 +81,5 @@ namespace ARS
             return position;
         }
 
-        public static string ReadVehicleModel(string path)
-        {
-            try { return Load(path).SelectSingleNode("//Model")?.InnerText?.Trim(); }
-            catch { return null; }
-        }
     }
 }

@@ -45,7 +45,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        SaveThisCar, SaveDriverModel, FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, ReloadSettings, ReverseRoute, BrakeLearning, HighDownforceOnline, StagedSpawns, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard
+        FindCustomProps, ShowAggro, ShowInputs, ShowTrackAnalysis, ShowPhysics, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard
     }
 
     public enum DebugDisplay
@@ -74,6 +74,9 @@ namespace ARS
         // Per-model electric flag from GET_IS_VEHICLE_ELECTRIC (0xD839450756ED5A80). Used for the
         // electric corrections in ComputePaceIndex.
         public static Dictionary<string, bool> ModelElectricCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+        // Display name per model, keyed same as ModelGripCache. Used by the PI ballpark descriptions.
+        public static Dictionary<string, string> ModelNameCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // Pace score per model (raw units, reaches ~124+), keyed same as the stat caches.
         public static Dictionary<string, float> ModelPaceIndexCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
@@ -124,6 +127,10 @@ namespace ARS
         public static bool UseMenyooSkins = true;
         public static bool OverspeedEnabled = true;
         public static bool SmartTuning = true;
+        // Learn the effective braking decel that keeps the car at full brake through a braking phase.
+        public static bool BrakeLearning = true;
+        // Show or hide the staged Spawn Track / Spawn Grid items in the Race menu.
+        public static bool StagedSpawns = true;
         // Flat mph added to every racer's intended speed plan; 0 = the physics plan alone.
         public static int SpeedOffsetMph = 0;
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowTrackAnalysis visuals.
@@ -136,9 +143,7 @@ namespace ARS
         { Options.ShowTrackAnalysis, false },
         { Options.ShowPhysics, false },
         { Options.ReverseRoute, false },
-        { Options.BrakeLearning, true },
         { Options.HighDownforceOnline, true },
-        { Options.StagedSpawns, true },
         { Options.ShowCheckpoints, false },
         { Options.ShowEdgeChevrons, true },
         { Options.ShowLeaderboard, true }
@@ -358,6 +363,7 @@ namespace ARS
             ModelAccelCache.Clear();
             ModelElectricCache.Clear();
             ModelPaceIndexCache.Clear();
+            ModelNameCache.Clear();
             Log(LogImportance.Info, "-------------");
             Log(LogImportance.Info, "Discovering the vehicle pool and tracks...");
             VehicleCatalog.FillPool(_vehiclePool);
@@ -371,7 +377,7 @@ namespace ARS
         // modelName -> power cache here rather than during the pool scan.
         public void BuildPowerCache()
         {
-            VehicleCatalog.BuildPowerCache(_vehiclePool, ModelGripCache, ModelTopSpeedMphCache, ModelAccelCache, ModelElectricCache, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
+            VehicleCatalog.BuildPowerCache(_vehiclePool, ModelGripCache, ModelTopSpeedMphCache, ModelAccelCache, ModelElectricCache, ModelNameCache, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
             BuildPaceIndex();
         }
 
@@ -398,6 +404,21 @@ namespace ARS
                 indexed++;
             }
             Log(LogImportance.Info, "BuildPaceIndex: " + indexed + " models indexed.");
+        }
+
+        // The SHVDN member name is the model name in most cases; keep it only when it hashes to that model.
+        static string RosterKeyFor(VehicleHash hash)
+        {
+            string name = hash.ToString().ToLowerInvariant();
+            return Game.GenerateHash(name) == (int)hash ? name : ((int)hash).ToString();
+        }
+
+        // A regenerated roster takes effect without a reload: the same three steps the load task runs.
+        void RefreshRoster()
+        {
+            RefreshCatalogs();
+            BuildPowerCache();
+            RefreshPowerControls();
         }
 
         public static float SignedLaneOffset(Vector3 pos, Vector3 refPoint, Vector3 refDir)
@@ -737,6 +758,7 @@ namespace ARS
                 {
                     PaceOffsetScale = _paceOffsetValues[args.Index];
                     RaceMenuStore.Set("PaceOffset", PaceOffsetScale.ToString(CultureInfo.InvariantCulture));
+                    ApplyPaceModeUI();
                 }
             };
             _raceMenu.Add(_paceOffsetItem);
@@ -748,6 +770,7 @@ namespace ARS
                 {
                     PowerTargetScale = _powerTargetValues[args.Index];
                     RaceMenuStore.Set("PaceTarget", PowerTargetScale);
+                    ApplyPaceModeUI();
                 }
             };
             _raceMenu.Add(_powerTargetItem);
@@ -829,26 +852,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
             AddDebugCheckbox(debugMenu, Options.ShowPhysics, "Show Physics", "Show physics debug information.");
-            AddDebugCheckbox(debugMenu, Options.BrakeLearning, "Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.");
             AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
-            AddDebugCheckbox(debugMenu, Options.StagedSpawns, "Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", value =>
-            {
-                if (value)
-                {
-                    if (!_raceMenu.Items.Contains(instanceTrackItem)) _raceMenu.Add(instanceTrackItem);
-                    if (!_raceMenu.Items.Contains(instanceGridItem)) _raceMenu.Add(instanceGridItem);
-                }
-                else
-                {
-                    if (_raceMenu.Items.Contains(instanceTrackItem)) _raceMenu.Remove(instanceTrackItem);
-                    if (_raceMenu.Items.Contains(instanceGridItem)) _raceMenu.Remove(instanceGridItem);
-                }
-            });
-            if (!DebugToggles[Options.StagedSpawns])
-            {
-                _raceMenu.Remove(instanceTrackItem);
-                _raceMenu.Remove(instanceGridItem);
-            }
 
             // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
             NativeMenu racersMenu = new NativeMenu("General Settings", "General Settings", "Standing preferences: grid sorting, timeout, racer behaviour and tuning.")
@@ -915,6 +919,14 @@ namespace ARS
             speedOffsetItem.SelectedIndex = Math.Max(0, speedOffsetItem.Items.IndexOf(RacersMenuStore.GetInt("SpeedOffset", SpeedOffsetMph).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(speedOffsetItem);
 
+            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.", BrakeLearning);
+            brakeLearningItem.CheckboxChanged += (sender, args) =>
+            {
+                BrakeLearning = brakeLearningItem.Checked;
+                SaveRacerSetting("BrakeLearning", BrakeLearning.ToString());
+            };
+            aiMenu.Add(brakeLearningItem);
+
             // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
             NativeMenu advancedMenu = new NativeMenu("Advanced Settings", "Advanced Settings", "Low-level physics overrides and AI corrections.")
             {
@@ -929,6 +941,29 @@ namespace ARS
                 SaveRacerSetting("OverspeedEnabled", OverspeedEnabled.ToString());
             };
             advancedMenu.Add(overspeedItem);
+
+            NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", StagedSpawns);
+            stagedSpawnsItem.CheckboxChanged += (sender, args) =>
+            {
+                StagedSpawns = stagedSpawnsItem.Checked;
+                SaveRacerSetting("StagedSpawns", StagedSpawns.ToString());
+                if (StagedSpawns)
+                {
+                    if (!_raceMenu.Items.Contains(instanceTrackItem)) _raceMenu.Add(instanceTrackItem);
+                    if (!_raceMenu.Items.Contains(instanceGridItem)) _raceMenu.Add(instanceGridItem);
+                }
+                else
+                {
+                    if (_raceMenu.Items.Contains(instanceTrackItem)) _raceMenu.Remove(instanceTrackItem);
+                    if (_raceMenu.Items.Contains(instanceGridItem)) _raceMenu.Remove(instanceGridItem);
+                }
+            };
+            advancedMenu.Add(stagedSpawnsItem);
+            if (!StagedSpawns)
+            {
+                _raceMenu.Remove(instanceTrackItem);
+                _raceMenu.Remove(instanceGridItem);
+            }
 
             // ── Settings submenu (root) — hosts General, AI, Advanced and Debug ──
             NativeMenu settingsMenu = new NativeMenu("Settings", "Settings", "Racer behaviour and debug options.")
@@ -1184,10 +1219,50 @@ namespace ARS
 
         void ApplyPaceModeUI()
         {
+            // The offset and target handlers call this, and they can fire while the menu is still being built.
+            if (_powerTargetItem == null || _paceOffsetItem == null) return;
+            float playerPace;
+            bool hasPlayerPace = TryComputePlayerCarPaceIndex(out playerPace);
             _powerTargetItem.Enabled = CurrentPaceMode == PaceMode.Absolute;
-            _powerTargetItem.Description = CurrentPaceMode == PaceMode.RelativeToMine ? "Disabled in Relative To Mine - resolves at Spawn Grid: your car's PI + offset." : "Fixed performance index for the grid (spectating).";
+            _powerTargetItem.Description = WithBallpark(CurrentPaceMode == PaceMode.RelativeToMine ? "Disabled in Relative To Mine - resolves at Spawn Grid: your car's PI + offset." : "Fixed performance index for the grid (spectating).", BallparkText(PowerTargetScale));
             _paceOffsetItem.Enabled = CurrentPaceMode == PaceMode.RelativeToMine;
-            _paceOffsetItem.Description = CurrentPaceMode == PaceMode.RelativeToMine ? "Field PI = your car's performance index + this offset, resolved at Spawn Grid." : "Disabled in Absolute mode - the fixed PI Target governs.";
+            _paceOffsetItem.Description = WithBallpark(CurrentPaceMode == PaceMode.RelativeToMine ? "Field PI = your car's performance index + this offset, resolved at Spawn Grid." : "Disabled in Absolute mode - the fixed PI Target governs.", hasPlayerPace ? BallparkText(playerPace + PaceOffsetScale) : null);
+        }
+
+        // The example cars ride on the end of the item's own description.
+        static string WithBallpark(string description, string ballpark)
+        {
+            return ballpark == null ? description : description + " " + ballpark;
+        }
+
+        // Three cars that bracket a performance index: the nearest at or below it, the nearest overall,
+        // and the nearest at or above - so the trio reads as what a grid at that PI looks like.
+        string BallparkText(float pi)
+        {
+            if (ModelPaceIndexCache.Count == 0) return null;
+            List<KeyValuePair<string, float>> ranked = ModelPaceIndexCache.OrderBy(entry => entry.Value).ThenBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase).ToList();
+            KeyValuePair<string, float>? below = null;
+            KeyValuePair<string, float>? above = null;
+            foreach (KeyValuePair<string, float> entry in ranked)
+            {
+                if (entry.Value <= pi) below = entry;
+                else { above = entry; break; }
+            }
+            KeyValuePair<string, float>? nearest = below;
+            if (above != null && (nearest == null || above.Value.Value - pi < pi - nearest.Value.Value)) nearest = above;
+            List<string> names = new List<string>();
+            AddBallparkName(names, below);
+            AddBallparkName(names, nearest);
+            AddBallparkName(names, above);
+            return names.Count == 0 ? null : "Ballpark: " + string.Join(", ", names.ToArray());
+        }
+
+        void AddBallparkName(List<string> names, KeyValuePair<string, float>? entry)
+        {
+            if (entry == null) return;
+            string name;
+            if (!ModelNameCache.TryGetValue(entry.Value.Key, out name) || string.IsNullOrWhiteSpace(name)) name = entry.Value.Key;
+            if (!names.Contains(name)) names.Add(name);
         }
 
         static void AddPowerValues(List<float> values, float min, float max, float step)
@@ -1382,17 +1457,6 @@ namespace ARS
 
                 
                 if (DebugVisual == (int)DebugDisplay.PropEdit) DisplayHelpTextThisFrame("Add or remove any ~g~prop~w~ with the tool of your preference. They must be ~y~persistent~w~.");
-
-
-
-                if (ListenMode)
-                {
-                    if (Game.IsControlJustPressed(2, GTA.Control.Jump))
-                    {
-                        Vehicle playerVeh = Game.Player.Character.CurrentVehicle;
-                        if (CanWeUse(playerVeh)) CreateVehicle(playerVeh, true);
-                    }
-                }
 
 
 
@@ -1873,7 +1937,6 @@ namespace ARS
         
 
 
-        public bool ListenMode = false;
         public void HandleCheats()
         {
 
@@ -1897,11 +1960,6 @@ namespace ARS
 
                 FillKnownTracks();
             }
-            if (WasCheatStringJustEntered("arscarlisten"))
-            {
-                ListenMode = !ListenMode;
-                if (ListenMode) UI.Notify("~g~Listen mode is on."); else UI.Notify("~y~Listen mode disabled.");
-            }
             if (WasCheatStringJustEntered("arsupdroute"))
             {
                 
@@ -1911,19 +1969,24 @@ namespace ARS
             }
             if (WasCheatStringJustEntered("arsbuildcarlist"))
             {
-                UI.Notify("~b~[ARS]:~w~ Generating vehicle files for all SHVDN known vehicles in the game.");
+                UI.Notify("~b~[ARS]:~w~ Generating the car list for all SHVDN known vehicles in the game.");
 
+                List<string> keys = new List<string>();
+                int inspected = 0;
                 foreach (VehicleHash hash in Enum.GetValues(typeof(VehicleHash)).Cast<VehicleHash>())
                 {
                     Model m = new Model(hash);
-                    if (m.IsBike || m.IsQuadbike || m.IsBicycle || m.IsCar) CreateVehicleFromHash(hash);
-                    Script.Yield();
+                    if (m.IsBike || m.IsQuadbike || m.IsBicycle || m.IsCar) keys.Add(RosterKeyFor(hash));
+                    if (++inspected % 25 == 0) Script.Yield();
                 }
+                int added = VehicleCatalog.AddToRoster(keys);
+                RefreshRoster();
+                UI.Notify("~b~[ARS]:~w~ cars.txt - " + added + " new model(s) added.");
             }
 
             if (WasCheatStringJustEntered("arsbuilddumpcarlist"))
             {
-                UI.Notify("~b~[ARS]:~w~ Generating vehicle files from modeldump.txt.");
+                UI.Notify("~b~[ARS]:~w~ Generating the car list from modeldump.txt.");
 
                 string dumpFilePath = ScriptsFolder + @"\modeldump.txt";
                 if (File.Exists(dumpFilePath))
@@ -1931,17 +1994,16 @@ namespace ARS
                     string content = File.ReadAllText(dumpFilePath);
                     string[] modelNames = content.Split(new[] { ',', '\n', '\r', ' ' }, StringSplitOptions.RemoveEmptyEntries);
 
+                    List<string> keys = new List<string>();
                     foreach (string modelName in modelNames)
                     {
                         string trimmedName = modelName.Trim().ToLowerInvariant();
-                        if (!string.IsNullOrEmpty(trimmedName))
-                        {
-                            CreateVehicleFromName(trimmedName);
-                            Script.Yield();
-                        }
+                        if (!string.IsNullOrEmpty(trimmedName)) keys.Add(trimmedName);
                     }
 
-                    UI.Notify("~b~[ARS]:~w~ Processed " + modelNames.Length + " models from modeldump.txt.");
+                    int added = VehicleCatalog.AddToRoster(keys);
+                    RefreshRoster();
+                    UI.Notify("~b~[ARS]:~w~ cars.txt - " + added + " new model(s) added from " + modelNames.Length + " entries.");
                 }
                 else
                 {
@@ -1955,13 +2017,6 @@ namespace ARS
                 SettingsFile = null;
                 DevSettingsFile = null;
                 LoadSettings();
-            }
-
-
-            if (WasCheatStringJustEntered("arssavedriver")) CreateDriver(Game.Player.Character);
-            if (WasCheatStringJustEntered("arssavecar"))
-            {
-                CreateVehicle(Game.Player.Character.CurrentVehicle);
             }
 
             if (WasCheatStringJustEntered("arsclean"))
@@ -2685,6 +2740,11 @@ namespace ARS
             Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
             Log(LogImportance.Info, "Checking the Settings folder ...");
+            // Brake Learning and Staged Spawns moved out of the debug toggles; read their legacy dev
+            // values now, because the prune pass below drops keys the dev schema no longer declares.
+            ScriptSettings retiredDevToggles = ScriptSettings.Load(SettingsFolder + @"\Menu-DevSettings.ini");
+            string legacyBrakeLearning = retiredDevToggles.GetValue<string>("MENU", "BrakeLearning", null);
+            string legacyStagedSpawns = retiredDevToggles.GetValue<string>("MENU", "StagedSpawns", null);
             SettingsRepair.CreateMissingFiles();
             SettingsRepair.PruneOwnedFiles();
 
@@ -2708,6 +2768,10 @@ namespace ARS
             OverspeedEnabled = RacersMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
             SmartTuning = RacersMenuStore.GetBool("SmartTuning", SmartTuning);
             SpeedOffsetMph = RacersMenuStore.GetInt("SpeedOffset", SpeedOffsetMph);
+            RacersMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
+            RacersMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
+            BrakeLearning = RacersMenuStore.GetBool("BrakeLearning", BrakeLearning);
+            StagedSpawns = RacersMenuStore.GetBool("StagedSpawns", StagedSpawns);
             // Menu-Settings.ini is retired (Pace Mode moved to the Race menu): carry its one key over once.
             ScriptSettings retiredMenuSettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Settings.ini");
             RaceMenuStore.Migrate("PaceMode", retiredMenuSettings.GetValue<string>("MENU", "PaceMode", null));
@@ -3249,7 +3313,7 @@ namespace ARS
         }
         VehicleColor[] _randomColors = { VehicleColor.MetallicRed, VehicleColor.MetallicRaceYellow, VehicleColor.MetallicBlue, VehicleColor.MetallicOrange, VehicleColor.MetallicSteelGray };
 
-        List<XmlDocument> _cachedCandidates = new List<XmlDocument>();
+        List<string> _cachedCandidates = new List<string>();
 
         void FillCachedCandidates(int maxcars, bool allowScriptYield = true)
         {
@@ -3336,122 +3400,22 @@ namespace ARS
                 return vehicleModel;
             }
 
-            List<string> GetVehicleTags(XmlDocument file)
+            // Roster cars carry no appearance data: they get the random colour combination they always did.
+            void RandomizeCarColour(Vehicle car)
             {
-                XmlNodeList disciplines = file.SelectNodes("//Disciplines/Discipline");
-                List<string> tags = new List<string>();
-                foreach (XmlElement t in disciplines)
-                {
-                    tags.Add(t.InnerText.ToLowerInvariant());
-                }
-                return tags;
-            }
-
-            void ApplyCarAppearance(XmlDocument file, Vehicle car, List<string> tags)
-            {
-                if (tags.Contains("tuner"))
-                {
-                    RandomTuning(car, true, true, true, true, false);
-                }
+                if (car.ColorCombinationCount > 2) car.ColorCombination = GetRandomInt(0, car.ColorCombinationCount);
                 else
                 {
-                    if (file.SelectSingleNode("//WheelType") != null) car.WheelType = (VehicleWheelType)int.Parse(file.SelectSingleNode("//WheelType").InnerText);
-                    if (file.SelectSingleNode("//Livery") != null) car.Livery = int.Parse(file.SelectSingleNode("//Livery").InnerText);
-                    if (file.SelectSingleNode("//Primary") != null) car.PrimaryColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Primary").InnerText);
-                    else
-                    {
-                        if (car.ColorCombinationCount > 2) car.ColorCombination = GetRandomInt(0, car.ColorCombinationCount);
-                        else
-                        {
-                            VehicleColor c = _randomColors[GetRandomInt(0, _randomColors.Length - 1)];
-                            car.PrimaryColor = c;
-                            car.SecondaryColor = c;
-                            car.PearlescentColor = c;
-                        }
-                    }
-                    if (file.SelectSingleNode("//Secondary") != null) car.SecondaryColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Secondary").InnerText);
-                    if (file.SelectSingleNode("//Pearl") != null) car.PearlescentColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Pearl").InnerText);
-                    if (file.SelectSingleNode("//Wheel") != null) car.RimColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Wheel").InnerText);
-                    if (file.SelectSingleNode("//Dash") != null) car.DashboardColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Dash").InnerText);
-                    if (file.SelectSingleNode("//Trim") != null) car.TrimColor = (VehicleColor)int.Parse(file.SelectSingleNode("//Trim").InnerText);
-
-                    if (NodeExists(file, "//Mods"))
-                    {
-                        if (file.SelectNodes("//Mods/Mod").Count > 0)
-                        {
-                            foreach (XmlElement modElement in file.SelectNodes("//Mods/Mod"))
-                            {
-                                if (int.Parse(modElement.GetAttribute("ModIndex")) == 48)
-                                {
-                                    if (int.Parse(modElement.InnerText) == -1) car.SetMod(VehicleMod.Livery, GetRandomInt(0, car.GetModCount(VehicleMod.Livery)), false);
-                                }
-                                else
-                                {
-                                    car.SetMod((VehicleMod)int.Parse(modElement.GetAttribute("ModIndex")), int.Parse(modElement.InnerText), modElement.HasAttribute("IsCustom") && modElement.GetAttribute("IsCustom").ToLowerInvariant() == "true");
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        
-                    }
-
-                    foreach (XmlElement modElement in file.SelectNodes("//Mods/ToggleMod")) car.ToggleMod((VehicleToggleMod)int.Parse(modElement.GetAttribute("ModIndex")), int.Parse(modElement.InnerText) == 1 ? true : false);
-
-                    if (file.SelectNodes("//Extras/Extra").Count > 0) for (int i = 0; i < 15; i++) if (car.ExtraExists(i)) car.ToggleExtra(i, false);
-                    foreach (XmlElement modElement in file.SelectNodes("//Extras/Extra")) car.ToggleExtra(int.Parse(modElement.InnerText), true);
+                    VehicleColor c = _randomColors[GetRandomInt(0, _randomColors.Length - 1)];
+                    car.PrimaryColor = c;
+                    car.SecondaryColor = c;
+                    car.PearlescentColor = c;
                 }
             }
 
-            void ApplyAccelerationOverride(XmlDocument file, Vehicle car)
+            Ped CreateDriverPed(Vehicle car)
             {
-                if (file.SelectSingleNode("//Acceleration") != null)
-                {
-                    float acc = float.Parse(file.SelectSingleNode("//Acceleration").InnerText) - 0.05f;
-
-                    if (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc && car.HighGear > 2)
-                    {
-                        float mul = 10f;
-                        while (Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, car) < acc && mul < 500)
-                        {
-                            mul += 10;
-                            car.EnginePowerMultiplier = mul;
-                            Script.Wait(0);
-                        }
-                    }
-                }
-            }
-
-            Ped CreateDriverPed(XmlDocument file, Vehicle car, List<string> tags, out XmlDocument driverXml)
-            {
-                driverXml = new XmlDocument();
-                Model driverModel;
-                string driverChosen = null;
-                try
-                {
-                    if (file.SelectSingleNode("//DriverName") != null) driverChosen = file.SelectSingleNode("//DriverName").InnerText;
-                    if (!string.IsNullOrEmpty(driverChosen))
-                    {
-                        driverXml = LoadDriver(driverChosen);
-                        driverModel = int.Parse(driverXml.SelectSingleNode("//Model").InnerText);
-                    }
-                    else
-                    {
-                        driverModel = PedHash.Car3Guy2;
-                    }
-                }
-                catch (Exception)
-                {
-                    Log(LogImportance.Info, "Driver XML not found, using fallback ped.", true);
-                    driverModel = PedHash.Car3Guy2;
-                }
-
-                if (tags.Contains("street"))
-                {
-                    driverModel = StreetRacerModels[GetRandomInt(0, StreetRacerModels.Length - 1)];
-                }
-
+                Model driverModel = StreetRacerModels[GetRandomInt(0, StreetRacerModels.Length - 1)];
                 Ped driverPed = null;
                 try
                 {
@@ -3486,35 +3450,12 @@ namespace ARS
                 return driverPed;
             }
 
-            void ApplyDriverClothes(Ped driverPed, XmlDocument driverXml, List<string> tags)
-            {
-                if (!tags.Contains("street"))
-                {
-                    foreach (XmlElement e in driverXml.SelectNodes("//Cloth"))
-                    {
-                        int component = int.Parse(e.GetAttribute("ComponentID"));
-                        int drawable = int.Parse(e.GetAttribute("DrawableID"));
-                        Function.Call(Hash.SET_PED_COMPONENT_VARIATION, driverPed, int.Parse(e.InnerText), component, drawable, 2);
-                    }
-
-                    foreach (XmlElement e in driverXml.SelectNodes("//Clothes/Prop"))
-                    {
-                        int prop = int.Parse(e.GetAttribute("PropID"));
-                        int texture = int.Parse(e.GetAttribute("TextureID"));
-                        Function.Call(Hash.SET_PED_PROP_INDEX, driverPed, int.Parse(e.InnerText), prop, texture, true);
-                    }
-                }
-            }
-
-            void AddRacer(XmlDocument file, Vehicle car, Ped driverPed)
+            void AddRacer(Vehicle car, Ped driverPed)
             {
                 if (CanWeUse(car))
                 {
                     Racer r = new Racer(car, driverPed);
 
-                    if (file.SelectSingleNode("//Name") != null) r.Name = file.SelectSingleNode("//Name").InnerText;
-                    if (file.SelectSingleNode("//Nickname") != null) r.Name = file.SelectSingleNode("//Nickname").InnerText;
-                    if (r.Name == "NULL" || r.Name == null) r.Name = r.Car.DisplayName.ToString()[0].ToString().ToUpper() + r.Car.DisplayName.ToString().Substring(1).ToLowerInvariant();
                     if (car == Game.Player.Character.CurrentVehicle) r.Name = Game.Player.Name;
                     else r.Name = NextSillyName() ?? r.Name;
                     r._baseName = r.Name;
@@ -3530,17 +3471,16 @@ namespace ARS
                 }
             }
 
-            foreach (XmlDocument file in _cachedCandidates)
+            foreach (string modelKey in _cachedCandidates)
             {
                 Vehicle car = null;
                 Ped driverPed = null;
                 try
                 {
-                    string modelName = file.SelectSingleNode("//Model").InnerText;
-                    Model vehicleModel = LoadVehicleModel(modelName);
+                    Model vehicleModel = LoadVehicleModel(modelKey);
                     if (!vehicleModel.IsLoaded)
                     {
-                        Log(LogImportance.Error, "Skipping " + modelName + " - model not loaded", true);
+                        Log(LogImportance.Error, "Skipping " + modelKey + " - model not loaded", true);
                         continue;
                     }
 
@@ -3548,26 +3488,22 @@ namespace ARS
                     car.Heading = (RouteNodes[2] - RouteNodes[0]).ToHeading();
                     car.InstallModKit();
 
-                    List<string> tags = GetVehicleTags(file);
-                    try { ApplyCarAppearance(file, car, tags); } catch (Exception ex) { Log(LogImportance.Info, "Appearance skipped: " + ex.Message); }
+                    RandomizeCarColour(car);
                     if (UseMenyooSkins)
                     {
                         // Menyoo livery override: if a matching Menyoo tuning file exists for this model,
-                        // apply one at random (cosmetic only, separate from the ARS supplier pool).
+                        // apply one at random (cosmetic only, separate from the ARS roster).
                         MenyooAppearance.Apply(car);
                     }
-                    ApplyAccelerationOverride(file, car);
 
-                    XmlDocument driverXml;
-                    driverPed = CreateDriverPed(file, car, tags, out driverXml);
+                    driverPed = CreateDriverPed(car);
                     if (driverPed == null)
                     {
-                        Log(LogImportance.Error, "Skipping " + modelName + " - no driver ped.", true);
+                        Log(LogImportance.Error, "Skipping " + modelKey + " - no driver ped.", true);
                         car.Delete();
                         continue;
                     }
-                    ApplyDriverClothes(driverPed, driverXml, tags);
-                    AddRacer(file, car, driverPed);
+                    AddRacer(car, driverPed);
 
                     lastCar = car;
                 }

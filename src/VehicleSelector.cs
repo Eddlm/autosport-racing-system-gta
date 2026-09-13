@@ -7,18 +7,18 @@ namespace ARS
 {
     public static class VehicleSelector
     {
-        // One pool pass: rank every paced vehicle by pace distance to the target, take the closest maxCars.
-        public static List<XmlDocument> SelectClosestByPace(List<string> pool, Dictionary<string, float> paceIndex, int maxCars, bool allowYield, Action yield, Func<int, int, int> random, Action<string> log, float powerTarget)
+        // One pool pass: rank every paced model by pace distance to the target, take the closest maxCars.
+        // The pool holds canonical hash-string keys, so no file is touched here.
+        public static List<string> SelectClosestByPace(List<string> pool, Dictionary<string, float> paceIndex, int maxCars, bool allowYield, Action yield, Func<int, int, int> random, Action<string> log, float powerTarget)
         {
             List<KeyValuePair<float, string>> ranked = new List<KeyValuePair<float, string>>();
             int cooldown = 0;
             int inspected = 0;
-            foreach (string path in pool)
+            foreach (string key in pool)
             {
-                string model = TrackRepository.ReadVehicleModel(path);
                 float pace;
-                if (!string.IsNullOrWhiteSpace(model) && paceIndex.TryGetValue(model, out pace))
-                    ranked.Add(new KeyValuePair<float, string>(Math.Abs(pace - powerTarget), path));
+                if (paceIndex.TryGetValue(key, out pace))
+                    ranked.Add(new KeyValuePair<float, string>(Math.Abs(pace - powerTarget), key));
                 if (++inspected % 10 == 0) log("Ranking progress: " + inspected + "/" + pool.Count);
                 if (allowYield && ++cooldown > 20) { cooldown = 0; yield(); }
             }
@@ -26,12 +26,11 @@ namespace ARS
             Shuffle(ranked, random);
             List<KeyValuePair<float, string>> ordered = ranked.OrderBy(pair => pair.Key).ToList();
 
-            List<XmlDocument> candidates = new List<XmlDocument>();
+            List<string> candidates = new List<string>();
             foreach (KeyValuePair<float, string> pair in ordered)
             {
                 if (candidates.Count >= maxCars) break;
-                try { XmlDocument document = new XmlDocument(); document.Load(pair.Value); candidates.Add(document); }
-                catch (Exception) { }
+                candidates.Add(pair.Value);
             }
 
             log("Closest-pace candidates: " + candidates.Count);
@@ -39,26 +38,10 @@ namespace ARS
             return candidates;
         }
 
-        // Temp: bypass pace matching and XML lookup — create minimal XML docs from model names directly.
-        // Used for hardcoded roster testing — bypasses pace matching for the full grid.
-        public static List<XmlDocument> SelectHardcoded(List<string> roster, int maxCars, Action yield, Func<int, int, int> random, Action<string> log)
+        // Full-roster test bypass: no pace matching, the roster entries themselves become the grid.
+        public static List<string> SelectHardcoded(List<string> roster, int maxCars, Action yield, Func<int, int, int> random, Action<string> log)
         {
-            List<XmlDocument> candidates = new List<XmlDocument>();
-            HashSet<string> rosterSet = new HashSet<string>(roster, StringComparer.OrdinalIgnoreCase);
-            foreach (string modelName in rosterSet)
-            {
-                try
-                {
-                    XmlDocument doc = new XmlDocument();
-                    XmlElement root = doc.CreateElement("Vehicle");
-                    doc.AppendChild(root);
-                    XmlElement modelNode = doc.CreateElement("Model");
-                    modelNode.InnerText = modelName;
-                    root.AppendChild(modelNode);
-                    candidates.Add(doc);
-                }
-                catch (Exception) { }
-            }
+            List<string> candidates = new List<string>(new HashSet<string>(roster, StringComparer.OrdinalIgnoreCase));
             log("Hardcoded roster candidates: " + candidates.Count);
             Shuffle(candidates, random);
             if (candidates.Count > maxCars) candidates.RemoveRange(maxCars, candidates.Count - maxCars);

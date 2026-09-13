@@ -39,6 +39,18 @@ Where the gap shows:
 
 **The real design tension** (worth settling before either direction): reading the *stock* model is what makes pre-race evaluation free and spawn-free — the grid is chosen *before* any car exists. The moment pace needs an instance, AI selection either has to spawn-and-read (expensive, and structurally too late) or keep inferring from an upgrade set. That choice, not the native selection, is the decision to make when this is picked up.
 
+## Vehicle XML teardown — six writers left unreachable (2026-11)
+
+**What happened**: the roster moved to `Vehicles\cars.txt` (one model key per line) and the whole XML car-info system was retired — save-car, driver save, discipline tags and the per-car appearance reads. The *entry points* are gone: cheats (`arssavecar`, `arssavedriver`, `arscarlisten`), the listen-mode Jump trigger, the `ListenMode` field, `Options.SaveThisCar`/`SaveDriverModel`, and every consumer of the XML reads.
+
+**What is left**: six methods are now unreachable but still in `src\AutosportRacingSystem.cs` — `RandomTuning`, `LoadDriver`, `CreateDriver`, `CreateVehicle`, `CreateVehicleFromName`, `CreateVehicleFromHash` (roughly 600 lines, including the two XML list writers that the build cheats used to call).
+
+**Why they were not deleted in the same pass**: several of them contain *whitespace-only lines with trailing spaces*, which makes a literal exact-match deletion unsafe with the file tools — a mis-typed space run either fails to match or, worse, matches the wrong span. The honest options are a dedicated pass that rewrites those methods whole (read the region, replace it in one `write`), or normalising the trailing whitespace first. The user's tooling rule is "no scripts to edit code files", so it was deferred rather than botched.
+
+**When**: with the rebuild, or as a standalone cleanup before the WIP ships — dead private writers ship fine but they are 600 lines of noise and two of them still name the retired `Drivers\` folder.
+
+**Also left on disk**: the 844 `Vehicles\*.xml` files (game folder and `Dist`) are no longer read by anything; `Dist\AutosportRacingSystem\Vehicles\` should ship `cars.txt` alone once the XMLs are deleted, and `Drivers\` is now unused too.
+
 ## Dist shipped defaults — pending decision (noted 2026-10)
 
 **What is pending**: `Dist\AutosportRacingSystem\Settings\*.ini` is the version-controlled, ship-ready mirror of the live install, and its settings currently hold *whatever the last dev session left behind* rather than deliberate values — as did the committed set before it (it came from an even earlier session). The keys that shape a first-run experience: `Laps`, `GridSize`, `Track`, `PaceMode`, `PaceOffset`, `PaceTarget`, `ReverseRoute` in `Menu-Race.ini`; the racer/AI knobs in `Menu-Racers.ini`; every debug toggle in `Menu-DevSettings.ini`. Decide them **on purpose** before publishing a release.
