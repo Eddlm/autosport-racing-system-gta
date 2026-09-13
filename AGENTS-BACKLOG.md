@@ -29,9 +29,9 @@
 
 **Tier 2 — verify in game, then tune**
 
-7. Side-by-side heading assist — implemented, never checked.
+7. ~~Side-by-side heading assist~~ — **VERIFIED in game (2026-11)**.
 8. Start-line flare placement — geometry on a disabled pipeline.
-9. Stuck-recovery escalation — one wiring change, gated on `ResetToTrack` being player-verified.
+9. ~~Stuck-recovery escalation~~ — **already in the code**: `ApplyStuckRecoveryOverride` teleports the racer to the nearest track edge after 5 failed reverse attempts, using the same math as the player's `ResetToTrack()`; user confirms it works for player and AI (2026-11).
 
 **Tier 3 — single-method changes**
 
@@ -41,7 +41,7 @@
 **Tier 4 — coupled systems**
 
 12. Corner approach tied to the braking plan — lane timing starts reading the braking map.
-13. Entrance brake buffer vs brake learning — root-cause hunting across two systems that mask each other.
+13. ~~Entrance brake buffer vs brake learning~~ — **RESOLVED (2026-11)**: the pedal-gain divisor was the cause (user verdict); its two residual hypotheses explained the same symptom and stay dormant while that stays gone.
 14. Steer-limiter throttle cut rate — needs a grounded derivation for values tuned by feel.
 
 **Tier 5 — new controllers and design decisions**
@@ -108,7 +108,9 @@ Where the gap shows:
 
 **Until then**: those files sit dirty in the working tree on purpose. Stage files explicitly on every commit — never `git add -A` — so the drift cannot ride along with unrelated work (also a workflow rule in `AGENTS.md`).
 
-## Entrance brake buffer vs brake learning — revisit together
+## Entrance brake buffer vs brake learning — RESOLVED (2026-11)
+
+**Resolved (2026-11, user verdict): the pedal gain was it.** The full-pedal speed-error divisor was cut sharply in the same session and the symptoms went with it — exactly the collapse this note predicted. The two root-cause candidates below (entrance-node detection on square/angled corners; the all-or-nothing apex-queue invalidation) explained the same symptom, so they are **dormant, not open** — reopen only if overshoot returns. **Kept for the trail:**
 
 **Entrance brake buffer vs brake learning — revisit together.** The corner-overshoot symptoms ("blows one specific corner", slide-offs at angled entrances) appeared when the entrance brake buffer was shortened from ~1 s to ~0.6 s. The brake-learning rework (per-corner committed factor, sampling gated at the entrance node, **input-share target** — the share of sampled brake *input integral* delivered at full brake, not a time-share of full-brake moments: the time-share target overshot even when tuned low — proportional gain, factor range, mid default) was built as compensation and masks part of it. When revisiting: the buffer decides how much pre-entrance braking authority the map keeps; the learning factor only scales assumed decel ±. Root-cause candidates: entrance-node detection on square/angled corners (StartNode ≈ apex → almost no planned braking distance), and the all-or-nothing apex-queue invalidation (low-speed rule) leaving cars planless mid-slide. **(2026-09, leading hypothesis: under-braking via the pedal gain.** The speed→pedal loop's full-pedal speed-error divisor was ~6.5 m/s — brakes ramped proportionally weakly through the whole braking zone, so the car entered the corner with a decel deficit it could not recover; the learning rework was compensating for this. The divisor was cut to 3 m/s in the same session — if overshoot symptoms largely vanish, this TODO collapses to just the buffer/entrance-node question.)
 
@@ -179,8 +181,8 @@ The flare prop/particle pipeline (`TrackLoader.SpawnGatePair` + both `AttachFlar
 ### Stability awareness — partially implemented
 Only the throttle-side rules are live: not all wheels on ground → reduce `MaxThrottle` (rates and floor in code); and steer angle exceeding the grip-based limit → the same reduction. The steer-into-airborne-side rule is **disabled** (`if (1 == 2)`-gated in `Racer.cs`). `AvgGroundStability` itself is hardcoded to 1 (see the per-racer bullet in AGENTS.md).
 
-### Stuck recovery — the single system, and the planned escalation
-One system only: the reverse-rock (steer straight, reverse throttle) for a fixed window; if still stuck when the window ends, detection re-arms after the stuck-check time and a new attempt starts. The old position-lerp-to-track escalation was **removed entirely** (the velocity punt went long before it). **Planned AI escalation (2026-10)**: once `ARS.ResetToTrack` is player-verified, wire a per-racer variant (not `Game.Player.Character`) into `ApplyStuckRecoveryOverride`'s window-end branch as the still-stuck fallback for AI racers.
+### Stuck recovery — one system, escalation included (verified 2026-11)
+One system: the reverse-rock (steer straight, reverse throttle) for a fixed window; when the window ends it re-arms after the stuck-check time, alternating straight reverse with a steer toward the nearest track point. The old position-lerp-to-track escalation was removed — **but an escalation does exist**: after 5 failed attempts `ApplyStuckRecoveryOverride` teleports the racer to the nearest track edge, using the same math as the player's menu `ResetToTrack()` (nearest `TrackPoint`, lane side from `SignedLaneOffset`, heading along the track, ~10 mph forward), then clears its own stuck state. The 2026-10 "**planned** AI escalation, gated on `ResetToTrack` being player-verified" note was **wrong** — it was already in the code. User-verified in game for both player and AI (2026-11).
 
 ### TCS — the controller
 A P-controller on `MaxThrottleFromTCS` targeting an ideal wheelspin: a tame fixed target off-track, more permissive on-track as the slide angle grows (values in code), with the output clamped well above zero — it never cuts below a floor fraction of throttle. Wheelspin is signed: negative = spin, positive = lockup.
@@ -194,8 +196,8 @@ Slide response is purely proportional (countersteer = slideAngle × scale); ther
 ### Gravity vs grip & speed — a design decision to set in stone
 A TEMP experiment bakes the gravity multiplier into the base grip (`UpdatePerceivedGrip`). It feels good in-game but is **not settled**: `CurrentMechanicalGrip` also feeds sites that separately multiply by `Handling.Gravity` (route speed, corner speed, braking decel) — a possible double-count. The decision to make: define how gravity scales grip versus each speed/decel consumption site, principled rather than this temporary bake.
 
-### Side-by-side heading assist — unverified in-game
-Per steering update, for longitudinally overlapping rivals: mirror their live forward-heading angle, ramping from a small effect at wide lateral separation to the full effect near the combined vehicle width + buffer.
+### Side-by-side heading assist — verified in game (2026-11)
+Per steering update, for longitudinally overlapping rivals: mirror their live forward-heading angle, ramping from a small effect at wide lateral separation to the full effect near the combined vehicle width + buffer. The "unverified" flag simply predated the check — the user confirmed it in game and never reported it back.
 
 ### The reverse throttle path is gone from the pedal pipeline
 No writer ever commands a negative `Intention.Speed`, so the `wantsReverse` branch in `ConvertSpeedToPedals` was dead code and was deleted — a negative intended speed simply brakes. The only reverse left in the AI is the stuck-recovery override.
