@@ -535,7 +535,7 @@ namespace ARS
         {
             int count = ARS.TrackPoints.Count;
             int fwdNode;
-            int fwdOffset = (int)(speedMps * 0.9f);
+            int fwdOffset = (int)(speedMps * 1.2f);
             if (ARS.IsPointToPoint)
                 fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + fwdOffset, 0, count - 1);
             else
@@ -573,7 +573,9 @@ namespace ARS
 
             // Flagged corners are too close to the previous one: no outside hold, no corner-commit.
             bool suppressOutside = ARS.Corners.Exists(cp => cp.Node == apexNode && cp.SuppressOutsideApproach);
-            bool shouldHoldOutside = !suppressOutside; // TEMP: hold outside unless flagged, for testing
+            // Prepare outside only when the car arrives already carrying more than the apex allows.
+            bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.SupposedRadius);
+            bool shouldHoldOutside = !suppressOutside && aboveApexSpeed;
             if (!_approachOutsideDecided || (!_approachHoldsOutside && shouldHoldOutside))
             {
                 _approachHoldsOutside = shouldHoldOutside;
