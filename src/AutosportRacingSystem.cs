@@ -58,7 +58,7 @@ namespace ARS
         public static List<TrackStartInfo> TrackStartInfos = new List<TrackStartInfo>();
 
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
-        // Pre-computed apex table. Built in BuildApexCorners after track generation.
+        // Pre-computed apex table. Built in BuildApexTable after track generation.
         public static List<CornerPoint> Corners = new List<CornerPoint>();
 
         public static List<string> KnownTracks = new List<string>();
@@ -94,6 +94,20 @@ namespace ARS
         {
             if (isElectric) accelRaw *= (ElectricDrivePeak + ElectricDriveAtTopSpeed) * 0.5f;
             return topSpeedMph + grip * 4f + accelRaw * 30f;
+        }
+
+        // GET_IS_VEHICLE_ELECTRIC is a model-hash native that only exists from game build 3258, so probe
+        // it once and degrade to ICE where it is missing rather than throwing per model.
+        static bool? _electricNativeAvailable;
+
+        public static bool IsElectricModel(int modelHash)
+        {
+            if (_electricNativeAvailable == null)
+            {
+                try { Function.Call<int>((Hash)0x1FCB07FE230B6639, modelHash); _electricNativeAvailable = true; }
+                catch (Exception) { _electricNativeAvailable = false; Log(LogImportance.Info, "GET_IS_VEHICLE_ELECTRIC is unavailable on this game build - no car will be treated as electric."); }
+            }
+            return _electricNativeAvailable.Value && Function.Call<int>((Hash)0x1FCB07FE230B6639, modelHash) != 0;
         }
 
         // Vehicle classes we never race.
@@ -2995,7 +3009,7 @@ namespace ARS
             float topSpeedMph = MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, model.Hash));
             if (grip <= 0f || topSpeedMph <= 0f) return false;
             float accel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model.Hash);
-            bool isElectric = Function.Call<int>((Hash)0xD839450756ED5A80, model.Hash) != 0;
+            bool isElectric = IsElectricModel(model.Hash);
             pace = ComputePaceIndex(topSpeedMph, grip, accel, isElectric);
             return !float.IsNaN(pace) && !float.IsInfinity(pace);
         }

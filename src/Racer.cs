@@ -344,7 +344,9 @@ namespace ARS
             float modelGrip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, Car.Model.Hash);
             float modelTopSpeedMph = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, Car.Model.Hash));
             float modelAccel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, Car.Model.Hash);
-            bool modelElectric = Function.Call<int>((Hash)0xD839450756ED5A80, Car.Model.Hash) != 0;
+            // Cache first so the spawn-time PI matches the metric the grid was selected on; live probe only for an unscored car.
+            bool modelElectric;
+            if (!ARS.ModelElectricCache.TryGetValue(Car.Model.Hash.ToString(), out modelElectric)) modelElectric = ARS.IsElectricModel(Car.Model.Hash);
             VehicleData.PowerScale = ARS.ComputePaceIndex(modelTopSpeedMph, modelGrip, modelAccel, modelElectric);
             VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.00");
             if (!ControlledByPlayer) Name = _baseName + " (" + VehicleData.PowerScale.ToString("0.00") + ")";
@@ -752,7 +754,7 @@ namespace ARS
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
         const float PlayerSpeedSteerFwdThreshold = 0.001f;   // effectively always on
         // Steer reduction multiplier: 0.04 at throttle 0.5, 0.08 at throttle 0.99.
-        // Floor: TRlat/3 (degrees) so high-speed steering doesn't collapse.
+        // The TRlat/3 floor described here belongs to the disabled block below; the live path caps at TRlat × 0.5.
 
 
         void ApplySteerLimits()
@@ -773,14 +775,12 @@ namespace ARS
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // Max steer angle = 2° base, plus slide, capped at TRlat × 0.3.
-            float maxSteerAngle = Math.Min(2f + slideAngle, Handling.LateralTractionCurve * 0.3f);
-            // Brake rampdown: once slide exceeds the grip-based steer allowance, ease brake so tires regain lateral grip.
-            float gripSteerAngle = 2f + Handling.LateralTractionCurve * 0.2f;
-            Control.MaxBrake = slideAngle > gripSteerAngle ? ARS.Remap(slideAngle, gripSteerAngle * 2f, gripSteerAngle, 0.8f, 1f, true) : 1f;
+            // Max steer angle = 2° base, plus slide, capped at TRlat × 0.5.
+            float maxSteerAngle = Math.Min(2f + slideAngle, Handling.LateralTractionCurve * 0.5f);
             // Full countersteer: release the brake outright, immediately, so the tires can roll again.
+            // No reset here: the cap recovers on its own at the MaxThrottle rate (ConvertSpeedToPedals).
             if (IsFullCountersteer()) Control.MaxBrake = 0f;
-            float maxSteer = ARS.Remap(fwdMph, 50f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
+            float maxSteer = ARS.Remap(fwdMph, 40f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
             // Countersteer is exempt from the limit — same steer-vs-yaw test the slew rate uses.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             if (!countersteering && Math.Abs(requestedSteer) > maxSteer)
@@ -899,6 +899,7 @@ namespace ARS
 
             UpdateBrakeLearning();
             Control.Brake = Math.Min(Control.Brake, Control.MaxBrake);
+            if (Control.MaxBrake < 1f) Control.MaxBrake += 2 * TickScale;
             Control.Throttle = Math.Min(Control.Throttle, Control.MaxThrottle);
             if (Control.MaxThrottle < 1.00f && !VehicleData.OverspeedThisTick) Control.MaxThrottle += 2 * TickScale;
 
@@ -1700,7 +1701,7 @@ namespace ARS
             UpdateSlideAndBoundingBox();
             UpdatePerceivedGrip();
             // Legacy live-corner scan and route probe remain disabled.
-            // UpdateNextApexes supplies corner state.
+            // UpdateApexLeapfrog supplies corner state.
             // UpdateCornerValidity();
             // UpdateRouteTarget();
 
