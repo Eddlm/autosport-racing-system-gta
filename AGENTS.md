@@ -31,16 +31,13 @@ This file is auto-loaded on every session and is capped (DSH truncates at ~65 KB
 - **Ask for clarification when an instruction is open to interpretation** (thresholds, which rule it replaces, kept-vs-dropped) — a wrong guess costs a build cycle. The user also asks for judgment calls to be raised rather than guessed; the ask tool is welcome for those.
 - **No 1.0 is scheduled** — ongoing updates, not a feature-freeze gate; don't reflexively talk the user out of new features/tuning, but keep changes modest and verified (compile → in-game check → commit).
 - **Every file change → compile (with autocopy) → user verifies in-game → then commit.** Never commit before the human confirms — the human is the verification gatekeeper; a successful compile is not "verified."
-- **🚫 NEVER `git push` on my own.** Commit locally when greenlit; push only when explicitly asked (pushed `cb9b352` and `7d8a054` unprompted before — the cardinal git sin).
 - **Documentation-only changes** (comments/non-executable docs): commit without in-game verification if the build passes — git is the backup while work remains undistributed.
 - **Stage files explicitly — never `git add -A`.** The `Dist` setting mirrors track the live game install, so they sit dirty by design (see the Dist-defaults decision in the open items); a blanket add would sweep session knobs into unrelated commits.
 - **Commit per step, with a task list for multi-step work** (user request): keep each step reviewable, and grep for a key name after repointing it rather than trusting remembered call sites (a "fixed all four readers" claim was wrong once — two were missed, and half-fixed was actively wrong).
 - **Cutting large dead regions with the file tools** (`6bce252`, −590 lines in one file): exact-match edits are fail-safe — a mismatch changes nothing — so drive `old_string` from a `line=length` map of the region rather than counting blank runs by eye; miscounted *blank runs*, never trailing spaces, are what fails. Read each span before cutting: a live method sat between two dead ones and had to survive.
 
 ## The Council (on-demand subagent review)
-- **The Council** = four background subagents via Ollama Cloud that review diffs, explore the codebase, and suggest design alternatives. **Never dispatched automatically** — only when the user asks to "dispatch the council". Dispatch all four with the recent commit diff + relevant files; summarize findings without applying changes unless explicitly approved.
-  - **Grunt reviewers** (low effort): `deepseek-v4-flash:0731`, `glm-5.3-flash`
-  - **Full reviewers** (medium effort): `glm-5.2`; (low effort): `deepseek-v4-pro:0813`
+- **The Council** = background subagent review of diffs and design alternatives. The **canonical roster** (four subagents, two effort tiers) and the dispatch protocol live in the global `~\.dsh\AGENTS.md` — point there rather than restating it. **Never dispatched automatically** — only when the user asks to "dispatch the council"; dispatch all four with the recent commit diff + relevant files, and summarize findings without applying changes unless explicitly approved.
 
 ## Build & deploy
 - **The project auto-copies on build** (`PostBuildEvent` + `CopyArsDll` target): every build drops `ARS.dll` into `D:\SteamLibrary\...\Scripts\AutosportRacingSystem\`. **Quirk:** Debug and Release both fire the copy — *whichever builds last wins*; run Release last when Release deployment matters.
