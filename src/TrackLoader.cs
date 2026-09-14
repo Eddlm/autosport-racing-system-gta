@@ -142,7 +142,7 @@ namespace ARS
             }
 
             // Detect circuit vs point-to-point BEFORE GenerateRouteInfo so the geometry pass
-            // (Angle/Direction/Elevation/PreciseCurveRadius) and BuildApexCorners can wrap node
+            // (Angle/Direction/Elevation/PreciseCurveRadius) and BuildApexTable can wrap node
             // indices across the start/finish seam. Without this, corners sitting on the finish
             // line are invisible to the apex table on circuits.
             ARS.IsPointToPoint = false;

@@ -14,7 +14,7 @@ that style's cosmetic parts → paint last. Replaces the old random-index tuning
   streaming hit under memory pressure.
 - The new pass has **no sleeps at all**. Measured in game: 12 cars processed inside the same second, and the
   per-car work is spread over frames instead of landing in one burst.
-- `RandomTuning` is **not** dead: `ApplyCarAppearance` still calls it for tuner-discipline cars (see open items).
+- `RandomTuning` and its caller `ApplyCarAppearance` are both **gone** (`RandomTuning` in `6bce252`, `ApplyCarAppearance` in `d0a6e10` with the vehicle-XML/discipline teardown) — nothing applies random tuning any more.
 
 ## The trap: two livery spaces
 Enumerating the wrong space returns **no names for every car, silently** - it cost a full test cycle.
@@ -110,7 +110,6 @@ there is no `MetallicYellow` / `MetallicTeal` / `MetallicBrown` (use `MetallicTa
   Andreas, Jackal — all on the generic colour paths.
 - **Karin's body pool is the whole blue family** (10 paints), so "deep blue" is likely but not guaranteed. A
   separate deep-blue family is the clean fix if it comes out too bright in the field.
-- **`RandomTuning` still drives the tuner-discipline path** in `ApplyCarAppearance` (left alone by choice), so
-  tuner-tagged cars get that random treatment on top of this pass.
+- The **tuner-discipline path is gone** (`d0a6e10`, then `6bce252`): no discipline tags, no `ApplyCarAppearance`, no `RandomTuning` — this pass and Menyoo are the only appearance writers.
 - The **~75% parts fill** is a guess at how complete a build should look; tune it after seeing a few fields.
 - Marque cars have only been seen as code, not in the field: the monochrome look is unverified visually.

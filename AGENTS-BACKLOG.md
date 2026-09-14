@@ -17,8 +17,8 @@
 
 **Tier 0 — decisions, no code**
 
-1. ~~Dist shipped defaults~~ — **DONE (`7696db3`)**: deliberate first-run values committed under the renamed files, and Dist now ships only the five files the script owns or creates.
-2. Menu-persistence verification — delete each `Menu-*.ini`, restart, click every toggle; fresh install and existing one.
+1. ~~Dist shipped defaults~~ — **DONE (`7696db3`)**: deliberate first-run values committed under the renamed files, and its tracked settings are the five files the script owns or creates (`Options.ini` returns untracked after every build — see the section below).
+2. ~~Menu-persistence verification~~ — **DONE**: both paths verified in game (fresh install + legacy upgrade — see the section below).
 
 **Tier 1 — localised edits, low risk**
 
@@ -56,9 +56,13 @@
 19. Two-projection route speed — replaces the geometric route speed, the sweeping-corner authority.
 20. Track-creator revival — entry point, shared-statics ownership, mutation policy, the `Wide` off-by-one.
 
-**Tier 7 — just added, wants a second look**
+**Tier 7 — shipped, wants a second look**
 
 21. Downhill braking term — **span consistency fixed and verified in game**; the per-node-profile worry was **not a defect** (the mean is exact for `∫a·ds`). One question left: the brake-learning/grade coupling, below.
+
+**Tier 8 — removed for the WIP, reimplement later**
+
+22. Slide brake rampdown — taken out so the WIP ships a steering/braking pair that was actually tuned together; comes back with feedback in hand, **v0.9 and over**. Detail below.
 
 ## Downhill braking term — span fixed, one design question open
 
@@ -121,7 +125,7 @@ Where the gap shows:
 
 ## Dist shipped defaults — decided (`7696db3`)
 
-**Decided and shipped (`7696db3`) — the live install held the intended defaults** (user's call). The keys that shape a first-run experience: `Laps`, `GridSize`, `Track`, `PaceMode`, `PaceOffset`, `PaceTarget`, `ReverseRoute` in `Menu-Race.ini`; the racer/AI knobs in `Menu-Settings.ini`; every debug toggle in `Menu-Debug.ini`. Dist now holds **only the five files the script owns or creates** — the legacy read-once inputs (`Settings.ini`, `Options.ini`) no longer ship, and `Options.ini` is recreated with the same defaults on first load, so a new install receives deliberate values instead of another install's migration inputs. **Mechanics worth keeping: `RefreshDist` is `robocopy /E` with no `/PURGE`, so it copies the new names in but never removes a stale one — pruning Dist is manual. The robocopy direction is game → Dist, so edit the live install (or the live inis), build, and commit Dist as a content change.** One difference is deliberately left unreconciled: the committed `Dist` carries `PaceTarget = 120` while the live install holds `126` — that key is rewritten on every menu build (clamped to the fleet span and snapped to the nearest offer), so it is a seed rather than a preference. See the pace-anchor bullet in AGENTS.md.
+**Decided and shipped (`7696db3`) — the live install held the intended defaults** (user's call). The keys that shape a first-run experience: `Laps`, `GridSize`, `Track`, `PaceMode`, `PaceOffset`, `PaceTarget`, `ReverseRoute` in `Menu-Race.ini`; the racer/AI knobs in `Menu-Settings.ini`; every debug toggle in `Menu-Debug.ini`. Dist's **tracked** settings are the five files the script owns or creates — the legacy read-once input `Settings.ini` no longer ships. **`Options.ini` is the exception, and it is not read-once**: it is still read live every race (`CATCHUP.OnlyLastHalf`/`OnlyBehindPlayer` for catch-up, `GENERAL_SETTINGS.ReverseRoutes` in `TrackLoader`), it is recreated with the same defaults on first load, and `RefreshDist` copies it into Dist untracked after any build — so a present-but-untracked `Dist\...\Settings\Options.ini` is expected drift rather than a ship-set change, and deleting that file from a live install would silently change catch-up and route-reversal behaviour. **Mechanics worth keeping: `RefreshDist` is `robocopy /E` with no `/PURGE`, so it copies the new names in but never removes a stale one — pruning Dist is manual. The robocopy direction is game → Dist, so edit the live install (or the live inis), build, and commit Dist as a content change.** One difference is deliberately left unreconciled: the committed `Dist` carries `PaceTarget = 120` while the live install's has drifted a few points since — that key is rewritten on every menu build (clamped to the fleet span and snapped to the nearest offer), so it is a seed rather than a preference. See the pace-anchor bullet in AGENTS.md.
 
 **Why it matters**: `Dist` is what a new installer receives. A personal favourite track, an arbitrary pace target/grid size and arbitrary debug toggles (which decide a player's out-of-the-box visual aids) are a poor first impression for a WIP release.
 
@@ -162,6 +166,16 @@ Where the gap shows:
 
 **Do not confuse it with Speed Offset**: the projection cap governs **input**, the offset governs the **target**. While the cap is active a raised `Intention.Speed` produces no extra pedal, so "the offset does nothing" in a corner is expected there — the tell is the debug HUD's intended speed moving while the pedal trail doesn't.
 
+## Slide brake rampdown — removed for the WIP, reimplement after v0.9 feedback
+
+**What it was**: in `ApplySteerLimits`, the maximum brake used to ease with the slide angle — `Control.MaxBrake = slideAngle > gripSteerAngle ? Remap(slideAngle, gripSteerAngle*2, gripSteerAngle, 0.8, 1) : 1` with `gripSteerAngle = 2 + TRlat × 0.2`. Past that slide angle the brake cap fell to **0.8** (a 20 % cut) so the tyres could regain lateral grip; below it the cap was a plain 1.
+
+**Why it is out**: it was tuned against the *old* steering allowance (`2 + slide` capped at `TRlat × 0.3`, ≈3.4° for the median car), which sat **below** its threshold (≈4.25° median). The allowance is now `2 + slide` capped at `TRlat × 0.5` (≈5.6° median ceiling), so the rampdown would engage *inside* the steering range — the car holding more steer while its brake is being cut, a pairing that was never tuned together. Rather than re-tune blind, it ships out and returns with feedback in hand.
+
+**When**: after the first WIP release's feedback — **v0.9 and over**.
+
+**Reimplementing — the trap that made this more than a deletion**: `Control.MaxBrake` used to be *derived fresh each tick* — `Initialize()` seeded it once per race and `ApplySteerLimits` rewrote it every tick (1, or 0 under full countersteer). Deleting the rampdown outright therefore left the countersteer release with nothing to undo it, and the brake would have stayed dead for the rest of the race. The first fix kept a plain `MaxBrake = 1f` in the rampdown's place; that was then replaced by the better answer — the cap is now **stateful with a natural recovery, mirroring `MaxThrottle`** (`if (Control.MaxBrake < 1f) Control.MaxBrake += 2 × TickScale` in `ConvertSpeedToPedals`, sitting beside the identical throttle line). So the release is still instant, the restoration is a ~0.5 s ramp, and the value self-heals with no reset anywhere — including across `ApplySteerLimits`' early `return` on a NaN steer, which the per-tick reset used to skip entirely. Anything reimplemented here must respect that pair: **instant release, ramped recovery**.
+
 ## Optional update checker as a separate DLL (idea)
 
 **Optional update checker as a separate DLL (idea)**: extract the compiled-in update checker into a small `ARS.UpdateChecker.dll` loaded via reflection only if present (users who dislike network checks delete the DLL); simpler alternative: an `Options.ini` toggle.
@@ -172,7 +186,7 @@ Where the gap shows:
 
 **Extraction (behavior-preserving, byte-verified)**: the feature now lives in its own files; `class ARS` is `partial`:
 - `src\AutosportRacingSystem.TrackCreator.cs` — the dormant editor: `HandleTrackCreator`, `GenerateBezier`/`Bezier2`, `DrawRouteNodes`/`DrawSection`/`GetPerpendicular`/`PlayerOrCameraNearPos`, plus the mode flag and its knobs (`_routeEditorActive`, `_routeSection`, `_bezierStartAnchor`, `_bezierScale`, `_pathWidth`, `EditNodeHalfWidths`).
-- `src\AutosportRacingSystem.TrackFile.cs` — the track XML writer: `UpdateRoute` (**live**, the `arsupdroute` cheat), `SaveRoute` (dead, zero callers) and `FindCustomProps` (sole caller is `UpdateRoute`).
+- `src\AutosportRacingSystem.TrackFile.cs` — the track XML writer: `UpdateRoute` (**gated off for the WIP, `58dbf98`** — the `arsupdroute` cheat logs and does nothing), `SaveRoute` (dead, zero callers) and `FindCustomProps` (sole caller is `UpdateRoute`).
 
 Only location changed: `partial class` means no visibility plumbing and no call-site edits, and every moved block is byte-identical to the original. The loader (`TrackLoader`/`TrackRepository`) and the shared statics were deliberately left in place — a real class + interface split is the refinement pass's job, not the move's.
 
@@ -242,7 +256,7 @@ Every car is charged once at race launch and recharged on each lap increase (`Ra
 ### Corrections are corrections — never reuse one as an absolute target
 The rule is **now embodied in the code** (re-verified): `ComputeSteering` rebuilds the countersteer as a full target — `countersteerTarget = trajectorySteer - 2f * VehicleData.SlideAngle` — and blends the final steer *toward that target*, never toward the bare correction term. `_slideCountersteerDegrees`, the identifier this note used to cite as the counter-example, no longer exists; the lesson is what survives it. A value stored as a correction ("subtract this from the PD") carries the **opposite sign** of the steer direction it wants. Lerping the final steer *toward* it as a target steers **into** the slide — caught in-game (car sliding rightwards steered leftwards). So when blending toward a slide-response target, reconstruct the full target (trajectory terms with the correction applied), never the bare correction value.
 
-### Menu persistence — thorough in-game verification still pending (release gate)
+### Menu persistence — verified in game (fresh install + legacy upgrade)
 The menu restructure (`9b8da25`; per-menu ini stores, Pace Mode under Settings, Reverse Route in the Race menu — Pace Mode has since moved *into* the Race menu, above Pace Offset), the seed-on-read tidy-up and the dropped auto-migrations were only spot-checked. **VERIFIED in game since, fresh-install path**: deleting every `Settings\*.ini` regenerates all three foreign files with their documented defaults and three complete `Menu-*.ini`; a second load rewrites nothing (byte-identical files, zero repair lines); changed values survive a reload, a live `static` included. **The legacy migration path is verified too**, exercised with the pre-rename fixture kept in `..\_ars-settings-backup\`: the rename migration, the `DevSettings.ini` move, the pre-prune `PaceMode` salvage, `AIRacerAutofix` rescued from the ancient `Settings.ini`, and `Options.ini` losing to the per-menu file on `Laps`. `5edc8b6` is the restructure commit; the settings-repair paths added afterwards *have* been verified in-game (snap, fill, drop, create — see the repair evidence in AGENTS-TECHNOTES.md).
 ## Smart Tuning (the grid auto-tuner) - moved to AGENTS-SMARTTUNING.md
 
