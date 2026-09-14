@@ -43,7 +43,7 @@
 
 13. Corner approach tied to the braking plan — lane timing starts reading the braking map.
 14. ~~Entrance brake buffer vs brake learning~~ — **RESOLVED (`77d3729`)**: the pedal-gain divisor was the cause (user verdict); its two residual hypotheses explained the same symptom and stay dormant while that stays gone.
-15. Steer-limiter throttle cut rate — needs a grounded derivation for values tuned by feel.
+15. ~~Steer-limiter throttle cut rate~~ — **REMOVED**: the cut cancelled exactly against the recovery's own rate, so it was a no-op, and had it bitten it would have fought TCS through the plant — see the section below.
 
 **Tier 5 — new controllers and design decisions**
 
@@ -237,8 +237,8 @@ One system: the reverse-rock (steer straight, reverse throttle) for a fixed wind
 ### TCS — the controller
 A P-controller on `MaxThrottleFromTCS` targeting an ideal wheelspin: a tame fixed target off-track, more permissive on-track as the slide angle grows (values in code), with the output clamped well above zero — it never cuts below a floor fraction of throttle. Wheelspin is signed: negative = spin, positive = lockup.
 
-### Steer-limiter throttle tie-in
-When `ApplySteerLimits` is clamping the steer *and* the allowance it clamps to has dropped below `ThrottleCutSteerLimitFraction` of the steering lock, `MaxThrottle` drops at a slow rate with a floor and recovers once the limiter disengages. Near lock the steer is still trimmed and throttle is left alone on purpose: the limiter reaches full lock exactly where steering is free, and starving throttle there strangled recovering cars, which need pedal authority to drive away while they steer back toward the track. Consequence: the cut is a high-speed-only device — the allowance crosses the gate roughly a third of the way up the 0–50 mph ramp at the default lock and TRlat (and the branch additionally requires the requested steer to exceed the allowance). **TODO: revisit the cut rate** — tuned to "feels right", with no grounded justification.
+### Steer-limiter throttle tie-in — REMOVED
+`ApplySteerLimits` used to cut `MaxThrottle` at a slow rate with a floor once the allowance it clamps to fell below a fraction of the steering lock, recovering when the limiter disengaged. **It has been removed outright, and the grounded derivation the TODO asked for is the reason it could not be justified**: the cut ran at exactly the recovery's rate (`+2 × TickScale`), in the same tick and *after* it, gated only on the overspeed flag — so the two cancelled exactly and the branch was a **no-op in normal driving**. Its one real effect was to *compound* with the overspeed correction's cut, which is the case the `!OverspeedThisTick` gate protects from the recovery: the limiter was quietly extending overspeed cuts. And had it ever bitten as intended it would have fought TCS through the *plant* rather than in code — starving the throttle lowers measured wheelspin, TCS reads that as grip and relaxes its own cap, and the cap snaps back the moment the limiter releases. **The durable lesson: every other `MaxThrottle` writer in the codebase re-applies a *ceiling* each tick (`Min(cap, …)` — ChillOut, Yield, the nearby cap), which is why they survive the recovery; the limiter was the only *decaying decrement*, and the recovery exists precisely to erase decaying decrements.** The limiter is steering-only now.
 
 **Corrected (compiler-confirmed)**: this note used to attribute the drop to `_steerLimitedThisFrame`, "when it actually cuts the steer". That flag is **assigned and never read** (`CS0414`, `Racer.cs`) — the *allowance* test above is the whole trigger, and the flag is a leftover from the older form where it also gated the disabled speed-based reduction (the commented zombie block below the live one is the only remaining reader). The parenthetical the note used to carry about "real authority" was right; only its citation of the flag was wrong.
 

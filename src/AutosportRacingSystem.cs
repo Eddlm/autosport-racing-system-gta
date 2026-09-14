@@ -632,7 +632,6 @@ namespace ARS
         
 
         
-        int _pathDisplayFidelity = 1;
 
 
 

@@ -59,7 +59,6 @@ namespace ARS
 
         
         int _lastStabilityCheck = 0;
-        int _wheelsOffGround = 0;
 
         // Racer progress along the route.
         public TrackPoint CurrentTrackPoint = new TrackPoint();
@@ -140,7 +139,7 @@ namespace ARS
         const int InputTrailMaxSamples = 40;
 
 
-        // True when the steer limiter actually reduced the steer this frame.
+        // True when the steer limiter actually reduced the steer this frame; read only by the ZOMBIE block below.
         bool _steerLimitedThisFrame = false;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
@@ -743,7 +742,6 @@ namespace ARS
             return ARS.Clamp(targetLane, clampLeft, clampRight);
         }
 
-        const float ThrottleCutSteerLimitFraction = 0.75f;
         // Countersteer blend: starts at TRlat × this, fully engaged at TRlat × the full fraction.
         const float CountersteerBlendStartFraction = 0.3f;
         const float CountersteerFullFraction = 0.6f;
@@ -789,9 +787,6 @@ namespace ARS
             {
                 Control.SteerDegrees = Math.Sign(requestedSteer) * maxSteer;
                 _steerLimitedThisFrame = true;
-                // Starve throttle only once the limiter has real authority: near lock it would fight
-                // slow-speed maneuvering and the recovery reverse.
-                if (maxSteer < VehicleData.SteeringLock * ThrottleCutSteerLimitFraction && Control.MaxThrottle >= 0.1) Control.MaxThrottle -= (float)(2 * TickScale);
             }
 
             /* ZOMBIE — speed-based reduction, disabled while trialing slide-angle steer limit.
@@ -1268,6 +1263,10 @@ namespace ARS
             return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
         }
 
+        // TCS wheelspin targets: more negative = more spin allowed, so the deepening is subtracted.
+        const float IdealWheelspinBase = -1.5f;
+        const float IdealWheelspinDeepening = 0.5f;
+
         void TractionControl()
         {
             float wheelspin = ARS.MaxWheelSlip(Car);
@@ -1279,15 +1278,16 @@ namespace ARS
             }
             else
             {
-                // Slide modulates the allowed spin: -1 base, deepest allowance (-2) at the traction limit, then back
-                // to strict (-1) at twice that - a car sliding that far needs the throttle back, not more of it.
+                // Slide modulates the allowed spin: the base allowance deepens by the extra at the traction limit, then
+                // returns to the base at twice that - a car sliding that far needs the throttle back, not more of it.
                 // Descending *input* with ascending output on purpose: a descending output is inverted by Remap's
                 // clamp (Clamp(r, min, max) with min > max collapses to min), and trlat == 0 would divide by zero.
                 float trlat = Handling.LateralTractionCurve;
                 float slide = Math.Abs(VehicleData.SlideAngle);
-                if (trlat <= 0.01f) IdealWheelspin = -1f;
-                else if (slide <= trlat) IdealWheelspin = ARS.Remap(slide, trlat, 0f, -2f, -1f, true);
-                else IdealWheelspin = ARS.Remap(slide, trlat, trlat * 2f, -2f, -1f, true);
+                float deepest = IdealWheelspinBase - IdealWheelspinDeepening;
+                if (trlat <= 0.01f) IdealWheelspin = IdealWheelspinBase;
+                else if (slide <= trlat) IdealWheelspin = ARS.Remap(slide, trlat, 0f, deepest, IdealWheelspinBase, true);
+                else IdealWheelspin = ARS.Remap(slide, trlat, trlat * 2f, deepest, IdealWheelspinBase, true);
             }
 
             float error = wheelspin - IdealWheelspin;
