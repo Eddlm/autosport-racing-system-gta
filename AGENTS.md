@@ -188,6 +188,6 @@ One line each; the detail for every one of these is in `AGENTS-BACKLOG.md` or `A
 - **Reverse throttle path** — removed from the pedal pipeline by design.
 - **Nitro pacing** — charged at launch and per lap increase; no free-roam refill.
 - **Two-projection route speed (future idea)** — replace the geometric route speed with a ballistic + a pessimistic projection; caveats in the companion.
-- **Off-track projection → reaction relationship — ACTIVE**: the cap brakes and the braking is right in principle but reads **too aggressive**; the reference-node truncation is now fixed (`f1acebd`), so re-judge before tuning anything. Open shape questions (absolute-vs-angular band, binary outside gate, cap-vs-target, pessimistic projection) in `AGENTS-BACKLOG.md`.
+- **Off-track projection → reaction relationship — closed (`67d8da7`)**: the reaction used to swing **full throttle → brake inside ~4 m** (±2 m either side of a bound inset by half the car), which is what read aggressive; it now ramps across the **whole track half-width** and past the edge reaches only a shallow floor. Re-checked in game and accepted. The angular-band, binary-gate and pessimistic-projection ideas are **parked, not active**, in `AGENTS-BACKLOG.md`.
 - **Immersive join points** — a chevron marks the nearest start line; Context starts a race there (Sprint+Context opens the menu). The join follows **Pace Mode** like any other start.
 - **Optional update checker as a separate DLL (idea)**, and **rear-end prevention** tuning notes — both in the companion.

@@ -37,7 +37,7 @@
 **Tier 3 — single-method changes**
 
 11. Electric slow-electrics class question — data plus a balance judgment (see the electric section).
-12. Off-track projection ↔ reaction relationship — **ACTIVE** (user's pick): the projection debug ladder exists and the reference-node truncation is fixed; the band/gate/cap-shape questions are on file below.
+12. ~~Off-track projection ↔ reaction relationship~~ — **RESOLVED (`67d8da7`)**: the cap was rewritten to ramp across the whole half-width and to a shallow floor, instead of swinging full throttle → brake inside ±2 m of a car-inset bound; re-checked in game and accepted. The band/gate/cap-shape questions stay on file below as **parked**.
 
 **Tier 4 — coupled systems**
 
@@ -147,11 +147,13 @@ Where the gap shows:
 
 **Corner approach tied to braking plan (idea)**: start the outside-line move ~1 s before the car must brake for the apex (computed from current speed, apex speed, braking decel) instead of a fixed seconds-to-apex gate — matches the lane transition to each corner's actual speed profile.
 
-## Off-track projection — the projection↔reaction relationship (ACTIVE — user's pick)
+## Off-track projection — the projection↔reaction relationship (RESOLVED — `67d8da7`)
 
-**State**: the cap **does** brake and the braking is correct in principle, but it reads **too aggressive** (user verdict). Two things have changed since that verdict: (a) the debug ladder exists — Debug → Show Projection, three slices, where the **1 s magenta sphere is literally the point the cap judges**; (b) the cap's reference node was **truncated** — `FindNearestTrackPoint` searched only ±10 nodes around the car, so every moving car had its projection measured against the track direction ~10 m ahead of it, amplifying any heading error by the `(speed − 10 m)` lever arm. The window is now the caller's (`behind: 0`, `ahead: ~1 s of travel`, circuits wrapping). **Re-judge the aggressiveness after that fix** before touching the ramp — the speed-scaled false positives should be gone. **⚠ And re-judge it after the pedal-slew change (`4fdbaa8`)**: the cap judges the *target* (an instant `Min` on the combined input) and the pedal slew is the only thing that turns that into a ramp, so a much faster slew shortens this cap's onset by the same factor. The "too aggressive" verdict was reached with the slow slew and must not be carried over unchanged — the cap now bites roughly six times sooner.
+**Resolved (user verdict, re-checked in game) — the reaction was rewritten, so "too aggressive" no longer describes the code.** The old cap swung **from full throttle to brake inside ~4 m**: `Remap(offTrackDistance, +2, −2, −0.5, 1)`, i.e. ±2 m either side of a bound **inset by half the car's width** — which is exactly why it read aggressive, since a 4 m band is a few frames at speed and its terminal value was a 0.5 brake. The current form ramps throttle across the **whole track half-width** (`1 − offset/halfWidth`), measures against the **full** half-width rather than a car-inset bound, and past the edge only ever reaches a shallow floor (`OffshootBlendBrake`) over `OffshootRangeMeters`. No commit since has touched it.
 
-**What the relationship pass has to settle** (i.e. what the reaction should be a function of):
+**Two fixes had landed before it, and they removed *false positives* rather than softening the dose** — worth knowing if this is ever revisited: (a) the cap's reference node was **truncated** (`f1acebd`) — `FindNearestTrackPoint` searched only ±10 nodes around the car, so every moving car had its projection measured against the track direction ~10 m ahead of it, amplifying heading error by the `(speed − 10 m)` lever arm; the window is now the caller's (`behind: 0`, `ahead: ~1 s of travel`, circuits wrapping). (b) The pedal slew then got ~6× faster (`4fdbaa8`, *after* `67d8da7`), and the slew is the only thing that turns the cap's instant `Min` into a ramp — so the cap bites far sooner than it did when the verdict was formed, in *either* direction.
+
+**Parked — the questions to settle only if it ever needs revisiting** (i.e. what the reaction should be a function of):
 - **Absolute vs angular band** — the ramp is in metres past the edge at every speed, so the same heading error trips it far harder at 200 km/h than at 40. A speed-scaled or angle-based band is the leading candidate: "expecting to be off track" is arguably an angular fact, not a metric one.
 - **Binary gate on a sliding reference** — the outside test is a sign comparison against the node 1 s *behind* the car, and its two sides sit at different places on the track (offset measured near the car, angle taken behind it). A sign flip through a transition or at corner exit flickers the cap while its value moves smoothly → hysteresis or a graduated verdict.
 - **Cap vs target** — applied as a `Min` on the combined input, so a negative cap **commands brake** over the plan's own throttle; its onset reads as a ramp only because the pedal slew sits downstream. Whether the reaction belongs in the input cap or in the plan's target is the framing question.
