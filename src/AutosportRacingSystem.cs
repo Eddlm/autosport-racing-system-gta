@@ -108,11 +108,11 @@ namespace ARS
         public static int RaceReward = 0;
 
         public static ScriptSettings SettingsFile;
-        public static ScriptSettings DevSettingsFile;
+        public static ScriptSettings DevConfigFile;
         // One ini per menu (Settings\Menu-*.ini), created in LoadSettings.
         public static MenuSettings RaceMenuStore;
-        public static MenuSettings RacersMenuStore;
-        public static MenuSettings DevMenuStore;
+        public static MenuSettings SettingsMenuStore;
+        public static MenuSettings DebugMenuStore;
 
         public static bool HideHudMode = false;
         // True when the player demonstrably has nitrous: bottle mod installed (slot 17) OR fired nitro
@@ -648,7 +648,7 @@ namespace ARS
         // Default script folder under GTA's `scripts\` (Tracks/, Vehicles/cars.txt, sillynames.txt,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
-        // Config .ini files (Options/DevSettings/Settings/MemoryOffsets) live in a
+        // Config .ini files (Options/DevConfig/MemoryOffsets) live in a
         // dedicated Settings subfolder, derived from ScriptsFolder so the base stays in one place.
         public static string SettingsFolder => ScriptsFolder + @"\Settings";
         // Temp: bypass pace matching entirely and load only these models into the grid.
@@ -863,7 +863,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
             AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
 
-            // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
+            // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
             NativeMenu racersMenu = new NativeMenu("General Settings", "General Settings", "Standing preferences: grid sorting, timeout, racer behaviour and tuning.")
             {
                 UseMouse = false,
@@ -872,17 +872,17 @@ namespace ARS
             };
             NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "How the grid is ordered.", EnumLabels<GridSort>());
             gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", ((GridSort)args.Index).ToString());
-            gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(EnumLabel(ParseEnum(RacersMenuStore.Get("GridSorting", "Random"), GridSort.Random))));
+            gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(EnumLabel(ParseEnum(SettingsMenuStore.Get("GridSorting", "Random"), GridSort.Random))));
             racersMenu.Add(gridSortItem);
 
             NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", new[] { "15", "30", "45", "60" });
             timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
-            timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(RacersMenuStore.GetInt("TimeoutSeconds", 30).ToString()));
+            timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(SettingsMenuStore.GetInt("TimeoutSeconds", 30).ToString()));
             racersMenu.Add(timeoutItem);
 
             NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", new[] { "0", "1", "2" });
             autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
-            autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(RacersMenuStore.GetInt("AIRacerAutofix", 1).ToString()));
+            autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(SettingsMenuStore.GetInt("AIRacerAutofix", 1).ToString()));
             racersMenu.Add(autofixItem);
 
             NativeCheckboxItem tuningItem = new NativeCheckboxItem("Smart Tuning", "Pick the livery that fits a style, then the body parts that go with it, then paint to suit. Runs during the countdown so it adds no load time.", SmartTuning);
@@ -912,7 +912,7 @@ namespace ARS
             };
             racersMenu.Add(menyooItem);
 
-            // ── AI Settings submenu (under Settings) — how the AI racers drive; shares Settings\Menu-Racers.ini ──
+            // ── AI Settings submenu (under Settings) — how the AI racers drive; shares Settings\Menu-Settings.ini ──
             NativeMenu aiMenu = new NativeMenu("AI Settings", "AI Settings", "How the AI racers behave on track.")
             {
                 UseMouse = false,
@@ -925,7 +925,7 @@ namespace ARS
                 SpeedOffsetMph = int.Parse(speedOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
                 SaveRacerSetting("SpeedOffset", speedOffsetItem.Items[args.Index]);
             };
-            speedOffsetItem.SelectedIndex = Math.Max(0, speedOffsetItem.Items.IndexOf(RacersMenuStore.GetInt("SpeedOffset", SpeedOffsetMph).ToString(CultureInfo.InvariantCulture)));
+            speedOffsetItem.SelectedIndex = Math.Max(0, speedOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("SpeedOffset", SpeedOffsetMph).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(speedOffsetItem);
 
             NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.", BrakeLearning);
@@ -951,7 +951,7 @@ namespace ARS
                 CrestEffect = int.Parse(crestEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
                 SaveRacerSetting("CrestEffect", crestEffectItem.Items[args.Index]);
             };
-            crestEffectItem.SelectedIndex = Math.Max(0, crestEffectItem.Items.IndexOf(RacersMenuStore.GetInt("CrestEffect", 100).ToString(CultureInfo.InvariantCulture)));
+            crestEffectItem.SelectedIndex = Math.Max(0, crestEffectItem.Items.IndexOf(SettingsMenuStore.GetInt("CrestEffect", 100).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(crestEffectItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Hill Effect (%)", "How much a hill's pitch cuts a racer's intended speed. 0% ignores slopes, 100% is the tuned default (15 degrees halves grip).", terrainEffectOptions);
@@ -960,10 +960,10 @@ namespace ARS
                 HillGripEffect = int.Parse(hillEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
                 SaveRacerSetting("HillGripEffect", hillEffectItem.Items[args.Index]);
             };
-            hillEffectItem.SelectedIndex = Math.Max(0, hillEffectItem.Items.IndexOf(RacersMenuStore.GetInt("HillGripEffect", 100).ToString(CultureInfo.InvariantCulture)));
+            hillEffectItem.SelectedIndex = Math.Max(0, hillEffectItem.Items.IndexOf(SettingsMenuStore.GetInt("HillGripEffect", 100).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(hillEffectItem);
 
-            // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Racers.ini ──
+            // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
             NativeMenu advancedMenu = new NativeMenu("Advanced Settings", "Advanced Settings", "Low-level physics overrides and AI corrections.")
             {
                 UseMouse = false,
@@ -1034,7 +1034,7 @@ namespace ARS
         }
         void SaveRacerSetting(string key, string value)
         {
-            RacersMenuStore.Set(key, value);
+            SettingsMenuStore.Set(key, value);
         }
         void AddDebugCheckbox(NativeMenu menu, Options option, string title, string description, Action<bool> onChanged = null, MenuSettings store = null)
         {
@@ -1050,7 +1050,7 @@ namespace ARS
         }
         void SaveDevToggle(Options option, bool value)
         {
-            DevMenuStore.Set(option.ToString(), value.ToString());
+            DebugMenuStore.Set(option.ToString(), value.ToString());
         }
         // ── Phased race instancing ──
         // Each phase is a self-contained method callable individually or chained
@@ -1380,7 +1380,7 @@ namespace ARS
 
                 if (!_loaded)
                 {
-                    if (DevSettingsFile.GetValue<bool>("GENERAL", "LoadAtStart", true) || WasCheatStringJustEntered("arson"))
+                    if (DevConfigFile.GetValue<bool>("GENERAL", "LoadAtStart", true) || WasCheatStringJustEntered("arson"))
                     {
                         StartLoadScript();
                     }
@@ -1518,7 +1518,7 @@ namespace ARS
                 
                 if (!_menuPool.AreAnyVisible)
                 {
-                    if ((DevSettingsFile.GetValue<bool>("GENERAL", "Hotkeys", true) && Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlPressed(2, GTA.Control.Context)) || WasCheatStringJustEntered("arsmenu"))
+                    if ((DevConfigFile.GetValue<bool>("GENERAL", "Hotkeys", true) && Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlPressed(2, GTA.Control.Context)) || WasCheatStringJustEntered("arsmenu"))
                     {
                         _arsMenu.Visible = true;
                     }
@@ -1613,7 +1613,7 @@ namespace ARS
                         LeaderboardFinish.Add(racer);
                         racer.BaseBehavior = RacerBaseBehavior.FinishedRace;
                         if (IsPointToPoint) racer.BaseBehavior = RacerBaseBehavior.FinishedStandStill;
-                        if (_raceTimedFinishMs == 0) _raceTimedFinishMs = Game.GameTime + (RacersMenuStore.GetInt("TimeoutSeconds", 30) * 1000);
+                        if (_raceTimedFinishMs == 0) _raceTimedFinishMs = Game.GameTime + (SettingsMenuStore.GetInt("TimeoutSeconds", 30) * 1000);
                     }
                 }
 
@@ -1867,7 +1867,7 @@ namespace ARS
         void PlaceCars()
         {
             GridSort sort = GridSort.Power;
-            string setting = RacersMenuStore.Get("GridSorting", "Power");
+            string setting = SettingsMenuStore.Get("GridSorting", "Power");
             if (!Enum.TryParse(setting, true, out sort)) sort = GridSort.Power;
             GridBuilder.Place(Racers, GridPositions, RouteNodes, IsPointToPoint, sort);
         }
@@ -2105,7 +2105,7 @@ namespace ARS
             if (WasCheatStringJustEntered("arssettings"))
             {
                 SettingsFile = null;
-                DevSettingsFile = null;
+                DevConfigFile = null;
                 LoadSettings();
             }
 
@@ -2829,44 +2829,53 @@ namespace ARS
             Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
             Log(LogImportance.Info, "Checking the Settings folder ...");
-            // Brake Learning and Staged Spawns moved out of the debug toggles; read their legacy dev
-            // values now, because the prune pass below drops keys the dev schema no longer declares.
+            // Every legacy read happens before the prune pass below, which drops keys the schema no longer declares.
+            // Menu-DevSettings.ini held Brake Learning and Staged Spawns before they moved to the Settings file.
             ScriptSettings retiredDevToggles = ScriptSettings.Load(SettingsFolder + @"\Menu-DevSettings.ini");
             string legacyBrakeLearning = retiredDevToggles.GetValue<string>("MENU", "BrakeLearning", null);
             string legacyStagedSpawns = retiredDevToggles.GetValue<string>("MENU", "StagedSpawns", null);
+            // Menu-Settings.ini held the single Pace Mode key before that name was reused for the Settings file.
+            ScriptSettings retiredPaceSettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Settings.ini");
+            string legacyPaceMode = retiredPaceSettings.GetValue<string>("MENU", "PaceMode", null);
             SettingsRepair.CreateMissingFiles();
             SettingsRepair.PruneOwnedFiles();
 
             Log(LogImportance.Info, "Loading Options.ini ...");
             RaceMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Race.ini");
-            RacersMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Racers.ini");
-            DevMenuStore = new MenuSettings(SettingsFolder + @"\Menu-DevSettings.ini");
+            SettingsMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Settings.ini");
+            DebugMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Debug.ini");
             SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
             RaceMenuStore.Migrate("Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 4).ToString());
             Log(LogImportance.Info, "Loaded Options.");
 
             Log(LogImportance.Info, "Loading per-menu settings (Menu-*.ini) ...");
+            // The Settings menu's items lived in Menu-Racers.ini and the debug toggles in Menu-DevSettings.ini
+            // until both files were renamed after the menu they serve.
+            ScriptSettings legacySettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Racers.ini");
+            foreach (string key in SettingsRepair.DeclaredKeys("Menu-Settings.ini"))
+                SettingsMenuStore.Migrate(key, legacySettings.GetValue<string>("MENU", key, null));
+            ScriptSettings legacyDebug = ScriptSettings.Load(SettingsFolder + @"\Menu-DevSettings.ini");
+            foreach (Options option in DebugToggles.Keys.ToArray())
+                DebugMenuStore.Migrate(option.ToString(), legacyDebug.GetValue<string>("MENU", option.ToString(), null));
             ScriptSettings legacyRacers = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
-            RacersMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", "Power"));
-            RacersMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<int>("RACERS", "TimeoutSeconds", 30).ToString());
-            RacersMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString());
-            RacersMenuStore.Migrate("AiNitro", legacyRacers.GetValue<string>("RACERS", "AiNitro", AiNitro.ToString()));
-            RacersMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
-            AiNitro = ParseEnum(RacersMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
-            UseMenyooSkins = RacersMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
-            OverspeedEnabled = RacersMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
-            SmartTuning = RacersMenuStore.GetBool("SmartTuning", SmartTuning);
-            SpeedOffsetMph = RacersMenuStore.GetInt("SpeedOffset", SpeedOffsetMph);
-            RacersMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
-            RacersMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
-            BrakeLearning = RacersMenuStore.GetBool("BrakeLearning", BrakeLearning);
-            RouteSpeedLimit = RacersMenuStore.GetBool("RouteSpeedLimit", RouteSpeedLimit);
-            CrestEffect = RacersMenuStore.GetInt("CrestEffect", 100) * 0.01f;
-            HillGripEffect = RacersMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
-            StagedSpawns = RacersMenuStore.GetBool("StagedSpawns", StagedSpawns);
-            // Menu-Settings.ini is retired (Pace Mode moved to the Race menu): carry its one key over once.
-            ScriptSettings retiredMenuSettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Settings.ini");
-            RaceMenuStore.Migrate("PaceMode", retiredMenuSettings.GetValue<string>("MENU", "PaceMode", null));
+            SettingsMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", "Power"));
+            SettingsMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<int>("RACERS", "TimeoutSeconds", 30).ToString());
+            SettingsMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString());
+            SettingsMenuStore.Migrate("AiNitro", legacyRacers.GetValue<string>("RACERS", "AiNitro", AiNitro.ToString()));
+            SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
+            AiNitro = ParseEnum(SettingsMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
+            UseMenyooSkins = SettingsMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
+            OverspeedEnabled = SettingsMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
+            SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
+            SpeedOffsetMph = SettingsMenuStore.GetInt("SpeedOffset", SpeedOffsetMph);
+            SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
+            SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
+            BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
+            RouteSpeedLimit = SettingsMenuStore.GetBool("RouteSpeedLimit", RouteSpeedLimit);
+            CrestEffect = SettingsMenuStore.GetInt("CrestEffect", 100) * 0.01f;
+            HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
+            StagedSpawns = SettingsMenuStore.GetBool("StagedSpawns", StagedSpawns);
+            RaceMenuStore.Migrate("PaceMode", legacyPaceMode);
             // The mode's option was relabelled and then re-spelled as an enum name; rewrite either older
             // spelling so the repair pass cannot reset a stored mode to the default.
             string storedMode = RaceMenuStore.Get("PaceMode", null);
@@ -2882,16 +2891,17 @@ namespace ARS
             Log(LogImportance.Info, "Loaded Memory Offsets.");
             Log(LogImportance.Info, "[MEMORY] Learned the steer offset from file: " + SteerOffset);
 
-            Log(LogImportance.Info, "Loading DevSettings.ini ...");
-            DevSettingsFile = ScriptSettings.Load(SettingsFolder + @"\DevSettings.ini");
+            Log(LogImportance.Info, "Loading DevConfig.ini ...");
+            DevConfigFile = ScriptSettings.Load(SettingsFolder + @"\DevConfig.ini");
             foreach (Options option in DebugToggles.Keys.ToArray())
-                DevMenuStore.Migrate(option.ToString(), DevSettingsFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]).ToString());
+                DebugMenuStore.Migrate(option.ToString(), DevConfigFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]).ToString());
             foreach (Options option in DebugToggles.Keys.ToArray())
-                DebugToggles[option] = DevMenuStore.GetBool(option.ToString(), DebugToggles[option]);
+                DebugToggles[option] = DebugMenuStore.GetBool(option.ToString(), DebugToggles[option]);
             DebugToggles[Options.ReverseRoute] = RaceMenuStore.GetBool("ReverseRoute", DebugToggles[Options.ReverseRoute]);
             Log(LogImportance.Info, "Loaded dev toggles.");
 
-            SettingsRepair.CompleteOwnedKeys(RaceMenuStore, RacersMenuStore, DevMenuStore);
+            SettingsRepair.CompleteOwnedKeys(RaceMenuStore, SettingsMenuStore, DebugMenuStore);
+            SettingsRepair.DeleteLegacyOwnedFiles();
             Log(LogImportance.Info, "Checked the Settings folder.");
         }
         public enum LogImportance { Info, Error, Fatal }
@@ -2948,7 +2958,7 @@ namespace ARS
 
         public static void Log(LogImportance i, string text, bool forced = false)
         {
-            if (DevSettingsFile != null && DevSettingsFile.GetValue<LogImportance>("GENERAL", "LogLevel", LogImportance.Info) > i && !forced) return;
+            if (DevConfigFile != null && DevConfigFile.GetValue<LogImportance>("GENERAL", "LogLevel", LogImportance.Info) > i && !forced) return;
             string log = "\n[" + DateTime.Now + "](" + i.ToString() + "): " + text;
             File.AppendAllText(ScriptsFolder + @"\Log.log", log);
         }

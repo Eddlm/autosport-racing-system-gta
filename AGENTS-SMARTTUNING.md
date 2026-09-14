@@ -28,7 +28,7 @@ Enumerating the wrong space returns **no names for every car, silently** - it co
   genuinely have none at all (reaper, tyrant, t20, osiris, tempesta, turismor).
 
 ## Settings
-- **`SmartTuning`** (bool, `Menu-Racers.ini`, default **True**) replaced the `AITuningLevel` 0-3 ladder. The old
+- **`SmartTuning`** (bool, `Menu-Settings.ini`, default **True**) replaced the `AITuningLevel` 0-3 ladder. The old
   key is undeclared in the schema now, so `SettingsRepair.PruneOwnedFiles` drops it and the new key is created
   with its default. **No migration by convention** - a user who had tuning off gets it back on.
 - The ladder's level 2/3 behaviour (performance mods, engine boost) was dropped by request; this pass is

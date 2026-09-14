@@ -11,7 +11,7 @@ namespace ARS
     //   CreateMissingFiles  Settings\ exists, and every foreign file is present.
     //   PruneOwnedFiles     ARS-owned Menu-*.ini lose keys the schema no longer declares.
     //   CompleteOwnedKeys   ARS-owned files gain missing keys and lose values the schema rejects.
-    // Foreign files (Options.ini, DevSettings.ini, MemoryOffsets.ini) are hand-editable and may carry
+    // Foreign files (Options.ini, DevConfig.ini, MemoryOffsets.ini) are hand-editable and may carry
     // comments, which ScriptSettings.Save drops — so they are created when missing but never rewritten.
     // A created file holds exactly the values the code uses when a key is absent, so creating one can
     // never change behaviour. Settings.ini is a legacy migration input and is deliberately not expected.
@@ -133,7 +133,7 @@ namespace ARS
             "OnlyLastHalf = true",
             "OnlyBehindPlayer = true");
 
-        static readonly string DEVSETTINGS_DEFAULTS = Lines(
+        static readonly string DEVCONFIG_DEFAULTS = Lines(
             "[GENERAL]",
             "Hotkeys = true",
             "LoadAtStart = true",
@@ -171,30 +171,30 @@ namespace ARS
             race.Specs.Add(new KeySpec("ReverseRoute", "False", Kind.Bool));
             files.Add(race);
 
-            FileSpec racers = Owned("Menu-Racers.ini");
-            racers.Specs.Add(new KeySpec("GridSorting", GridSort.Power.ToString(), Kind.Text, Enum.GetNames(typeof(GridSort))));
-            racers.Specs.Add(new KeySpec("TimeoutSeconds", "30", Kind.Number, new[] { "15", "30", "45", "60" }));
-            racers.Specs.Add(new KeySpec("AIRacerAutofix", "1", Kind.Number, new[] { "0", "1", "2" }));
-            racers.Specs.Add(new KeySpec("SpeedOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
-            racers.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
-            racers.Specs.Add(new KeySpec("AiNitro", TriState.IfPlayerHas.ToString(), Kind.Text, Enum.GetNames(typeof(TriState))));
-            racers.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
-            racers.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
-            racers.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
-            racers.Specs.Add(new KeySpec("RouteSpeedLimit", "True", Kind.Bool));
-            racers.Specs.Add(new KeySpec("CrestEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
-            racers.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
-            racers.Specs.Add(new KeySpec("StagedSpawns", "True", Kind.Bool));
-            files.Add(racers);
+            FileSpec settings = Owned("Menu-Settings.ini");
+            settings.Specs.Add(new KeySpec("GridSorting", GridSort.Power.ToString(), Kind.Text, Enum.GetNames(typeof(GridSort))));
+            settings.Specs.Add(new KeySpec("TimeoutSeconds", "30", Kind.Number, new[] { "15", "30", "45", "60" }));
+            settings.Specs.Add(new KeySpec("AIRacerAutofix", "1", Kind.Number, new[] { "0", "1", "2" }));
+            settings.Specs.Add(new KeySpec("SpeedOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
+            settings.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("AiNitro", TriState.IfPlayerHas.ToString(), Kind.Text, Enum.GetNames(typeof(TriState))));
+            settings.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("RouteSpeedLimit", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("CrestEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
+            settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
+            settings.Specs.Add(new KeySpec("StagedSpawns", "True", Kind.Bool));
+            files.Add(settings);
 
             // The dev file's key set is the debug toggle table itself: retiring a toggle retires its key.
-            FileSpec dev = Owned("Menu-DevSettings.ini");
+            FileSpec debug = Owned("Menu-Debug.ini");
             foreach (Options option in ARS.DebugToggles.Keys)
-                dev.Specs.Add(new KeySpec(option.ToString(), ARS.DebugToggles[option].ToString(), Kind.Bool));
-            files.Add(dev);
+                debug.Specs.Add(new KeySpec(option.ToString(), ARS.DebugToggles[option].ToString(), Kind.Bool));
+            files.Add(debug);
 
             files.Add(new FileSpec("Options.ini", false, OPTIONS_DEFAULTS));
-            files.Add(new FileSpec("DevSettings.ini", false, DEVSETTINGS_DEFAULTS));
+            files.Add(new FileSpec("DevConfig.ini", false, DEVCONFIG_DEFAULTS));
             files.Add(new FileSpec("MemoryOffsets.ini", false, MEMORY_OFFSETS_DEFAULTS));
             return files;
         }
@@ -205,6 +205,14 @@ namespace ARS
             try
             {
                 Directory.CreateDirectory(ARS.SettingsFolder);
+                // The dev config was DevSettings.ini before the menu-scoped naming: a move keeps its comments.
+                string legacyDevConfig = ARS.SettingsFolder + @"\DevSettings.ini";
+                string devConfig = ARS.SettingsFolder + @"\DevConfig.ini";
+                if (File.Exists(legacyDevConfig) && !File.Exists(devConfig))
+                {
+                    File.Move(legacyDevConfig, devConfig);
+                    ARS.Log(ARS.LogImportance.Info, "Settings repair: renamed DevSettings.ini to DevConfig.ini.");
+                }
                 foreach (FileSpec file in Schema)
                 {
                     if (file.Owned || file.DefaultText == null || File.Exists(file.Path)) continue;
@@ -261,13 +269,13 @@ namespace ARS
 
         // Pass 3: every declared key exists and holds a value the schema accepts. Runs after the legacy
         // migrations, so a repaired default can never shadow a value carried over from an older install.
-        public static void CompleteOwnedKeys(MenuSettings race, MenuSettings racers, MenuSettings dev)
+        public static void CompleteOwnedKeys(MenuSettings race, MenuSettings settings, MenuSettings debug)
         {
             Dictionary<string, MenuSettings> stores = new Dictionary<string, MenuSettings>(StringComparer.OrdinalIgnoreCase)
             {
                 { "Menu-Race.ini", race },
-                { "Menu-Racers.ini", racers },
-                { "Menu-DevSettings.ini", dev },
+                { "Menu-Settings.ini", settings },
+                { "Menu-Debug.ini", debug },
             };
             foreach (FileSpec file in Schema)
             {
@@ -288,6 +296,38 @@ namespace ARS
                     {
                         ARS.Log(ARS.LogImportance.Error, "Settings repair: could not fix " + file.Name + " " + spec.Key + " - " + ex.Message, true);
                     }
+                }
+            }
+        }
+
+        // The declared key names of one owned file, so a rename migration walks the schema instead of a copy of it.
+        public static List<string> DeclaredKeys(string fileName)
+        {
+            foreach (FileSpec file in Schema)
+            {
+                if (!string.Equals(file.Name, fileName, StringComparison.OrdinalIgnoreCase)) continue;
+                List<string> keys = new List<string>();
+                foreach (KeySpec spec in file.Specs) keys.Add(spec.Key);
+                return keys;
+            }
+            return new List<string>();
+        }
+
+        // Owned files retired by a rename, removed only after their values have been migrated to the new names.
+        public static void DeleteLegacyOwnedFiles()
+        {
+            foreach (string name in new[] { "Menu-Racers.ini", "Menu-DevSettings.ini" })
+            {
+                string path = ARS.SettingsFolder + @"\" + name;
+                try
+                {
+                    if (!File.Exists(path)) continue;
+                    File.Delete(path);
+                    ARS.Log(ARS.LogImportance.Info, "Settings repair: removed " + name + " (renamed; its values were migrated).");
+                }
+                catch (Exception ex)
+                {
+                    ARS.Log(ARS.LogImportance.Error, "Settings repair: could not remove " + name + " - " + ex.Message, true);
                 }
             }
         }

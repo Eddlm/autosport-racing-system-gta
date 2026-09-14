@@ -214,11 +214,11 @@ namespace ARS
 
             XmlElement trackside = document.CreateElement("Trackside");
             XmlElement t = document.CreateElement("Model");
-            t.InnerText = ARS.DevSettingsFile.GetValue("CREATOR_DEFAULTS", "TracksideModel", "prop_wheel_tyre");
+            t.InnerText = ARS.DevConfigFile.GetValue("CREATOR_DEFAULTS", "TracksideModel", "prop_wheel_tyre");
             trackside.AppendChild(t);
 
             t = document.CreateElement("Frecuency");
-            t.InnerText = ARS.DevSettingsFile.GetValue("CREATOR_DEFAULTS", "TracksideModelFrecuency", "10");
+            t.InnerText = ARS.DevConfigFile.GetValue("CREATOR_DEFAULTS", "TracksideModelFrecuency", "10");
             trackside.AppendChild(t);
 
 
