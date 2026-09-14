@@ -132,6 +132,8 @@ namespace ARS
         const float OffshootRangeMeters = 2f;
         const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
         const float FullPedalSpeedErrorMps = 3f;
+        // Braking is the softer side: it takes this many times the speed error to command full brake.
+        const float BrakeErrorMultiplier = 2f;
 
         // Applied pedal input sampled every metre of travel, for the debug trail.
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
@@ -871,7 +873,7 @@ namespace ARS
 
         }
 
-        const float PedalSlewRate = 12f;            // pedal slew rate (units/second: full range in ~83ms)
+        const float PedalSlewRate = 6f;             // pedal slew rate (units/second: full range in ~167ms)
         const float PedalSlewMaxPerTick = 0.5f;     // hitch guard: never step more than this in one tick
 
         void ConvertSpeedToPedals()
@@ -887,7 +889,7 @@ namespace ARS
 
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
 
-            float combinedInput = ComputeCombinedInput(intendedSpeedChange, currentForwardSpeed);
+            float combinedInput = ComputeCombinedInput(intendedSpeedChange);
             combinedInput = ApplyOffshootBlend(combinedInput);
             // Full countersteer: no brake, just enough throttle to keep the wheels rolling. TCS still caps it.
             if (IsFullCountersteer()) combinedInput = CountersteerRollThrottle;
@@ -907,15 +909,11 @@ namespace ARS
 
         }
 
-        float ComputeCombinedInput(float intendedSpeedChange, float currentForwardSpeed)
+        // One linear map for both pedals: a direction swap needs no case of its own, because its error is the sum of the magnitudes and saturates anyway.
+        float ComputeCombinedInput(float intendedSpeedChange)
         {
-            bool signsDisagree = (intendedSpeedChange > 0f && currentForwardSpeed < 0f)
-                              || (intendedSpeedChange < 0f && currentForwardSpeed > 0f);
-
-            if (signsDisagree && Math.Abs(currentForwardSpeed) > ARS.MphToMps(10f))
-                return currentForwardSpeed > 0f ? -1f : 1f;
-
-            return ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, -1f, 1f);
+            float divisor = intendedSpeedChange < 0f ? FullPedalSpeedErrorMps * BrakeErrorMultiplier : FullPedalSpeedErrorMps;
+            return ARS.Clamp(intendedSpeedChange / divisor, -1f, 1f);
         }
 
         float ApplyThrottleCap(float combinedInput)
