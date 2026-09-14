@@ -17,7 +17,7 @@
 
 **Tier 0 — decisions, no code**
 
-1. Dist shipped defaults — pick the values in the live install, build so `RefreshDist` propagates, commit.
+1. ~~Dist shipped defaults~~ — **DONE (`7696db3`)**: deliberate first-run values committed under the renamed files, and Dist now ships only the five files the script owns or creates.
 2. Menu-persistence verification — delete each `Menu-*.ini`, restart, click every toggle; fresh install and existing one.
 
 **Tier 1 — localised edits, low risk**
@@ -119,9 +119,9 @@ Where the gap shows:
 
 **Deleted (`2ef27db`)**: the 844 `Vehicles\*.xml` files and the `Drivers\` folder (9 files) are gone from the live install *and* `Dist`, so both now ship `Vehicles\cars.txt` alone. Every one of those 853 `Dist` files was git-tracked, so `git checkout` restores them if the rebuild ever wants a sample. Nothing read them: `VehicleCatalog` reads `cars.txt`, and the one recursive `*.xml` sweep in the code (`MenyooAppearance.GetFiles`) targets the game's own `menyooStuff\Vehicle`, not the ARS folder — worth knowing before a future "unread files" pass mistakes it for a reader. Note the boundary for such a pass: `Options.ini` is live (`CATCHUP`/`ReverseRoutes`), and `Settings.ini` is read **once** as a legacy migration input — `Menu-Settings.ini` is *no longer* that file (the Settings store took the name, and the old `PaceMode` key it carried is read pre-prune), so none of the three is unread.
 
-## Dist shipped defaults — pending decision
+## Dist shipped defaults — decided (`7696db3`)
 
-**Decided — the live install holds the intended defaults** (user's call). The keys that shape a first-run experience: `Laps`, `GridSize`, `Track`, `PaceMode`, `PaceOffset`, `PaceTarget`, `ReverseRoute` in `Menu-Race.ini`; the racer/AI knobs in `Menu-Settings.ini`; every debug toggle in `Menu-Debug.ini`. What remains is mechanical: build so `RefreshDist` copies game → Dist, then commit `Dist` as a **content** change. Two file-set decisions ride along: `Dist` should stop shipping the legacy read-once inputs (`Settings.ini`, and `Options.ini` — the script recreates the latter with defaults, so a new install needs neither), and it must ship the **renamed** files rather than holding both names.
+**Decided and shipped (`7696db3`) — the live install held the intended defaults** (user's call). The keys that shape a first-run experience: `Laps`, `GridSize`, `Track`, `PaceMode`, `PaceOffset`, `PaceTarget`, `ReverseRoute` in `Menu-Race.ini`; the racer/AI knobs in `Menu-Settings.ini`; every debug toggle in `Menu-Debug.ini`. Dist now holds **only the five files the script owns or creates** — the legacy read-once inputs (`Settings.ini`, `Options.ini`) no longer ship, and `Options.ini` is recreated with the same defaults on first load, so a new install receives deliberate values instead of another install's migration inputs. **Mechanics worth keeping: `RefreshDist` is `robocopy /E` with no `/PURGE`, so it copies the new names in but never removes a stale one — pruning Dist is manual. The robocopy direction is game → Dist, so edit the live install (or the live inis), build, and commit Dist as a content change.**
 
 **Why it matters**: `Dist` is what a new installer receives. A personal favourite track, an arbitrary pace target/grid size and arbitrary debug toggles (which decide a player's out-of-the-box visual aids) are a poor first impression for a WIP release.
 
