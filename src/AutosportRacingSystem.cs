@@ -792,6 +792,10 @@ namespace ARS
             };
             _raceMenu.Add(instanceGridItem);
 
+            // Slots to restore into when Staged Spawns is re-enabled: Add() alone appends past LemonUI's 10-row window.
+            int spawnTrackSlot = _raceMenu.Items.IndexOf(instanceTrackItem);
+            int spawnGridSlot = _raceMenu.Items.IndexOf(instanceGridItem);
+
             // Start: add player to grid, place cars, tune, countdown. Lives at the end of Race.
             NativeItem startItem = new NativeItem("Start Race", "Add yourself to the grid and start the race.");
             startItem.Activated += (sender, args) =>
@@ -981,8 +985,8 @@ namespace ARS
                 SaveRacerSetting("StagedSpawns", StagedSpawns.ToString());
                 if (StagedSpawns)
                 {
-                    if (!_raceMenu.Items.Contains(instanceTrackItem)) _raceMenu.Add(instanceTrackItem);
-                    if (!_raceMenu.Items.Contains(instanceGridItem)) _raceMenu.Add(instanceGridItem);
+                    if (!_raceMenu.Items.Contains(instanceTrackItem)) _raceMenu.Add(Math.Min(spawnTrackSlot, _raceMenu.Items.Count), instanceTrackItem);
+                    if (!_raceMenu.Items.Contains(instanceGridItem)) _raceMenu.Add(Math.Min(spawnGridSlot, _raceMenu.Items.Count), instanceGridItem);
                 }
                 else
                 {
