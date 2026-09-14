@@ -2756,7 +2756,7 @@ namespace ARS
             float distance = rawDistance - coastReserve;
             if (distance < 0f) distance = 0f;
 
-            float decel = r.BrakingDecel(apexNode, rawDistance);
+            float decel = r.BrakingDecel(apexNode, distance);
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
             if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;

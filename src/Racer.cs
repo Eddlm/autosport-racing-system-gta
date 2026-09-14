@@ -2255,7 +2255,8 @@ namespace ARS
                     - EntranceBrakeExtraDistance)
                 : 0f;
 
-            float decel = BrakingDecel(apexNode, rawDistance);
+            // Grade over the same span the solve integrates, or the mean and the distance measure different zones.
+            float decel = BrakingDecel(apexNode, distance);
 
             float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
             if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
