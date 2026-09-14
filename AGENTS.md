@@ -183,6 +183,7 @@ One line each; the detail for every one of these is in `AGENTS-BACKLOG.md` or `A
 - **Gravity vs grip & speed — design decision to set in stone** (possible double-count; see the moved details).
 - **Stability awareness — partially implemented** (throttle-side only; the airborne-side rule is disabled).
 - **TCS** — P-controller; values in code. **Steer-limiter throttle tie-in** — cut rate needs a grounded justification.
+- **Low-grip handling test — release gate**: the steer allowance base now *scales* with TRlat instead of being a fixed margin, which makes it **tighter** below TRlat ≈ 10 — and it is verified on high-grip handling only. Before release, drive a genuinely low-grip car and watch for the mirrored symptom (won't turn in, understeer at speed); if it shows up, the base factor is the knob, not the ceiling (math in `AGENTS-TECHNOTES.md`).
 - **Snap-oversteer counter (TODO)** — no D-term exists to catch yaw-rate spikes; dedicated session.
 - **The corrections rule** — never blend toward a correction value as if it were a target (steers into the slide; caught in-game).
 - **Reverse throttle path** — removed from the pedal pipeline by design.
