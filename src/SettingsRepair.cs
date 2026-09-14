@@ -163,19 +163,19 @@ namespace ARS
 
             FileSpec race = Owned("Menu-Race.ini");
             race.Specs.Add(new KeySpec("Track", null));                     // optional: absent = no track chosen yet
-            race.Specs.Add(new KeySpec("Laps", "4", Kind.Number, new[] { "2", "4", "6", "8", "10" }));   // numeric: a retired lap count snaps to the nearest offer instead of resetting
-            race.Specs.Add(new KeySpec("GridSize", "4", Kind.Number, null, 0f, 12f));
-            race.Specs.Add(new KeySpec("PaceMode", PaceMode.RelativeToMine.ToString(), Kind.Text, Enum.GetNames(typeof(PaceMode))));
+            race.Specs.Add(new KeySpec("Laps", "6", Kind.Number, new[] { "2", "4", "6", "8", "10" }));   // numeric: a retired lap count snaps to the nearest offer instead of resetting
+            race.Specs.Add(new KeySpec("GridSize", "8", Kind.Number, null, 0f, 12f));
+            race.Specs.Add(new KeySpec("PaceMode", PaceMode.Absolute.ToString(), Kind.Text, Enum.GetNames(typeof(PaceMode))));
             race.Specs.Add(new KeySpec("PaceOffset", "0", Kind.Number));
             race.Specs.Add(new KeySpec("PaceTarget", null, Kind.Number));   // optional: absent triggers the fleet-span middle autoselect
             race.Specs.Add(new KeySpec("ReverseRoute", "False", Kind.Bool));
             files.Add(race);
 
             FileSpec settings = Owned("Menu-Settings.ini");
-            settings.Specs.Add(new KeySpec("GridSorting", GridSort.Power.ToString(), Kind.Text, Enum.GetNames(typeof(GridSort))));
-            settings.Specs.Add(new KeySpec("TimeoutSeconds", "30", Kind.Number, new[] { "15", "30", "45", "60" }));
-            settings.Specs.Add(new KeySpec("AIRacerAutofix", "1", Kind.Number, new[] { "0", "1", "2" }));
-            settings.Specs.Add(new KeySpec("SpeedOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
+            settings.Specs.Add(new KeySpec("GridSorting", GridSort.Random.ToString(), Kind.Text, Enum.GetNames(typeof(GridSort))));
+            settings.Specs.Add(new KeySpec("TimeoutSeconds", "60", Kind.Number, new[] { "15", "30", "45", "60" }));
+            settings.Specs.Add(new KeySpec("AIRacerAutofix", "2", Kind.Number, new[] { "0", "1", "2" }));
+            settings.Specs.Add(new KeySpec("SpeedOffset", "6", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
             settings.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("AiNitro", TriState.IfPlayerHas.ToString(), Kind.Text, Enum.GetNames(typeof(TriState))));
             settings.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
@@ -184,7 +184,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("RouteSpeedLimit", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("CrestEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
-            settings.Specs.Add(new KeySpec("StagedSpawns", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("StagedSpawns", "False", Kind.Bool));
             files.Add(settings);
 
             // The dev file's key set is the debug toggle table itself: retiring a toggle retires its key.

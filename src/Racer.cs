@@ -235,7 +235,7 @@ namespace ARS
                 Function.Call(GTA.Native.Hash.SET_DRIVER_ABILITY, Driver, 0f);
                 Function.Call(GTA.Native.Hash.SET_DRIVER_AGGRESSIVENESS, Driver, 0f);
 
-                if (ARS.SettingsMenuStore.GetInt("AIRacerAutofix", 1) == 2)
+                if (ARS.SettingsMenuStore.GetInt("AIRacerAutofix", 2) == 2)
                 {
                     Function.Call(GTA.Native.Hash.SET_ENTITY_PROOFS, Car, true, true, true, true, true, true, true, true);
                     Function.Call(GTA.Native.Hash.SET_ENTITY_PROOFS, Driver, true, true, true, true, true, true, true, true);
@@ -247,7 +247,7 @@ namespace ARS
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_HAS_STRONG_AXLES, Car, true);
                     try { Car.EngineCanDegrade = false; } catch (Exception) { }
                 }
-                else if (ARS.SettingsMenuStore.GetInt("AIRacerAutofix", 1) == 1)
+                else if (ARS.SettingsMenuStore.GetInt("AIRacerAutofix", 2) == 1)
                 {
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_STRONG, Car, true);
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_HAS_STRONG_AXLES, Car, true);
@@ -775,8 +775,8 @@ namespace ARS
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // Max steer angle = 2° base, plus slide, capped at TRlat × 0.5.
-            float maxSteerAngle = Math.Min(2f + slideAngle, Handling.LateralTractionCurve * 0.5f);
+            // Max steer angle = TRlat × 0.2 base, plus slide, capped at TRlat × 0.5 (base is always 40% of the ceiling).
+            float maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.2f + slideAngle, Handling.LateralTractionCurve * 0.5f);
             // Full countersteer: release the brake outright, immediately, so the tires can roll again.
             // No reset here: the cap recovers on its own at the MaxThrottle rate (ConvertSpeedToPedals).
             if (IsFullCountersteer()) Control.MaxBrake = 0f;
@@ -1554,7 +1554,7 @@ namespace ARS
         {
             int nodeCount = ARS.TrackPoints.Count;
             if (ARS.IsPointToPoint) return nodeCount - CurrentTrackPoint.Node;
-            float totalLaps = ARS.RaceMenuStore.GetInt("Laps", 4);
+            float totalLaps = ARS.RaceMenuStore.GetInt("Laps", 6);
             return Math.Max(0f, (totalLaps + 1f - Lap) * nodeCount - CurrentTrackPoint.Node);
         }
 
@@ -1984,7 +1984,7 @@ namespace ARS
                     CanRegisterNewLap = false;
                     Lap++;
                     ARS.Log(ARS.LogImportance.Info, "Lap++ " + Name + " -> lap " + Lap + " (node " + currentNode + ")");
-                    if (Lap > ARS.RaceMenuStore.GetInt("Laps", 4))
+                    if (Lap > ARS.RaceMenuStore.GetInt("Laps", 6))
                     {
                         if (Car.CurrentBlip != null) Car.CurrentBlip.Color = BlipColor.Green;
                     }
@@ -2477,7 +2477,7 @@ namespace ARS
                 if (Function.Call<bool>((Hash)0x3D34E80EED4AE3BE, Car) && Control.Brake > 0.1f) Function.Call((Hash)0x81E1552E35DC3839, Car, false);
 
 
-                if (ARS.SettingsMenuStore.GetInt("AIRacerAutofix", 1) == 2 && Function.Call<bool>(Hash._IS_VEHICLE_DAMAGED, Car))
+                if (ARS.SettingsMenuStore.GetInt("AIRacerAutofix", 2) == 2 && Function.Call<bool>(Hash._IS_VEHICLE_DAMAGED, Car))
                 {
                     Car.Repair();
                 }
