@@ -129,6 +129,8 @@ Where the gap shows:
 
 **Why it matters**: `Dist` is what a new installer receives. A personal favourite track, an arbitrary pace target/grid size and arbitrary debug toggles (which decide a player's out-of-the-box visual aids) are a poor first impression for a WIP release.
 
+**Backup**: the decided set is archived outside the repo at `..\ars-dist-defaults-<commit>.zip` (the `GTAV\` folder, beside `_ars-settings-backup\`), holding the five committed files plus a manifest. Export one with `git show HEAD:<path>` — the newest commit touching that path *is* the decision commit, so **git is the source of truth for these defaults, not the working-tree folder**, which `RefreshDist` has already overwritten with live session knobs. Restore by copying the files back into `Dist\AutosportRacingSystem\Settings\` or the live install before a release.
+
 **Mechanics — direction matters**: the `RefreshDist` build target robocopies **game install → Dist**, so editing `Dist` alone is overwritten by the next build. The order that sticks: set the values in the live install (pick them in the menu, or edit the live inis), then build so `RefreshDist` propagates them, then commit `Dist` as a **content** change (only data is git-tracked; `Dist/**/*.dll` is ignored).
 
 **Until then**: those files sit dirty in the working tree on purpose. Stage files explicitly on every commit — never `git add -A` — so the drift cannot ride along with unrelated work (also a workflow rule in `AGENTS.md`).
