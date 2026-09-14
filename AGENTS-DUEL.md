@@ -1,6 +1,6 @@
 # ARS — Duel model, full deferred design (companion to AGENTS.md)
 
-> Split from `AGENTS.md` on 2026-10 to keep AGENTS.md under the DSH auto-load size cap
+> Split from `AGENTS.md` (`8447d75`) to keep AGENTS.md under the DSH auto-load size cap
 > (~65 KB — AGENTS.md had grown to ~73 KB and its tail was silently truncated).
 > AGENTS.md keeps a one-line pointer to this file. The design below is verbatim, unedited.
 > Status: designed via Council, **not yet implemented**. Read this before touching any card logic.

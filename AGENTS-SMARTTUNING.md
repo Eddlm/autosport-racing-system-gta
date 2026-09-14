@@ -1,6 +1,6 @@
 # ARS — Smart Tuning (companion to AGENTS.md)
 
-The grid auto-tuner, and everything learned while building it. Code: `src\SmartTuner.cs`. Written 2026-10 after
+The grid auto-tuner, and everything learned while building it. Code: `src\SmartTuner.cs`. Written after
 the feature was verified in game ("now I see dem liveries").
 
 **What it does**: per car, read the car's own livery names → pick a style from keywords → apply a livery → fit
@@ -74,7 +74,7 @@ Enumerating the wrong space returns **no names for every car, silently** - it co
 - Brand matching is **whole-word** (`ContainsWord`): a plain `Contains` fires "ron" inside "Chevron", and a
   mis-firing brand rule is invisible — it just quietly paints the wrong car.
 
-## Brand evidence (2026-10 research pass)
+## Brand evidence (`64938c6` research pass)
 - 23 brand rules and 11 marques, from the GTA Wiki, Rockstar's Respray Colours pages, and the fan livery-colour
   database.
 - **Canonical pairings are the strongest evidence** — the paints R\* itself ships on a brand-liveried car:
