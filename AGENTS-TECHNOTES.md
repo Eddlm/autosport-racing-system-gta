@@ -102,7 +102,7 @@ A 3-way "Weaponized Cars" menu option + `DOES_VEHICLE_HAVE_WEAPONS`-based LoadGr
 | File | Keys (default) |
 | --- | --- |
 | `Menu-Race.ini` | `Track` *(optional)*, `Laps` (4), `GridSize` (4), `PaceMode` (`RelativeToMine` — the menu calls the item `Grid PI Mode` and spaces the option to "Relative To Mine"), `PaceOffset` (0), `PaceTarget` *(optional)*, `ReverseRoute` (False) |
-| `Menu-Racers.ini` | `GridSorting` (Power), `TimeoutSeconds` (30), `AIRacerAutofix` (1), `SmartTuning` (True), `SpeedOffset` (0), `AiNitro` (IfPlayerHas), `UseMenyooSkins` (True), `OverspeedEnabled` (True), `BrakeLearning` (True), `RouteSpeedLimit` (True), `CrestEffect` (100), `HillGripEffect` (100), `StagedSpawns` (True) |
+| `Menu-Racers.ini` | `GridSorting` (Power), `TimeoutSeconds` (30), `AIRacerAutofix` (1), `SpeedOffset` (0), `SmartTuning` (True), `AiNitro` (IfPlayerHas), `UseMenyooSkins` (True), `OverspeedEnabled` (True), `BrakeLearning` (True), `RouteSpeedLimit` (True), `CrestEffect` (100), `HillGripEffect` (100), `StagedSpawns` (True) |
 | `Menu-DevSettings.ini` | one key per `DebugToggles` entry — the table *is* the schema, so retiring a toggle retires its key automatically |
 
 `Menu-Settings.ini` is **retired** (`9b8da25`): Pace Mode was its only key and moved into the Race menu, so `LoadSettings` carries that key into `Menu-Race.ini` once from the leftover file and nothing reads it again.
