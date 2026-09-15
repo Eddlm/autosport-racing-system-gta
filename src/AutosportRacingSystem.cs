@@ -187,7 +187,6 @@ namespace ARS
         public static Prop FreeCamRide = null;
 
         public static PedHash[] StreetRacerModels = { PedHash.Car3Guy2, PedHash.Vinewood02AFY, PedHash.Stwhi02AMY, PedHash.StrPunk02GMY, PedHash.Stbla02AMY };
-        public static List<Model> RacerModels = new List<Model> { "a_m_y_motox_01", "a_m_y_motox_02" };
 
 
         public static RaceState RaceStatus = RaceState.None;
@@ -317,6 +316,7 @@ namespace ARS
             File.WriteAllText(ScriptsFolder + @"\Log.log", "----------------------------");
             Log(LogImportance.Info, "Script initialized - " + DateTime.Now);
             File.AppendAllText(ScriptsFolder + @"\Log.log", "\n----------------------------");
+            VerifyScriptBridge();
             LoadSettings();
             InitializeMenu();
 
@@ -337,6 +337,21 @@ namespace ARS
 
             UpdateChecker.CheckLatestRelease();
         }
+
+        // SHVDN's asi and API dll are a matched pair; a mismatch throws inside the API's native bridge.
+        static void VerifyScriptBridge()
+        {
+            try
+            {
+                Game.GenerateHash("ars");
+            }
+            catch (Exception ex)
+            {
+                Log(LogImportance.Error, "ScriptHookVDotNet2.dll is not usable with this ScriptHookVDotNet.asi build (" + ex.GetType().Name + ") - install ScriptHookVDotNet as one complete, matching set.", true);
+                throw;
+            }
+        }
+
         Dictionary<string, string> _trackTags = new Dictionary<string, string>();
 
         public void FillKnownTracks(bool allowScriptYield = true)
