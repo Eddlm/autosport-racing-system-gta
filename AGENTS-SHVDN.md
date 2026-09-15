@@ -2,6 +2,8 @@
 
 Companion to the "SHVDN build compatibility (release-critical)" block in `AGENTS.md`. That block is the summary; this is the evidence, the mechanism and the lab.
 
+**Read this when**: the work touches **SHVDN / ScriptHookVDotNet, install or compatibility, "the mod doesn't load", the asi or API dll, version matching, the game build, or release requirements**.
+
 ## The question this answers
 
 ARS is compiled against the ScriptHookVDotNet **v2 API** (`ScriptHookVDotNet2.dll`). Users install SHVDN themselves, so the release question is: *which SHVDN installs actually run ARS?* Answered in-game on game build `VER_1_0_3889_0` by swapping components one at a time (matrix below).

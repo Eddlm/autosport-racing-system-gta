@@ -3,6 +3,8 @@
 The grid auto-tuner, and everything learned while building it. Code: `src\SmartTuner.cs`. Written after
 the feature was verified in game ("now I see dem liveries").
 
+**Read this when**: the work touches **liveries, paint, colours, cosmetic mods/parts, "Smart Tuning", Menyoo appearance, or brand/model naming** — the colour precedence, whitelists and the evidence behind them live here, not in `AGENTS.md`.
+
 **What it does**: per car, read the car's own livery names → pick a style from keywords → apply a livery → fit
 that style's cosmetic parts → paint last. Replaces the old random-index tuning (`AITuningLevel`). Everything is
 `internal static`; `SetupRace` enqueues the grid and `OnTick` drains **one car per tick**.

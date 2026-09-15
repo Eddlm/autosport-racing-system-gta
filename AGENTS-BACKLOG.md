@@ -1,5 +1,7 @@
 # ARS — Deferred backlog details (companion to AGENTS.md)
 
+**Read this when**: the work touches anything **deferred / "later" / "TODO" / "open question"**, when you need to know whether something was already decided, tried or fixed, or when the user asks to add, resume or rank a feature. The simplest→most-complex ranking of every open item is at the top.
+
 > Split from `AGENTS.md` (`8447d75`) to keep AGENTS.md under the DSH auto-load size cap
 > (~65 KB — AGENTS.md had grown to ~73 KB and its tail was silently truncated).
 > AGENTS.md keeps one-line pointers to the sections below; the text here is verbatim
