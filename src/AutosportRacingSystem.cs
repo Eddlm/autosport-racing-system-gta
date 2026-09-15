@@ -661,7 +661,7 @@ namespace ARS
         // Default script folder under GTA's `scripts\` (Tracks/, Vehicles/cars.txt, sillynames.txt,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
-        // Config .ini files (Options/DevConfig/MemoryOffsets) live in a
+        // Config .ini files (Options/DevConfig) live in a
         // dedicated Settings subfolder, derived from ScriptsFolder so the base stays in one place.
         public static string SettingsFolder => ScriptsFolder + @"\Settings";
         // Temp: bypass pace matching entirely and load only these models into the grid.
@@ -1703,7 +1703,7 @@ namespace ARS
             Racer player = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
 
             // Leaderboard draws even when the player is off the grid (spectating), gated by the toggle.
-            if (DebugToggles[Options.ShowLeaderboard]) DrawLeaderboard();
+            if (DebugToggles[Options.ShowLeaderboard] && !HideHudMode) DrawLeaderboard();
 
             if (player == null) return;
 
@@ -1724,24 +1724,48 @@ namespace ARS
 
         static void DrawLeaderboard()
         {
-            float x = 0.03f;
-            float y = 0.2f;
+            const float headerY = 0.06f;
             const float step = 0.031f;
-            // Frozen block first: finishers in finish order, positions locked.
+            const float colPos = 0.02f;
+            const float colPI = 0.05f;
+            const float colCar = 0.10f;
+            const float colName = 0.18f;
+            const float scale = 0.336f;
+            const DrawTextFont font = DrawTextFont.Standard;
+            Color hCol = Color.FromArgb(180, 180, 180);
+
+            // Header
+            DrawText(new Vector2(colPos, headerY), "POS", hCol, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colPI, headerY), "PI", hCol, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colCar, headerY), "CAR", hCol, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colName, headerY), "RACER", hCol, font, DrawTextAlign.Left, scale);
+
+            float y = headerY + step;
+            int pos = 1;
+
+            // Frozen block: finishers in finish order, positions locked.
             foreach (Racer r in LeaderboardFinish)
             {
                 Color c = r.Driver != null && r.Driver.IsPlayer ? Color.Yellow : Color.White;
-                DrawText(new Vector2(x, y), r.FinalPosition + "º - " + r.Name, c, DrawTextFont.Condensed, DrawTextAlign.Left, 0.46f);
+                DrawText(new Vector2(colPos, y), pos + "º", c, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colPI, y), r.VehicleData.TextPerformanceIndex, c, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colCar, y), r.CarModelName, c, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colName, y), r._baseName, c, font, DrawTextAlign.Left, scale);
                 y += step;
+                pos++;
             }
-            // Still racing: numbered after the finishers, ordered by live progress.
+
+            // Still racing: ordered by live progress.
             List<Racer> racing = Racers.Where(v => v.FinalPosition == 0).OrderByDescending(v => v.RaceProgress).ToList();
-            for (int i = 0; i < racing.Count; i++)
+            foreach (Racer r in racing)
             {
-                Racer r = racing[i];
                 Color c = r.Driver != null && r.Driver.IsPlayer ? Color.Yellow : Color.White;
-                DrawText(new Vector2(x, y), (LeaderboardFinish.Count + i + 1) + "º - " + r.Name, c, DrawTextFont.Condensed, DrawTextAlign.Left, 0.46f);
+                DrawText(new Vector2(colPos, y), pos + "º", c, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colPI, y), r.VehicleData.TextPerformanceIndex, c, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colCar, y), r.CarModelName, c, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colName, y), r._baseName, c, font, DrawTextAlign.Left, scale);
                 y += step;
+                pos++;
             }
         }
         public static float GetPercent(float current, float max)
@@ -2897,13 +2921,6 @@ namespace ARS
             PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
             Log(LogImportance.Info, "Loaded per-menu settings.");
 
-            ScriptSettings memOffsets = ScriptSettings.Load(SettingsFolder + @"\MemoryOffsets.ini");
-            ThrottleOffset = memOffsets.GetValue<ulong>("MEMORY_OFFSETS", "Throttle", 0x0);
-            SteerOffset = memOffsets.GetValue<ulong>("MEMORY_OFFSETS", "Steer", 0x0);
-            BrakeOffset = memOffsets.GetValue<ulong>("MEMORY_OFFSETS", "Brake", 0x0);
-            Log(LogImportance.Info, "Loaded Memory Offsets.");
-            Log(LogImportance.Info, "[MEMORY] Learned the steer offset from file: " + SteerOffset);
-
             Log(LogImportance.Info, "Loading DevConfig.ini ...");
             DevConfigFile = ScriptSettings.Load(SettingsFolder + @"\DevConfig.ini");
             foreach (Options option in DebugToggles.Keys.ToArray())
@@ -3038,7 +3055,7 @@ namespace ARS
         // 0 = Standard, 1 = Cursive, 2 = RockstarTag, 3 = Leaderboard,
         // 4 = Condensed, 5 = FixedWidthNumbers, 6 = CondensedNotGamername,
         // 7 = Pricedown, 8 = Taxi
-        public enum DrawTextFont { Standard = 0, Cursive = 1, Condensed = 4, FixedWidthNumbers = 5, Pricedown = 7 }
+        public enum DrawTextFont { Standard = 0, Cursive = 1, Leaderboard = 3, Condensed = 4, FixedWidthNumbers = 5, Pricedown = 7 }
         public static void DrawText(Vector3 pos, string t, Color c, float scale)
         {
             Vector2 screeninfo = World3DToScreen2d(pos);

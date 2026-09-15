@@ -19,6 +19,7 @@ namespace ARS
 
         public string Name = "Racer";
         internal string _baseName = "Racer";
+        internal string CarModelName = "";
         public Ped Driver;
         public Vehicle Car;
         public Team TeamRole = Team.None;
@@ -221,6 +222,7 @@ namespace ARS
             Driver = RacerPed;
             try { Name = RacerCar.FriendlyName; } catch (Exception) { Name = "Racer"; }
             if (Name == "NULL" || Name == null) { try { Name = Car.DisplayName.ToString()[0].ToString().ToUpper() + Car.DisplayName.ToString().Substring(1).ToLowerInvariant(); } catch (Exception) { Name = "Racer"; } }
+            CarModelName = Name;
 
             if (Driver.IsPlayer) ControlledByPlayer = true;
             _halfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));

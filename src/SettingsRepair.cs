@@ -11,7 +11,7 @@ namespace ARS
     //   CreateMissingFiles  Settings\ exists, and every foreign file is present.
     //   PruneOwnedFiles     ARS-owned Menu-*.ini lose keys the schema no longer declares.
     //   CompleteOwnedKeys   ARS-owned files gain missing keys and lose values the schema rejects.
-    // Foreign files (Options.ini, DevConfig.ini, MemoryOffsets.ini) are hand-editable and may carry
+    // Foreign files (Options.ini, DevConfig.ini) are hand-editable and may carry
     // comments, which ScriptSettings.Save drops — so they are created when missing but never rewritten.
     // A created file holds exactly the values the code uses when a key is absent, so creating one can
     // never change behaviour. Settings.ini is a legacy migration input and is deliberately not expected.
@@ -115,14 +115,7 @@ namespace ARS
             public string Path { get { return ARS.SettingsFolder + @"\" + Name; } }
         }
 
-        const string MEMORY_OFFSETS_DEFAULTS =
-            ";GTA Online updates occasionally move the memory offsets ARS needs for direct handling,\r\n" +
-            ";steering and throttle input. Update these when that happens, or leave at 0x0 to let ARS\r\n" +
-            ";find them itself.\r\n" +
-            "[MEMORY_OFFSETS]\r\n" +
-            "Steer=0x0\r\n" +
-            "Throttle=0x0\r\n" +
-            "Brake=0x0\r\n";
+
 
         static readonly string OPTIONS_DEFAULTS = Lines(
             "[GENERAL_SETTINGS]",
@@ -195,7 +188,6 @@ namespace ARS
 
             files.Add(new FileSpec("Options.ini", false, OPTIONS_DEFAULTS));
             files.Add(new FileSpec("DevConfig.ini", false, DEVCONFIG_DEFAULTS));
-            files.Add(new FileSpec("MemoryOffsets.ini", false, MEMORY_OFFSETS_DEFAULTS));
             return files;
         }
 
