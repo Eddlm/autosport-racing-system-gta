@@ -47,7 +47,7 @@ The 2022 bundle fails identically with and without the v3 dll, and it kills `Han
 1. **A SHVDN build that supports the user's game build.** The bundle currently served as the public download cannot run on current game builds at all.
 2. **The asi and `ScriptHookVDotNet2.dll` from the same build** — not merely "a v2 dll present".
 3. Diagnosis to quote: `MissingMethodException: Method not found: 'UInt32 SHVDN.NativeMemory.GetHashKey(System.String)'` (or any other `SHVDN.*` member) in `ScriptHookVDotNet.log`; since `353d65f` also named in ARS's own `Log.log`.
-4. **Never ship a pinned `ScriptHookVDotNet2.dll` with ARS** — it would manufacture exactly this mismatch for every user whose asi is a different build. Considered and rejected on this evidence.
+4. **Never ship a pinned `ScriptHookVDotNet2.dll` with ARS** — it would manufacture exactly this mismatch for every user whose asi is a different build. Considered and rejected on this evidence. **LemonUI is the deliberate opposite case and *is* bundled** (`libs\LemonUI.SHVDN2.dll`, staged by name in `deploy.yml`, MIT with the author's permission, and the last release supporting the v2 API): it is our own script-side dependency, whereas the API dll belongs to the user's SHVDN install. The `deploy.yml` staging line must therefore name the file — a `bin\Release\*` wildcard would sweep `ScriptHookVDotNet2.dll` in and undo this.
 
 ## The lab (reproduce any cell)
 
