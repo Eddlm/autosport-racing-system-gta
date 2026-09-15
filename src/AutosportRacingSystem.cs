@@ -92,8 +92,9 @@ namespace ARS
 
         public static float ComputePaceIndex(float topSpeedMph, float grip, float accelRaw, bool isElectric)
         {
-            if (isElectric) accelRaw *= (ElectricDrivePeak + ElectricDriveAtTopSpeed) * 0.5f;
-            return topSpeedMph + grip * 4f + accelRaw * 30f;
+            if (isElectric) accelRaw *= ElectricDrivePeak;
+            float cornerSpeedMph = (float)(Math.Sqrt(grip * 9.8 * 50.0) * 2.23694);
+            return topSpeedMph + cornerSpeedMph + accelRaw * 123.1f;
         }
 
         // GET_IS_VEHICLE_ELECTRIC is a model-hash native that only exists from game build 3258, so probe
