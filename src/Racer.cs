@@ -145,6 +145,10 @@ namespace ARS
         float _debugRequestedSteerDeg = 0f;
         // The yaw-rate correction the steering law applied this frame, for the debug line.
         float _debugCorrectionDeg = 0f;
+        // TEMP EXPERIMENT: last frame's post-limit, pre-slew steer, for the yaw-rate reference. It has to be
+        // captured in ApplySteerLimits because that runs AFTER ComputeSteering while TranslateSteerToInput
+        // overwrites the limited value with the slewed one in the same tick.
+        float _limitedSteerDeg = 0f;
         float _wheelbaseMeters = 0f;
 
         // Wheelbase measured once from the front/rear left wheel bones; fallback is a typical car.
@@ -441,7 +445,11 @@ namespace ARS
             float geometricSteerDeg = ARS.RadToDeg((float)Math.Atan(2f * WheelbaseMeters * (float)Math.Sin(ARS.DegToRad(aimErrorDeg)) / aimDistance));
             float pSteer = ARS.SteerTrim * geometricSteerDeg;
 
-            float commandedYawRateDeg = ARS.RadToDeg(speedMps * (float)Math.Tan(ARS.DegToRad(pSteer)) / WheelbaseMeters);
+            // TEMP EXPERIMENT: reference the steer the car was actually ALLOWED (post speed-limit, one frame
+            // stale) instead of the raw geometric command. When the limiter bites, the raw reference asks for
+            // a rotation the car is not permitted to attempt, so the excess reads as a deficit and D goes
+            // quiet; this keeps D alive at speed. The veto below still tests pSteer, not this value.
+            float commandedYawRateDeg = ARS.RadToDeg(speedMps * (float)Math.Tan(ARS.DegToRad(_limitedSteerDeg)) / WheelbaseMeters);
             float yawRateExcessDeg = VehicleData.YawRotationPerSecondDegrees - commandedYawRateDeg;
             float correction = -ARS.SteerD * ARS.SteerTrim * (2f * WheelbaseMeters / aimDistance) * yawRateExcessDeg;
             // Unwind-only: dropped whenever it would GROW the command's magnitude, so it takes lock away and
@@ -764,6 +772,7 @@ namespace ARS
                 Control.SteerDegrees = Math.Sign(requestedSteer) * maxSteer;
                 _steerLimitedThisFrame = true;
             }
+            _limitedSteerDeg = Control.SteerDegrees;
 
             /* ZOMBIE — speed-based reduction, disabled while trialing slide-angle steer limit.
 
