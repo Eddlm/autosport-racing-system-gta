@@ -475,12 +475,16 @@ namespace ARS
 
             if (Handling.LateralTractionCurve > 1f)
             {
-                float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * CountersteerBlendStartFraction, Handling.LateralTractionCurve * CountersteerFullFraction, 0f, 1f, true);
-                if (slidePriority > 0f)
+                float forwardMs = ARS.GetForwardSpeed(Car);
+                if (forwardMs >= 2f)
                 {
-                    // Countersteer output doubled (user, 2026-10) - the correction term only, not the slidePriority ramp.
-                    float countersteerTarget = trajectorySteer - (2f * VehicleData.SlideAngle);
-                    Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
+                    float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * CountersteerBlendStartFraction, Handling.LateralTractionCurve * CountersteerFullFraction, 0f, 1f, true);
+                    if (slidePriority > 0f)
+                    {
+                        // Countersteer output doubled (user, 2026-10) - the correction term only, not the slidePriority ramp.
+                        float countersteerTarget = trajectorySteer - (2f * VehicleData.SlideAngle);
+                        Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
+                    }
                 }
             }
 
@@ -944,36 +948,40 @@ namespace ARS
         }
 
         // Projection response: on a corner's outside, cap the maximum combined input by how far off-centre
-        // the 1s projection lands — full throttle on the centre line, none at the track edge, light brake beyond.
+        // the projection lands — full throttle on the centre line, none at the track edge, light brake beyond.
         float ApplyOffshootBlend(float combinedInput)
+        {
+            return Math.Min(combinedInput, OffshootInputCap(1f));
+        }
+
+        float OffshootInputCap(float seconds)
         {
             // Only meaningful when the car is aiming at a lane; with no target lane there is no
             // hug-inside expectation to enforce, so the outside sanity check must not fire.
-            if (_targetLane == 0f) return combinedInput;
+            if (_targetLane == 0f) return 1f;
 
-            Vector3 proj = ProjectAhead(1f);
-            // 1 node ≈ 1 m: the window has to reach the projected node ~1s of travel ahead.
-            int projectionWindow = (int)Car.Velocity.Length() + 10;
+            Vector3 proj = ProjectAhead(seconds);
+            // 1 node ≈ 1 m: the window has to reach the projected node.
+            int projectionWindow = (int)(Car.Velocity.Length() * seconds) + 10;
             TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node, 0, projectionWindow);
             float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
             float halfWidth = Math.Max(tp.TrackHalfWidth, 0.1f);
 
-            // Outside is judged from the track angle 1s behind, so it stays relevant through the corner.
+            // Outside is judged from the track angle behind the projected point, so it stays relevant through the corner.
             int count = ARS.TrackPoints.Count;
-            int behindOffset = (int)(Car.Velocity.Length() * 1f);
+            int behindOffset = (int)(Car.Velocity.Length() * seconds);
             int behindNode = ARS.IsPointToPoint
                 ? (int)ARS.Clamp(CurrentTrackPoint.Node - behindOffset, 0, count - 1)
                 : ((CurrentTrackPoint.Node - behindOffset) % count + count) % count;
             float turnDirection = Math.Sign(ARS.TrackPoints[behindNode].Angle);
 
-            if (Math.Sign(signedOffset) != turnDirection) return combinedInput;
+            if (Math.Sign(signedOffset) != turnDirection) return 1f;
 
             // Inside half keeps full throttle; the cap ramps from the centre line to the edge, then brakes.
             float outsideOffset = signedOffset * turnDirection;
-            float maxInput = 1f;
-            if (outsideOffset > halfWidth) maxInput = -OffshootBlendBrake * Math.Min((outsideOffset - halfWidth) / OffshootRangeMeters, 1f);
-            else if (outsideOffset > 0f) maxInput = 1f - outsideOffset / halfWidth;
-            return Math.Min(combinedInput, maxInput);
+            if (outsideOffset > halfWidth) return -OffshootBlendBrake * Math.Min((outsideOffset - halfWidth) / OffshootRangeMeters, 1f);
+            if (outsideOffset > 0f) return 1f - outsideOffset / halfWidth;
+            return 1f;
         }
 
         // Samples braking quality across the approach to the current apex; the factor is
@@ -1642,18 +1650,21 @@ namespace ARS
                 }
             }
 
-            // The same ProjectAhead the pipeline reads, cut into the three debug slices.
+            // The same ProjectAhead the pipeline reads, colored by its off-track input cap.
             if (ARS.DebugToggles[Options.ShowProjection] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
             {
                 Vector3 halfSec = ProjectAhead(0.5f);
                 Vector3 fullSec = ProjectAhead(1f);
                 Vector3 extraSec = ProjectAhead(1.5f);
-                ARS.DrawLine(Car.Position, halfSec, Color.Cyan);
-                ARS.DrawLine(halfSec, fullSec, Color.Cyan);
-                ARS.DrawLine(fullSec, extraSec, Color.Cyan);
-                DrawPointMarker(halfSec, 0.4f, Color.Cyan);
-                DrawPointMarker(fullSec, 0.6f, Color.Magenta);
-                DrawPointMarker(extraSec, 0.6f, Color.Orange);
+                Color halfSecColour = InputColour(OffshootInputCap(0.5f));
+                Color fullSecColour = InputColour(OffshootInputCap(1f));
+                Color extraSecColour = InputColour(OffshootInputCap(1.5f));
+                ARS.DrawLine(Car.Position, halfSec, halfSecColour);
+                ARS.DrawLine(halfSec, fullSec, fullSecColour);
+                ARS.DrawLine(fullSec, extraSec, extraSecColour);
+                DrawPointMarker(halfSec, 0.4f, halfSecColour);
+                DrawPointMarker(fullSec, 0.6f, fullSecColour);
+                DrawPointMarker(extraSec, 0.6f, extraSecColour);
             }
 
             if (ARS.DebugToggles[Options.ShowInputTrail] && !Driver.IsPlayer && ARS.DebugFocusRacer == this) DrawInputTrail();
@@ -1684,12 +1695,12 @@ namespace ARS
         {
             if (_inputTrail.Count == 0) return;
             foreach (InputTrailSample sample in _inputTrail)
-                World.DrawMarker(MarkerType.DebugSphere, sample.Position, Vector3.Zero, Vector3.Zero, new Vector3(0.21f, 0.21f, 0.21f), InputTrailColour(sample.Input));
+                World.DrawMarker(MarkerType.DebugSphere, sample.Position, Vector3.Zero, Vector3.Zero, new Vector3(0.21f, 0.21f, 0.21f), InputColour(sample.Input));
             ARS.DrawLine(Car.Position, _inputTrail[_inputTrail.Count - 1].Position, Color.White);
         }
 
         // Full throttle green, neutral yellow, full brake red.
-        static Color InputTrailColour(float input)
+        static Color InputColour(float input)
         {
             float v = ARS.Clamp(input, -1f, 1f);
             return Color.FromArgb((int)(255f * (1f - Math.Max(v, 0f))), (int)(255f * (1f + Math.Min(v, 0f))), 0);
@@ -1706,7 +1717,6 @@ namespace ARS
             // UpdateRouteTarget();
 
             ProcessAI();
-            if (Driver.IsPlayer && ARS.SettingsFile.GetValue("CATCHUP", "OnlyBehindPlayer", true)) ARS.CatchupPosition = RacePosition;
 
             _lastCoreTick = Game.GameTime;
         }

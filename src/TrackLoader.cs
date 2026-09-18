@@ -129,12 +129,6 @@ namespace ARS
 
                 if (ARS.RouteNodes.Count > 5) W = ARS.Clamp(W, oldW - 0.25f, oldW + 0.25f);
 
-                if (e.SelectSingleNode("RacingLine") != null && ARS.SettingsFile.GetValue<bool>("GENERAL_SETTINGS", "ReverseRoutes", false) == false)
-                {
-                    float racingline = 0.0f;
-                    float.TryParse(e.SelectSingleNode("RacingLine").InnerText, out racingline);
-                }
-
                 ARS.RouteNodes.Add(pos);
                 ARS.NodeHalfWidths.Add(i, W);
                 oldW = W;
@@ -155,7 +149,22 @@ namespace ARS
             ars.SetLoadingPromptText("Loading props...");
             BuildTrackLimits(ARS.RouteNodes, ARS.NodeHalfWidths, ARS.CurrentFile, ref ARS.IsPointToPoint, ars.IntendedOpponents, ARS.TrackLimits, ars.FlareEffects, ARS.GridPositions);
 
-            if (ARS.CanWeUse(Game.Player.Character.CurrentVehicle)) Game.Player.Character.CurrentVehicle.Position = ARS.RouteNodes[0]; else Game.Player.Character.Position = ARS.RouteNodes[20];
+            if (ARS.CanWeUse(Game.Player.Character.CurrentVehicle))
+            {
+                Game.Player.Character.CurrentVehicle.Position = ARS.RouteNodes[0];
+            }
+            else
+            {
+                Vector3 pos = ARS.RouteNodes[2];
+                Vector3 dir = ARS.RouteNodes[3] - ARS.RouteNodes[1];
+                dir.Z = 0f;
+                if (dir.LengthSquared() < 0.001f) dir = Vector3.WorldNorth;
+                dir.Normalize();
+                Vector3 right = Vector3.Cross(dir, Vector3.WorldUp);
+                float halfWide = ARS.NodeHalfWidths.ContainsKey(2) ? ARS.NodeHalfWidths[2] : 5f;
+                float side = ARS.GetRandomInt(0, 2) == 0 ? 1f : -1f;
+                Game.Player.Character.Position = pos + right * (halfWide * side) + new Vector3(0f, 0f, 0.5f);
+            }
             if (ARS.CanWeUse(ARS.FreeCamRide)) ARS.FreeCamRide.Position = ARS.RouteNodes[5] + new Vector3(0, 0, 20);
             ars.SetLoadingPromptText("Finished loading props");
             Function.Call(Hash._0x10D373323E5B9C0D);
