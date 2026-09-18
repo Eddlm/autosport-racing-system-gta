@@ -411,7 +411,7 @@ namespace ARS
             _steerAimPoint = steerRefPoint.Position + steerRight * targetLane;
 
 
-            // --- Steering: pure-pursuit feedforward + a two-sided yaw-rate correction ---
+            // --- Steering: pure-pursuit feedforward + an unwind-only yaw-rate correction ---
             // Two knobs, no integral, and no numerical derivative anywhere.
             // Feedforward: the steer that puts the car on the arc through the aim point,
             // delta = atan(2L sin(e) / d). sin rather than the raw angle so the demand saturates as the
@@ -421,13 +421,14 @@ namespace ARS
             // bicycle model on our own command. Rotating beyond that is overrotation: it reaches the
             // intended heading sooner than was asked, which is the thing to pace. SteerD is that payback
             // in seconds of rotation per deg/s of excess, applied through P's geometry gain so the
-            // effective gain 2 * SteerTrim * SteerD * grip / leadScale holds at any speed. It is two-sided on
-            // purpose: a car rotating SLOWER than commanded gets steer added, which is the understeer
-            // case, and one rotating faster gets steer taken away.
+            // effective gain 2 * SteerTrim * SteerD * grip / leadScale holds at any speed. It may only take
+            // lock AWAY: a car rotating faster than commanded is reaching the intended heading sooner than
+            // asked, and that is the only direction the correction acts in.
             // Reading the yaw rate directly — a native read of the entity's rotation velocity — is what
-            // allows that symmetry. The aim error's own derivative carried the aim point's sweep as well
-            // as the car's rotation, so a correction that added lock looked like noise and had to be
-            // vetoed by sign; the measured rate carries rotation alone.
+            // makes the term worth having: the aim error's own derivative carried the aim point's sweep
+            // (the 1 m node staircase) as well as the car's rotation, so the old correction needed a filter
+            // and a sign veto just to stay sane. The measured rate carries rotation alone, which leaves the
+            // veto below as a deliberate choice about direction rather than a defence against noise.
             Vector3 toAim = _steerAimPoint - Car.Position;
             Vector3 aimFlat = new Vector3(toAim.X, toAim.Y, 0f);
             Vector3 travelFlat = new Vector3(bodyForward.X, bodyForward.Y, 0f);
@@ -443,6 +444,13 @@ namespace ARS
             float commandedYawRateDeg = ARS.RadToDeg(speedMps * (float)Math.Tan(ARS.DegToRad(pSteer)) / WheelbaseMeters);
             float yawRateExcessDeg = VehicleData.YawRotationPerSecondDegrees - commandedYawRateDeg;
             float correction = -ARS.SteerD * ARS.SteerTrim * (2f * WheelbaseMeters / aimDistance) * yawRateExcessDeg;
+            // Unwind-only: dropped whenever it would GROW the command's magnitude, so it takes lock away and
+            // never adds any. Stated on the magnitude rather than on matching signs so the neutral case is
+            // covered too: a sign test cannot fire when pSteer is exactly 0, and a nonzero correction there
+            // would add lock out of nothing. This is a direction choice, not a noise guard — the input is a
+            // measured rate. It costs the under-rotation response: a car rotating SLOWER than commanded gets
+            // no help from this term.
+            if (Math.Abs(pSteer + correction) > Math.Abs(pSteer)) correction = 0f;
             _debugCorrectionDeg = correction;
             Control.SteerDegrees = pSteer + correction;
 

@@ -52,7 +52,7 @@
 16. Snap-oversteer D-term — a term that does not exist yet; dedicated session.
 17. Gravity vs grip & speed — settle how gravity scales grip against each site that multiplies it again.
 18. Pace: model-theoretical vs instance — structural: pre-race selection is spawn-free by design.
-19. Overrotation via the pedal — a rotation-driven throttle authority; the wheel now carries a real two-sided yaw-rate term so it is no longer a lever limited **by construction**, but the pedal is still the one that acts on **rear grip** (section below).
+19. Overrotation via the pedal — a rotation-driven throttle authority; the wheel now reads rotation directly so countersteer no longer waits on slip, but the correction is **unwind-only**, so the pedal is still the lever that acts on **rear grip** (section below).
 
 **Tier 6 — subsystem reworks**
 
@@ -187,7 +187,7 @@ Where the gap shows:
 
 **Trigger**: the car rotates more than the corner wants, especially on exit. The user's steer: *"overrotation does not need to just be fixed by countersteering or a big D here, overrotation can be tweaked with throttle."*
 
-**The steering path used to be limited by construction; that is no longer true, and it changes what this item is about.** The old PID could not command countersteer until slip exceeded the aim-point chord angle (`β > c = ld / (2R)` — ~7° at 30 m/s in a 100 m corner), and above it its gain was only the pure-pursuit geometry (`2L/d`, a few tenths); on top of that the correction gate made the old D **unwind-only**, so it could damp a countersteer but never create one. **Both of those limits are gone** — the live law carries a two-sided yaw-rate correction and has no gate at all. What has *not* changed is the physics underneath: the wheel acts on rotation through the **front** tyres, so overrotation caused by the rear breaking away is still fundamentally a **rear-grip** problem, and the pedal remains the lever that acts on rear grip.
+**Of the steering path's two old limits, one is gone and the other is back by choice.** The old PID could not command countersteer until slip exceeded the aim-point chord angle (`β > c = ld / (2R)` — ~7° at 30 m/s in a 100 m corner), and above it its gain was only the pure-pursuit geometry (`2L/d`, a few tenths); on top of that the old gate made D **unwind-only**, so it could damp a countersteer but never create one. **The first limit is gone** — the live correction reads the measured yaw rate, so it no longer waits on slip. **The second is back by choice**: the correction is unwind-only, dropped whenever it would grow the command's magnitude, so it still cannot create a countersteer. What has *not* changed is the physics underneath: the wheel acts on rotation through the **front** tyres, so overrotation caused by the rear breaking away is still fundamentally a **rear-grip** problem, and the pedal remains the lever that acts on rear grip.
 
 **The sign depends on which overrotation, and that is the whole hazard.**
 
