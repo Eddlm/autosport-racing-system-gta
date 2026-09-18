@@ -142,30 +142,7 @@ namespace ARS
 
         // True when the steer limiter actually reduced the steer this frame; read only by the ZOMBIE block below.
         bool _steerLimitedThisFrame = false;
-        float _debugRequestedSteerDeg = 0f;
-        // The yaw-rate correction the steering law applied this frame, for the debug line.
-        float _debugCorrectionDeg = 0f;
-        // TEMP EXPERIMENT: last frame's post-limit, pre-slew steer, for the yaw-rate reference. It has to be
-        // captured in ApplySteerLimits because that runs AFTER ComputeSteering while TranslateSteerToInput
-        // overwrites the limited value with the slewed one in the same tick.
-        float _limitedSteerDeg = 0f;
-        float _wheelbaseMeters = 0f;
-
-        // Wheelbase measured once from the front/rear left wheel bones; fallback is a typical car.
-        float WheelbaseMeters
-        {
-            get
-            {
-                if (_wheelbaseMeters <= 0f)
-                {
-                    Vector3 fl = Car.GetBoneCoord("wheel_lf");
-                    Vector3 rl = Car.GetBoneCoord("wheel_lr");
-                    _wheelbaseMeters = Vector3.Distance(fl, rl);
-                    if (_wheelbaseMeters < 0.5f) _wheelbaseMeters = 2.7f;
-                }
-                return _wheelbaseMeters;
-            }
-        }
+        float _debugPdSteer = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
         const float BrakeFactorDefault = 0.8f; // TEMP: hardcoded for testing
@@ -218,6 +195,9 @@ namespace ARS
         }
         const int NitrousDurationMs = 3000;
         const float RocketBoostMinimumCurveRadius = 600f;
+        const float SideBySideAssistRangeExtra = 3f;
+        const float SideBySideFullAssistExtraGap = 1f;
+        const float SideBySideMinimumAssist = 0.1f;
         const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
         const ulong CheatPowerIncreaseHash = 0xB59E4BD37AE292DB;
         const ulong MaxDriveGearHash = 0x24910C3D66BA770D;
@@ -393,9 +373,13 @@ namespace ARS
             float speedMps = Math.Max(Car.Velocity.Length(), 1f);
 
 
-            // The lane systems below decide WHERE to aim; the feedforward plus yaw-rate correction at
-            // the end of this method decides HOW HARD to steer. Nothing else writes steer.
-            Vector3 bodyForward = Car.ForwardVector;
+            // --- Heading error: how far the car faces away from the track direction ---
+            // Kept separate from lane bias; merging them caused oscillation.
+
+            Vector3 carForward = Car.ForwardVector;
+            if (Car.Velocity.LengthSquared() > 0.01f) carForward = Car.Velocity.Normalized;
+            float headingErrorDeg = -Vector3.SignedAngle(steerRefPoint.Direction, carForward, Vector3.WorldUp);
+            if (float.IsNaN(headingErrorDeg) || float.IsInfinity(headingErrorDeg)) headingErrorDeg = 0f;
 
 
             // --- Lane resolution: override chain (high-speed → corner → avoidance → walls) ---
@@ -415,79 +399,82 @@ namespace ARS
             _steerAimPoint = steerRefPoint.Position + steerRight * targetLane;
 
 
-            // --- Steering: pure-pursuit feedforward + an unwind-only yaw-rate correction ---
-            // Two knobs, no integral, and no numerical derivative anywhere.
-            // Feedforward: the steer that puts the car on the arc through the aim point,
-            // delta = atan(2L sin(e) / d). sin rather than the raw angle so the demand saturates as the
-            // aim point swings abeam instead of asking for full lock, and the gain 2L/d rises as the aim
-            // point closes in. SteerTrim trims this geometry and nothing else.
-            // Correction: the rotation the feedforward is asking for is w_cmd = v tan(delta) / L — the
-            // bicycle model on our own command. Rotating beyond that is overrotation: it reaches the
-            // intended heading sooner than was asked, which is the thing to pace. SteerD is that payback
-            // in seconds of rotation per deg/s of excess, applied through P's geometry gain so the
-            // effective gain 2 * SteerTrim * SteerD * grip / leadScale holds at any speed. It may only take
-            // lock AWAY: a car rotating faster than commanded is reaching the intended heading sooner than
-            // asked, and that is the only direction the correction acts in.
-            // Reading the yaw rate directly — a native read of the entity's rotation velocity — is what
-            // makes the term worth having: the aim error's own derivative carried the aim point's sweep
-            // (the 1 m node staircase) as well as the car's rotation, so the old correction needed a filter
-            // and a sign veto just to stay sane. The measured rate carries rotation alone, which leaves the
-            // veto below as a deliberate choice about direction rather than a defence against noise.
-            Vector3 toAim = _steerAimPoint - Car.Position;
-            Vector3 aimFlat = new Vector3(toAim.X, toAim.Y, 0f);
-            Vector3 travelFlat = new Vector3(bodyForward.X, bodyForward.Y, 0f);
-            float aimErrorDeg = 0f;
-            if (aimFlat.LengthSquared() > 0.01f && travelFlat.LengthSquared() > 0.01f)
-                aimErrorDeg = Vector3.SignedAngle(travelFlat, aimFlat, Vector3.WorldUp);
-            if (float.IsNaN(aimErrorDeg) || float.IsInfinity(aimErrorDeg)) aimErrorDeg = 0f;
+            // --- Off-track recovery: push back toward center if past the safe edge ---
 
-            float aimDistance = Math.Max(aimFlat.Length(), 1f);
-            float geometricSteerDeg = ARS.RadToDeg((float)Math.Atan(2f * WheelbaseMeters * (float)Math.Sin(ARS.DegToRad(aimErrorDeg)) / aimDistance));
-            float pSteer = ARS.SteerTrim * geometricSteerDeg;
+            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
+            float absDev = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
+            float safeEdge = roadWide - carHalfWidth;
+            float overshoot = absDev - safeEdge;
+            float recoveryDeg = 0f;
+            if (overshoot > 0f)
+            {
+                float maxRecoveryDeg = ARS.Remap(ARS.MpsToMph(speedMps), 100f, 10f, 3f, 45f, true);
+                float severity = ARS.Clamp(overshoot / Math.Max(carHalfWidth, 0.1f), 0f, 1f);
+                recoveryDeg = Math.Sign(Brain.CurrentPerception.DeviationFromCenter) * maxRecoveryDeg * severity;
+            }
 
-            // The yaw-rate reference is the RAW feedforward command — the true intent, not a clipped view of it.
-            // The speed-limited variant is one guard away and was tried; it is the wrong quantity on two counts.
-            // (1) It is PARTIAL: it answers "am I rotating more than my STEERING implies", which folds the
-            // limiter's own intervention into what is supposed to be the car's error. The raw command asks the
-            // honest question — "am I rotating more than I INTENDED" — and the intent is the heading we aim for.
-            // (2) It closes a LOOP: the limited value already contains the correction, so subtracting made the
-            // reference shrink, which made the measured excess grow, which subtracted more — positive feedback
-            // through the measurement, loop gain 2 * SteerTrim * SteerD * grip / leadScale (about 4 * SteerD at
-            // grip 2), crossing 1 near SteerD 0.25. That is why 0.1 there appeared to do the work of 0.5.
-            // What to expect from raw: wherever the limiter cuts, the car rotates less than the raw command
-            // asks, which reads as a deficit, and the sign test below refuses deficits — so D is quiet in
-            // ordinary driving under the limiter. Countersteer is NOT lost by that: a genuine slide produces a
-            // large positive excess that outruns even a high raw reference. With the loop gone, SteerD is a
-            // straight monotonic gain again, so expect to need a LARGER value than the limited reference wanted.
-            float referenceSteerDeg = pSteer;
-            if (1 == 2) referenceSteerDeg = _limitedSteerDeg;
-            float commandedYawRateDeg = ARS.RadToDeg(speedMps * (float)Math.Tan(ARS.DegToRad(referenceSteerDeg)) / WheelbaseMeters);
-            float yawRateExcessDeg = VehicleData.YawRotationPerSecondDegrees - commandedYawRateDeg;
-            float correction = -ARS.SteerD * ARS.SteerTrim * (2f * WheelbaseMeters / aimDistance) * yawRateExcessDeg;
-            // One-sided in the ADD direction only, UNBOUNDED in the REDUCE direction. The correction may take
-            // lock away and may keep going straight past centre into countersteer, but it may never ADD lock to
-            // the feedforward. That is the driver's model: rotating normally -> trim little or nothing;
-            // overrotating -> trim a lot; overrotating hard -> countersteer to zero and beyond. The case being
-            // refused is under-rotation.
-            // This is a SIGN test, not a magnitude test. The magnitude form ("drop it if it would grow the
-            // command") refused the cross past centre as well, which capped countersteer at exactly zero, AND
-            // made D's response non-monotonic — a larger SteerD crossed it more often and therefore did LESS
-            // work, which is why 1.0 once felt like 0.5. Testing the product with >= 0 keeps both properties and
-            // still covers pSteer == 0 exactly, where a bare sign comparison cannot fire.
-            // Side benefit worth knowing: the additive half is precisely where the bicycle reference turns to
-            // fiction — at high lock v*tan(P)/L is far beyond what the tyres can deliver, so the car reads as
-            // permanently under-rotating and would demand more lock. Refusing the additive direction means D
-            // goes quiet exactly there, which is why a big lock angle makes it inert rather than dangerous.
-            if (correction * pSteer >= 0f) correction = 0f;
-            _debugCorrectionDeg = correction;
-            Control.SteerDegrees = pSteer + correction;
 
-            // --- Slide countersteer blend: the last word on steering, and it overrides the law above. ---
-            // It must sit AFTER the feedforward and its correction, which assign Control.SteerDegrees
-            // outright — a blend placed before them is silently discarded. The ramp eases it in with slide
-            // angle and at full priority the target replaces the command rather than trimming it.
-            // SlideCountersteer scales the slide angle: 1.0 points the wheels along the velocity vector,
-            // which neutralises the slide; above that it over-corrects and rotates the nose back.
+            // --- Lane bias: pure-pursuit toward target lane + penetration repulsion ---
+
+            float trackBound = roadWide - carHalfWidth;
+            bool hasActiveGuidance = Math.Abs(targetLane) > 0.01f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
+            float laneBiasDeg = 0f;
+            if (hasActiveGuidance)
+            {
+                float currentLane = Brain.CurrentPerception.DeviationFromCenter;
+                float laneError = targetLane - currentLane;
+                if (LookAheads.TryGetValue(LookAhead.HalfSec, out TrackPoint halfSecPoint) && halfSecPoint != null)
+                {
+                    Vector3 projection = ProjectAhead(0.5f);
+                    float projectedLane = ARS.SignedLaneOffset(projection, halfSecPoint.Position, halfSecPoint.Direction);
+                    const float blend = 0.5f;
+                    laneError = laneError * (1f - blend) + (targetLane - projectedLane) * blend;
+                }
+                if (float.IsNaN(laneError)) laneError = 0f;
+                // Proportional lane pursuit: degrees per meter of lane error (no ceiling).
+                // Halve the gain when heading to the outside of a tight curve for smoother transitions.
+                bool outsideOfCurve = CurrentTrackPoint != null && Brain.CurrentPerception.CurveRadiusToFollowPoint < 500f
+                    && Math.Sign(targetLane) != 0 && Math.Sign(targetLane) != Math.Sign(CurrentTrackPoint.Angle);
+                float laneGainDegPerMeter = outsideOfCurve ? 1.5f : 3f;
+                laneBiasDeg = -laneError * laneGainDegPerMeter;
+            }
+            // Physical repulsion: inside the "no touching" box, steer away from rivals
+            // actually closing laterally; parallel traffic must not kill the lane pursuit.
+            Vector3 velDir = speedMps > 0.5f ? Car.Velocity / speedMps : carForward;
+            Vector3 velRight = Vector3.Cross(velDir, Vector3.WorldUp);
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
+                Vector3 delta = r.RivalRacer.Car.Position - Car.Position;
+                float longDist = Math.Abs(Vector3.Dot(delta, velDir));
+                float latDist = Math.Abs(Vector3.Dot(delta, velRight));
+                float longGate = (VehicleData.ModelDimensions.Y + r.RivalRacer.VehicleData.ModelDimensions.Y) * 0.5f + 1f;
+                float latGate = (VehicleData.BoundingBox + r.RivalRacer.VehicleData.BoundingBox) * 0.5f + 3f;
+                if (longDist > longGate || latDist > latGate) continue;
+                Vector3 rivalVel = r.RivalRacer.Car.Velocity;
+                if (rivalVel.LengthSquared() < 0.01f) continue;
+                float latSide = Vector3.Dot(delta, velRight);
+                float latRelVel = Vector3.Dot(rivalVel - Car.Velocity, velRight);
+                if (latSide * latRelVel >= 0f) continue;
+                float dist = delta.Length();
+                float distScale = ARS.Remap(dist, 6f, 2f, 0.5f, 2f, true);
+                float strength = ARS.Remap(Math.Abs(latRelVel), 0.3f, 3f, 0f, 15f, true) * distScale;
+                laneBiasDeg += Math.Sign(latSide) * strength;
+            }
+
+
+            // --- Heading assist: match a side-by-side rival's heading ---
+
+            float sideBySideHeadingDeg = ComputeSideBySideHeadingCorrection(carForward);
+
+
+            // --- PD assembly: trajectory terms + lane bias + slide priority blend ---
+
+            const float steerKP = 1.0f;
+            float steerKD = ARS.SteerKD;
+            float trajectorySteer = (steerKP * (headingErrorDeg + recoveryDeg + sideBySideHeadingDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
+            Control.SteerDegrees = trajectorySteer + (steerKP * laneBiasDeg);
+
             if (Handling.LateralTractionCurve > 1f)
             {
                 float forwardMs = ARS.GetForwardSpeed(Car);
@@ -496,7 +483,8 @@ namespace ARS
                     float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * CountersteerBlendStartFraction, Handling.LateralTractionCurve * CountersteerFullFraction, 0f, 1f, true);
                     if (slidePriority > 0f)
                     {
-                        float countersteerTarget = -(ARS.SlideCountersteer * VehicleData.SlideAngle);
+                        // Countersteer output doubled (user, 2026-10) - the correction term only, not the slidePriority ramp.
+                        float countersteerTarget = trajectorySteer - (2f * VehicleData.SlideAngle);
                         Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
                     }
                 }
@@ -504,7 +492,7 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
                 Control.SteerDegrees = 0f;
-            _debugRequestedSteerDeg = Control.SteerDegrees;
+            _debugPdSteer = Control.SteerDegrees;
 
             // --- Local function: TryGetSteerContext ---
 
@@ -519,6 +507,32 @@ namespace ARS
                 localRoadWide = localSteerRef.TrackHalfWidth;
                 return true;
             }
+        }
+
+        // Phase 1: match an overlapping rival's heading so side-by-side cars follow the same arc.
+        float ComputeSideBySideHeadingCorrection(Vector3 carForward)
+        {
+            float correction = 0f;
+            foreach (Rival rival in Brain.Rivals)
+            {
+                if (rival.RivalRacer == null || !rival.RivalRacer.Car.Exists()) continue;
+
+                Vector3 relativeOffset = ARS.EntityRelativeOffset(Car, rival.RivalRacer.Car);
+                if (Math.Abs(relativeOffset.Y) > rival.CombinedSize.Y) continue;
+
+                float lateralDistance = Math.Abs(relativeOffset.X);
+
+                float fullAssistDistance = rival.CombinedSize.X + SideBySideFullAssistExtraGap;
+                float wideDistance = rival.CombinedSize.X + SideBySideAssistRangeExtra;
+                if (lateralDistance > wideDistance) continue;
+
+                float proximity = ARS.Remap(lateralDistance, wideDistance, fullAssistDistance, SideBySideMinimumAssist, 1f, true);
+                float headingDifference = -Vector3.SignedAngle(rival.RivalRacer.Car.ForwardVector, carForward, Vector3.WorldUp);
+                if (float.IsNaN(headingDifference) || float.IsInfinity(headingDifference)) continue;
+
+                correction += headingDifference * proximity;
+            }
+            return correction;
         }
 
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
@@ -748,8 +762,8 @@ namespace ARS
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
-        const float SteerSlewRate = 90f;                 // steering-in rate; lower = slower to reach a lock angle
-        const float SteerSlewRateCountersteer = 90f;     // TEMP: matched to the steering-in rate, so there is no fast path for opposite lock
+        const float SteerSlewRate = 180f;                // fixed steering slew rate (degrees/second)
+        const float SteerSlewRateCountersteer = 360f;    // doubled when countersteering (steer opposes yaw)
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
         const float PlayerSpeedSteerFwdThreshold = 0.001f;   // effectively always on
         // Steer reduction multiplier: 0.04 at throttle 0.5, 0.08 at throttle 0.99.
@@ -774,37 +788,19 @@ namespace ARS
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // Slide-angle steer allowance: a grip-scaled base that the slide widens, capped at half of TRlat.
-            // The base was lowered from TRlat x 0.33 to TRlat x 0.10 and the slide slope halved from 1.0 to 0.5,
-            // so the ordinary non-sliding command is smaller and a slide has to EARN the extra authority back.
-            // The grip scaling is load-bearing and must not become a flat number: the base IS a non-sliding
-            // car's whole allowance, and a high-grip car slides least, so it lives in the base regime — a flat
-            // base was tried in game and left grippy cars barely able to steer.
-            float maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.10f + slideAngle * 0.5f, Handling.LateralTractionCurve * 0.5f);
-            // Superseded: the flat TRlat x 0.33 allowance with no slide widening. One guard away.
-            if (1 == 2) maxSteerAngle = Handling.LateralTractionCurve * 0.33f;
+            // Max steer angle = TRlat × 0.2 base, plus slide, capped at TRlat × 0.5 (base is always 40% of the ceiling).
+            float maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.33f + slideAngle, Handling.LateralTractionCurve * 0.5f);
             // Full countersteer: release the brake outright, immediately, so the tires can roll again.
             // No reset here: the cap recovers on its own at the MaxThrottle rate (ConvertSpeedToPedals).
             if (IsFullCountersteer()) Control.MaxBrake = 0f;
             float maxSteer = ARS.Remap(fwdMph, 40f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
-            // Countersteer is NOT exempt from the limit — it gets a WIDER allowance instead: a FULL slide on top
-            // of the base, against the half-slide the steering-in allowance gets, so recovery is never more
-            // restricted than steering in. (USR reaches the same intent from the other direction, by widening
-            // its clamp under rear skid rather than exempting the countersteer.)
-            // Tested against the SLIDE ANGLE, not the yaw rate: the nose is what says the car is sideways, and
-            // the yaw test stops reading countersteer the moment the correction has rotated the car back — it
-            // would clamp the recovery lock while the recovery is working. Steer opposing the slide IS
-            // countersteer, by definition. Both signs being 0 only picks the wider allowance, which is the same
-            // size as the base anyway, so the degenerate cases are harmless.
-            bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.SlideAngle);
-            if (countersteering)
-                maxSteer = ARS.Remap(fwdMph, 40f, 0f, slideAngle + Handling.LateralTractionCurve * 0.10f, VehicleData.SteeringLock, true);
-            if (Math.Abs(requestedSteer) > maxSteer)
+            // Countersteer is exempt from the limit — same steer-vs-yaw test the slew rate uses.
+            bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
+            if (!countersteering && Math.Abs(requestedSteer) > maxSteer)
             {
                 Control.SteerDegrees = Math.Sign(requestedSteer) * maxSteer;
                 _steerLimitedThisFrame = true;
             }
-            _limitedSteerDeg = Control.SteerDegrees;
 
             /* ZOMBIE — speed-based reduction, disabled while trialing slide-angle steer limit.
 
@@ -1068,9 +1064,8 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees)) Control.SteerDegrees = 0f;
 
-            // Fixed slew-rate limiter: the applied steer moves toward the target at a fixed rate. The
-            // countersteer branch below is currently a no-op — both constants are equal, so opposite lock
-            // is no faster than steering in. Restore the asymmetry by raising SteerSlewRateCountersteer.
+            // Fixed slew-rate limiter: the applied steer moves toward the target at a
+            // fixed rate (180°/s), doubled to 360°/s when countersteering (steer opposes yaw).
             float error = Control.SteerDegrees - Control.LastAppliedSteerDegrees;
             bool countersteering = Math.Sign(Control.SteerDegrees) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float rate = countersteering ? SteerSlewRateCountersteer : SteerSlewRate;
@@ -1078,7 +1073,9 @@ namespace ARS
             float delta = ARS.Clamp(error, -maxDeltaPerTick, maxDeltaPerTick);
             Control.SteerDegrees = Control.LastAppliedSteerDegrees + delta;
 
-            // TEMP: half-blend disabled — testing the PID without that extra actuation lag.
+            // Average with the previous frame's applied steer to soften twitch.
+            Control.SteerDegrees = (Control.SteerDegrees + Control.LastAppliedSteerDegrees) * 0.5f;
+
             Control.LastAppliedSteerDegrees = Control.SteerDegrees;
 
             if (float.IsNaN(Control.SteerInput) || float.IsInfinity(Control.SteerInput)) Control.SteerInput = 0f;
@@ -1224,7 +1221,7 @@ namespace ARS
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
             if (steerRad > 0.001f)
             {
-                float turnRadius = WheelbaseMeters / (float)Math.Tan(steerRad);
+                float turnRadius = VehicleData.WheelBase / (float)Math.Tan(steerRad);
                 Brain.CurrentIntention.SteerLimitedSpeed = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Math.Max(turnRadius, 1f));
                 followTrackSpd = 0.7f * Brain.CurrentIntention.SteerLimitedSpeed + 0.3f * followTrackSpd;
             }
@@ -1717,29 +1714,16 @@ namespace ARS
                 DrawPointMarker(fullSec, 0.6f, fullSecColour);
                 DrawPointMarker(extraSec, 0.6f, extraSecColour);
 
-                // Steering angle lines. Green = applied (after the limiter clamps and after the slew); a lone
-                // pink line is the D correction. There is no line for P alone, and none for D when it is silent.
-                // The yellow requested-steer line is DISABLED — it is pre-actuation, so it read as twitchy
-                // no matter how smooth the wheels were. Drop the guard to restore it;
-                // _debugRequestedSteerDeg is still maintained above.
+                // Steering angle lines: PD target (yellow) vs applied (green).
                 Vector3 carPos = Car.Position + new Vector3(0, 0, 0.5f);
                 Vector3 fwd = Car.ForwardVector;
                 float lineLen = 5f;
-                const float appliedCorrectionDrawMinDeg = 0.01f;
-                Vector3 SteerDir(float deg)
-                {
-                    float rad = deg * (float)Math.PI / 180f;
-                    return new Vector3(fwd.X * (float)Math.Cos(rad) - fwd.Y * (float)Math.Sin(rad), fwd.X * (float)Math.Sin(rad) + fwd.Y * (float)Math.Cos(rad), 0f);
-                }
-                if (1 == 2) ARS.DrawLine(carPos, carPos + SteerDir(_debugRequestedSteerDeg) * lineLen, Color.Yellow);
-                ARS.DrawLine(carPos, carPos + SteerDir(Control.SteerDegrees) * lineLen, Color.Lime);
-                // Pink = the yaw-rate correction, drawn only on the frames it is actually steering with.
-                // SteerDir is a rotation of the forward unit vector, so drawing it unconditionally painted
-                // a full-length line dead ahead whenever the correction was ~0 and read as "D is doing
-                // something". No pink line = no correction this frame; its angle against the green line is
-                // how much lock the correction is adding or taking away.
-                if (Math.Abs(_debugCorrectionDeg) > appliedCorrectionDrawMinDeg)
-                    ARS.DrawLine(carPos, carPos + SteerDir(_debugCorrectionDeg) * lineLen, Color.DeepPink);
+                float pdRad = _debugPdSteer * (float)Math.PI / 180f;
+                float apRad = Control.SteerDegrees * (float)Math.PI / 180f;
+                Vector3 pdDir = new Vector3(fwd.X * (float)Math.Cos(pdRad) - fwd.Y * (float)Math.Sin(pdRad), fwd.X * (float)Math.Sin(pdRad) + fwd.Y * (float)Math.Cos(pdRad), 0f);
+                Vector3 apDir = new Vector3(fwd.X * (float)Math.Cos(apRad) - fwd.Y * (float)Math.Sin(apRad), fwd.X * (float)Math.Sin(apRad) + fwd.Y * (float)Math.Cos(apRad), 0f);
+                ARS.DrawLine(carPos, carPos + pdDir * lineLen, Color.Yellow);
+                ARS.DrawLine(carPos, carPos + apDir * lineLen, Color.Lime);
 
                 // Input trail.
                 DrawInputTrail();

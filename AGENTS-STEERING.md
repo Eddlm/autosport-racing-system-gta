@@ -4,6 +4,14 @@
 
 **Depth lives in `STEERING-CONTROLLER-SURVEY.md`** (36 implementations, 10 documented disagreements, every claim carrying its source URL, inaccessible sources listed rather than papered over). This file is the distillation; the survey is the evidence. ARS comparisons here are mine and go stale — **the code wins**.
 
+## ⚠️ STATUS — the PID / measured-yaw-rate law in this file was tried and ABANDONED
+
+**Everything below about a P/I/D law applied to the *aim error*, and about a correction reading the *measured yaw rate*, records a design that was built, driven through many variants, and then rolled back.** The live steering system is the **pre-PID authority chain, restored from `1f4516d`** (see `AGENTS.md` pipeline step 3): velocity-referenced heading error + off-track recovery + lane bias (pure pursuit on the lane error, blended with the 0.5 s projection) + rival repulsion + side-by-side heading + an outer PD damped by `− SteerKD × yawRate` + the slide-priority blend.
+
+**Three claims below are directly superseded:** the live heading error is **velocity**-referenced (not nose); there is **no PID**, no `SteerI` and no `SteerD`/`SteerTrim` — the only steering knob is `SteerKD`; and the aim point is no longer the only thing that was rescued from the authority change (the whole chain is live). Read the material below as the record of a **rejected** design and its transferable lessons, not as a description of the code.
+
+**The lessons worth carrying forward** (they are why this section is kept): a reference that contains its own correction closes a measurement loop through its own input; a veto that **drops** rather than **clamps** turns a monotonic dial into a cliff; `v·tan(δ)/L` is a fiction once the tyres leave their linear range; and the field's "read yaw rate directly instead of differentiating" advice is sound in principle but **did not beat a well-tuned PD chain in this game**.
+
 ## The dominant architecture is feedforward + feedback, not a lone PID
 
 Every serious implementation surveyed splits the steering command into an open-loop **feedforward** term and a closed-loop **feedback** term — a two-degree-of-freedom architecture, explicitly named as such in the racing literature:
