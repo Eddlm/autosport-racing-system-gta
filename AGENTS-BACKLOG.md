@@ -52,19 +52,20 @@
 16. Snap-oversteer D-term — a term that does not exist yet; dedicated session.
 17. Gravity vs grip & speed — settle how gravity scales grip against each site that multiplies it again.
 18. Pace: model-theoretical vs instance — structural: pre-race selection is spawn-free by design.
+19. Overrotation via the pedal — a rotation-driven throttle authority; the steering path is a limited lever on rotation **by design**, so this is the rear-grip side of the same problem (section below).
 
 **Tier 6 — subsystem reworks**
 
-19. Two-projection route speed — replaces the geometric route speed, the sweeping-corner authority.
-20. Track-creator revival — entry point, shared-statics ownership, mutation policy, the `Wide` off-by-one.
+20. Two-projection route speed — replaces the geometric route speed, the sweeping-corner authority.
+21. Track-creator revival — entry point, shared-statics ownership, mutation policy, the `Wide` off-by-one.
 
 **Tier 7 — shipped, wants a second look**
 
-21. Downhill braking term — **span consistency fixed and verified in game**; the per-node-profile worry was **not a defect** (the mean is exact for `∫a·ds`). One question left: the brake-learning/grade coupling, below.
+22. Downhill braking term — **span consistency fixed and verified in game**; the per-node-profile worry was **not a defect** (the mean is exact for `∫a·ds`). One question left: the brake-learning/grade coupling, below.
 
 **Tier 8 — removed for the WIP, reimplement later**
 
-22. Slide brake rampdown — taken out so the WIP ships a steering/braking pair that was actually tuned together; comes back with feedback in hand, **v0.9 and over**. Detail below.
+23. Slide brake rampdown — taken out so the WIP ships a steering/braking pair that was actually tuned together; comes back with feedback in hand, **v0.9 and over**. Detail below.
 
 ## Downhill braking term — span fixed, one design question open
 
@@ -181,6 +182,23 @@ Where the gap shows:
 **When**: after the first WIP release's feedback — **v0.9 and over**.
 
 **Reimplementing — the trap that made this more than a deletion**: `Control.MaxBrake` used to be *derived fresh each tick* — `Initialize()` seeded it once per race and `ApplySteerLimits` rewrote it every tick (1, or 0 under full countersteer). Deleting the rampdown outright therefore left the countersteer release with nothing to undo it, and the brake would have stayed dead for the rest of the race. The first fix kept a plain `MaxBrake = 1f` in the rampdown's place; that was then replaced by the better answer — the cap is now **stateful with a natural recovery, mirroring `MaxThrottle`** (`if (Control.MaxBrake < 1f) Control.MaxBrake += 2 × TickScale` in `ConvertSpeedToPedals`, sitting beside the identical throttle line). So the release is still instant, the restoration is a ~0.5 s ramp, and the value self-heals with no reset anywhere — including across `ApplySteerLimits`' early `return` on a NaN steer, which the per-tick reset used to skip entirely. Anything reimplemented here must respect that pair: **instant release, ramped recovery**.
+
+## Overrotation — the pedal is the other lever (not countersteer, not D)
+
+**Trigger**: the car rotates more than the corner wants, especially on exit. The user's steer: *"overrotation does not need to just be fixed by countersteering or a big D here, overrotation can be tweaked with throttle."*
+
+**Both halves of the steering path are limited by construction, not by tuning — so neither is the primary fix.** The PID cannot command countersteer at all until slip exceeds the aim-point chord angle (`β > c = ld / (2R)` — ~7° at 30 m/s in a 100 m corner), and above it its gain is only the pure-pursuit geometry (`2L/d`, a few tenths). The correction gate then makes D **unwind-only**: it may only oppose `pSteer`, so it can damp a countersteer but can never create one. Overrotation is a **rear-grip** problem, and the pedal is the lever that acts on it.
+
+**The sign depends on which overrotation, and that is the whole hazard.**
+
+- **Power oversteer** — the rear is saturated by drive force. Lifting hooks it back up. *Less* throttle.
+- **Load-transfer / lift-off oversteer** — the rear is unloaded by forward weight transfer, or by a crest or kerb. Lifting makes it **worse**; keeping the throttle on holds the rear down. This is exactly why the code's full-countersteer branch already holds `CountersteerRollThrottle` — a hair of throttle so the tires keep rolling — rather than cutting.
+
+A rotation → pedal law that cannot tell these apart will fix one and worsen the other. The discriminator is already in the code: **wheelspin**. TCS reads it; nothing new is needed to classify.
+
+**What exists today.** `ApplyThrottleCap` / TCS is **wheelspin-driven, not rotation-driven**, so power oversteer is covered only insofar as it produces wheelspin — a high-grip car rotating without wheelspin gets nothing. The only rotation-driven pedal action sits at the **full-countersteer threshold** (`IsFullCountersteer` → `MaxBrake = 0`, then `CountersteerRollThrottle` in `ConvertSpeedToPedals`) — very late in the slide, and it is a *brake release* rather than a throttle authority. The brake-side equivalent is deliberately out for the WIP (item 23).
+
+**The shape worth trying later**: generalise the maintenance-throttle half from the full-countersteer threshold to a `|SlideAngle|` ramp, bounded so it never adds drive beyond maintenance. A slide-throttle law feeds speed — at a corner exit that is lap time, but it can also spin the rears, so it is a loop and needs the bound.
 
 ## Optional update checker as a separate DLL (idea)
 

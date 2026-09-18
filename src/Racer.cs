@@ -142,13 +142,17 @@ namespace ARS
 
         // True when the steer limiter actually reduced the steer this frame; read only by the ZOMBIE block below.
         bool _steerLimitedThisFrame = false;
-        float _debugPdSteer = 0f;
+        float _debugRequestedSteerDeg = 0f;
+        // The PID correction (I+D) as the D term with I at 0, after the unwind-only gate: zero unless it acted.
+        float _debugCorrectionActedDeg = 0f;
 
         // Inner yaw-stability loop state: last error and the raw integral. The loop itself is disabled.
         // Live gains are the menu-owned ARS.SteerTrim / SteerI / SteerD.
         float _lastYawErrDeg = 0f;
         float _yawErrIntegral = 0f;
+        // Two-tap average of the aim error, for the D term's rate only. See the note in ComputeSteering.
         float _lastAimErrorDeg = 0f;
+        float _lastAimErrFiltered = 0f;
         float _aimErrorIntegral = 0f;
         float _wheelbaseMeters = 0f;
 
@@ -391,8 +395,9 @@ namespace ARS
             if (!TryGetSteerContext(out TrackPoint steerRefPoint, out float roadWide))
             {
                 Control.SteerDegrees = 0f;
-                _lastAimErrorDeg = 0f;
                 _aimErrorIntegral = 0f;
+                _lastAimErrorDeg = 0f;
+                _lastAimErrFiltered = 0f;
                 return;
             }
 
@@ -523,6 +528,8 @@ namespace ARS
                 // The dead loop keeps its own gain: SteerTrim is a dimensionless trim on the steering
                 // geometry now, so reviving this must not silently inherit a value in different units.
                 const float legacyYawPDegPerRate = 0.2f;
+                // Same reasoning for D: SteerD is a lead time in seconds now, so the dead loop pins its own gain.
+                const float legacyYawDDegPerRate = 0.1f;
                 float actualYawDeg = VehicleData.YawRotationPerSecondDegrees;
                 float appliedSteerDeg = Control.LastAppliedSteerDegrees;
                 if (float.IsNaN(appliedSteerDeg) || float.IsInfinity(appliedSteerDeg)) appliedSteerDeg = 0f;
@@ -537,7 +544,7 @@ namespace ARS
                     // All three terms raw for the core test: no D smoothing, no I clamp or leak.
                     float errRate = (unexplainedDeg - _lastYawErrDeg) / dt;
                     _yawErrIntegral += unexplainedDeg * dt;
-                    float authority = (legacyYawPDegPerRate * unexplainedDeg) + (ARS.SteerI * _yawErrIntegral) + (ARS.SteerD * errRate);
+                    float authority = (legacyYawPDegPerRate * unexplainedDeg) + (ARS.SteerI * _yawErrIntegral) + (legacyYawDDegPerRate * errRate);
                     Control.SteerDegrees -= Math.Sign(actualYawDeg) * authority;
                 }
                 _lastYawErrDeg = unexplainedDeg;
@@ -572,15 +579,40 @@ namespace ARS
             // the raw angle is the point: the demand saturates as the aim point swings abeam instead of
             // asking for full lock. It also makes the gain 2L/distance, which rises as the aim point
             // closes in, instead of a constant that is only correct at one speed. Steer Trim scales that
-            // geometry; I and D still run on the angle error itself.
+            // geometry. I runs on the angle error itself; D is scaled by that same gain (see below).
             float aimDistance = Math.Max(aimFlat.Length(), 1f);
             float geometricSteerDeg = ARS.RadToDeg((float)Math.Atan(2f * WheelbaseMeters * (float)Math.Sin(ARS.DegToRad(aimErrorDeg)) / aimDistance));
 
             float aimDt = Math.Max(TickScale, 0.001f);
-            float aimErrRate = (aimErrorDeg - _lastAimErrorDeg) / aimDt;
-            _aimErrorIntegral += aimErrorDeg * aimDt;
-            Control.SteerDegrees = (ARS.SteerTrim * geometricSteerDeg) + (ARS.SteerI * _aimErrorIntegral) + (ARS.SteerD * aimErrRate);
+            // D's rate runs on a two-frame average of the error; P and I take the raw error so line tracking
+            // gains no lag. The aim point is pinned to a 1 m track node, so every crossing steps the aim
+            // direction by 1/(2R) rad and a bare per-tick difference turns that staircase into a spike.
+            // A two-tap average halves a step's peak slope at half the group delay of the EMA it replaced
+            // (0.5 samples vs 1) and is an exact null at Nyquist, where frame-rate chatter lives. It cannot
+            // remove the spike's area, only spread it — the step size fixes the integral.
+            float aimErrFiltered = (aimErrorDeg + _lastAimErrorDeg) * 0.5f;
+            float aimErrRate = (aimErrFiltered - _lastAimErrFiltered) / aimDt;
             _lastAimErrorDeg = aimErrorDeg;
+            _lastAimErrFiltered = aimErrFiltered;
+            _aimErrorIntegral += aimErrorDeg * aimDt;
+
+            // The PID's correction may only REDUCE the steering: it is dropped whenever it shares a sign with
+            // pSteer, so it can unwind lock but never add lock. Testing it against the yaw rate instead leaks
+            // twice — steer and yaw disagree during a slide, which is exactly the countersteer case, so the
+            // additive correction got through; and Math.Sign(0) matches nothing, so a straight (yaw ≈ 0, or
+            // dithering across it) held the gate open. The geometry is the steering and stays free — gating
+            // it would stop the car cornering at all. Consequence: the correction is unwind-only, so I is
+            // the only term that could trim out a steady-state following error.
+            // D is P's geometry gain times a lead time in seconds, so the lead is constant in time and D stops
+            // fading as the aim point moves out with speed: Kd = SteerD * SteerTrim * 2L/d. Scaling by 2L/d and
+            // not by 1/speed is deliberate — aimDistance already has a floor, so this self-limits at low speed
+            // instead of running away at rest, which matters for the stuck-recovery crawl.
+            float aimGeometryGain = 2f * WheelbaseMeters / aimDistance;
+            float pSteer = ARS.SteerTrim * geometricSteerDeg;
+            float correction = (ARS.SteerI * _aimErrorIntegral) + (ARS.SteerD * ARS.SteerTrim * aimGeometryGain * aimErrRate);
+            if (Math.Sign(correction) == Math.Sign(pSteer)) correction = 0f;
+            _debugCorrectionActedDeg = correction;
+            Control.SteerDegrees = pSteer + correction;
 
             // --- Slide countersteer blend: the last word on steering, and it overrides the PID. ---
             // It must sit AFTER the aim-error PID, because the PID assigns Control.SteerDegrees outright
@@ -606,7 +638,7 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
                 Control.SteerDegrees = 0f;
-            _debugPdSteer = Control.SteerDegrees;
+            _debugRequestedSteerDeg = Control.SteerDegrees;
 
             // --- Local function: TryGetSteerContext ---
 
@@ -876,8 +908,8 @@ namespace ARS
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
-        const float SteerSlewRate = 360f;                // TEMP: matched to the countersteer rate so slew stops binding
-        const float SteerSlewRateCountersteer = 360f;    // doubled when countersteering (steer opposes yaw)
+        const float SteerSlewRate = 90f;                 // steering-in rate; lower = slower to reach a lock angle
+        const float SteerSlewRateCountersteer = 90f;     // TEMP: matched to the steering-in rate, so there is no fast path for opposite lock
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
         const float PlayerSpeedSteerFwdThreshold = 0.001f;   // effectively always on
         // Steer reduction multiplier: 0.04 at throttle 0.5, 0.08 at throttle 0.99.
@@ -902,8 +934,13 @@ namespace ARS
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // Max steer angle = TRlat × 0.2 base, plus slide, capped at TRlat × 0.5 (base is always 40% of the ceiling).
-            float maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.33f + slideAngle, Handling.LateralTractionCurve * 0.5f);
+            // TEMP — flat grip allowance: TRlat × 0.33, with no slide widening and no 0.5 × TRlat ceiling.
+            // The slide-widened form is kept directly below and is one guard away from returning.
+            float maxSteerAngle = Handling.LateralTractionCurve * 0.33f;
+            // Max steer angle = TRlat × 0.33 base, plus the current slide, capped at TRlat × 0.5 — so the base
+            // is two thirds of the ceiling and the cap is reached once the slide exceeds 0.17 × TRlat.
+            if (1 == 2)
+                maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.33f + slideAngle, Handling.LateralTractionCurve * 0.5f);
             // Full countersteer: release the brake outright, immediately, so the tires can roll again.
             // No reset here: the cap recovers on its own at the MaxThrottle rate (ConvertSpeedToPedals).
             if (IsFullCountersteer()) Control.MaxBrake = 0f;
@@ -1178,8 +1215,9 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees)) Control.SteerDegrees = 0f;
 
-            // Fixed slew-rate limiter: the applied steer moves toward the target at a
-            // fixed rate (180°/s), doubled to 360°/s when countersteering (steer opposes yaw).
+            // Fixed slew-rate limiter: the applied steer moves toward the target at a fixed rate. The
+            // countersteer branch below is currently a no-op — both constants are equal, so opposite lock
+            // is no faster than steering in. Restore the asymmetry by raising SteerSlewRateCountersteer.
             float error = Control.SteerDegrees - Control.LastAppliedSteerDegrees;
             bool countersteering = Math.Sign(Control.SteerDegrees) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float rate = countersteering ? SteerSlewRateCountersteer : SteerSlewRate;
@@ -1826,16 +1864,29 @@ namespace ARS
                 DrawPointMarker(fullSec, 0.6f, fullSecColour);
                 DrawPointMarker(extraSec, 0.6f, extraSecColour);
 
-                // Steering angle lines: PD target (yellow) vs applied (green).
+                // Steering angle lines. Green = applied (after the limiter clamps and after the slew); a lone
+                // pink line is the D correction. There is no line for P alone, and none for D when it is silent.
+                // The yellow requested-steer line is DISABLED — it is pre-actuation, so it read as twitchy
+                // no matter how smooth the wheels were. Drop the guard to restore it;
+                // _debugRequestedSteerDeg is still maintained above.
                 Vector3 carPos = Car.Position + new Vector3(0, 0, 0.5f);
                 Vector3 fwd = Car.ForwardVector;
                 float lineLen = 5f;
-                float pdRad = _debugPdSteer * (float)Math.PI / 180f;
-                float apRad = Control.SteerDegrees * (float)Math.PI / 180f;
-                Vector3 pdDir = new Vector3(fwd.X * (float)Math.Cos(pdRad) - fwd.Y * (float)Math.Sin(pdRad), fwd.X * (float)Math.Sin(pdRad) + fwd.Y * (float)Math.Cos(pdRad), 0f);
-                Vector3 apDir = new Vector3(fwd.X * (float)Math.Cos(apRad) - fwd.Y * (float)Math.Sin(apRad), fwd.X * (float)Math.Sin(apRad) + fwd.Y * (float)Math.Cos(apRad), 0f);
-                ARS.DrawLine(carPos, carPos + pdDir * lineLen, Color.Yellow);
-                ARS.DrawLine(carPos, carPos + apDir * lineLen, Color.Lime);
+                const float appliedCorrectionDrawMinDeg = 0.01f;
+                Vector3 SteerDir(float deg)
+                {
+                    float rad = deg * (float)Math.PI / 180f;
+                    return new Vector3(fwd.X * (float)Math.Cos(rad) - fwd.Y * (float)Math.Sin(rad), fwd.X * (float)Math.Sin(rad) + fwd.Y * (float)Math.Cos(rad), 0f);
+                }
+                if (1 == 2) ARS.DrawLine(carPos, carPos + SteerDir(_debugRequestedSteerDeg) * lineLen, Color.Yellow);
+                ARS.DrawLine(carPos, carPos + SteerDir(Control.SteerDegrees) * lineLen, Color.Lime);
+                // Pink = D, and only on the frames it actually reached the wheels (the correction is zeroed by the
+                // unwind-only gate whenever it shares the geometry's sign, and is zero anyway when the aim error is
+                // not changing). SteerDir is a rotation of the forward unit vector, so drawing it unconditionally
+                // painted a full-length line dead ahead in both of those states and read as "D is doing something".
+                // No pink line = D contributed nothing this frame; its angle against the green line is the trim.
+                if (Math.Abs(_debugCorrectionActedDeg) > appliedCorrectionDrawMinDeg)
+                    ARS.DrawLine(carPos, carPos + SteerDir(_debugCorrectionActedDeg) * lineLen, Color.DeepPink);
 
                 // Input trail.
                 DrawInputTrail();
