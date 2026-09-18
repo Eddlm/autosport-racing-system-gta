@@ -10,10 +10,9 @@ using System.Xml;
 namespace ARS
 {
     // Track file writing: serialising the loaded route and props back to Tracks\*.xml.
-    // UpdateRoute was the one live path (reached by the arsupdroute cheat) and is now DISABLED for the WIP
-    // release, which must not create, edit/update or delete tracks - the gate sits at its call site in
-    // HandleCheats. SaveRoute is the dead "new track from scratch" path: it builds a whole document, writes the
-    // Trackside/Tags metadata and has no callers. Split out of AutosportRacingSystem.cs 2026-10; the shared
+    // UpdateRoute and SaveRoute have no callers while track mutation is disabled for the WIP release.
+    // SaveRoute is the dead "new track from scratch" path: it builds a whole document and writes the Trackside/Tags
+    // metadata. Split out of AutosportRacingSystem.cs 2026-10; the shared
     // statics it reads (CurrentFile, RouteNodes, NodeHalfWidths, CustomProps) stay in AutosportRacingSystem.cs.
     // Nothing in this file may write to Tracks\ until track mutation is deliberately re-enabled.
     public partial class ARS
@@ -214,11 +213,11 @@ namespace ARS
 
             XmlElement trackside = document.CreateElement("Trackside");
             XmlElement t = document.CreateElement("Model");
-            t.InnerText = ARS.DevConfigFile.GetValue("CREATOR_DEFAULTS", "TracksideModel", "prop_wheel_tyre");
+            t.InnerText = "prop_wheel_tyre";
             trackside.AppendChild(t);
 
             t = document.CreateElement("Frecuency");
-            t.InnerText = ARS.DevConfigFile.GetValue("CREATOR_DEFAULTS", "TracksideModelFrecuency", "10");
+            t.InnerText = "10";
             trackside.AppendChild(t);
 
 
