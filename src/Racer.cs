@@ -445,22 +445,40 @@ namespace ARS
             float geometricSteerDeg = ARS.RadToDeg((float)Math.Atan(2f * WheelbaseMeters * (float)Math.Sin(ARS.DegToRad(aimErrorDeg)) / aimDistance));
             float pSteer = ARS.SteerTrim * geometricSteerDeg;
 
-            // TEMP EXPERIMENT: reference the steer the car was actually ALLOWED (post speed-limit, one frame
-            // stale) instead of the raw geometric command. When the limiter bites, the raw reference asks for
-            // a rotation the car is not permitted to attempt, so the excess reads as a deficit and D goes
-            // quiet; this keeps D alive at speed. The veto below still tests pSteer, not this value.
-            float commandedYawRateDeg = ARS.RadToDeg(speedMps * (float)Math.Tan(ARS.DegToRad(_limitedSteerDeg)) / WheelbaseMeters);
+            // The yaw-rate reference is the RAW feedforward command — the true intent, not a clipped view of it.
+            // The speed-limited variant is one guard away and was tried; it is the wrong quantity on two counts.
+            // (1) It is PARTIAL: it answers "am I rotating more than my STEERING implies", which folds the
+            // limiter's own intervention into what is supposed to be the car's error. The raw command asks the
+            // honest question — "am I rotating more than I INTENDED" — and the intent is the heading we aim for.
+            // (2) It closes a LOOP: the limited value already contains the correction, so subtracting made the
+            // reference shrink, which made the measured excess grow, which subtracted more — positive feedback
+            // through the measurement, loop gain 2 * SteerTrim * SteerD * grip / leadScale (about 4 * SteerD at
+            // grip 2), crossing 1 near SteerD 0.25. That is why 0.1 there appeared to do the work of 0.5.
+            // What to expect from raw: wherever the limiter cuts, the car rotates less than the raw command
+            // asks, which reads as a deficit, and the sign test below refuses deficits — so D is quiet in
+            // ordinary driving under the limiter. Countersteer is NOT lost by that: a genuine slide produces a
+            // large positive excess that outruns even a high raw reference. With the loop gone, SteerD is a
+            // straight monotonic gain again, so expect to need a LARGER value than the limited reference wanted.
+            float referenceSteerDeg = pSteer;
+            if (1 == 2) referenceSteerDeg = _limitedSteerDeg;
+            float commandedYawRateDeg = ARS.RadToDeg(speedMps * (float)Math.Tan(ARS.DegToRad(referenceSteerDeg)) / WheelbaseMeters);
             float yawRateExcessDeg = VehicleData.YawRotationPerSecondDegrees - commandedYawRateDeg;
             float correction = -ARS.SteerD * ARS.SteerTrim * (2f * WheelbaseMeters / aimDistance) * yawRateExcessDeg;
-            // Unwind-only AND capped at centre: the correction takes lock down toward straight, but never past
-            // it. The previous form DROPPED any correction that would cross centre, which made D's response
-            // non-monotonic — a larger SteerD crossed the cliff more often and therefore did LESS work, which is
-            // why a D of 1.0 felt like 0.5. Clamping instead keeps the response linear in SteerD and saturating
-            // at zero steer, so more D always means more damping.
-            // Testing the product also covers pSteer == 0 exactly, where a sign comparison cannot fire and a
-            // nonzero correction would add lock out of nothing.
-            float reduction = correction * pSteer < 0f ? Math.Min(Math.Abs(correction), Math.Abs(pSteer)) : 0f;
-            correction = -Math.Sign(pSteer) * reduction;
+            // One-sided in the ADD direction only, UNBOUNDED in the REDUCE direction. The correction may take
+            // lock away and may keep going straight past centre into countersteer, but it may never ADD lock to
+            // the feedforward. That is the driver's model: rotating normally -> trim little or nothing;
+            // overrotating -> trim a lot; overrotating hard -> countersteer to zero and beyond. The case being
+            // refused is under-rotation.
+            // This is a SIGN test, not a magnitude test. The magnitude form ("drop it if it would grow the
+            // command") refused the cross past centre as well, which capped countersteer at exactly zero, AND
+            // made D's response non-monotonic — a larger SteerD crossed it more often and therefore did LESS
+            // work, which is why 1.0 once felt like 0.5. Testing the product with >= 0 keeps both properties and
+            // still covers pSteer == 0 exactly, where a bare sign comparison cannot fire.
+            // Side benefit worth knowing: the additive half is precisely where the bicycle reference turns to
+            // fiction — at high lock v*tan(P)/L is far beyond what the tyres can deliver, so the car reads as
+            // permanently under-rotating and would demand more lock. Refusing the additive direction means D
+            // goes quiet exactly there, which is why a big lock angle makes it inert rather than dangerous.
+            if (correction * pSteer >= 0f) correction = 0f;
             _debugCorrectionDeg = correction;
             Control.SteerDegrees = pSteer + correction;
 
@@ -756,20 +774,32 @@ namespace ARS
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // TEMP — flat grip allowance: TRlat × 0.33, with no slide widening and no 0.5 × TRlat ceiling.
-            // The slide-widened form is kept directly below and is one guard away from returning.
-            float maxSteerAngle = Handling.LateralTractionCurve * 0.33f;
-            // Max steer angle = TRlat × 0.33 base, plus the current slide, capped at TRlat × 0.5 — so the base
-            // is two thirds of the ceiling and the cap is reached once the slide exceeds 0.17 × TRlat.
-            if (1 == 2)
-                maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.33f + slideAngle, Handling.LateralTractionCurve * 0.5f);
+            // Slide-angle steer allowance: a grip-scaled base that the slide widens, capped at half of TRlat.
+            // The base was lowered from TRlat x 0.33 to TRlat x 0.10 and the slide slope halved from 1.0 to 0.5,
+            // so the ordinary non-sliding command is smaller and a slide has to EARN the extra authority back.
+            // The grip scaling is load-bearing and must not become a flat number: the base IS a non-sliding
+            // car's whole allowance, and a high-grip car slides least, so it lives in the base regime — a flat
+            // base was tried in game and left grippy cars barely able to steer.
+            float maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.10f + slideAngle * 0.5f, Handling.LateralTractionCurve * 0.5f);
+            // Superseded: the flat TRlat x 0.33 allowance with no slide widening. One guard away.
+            if (1 == 2) maxSteerAngle = Handling.LateralTractionCurve * 0.33f;
             // Full countersteer: release the brake outright, immediately, so the tires can roll again.
             // No reset here: the cap recovers on its own at the MaxThrottle rate (ConvertSpeedToPedals).
             if (IsFullCountersteer()) Control.MaxBrake = 0f;
             float maxSteer = ARS.Remap(fwdMph, 40f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
-            // Countersteer is exempt from the limit — same steer-vs-yaw test the slew rate uses.
-            bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
-            if (!countersteering && Math.Abs(requestedSteer) > maxSteer)
+            // Countersteer is NOT exempt from the limit — it gets a WIDER allowance instead: a FULL slide on top
+            // of the base, against the half-slide the steering-in allowance gets, so recovery is never more
+            // restricted than steering in. (USR reaches the same intent from the other direction, by widening
+            // its clamp under rear skid rather than exempting the countersteer.)
+            // Tested against the SLIDE ANGLE, not the yaw rate: the nose is what says the car is sideways, and
+            // the yaw test stops reading countersteer the moment the correction has rotated the car back — it
+            // would clamp the recovery lock while the recovery is working. Steer opposing the slide IS
+            // countersteer, by definition. Both signs being 0 only picks the wider allowance, which is the same
+            // size as the base anyway, so the degenerate cases are harmless.
+            bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.SlideAngle);
+            if (countersteering)
+                maxSteer = ARS.Remap(fwdMph, 40f, 0f, slideAngle + Handling.LateralTractionCurve * 0.10f, VehicleData.SteeringLock, true);
+            if (Math.Abs(requestedSteer) > maxSteer)
             {
                 Control.SteerDegrees = Math.Sign(requestedSteer) * maxSteer;
                 _steerLimitedThisFrame = true;
