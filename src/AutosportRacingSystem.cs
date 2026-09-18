@@ -151,10 +151,9 @@ namespace ARS
         // Flat mph added to the corner plan and the route plan respectively.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
-        // Aim-error PID gains. P = dimensionless trim on the pure-pursuit geometry; I = steer degrees per
-        // accumulated degree-second of aim error; D = lead time in seconds, applied through P's geometry gain.
+        // Steering law gains. P = dimensionless trim on the pure-pursuit geometry; D = the yaw-rate
+        // correction's payback time in seconds, applied through P's geometry gain.
         public static float SteerTrim = 1.0f;   // dimensionless trim on the pure-pursuit geometry; 1.0 = the geometry itself
-        public static float SteerI = 0f;
         public static float SteerD = 0.50f;
         public static float SlideCountersteer = 0.80f;   // multiplier on SlideAngle for the countersteer target; 1.0 points the wheels along the velocity vector
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
@@ -1012,11 +1011,8 @@ namespace ARS
             string[] steerTrimOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
             AddSteerPidItem("Steer P", "Trim on the pure-pursuit steering geometry, not a raw gain. 1.00 steers exactly at the arc through the aim point; higher tracks tighter, lower runs lazier, 0.00 is no steering at all.", steerTrimOptions, "SteerTrim", SteerTrim, v => SteerTrim = v);
 
-            string[] steerIOptions = { "0.00", "0.01", "0.02", "0.03", "0.04", "0.05", "0.06", "0.07", "0.08", "0.09", "0.10", "0.11", "0.12", "0.13", "0.14", "0.15", "0.16", "0.17", "0.18", "0.19", "0.20" };
-            AddSteerPidItem("Steer I", "Steer I: slow trim from sustained aim error, in steer degrees per accumulated degree-second. Unclamped, so it keeps winding up while the error persists.", steerIOptions, "SteerI", SteerI, v => SteerI = v);
-
             string[] steerDOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00" };
-            AddSteerPidItem("Steer D (Lead)", "Steer D: lead time in seconds, applied through the same geometry gain as Steer P, so the damping is the same at every speed. Raise it if the car weaves or overshoots; taken far enough it cancels Steer P, which reads as twitching. 0.00 is no damping.", steerDOptions, "SteerD", SteerD, v => SteerD = v);
+            AddSteerPidItem("Steer D (Yaw)", "Steer D: rotation paid back per degree-per-second the car is rotating beyond what the steering asks for, in seconds. Two-sided — a car rotating slower than commanded gets steer added. 0.00 disables the correction.", steerDOptions, "SteerD", SteerD, v => SteerD = v);
 
             string[] slideCountersteerOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
             AddSteerPidItem("Slide Countersteer", "Multiplier on the slide angle for the countersteer target. 1.00 points the front wheels along the velocity vector, which neutralises the slide; above that it over-corrects and rotates the nose back, below it recovers gently and leaves some slide on the car. 0.00 disables the blend.", slideCountersteerOptions, "SlideCountersteer", SlideCountersteer, v => SlideCountersteer = v);
@@ -3008,7 +3004,6 @@ namespace ARS
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerTrim = SettingsMenuStore.GetFloat("SteerTrim", SteerTrim);
-            SteerI = SettingsMenuStore.GetFloat("SteerI", SteerI);
             SteerD = SettingsMenuStore.GetFloat("SteerD", SteerD);
             SlideCountersteer = SettingsMenuStore.GetFloat("SlideCountersteer", SlideCountersteer);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);

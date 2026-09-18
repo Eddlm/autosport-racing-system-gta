@@ -52,7 +52,7 @@
 16. Snap-oversteer D-term — a term that does not exist yet; dedicated session.
 17. Gravity vs grip & speed — settle how gravity scales grip against each site that multiplies it again.
 18. Pace: model-theoretical vs instance — structural: pre-race selection is spawn-free by design.
-19. Overrotation via the pedal — a rotation-driven throttle authority; the steering path is a limited lever on rotation **by design**, so this is the rear-grip side of the same problem (section below).
+19. Overrotation via the pedal — a rotation-driven throttle authority; the wheel now carries a real two-sided yaw-rate term so it is no longer a lever limited **by construction**, but the pedal is still the one that acts on **rear grip** (section below).
 
 **Tier 6 — subsystem reworks**
 
@@ -183,11 +183,11 @@ Where the gap shows:
 
 **Reimplementing — the trap that made this more than a deletion**: `Control.MaxBrake` used to be *derived fresh each tick* — `Initialize()` seeded it once per race and `ApplySteerLimits` rewrote it every tick (1, or 0 under full countersteer). Deleting the rampdown outright therefore left the countersteer release with nothing to undo it, and the brake would have stayed dead for the rest of the race. The first fix kept a plain `MaxBrake = 1f` in the rampdown's place; that was then replaced by the better answer — the cap is now **stateful with a natural recovery, mirroring `MaxThrottle`** (`if (Control.MaxBrake < 1f) Control.MaxBrake += 2 × TickScale` in `ConvertSpeedToPedals`, sitting beside the identical throttle line). So the release is still instant, the restoration is a ~0.5 s ramp, and the value self-heals with no reset anywhere — including across `ApplySteerLimits`' early `return` on a NaN steer, which the per-tick reset used to skip entirely. Anything reimplemented here must respect that pair: **instant release, ramped recovery**.
 
-## Overrotation — the pedal is the other lever (not countersteer, not D)
+## Overrotation — the pedal acts on rear grip (the wheel has a rotation term now too)
 
 **Trigger**: the car rotates more than the corner wants, especially on exit. The user's steer: *"overrotation does not need to just be fixed by countersteering or a big D here, overrotation can be tweaked with throttle."*
 
-**Both halves of the steering path are limited by construction, not by tuning — so neither is the primary fix.** The PID cannot command countersteer at all until slip exceeds the aim-point chord angle (`β > c = ld / (2R)` — ~7° at 30 m/s in a 100 m corner), and above it its gain is only the pure-pursuit geometry (`2L/d`, a few tenths). The correction gate then makes D **unwind-only**: it may only oppose `pSteer`, so it can damp a countersteer but can never create one. Overrotation is a **rear-grip** problem, and the pedal is the lever that acts on it.
+**The steering path used to be limited by construction; that is no longer true, and it changes what this item is about.** The old PID could not command countersteer until slip exceeded the aim-point chord angle (`β > c = ld / (2R)` — ~7° at 30 m/s in a 100 m corner), and above it its gain was only the pure-pursuit geometry (`2L/d`, a few tenths); on top of that the correction gate made the old D **unwind-only**, so it could damp a countersteer but never create one. **Both of those limits are gone** — the live law carries a two-sided yaw-rate correction and has no gate at all. What has *not* changed is the physics underneath: the wheel acts on rotation through the **front** tyres, so overrotation caused by the rear breaking away is still fundamentally a **rear-grip** problem, and the pedal remains the lever that acts on rear grip.
 
 **The sign depends on which overrotation, and that is the whole hazard.**
 
