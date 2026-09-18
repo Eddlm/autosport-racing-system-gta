@@ -1,5 +1,6 @@
 using GTA;
 using GTA.Math;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 
@@ -94,6 +95,112 @@ namespace ARS
             Vector3 chevronPos = apexGround + new Vector3(0f, 0f, 2.35f);
             float chevronSize = ARS.Clamp(trackWidth * 0.18f, 1.2f, 2.2f);
             World.DrawMarker(chevronMarker, chevronPos, toNext, new Vector3(89f, 0f, -90f), new Vector3(chevronSize, chevronSize, chevronSize), chevronColor, false, false, 2, false, "", "", false);
+        }
+
+        // Crossing lines at entrance, apex, and exit of each corner within range.
+        public static void DrawCornerRegions(Racer player, List<CornerPoint> corners, List<TrackPoint> trackPoints)
+        {
+            if (corners.Count == 0 || trackPoints.Count == 0) return;
+            int playerNode = player.CurrentTrackPoint.Node;
+
+            for (int i = 0; i < corners.Count; i++)
+            {
+                CornerPoint corner = corners[i];
+                int apexNode = corner.Node;
+                if (apexNode < 0 || apexNode >= trackPoints.Count) continue;
+
+                int delta = ARS.IsPointToPoint ? apexNode - playerNode : ((apexNode - playerNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
+                if (!ARS.IsBetween(delta, -10, 400)) continue;
+
+                Color startColor = Color.FromArgb(200, 0, 255, 0);   // green = entrance
+                Color apexColor = Color.FromArgb(200, 255, 255, 0);  // yellow = apex
+                Color endColor = Color.FromArgb(200, 255, 0, 0);     // red = exit
+
+                if (corner.StartNode >= 0 && corner.StartNode < trackPoints.Count)
+                    DrawTrackCrossingLine(trackPoints, corner.StartNode, startColor);
+                DrawTrackCrossingLine(trackPoints, apexNode, apexColor);
+                if (corner.EndNode >= 0 && corner.EndNode < trackPoints.Count)
+                    DrawTrackCrossingLine(trackPoints, corner.EndNode, endColor);
+            }
+        }
+
+        // Spectator overload: draws corner regions within a radius of the center position.
+        public static void DrawCornerRegions(Vector3 center, float radiusMeters, List<CornerPoint> corners, List<TrackPoint> trackPoints)
+        {
+            if (corners.Count == 0 || trackPoints.Count == 0) return;
+
+            for (int i = 0; i < corners.Count; i++)
+            {
+                CornerPoint corner = corners[i];
+                int apexNode = corner.Node;
+                if (apexNode < 0 || apexNode >= trackPoints.Count) continue;
+                if (trackPoints[apexNode].Position.DistanceTo2D(center) > radiusMeters) continue;
+
+                Color startColor = Color.FromArgb(200, 0, 255, 0);
+                Color apexColor = Color.FromArgb(200, 255, 255, 0);
+                Color endColor = Color.FromArgb(200, 255, 0, 0);
+
+                if (corner.StartNode >= 0 && corner.StartNode < trackPoints.Count)
+                    DrawTrackCrossingLine(trackPoints, corner.StartNode, startColor);
+                DrawTrackCrossingLine(trackPoints, apexNode, apexColor);
+                if (corner.EndNode >= 0 && corner.EndNode < trackPoints.Count)
+                    DrawTrackCrossingLine(trackPoints, corner.EndNode, endColor);
+            }
+        }
+
+        // Outside approach line: blue line from the racer's current node to the corner entrance.
+        public static void DrawOutsideApproachLine(Racer racer, List<TrackPoint> trackPoints)
+        {
+            if (racer.Brain.Corner == null || trackPoints.Count == 0) return;
+            CornerPoint cp = racer.Brain.Corner.Point;
+            int entranceNode = cp.StartNode >= 0 ? cp.StartNode : cp.Node;
+            if (entranceNode < 0 || entranceNode >= trackPoints.Count) return;
+
+            int fromNode = racer.CurrentTrackPoint.Node;
+            int steps = entranceNode - fromNode;
+            if (!ARS.IsPointToPoint && steps < 0) steps += trackPoints.Count;
+            steps = Math.Min(steps, 200);
+
+            // Same sign the AI uses: cornerDir * halfWidth (right for positive angle, left for negative).
+            float cornerDir = Math.Sign(cp.Angle);
+            if (cornerDir == 0f) return;
+
+            Color blue = Color.FromArgb(200, 0, 120, 255);
+            for (int n = 0; n < steps; n++)
+            {
+                int nodeA = fromNode + n;
+                int nodeB = fromNode + n + 1;
+                if (!ARS.IsPointToPoint)
+                {
+                    nodeA = nodeA % trackPoints.Count;
+                    nodeB = nodeB % trackPoints.Count;
+                }
+                if (nodeA >= trackPoints.Count || nodeB >= trackPoints.Count) break;
+                TrackPoint tpA = trackPoints[nodeA];
+                TrackPoint tpB = trackPoints[nodeB];
+                Vector3 dirA = tpA.Direction; dirA.Z = 0f;
+                Vector3 dirB = tpB.Direction; dirB.Z = 0f;
+                if (dirA.LengthSquared() < 0.0001f || dirB.LengthSquared() < 0.0001f) continue;
+                Vector3 rightA = Vector3.Cross(dirA.Normalized, Vector3.WorldUp);
+                Vector3 rightB = Vector3.Cross(dirB.Normalized, Vector3.WorldUp);
+                Vector3 posA = tpA.Position + rightA * (tpA.TrackHalfWidth * cornerDir) + new Vector3(0, 0, 0.5f);
+                Vector3 posB = tpB.Position + rightB * (tpB.TrackHalfWidth * cornerDir) + new Vector3(0, 0, 0.5f);
+                ARS.DrawLine(posA, posB, blue);
+            }
+        }
+
+        static void DrawTrackCrossingLine(List<TrackPoint> trackPoints, int node, Color color)
+        {
+            TrackPoint tp = trackPoints[node];
+            Vector3 dir = tp.Direction;
+            dir.Z = 0f;
+            if (dir.LengthSquared() < 0.0001f) return;
+            dir.Normalize();
+            Vector3 right = Vector3.Cross(dir, Vector3.WorldUp);
+            float halfWide = tp.TrackHalfWidth;
+            Vector3 leftEdge = tp.Position - right * halfWide + new Vector3(0, 0, 0.5f);
+            Vector3 rightEdge = tp.Position + right * halfWide + new Vector3(0, 0, 0.5f);
+            ARS.DrawLine(leftEdge, rightEdge, color);
         }
 
         // Small blue chevrons on both track edges, pointing ahead, on odd absolute nodes within ±30 of the given node.

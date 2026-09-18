@@ -50,7 +50,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        FindCustomProps, ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail
+        FindCustomProps, ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis
     }
 
     public enum DebugDisplay
@@ -151,6 +151,7 @@ namespace ARS
         // On = route curvature limits speed (sweeping corners); off = the corner braking plan alone.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
+        public static float SteerKD = 0.45f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -173,13 +174,12 @@ namespace ARS
         public static Dictionary<Options, bool> DebugToggles = new Dictionary<Options, bool>()
     {
         { Options.ShowInputs, false },
+        { Options.ShowTrackAnalysis, false },
         { Options.ReverseRoute, false },
         { Options.HighDownforceOnline, false },
         { Options.ShowCheckpoints, true },
         { Options.ShowEdgeChevrons, false },
-        { Options.ShowLeaderboard, true },
-        { Options.ShowProjection, false },
-        { Options.ShowInputTrail, false }
+        { Options.ShowLeaderboard, true }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -895,9 +895,8 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's lane aim line and its wall limits at the steering reference node.");
-            AddDebugCheckbox(debugMenu, Options.ShowProjection, "Show Projection", "Draw the closest AI car's 1.5s kinematic projection in three slices: 0.5s (the lane pursuit's read), 1s (the off-track cap's read) and 1.5s (read-ahead, nothing consumes it yet).");
-            AddDebugCheckbox(debugMenu, Options.ShowInputTrail, "Show Input Trail", "Drop a sphere every metre of travel, coloured by the pedal input applied there: green full throttle, yellow neutral, red full brake. Closest AI car.");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's projection (0.5s/1s/1.5s), input trail (coloured by pedal input), and lane aim with wall stubs.");
+            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's lane aim line and wall limits at the steering reference node.");
             AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
@@ -985,6 +984,16 @@ namespace ARS
                 SaveRacerSetting("BrakeLearning", BrakeLearning.ToString());
             };
             aiMenu.Add(brakeLearningItem);
+
+            string[] steerKDOptions = { "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80" };
+            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping in the steering PD controller. Higher = more resistance to rotation, less oscillation. 0.45 is the tuned default.", steerKDOptions);
+            steerKDItem.ItemChanged += (sender, args) =>
+            {
+                SteerKD = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerKD", steerKDItem.Items[args.Index]);
+            };
+            steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerKD", SteerKD).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(steerKDItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -1553,6 +1562,15 @@ namespace ARS
                         TrackVisuals.DrawEdgeChevrons(playerRacer, ARS.TrackPoints);
                     else if (raceLive)
                         TrackVisuals.DrawEdgeChevrons(Game.Player.Character.Position, ARS.TrackPoints);
+                }
+                if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
+                {
+                    if (playerRacer != null)
+                        TrackVisuals.DrawCornerRegions(playerRacer, ARS.Corners, ARS.TrackPoints);
+                    else if (raceLive)
+                        TrackVisuals.DrawCornerRegions(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
+                    if (DebugFocusRacer != null)
+                        TrackVisuals.DrawOutsideApproachLine(DebugFocusRacer, ARS.TrackPoints);
                 }
 
                 // Nitro presence probe: latches PlayerHasNitro on a fired boost, a below-full charge
@@ -2963,6 +2981,7 @@ namespace ARS
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
+            SteerKD = SettingsMenuStore.GetFloat("SteerKD", SteerKD);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

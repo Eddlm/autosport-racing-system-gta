@@ -142,6 +142,7 @@ namespace ARS
 
         // True when the steer limiter actually reduced the steer this frame; read only by the ZOMBIE block below.
         bool _steerLimitedThisFrame = false;
+        float _debugPdSteer = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
         const float BrakeFactorDefault = 0.8f; // TEMP: hardcoded for testing
@@ -430,10 +431,12 @@ namespace ARS
                     laneError = laneError * (1f - blend) + (targetLane - projectedLane) * blend;
                 }
                 if (float.IsNaN(laneError)) laneError = 0f;
-                // Proportional lane pursuit: degrees per meter of lane error, ceiling easing with speed.
-                const float laneGainDegPerMeter = 2f;
-                float maxLaneDeg = ARS.Remap(ARS.MpsToMph(speedMps), 100f, 10f, 7f, 25f, true);
-                laneBiasDeg = -ARS.Clamp(laneError * laneGainDegPerMeter, -maxLaneDeg, maxLaneDeg);
+                // Proportional lane pursuit: degrees per meter of lane error (no ceiling).
+                // Halve the gain when heading to the outside of a tight curve for smoother transitions.
+                bool outsideOfCurve = CurrentTrackPoint != null && Brain.CurrentPerception.CurveRadiusToFollowPoint < 500f
+                    && Math.Sign(targetLane) != 0 && Math.Sign(targetLane) != Math.Sign(CurrentTrackPoint.Angle);
+                float laneGainDegPerMeter = outsideOfCurve ? 1.5f : 3f;
+                laneBiasDeg = -laneError * laneGainDegPerMeter;
             }
             // Physical repulsion: inside the "no touching" box, steer away from rivals
             // actually closing laterally; parallel traffic must not kill the lane pursuit.
@@ -468,8 +471,7 @@ namespace ARS
             // --- PD assembly: trajectory terms + lane bias + slide priority blend ---
 
             const float steerKP = 1.0f;
-            // TEMP: hardcoded 0.66 — testing yaw damping.
-            const float steerKD = 0.66f;
+            float steerKD = ARS.SteerKD;
             float trajectorySteer = (steerKP * (headingErrorDeg + recoveryDeg + sideBySideHeadingDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
             Control.SteerDegrees = trajectorySteer + (steerKP * laneBiasDeg);
 
@@ -490,7 +492,7 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
                 Control.SteerDegrees = 0f;
-
+            _debugPdSteer = Control.SteerDegrees;
 
             // --- Local function: TryGetSteerContext ---
 
@@ -556,43 +558,48 @@ namespace ARS
         }
 
         // Hold the outside line on entry, then release it for the high-speed inside line.
+        static float OutsideReleaseSeconds = 0.5f;
+        static float OutsideEngageSeconds => OutsideReleaseSeconds + 3f;
+
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
         {
             CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
-            float distToApexNodes = Math.Abs(apexNode - CurrentTrackPoint.Node);
-            float timeToApex = distToApexNodes / Math.Max(speedMps, 1f);
-            float releaseSeconds = steerRefPoint.TrackHalfWidth * 0.495f;
-            float approachStartTime = releaseSeconds + 2f;
+            // Time to entrance — the single reference for both engage and release.
+            int entranceNode = c.StartNode >= 0 ? c.StartNode : OffsetCornerNode(apexNode, -c.LengthStart);
+            int fwdToEntrance = entranceNode - CurrentTrackPoint.Node;
+            if (!ARS.IsPointToPoint && fwdToEntrance < 0) fwdToEntrance += ARS.TrackPoints.Count;
+            float timeToEntrance = fwdToEntrance / Math.Max(speedMps, 1f);
 
-            if (apexNode != _approachCornerNode || timeToApex > approachStartTime)
+            // New corner: reset latch.
+            if (apexNode != _approachCornerNode)
             {
                 _approachCornerNode = apexNode;
                 _approachOutsideDecided = false;
                 _approachHoldsOutside = false;
-                if (timeToApex > approachStartTime) return 0f;
             }
+
+            // Past the entrance: kill the hold so it can't re-engage mid-corner.
+            if (fwdToEntrance <= 2)
+            {
+                _approachHoldsOutside = false;
+                return 0f;
+            }
+
+            // Outside is only valid in the [Release, Engage] window before the entrance.
+            if (timeToEntrance < OutsideReleaseSeconds || timeToEntrance > OutsideEngageSeconds)
+                return 0f;
 
             // Flagged corners are too close to the previous one: no outside hold, no corner-commit.
             bool suppressOutside = ARS.Corners.Exists(cp => cp.Node == apexNode && cp.SuppressOutsideApproach);
-            // Prepare outside only when the car arrives already carrying more than the apex allows.
-            bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.SupposedRadius);
+            // Prepare outside when the car arrives within 20 mph of the apex speed.
+            bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.SupposedRadius) - ARS.MphToMps(20f);
             bool shouldHoldOutside = !suppressOutside && aboveApexSpeed;
             if (!_approachOutsideDecided || (!_approachHoldsOutside && shouldHoldOutside))
             {
                 _approachHoldsOutside = shouldHoldOutside;
                 _approachOutsideDecided = true;
-            }
-
-            // Entrance-direction gate: don't hold the outside line if the direction at the
-            // entrance diverges too far from the current track direction (the approach is misaligned).
-            int entranceNode = c.StartNode >= 0 ? c.StartNode : OffsetCornerNode(apexNode, -c.LengthStart);
-            if (entranceNode >= 0 && entranceNode < ARS.TrackPoints.Count)
-            {
-                float entranceHeading = Vector3.SignedAngle(ARS.TrackPoints[entranceNode].Direction, CurrentTrackPoint.Direction, Vector3.WorldUp);
-                if (!float.IsNaN(entranceHeading) && !float.IsInfinity(entranceHeading) && Math.Abs(entranceHeading) > 60f)
-                    return 0f;
             }
 
             float cornerDir = Math.Sign(c.Angle);
@@ -615,7 +622,7 @@ namespace ARS
                 }
             }
 
-            if (_approachHoldsOutside && timeToApex > releaseSeconds)
+            if (_approachHoldsOutside)
             {
                 return cornerDir * halfWidth;
             }
@@ -782,7 +789,7 @@ namespace ARS
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
             // Max steer angle = TRlat × 0.2 base, plus slide, capped at TRlat × 0.5 (base is always 40% of the ceiling).
-            float maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.2f + slideAngle, Handling.LateralTractionCurve * 0.5f);
+            float maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.33f + slideAngle, Handling.LateralTractionCurve * 0.5f);
             // Full countersteer: release the brake outright, immediately, so the tires can roll again.
             // No reset here: the cap recovers on its own at the MaxThrottle rate (ConvertSpeedToPedals).
             if (IsFullCountersteer()) Control.MaxBrake = 0f;
@@ -856,7 +863,7 @@ namespace ARS
             NextApexSpeed4 = 999f;
             ResetRouteProbe();
             BaseBehavior = RacerBaseBehavior.Race;
-            Lap = ARS.IsPointToPoint ? 1 : 0;
+            Lap = 1;
             LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
             CanRegisterNewLap = false;
             _previousNode = -1;
@@ -1667,13 +1674,17 @@ namespace ARS
         {
             UpdateTickData();
 
-            if (ARS.DebugToggles[Options.ShowInputTrail] && !Driver.IsPlayer) SampleInputTrail();
+            if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer) SampleInputTrail();
 
-            if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
+            // Lane aim line + wall stubs (track analysis).
+            if (ARS.DebugToggles[Options.ShowTrackAnalysis] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
             {
                 Vector3 from = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.5f);
                 if (Math.Abs(_targetLane) > 0.01f)
-                    ARS.DrawLine(from, _steerAimPoint, Color.White);
+                {
+                    Color laneColor = _approachHoldsOutside ? Color.Cyan : Color.White;
+                    ARS.DrawLine(from, _steerAimPoint, laneColor);
+                }
 
                 if (LookAheads.TryGetValue(LookAhead.SteerRef, out TrackPoint steerRef) && steerRef != null)
                 {
@@ -1686,9 +1697,10 @@ namespace ARS
                 }
             }
 
-            // The same ProjectAhead the pipeline reads, colored by its off-track input cap.
-            if (ARS.DebugToggles[Options.ShowProjection] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
+            // Projection + input trail (inputs).
+            if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
             {
+                // Projection: 0.5s / 1s / 1.5s kinematic forecast.
                 Vector3 halfSec = ProjectAhead(0.5f);
                 Vector3 fullSec = ProjectAhead(1f);
                 Vector3 extraSec = ProjectAhead(1.5f);
@@ -1701,9 +1713,21 @@ namespace ARS
                 DrawPointMarker(halfSec, 0.4f, halfSecColour);
                 DrawPointMarker(fullSec, 0.6f, fullSecColour);
                 DrawPointMarker(extraSec, 0.6f, extraSecColour);
-            }
 
-            if (ARS.DebugToggles[Options.ShowInputTrail] && !Driver.IsPlayer && ARS.DebugFocusRacer == this) DrawInputTrail();
+                // Steering angle lines: PD target (yellow) vs applied (green).
+                Vector3 carPos = Car.Position + new Vector3(0, 0, 0.5f);
+                Vector3 fwd = Car.ForwardVector;
+                float lineLen = 5f;
+                float pdRad = _debugPdSteer * (float)Math.PI / 180f;
+                float apRad = Control.SteerDegrees * (float)Math.PI / 180f;
+                Vector3 pdDir = new Vector3(fwd.X * (float)Math.Cos(pdRad) - fwd.Y * (float)Math.Sin(pdRad), fwd.X * (float)Math.Sin(pdRad) + fwd.Y * (float)Math.Cos(pdRad), 0f);
+                Vector3 apDir = new Vector3(fwd.X * (float)Math.Cos(apRad) - fwd.Y * (float)Math.Sin(apRad), fwd.X * (float)Math.Sin(apRad) + fwd.Y * (float)Math.Cos(apRad), 0f);
+                ARS.DrawLine(carPos, carPos + pdDir * lineLen, Color.Yellow);
+                ARS.DrawLine(carPos, carPos + apDir * lineLen, Color.Lime);
+
+                // Input trail.
+                DrawInputTrail();
+            }
 
             if (!Driver.IsPlayer)
             {
@@ -2035,7 +2059,7 @@ namespace ARS
                         if (Car.CurrentBlip != null) Car.CurrentBlip.Color = BlipColor.Green;
                     }
 
-                    if (Lap == 1 && !ARS.IsPointToPoint)
+                    if (Lap == 2 && !ARS.IsPointToPoint)
                     {
                         LapStartTime = Game.GameTime;
                     }
