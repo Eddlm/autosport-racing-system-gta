@@ -452,13 +452,15 @@ namespace ARS
             float commandedYawRateDeg = ARS.RadToDeg(speedMps * (float)Math.Tan(ARS.DegToRad(_limitedSteerDeg)) / WheelbaseMeters);
             float yawRateExcessDeg = VehicleData.YawRotationPerSecondDegrees - commandedYawRateDeg;
             float correction = -ARS.SteerD * ARS.SteerTrim * (2f * WheelbaseMeters / aimDistance) * yawRateExcessDeg;
-            // Unwind-only: dropped whenever it would GROW the command's magnitude, so it takes lock away and
-            // never adds any. Stated on the magnitude rather than on matching signs so the neutral case is
-            // covered too: a sign test cannot fire when pSteer is exactly 0, and a nonzero correction there
-            // would add lock out of nothing. This is a direction choice, not a noise guard — the input is a
-            // measured rate. It costs the under-rotation response: a car rotating SLOWER than commanded gets
-            // no help from this term.
-            if (Math.Abs(pSteer + correction) > Math.Abs(pSteer)) correction = 0f;
+            // Unwind-only AND capped at centre: the correction takes lock down toward straight, but never past
+            // it. The previous form DROPPED any correction that would cross centre, which made D's response
+            // non-monotonic — a larger SteerD crossed the cliff more often and therefore did LESS work, which is
+            // why a D of 1.0 felt like 0.5. Clamping instead keeps the response linear in SteerD and saturating
+            // at zero steer, so more D always means more damping.
+            // Testing the product also covers pSteer == 0 exactly, where a sign comparison cannot fire and a
+            // nonzero correction would add lock out of nothing.
+            float reduction = correction * pSteer < 0f ? Math.Min(Math.Abs(correction), Math.Abs(pSteer)) : 0f;
+            correction = -Math.Sign(pSteer) * reduction;
             _debugCorrectionDeg = correction;
             Control.SteerDegrees = pSteer + correction;
 
