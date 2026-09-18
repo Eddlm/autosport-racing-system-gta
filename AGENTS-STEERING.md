@@ -1,6 +1,6 @@
 # Steering control — how this is actually done elsewhere
 
-**Read this when** the request or the bug touches: steering controller, PID, P/I/D, pure pursuit, Stanley, aim point, lookahead, preview, gain, gain scheduling, feedforward, anti-windup, integral clamp, countersteer, opposite lock, oscillation, weaving, "why does it oscillate", "how do other games do it", "is a PID the right tool", steering limiter, steer authority, velocity-vector vs heading reference.
+**Read this when** the request or the bug touches: steering controller, PID, P/I/D, pure pursuit, Stanley, aim point, lookahead, preview, gain, gain scheduling, feedforward, anti-windup, integral clamp, countersteer, opposite lock, oscillation, weaving, "why does it oscillate", "how do other games do it", "is a PID the right tool", **loop order, damping ratio, "why is it stable"**, standing error, straight-line drift, steering limiter, steer authority, velocity-vector vs heading reference.
 
 **Depth lives in `STEERING-CONTROLLER-SURVEY.md`** (36 implementations, 10 documented disagreements, every claim carrying its source URL, inaccessible sources listed rather than papered over). This file is the distillation; the survey is the evidence. ARS comparisons here are mine and go stale — **the code wins**.
 
@@ -11,6 +11,34 @@
 **Three claims below are directly superseded:** the live heading error is **velocity**-referenced (not nose); there is **no PID**, no `SteerI` and no `SteerD`/`SteerTrim` — the only steering knob is `SteerKD`; and the aim point is no longer the only thing that was rescued from the authority change (the whole chain is live). Read the material below as the record of a **rejected** design and its transferable lessons, not as a description of the code.
 
 **The lessons worth carrying forward** (they are why this section is kept): a reference that contains its own correction closes a measurement loop through its own input; a veto that **drops** rather than **clamps** turns a monotonic dial into a cliff; `v·tan(δ)/L` is a fiction once the tyres leave their linear range; and the field's "read yaw rate directly instead of differentiating" advice is sound in principle but **did not beat a well-tuned PD chain in this game**.
+
+## What the restored chain actually is, and where its stability comes from
+
+**The analysis of the live law.** Reduced to the terms that are always on, `ComputeSteering` is:
+
+```
+e_course = −SignedAngle(trackDir@SteerRef, v̂)        // course error — v̂ is the velocity direction
+δ = 1.0·(e_course + recovery + sideBySide) − SteerKD·yawRate + 1.0·laneBias
+laneBias = −(targetLane − lane) × (1.5 or 3 °/m), blended 50/50 with the 0.5 s projection
+δ_final = lerp(δ, δ − 2·SlideAngle, slidePriority)
+```
+
+**The stability is loop *order*, not the setpoint.** The command is exactly one degree of steer per degree of error — the dimensionless normalisation — and the plant's input is a *rate*:
+
+- **P on the course error closes a first-order loop.** Kinematically `χ̇ = (v/L)·δ`, so `ė_course = −(v/L)·e_course + disturbance`. **A first-order loop cannot overshoot**, and its time constant `L/v` comes from the plant rather than from a tuned number — which is why this chain never needed tuning, and why raising P above 1 rings: the gain is no longer the natural 1:1.
+- **P on the cross-track error closes a second-order loop, and the *course* term is what damps it.** With `g` the lane gain in rad/m and `y = targetLane − lane`, `δ = e_course − g·y` with `ẏ ≈ v·e_course` and `ė_course = k·δ` gives `s² − k·s + v·k·g = 0`, so **`ζ = 1/(2√(L·g))` ≈ 1.5 — and independent of speed**, because the speed cancels out of a plant gain that is itself `v/L`. So the two P terms are **not** redundant: the course term supplies the position loop's damping, the lane term supplies its nulling. The 50/50 blend with the 0.5 s projection adds phase lead on top, so the real damping is better than that figure.
+  - **Assumptions, all load-bearing:** linear tyres, small angles, a fixed track tangent. The linear regime ends where the friction circle does — `v ≳ √(L · grip · gravity)` ≈ 6 m/s at grip 2 — so at racing speeds a multi-metre lane error (a corner-entry lane flip) commands steer past what the tyres can deliver and the car turns at its lateral maximum. Above that the linear result yields to the circle, and **the yaw damper, not the proportional terms, is what restrains the loop** — it is doing more work than "damping the heading term" implies.
+- **There is no integrator anywhere, and no curvature feedforward either.** The literature's steady-state problem ("feedback-only must carry a standing error so P settles a permanent offset") is solved here by the **cross-track** P instead: because it acts on **position** rather than on **course**, it nulls a lateral offset that a course-only law would settle at. **The qualifier matters — it does this only while it is engaged**, and engagement is exactly the corner-entry / curvature / rival case the literature's standing error is about; a straight has no lane target to stand off from (see the straight-line regime below).
+- **That is also the most likely reason the restore beat the abandoned PID law**: that law had **no lane term at all**, so its standing line error could only be fought by raising P — exactly the "P 1.0 swerves / P 0.5 is stable but lazy" trade the driver reported. **The lever for "lazy" is the lane gain — not P, and not I** (an I term adds 90° of phase lag and would manufacture the ring it was meant to remove). No integral also means **no windup**: `ApplySteerLimits` caps a command that nothing is integrating against, so the anti-windup item below is moot while there is no integral.
+
+**Two properties of the reference that are usually mis-stated:**
+
+1. **It is the velocity vector, so this is a *course* error** (`carForward = Car.Velocity.Normalized`) — the car is asked to point its *velocity* at the track, not its nose. A body rotated hard against its own velocity reads as perfectly tracked.
+2. **It is previewed, and the preview is a constant *time*.** `SteerRef` sits `speed/grip × leadScale` metres ahead; divide by speed and the distance cancels: **preview time = `leadScale/grip` ≈ 0.5 s at grip 2** (0.8 s at grip 1, 0.4 s at grip 3). The *distance* grows with speed exactly as the field prescribes, while the *time* is held roughly constant and grip-derived — which is the quantity the ForzaETH delay-margin argument actually constrains (`ω_n = √2·v/L_d`). **So the grip-scaled preview is not in tension with that argument**: it is still `L_d` growing with speed, with a compensating grip term. ARS's preview remains the only grip-scaled one in the corpus; it is not, on this reading, unjustified.
+
+**The regime the "it aligns to the track direction" intuition describes — and where it stops being true. Verified in the code.** `hasActiveGuidance` needs a non-zero `targetLane` or a constrained rival wall, and the relaxed walls sit *exactly* at `±trackBound`; `ComputeHighSpeedLane` returns 0 unless the `1.2 × speed`-metre chord subtends >5°. So on a straight with no rivals **`laneBiasDeg` is exactly 0**, and the entire controller is `e_course − SteerKD·yawRate`: align to the track direction, damp the yaw rate. That is a fair description of stable straight-line running — but it is **not** a position law: a car holding a 2 m offset on a straight has the same heading error as one on the line, so **the offset persists untouched**. The line is re-acquired only where it is tested — the 5°-deadband high-speed lane at corner entry, off-track recovery past the safe edge, or a rival wall. **Straight-line smoothness therefore does not exercise the lane term; do not read it as evidence that the lane gain is right.** It is also the structural reason the lane systems can be a hard switch with no lerp: at corner entry they are re-engaging a loop that was open.
+
+**One body-yaw feedback path, deliberately weaker than the course path.** The only term reading body rotation is `− SteerKD × yawRate` (0.45), against course feedback at 1.0. The mode that rings — body yaw, underdamped through tyre stiffness — is fed back at under half the authority of the mode that does not; a nose-referenced law at the same gain would feed it at 1.0. That is the structural argument for the velocity reference, beyond its slide-blindness. **The half of the job still open:** the damper gain is flat while the loop's own time constant is `L/v`, so one `SteerKD` is a different damping ratio at every speed. The field's fix (scale the yaw term with speed) is ranked item 1 below.
 
 ## The dominant architecture is feedforward + feedback, not a lone PID
 
@@ -77,7 +105,7 @@ TORCS `bt` and `damned` both floor the preview against `oldlookahead − v·dt` 
 
 ## Anti-windup is mandatory when the actuator saturates — and ARS's steering saturates
 
-Only **five** surveyed sources carry an integral term, and **four of them guard it**. ARS's is unguarded (unbounded, integrating unconditionally) while `ApplySteerLimits` caps the command to a small allowance at speed — so enabling I winds the integrator against a cap it cannot overcome.
+Only **five** surveyed sources carry an integral term, and **four of them guard it**. **ARS has none today** — the live chain is P and D only — so read this as the prerequisite for turning an I on, not as a description of the code. (The abandoned PID law's integrator *was* unguarded: unbounded, integrating unconditionally, while `ApplySteerLimits` caps the command to a small allowance at speed — so enabling it wound the integrator against a cap it could not overcome.)
 
 Documented remedies, all cheap: **clamp** the integral (Ziggy: `cte_int` ±3; TUM: ±1325 on both PIDs) and **suppress integration while the actuator is saturated** (Ziggy's steer-clip anti-windup bleeds the integrator when the wheel is pinned at full lock and still winding). Game AI Pro ch.40 names both and adds a third: a **leaky rolling integral** — each frame reduce the integral by `(1−T)%` and add `T%` of the current error — which needs no saturation signal and self-heals. ARS already has `_steerLimitedThisFrame` for the saturation gate.
 
@@ -112,7 +140,7 @@ Game AI Pro ch.40 warns about the alternative in the same breath as recommending
 
 **ARS runs two layers, and how they relate depends entirely on which reference is selected:**
 
-- The aim-error PID in `ComputeSteering` → the line, from whichever reference is active.
+- The live course-error P chain in `ComputeSteering` → the line, from whichever reference is active.
 - The **slide countersteer blend** → **slip**, via `VehicleData.SlideAngle`, ramping in against TRlat and **overriding** the path command at full priority. It is the only consumer of slip in the entire steering path.
 
 With the **velocity** reference the two layers are **complementary** — course vs slip, the field's shape, and the honest justification for the blend getting the last word.
@@ -153,7 +181,7 @@ Ziggy's headline diagnosis is the cautionary tale: it burned a long campaign try
 
 ## Run the integral in distance, not in time
 
-"The integrator AND the derivative gain need to be scaled by the speed. Normally the PID updates every millisecond but what you really want is to update the PID as a function of distance travelled or rate of speed." Integrating `error × dt` makes the integral speed-dependent for free; `error × ds` removes that. ARS already adopted time-sampled discipline for the Gs calculator; the steering PID has the same argument available in distance terms.
+"The integrator AND the derivative gain need to be scaled by the speed. Normally the PID updates every millisecond but what you really want is to update the PID as a function of distance travelled or rate of speed." Integrating `error × dt` makes the integral speed-dependent for free; `error × ds` removes that. ARS already adopted time-sampled discipline for the Gs calculator; the steering loop has the same argument available in distance terms — **moot today, since there is no integral to sample** (see the analysis above), and live again the moment one is added. Note the *derivative* half applies right now: the live yaw damper is flat while the loop's time constant is `L/v`.
 
 ## Reading constants out of this literature
 
@@ -163,12 +191,12 @@ Ziggy's headline diagnosis is the cautionary tale: it burned a long campaign try
 
 ## Where ARS sits, and the ranked list
 
-ARS runs **pure pursuit on course-over-ground with the geometric gain computed in code**, a flat trim knob, a yaw-rate-shaped D term, and a saturating countersteer-exempt limit. That is the dominant architecture with two unusual choices (a velocity-referenced error; grip in the preview) and one missing piece (anti-windup). Ranked by expected payoff:
+ARS runs **a unity-gain course-error P** (velocity-referenced), **a flat degrees-per-metre cross-track P** on the lane error blended with the 0.5 s projection, **a flat-gain yaw-rate damper**, and a saturating countersteer-exempt limit. No integral, no curvature feedforward. That is the field's feedforward-plus-feedback *intent* reached by a different route — the cross-track P does the standing-error job the curvature feedforward usually does — with two unusual choices (a velocity-referenced **course** error; grip in the preview) and one open scheduling defect (the yaw damper is not speed-scaled). Ranked by expected payoff:
 
-1. **Move the damping onto measured yaw rate**, scaled by speed, instead of differentiating the aim error. Fixes the noise fragility *and* the `D·v/L` speed mis-scheduling together. This supersedes the "damping ratio" framing — it is the same insight, with the field's standard implementation.
-2. **Clamp and gate the integral** before I is ever turned up. Prefer clamp + saturation gate, or Game AI Pro ch.40's leaky rolling integral.
+1. **Scale the yaw-rate damping with speed.** The signal half is already done: the live damper reads measured yaw rate directly — no numerical differentiation, no aim-point swing (see the analysis above). What remains is the *scheduling*: a flat `SteerKD` against a loop whose time constant is `L/v` is a different damping ratio at every speed, so one gain over-damps slowly and under-damps fast. This supersedes the "damping ratio" framing — it is the same insight, with the field's standard implementation.
+2. **Clamp and gate an integral** before I is ever turned up — **a precondition, not a task**: there is no integral to clamp today. Prefer clamp + saturation gate, or Game AI Pro ch.40's leaky rolling integral.
 3. **Rate-limit `targetLane`** so a hard lane switch cannot step the aim point — the TORCS preview-rate guard, applied to the lateral target. Fixes the D-spike hazard for P too.
-4. **A/B the grip-scaled preview** against a speed-only one, on cross-track RMS and steer-reversal count. The survey's highest-value open experiment.
-5. **Add the curvature feedforward** (`wheelbase × curvature`) if a standing aim error shows up as a permanent lane offset.
+4. **A/B the grip-scaled preview** against a speed-only one, on cross-track RMS and steer-reversal count. The survey's highest-value open experiment, and the analysis above sharpens what it actually tests: since `speed/grip × leadScale` is a constant *time* `leadScale/grip`, this is not "distance vs speed" — in metres both are speed-affine — but **whether preview *time* should fall with grip**. Today it does, mildly (≈0.8 / 0.5 / 0.4 s at grip 1 / 2 / 3); a flat `leadScale` makes it `1/grip` (sharper), and a truly grip-affine `leadScale` would hold it constant (the delay-margin reading). Those are three different hypotheses and only one is implemented.
+5. **Add the curvature feedforward** (`wheelbase × curvature`) if a standing aim error shows up as a permanent lane offset. **Partly answered already**: while engaged, the live cross-track P does null an offset, because it acts on position rather than course — so the job the feedforward exists to do is currently done by the lane term. Revisit only if the lane term's authority is deliberately reduced, or if a *straight-line* standing offset ever matters (today it is uncontrolled there).
 6. **Sharpen the slide layer's input.** The blend is live again, so this is no longer "reinstate slide handling" but "give it a better signal": TUM gates on the **front/rear slip-angle imbalance** (`|α_r| > |α_f|` — the actual definition of oversteer) while ARS gates on the magnitude of a single body-level `SlideAngle` against TRlat, which cannot tell a rear-axle slide from a front-axle one. Per-wheel slip is available in the handling struct's wheel data if it is worth the plumbing.
-7. Consider a distance-based integral, and a lookahead fallback (PX4: target the closest point on the path when the lateral error exceeds the lookahead) plus error-adaptive aggression (JPL/Kelly: let the gain grow with lateral error) as the honest replacement for the disabled off-track recovery term.
+7. Consider a distance-based integral, a lookahead fallback (PX4: target the closest point on the path when the lateral error exceeds the lookahead) and error-adaptive aggression (JPL/Kelly: let the gain grow with lateral error) — the last two as honest upgrades to the **live** off-track recovery term, which is a severity-scaled push-back once past the safe edge, not a lookahead fallback.
