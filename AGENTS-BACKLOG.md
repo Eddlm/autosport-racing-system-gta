@@ -86,7 +86,7 @@ Deferred findings to check out when touched again:
 
 ## Steering lookahead naming — two references, only one of them named
 
-**The two things "the steering lookahead" can mean.** `SteerLookaheadMinMeters` floors `LookAhead.SteerRef`, the **grip-scaled** reference (`speed / grip` metres, so *less grip → farther ahead*) that feeds the heading-error term, the steer aim point and the `ApplyRivalWalls` stubs. The **high-speed lane's** own sample distance is a different quantity with a different unit — a seconds-of-travel chord — and it is an **inline literal inside `ComputeHighSpeedLane`**, with nothing but the method to explain it.
+**The two things "the steering lookahead" can mean.** `SteerLookaheadMinMeters` floors `LookAhead.SteerRef`, the **grip-scaled** reference (`speed / grip` metres, so *less grip → farther ahead*) that feeds the heading-error direction, the **track half-width** every lane bound / wall clamp / recovery edge is measured against, and the debug aim point + `ApplyRivalWalls` stubs. The **high-speed lane's** own sample distance is a different quantity with a different unit — a seconds-of-travel chord — and it is an **inline literal inside `ComputeHighSpeedLane`**, with nothing but the method to explain it.
 
 **Why it bites.** The constant that *reads* like a general steering lookahead is not the one doing the lane's curvature detection, and the two are tuned independently in different units (metres scaled by grip vs seconds scaled by speed). The user hit exactly this: asking what the named steering-lookahead factor was, having meant `SteerRef` — the answer was the lane chord's own literal. Any future tuning pass will make the same wrong assumption.
 
