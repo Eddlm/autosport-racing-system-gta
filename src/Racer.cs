@@ -471,7 +471,7 @@ namespace ARS
             // --- PD assembly: trajectory terms + lane bias + slide priority blend ---
 
             const float steerKP = 1.0f;
-            float steerKD = ARS.SteerKD;
+            float steerKD = SteerDamping;
             float trajectorySteer = (steerKP * (headingErrorDeg + recoveryDeg + sideBySideHeadingDeg)) - (steerKD * VehicleData.YawRotationPerSecondDegrees);
             Control.SteerDegrees = trajectorySteer + (steerKP * laneBiasDeg);
 
@@ -764,6 +764,10 @@ namespace ARS
         const float CountersteerMinSpeedMph = 10f;
         const float SteerSlewRate = 180f;                // fixed steering slew rate (degrees/second)
         const float SteerSlewRateCountersteer = 360f;    // doubled when countersteering (steer opposes yaw)
+        // Yaw-rate damping is grip-normalised: the menu scale is divided by the car's base grip, so the
+        // damping ratio can hold across the fleet. The floor only guards a degenerate grip.
+        const float SteerDampingGripFloor = 1f;
+        float SteerDamping => ARS.SteerDampingScale / Math.Max(VehicleData.BaseMechanicalGrip, SteerDampingGripFloor);
         // Game's player steering limiter (Automobile.cpp): speed-based reduction.
         const float PlayerSpeedSteerFwdThreshold = 0.001f;   // effectively always on
         // Steer reduction multiplier: 0.04 at throttle 0.5, 0.08 at throttle 0.99.

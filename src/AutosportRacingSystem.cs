@@ -151,7 +151,7 @@ namespace ARS
         // On = route curvature limits speed (sweeping corners); off = the corner braking plan alone.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
-        public static float SteerKD = 0.45f;
+        public static float SteerDampingScale = 1f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -985,14 +985,14 @@ namespace ARS
             };
             aiMenu.Add(brakeLearningItem);
 
-            string[] steerKDOptions = { "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80" };
-            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping in the steering PD controller. Higher = more resistance to rotation, less oscillation. 0.45 is the tuned default.", steerKDOptions);
+            string[] steerKDOptions = { "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00" };
+            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping as a multiple of the grip-normalised baseline (baseline = 1 / car grip). 1.00 reproduces the tuned feel on a 2.2G car; lower is crisper, higher is calmer.", steerKDOptions);
             steerKDItem.ItemChanged += (sender, args) =>
             {
-                SteerKD = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerKD", steerKDItem.Items[args.Index]);
+                SteerDampingScale = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerDampingScale", steerKDItem.Items[args.Index]);
             };
-            steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerKD", SteerKD).ToString(CultureInfo.InvariantCulture)));
+            steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale).ToString("0.00", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerKDItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
@@ -2981,7 +2981,7 @@ namespace ARS
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
-            SteerKD = SettingsMenuStore.GetFloat("SteerKD", SteerKD);
+            SteerDampingScale = SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

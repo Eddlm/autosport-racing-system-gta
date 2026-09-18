@@ -145,7 +145,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
-            settings.Specs.Add(new KeySpec("SteerKD", "0.45", Kind.Number, new[] { "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80" }));
+            settings.Specs.Add(new KeySpec("SteerDampingScale", "1.00", Kind.Number, new[] { "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00" }));
             settings.Specs.Add(new KeySpec("CrestEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("Rubberbanding", "0", Kind.Number, new[] { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" }));
