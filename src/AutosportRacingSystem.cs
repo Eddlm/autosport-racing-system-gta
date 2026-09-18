@@ -155,7 +155,8 @@ namespace ARS
         // I = steer degrees per accumulated degree; D = steer degrees per deg/s² of error rate.
         public static float SteerTrim = 1.0f;   // dimensionless trim on the pure-pursuit geometry; 1.0 = the geometry itself
         public static float SteerI = 0f;
-        public static float SteerD = 0.001f;
+        public static float SteerD = 0.10f;
+        public static float SlideCountersteer = 0.50f;   // multiplier on SlideAngle for the countersteer target; 1.0 points the wheels along the velocity vector
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1014,8 +1015,11 @@ namespace ARS
             string[] steerIOptions = { "0.00", "0.01", "0.02", "0.03", "0.04", "0.05", "0.06", "0.07", "0.08", "0.09", "0.10", "0.11", "0.12", "0.13", "0.14", "0.15", "0.16", "0.17", "0.18", "0.19", "0.20" };
             AddSteerPidItem("Steer I", "Steer I: slow trim from sustained aim error, in steer degrees per accumulated degree-second. Unclamped, so it keeps winding up while the error persists.", steerIOptions, "SteerI", SteerI, v => SteerI = v);
 
-            string[] steerDOptions = { "0.000", "0.001", "0.002", "0.003", "0.005", "0.007", "0.010", "0.015", "0.020", "0.030", "0.040", "0.050", "0.070", "0.100" };
+            string[] steerDOptions = { "0.00", "0.05", "0.10", "0.15", "0.20", "0.25", "0.30" };
             AddSteerPidItem("Steer D", "Steer D: steer degrees per deg/s of aim-error change. Because the error rides the velocity vector, its rate is roughly the negative of the car's yaw rate, so this damps the loop.", steerDOptions, "SteerD", SteerD, v => SteerD = v);
+
+            string[] slideCountersteerOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
+            AddSteerPidItem("Slide Countersteer", "Multiplier on the slide angle for the countersteer target. 1.00 points the front wheels along the velocity vector, which neutralises the slide; above that it over-corrects and rotates the nose back. 0.00 disables the blend.", slideCountersteerOptions, "SlideCountersteer", SlideCountersteer, v => SlideCountersteer = v);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -3006,6 +3010,7 @@ namespace ARS
             SteerTrim = SettingsMenuStore.GetFloat("SteerTrim", SteerTrim);
             SteerI = SettingsMenuStore.GetFloat("SteerI", SteerI);
             SteerD = SettingsMenuStore.GetFloat("SteerD", SteerD);
+            SlideCountersteer = SettingsMenuStore.GetFloat("SlideCountersteer", SlideCountersteer);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

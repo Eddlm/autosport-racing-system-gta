@@ -23,7 +23,7 @@ delta = delta_feedforward(curvature of the line ahead)  +  delta_feedback(PID on
 
 Pure pursuit is **itself a proportional controller**: the [Sensors 2025 pure-pursuit paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC11820862/) gives the gain as `2/l_d²` on lateral error (so `2L/l_d²` in steering-angle terms), equivalently `(2L/l_d)·α` on the aim angle. The [autonomous-driving-book](https://github.com/YangyangFu/autonomous-driving-book/blob/main/book/3-trajectory-tracking/lateral-control/pure-pursuit.md) notes it "can be tuned at different speeds by creating a relationship between the speed and the lookahead distance."
 
-**ARS now computes this gain from geometry** (`atan(2 × wheelbase × sin(error) / aimDistance)`, trimmed by `SteerTrim`), which is the unified form — pure pursuit proper is the same law with the aim point placed by a look-ahead circle.
+**ARS now computes this gain from geometry** (`atan(2 × wheelbase × sin(error) / aimDistance)`, trimmed by `SteerTrim`), which is the unified form — pure pursuit proper is the same law with the aim point placed by a look-ahead circle. `sin` rather than the raw angle is deliberate: the demand saturates as the aim point swings abeam instead of asking for full lock. **Knobs and units:** the menu's *Steer P* is `SteerTrim`, a **dimensionless trim on the geometry** (1.0 = the geometry itself), and the gain still schedules itself because the aim distance is `speed / grip × leadScale`; **`SteerI` and `SteerD` run on the angle error, not on the geometry.** Two naming traps to keep: the ini key is `SteerTrim`, deliberately *not* `SteerP`, because changing a raw gain into a trim meant a stale value had to be retired — the repair pass **snaps an in-list numeric key to the nearest offer** rather than resetting it, so a stored 0.25 would have become a permanent 0.2 trim (~80% too little steer) with no visible error. And **every declared default must be a member of its own domain list**, or the repair rewrites it on the next launch.
 
 ## What is universal is *preview* scheduling, not gain scheduling
 
@@ -84,19 +84,36 @@ Game AI Pro ch.40 warns about the alternative in the same breath as recommending
 - Our D differentiates the aim error, and that error is derived from the velocity vector — noisy — with a raw per-tick divide. The field's answer is not to smooth it but to **read yaw rate directly**. USR's cheapest trick is to fold the damping into the aim *bearing* rather than add a term: `targetAngle − (yaw + yaw_rate/15)`. ARS's D is mathematically a yaw-rate term in disguise (`ė ≈ −ω`, so the D term is `−D(v/L)δ`), so writing it explicitly keeps the behaviour and drops the numerical differentiation **and** the speed mis-scheduling at once — a fixed D over-damps at speed and under-damps at walking pace, because its real coefficient is `D·v/L`.
 - **ARS's disabled inner yaw loop was the field's answer, badly implemented.** The *shape* (a yaw-rate error term) is what TORCS berniw has shipped since 2002; what was wrong was the expected-yaw reference (derived from applied steer, and hence meaningless once the car slides), not the choice of signal.
 
-## Course error and slip angle are different states — do not unify them
+## Course error and slip angle are different states — and which the loop sees depends on its reference vector
 
-**The aim-error PID is a *course* controller.** Its error is the angle between where the car is **travelling** and where it **wants to go**. It is blind to how the car is *oriented* relative to its own motion:
+**This is the most error-prone point in the steering design, so always state it with the reference attached, never as a general property.** **ARS uses the body-forward reference; the velocity variant was A/B'd in game and dropped** — both are documented here because the difference between them is the durable insight. With `θ` the direction to the aim point, `ψ` the heading, `v` the velocity heading and `SlideAngle = ψ − v`:
 
-- A car pointed 20° off while tracking straight produces a course error, and the PID corrects it by steering. Ordinary.
-- A car **sliding with its velocity vector still pointing at the aim point produces zero error** — the PID sees a perfectly tracked line while the car is sideways.
+| reference | error | on a slide |
+|---|---|---|
+| **velocity** (course-over-ground) | `e_vel = θ − v` | a **course** error only. For a pure body rotation with the course intact, `e_vel = 0` — the car reads as *perfectly tracked while it is sideways*, and only the blend countersteers. |
+| **body forward** (textbook pure pursuit) | `e_nose = θ − ψ` | the slide **directly**, since `e_nose = e_vel − SlideAngle`. A slide *subtracts* from the error, so the law **countersteers on its own** — the right sign, but see the magnitude trap below. |
 
-**Slip angle is a separate state and the PID never reads it.** Oversteer (rotating more than the steering implies) and sliding (the velocity vector diverging from the body) are different quantities, and a controller on course error addresses neither directly — only the course deviation they eventually cause.
+- A car pointed 20° off while tracking straight produces a course error, and **either** reference corrects it by steering. Ordinary.
+- A car **sliding with its velocity vector still pointing at the aim point**: the velocity reference reads zero error and does nothing; the nose reference reads the full slip as error and counters it. That is *why* 13 of ~20 surveyed implementations are nose-referenced, and why nose-referenced controllers so often need no separate slide term at all.
 
-**ARS therefore runs two layers reading two different signals, which is the field's shape rather than an oddity:**
+**Neither reference *reads* slip — `e_nose` merely contains it.** The blend via `VehicleData.SlideAngle` remains the only explicit consumer of that state.
 
-- The aim-error PID in `ComputeSteering` → **course**. The only authority on where the car goes.
+**ARS runs two layers, and how they relate depends entirely on which reference is selected:**
+
+- The aim-error PID in `ComputeSteering` → the line, from whichever reference is active.
 - The **slide countersteer blend** → **slip**, via `VehicleData.SlideAngle`, ramping in against TRlat and **overriding** the PID at full priority. It is the only consumer of slip in the entire steering path.
+
+With the **velocity** reference the two layers are **complementary** — course vs slip, the field's shape, and the honest justification for the blend getting the last word.
+
+### The magnitude trap: the sign is right, the gain is ~5× too small
+
+**Do not conclude from the table above that a slip-containing error gives you countersteer worth having.** That error passes through the pure-pursuit gain `2L/aimDistance` ≈ **0.225° of steer per degree of error** at 30 m/s, so a genuine 10° slide yields `atan(2 × 2.7 × sin 10° / 24)` ≈ **2.2° of opposite lock** — right sign, invisible magnitude, well inside the slew and the limiter. The velocity reference has the same gain and the *wrong* sign (in a developed slide it commands *into* the corner).
+
+**And in a corner the nose-referenced error does not even reach zero.** The aim point sits at the chord angle `c ≈ ld/(2R)` off the tangent (~6.9° at 30 m/s in a 100 m corner, more in tight ones) while the nose sits at the slip angle β, so `e_nose = c − β` stays **positive** until the slide exceeds the chord angle. Below that the nose reference merely **unwinds** steer as the body rotates — and that is self-reinforcing: less steer means less yaw, which means a *smaller* β, which keeps `|SlideAngle|` under the blend's ramp onset (~`0.3 × TRlat`) and leaves the blend contributing nothing.
+
+**So the blend is not redundant with the nose reference — it is the same signal at roughly 5× the gain**, and it is why the reference choice barely affects slide recovery at all: at a 10° slide the PID offers ~2.2° and the blend ~6.2°, and at full ramp the blend *replaces* the PID outright. **The reference choice is a line-tracking decision, not a slide-handling one.** Making the PID a real slide participant would need the slip term entering with a gain near 1, not routed through `2L/ld`. Note also that **ARS has no understeer detector or sideslip model anywhere** — the blend's bare `|SlideAngle|` magnitude gate is the only thing in the steering path that looks at slip, so nothing "classifies" a car as understeering; it merely fails to trip the gate.
+
+**The countersteer magnitude has a physical neutral value, and it is 1.** A steer angle equal to the slip angle points the front wheels along the **velocity vector**, which removes the front tyres' contribution to the rotation — that *neutralises* a slide. Any multiple above 1 points the wheels *past* the velocity vector and actively rotates the nose back, which is a deliberate over-correction rather than a stabilisation. ARS exposes it as the `SlideCountersteer` knob for exactly this reason — it is a taste dial around a derived value, not an arbitrary gain. Note also that nothing else limits this path: `ApplySteerLimits` exempts countersteer, so the knob is the only bound on it.
 
 That is TUM's architecture — a path-tracking controller with a slip-gated countersteer layer on top (`δ += k·(α_f − α_r)`, gated on `|α_r| > |α_f|`). **The survey mis-characterised ARS as folding the slide into the path error; it does not.** The two terms are not competing for the same job, so their interaction is a *priority* choice (save the car first), not redundancy — which is the honest justification for the blend getting the last word.
 

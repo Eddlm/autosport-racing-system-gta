@@ -549,17 +549,19 @@ namespace ARS
             }
 
             // --- Aim-error PID: the sole steering authority ---
-            // Error is the signed horizontal angle from where the car is ACTUALLY travelling (the
-            // velocity direction, so a slide lands in this error directly) to where it is supposed to
-            // go (car → aim point). Positive = aim point left of travel = steer left, the same sign as
-            // Control.SteerDegrees. Below walking pace the velocity vector is mostly noise, so body
-            // forward stands in and the loop degrades to nose pursuit. Both vectors are flattened to
-            // the horizontal plane: SignedAngle does not project, so on a grade the pitch difference
-            // between them would read as a standing steering error.
+            // Error is the signed horizontal angle from the car's body-forward (nose) vector to where it
+            // is supposed to go (car → aim point). Positive = aim point left of the nose = steer left, the
+            // same sign as Control.SteerDegrees. Both vectors are flattened to the horizontal plane:
+            // SignedAngle does not project, so on a grade the pitch difference would read as a standing
+            // steering error.
+            // This is textbook pure pursuit. Referencing the velocity vector instead (course-over-ground)
+            // was A/B'd and dropped: it is blind to slip for a pure body rotation — e_vel reads 0 while the
+            // car is sideways — and it drove the line worse. The nose reference carries slip in the error
+            // (e_nose = e_vel − SlideAngle), but only at the geometry gain, so it is the slide blend below
+            // that does the real countersteering, not this loop.
             Vector3 toAim = _steerAimPoint - Car.Position;
             Vector3 aimFlat = new Vector3(toAim.X, toAim.Y, 0f);
-            Vector3 travel = ARS.GetForwardSpeed(Car) > 3f ? Car.Velocity : bodyForward;
-            Vector3 travelFlat = new Vector3(travel.X, travel.Y, 0f);
+            Vector3 travelFlat = new Vector3(bodyForward.X, bodyForward.Y, 0f);
             float aimErrorDeg = 0f;
             if (aimFlat.LengthSquared() > 0.01f && travelFlat.LengthSquared() > 0.01f)
                 aimErrorDeg = Vector3.SignedAngle(travelFlat, aimFlat, Vector3.WorldUp);
@@ -583,11 +585,11 @@ namespace ARS
             // --- Slide countersteer blend: the last word on steering, and it overrides the PID. ---
             // It must sit AFTER the aim-error PID, because the PID assigns Control.SteerDegrees outright
             // — a blend placed before it is silently discarded. The ramp eases it in with slide angle and
-            // at full priority the target replaces the PID's command rather than trimming it. The 2x on
-            // the slide angle is deliberate (the correction term only, not the ramp).
-            // NOTE: trajectorySteer is 0 while the legacy outer chain stays disabled, so today the target
-            // is pure -2 x SlideAngle with no forward-intent baseline. Re-enabling the outer loop puts one
-            // back and makes this term correspondingly gentler.
+            // at full priority the target replaces the PID's command rather than trimming it.
+            // SlideCountersteer scales the slide angle: 1.0 points the wheels along the velocity vector,
+            // which neutralises the slide; above that it over-corrects and rotates the nose back.
+            // NOTE: trajectorySteer is 0 while the legacy outer chain stays disabled, so the target carries
+            // no forward-intent baseline. Re-enabling the outer loop puts one back and softens this term.
             if (Handling.LateralTractionCurve > 1f)
             {
                 float forwardMs = ARS.GetForwardSpeed(Car);
@@ -596,7 +598,7 @@ namespace ARS
                     float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * CountersteerBlendStartFraction, Handling.LateralTractionCurve * CountersteerFullFraction, 0f, 1f, true);
                     if (slidePriority > 0f)
                     {
-                        float countersteerTarget = trajectorySteer - (2f * VehicleData.SlideAngle);
+                        float countersteerTarget = trajectorySteer - (ARS.SlideCountersteer * VehicleData.SlideAngle);
                         Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
                     }
                 }
