@@ -12,10 +12,11 @@ namespace ARS
     public class VehicleState
     {
         public const int AccelWindow = 10;
-        public Vector3[] AccelerationVector = new Vector3[AccelWindow];
+        public const int AccelIntervalMs = 20;
+        public Vector3[] AccelSamples = new Vector3[AccelWindow];
         public int AccelHead = 0;
         public int AccelCount = 0;
-        public Vector3 AccelSum = Vector3.Zero;
+        public int LastAccelSampleTime = 0;
         public Vector3 SpeedVectorGlobal = Vector3.Zero;
         public Vector3 SpeedVectorLocal = Vector3.Zero;
         public int WheelBase = 2;
@@ -31,7 +32,16 @@ namespace ARS
         public float OverspeedExcessGs;
         public bool OverspeedThisTick;
 
-        public Vector3 AverageAcceleration => AccelCount > 0 ? AccelSum / AccelCount : Vector3.Zero;
+        public Vector3 AverageAcceleration
+        {
+            get
+            {
+                if (AccelCount == 0) return Vector3.Zero;
+                Vector3 sum = Vector3.Zero;
+                for (int i = 0; i < AccelCount; i++) sum += AccelSamples[i];
+                return sum / AccelCount;
+            }
+        }
 
         public float GetLongitudinalGs(Vector3 forward)
         {

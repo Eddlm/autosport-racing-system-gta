@@ -897,6 +897,16 @@ namespace ARS
             combinedInput = ApplyThrottleCap(combinedInput);
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
 
+            // Rubber-band torque boost: gate on the raw target (pre-slew) so the boost
+            // doesn't fire during the throttle-to-brake transition where Control.Throttle
+            // slews down slowly and could still read >= 1.0 while the car is already braking.
+            bool rbFreeZonePedal = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
+            if (ARS.RubberbandingPct > 0 && ARS.CurrentRubberbandMode == RubberbandMode.Artificial && newThrottle >= 1.00f && !rbFreeZonePedal)
+            {
+                float rbTorque = ComputeRubberBandFactor();
+                if (rbTorque > 1f) newThrottle *= rbTorque;
+            }
+
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
 
@@ -1104,10 +1114,7 @@ namespace ARS
             else if (Brain.Corner != null) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
 
             // Route speed from the triple-check circumradius window.
-            // Route speed from the triple-check circumradius window; the AI toggle can drop it entirely.
-            float followTrackSpd = ARS.RouteSpeedLimit
-                ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint)
-                : 999f;
+            float followTrackSpd = RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint);
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
@@ -1225,9 +1232,9 @@ namespace ARS
                 followTrackSpd += chicaneBoost;
             }
 
-            Brain.CurrentIntention.Speed = Math.Min(cornerSpd, followTrackSpd) + ARS.MphToMps(ARS.SpeedOffsetMph);
+            Brain.CurrentIntention.Speed = Math.Min(cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph), followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph));
             // Physics-limited cornering speed for the current high-speed curve radius.
-            Brain.CurrentIntention.CorneringSpeedLimit = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Brain.CurrentPerception.HighSpeedCurveRadius) + ARS.MphToMps(ARS.SpeedOffsetMph);
+            Brain.CurrentIntention.CorneringSpeedLimit = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Brain.CurrentPerception.HighSpeedCurveRadius) + ARS.MphToMps(ARS.CornerOffsetMph);
 
             // Yield: cap throttle to 0.5 to stay behind.
             if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
@@ -1250,8 +1257,30 @@ namespace ARS
                 }
             }
 
+            // Rubber-banding: slow leaders via lower speed target (laggard boost is in ConvertSpeedToPedals).
+            // Natural mode skips the penalty when any rival is nearby — lets them race without interference.
+            // First 500 nodes (~500 m) of the first lap are rubberband-free.
+            float rbFactor = ComputeRubberBandFactor();
+            bool rbNearbyRival = Brain.Rivals.Any(r => r.RivalRacer != null && r.Distance < 100f);
+            bool rbFreeZone = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
+            if (rbFactor < 1f && !rbFreeZone && !(ARS.CurrentRubberbandMode == RubberbandMode.Natural && rbNearbyRival))
+                Brain.CurrentIntention.Speed *= rbFactor;
+
             // Temporarily neutralized: keep the acceleration cap at 1 until rear-end
             // avoidance has a dedicated speed-control implementation.
+        }
+
+        // Rubber-band factor: <1 for leaders (penalty), >1 for laggards (boost), 1 at center.
+        float ComputeRubberBandFactor()
+        {
+            if (ARS.RubberbandingPct <= 0 || RacePosition <= 0) return 1f;
+            int fieldSize = ARS.Racers.Count;
+            int centerPos = (fieldSize + 1) / 2;
+            Racer playerRacer = ARS.Racers.FirstOrDefault(r => r.Car.Exists() && r.Car == Game.Player.Character.CurrentVehicle);
+            if (playerRacer != null) centerPos = playerRacer.RacePosition;
+            int maxDistance = Math.Max(Math.Max(centerPos - 1, fieldSize - centerPos), 1);
+            float norm = (RacePosition - centerPos) / (float)maxDistance;
+            return 1f + norm * 0.33f * (ARS.RubberbandingPct * 0.01f);
         }
 
         const float SlopeGripLossK = 3f;
@@ -1606,13 +1635,20 @@ namespace ARS
         {
             Vector3 cSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
 
-            Vector3 accel = (cSpeed - _lastSpeed) / Game.LastFrameTime;
-            VehicleData.AccelSum += accel - VehicleData.AccelerationVector[VehicleData.AccelHead];
-            VehicleData.AccelerationVector[VehicleData.AccelHead] = accel;
-            VehicleData.AccelHead = (VehicleData.AccelHead + 1) % VehicleState.AccelWindow;
-            if (VehicleData.AccelCount < VehicleState.AccelWindow) VehicleData.AccelCount++;
+            // Sample acceleration at a fixed 20ms interval (10 samples × 20ms = 200ms window).
+            int now = Game.GameTime;
+            int elapsed = now - VehicleData.LastAccelSampleTime;
+            if (elapsed >= VehicleState.AccelIntervalMs)
+            {
+                VehicleData.LastAccelSampleTime = now;
+                float dt = Math.Max(elapsed * 0.001f, 0.001f);
+                Vector3 accel = (cSpeed - _lastSpeed) / dt;
+                VehicleData.AccelSamples[VehicleData.AccelHead] = accel;
+                VehicleData.AccelHead = (VehicleData.AccelHead + 1) % VehicleState.AccelWindow;
+                if (VehicleData.AccelCount < VehicleState.AccelWindow) VehicleData.AccelCount++;
+                _lastSpeed = cSpeed;
+            }
 
-            _lastSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
             VehicleData.SpeedVectorGlobal = cSpeed;
             VehicleData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
             Brain.CurrentPerception.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);

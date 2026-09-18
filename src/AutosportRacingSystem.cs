@@ -42,6 +42,11 @@ namespace ARS
         Absolute, RelativeToMine,
     }
 
+    public enum RubberbandMode
+    {
+        Natural, Artificial,
+    }
+
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
@@ -122,8 +127,6 @@ namespace ARS
 
         public static int RaceReward = 0;
 
-        public static ScriptSettings SettingsFile;
-        public static ScriptSettings DevConfigFile;
         // One ini per menu (Settings\Menu-*.ini), created in LoadSettings.
         public static MenuSettings RaceMenuStore;
         public static MenuSettings SettingsMenuStore;
@@ -146,15 +149,24 @@ namespace ARS
         // Learn the effective braking decel that keeps the car at full brake through a braking phase.
         public static bool BrakeLearning = true;
         // On = route curvature limits speed (sweeping corners); off = the corner braking plan alone.
-        public static bool RouteSpeedLimit = true;
+        public static int CornerOffsetMph = 6;
+        public static int RouteOffsetMph = 6;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
         public static float HillGripEffect = 1f;
+        public static int RubberbandingPct = 0;
+        public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
         // Show or hide the staged Spawn Track / Spawn Grid items in the Race menu.
         public static bool StagedSpawns = false;
+        public static bool HotkeysEnabled = true;
+        public static Keys MenuModifierKey = Keys.LShiftKey;
+        public static Keys MenuKey = Keys.E;
+        static readonly Keys[] MenuHotkeyKeys = Enum.GetValues(typeof(Keys)).Cast<Keys>().Where(key => (int)key >= 8 && (int)key <= 255).Distinct().OrderBy(key => (int)key).ToArray();
+        public static readonly string[] MenuHotkeyValues = MenuHotkeyKeys.Select(key => ((int)key).ToString(CultureInfo.InvariantCulture)).ToArray();
+        public static LogImportance LogLevel = LogImportance.Info;
         // Flat mph added to every racer's intended speed plan; 0 = the physics plan alone.
-        public static int SpeedOffsetMph = 6;
+
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowProjection/ShowInputTrail visuals.
         public static Racer DebugFocusRacer;
 
@@ -223,7 +235,6 @@ namespace ARS
 
         
         public static List<Racer> Racers = new List<Racer>();
-        public static int CatchupPosition = 0; 
 
 
         
@@ -311,6 +322,7 @@ namespace ARS
             _freeCam = new FreeCamController(this);
 
             Tick += OnTick;
+            KeyDown += OnKeyDown;
             Aborted += OnAbort;
 
             File.WriteAllText(ScriptsFolder + @"\Log.log", "----------------------------");
@@ -672,7 +684,7 @@ namespace ARS
         public static float PowerTargetScale = 0.52f;
         // Relative resolves the target from the player's car + offset at Spawn Grid; Absolute uses the
         // fixed target. Neither writes back here.
-        public static PaceMode CurrentPaceMode = PaceMode.Absolute;
+        public static PaceMode CurrentPaceMode = PaceMode.RelativeToMine;
         public static float PaceOffsetScale = 0f;
         // Default script folder under GTA's `scripts\` (Tracks/, Vehicles/cars.txt, sillynames.txt,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
@@ -781,11 +793,10 @@ namespace ARS
 
             // ── PI offset / target (merged Council design; the mode above decides which one governs) ──
             _paceOffsetItem = new NativeListItem<string>("PI Offset", "Field PI = your car's performance index + this offset, resolved at Spawn Grid (clamped to the fleet's range).", Array.Empty<string>());
-            for (int halfStep = -20; halfStep <= 20; halfStep++)
+            for (int offset = -10; offset <= 10; offset++)
             {
-                float offset = halfStep * 0.5f;
                 _paceOffsetValues.Add(offset);
-                _paceOffsetItem.Items.Add(offset.ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture));
+                _paceOffsetItem.Items.Add(offset.ToString("+0;-0;0", CultureInfo.InvariantCulture));
             }
             _paceOffsetItem.ItemChanged += (sender, args) =>
             {
@@ -948,14 +959,24 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            NativeListItem<string> speedOffsetItem = new NativeListItem<string>("Speed Offset (mph)", "Flat mph added to a racer's intended speed, on top of the corner and route plans. 0 = the physics plan alone; negative slows the field.", new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" });
-            speedOffsetItem.ItemChanged += (sender, args) =>
+            string[] speedOffsetOptions = { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" };
+            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Offset (mph)", "Flat mph added to the corner braking plan. Higher = racers carry more speed into corners.", speedOffsetOptions);
+            cornerOffsetItem.ItemChanged += (sender, args) =>
             {
-                SpeedOffsetMph = int.Parse(speedOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SpeedOffset", speedOffsetItem.Items[args.Index]);
+                CornerOffsetMph = int.Parse(cornerOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("CornerOffset", cornerOffsetItem.Items[args.Index]);
             };
-            speedOffsetItem.SelectedIndex = Math.Max(0, speedOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("SpeedOffset", SpeedOffsetMph).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(speedOffsetItem);
+            cornerOffsetItem.SelectedIndex = Math.Max(0, cornerOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(cornerOffsetItem);
+
+            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Route Offset (mph)", "Flat mph added to the route curvature plan. Higher = racers carry more speed through sweeping corners.", speedOffsetOptions);
+            routeOffsetItem.ItemChanged += (sender, args) =>
+            {
+                RouteOffsetMph = int.Parse(routeOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("RouteOffset", routeOffsetItem.Items[args.Index]);
+            };
+            routeOffsetItem.SelectedIndex = Math.Max(0, routeOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(routeOffsetItem);
 
             NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.", BrakeLearning);
             brakeLearningItem.CheckboxChanged += (sender, args) =>
@@ -964,14 +985,6 @@ namespace ARS
                 SaveRacerSetting("BrakeLearning", BrakeLearning.ToString());
             };
             aiMenu.Add(brakeLearningItem);
-
-            NativeCheckboxItem routeSpeedItem = new NativeCheckboxItem("Route Speed Limit", "On = route curvature limits speed through sweeping corners. Off = the corner braking plan alone governs speed.", RouteSpeedLimit);
-            routeSpeedItem.CheckboxChanged += (sender, args) =>
-            {
-                RouteSpeedLimit = routeSpeedItem.Checked;
-                SaveRacerSetting("RouteSpeedLimit", RouteSpeedLimit.ToString());
-            };
-            aiMenu.Add(routeSpeedItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -991,6 +1004,25 @@ namespace ARS
             };
             hillEffectItem.SelectedIndex = Math.Max(0, hillEffectItem.Items.IndexOf(SettingsMenuStore.GetInt("HillGripEffect", 100).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(hillEffectItem);
+
+            string[] rubberbandOptions = { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" };
+            NativeListItem<string> rubberbandItem = new NativeListItem<string>("Rubberbanding (%)", "Keeps the field packed: leaders are slowed and laggards are boosted, scaled by distance from the center position. 0 = off; 100 = max effect (0.66× for the leader, 1.33× for last place).", rubberbandOptions);
+            rubberbandItem.ItemChanged += (sender, args) =>
+            {
+                RubberbandingPct = int.Parse(rubberbandItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("Rubberbanding", rubberbandItem.Items[args.Index]);
+            };
+            rubberbandItem.SelectedIndex = Math.Max(0, rubberbandItem.Items.IndexOf(SettingsMenuStore.GetInt("Rubberbanding", 0).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(rubberbandItem);
+
+            NativeListItem<string> rubberModeItem = new NativeListItem<string>("Rubberband Mode", "Natural = leaders are slowed only. Artificial = leaders are slowed and laggards get a torque boost.", Enum.GetNames(typeof(RubberbandMode)));
+            rubberModeItem.ItemChanged += (sender, args) =>
+            {
+                CurrentRubberbandMode = (RubberbandMode)args.Index;
+                SaveRacerSetting("RubberbandMode", CurrentRubberbandMode.ToString());
+            };
+            rubberModeItem.SelectedIndex = Math.Max(0, rubberModeItem.Items.IndexOf(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString())));
+            aiMenu.Add(rubberModeItem);
 
             // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
             NativeMenu advancedMenu = new NativeMenu("Advanced Settings", "Advanced Settings", "Low-level physics overrides and AI corrections.")
@@ -1024,6 +1056,44 @@ namespace ARS
                 }
             };
             advancedMenu.Add(stagedSpawnsItem);
+
+            NativeCheckboxItem hotkeysItem = new NativeCheckboxItem("Hotkeys", "Allow the configured virtual-key chord to open the ARS menu. The arsmenu cheat remains available.", HotkeysEnabled);
+            hotkeysItem.CheckboxChanged += (sender, args) =>
+            {
+                HotkeysEnabled = hotkeysItem.Checked;
+                SaveRacerSetting("Hotkeys", HotkeysEnabled.ToString());
+            };
+            advancedMenu.Add(hotkeysItem);
+
+            NativeListItem<string> menuModifierItem = new NativeListItem<string>("Menu Modifier", "First key of the ARS menu chord (Windows virtual-key code).", MenuHotkeyKeys.Select(MenuHotkeyLabel).ToArray());
+            menuModifierItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index < 0 || args.Index >= MenuHotkeyKeys.Length) return;
+                MenuModifierKey = MenuHotkeyKeys[args.Index];
+                SettingsMenuStore.Set("MenuModifierKey", (int)MenuModifierKey);
+            };
+            menuModifierItem.SelectedIndex = Math.Max(0, Array.IndexOf(MenuHotkeyKeys, MenuModifierKey));
+            advancedMenu.Add(menuModifierItem);
+
+            NativeListItem<string> menuKeyItem = new NativeListItem<string>("Menu Key", "Second key of the ARS menu chord (Windows virtual-key code).", MenuHotkeyKeys.Select(MenuHotkeyLabel).ToArray());
+            menuKeyItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index < 0 || args.Index >= MenuHotkeyKeys.Length) return;
+                MenuKey = MenuHotkeyKeys[args.Index];
+                SettingsMenuStore.Set("MenuKey", (int)MenuKey);
+            };
+            menuKeyItem.SelectedIndex = Math.Max(0, Array.IndexOf(MenuHotkeyKeys, MenuKey));
+            advancedMenu.Add(menuKeyItem);
+
+            NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
+            logLevelItem.ItemChanged += (sender, args) =>
+            {
+                LogLevel = ParseEnum(logLevelItem.Items[args.Index], LogLevel);
+                SaveRacerSetting("LogLevel", LogLevel.ToString());
+            };
+            logLevelItem.SelectedIndex = Math.Max(0, logLevelItem.Items.IndexOf(EnumLabel(LogLevel)));
+            advancedMenu.Add(logLevelItem);
+
             if (!StagedSpawns)
             {
                 _raceMenu.Remove(instanceTrackItem);
@@ -1394,6 +1464,26 @@ namespace ARS
         int _nextInLine = 0;
         int _gameTimeNextInLine = 0;
 
+        void OnKeyDown(object sender, KeyEventArgs e)
+        {
+            if (!HotkeysEnabled || _arsMenu == null || _menuPool.AreAnyVisible) return;
+            if (e.KeyCode != MenuKey || !IsMenuModifierPressed(e)) return;
+            _arsMenu.Visible = true;
+        }
+
+        static bool IsMenuModifierPressed(KeyEventArgs e)
+        {
+            if (MenuModifierKey == Keys.ShiftKey || MenuModifierKey == Keys.LShiftKey || MenuModifierKey == Keys.RShiftKey) return e.Shift;
+            if (MenuModifierKey == Keys.ControlKey || MenuModifierKey == Keys.LControlKey || MenuModifierKey == Keys.RControlKey) return e.Control;
+            if (MenuModifierKey == Keys.Menu || MenuModifierKey == Keys.LMenu || MenuModifierKey == Keys.RMenu) return e.Alt;
+            return Game.IsKeyPressed(MenuModifierKey);
+        }
+
+        bool IsMenuHotkeyPressed()
+        {
+            return HotkeysEnabled && Game.IsKeyPressed(MenuModifierKey) && Game.IsKeyPressed(MenuKey);
+        }
+
         void OnTick(object sender, EventArgs e)
         {
             try
@@ -1409,10 +1499,7 @@ namespace ARS
 
                 if (!_loaded)
                 {
-                    if (DevConfigFile.GetValue<bool>("GENERAL", "LoadAtStart", true) || WasCheatStringJustEntered("arson"))
-                    {
-                        StartLoadScript();
-                    }
+                    StartLoadScript();
                     return;
                 }
 
@@ -1506,7 +1593,7 @@ namespace ARS
                         if (dist <= 5f)
                         {
                             DisplayHelpTextThisFrame("Press ~INPUT_CONTEXT~ to race at ~b~" + Path.GetFileNameWithoutExtension(nearest.TrackPath) + "~w~.");
-                            if (!_arsMenu.Visible && CanWeUse(Game.Player.Character.CurrentVehicle) && !Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlJustPressed(2, GTA.Control.Context))
+                            if (!_arsMenu.Visible && CanWeUse(Game.Player.Character.CurrentVehicle) && !IsMenuHotkeyPressed() && Game.IsControlJustPressed(2, GTA.Control.Context))
                             {
                                 // Pace Mode governs this grid like any other — the join adds no pace override of its own.
                                 SelectTrackInMenu(nearest.TrackPath);
@@ -1545,12 +1632,9 @@ namespace ARS
                 }
 
                 
-                if (!_menuPool.AreAnyVisible)
+                if (!_menuPool.AreAnyVisible && WasCheatStringJustEntered("arsmenu"))
                 {
-                    if ((DevConfigFile.GetValue<bool>("GENERAL", "Hotkeys", true) && Game.IsControlPressed(2, GTA.Control.Sprint) && Game.IsControlPressed(2, GTA.Control.Context)) || WasCheatStringJustEntered("arsmenu"))
-                    {
-                        _arsMenu.Visible = true;
-                    }
+                    _arsMenu.Visible = true;
                 }
 
                 
@@ -1881,8 +1965,6 @@ namespace ARS
             Game.SetControlNormal(2, GTA.Control.VehicleLookBehind, 1f);
 
 
-            if (ARS.SettingsFile.GetValue("CATCHUP", "OnlyLastHalf", true)) ARS.CatchupPosition = (int)(ARS.Racers.Count / 2);
-
             // Race is now in the countdown/in-progress flow — clear setup flags.
             _trackInstanced = false;
             _gridInstanced = false;
@@ -2031,31 +2113,6 @@ namespace ARS
 
 
 
-            if (WasCheatStringJustEntered("arson"))
-            {
-                StartLoadScript();
-            }
-            if (WasCheatStringJustEntered("arsoff"))
-            {
-                DisplayHelpTextTimed("ARS is now disabled. You can re-enable it with the 'arson' cheat.", 3000);
-                _loaded = false;
-            }
-
-            if (WasCheatStringJustEntered("arsreload"))
-            {
-                
-                
-                RefreshCatalogs();
-
-                FillKnownTracks();
-            }
-            if (WasCheatStringJustEntered("arsupdroute"))
-            {
-                
-                Log(LogImportance.Info, "arsupdroute ignored: track mutation is disabled in this build (no create, edit/update or delete).");
-                if (1 == 2) UpdateRoute(true, true, true);
-
-            }
             if (WasCheatStringJustEntered("arsepidump"))
             {
                 // The pacing numbers behind the grid: one row per cached model, so the electric
@@ -2154,18 +2211,6 @@ namespace ARS
                 }
             }
 
-
-            if (WasCheatStringJustEntered("arssettings"))
-            {
-                SettingsFile = null;
-                DevConfigFile = null;
-                LoadSettings();
-            }
-
-            if (WasCheatStringJustEntered("arsclean"))
-            {
-                CleanEverything();
-            }
         }
         
 
@@ -2893,13 +2938,9 @@ namespace ARS
             SettingsRepair.CreateMissingFiles();
             SettingsRepair.PruneOwnedFiles();
 
-            Log(LogImportance.Info, "Loading Options.ini ...");
             RaceMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Race.ini");
             SettingsMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Settings.ini");
             DebugMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Debug.ini");
-            SettingsFile = ScriptSettings.Load(SettingsFolder + @"\Options.ini");
-            RaceMenuStore.Migrate("Laps", SettingsFile.GetValue<int>("GENERAL_SETTINGS", "Laps", 6).ToString());
-            Log(LogImportance.Info, "Loaded Options.");
 
             Log(LogImportance.Info, "Loading per-menu settings (Menu-*.ini) ...");
             // The Settings menu's items lived in Menu-Racers.ini and the debug toggles in Menu-DevSettings.ini
@@ -2920,13 +2961,15 @@ namespace ARS
             UseMenyooSkins = SettingsMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
             OverspeedEnabled = SettingsMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
-            SpeedOffsetMph = SettingsMenuStore.GetInt("SpeedOffset", SpeedOffsetMph);
+            CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
+            RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
-            RouteSpeedLimit = SettingsMenuStore.GetBool("RouteSpeedLimit", RouteSpeedLimit);
             CrestEffect = SettingsMenuStore.GetInt("CrestEffect", 100) * 0.01f;
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
+            RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 0);
+            CurrentRubberbandMode = ParseEnum(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString()), CurrentRubberbandMode);
             StagedSpawns = SettingsMenuStore.GetBool("StagedSpawns", StagedSpawns);
             RaceMenuStore.Migrate("PaceMode", legacyPaceMode);
             // The mode's option was relabelled and then re-spelled as an enum name; rewrite either older
@@ -2937,17 +2980,22 @@ namespace ARS
             PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
             Log(LogImportance.Info, "Loaded per-menu settings.");
 
-            Log(LogImportance.Info, "Loading DevConfig.ini ...");
-            DevConfigFile = ScriptSettings.Load(SettingsFolder + @"\DevConfig.ini");
+            ScriptSettings legacyDevConfig = ScriptSettings.Load(SettingsFolder + @"\DevConfig.ini");
+            SettingsMenuStore.Migrate("Hotkeys", legacyDevConfig.GetValue<string>("GENERAL", "Hotkeys", null));
+            SettingsMenuStore.Migrate("LogLevel", legacyDevConfig.GetValue<string>("GENERAL", "LogLevel", null));
             foreach (Options option in DebugToggles.Keys.ToArray())
-                DebugMenuStore.Migrate(option.ToString(), DevConfigFile.GetValue<bool>("DEBUG", option.ToString(), DebugToggles[option]).ToString());
+                DebugMenuStore.Migrate(option.ToString(), legacyDevConfig.GetValue<string>("DEBUG", option.ToString(), null));
+
+            HotkeysEnabled = SettingsMenuStore.GetBool("Hotkeys", HotkeysEnabled);
+            MenuModifierKey = ParseMenuHotkey(SettingsMenuStore.GetInt("MenuModifierKey", (int)MenuModifierKey), MenuModifierKey);
+            MenuKey = ParseMenuHotkey(SettingsMenuStore.GetInt("MenuKey", (int)MenuKey), MenuKey);
+            LogLevel = ParseEnum(SettingsMenuStore.Get("LogLevel", LogLevel.ToString()), LogLevel);
             foreach (Options option in DebugToggles.Keys.ToArray())
                 DebugToggles[option] = DebugMenuStore.GetBool(option.ToString(), DebugToggles[option]);
             DebugToggles[Options.ReverseRoute] = RaceMenuStore.GetBool("ReverseRoute", DebugToggles[Options.ReverseRoute]);
-            Log(LogImportance.Info, "Loaded dev toggles.");
 
             SettingsRepair.CompleteOwnedKeys(RaceMenuStore, SettingsMenuStore, DebugMenuStore);
-            SettingsRepair.DeleteLegacyOwnedFiles();
+            SettingsRepair.DeleteLegacyFiles();
             Log(LogImportance.Info, "Checked the Settings folder.");
         }
         public enum LogImportance { Info, Error, Fatal }
@@ -2957,6 +3005,26 @@ namespace ARS
         {
             T parsed;
             return Enum.TryParse(value, true, out parsed) && Enum.IsDefined(typeof(T), parsed) ? parsed : fallback;
+        }
+
+        static Keys ParseMenuHotkey(int keyCode, Keys fallback)
+        {
+            Keys key = (Keys)keyCode;
+            return MenuHotkeyKeys.Contains(key) ? key : fallback;
+        }
+
+        static string MenuHotkeyLabel(Keys key)
+        {
+            int keyCode = (int)key;
+            if (keyCode >= 48 && keyCode <= 57) return ((char)keyCode).ToString() + " (" + keyCode + ")";
+            if (keyCode >= 65 && keyCode <= 90) return ((char)keyCode).ToString() + " (" + keyCode + ")";
+            if (key == Keys.LShiftKey) return "Left Shift (160)";
+            if (key == Keys.RShiftKey) return "Right Shift (161)";
+            if (key == Keys.LControlKey) return "Left Control (162)";
+            if (key == Keys.RControlKey) return "Right Control (163)";
+            if (key == Keys.LMenu) return "Left Alt (164)";
+            if (key == Keys.RMenu) return "Right Alt (165)";
+            return EnumLabel(key) + " (" + keyCode + ")";
         }
 
         // The menu shows a member's name spaced out: "RelativeToMine" -> "Relative To Mine". The stored value
@@ -3004,7 +3072,7 @@ namespace ARS
 
         public static void Log(LogImportance i, string text, bool forced = false)
         {
-            if (DevConfigFile != null && DevConfigFile.GetValue<LogImportance>("GENERAL", "LogLevel", LogImportance.Info) > i && !forced) return;
+            if (LogLevel > i && !forced) return;
             string log = "\n[" + DateTime.Now + "](" + i.ToString() + "): " + text;
             File.AppendAllText(ScriptsFolder + @"\Log.log", log);
         }
