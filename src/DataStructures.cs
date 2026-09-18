@@ -19,7 +19,6 @@ namespace ARS
         public int LastAccelSampleTime = 0;
         public Vector3 SpeedVectorGlobal = Vector3.Zero;
         public Vector3 SpeedVectorLocal = Vector3.Zero;
-        public int WheelBase = 2;
         public float YawRotationPerSecondDegrees = 1f;
         public float SlideAngle = 22f;
         public float BaseMechanicalGrip = 1f;

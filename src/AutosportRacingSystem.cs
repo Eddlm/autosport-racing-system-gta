@@ -148,10 +148,14 @@ namespace ARS
         public static bool SmartTuning = true;
         // Learn the effective braking decel that keeps the car at full brake through a braking phase.
         public static bool BrakeLearning = true;
-        // On = route curvature limits speed (sweeping corners); off = the corner braking plan alone.
+        // Flat mph added to the corner plan and the route plan respectively.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
-        public static float SteerKD = 0.45f;
+        // Yaw-stability PID gains. Units: P = steer degrees per deg/s of unexplained rotation;
+        // I = steer degrees per accumulated degree; D = steer degrees per deg/s² of error rate.
+        public static float SteerTrim = 1.0f;   // dimensionless trim on the pure-pursuit geometry; 1.0 = the geometry itself
+        public static float SteerI = 0f;
+        public static float SteerD = 0.001f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -985,15 +989,33 @@ namespace ARS
             };
             aiMenu.Add(brakeLearningItem);
 
-            string[] steerKDOptions = { "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80" };
-            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping in the steering PD controller. Higher = more resistance to rotation, less oscillation. 0.45 is the tuned default.", steerKDOptions);
-            steerKDItem.ItemChanged += (sender, args) =>
+            // Steering PID knobs. One shared builder: the parse-match restore is needed because
+            // a stored "0.5" would never string-match "0.50" in the option list.
+            NativeListItem<string> AddSteerPidItem(string title, string description, string[] options, string key, float current, Action<float> apply)
             {
-                SteerKD = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerKD", steerKDItem.Items[args.Index]);
-            };
-            steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerKD", SteerKD).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(steerKDItem);
+                NativeListItem<string> item = new NativeListItem<string>(title, description, options);
+                item.ItemChanged += (sender, args) =>
+                {
+                    apply(float.Parse(item.Items[args.Index], CultureInfo.InvariantCulture));
+                    SaveRacerSetting(key, item.Items[args.Index]);
+                };
+                float stored = SettingsMenuStore.GetFloat(key, current);
+                int index = 0;
+                for (int i = 0; i < item.Items.Count; i++)
+                    if (Math.Abs(float.Parse(item.Items[i], CultureInfo.InvariantCulture) - stored) < 0.0005f) { index = i; break; }
+                item.SelectedIndex = index;
+                aiMenu.Add(item);
+                return item;
+            }
+
+            string[] steerTrimOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
+            AddSteerPidItem("Steer P", "Trim on the pure-pursuit steering geometry, not a raw gain. 1.00 steers exactly at the arc through the aim point; higher tracks tighter, lower runs lazier, 0.00 is no steering at all.", steerTrimOptions, "SteerTrim", SteerTrim, v => SteerTrim = v);
+
+            string[] steerIOptions = { "0.00", "0.01", "0.02", "0.03", "0.04", "0.05", "0.06", "0.07", "0.08", "0.09", "0.10", "0.11", "0.12", "0.13", "0.14", "0.15", "0.16", "0.17", "0.18", "0.19", "0.20" };
+            AddSteerPidItem("Steer I", "Steer I: slow trim from sustained aim error, in steer degrees per accumulated degree-second. Unclamped, so it keeps winding up while the error persists.", steerIOptions, "SteerI", SteerI, v => SteerI = v);
+
+            string[] steerDOptions = { "0.000", "0.001", "0.002", "0.003", "0.005", "0.007", "0.010", "0.015", "0.020", "0.030", "0.040", "0.050", "0.070", "0.100" };
+            AddSteerPidItem("Steer D", "Steer D: steer degrees per deg/s of aim-error change. Because the error rides the velocity vector, its rate is roughly the negative of the car's yaw rate, so this damps the loop.", steerDOptions, "SteerD", SteerD, v => SteerD = v);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -2981,7 +3003,9 @@ namespace ARS
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
-            SteerKD = SettingsMenuStore.GetFloat("SteerKD", SteerKD);
+            SteerTrim = SettingsMenuStore.GetFloat("SteerTrim", SteerTrim);
+            SteerI = SettingsMenuStore.GetFloat("SteerI", SteerI);
+            SteerD = SettingsMenuStore.GetFloat("SteerD", SteerD);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
