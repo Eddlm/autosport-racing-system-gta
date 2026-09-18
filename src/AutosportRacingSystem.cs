@@ -1011,8 +1011,8 @@ namespace ARS
             string[] steerTrimOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
             AddSteerPidItem("Steer P", "Trim on the pure-pursuit steering geometry, not a raw gain. 1.00 steers exactly at the arc through the aim point; higher tracks tighter, lower runs lazier, 0.00 is no steering at all.", steerTrimOptions, "SteerTrim", SteerTrim, v => SteerTrim = v);
 
-            string[] steerDOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00" };
-            AddSteerPidItem("Steer D (Yaw)", "Steer D: rotation paid back per degree-per-second the car is rotating beyond what the steering asks for, in seconds. Two-sided — a car rotating slower than commanded gets steer added. 0.00 disables the correction.", steerDOptions, "SteerD", SteerD, v => SteerD = v);
+            string[] steerDOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
+            AddSteerPidItem("Steer D (Yaw)", "Steer D: rotation paid back per degree-per-second the car is rotating beyond what the steering asks for, in seconds. It can only take lock away, never add it, so it damps the arrival without blunting the turn-in. 0.00 disables the correction.", steerDOptions, "SteerD", SteerD, v => SteerD = v);
 
             string[] slideCountersteerOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
             AddSteerPidItem("Slide Countersteer", "Multiplier on the slide angle for the countersteer target. 1.00 points the front wheels along the velocity vector, which neutralises the slide; above that it over-corrects and rotates the nose back, below it recovers gently and leaves some slide on the car. 0.00 disables the blend.", slideCountersteerOptions, "SlideCountersteer", SlideCountersteer, v => SlideCountersteer = v);

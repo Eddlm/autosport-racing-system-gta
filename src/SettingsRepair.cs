@@ -146,7 +146,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("SteerTrim", "1.00", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));
-            settings.Specs.Add(new KeySpec("SteerD", "0.50", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00" }));
+            settings.Specs.Add(new KeySpec("SteerD", "0.50", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));
             settings.Specs.Add(new KeySpec("SlideCountersteer", "0.80", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));
             settings.Specs.Add(new KeySpec("CrestEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
