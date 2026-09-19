@@ -24,6 +24,12 @@ obj/
 # GTA runtime logs
 ScriptHookV.log
 
+# Runtime output that must never be committed or shipped (RefreshDist excludes these from the
+# Dist mirror, and deploy.yml ships Dist - so this is the second line of defence, not the first)
+*.log
+pidump.txt
+*.bak-crash
+
 # OS files
 Thumbs.db
 .DS_Store

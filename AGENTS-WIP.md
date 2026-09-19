@@ -34,14 +34,14 @@ It deliberately does not ship a track creator or any track-file mutation path. T
 - [ ] Verify a fresh settings folder creates usable defaults and a second load does not rewrite it.
 - [ ] Verify a legacy install migrates old per-menu files without losing user-facing values.
 - [ ] Check Show Inputs, Projection, Input Trail, Corner Checkpoints, Edge Chevrons, and Leaderboard against the closest AI car or race state they describe.
-- [ ] Confirm `Log.log` records startup and actionable load failures.
+- [ ] Confirm `Log.log` records the session banner and actionable load failures. With **Log Level `None`** (the shipped default) that is *all* it records: the banner, plus forced error lines — one of which is the bridge probe's, which is why the release README's "the log names the reason" still holds.
 - [ ] Confirm `Options.ini` advanced catch-up and reverse-route settings remain readable after the menu-settings migration.
 
 ## Package gate
 
 - [ ] Build Release successfully and confirm `ARS.dll` and `LemonUI.SHVDN2.dll` deploy to the game Scripts folder.
 - [ ] Run the generated GitHub artifact from a clean install using a current, matched SHVDN asi/API-dll pair.
-- [ ] Confirm the package includes `LemonUI-LICENSE.txt`, tracks, `cars.txt`, `sillynames.txt`, and the intended tracked settings files.
+- [ ] Confirm the package includes `LemonUI-LICENSE.txt`, tracks, `cars.txt`, `sillynames.txt`, and an **empty `Settings\`** — no settings ship at all; the mod writes its three inis on first run.
 - [ ] Confirm it excludes `ScriptHookVDotNet2.dll`, logs, crash artifacts, stale legacy settings files, and untracked `Options.ini`.
 - [ ] Read the staged release `README.txt` for installation, matched-SHVDN, menu, and log-troubleshooting instructions.
 
@@ -51,3 +51,4 @@ It deliberately does not ship a track creator or any track-file mutation path. T
 - No per-car XML saves, saved drivers, personalities, or discipline filtering.
 - The grid uses model-level pace, not the installed upgrades of a particular vehicle instance.
 - Low-grip steering behavior still needs the dedicated release-gate drive above.
+- The beater/rust matte paint rule is implemented and shipped **unverified in game** — drive a `rusty`/`rat look`/`junkyard`/`primed` livery before trusting it.
