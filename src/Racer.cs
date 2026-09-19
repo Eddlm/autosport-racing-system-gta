@@ -60,6 +60,7 @@ namespace ARS
 
         
         int _lastStabilityCheck = 0;
+        bool _gripLogged = false;
 
         // Racer progress along the route.
         public TrackPoint CurrentTrackPoint = new TrackPoint();
@@ -142,6 +143,10 @@ namespace ARS
 
         // True when the steer limiter actually reduced the steer this frame; read only by the ZOMBIE block below.
         bool _steerLimitedThisFrame = false;
+        // The limiter's two side limits, recomputed every tick in ApplySteerLimits. Public so a rule can grant
+        // an allowance to one side, and so the debug view can draw them.
+        public float SteerLimitRight = 40f;
+        public float SteerLimitLeft = 40f;
         float _debugPreLimitSteerDeg = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
@@ -331,6 +336,9 @@ namespace ARS
             VehicleData.SteeringLock = ARS.RadToDeg(VehicleMemory.GetSteerLock(Car));
             if (VehicleData.SteeringLock < 1 || VehicleData.SteeringLock > 100) VehicleData.SteeringLock = 40;
             ARS.Log(ARS.LogImportance.Info, "Steerlock for " + Car.DisplayName + ":" + VehicleData.SteeringLock + "º");
+
+            VehicleData.WheelBase = ARS.GetWheelBase(Car);
+            ARS.Log(ARS.LogImportance.Info, "Wheelbase for " + Car.DisplayName + ":" + VehicleData.WheelBase + " m");
             Control.SteerDegrees = 0f;
             CurrentTrackPoint = ARS.TrackPoints.Last();
             Control.Brake = 0f;
@@ -500,8 +508,8 @@ namespace ARS
                     float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * CountersteerBlendStartFraction, Handling.LateralTractionCurve * CountersteerFullFraction, 0f, 1f, true);
                     if (slidePriority > 0f)
                     {
-                        // Countersteer output doubled (user, 2026-10) - the correction term only, not the slidePriority ramp.
-                        float countersteerTarget = dampedCourseSteerDeg - (2f * VehicleData.SlideAngle);
+                        // Countersteer equals the slide angle - the correction term only, not the slidePriority ramp.
+                        float countersteerTarget = dampedCourseSteerDeg - VehicleData.SlideAngle;
                         Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
                     }
                 }
@@ -785,11 +793,41 @@ namespace ARS
         // damping ratio can hold across the fleet. The floor only guards a degenerate grip.
         const float SteerDampingGripFloor = 1f;
         float SteerDamping => ARS.SteerDampingScale / Math.Max(VehicleData.BaseMechanicalGrip, SteerDampingGripFloor);
-        // Vanilla's player steering limiter (Automobile.cpp): the requested angle is divided by
-        // 1 + 0.075 × (forward speed − 5), in m/s, and vanilla skips it while the car is sliding. Only the
-        // reduction is taken — vanilla's auto-centre term beside it is not applied.
+        // Vanilla's player steering limiter used as a ceiling (AGENTS.md pipeline step 4): vanilla divides by
+        // 1 + 0.075 × (forward speed − 5) in m/s and skips it while the car is sliding. The 5 m/s shift and its
+        // gate are deliberately dropped here, so the ceiling starts closing from a standstill instead of
+        // holding full lock to ~11 mph. Vanilla's auto-centre term beside it is not applied.
         const float VanillaSteerReductionPerMps = 0.075f;
-        const float VanillaSteerReductionFwdThreshold = 5f;
+        // Grip is read as a ratio to this reference, floored so a low-grip car cannot blow the coefficient up.
+        const float SteerCapGripReference = 1f;
+        const float SteerCapGripFloor = 0.5f;
+
+        // Live ceiling coefficient: the useful steer angle at speed is ~ grip × g × wheelbase / v², so grip
+        // belongs in that numerator and the cap loosens as √grip — the same √grip the speed maths uses.
+        // Reads CurrentMechanicalGrip, not the base: BaseMechanicalGrip has the downforce term divided out
+        // (1 + 0.035 × downforce) and only gets it back through Current, so a downforce car's base reads low.
+        float SteerReductionPerMps
+        {
+            get
+            {
+                float grip = VehicleData.CurrentMechanicalGrip;
+                if (float.IsNaN(grip)) grip = SteerCapGripReference;
+                float gripRatio = Math.Max(grip / SteerCapGripReference, SteerCapGripFloor);
+                return VanillaSteerReductionPerMps / (float)Math.Sqrt(gripRatio);
+            }
+        }
+
+        // Steer angle that holds the tightest corner this car's grip allows at this speed: the Ackermann
+        // relation R = v² / (grip × g), δ = atan(wheelbase / R). Deliberately the same 9.8 and grip that
+        // SteerLimitedSpeed uses, so the ceiling and the steer-limited speed are one law read two ways.
+        float AckermannCeilingDegrees(float fwdSpeed)
+        {
+            float grip = VehicleData.CurrentMechanicalGrip;
+            if (float.IsNaN(grip) || fwdSpeed <= 0f) return VehicleData.SteeringLock;
+            float ratio = VehicleData.WheelBase * grip * 9.8f / (fwdSpeed * fwdSpeed);
+            if (float.IsNaN(ratio) || ratio <= 0f) return VehicleData.SteeringLock;
+            return ARS.RadToDeg((float)Math.Atan(ratio));
+        }
 
 
         void ApplySteerLimits()
@@ -805,39 +843,34 @@ namespace ARS
 
             float requestedSteer = Control.SteerDegrees;
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
-            // Full countersteer: release the brake outright, immediately, so the tires can roll again.
-            // No reset here: the cap recovers on its own at the MaxThrottle rate (ConvertSpeedToPedals).
-            if (IsFullCountersteer()) Control.MaxBrake = 0f;
 
-            // Vanilla's authority curve used as a ceiling rather than as an attenuation: the full intent passes
-            // below it and is clipped to it above, so small corrections are never scaled down. The curve is the
-            // player's — lock / (1 + 0.075 × (v − 5)), m/s — which halves the allowance by 41 mph.
+            // The limiter is two independent limits, one per side, closed by a single clamp at the end: nothing
+            // is exempt from being limited, so an allowance has to be granted to a side rather than a check
+            // skipped. Both sides start at the corner-geometry ceiling — vanilla's grip-scaled authority curve
+            // and the Ackermann limit, whichever is lower. A reversing car keeps the raw lock: the vanilla
+            // term's 1 + k × v goes negative below −13 m/s and would invert the ceiling.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
-            if (!countersteering && fwdSpeed > VanillaSteerReductionFwdThreshold)
+            float speedCeiling = VehicleData.SteeringLock;
+            if (fwdSpeed > 0f)
             {
-                float vanillaMaxSteer = VehicleData.SteeringLock / (1f + VanillaSteerReductionPerMps * (fwdSpeed - VanillaSteerReductionFwdThreshold));
-                if (Math.Abs(requestedSteer) > vanillaMaxSteer)
-                {
-                    Control.SteerDegrees = Math.Sign(requestedSteer) * vanillaMaxSteer;
-                    _steerLimitedThisFrame = true;
-                }
+                float vanillaCeiling = VehicleData.SteeringLock / (1f + SteerReductionPerMps * fwdSpeed);
+                speedCeiling = Math.Min(vanillaCeiling, AckermannCeilingDegrees(fwdSpeed));
+            }
+            SteerLimitRight = speedCeiling;
+            SteerLimitLeft = speedCeiling;
+
+            // The one whitelisted allowance: the side answering a slide may reach past the corner geometry, up
+            // to the slide angle itself. It is a raise and never a reduction, so the geometry ceiling still
+            // holds everywhere a slide does not justify more.
+            if (countersteering && Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * CountersteerBlendStartFraction)
+            {
+                float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle), VehicleData.SteeringLock);
+                if (requestedSteer > 0f) SteerLimitRight = Math.Max(SteerLimitRight, countersteerAllowance);
+                else SteerLimitLeft = Math.Max(SteerLimitLeft, countersteerAllowance);
             }
 
-            /* ZOMBIE — slide-angle steer limit (the TRlat ladder), live until the vanilla player reduction
-            above replaced it. Full lock at standstill, collapsing to the grip-derived allowance by the ramp
-            speed, steering-in only: capping the countersteer would fight the correction that saves the car.
-
-            float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
-            float slideAngle = Math.Abs(VehicleData.SlideAngle);
-            // Max steer angle = TRlat × 0.33 base, plus slide, capped at TRlat × 0.5 (base is always 66% of the ceiling).
-            float maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.33f + slideAngle, Handling.LateralTractionCurve * 0.5f);
-            float maxSteer = ARS.Remap(fwdMph, 40f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
-            if (!countersteering && Math.Abs(requestedSteer) > maxSteer)
-            {
-                Control.SteerDegrees = Math.Sign(requestedSteer) * maxSteer;
-                _steerLimitedThisFrame = true;
-            }
-            */
+            Control.SteerDegrees = ARS.Clamp(requestedSteer, -SteerLimitLeft, SteerLimitRight);
+            if (Control.SteerDegrees != requestedSteer) _steerLimitedThisFrame = true;
         }
 
 
@@ -910,7 +943,12 @@ namespace ARS
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
             combinedInput = ApplyOffshootBlend(combinedInput);
             // Full countersteer: no brake, just enough throttle to keep the wheels rolling. TCS still caps it.
-            if (IsFullCountersteer()) combinedInput = CountersteerRollThrottle;
+            // The release is instant; the cap recovers on its own at the MaxThrottle rate below.
+            if (IsFullCountersteer())
+            {
+                combinedInput = CountersteerRollThrottle;
+                Control.MaxBrake = 0f;
+            }
             combinedInput = ApplyThrottleCap(combinedInput);
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
 
@@ -2676,16 +2714,17 @@ namespace ARS
                     }
                 }
 
-                ApplySteerLimits();
-
                 ConvertSpeedToPedals();
-                TranslateSteerToInput();
 
                 UpdateStuckCheck();
                 UpdateStuckRecovery();
-                
+
                 TractionControl();
                 ApplyStuckRecoveryOverride();
+
+                // The limiter closes the steering last, after every writer above, so nothing escapes it.
+                ApplySteerLimits();
+                TranslateSteerToInput();
 
                 UpdateNitrous();
                 UpdateYield();
@@ -2868,10 +2907,12 @@ namespace ARS
             Control.Throttle = -0.5f;
             Control.Brake = 0f;
 
-            // Even recovery = straight reverse. Odd = steer toward nearest track point.
+            // Even recovery = straight reverse. Odd = steer toward nearest track point. Written as an angle so
+            // the limiter, which runs after this, is the one that bounds it — a stuck car is at ~0 speed, where
+            // the limit is the full lock, so recovery keeps its authority without an exemption.
             if (_stuckRecoveryAttempts % 2 == 0)
             {
-                Control.SteerInput = 0f;
+                Control.SteerDegrees = 0f;
             }
             else
             {
@@ -2880,12 +2921,11 @@ namespace ARS
                 if (toTrack.LengthSquared() > 0.01f)
                 {
                     toTrack.Normalize();
-                    float angleDeg = Vector3.SignedAngle(Car.ForwardVector, toTrack, Vector3.WorldUp);
-                    Control.SteerInput = ARS.Clamp(angleDeg / VehicleData.SteeringLock, -1f, 1f);
+                    Control.SteerDegrees = Vector3.SignedAngle(Car.ForwardVector, toTrack, Vector3.WorldUp);
                 }
                 else
                 {
-                    Control.SteerInput = 0f;
+                    Control.SteerDegrees = 0f;
                 }
             }
         }
@@ -2918,6 +2958,13 @@ namespace ARS
             VehicleData.BaseMechanicalGrip = handlingGrip;
             VehicleData.DownforceGripBonus = dfGs;
             VehicleData.CurrentMechanicalGrip = (VehicleData.BaseMechanicalGrip + VehicleData.DownforceGripBonus) * GroundGripMultiplier;
+
+            if (!_gripLogged)
+            {
+                _gripLogged = true;
+                ARS.Log(ARS.LogImportance.Info, "Grip for " + Car.DisplayName + ": base " + VehicleData.BaseMechanicalGrip
+                    + ", current " + VehicleData.CurrentMechanicalGrip + " (steer cap k " + SteerReductionPerMps + ")");
+            }
 
             // Airborne vehicles temporarily lose available throttle; normal pedal processing restores it.
             if (Game.GameTime - _lastStabilityCheck >= 333) // ~3 Hz

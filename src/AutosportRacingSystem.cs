@@ -2554,6 +2554,34 @@ namespace ARS
             return ARS.Remap(Vector3.Angle(e.ForwardVector, e.Velocity.Normalized), 0f, 90f, e.Model.GetDimensions().X, e.Model.GetDimensions().Y, true);
         }
 
+        const float DefaultWheelBase = 2.7f;
+        const float MinWheelBase = 1f;
+        const float MaxWheelBase = 6f;
+
+        // Wheelbase from the wheel bones: the two axle centres projected on the car's forward axis.
+        static public float GetWheelBase(Vehicle vehicle)
+        {
+            if (!CanWeUse(vehicle)) return DefaultWheelBase;
+            Vector3 front, rear;
+            if (!WheelAxleCentre(vehicle, "wheel_lf", "wheel_rf", out front)) return DefaultWheelBase;
+            if (!WheelAxleCentre(vehicle, "wheel_lr", "wheel_rr", out rear)) return DefaultWheelBase;
+            float length = Math.Abs(Vector3.Dot(front - rear, vehicle.ForwardVector));
+            if (float.IsNaN(length) || length < MinWheelBase || length > MaxWheelBase) return DefaultWheelBase;
+            return length;
+        }
+
+        // Mean of one axle's two wheel bones; averaging cancels the offset steering puts on the front pair.
+        static bool WheelAxleCentre(Vehicle vehicle, string leftBone, string rightBone, out Vector3 centre)
+        {
+            bool hasLeft = vehicle.HasBone(leftBone);
+            bool hasRight = vehicle.HasBone(rightBone);
+            centre = Vector3.Zero;
+            if (hasLeft && hasRight) centre = (vehicle.GetBoneCoord(leftBone) + vehicle.GetBoneCoord(rightBone)) * 0.5f;
+            else if (hasLeft) centre = vehicle.GetBoneCoord(leftBone);
+            else if (hasRight) centre = vehicle.GetBoneCoord(rightBone);
+            return hasLeft || hasRight;
+        }
+
         
         static public unsafe ulong GetWheelsPtr(Vehicle handle)
         {
