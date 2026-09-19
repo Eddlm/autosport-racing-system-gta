@@ -25,7 +25,14 @@ namespace ARS
                 Racer racer = racers[index];
                 racer.Initialize();
                 racer.Car.Position = positions[index];
-                racer.Car.Heading = pointToPoint ? (route[2] - route[0]).ToHeading() : (index > positions.Count - 2 ? (positions[index - 2] - positions[index]).Normalized : (positions[index] - positions[index + 2]).Normalized).ToHeading();
+
+                // Heading from the neighbouring slots. The two-ahead reference is the normal one; it falls back
+                // to the slot behind when it would run off the end, so a short grid cannot throw here.
+                Vector3 gridDirection;
+                if (index > positions.Count - 2) gridDirection = positions[Math.Max(0, index - 2)] - positions[index];
+                else if (index + 2 < positions.Count) gridDirection = positions[index] - positions[index + 2];
+                else gridDirection = positions[Math.Max(0, index - 1)] - positions[index];
+                racer.Car.Heading = pointToPoint ? (route[2] - route[0]).ToHeading() : gridDirection.Normalized.ToHeading();
                 racer.InitializeTrackPosition();
                 racer.UpdateTrackPosition();
             }

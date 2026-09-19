@@ -1235,8 +1235,10 @@ namespace ARS
             }
 
             Log(LogImportance.Info, "Grid: ranking " + _vehiclePool.Count + " pool files, target " + _resolvedPaceTarget.ToString(CultureInfo.InvariantCulture));
-            TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, _intendedOpponents, GridPositions);
-            int gridSize = Math.Min(_intendedOpponents, GridSlotsAvailable);
+            // Ask for one more car than the AI count: AddPlayerToGrid puts the player's racer on top of these
+            // later, and the clamp below is measured against what the track can really yield.
+            TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, _intendedOpponents + 1, GridPositions);
+            int gridSize = Math.Min(_intendedOpponents, Math.Max(0, GridSlotsAvailable - 1));
             if (gridSize != _intendedOpponents) Log(LogImportance.Info, "Grid: the track only yielded " + GridSlotsAvailable + " slots, so " + _intendedOpponents + " was capped to " + gridSize);
             FillCachedCandidates(gridSize, true);
             LoadGrid(gridSize);
@@ -2048,6 +2050,9 @@ namespace ARS
             GridSort sort = GridSort.Power;
             string setting = SettingsMenuStore.Get("GridSorting", "Random");
             if (!Enum.TryParse(setting, true, out sort)) sort = GridSort.Power;
+            // Rebuilt here for the count actually being placed: the player's racer joined after the grid was
+            // sized, and GridBuilder.Place reads two slots past each car.
+            TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, Racers.Count, GridPositions);
             GridBuilder.Place(Racers, GridPositions, RouteNodes, IsPointToPoint, sort);
         }
 
