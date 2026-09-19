@@ -52,6 +52,7 @@ Enumerating the wrong space returns **no names for every car, silently** - it co
   Each slot applies ~**75%** of the time so two cars of the same style do not come out identical.
 - Livery names matched by no keyword land in **Clean** rather than being dropped.
 - **Dead entry removed**: `pinstripe` could never fire, because `stripe` precedes it and is a substring.
+- **`Style.Beater` forces the matte finish** (`MatteFor`): the hue is whatever the normal rules chose and *only* the finish changes, via `MatteByFamily` mapping a Palette family onto the matte members. Reflect for the members rather than guessing — there is **no `MatteSilver`** (silver → `MatteGray`/`MatteLightGray`) and **no `MatteGold`** (gold and cream → `MatteDesertTan`). Rims are deliberately left alone: wheels carry their own colour set and have no matte family. This is the **only place a style reaches the paint** — `ApplyPaint` takes the style for exactly this test — and because rust/rat look/junkyard/primed all resolve to Beater, the name scan stays the style's job rather than the paint's.
 
 ## Colour system — precedence, highest first
 1. **Brand rule** (`Brands`): body from the brand's families, accent + rims from its artwork colours. A colour

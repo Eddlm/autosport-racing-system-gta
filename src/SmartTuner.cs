@@ -198,6 +198,25 @@ namespace ARS
         static readonly string[] AllFamilies = { "white", "black", "red", "blue", "green", "yellow", "orange", "silver", "gold", "purple", "brown", "cream" };
         static readonly string[] Neutrals = { "black", "white", "silver" };
 
+        // The matte finish for a beater, one entry per Palette family. GTA.VehicleColor has no MatteSilver and no
+        // MatteGold (checked by reflection), so silver lands on the matte greys and gold/cream on the desert tans.
+        // Only the finish changes here - the hue the name, brand or whitelist chose is preserved.
+        static readonly Dictionary<string, VehicleColor[]> MatteByFamily = new Dictionary<string, VehicleColor[]>
+        {
+            { "white", new[] { VehicleColor.MatteWhite } },
+            { "black", new[] { VehicleColor.MatteBlack } },
+            { "red", new[] { VehicleColor.MatteRed, VehicleColor.MatteDarkRed } },
+            { "orange", new[] { VehicleColor.MatteOrange } },
+            { "yellow", new[] { VehicleColor.MatteYellow } },
+            { "green", new[] { VehicleColor.MatteGreen, VehicleColor.MatteForestGreen, VehicleColor.MatteOliveDrab, VehicleColor.MatteFoliageGreen } },
+            { "blue", new[] { VehicleColor.MatteBlue, VehicleColor.MatteDarkBlue, VehicleColor.MatteMidnightBlue } },
+            { "purple", new[] { VehicleColor.MattePurple, VehicleColor.MatteDarkPurple } },
+            { "brown", new[] { VehicleColor.MatteBrown, VehicleColor.MatteDesertBrown } },
+            { "gold", new[] { VehicleColor.MatteDesertTan } },
+            { "silver", new[] { VehicleColor.MatteGray, VehicleColor.MatteLightGray } },
+            { "cream", new[] { VehicleColor.MatteDesertTan, VehicleColor.MatteWhite } },
+        };
+
         // WHITELIST: the body colours that sit well with a livery of this colour. Anything unlisted is out - a
         // blacklist ("anything but white") plus a uniform draw is what produced muddy pairings, while these sets
         // stay broad enough (4+ families) that a pick is still a surprise.
@@ -295,7 +314,7 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Info, "Smart tune " + veh.DisplayName + ": " + style + ", " + options.Count
                 + " liveries, " + (livery >= 0 ? names[livery] : "none named"));
             ApplyParts(veh, style, random);
-            ApplyPaint(veh, livery >= 0 ? names[livery] : null, random);
+            ApplyPaint(veh, style, livery >= 0 ? names[livery] : null, random);
         }
 
         // Groups the car's livery names by style and takes a random non-empty group, so a car with both rally
@@ -343,7 +362,7 @@ namespace ARS
             }
         }
 
-        static void ApplyPaint(Vehicle veh, string liveryName, Func<int, int, int> random)
+        static void ApplyPaint(Vehicle veh, Style style, string liveryName, Func<int, int, int> random)
         {
             List<string> named = ColoursIn(liveryName);
             string brand = BrandIn(liveryName);
@@ -388,6 +407,14 @@ namespace ARS
                 // two draws cannot clash, and the rims never follow the accent.
                 body = PickPaint(AllFamilies, random);
                 accent = PickPaint(Neutrals, random);
+            }
+
+            // A beater takes the matte finish whatever hue the rules above chose. Rims are left alone: wheels
+            // carry their own colour set and have no matte family to land in.
+            if (style == Style.Beater)
+            {
+                body = MatteFor(body, random);
+                accent = MatteFor(accent, random);
             }
 
             veh.PrimaryColor = body;
@@ -500,6 +527,20 @@ namespace ARS
                 if (entry.Value == family) return entry.Key;
             }
             return VehicleColor.MetallicBlack;
+        }
+
+        // A beater is never glossy. Rust, rat look, junkyard and primed all resolve to Style.Beater, so the style
+        // is the whole test: same hue from the normal rules, matte finish on top.
+        static VehicleColor MatteFor(VehicleColor colour, Func<int, int, int> random)
+        {
+            foreach (KeyValuePair<VehicleColor, string> entry in Palette)
+            {
+                if (entry.Key != colour) continue;
+                VehicleColor[] matte;
+                if (MatteByFamily.TryGetValue(entry.Value, out matte)) return matte[random(0, matte.Length - 1)];
+                break;
+            }
+            return VehicleColor.MatteGray;
         }
 
         // The natives hand back a GXT label; _GET_LABEL_TEXT turns it into the game's own text.
