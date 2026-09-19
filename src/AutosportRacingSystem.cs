@@ -5,7 +5,6 @@ using LemonUI;
 using LemonUI.Menus;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
@@ -240,10 +239,6 @@ namespace ARS
 
 
 
-        static public ulong SteerOffset = 0x0;
-        static public ulong ThrottleOffset = 0x0;
-        static public ulong BrakeOffset = 0x0;
-        public static ulong HandlingPtr = 0x0;
         public static ulong WheelsPtr = 0x0;
         public static ulong NumWheelsOffset = 0x0;
         public static ulong WheelPowerOffset = 0x0;
@@ -549,130 +544,6 @@ namespace ARS
             return value >= min && value <= max;
         }
 
-        public unsafe static byte* FindPattern(string pattern, string mask)
-        {
-            ProcessModule module = Process.GetCurrentProcess().MainModule;
-
-            ulong address = (ulong)module.BaseAddress.ToInt64();
-            ulong endAddress = address + (ulong)module.ModuleMemorySize;
-
-            for (; address < endAddress; address++)
-            {
-                for (int i = 0; i < pattern.Length; i++)
-                {
-                    if (mask[i] != '?' && ((byte*)address)[i] != pattern[i])
-                    {
-                        break;
-                    }
-                    else if (i + 1 == pattern.Length)
-                    {
-                        return (byte*)address;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-
-        static public unsafe void SetSteerInput(Vehicle handle, float value)
-        {
-
-            if (!CanWeUse(handle)) return;
-
-            if (SteerOffset == 0x0)
-            {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
-                if (addr != null)
-                {
-                    SteerOffset = *(uint*)(addr + 6);
-                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset: " + SteerOffset);
-                }
-            }
-            else
-            {
-                var address = (ulong)handle.MemoryAddress;
-                *((float*)(address + SteerOffset)) = value;
-            }
-
-        }
-        static ulong SteerAngleOffset = 0x0;
-        static public unsafe void SetSteerAngle(Vehicle handle, float value)
-        {
-
-
-            if (!CanWeUse(handle)) return;
-
-            if (SteerAngleOffset == 0x0)
-            {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
-                if (addr != null)
-                {
-
-                    SteerAngleOffset = *(uint*)(addr + 6) + 8;
-                    Log(LogImportance.Info, "[MEMORY] Learned the steer offset: " + SteerAngleOffset);
-                }
-            }
-            else
-            {
-                var address = (ulong)handle.MemoryAddress;
-                *((float*)(address + SteerAngleOffset)) = value;
-            }
-
-        }
-
-
-        static public unsafe void SetThrottle(Vehicle handle, float value)
-        {
-
-
-            if (ThrottleOffset == 0x0)
-            {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
-
-                if (addr != null)
-                {
-                    ThrottleOffset = *(uint*)(addr + 6) + 0x10;
-                    Log(LogImportance.Info, "[MEMORY] Learned the throttle offset: " + ThrottleOffset);
-
-                }
-            }
-            else
-            {
-                var address = (ulong)handle.MemoryAddress;
-
-                *((float*)(address + ThrottleOffset)) = value;
-            }
-
-
-        }
-
-        static public unsafe void SetBrakes(Vehicle handle, float value)
-        {
-            if (!CanWeUse(handle)) return;
-
-
-
-            if (BrakeOffset == 0x0)
-            {
-                IntPtr addr = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
-
-                if (addr != null)
-                {
-
-                    BrakeOffset = *(uint*)(addr + 6) + 0x14;
-                    Log(LogImportance.Info, "[MEMORY] Learned the BrakeOffset offset:" + BrakeOffset);
-
-                }
-            }
-            else
-            {
-                var address = (ulong)handle.MemoryAddress;
-
-                *((float*)(address + BrakeOffset)) = value;
-            }
-
-        }
         public static float RadToDeg(float rad)
         {
             return (rad * (180.0f / (float)Math.PI));
@@ -2603,7 +2474,7 @@ namespace ARS
             var address = (ulong)handle.MemoryAddress;
             if (WheelsPtr == 0x0)
             {
-                IntPtr addr = (IntPtr)FindPattern("\x3B\xB7\x48\x0B\x00\x00\x7D\x0D", "xx????xx");
+                IntPtr addr = (IntPtr)VehicleMemory.FindPattern("\x3B\xB7\x48\x0B\x00\x00\x7D\x0D", "xx????xx");
 
                 if (addr != null)
                 {
@@ -2620,7 +2491,7 @@ namespace ARS
 
             if (NumWheelsOffset == 0x0)
             {
-                IntPtr addr = (IntPtr)FindPattern("\x3B\xB7\x48\x0B\x00\x00\x7D\x0D", "xx????xx");
+                IntPtr addr = (IntPtr)VehicleMemory.FindPattern("\x3B\xB7\x48\x0B\x00\x00\x7D\x0D", "xx????xx");
 
                 if (addr != null)
                 {
@@ -2702,7 +2573,7 @@ namespace ARS
                 // Pattern: COMISS xmm, [r/m+disp32] ; SETNBE al ; JMP short ; (SHL/SHR)
                 // FiveM >= b2060: "0F 2F ? ? ? 00 00 0F 97 C0 EB ? D1"
                 // The 4-byte displacement at +3 is wheelSteeringAngleOffset; +8 = wheelPowerOffset.
-                IntPtr addr = (IntPtr)FindPattern(
+                IntPtr addr = (IntPtr)VehicleMemory.FindPattern(
                     "\x0F\x2F\x00\x00\x00\x00\x00\x0F\x97\xC0\xEB\x00\xD1",
                     "xx???xx???x?x");
                 if (addr != null)
@@ -3272,57 +3143,6 @@ namespace ARS
         
 
 
-        static public unsafe ulong GetHandlingPtr(Vehicle handle)
-        {
-            GameVersion gameVersion = Game.Version;
-            var address = (ulong)handle.MemoryAddress;
-            if (HandlingPtr == 0x0)
-            {
-                IntPtr addr = (IntPtr)FindPattern("\x3C\x03\x0F\x85\x00\x00\x00\x00\x48\x8B\x41\x20\x48\x8B\x88", "xxxx????xxxxxxx");
-
-                if (addr != null)
-                {
-                    HandlingPtr = *(uint*)(addr + 0x16);
-                }
-            }
-            return *((ulong*)(address + HandlingPtr));
-        }
-
-        public static unsafe float GetTRCurveLat(Vehicle v)
-        {
-
-            if (!CanWeUse(v)) return 0f;
-            ulong handlingAddress = GetHandlingPtr(v);
-            if (handlingAddress == 0) return 0f;
-            ulong tractionCurveMaxOffset = 0x0098;
-            if (handlingAddress < 1) return 0f;
-            float result = *(float*)(handlingAddress + tractionCurveMaxOffset);
-            return result;
-        }
-        
-        public static unsafe float GetSteerLock(Vehicle v)
-        {
-
-            if (!CanWeUse(v)) return 0f;
-            ulong handlingAddress = GetHandlingPtr(v);
-            if (handlingAddress == 0) return 0f;
-            ulong steerlock = 0x0080;
-            if (handlingAddress < 1) return 0f;
-            float result = *(float*)(handlingAddress + steerlock);
-            return result;
-        }
-        public static unsafe float GetDownforce(Vehicle v)
-        {
-
-            if (!CanWeUse(v)) return 0f;
-            ulong handlingAddress = GetHandlingPtr(v);
-            if (handlingAddress == 0) return 0f;
-            ulong downfOffset = 0x0014;
-            if (handlingAddress < 1) return 0f;
-            float result = *(float*)(handlingAddress + downfOffset);
-            return result;
-        }
-
         // Engine reference: wheel.cpp UpdateDownforce() lines 7625-7670 + the per-tick application at 8194-8199.
         // Two velocities drive downforce: forward speed scales downForceScale (how strong the downforce CAN be),
         // and lateral speed scales the actual vertical acceleration. We approximate the lateral input with
@@ -3400,18 +3220,6 @@ namespace ARS
 
 
         
-        public static unsafe int GetHandlingFlags(Vehicle v)
-        {
-
-            if (!CanWeUse(v)) return 0;
-            ulong handlingAddress = GetHandlingPtr(v);
-            if (handlingAddress == 0) return 0;
-            ulong modelflags = 0x128;
-            if (handlingAddress < 1) return 0;
-            int result = *(int*)(handlingAddress + modelflags);
-            return result;
-        }
-
         static public void DisplayHelpTextTimed(string text, int time)
         {
 

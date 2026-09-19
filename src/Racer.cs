@@ -284,9 +284,9 @@ namespace ARS
 
                 Car.EngineRunning = true;
                 Driver.SetIntoVehicle(Car, VehicleSeat.Driver);
-                ARS.SetSteerAngle(Car, 0.5f);
-                ARS.SetThrottle(Car, 0f);
-                ARS.SetBrakes(Car, 0f);
+                VehicleMemory.SetSteerAngle(Car, 0.5f);
+                VehicleMemory.SetThrottle(Car, 0f);
+                VehicleMemory.SetBrakes(Car, 0f);
 
                 try { Car.IsRadioEnabled = false; } catch (Exception) { }
             }
@@ -359,7 +359,7 @@ namespace ARS
             _previousNode = -1;
             _inputTrail.Clear();
 
-            string flags = ARS.GetHandlingFlags(Car).ToString("X");
+            string flags = VehicleMemory.GetHandlingFlags(Car).ToString("X");
             int flagsHex = Convert.ToInt32(flags, 16);
             bool hasOffroad = (flagsHex & 0x800000) != 0 || (flagsHex & 0x200000) != 0;
             Handling.Gravity = 9.8f;

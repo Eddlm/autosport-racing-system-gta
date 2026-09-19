@@ -77,7 +77,8 @@ This file is auto-loaded on every session and is capped (DSH truncates at ~65 KB
 - `AutosportRacingSystem.TrackFile.cs` — the dormant track XML writer: `UpdateRoute`, `SaveRoute` (dead, zero callers) and `FindCustomProps` (its sole caller is `UpdateRoute`). **No track mutation ships in the first release: nothing may create, edit/update or delete a track file.** The `Wide` off-by-one bug still sits in `UpdateRoute` for whenever it is deliberately re-enabled — see the open items.
 - `Racer.cs` — per-car intelligence: the steering/speed pipeline (all `Compute*` lane/speed methods, `ApplyRivalWalls`, `ApplySteerLimits`, `ConvertSpeedToPedals`, `TranslateSteerToInput`), pressure, maneuvers, TCS, stuck recovery, debug drawing.
 - `DataStructures.cs` — `RacerBrain` (perception, corner, rivals, intention), `Rival`, `TrackPoint`, `CornerPoint`/`Corner`, `VehicleControl`, `VehicleState`, `HandlingData`.
-- `SettingsRepair.cs` / `MenuSettings.cs` / `VehicleSelector.cs` / `VehicleCatalog.cs` / `GridBuilder.cs` / `TrackVisuals.cs` / `VehicleMemory.cs` / `TrackLoader.cs` / `TrackRepository.cs` / `UpdateChecker.cs` / `MenyooAppearance.cs` / `FreeCamController.cs` — the focused helpers.
+- `SettingsRepair.cs` / `MenuSettings.cs` / `VehicleSelector.cs` / `VehicleCatalog.cs` / `GridBuilder.cs` / `TrackVisuals.cs` / `TrackLoader.cs` / `TrackRepository.cs` / `UpdateChecker.cs` / `MenyooAppearance.cs` / `FreeCamController.cs` — the focused helpers.
+- `VehicleMemory.cs` — **the single memory layer, and the only place an offset or a pattern scan belongs**: the control-struct writes, the handling-struct reads, and the **memoized** AOB scanner they all share. A second copy of any of it is the defect this consolidation removed — see `AGENTS-TECHNOTES.md`.
 - `PersonalitySet.cs` / `SkillSet.cs` — leftover per-racer scaffolding.
 
 ## The per-frame pipeline (Racer, timed core)
