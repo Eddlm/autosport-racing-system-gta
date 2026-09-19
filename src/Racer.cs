@@ -429,7 +429,8 @@ namespace ARS
 
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float absDev = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
-            float safeEdge = roadWide - carHalfWidth;
+            // The centre defines the edge — the box may overhang, because the lane hug rides the track edge.
+            float safeEdge = roadWide;
             float overshoot = absDev - safeEdge;
             float recoveryDeg = 0f;
             if (overshoot > 0f)
@@ -442,7 +443,7 @@ namespace ARS
 
             // --- Lane steer: cross-track P toward the target lane + penetration repulsion ---
 
-            float trackBound = roadWide - carHalfWidth;
+            float trackBound = roadWide;
             bool hasActiveGuidance = Math.Abs(targetLane) > 0.01f || _avoidLeftWall > -trackBound || _avoidRightWall < trackBound;
             float laneSteerDeg = 0f;
             if (hasActiveGuidance)
@@ -723,7 +724,9 @@ namespace ARS
         float ApplyRivalWalls(float targetLane, float roadWide)
         {
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-            float trackBound = roadWide - carHalfWidth;
+            // The track edge itself, no car-width inset: the lane hug targets the true edge, so the car's centre
+            // reaches it and the box overhangs. The rival walls below still carry both cars' widths.
+            float trackBound = roadWide;
 
             if (!_avoidWallsInitialized)
             {
@@ -1916,7 +1919,7 @@ namespace ARS
                 if (Control.HandBrakeTime > Game.GameTime) Car.HandbrakeOn = true; else Car.HandbrakeOn = false;
 
                 VehicleMemory.SetThrottle(Car, ShapeLaunchThrottle(ARS.Clamp(Control.Throttle, -1, 1)));
-                VehicleMemory.SetBrakes(Car, Control.Brake);
+                VehicleMemory.SetBrakes(Car, ARS.Clamp(Control.Brake, 0f, 1f));
                 VehicleMemory.SetSteerAngle(Car, Control.SteerInput);
 
             }
@@ -1999,7 +2002,7 @@ namespace ARS
 
         float OutOfTrackDistance()
         {
-            return (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) + (VehicleData.BoundingBox / 2)) - CurrentTrackPoint.TrackHalfWidth;
+            return Math.Abs(Brain.CurrentPerception.DeviationFromCenter) - CurrentTrackPoint.TrackHalfWidth;
         }
 
         void UpdateRivalInfo()
