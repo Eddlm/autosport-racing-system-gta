@@ -38,14 +38,19 @@ jobs:
           (https://github.com/LemonUIbyLemon/LemonUI).
 
           Required (install separately, we do not bundle them):
-            - ScriptHookV (Alexander Blade)
-            - ScriptHookVDotNet 2. The v2 API dll (ScriptHookVDotNet2.dll) MUST
-              come from the SAME download as your ScriptHookVDotNet.asi. Mixing
-              builds of the two makes ARS fail to start, silently, even though
-              nothing else in the game looks wrong.
-            - A SHVDN build that supports your game version. The widely mirrored
-              2022 v3.6.0 bundle cannot initialise on current game builds and
-              breaks every script, not just ARS.
+            - ScriptHookV (Alexander Blade): http://www.dev-c.com/gtav/scripthookv/
+            - .NET Framework 4.8 and the latest Visual C++ Redistributable.
+            - ScriptHookVDotNet: use a NIGHTLY build, NOT stable v3.6.0. The stable
+              bridge cannot start on current game builds and every script dies, not
+              just ARS. Nightlies, no GitHub account needed:
+                https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases
+              ARS is verified against v3.7.0-nightly.188:
+                https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases/tag/v3.7.0-nightly.188
+              Copy ScriptHookVDotNet.asi, ScriptHookVDotNet2.dll and
+              ScriptHookVDotNet3.dll from the SAME download into the game folder
+              (ScriptHookVDotNet.ini too if you want to edit it). ARS runs on the v2
+              API, so mixing builds of the asi and the API dll makes it fail
+              silently - nothing else in the game looks wrong.
 
           If ARS does not appear: open Scripts\AutosportRacingSystem\Log.log -
           it names the reason (for example an SHVDN dll/asi build mismatch).
