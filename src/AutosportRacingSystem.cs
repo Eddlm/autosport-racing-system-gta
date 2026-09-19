@@ -154,6 +154,10 @@ namespace ARS
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
         public static float SteerDampingScale = 1f;
+        // Degrees added to the computed corner-geometry steer ceiling. 0.0 is the geometry 1:1; this is a
+        // deliberate feel skew on how hard a racer may steer in, not a physics term. Being additive, its
+        // effect is proportionally largest where the ceiling is smallest — i.e. at speed.
+        public static float SteerCeilingBias = 0f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1014,6 +1018,16 @@ namespace ARS
             };
             steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale).ToString("0.00", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerKDItem);
+
+            string[] steerCeilingOptions = { "0.0", "0.5", "1.0", "1.5", "2.0" };
+            NativeListItem<string> steerCeilingItem = new NativeListItem<string>("Steer-In Bias (deg)", "Degrees added to the speed-based steer ceiling (vanilla curve vs Ackermann, whichever is lower). 0.0 is the corner geometry 1:1; higher turns in more, with the effect proportionally largest at speed, where the ceiling is smallest.", steerCeilingOptions);
+            steerCeilingItem.ItemChanged += (sender, args) =>
+            {
+                SteerCeilingBias = float.Parse(steerCeilingItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerCeilingBias", steerCeilingItem.Items[args.Index]);
+            };
+            steerCeilingItem.SelectedIndex = Math.Max(0, steerCeilingItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingBias", SteerCeilingBias).ToString("0.0", CultureInfo.InvariantCulture)));
+            aiMenu.Add(steerCeilingItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -3041,6 +3055,7 @@ namespace ARS
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingScale = SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale);
+            SteerCeilingBias = SettingsMenuStore.GetFloat("SteerCeilingBias", SteerCeilingBias);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

@@ -804,6 +804,8 @@ namespace ARS
         // Grip is read as a ratio to this reference, floored so a low-grip car cannot blow the coefficient up.
         const float SteerCapGripReference = 1f;
         const float SteerCapGripFloor = 0.5f;
+        // The bias dial may cut the ceiling but never below this fraction of the geometry.
+        const float SteerCeilingBiasFloor = 0.5f;
 
         // Live ceiling coefficient: the useful steer angle at speed is ~ grip × g × wheelbase / v², so grip
         // belongs in that numerator and the cap loosens as √grip — the same √grip the speed maths uses.
@@ -857,7 +859,11 @@ namespace ARS
             if (fwdSpeed > 0f)
             {
                 float vanillaCeiling = VehicleData.SteeringLock / (1f + SteerReductionPerMps * fwdSpeed);
-                speedCeiling = Math.Min(vanillaCeiling, AckermannCeilingDegrees(fwdSpeed));
+                float geometryCeiling = Math.Min(vanillaCeiling, AckermannCeilingDegrees(fwdSpeed));
+                // The one deliberate skew: the geometry is computed 1:1 and then biased, so the ceiling's shape
+                // and the crossover stay where the physics puts them and only the number moves. The floor stops
+                // a negative bias from reaching zero (a car that cannot steer) or below (an inverted clamp).
+                speedCeiling = ARS.Clamp(geometryCeiling + ARS.SteerCeilingBias, geometryCeiling * SteerCeilingBiasFloor, VehicleData.SteeringLock);
             }
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;
