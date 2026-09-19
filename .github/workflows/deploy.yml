@@ -34,9 +34,8 @@ jobs:
           Install: extract the AutosportRacingSystem folder into
           Grand Theft Auto V\Scripts\ (overwrite if updating).
 
-          Included: LemonUI.SHVDN2 1.5.2 - MIT, by JustALemon
-          (https://github.com/LemonUIbyLemon/LemonUI). Its licence notice is at the
-          end of this file.
+          Included: LemonUI.SHVDN2 1.5.2, used under the MIT License, by JustALemon
+          (https://github.com/LemonUIbyLemon/LemonUI).
 
           Required (install separately, we do not bundle them):
             - ScriptHookV (Alexander Blade)
@@ -52,28 +51,6 @@ jobs:
           it names the reason (for example an SHVDN dll/asi build mismatch).
 
           Menu: Sprint + Context hotkey, or type arsmenu in the chat console.
-
-          ============================================================
-          LemonUI.SHVDN2 1.5.2 - MIT License
-          Copyright (c) 2020-2023 Hannele Ruiz
-
-          Permission is hereby granted, free of charge, to any person obtaining a copy
-          of this software and associated documentation files (the "Software"), to deal
-          in the Software without restriction, including without limitation the rights
-          to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-          copies of the Software, and to permit persons to whom the Software is
-          furnished to do so, subject to the following conditions:
-
-          The above copyright notice and this permission notice shall be included in all
-          copies or substantial portions of the Software.
-
-          THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-          IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-          FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-          AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-          LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-          OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-          SOFTWARE.
           '@ | Set-Content -Encoding UTF8 (Join-Path $stage 'README.txt')
           $zip = "AutosportRacingSystem-$($env:GITHUB_SHA.Substring(0,7)).zip"
           Compress-Archive -Path "$stage\*" -DestinationPath $zip -Force
