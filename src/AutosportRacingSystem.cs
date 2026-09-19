@@ -154,10 +154,10 @@ namespace ARS
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
         public static float SteerDampingScale = 1f;
-        // Degrees added to the computed corner-geometry steer ceiling. 0.0 is the geometry 1:1; this is a
-        // deliberate feel skew on how hard a racer may steer in, not a physics term. Being additive, its
-        // effect is proportionally largest where the ceiling is smallest — i.e. at speed.
-        public static float SteerCeilingBias = 0f;
+        // Degrees added to the computed corner-geometry steer ceiling. 0.0 is the geometry 1:1; the shipped
+        // default is a deliberate +2 skew (driver-tuned), not a physics term. Being additive, its effect is
+        // proportionally largest where the ceiling is smallest — i.e. at speed.
+        public static float SteerCeilingBias = 2f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -171,7 +171,7 @@ namespace ARS
         public static Keys MenuKey = Keys.E;
         static readonly Keys[] MenuHotkeyKeys = Enum.GetValues(typeof(Keys)).Cast<Keys>().Where(key => (int)key >= 8 && (int)key <= 255).Distinct().OrderBy(key => (int)key).ToArray();
         public static readonly string[] MenuHotkeyValues = MenuHotkeyKeys.Select(key => ((int)key).ToString(CultureInfo.InvariantCulture)).ToArray();
-        public static LogImportance LogLevel = LogImportance.Info;
+        public static LogImportance LogLevel = LogImportance.None;
         // Flat mph added to every racer's intended speed plan; 0 = the physics plan alone.
 
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowProjection/ShowInputTrail visuals.
@@ -1019,7 +1019,7 @@ namespace ARS
             steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale).ToString("0.00", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerKDItem);
 
-            string[] steerCeilingOptions = { "0.0", "0.5", "1.0", "1.5", "2.0" };
+            string[] steerCeilingOptions = { "0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0" };
             NativeListItem<string> steerCeilingItem = new NativeListItem<string>("Steer-In Bias (deg)", "Degrees added to the speed-based steer ceiling (vanilla curve vs Ackermann, whichever is lower). 0.0 is the corner geometry 1:1; higher turns in more, with the effect proportionally largest at speed, where the ceiling is smallest.", steerCeilingOptions);
             steerCeilingItem.ItemChanged += (sender, args) =>
             {
@@ -2176,7 +2176,7 @@ namespace ARS
 
 
 
-            if (WasCheatStringJustEntered("arsepidump"))
+            if (WasCheatStringJustEntered("arspidump"))
             {
                 // The pacing numbers behind the grid: one row per cached model, so the electric
                 // corrections can be weighed against ICE cars of the same class instead of guessed at.
@@ -3091,7 +3091,10 @@ namespace ARS
             SettingsRepair.DeleteLegacyFiles();
             Log(LogImportance.Info, "Checked the Settings folder.");
         }
-        public enum LogImportance { Info, Error, Fatal }
+        // None sits last on purpose: Log() returns when `LogLevel > i`, so the highest value silences every
+        // level without a second test. Forced calls still write - those are error paths only, so they cannot
+        // hammer the disk, and a silent install failure is worse than a line in the log.
+        public enum LogImportance { Info, Error, Fatal, None }
 
         // Stored text -> enum value; unknown or undefined text falls back.
         static T ParseEnum<T>(string value, T fallback) where T : struct
@@ -3165,6 +3168,7 @@ namespace ARS
 
         public static void Log(LogImportance i, string text, bool forced = false)
         {
+            // LogLevel is a floor, not a switch: None (highest value) fails every level test and returns here.
             if (LogLevel > i && !forced) return;
             string log = "\n[" + DateTime.Now + "](" + i.ToString() + "): " + text;
             File.AppendAllText(ScriptsFolder + @"\Log.log", log);

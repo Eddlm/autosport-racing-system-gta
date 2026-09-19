@@ -146,7 +146,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("SteerDampingScale", "1.00", Kind.Number, new[] { "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00" }));
-            settings.Specs.Add(new KeySpec("SteerCeilingBias", "0.0", Kind.Number, new[] { "0.0", "0.5", "1.0", "1.5", "2.0" }));
+            settings.Specs.Add(new KeySpec("SteerCeilingBias", "2.0", Kind.Number, new[] { "0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0" }));
             settings.Specs.Add(new KeySpec("CrestEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("Rubberbanding", "0", Kind.Number, new[] { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" }));
@@ -155,7 +155,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("Hotkeys", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("MenuModifierKey", ((int)Keys.LShiftKey).ToString(), Kind.Number, ARS.MenuHotkeyValues));
             settings.Specs.Add(new KeySpec("MenuKey", ((int)Keys.E).ToString(), Kind.Number, ARS.MenuHotkeyValues));
-            settings.Specs.Add(new KeySpec("LogLevel", ARS.LogImportance.Info.ToString(), Kind.Text, Enum.GetNames(typeof(ARS.LogImportance))));
+            settings.Specs.Add(new KeySpec("LogLevel", ARS.LogImportance.None.ToString(), Kind.Text, Enum.GetNames(typeof(ARS.LogImportance))));
             files.Add(settings);
 
             // The debug key set is the toggle table itself: retiring a toggle retires its key.
