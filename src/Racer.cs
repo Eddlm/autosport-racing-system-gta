@@ -785,10 +785,11 @@ namespace ARS
         // damping ratio can hold across the fleet. The floor only guards a degenerate grip.
         const float SteerDampingGripFloor = 1f;
         float SteerDamping => ARS.SteerDampingScale / Math.Max(VehicleData.BaseMechanicalGrip, SteerDampingGripFloor);
-        // Game's player steering limiter (Automobile.cpp): speed-based reduction.
-        const float PlayerSpeedSteerFwdThreshold = 0.001f;   // effectively always on
-        // Steer reduction multiplier: 0.04 at throttle 0.5, 0.08 at throttle 0.99.
-        // The TRlat/3 floor described here belongs to the disabled block below; the live path caps at TRlat × 0.5.
+        // Vanilla's player steering limiter (Automobile.cpp): the requested angle is divided by
+        // 1 + 0.075 × (forward speed − 5), in m/s, and vanilla skips it while the car is sliding. Only the
+        // reduction is taken — vanilla's auto-centre term beside it is not applied.
+        const float VanillaSteerReductionPerMps = 0.075f;
+        const float VanillaSteerReductionFwdThreshold = 5f;
 
 
         void ApplySteerLimits()
@@ -802,55 +803,40 @@ namespace ARS
                 return;
             }
 
-            // Slide-angle steer limit ramps in with speed: full lock at standstill, collapsing to the
-            // grip-derived allowance by the ramp speed, staying at that value above.
-            // Steering-in only: capping the countersteer would fight the correction that saves the car.
             float requestedSteer = Control.SteerDegrees;
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
+            // Full countersteer: release the brake outright, immediately, so the tires can roll again.
+            // No reset here: the cap recovers on its own at the MaxThrottle rate (ConvertSpeedToPedals).
+            if (IsFullCountersteer()) Control.MaxBrake = 0f;
+
+            // Vanilla's authority curve used as a ceiling rather than as an attenuation: the full intent passes
+            // below it and is clipped to it above, so small corrections are never scaled down. The curve is the
+            // player's — lock / (1 + 0.075 × (v − 5)), m/s — which halves the allowance by 41 mph.
+            bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
+            if (!countersteering && fwdSpeed > VanillaSteerReductionFwdThreshold)
+            {
+                float vanillaMaxSteer = VehicleData.SteeringLock / (1f + VanillaSteerReductionPerMps * (fwdSpeed - VanillaSteerReductionFwdThreshold));
+                if (Math.Abs(requestedSteer) > vanillaMaxSteer)
+                {
+                    Control.SteerDegrees = Math.Sign(requestedSteer) * vanillaMaxSteer;
+                    _steerLimitedThisFrame = true;
+                }
+            }
+
+            /* ZOMBIE — slide-angle steer limit (the TRlat ladder), live until the vanilla player reduction
+            above replaced it. Full lock at standstill, collapsing to the grip-derived allowance by the ramp
+            speed, steering-in only: capping the countersteer would fight the correction that saves the car.
+
             float fwdMph = ARS.MpsToMph(Math.Max(fwdSpeed, 0f));
             float slideAngle = Math.Abs(VehicleData.SlideAngle);
             // Max steer angle = TRlat × 0.33 base, plus slide, capped at TRlat × 0.5 (base is always 66% of the ceiling).
             float maxSteerAngle = Math.Min(Handling.LateralTractionCurve * 0.33f + slideAngle, Handling.LateralTractionCurve * 0.5f);
-            // Full countersteer: release the brake outright, immediately, so the tires can roll again.
-            // No reset here: the cap recovers on its own at the MaxThrottle rate (ConvertSpeedToPedals).
-            if (IsFullCountersteer()) Control.MaxBrake = 0f;
             float maxSteer = ARS.Remap(fwdMph, 40f, 0f, maxSteerAngle, VehicleData.SteeringLock, true);
-            // Countersteer is exempt from the limit — same steer-vs-yaw test the slew rate uses.
-            bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             if (!countersteering && Math.Abs(requestedSteer) > maxSteer)
             {
                 Control.SteerDegrees = Math.Sign(requestedSteer) * maxSteer;
                 _steerLimitedThisFrame = true;
             }
-
-            /* ZOMBIE — speed-based reduction, disabled while trialing slide-angle steer limit.
-
-            // Only limit when steering and yaw agree (car turning into the steer).
-            if (Math.Sign(Control.SteerDegrees) != Math.Sign((int)VehicleData.YawRotationPerSecondDegrees))
-                return;
-
-            // Game's player steering limiter (Automobile.cpp): speed-based reduction.
-            float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
-            float preLimitSteer = Math.Abs(Control.SteerDegrees);
-            _requestedSteerDegrees = preLimitSteer;
-            float absoluteSteerLimit = VehicleData.SteeringLock;
-            _steerLimitDegrees = absoluteSteerLimit;
-
-            if (fwdSpeed > PlayerSpeedSteerFwdThreshold)
-            {
-                float speedSteerReduction = 0.5f;
-                float divisor = 1f + speedSteerReduction * fwdSpeed;
-                Control.SteerDegrees /= divisor;
-                if (Math.Abs(Control.SteerDegrees) < preLimitSteer) _steerLimitedThisFrame = true;
-                _steerLimitDegrees = absoluteSteerLimit / divisor;
-            }
-
-            const float MinSteerAngleFloorFactor = 0.3f;
-            float MinSteerAngleFloor = Handling.LateralTractionCurve * MinSteerAngleFloorFactor;
-            if (Control.SteerDegrees != 0f && Math.Abs(Control.SteerDegrees) < MinSteerAngleFloor)
-                Control.SteerDegrees = Math.Sign(Control.SteerDegrees) * MinSteerAngleFloor;
-
-            if (_steerLimitedThisFrame && Control.MaxThrottle>=0.1) Control.MaxThrottle -= (float)(2 * TickScale);
             */
         }
 
