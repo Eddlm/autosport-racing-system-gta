@@ -177,7 +177,7 @@ Where the gap shows:
 
 **What it was**: in `ApplySteerLimits`, the maximum brake used to ease with the slide angle — `Control.MaxBrake = slideAngle > gripSteerAngle ? Remap(slideAngle, gripSteerAngle*2, gripSteerAngle, 0.8, 1) : 1` with `gripSteerAngle = 2 + TRlat × 0.2`. Past that slide angle the brake cap fell to **0.8** (a 20 % cut) so the tyres could regain lateral grip; below it the cap was a plain 1.
 
-**Why it is out**: it was tuned against the *old* steering allowance (`2 + slide` capped at `TRlat × 0.3`, ≈3.4° for the median car), which sat **below** its threshold (≈4.25° median). The allowance is now `TRlat × 0.33 + slide` capped at `TRlat × 0.5` (this note cited the old `× 0.2` base; the correction widens the base and so makes the clash *worse*, not better), so the rampdown would engage *inside* the steering range — the car holding more steer while its brake is being cut, a pairing that was never tuned together. Rather than re-tune blind, it ships out and returns with feedback in hand.
+**Why it is out**: it was tuned against the *old* steering allowance (`2 + slide` capped at `TRlat × 0.3`, ≈3.4° for the median car), which sat **below** its threshold (≈4.25° median). The allowance is now vanilla's speed curve as a ceiling — `lock / (1 + 0.075(v − 5))`, i.e. ~20° at 41 mph and ~15° at 60 mph on a 40° lock, far looser than the TRlat form it replaced — so the rampdown would engage **even deeper inside** the steering range: the car holding more steer while its brake is being cut, a pairing that was never tuned together. Rather than re-tune blind, it ships out and returns with feedback in hand.
 
 **When**: after the first WIP release's feedback — **v0.9 and over**.
 
