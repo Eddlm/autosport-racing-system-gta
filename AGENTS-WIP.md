@@ -40,7 +40,7 @@ It deliberately does not ship a track creator or any track-file mutation path. T
 ## Package gate
 
 - [ ] Build Release successfully and confirm `ARS.dll` and `LemonUI.SHVDN2.dll` deploy to the game Scripts folder.
-- [ ] Run the generated GitHub artifact from a clean install using a current, matched SHVDN asi/API-dll pair.
+- [ ] Run the generated GitHub artifact from a clean install using a current, matched SHVDN asi/API-dll pair — the verified pair is nightly **`v3.7.0-nightly.188`**: asi `239104` B + `ScriptHookVDotNet2.dll` `984576` B, both from that one zip (`AGENTS-SHVDN.md`).
 - [ ] Confirm the package includes the LemonUI credit — **JustALemon**, its nickname, stating the dll is used under the MIT License — plus tracks, `cars.txt`, `sillynames.txt`, and an **empty `Settings\`** — no settings ship at all; the mod writes its three inis on first run.
   - **No `LemonUI-LICENSE.txt` and no verbatim MIT notice ship. That is a deliberate, informed decision, not an oversight — do not "fix" it.** It sits outside the MIT condition that the notice accompany copies, and the copyright holder's real name is present in the dll's own assembly metadata in any case, so the file bought no privacy.
 - [ ] Confirm it excludes `ScriptHookVDotNet2.dll`, logs, crash artifacts, stale legacy settings files, and untracked `Options.ini`.

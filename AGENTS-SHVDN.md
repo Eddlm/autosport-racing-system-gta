@@ -23,6 +23,8 @@ Both the widely distributed bundle's v2 dll and the nightly's report **assembly 
 
 ## Verified matrix (game build `VER_1_0_3889_0`)
 
+**The "nightly" in every cell below is `v3.7.0-nightly.188`** — commit `0d61afa8d46f5a80297a716cfb2ed04f186c57cd`, whose `ScriptHookVDotNet2.dll` reports `ProductVersion 2.11.6+0d61afa8…`, which is how the installed pair was identified. "bundle 2022" is the widely mirrored stable **v3.6.0** zip. Naming the nightly matters: the matrix said only "nightly" for a year, and that is not reproducible — a later nightly is a different bridge.
+
 | asi | `ScriptHookVDotNet2.dll` | `ScriptHookVDotNet3.dll` | Result |
 |---|---|---|---|
 | nightly (asi 239104 B) | nightly (984576 B, file 2.11.6) | — | **works** — race ran |
@@ -44,8 +46,11 @@ The 2022 bundle fails identically with and without the v3 dll, and it kills `Han
 
 ## Release requirement (user-facing)
 
-1. **A SHVDN build that supports the user's game build.** The bundle currently served as the public download cannot run on current game builds at all.
-2. **The asi and `ScriptHookVDotNet2.dll` from the same build** — not merely "a v2 dll present".
+1. **A SHVDN build that supports the user's game build.** The stable **v3.6.0** served as the public download cannot run on current game builds at all (SHVDN's own release notes say to use nightly.89 or later from game `v1.0.3258.0`). Send users to the **nightly** releases — a separate repo, and no GitHub account is needed:
+   - page: `https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases`
+   - the verified build: `https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases/tag/v3.7.0-nightly.188` (asset `ScriptHookVDotNet-v3.7.0-nightly.188.zip`)
+   - these links ship to users in the generated `README.txt` (`deploy.yml`); keep the two in sync.
+2. **The asi and `ScriptHookVDotNet2.dll` from the same build** — not merely "a v2 dll present". Verified pair, byte-for-byte: asi `239104` + `ScriptHookVDotNet2.dll` `984576`.
 3. Diagnosis to quote: `MissingMethodException: Method not found: 'UInt32 SHVDN.NativeMemory.GetHashKey(System.String)'` (or any other `SHVDN.*` member) in `ScriptHookVDotNet.log`; since `353d65f` also named in ARS's own `Log.log`.
 4. **Never ship a pinned `ScriptHookVDotNet2.dll` with ARS** — it would manufacture exactly this mismatch for every user whose asi is a different build. Considered and rejected on this evidence. **LemonUI is the deliberate opposite case and *is* bundled** (`libs\LemonUI.SHVDN2.dll`, staged by name in `deploy.yml`, MIT with the author's permission, and the last release supporting the v2 API): it is our own script-side dependency, whereas the API dll belongs to the user's SHVDN install. The `deploy.yml` staging line must therefore name the file — a `bin\Release\*` wildcard would sweep `ScriptHookVDotNet2.dll` in and undo this.
 
