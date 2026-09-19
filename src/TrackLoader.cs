@@ -147,7 +147,7 @@ namespace ARS
             Script.Wait(1000);
             ARS.Log(ARS.LogImportance.Info, "Loading props");
             ars.SetLoadingPromptText("Loading props...");
-            BuildTrackLimits(ARS.RouteNodes, ARS.NodeHalfWidths, ARS.CurrentFile, ref ARS.IsPointToPoint, ars.IntendedOpponents, ARS.TrackLimits, ars.FlareEffects, ARS.GridPositions);
+            BuildTrackLimits(ARS.RouteNodes, ARS.NodeHalfWidths, ARS.CurrentFile, ref ARS.IsPointToPoint, ars.IntendedOpponents, ARS.TrackLimits, ars.FlareEffects);
 
             if (ARS.CanWeUse(Game.Player.Character.CurrentVehicle))
             {
@@ -459,17 +459,27 @@ namespace ARS
             return wrapped < 0 ? wrapped + count : wrapped;
         }
 
-        public static void BuildTrackLimits(List<Vector3> nodes, Dictionary<int, float> widths, XmlDocument trackFile, ref bool isPointToPoint, int opponents, List<Prop> trackLimits, List<int> flareEffects, List<Vector3> gridPositions)
+        public static void BuildTrackLimits(List<Vector3> nodes, Dictionary<int, float> widths, XmlDocument trackFile, ref bool isPointToPoint, int opponents, List<Prop> trackLimits, List<int> flareEffects)
         {
-            gridPositions.Clear();
             if (nodes.Count == 0) return;
             isPointToPoint |= nodes[0].DistanceTo(nodes[nodes.Count - 1]) > 20f;
             Color flareColor = ReadFlareColor(trackFile);
 
             if (trackLimits.Count == 0) SpawnStartGates(nodes, widths, isPointToPoint, opponents, trackLimits, flareEffects, flareColor);
-            if (isPointToPoint) BuildPointToPointGrid(nodes, widths, gridPositions);
-            else BuildCircuitGrid(nodes, widths, gridPositions);
             Function.Call(Hash.CLEAR_FOCUS);
+        }
+
+        // Built to order rather than to a fixed ceiling: the grid only needs slots for the size being spawned,
+        // plus two that GridBuilder.Place reads ahead into while aiming each car. The walk is cheap, so this is
+        // redone at every grid spawn — the size can change between spawns, and between spawns and track load.
+        public static void BuildGridSlots(List<Vector3> nodes, Dictionary<int, float> widths, bool isPointToPoint, int wantedCars, List<Vector3> grid)
+        {
+            grid.Clear();
+            if (wantedCars <= 0) return;
+
+            int slotCount = wantedCars + 2;
+            if (isPointToPoint) BuildPointToPointGrid(nodes, widths, grid, slotCount);
+            else BuildCircuitGrid(nodes, widths, grid, slotCount);
         }
 
         static void SpawnStartGates(List<Vector3> nodes, Dictionary<int, float> widths, bool isPointToPoint, int opponents, List<Prop> limits, List<int> effects, Color color)
@@ -493,9 +503,9 @@ namespace ARS
             }
         }
 
-        static void BuildPointToPointGrid(List<Vector3> nodes, Dictionary<int, float> widths, List<Vector3> grid)
+        static void BuildPointToPointGrid(List<Vector3> nodes, Dictionary<int, float> widths, List<Vector3> grid, int slotCount)
         {
-            for (int i = 50; i > 1; i--)
+            for (int i = slotCount + 1; i > 1 && i * 3 < nodes.Count; i--)
             {
                 Vector3 point = nodes[i * 3];
                 Vector3 direction = (point - nodes[i * 3 - 1]).Normalized;
@@ -503,10 +513,10 @@ namespace ARS
             }
         }
 
-        static void BuildCircuitGrid(List<Vector3> nodes, Dictionary<int, float> widths, List<Vector3> grid)
+        static void BuildCircuitGrid(List<Vector3> nodes, Dictionary<int, float> widths, List<Vector3> grid, int slotCount)
         {
             int reference = nodes.Count - 1;
-            for (int i = nodes.Count - 1; i > 50 && grid.Count <= 40; i--)
+            for (int i = nodes.Count - 1; i > 50 && grid.Count < slotCount; i--)
             {
                 if (i >= reference - 5) continue;
                 Vector3 direction = (nodes[reference] - nodes[i]).Normalized;

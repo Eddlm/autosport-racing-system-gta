@@ -204,10 +204,24 @@ namespace ARS
         const ulong CurrentDriveGearHash = 0x56185A25D45A0DCD;
         const ulong FullyChargeNitrousHash = 0x1A2BCC8C636F9226;
         const ulong OverrideNitrousLevelHash = 0xC8E9B6B71B8E660D;
+        const float PowerCounterMax = 1.5f;
+        const float PowerCounterMinCommanded = 0.1f;
+        const float PowerCounterMinApplied = 0.05f;
+        const float TopSpeedCounterOnsetScale = 1f;
+        const float TopSpeedCounterBand = 15f;
+        const float TopSpeedCounterMax = 1.35f;
+        const float LaunchShapeMaxSpeed = 12f;
+        const float ModulatedThrottleCap = 0.99f;
+        const float ModulatedThrottleLow = 0.05f;
+        const float ModulatedThrottleHigh = 0.95f;
+        const float LaunchThrottleBinarySplit = 0.1f;
 
         public Maneuver ActiveManeuver = new Maneuver();
         int _nitrousActiveUntil = 0;
         int _nitrousLapUsed = -1;
+        float _powerCounter = 1f;
+        float _appliedThrottleLastFrame = 1f;
+        int _powerCounterLoggedAt = 0;
 
 
         public float Aggression = 50f;
@@ -321,6 +335,10 @@ namespace ARS
             CurrentTrackPoint = ARS.TrackPoints.Last();
             Control.Brake = 0f;
             Control.Throttle = 0f;
+            _powerCounter = 1f;
+            _appliedThrottleLastFrame = 1f;
+            if (ControlledByPlayer) ARS.PlayerModulatesThrottle = false;
+            Function.Call((Hash)CheatPowerIncreaseHash, Car, 1.0f);
 
             LapTimes.Clear();
             LapStartTime = 0;
@@ -848,6 +866,9 @@ namespace ARS
 
         public void Launch()
         {
+            // Open the launch window at the green: the player's input is judged during the launch itself.
+            if (ControlledByPlayer) ARS.PlayerLaunchTestActive = true;
+
             Brain.Corner = null;
             CornerScanNode = -1;
             RouteTargetNode = -1;
@@ -1315,9 +1336,12 @@ namespace ARS
         // TCS wheelspin targets: more negative = more spin allowed, so the deepening is subtracted.
         const float IdealWheelspinBase = -1.5f;
         const float IdealWheelspinDeepening = 0.5f;
+        const bool TcsEnabled = true;   // kill switch for judging a change without TCS in the way
 
         void TractionControl()
         {
+            if (!TcsEnabled) { Control.MaxThrottleFromTCS = 1f; return; }
+
             float wheelspin = ARS.MaxWheelSlip(Car);
 
             float IdealWheelspin;
@@ -1449,11 +1473,7 @@ namespace ARS
         {
             if (ControlledByPlayer || !ARS.AiNitroAllowed()) return;
 
-            if (Game.GameTime < _nitrousActiveUntil)
-            {
-                Function.Call((Hash)CheatPowerIncreaseHash, Car, NitrousPowerMultiplier);
-                return;
-            }
+            if (Game.GameTime < _nitrousActiveUntil) return;   // the burn's power rides ApplyPowerMultiplier
             if (_nitrousActiveUntil > 0) StopNitrous();
         }
 
@@ -1616,7 +1636,6 @@ namespace ARS
 
         void StopNitrous()
         {
-            Function.Call((Hash)CheatPowerIncreaseHash, Car, 1.0f);
             Function.Call((Hash)OverrideNitrousLevelHash, Car, false, 10.0f, 0.0f, 100.0f, true);
             _nitrousActiveUntil = 0;
         }
@@ -1732,10 +1751,32 @@ namespace ARS
                 DrawInputTrail();
             }
 
+            _appliedThrottleLastFrame = VehicleMemory.GetThrottle(Car);
+
+            // Judge the player's launch input once per race: sample while the window is open (a keyboard
+            // pedal is a hard 0/1, a gamepad is not), then freeze the verdict so the AI's shaping cannot
+            // change mid-race. The window closes where the grip loss it exists for stops mattering.
+            if (ControlledByPlayer && ARS.PlayerLaunchTestActive)
+            {
+                float playerThrottle = Math.Abs(_appliedThrottleLastFrame);
+                if (playerThrottle > ModulatedThrottleLow && playerThrottle < ModulatedThrottleHigh) ARS.PlayerModulatesThrottle = true;
+
+                if (ARS.GetForwardSpeed(Car) > LaunchShapeMaxSpeed)
+                {
+                    ARS.PlayerLaunchTestActive = false;
+                    ARS.Log(ARS.LogImportance.Info, ARS.PlayerModulatesThrottle
+                        ? "Player launch input: modulatable — AI launch throttle capped at " + ModulatedThrottleCap
+                        : "Player launch input: binary 0/1 — AI launch throttle quantised");
+                }
+            }
+
             if (!Driver.IsPlayer)
             {
                 ApplyInputs();
             }
+
+            UpdatePowerCompensation();
+            ApplyPowerMultiplier();
         }
 
         // Sphere plus a drop line, so a marked point can be placed against the ground.
@@ -1841,7 +1882,7 @@ namespace ARS
 
                 if (Control.HandBrakeTime > Game.GameTime) Car.HandbrakeOn = true; else Car.HandbrakeOn = false;
 
-                VehicleMemory.SetThrottle(Car, ARS.Clamp(Control.Throttle, -1, 1));
+                VehicleMemory.SetThrottle(Car, ShapeLaunchThrottle(ARS.Clamp(Control.Throttle, -1, 1)));
                 VehicleMemory.SetBrakes(Car, Control.Brake);
                 VehicleMemory.SetSteerAngle(Car, Control.SteerInput);
 
@@ -1852,6 +1893,56 @@ namespace ARS
                 VehicleMemory.SetBrakes(Car, 0f);
                 VehicleMemory.SetSteerInput(Car, 0f);
             }
+        }
+
+        // The engine resets the cheat multiplier every physics step, so this must re-write it each frame —
+        // it is the single per-frame writer of it, and nitro rides on the same write.
+        // Force-side compensation only: a fade is a multiplication so its inverse restores it, whereas a cut
+        // to zero cannot be (drive force is proportional to throttle) and grip-side losses only add wheelspin.
+        void UpdatePowerCompensation()
+        {
+            float counter = 1f;
+
+            float commanded = Math.Abs(Control.Throttle);
+            if (!ControlledByPlayer && commanded > PowerCounterMinCommanded && _appliedThrottleLastFrame < commanded)
+                counter *= ARS.Clamp(commanded / Math.Max(_appliedThrottleLastFrame, PowerCounterMinApplied), 1f, PowerCounterMax);
+
+            // Past the car's own top speed the engine fades drive force and adds an over-speed brake. No
+            // throttle gate is needed: this scales fDriveForce, which is already zero off-throttle.
+            float overTopSpeed = ARS.GetForwardSpeed(Car) - Handling.EstimatedTopSpeed * TopSpeedCounterOnsetScale;
+            if (overTopSpeed > 0f) counter *= ARS.Remap(overTopSpeed, 0f, TopSpeedCounterBand, 1f, TopSpeedCounterMax, true);
+
+            _powerCounter = counter;
+
+            if (_powerCounter > 1.001f && Game.GameTime > _powerCounterLoggedAt)
+            {
+                _powerCounterLoggedAt = Game.GameTime + 2000;
+                string throttlePart = ControlledByPlayer ? "" : ", throttle " + _appliedThrottleLastFrame.ToString("0.00") + " of " + commanded.ToString("0.00");
+                ARS.Log(ARS.LogImportance.Info, "Power counter " + Car.DisplayName + " x" + _powerCounter.ToString("0.00") + " (over top speed " + overTopSpeed.ToString("0.0") + " m/s" + throttlePart + ")");
+            }
+        }
+
+        void ApplyPowerMultiplier()
+        {
+            float multiplier = _powerCounter;
+            if (Game.GameTime < _nitrousActiveUntil) multiplier *= NitrousPowerMultiplier;
+
+            if (float.IsNaN(multiplier) || float.IsInfinity(multiplier) || multiplier < 0f || multiplier > 10f) multiplier = 1f;
+
+            Function.Call((Hash)CheatPowerIncreaseHash, Car, multiplier);
+        }
+
+        // Match the player's launch capability. A keyboard pedal is a hard 0/1 and 1.0 is exactly what sets
+        // the engine's full-throttle grip loss, so a binary player's cars are quantised the same way; a player
+        // who can modulate gets a cap that stays under it. Reverse and braking are never shaped, and there is
+        // nothing to shape once the grip loss has faded out with speed.
+        float ShapeLaunchThrottle(float throttle)
+        {
+            if (throttle <= 0f || ARS.GetForwardSpeed(Car) > LaunchShapeMaxSpeed) return throttle;
+
+            bool modulates = ARS.PlayerModulatesThrottle || !ARS.PlayerParticipating;
+            if (modulates) return Math.Min(throttle, ModulatedThrottleCap);
+            return throttle > LaunchThrottleBinarySplit ? 1f : 0f;
         }
 
         bool IsAwd()

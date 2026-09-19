@@ -17,6 +17,13 @@ namespace ARS
         public static void SetThrottle(Vehicle vehicle, float value) => WriteInput(vehicle, value, ref _throttleOffset, 0x10, "throttle");
         public static void SetBrakes(Vehicle vehicle, float value) => WriteInput(vehicle, value, ref _brakeOffset, 0x14, "brake");
 
+        // What the last frame actually left in the control field; an unknown offset reads as uncut.
+        public static float GetThrottle(Vehicle vehicle)
+        {
+            if (!ARS.CanWeUse(vehicle) || _throttleOffset == 0) return 1f;
+            return *((float*)((ulong)vehicle.MemoryAddress + _throttleOffset));
+        }
+
         public static float GetLateralTraction(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0098);
         public static float GetSteerLock(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0080);
         public static float GetDriveBiasFront(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0048);

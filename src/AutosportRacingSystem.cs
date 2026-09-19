@@ -138,6 +138,8 @@ namespace ARS
         public static bool PlayerHasNitro = false;
         // True when the player's own car is on the current race grid (feeds AI nitrous fairness gating).
         public static bool PlayerParticipating = false;
+        public static bool PlayerModulatesThrottle = false;
+        public static bool PlayerLaunchTestActive = false;
 
         // Player-facing AI/grid options (Settings.ini [RACERS]).
         // AiNitro: may AI racers use nitrous? IfPlayerHas = only when the player has it.
@@ -209,6 +211,26 @@ namespace ARS
         bool _trackInstanced;
         bool _gridInstanced;
         int _intendedOpponents = 4;
+        // Grid size offers: 0-6 by 1, on to 18 by 2, to 30 by 4, then by 10 for the masochists.
+        public static readonly int[] GridSizeChoices = { 0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 22, 26, 30, 40, 50, 60, 70, 80, 90, 100 };
+
+        // Safety net: the slots are built to order, but a short track still yields fewer than were asked for.
+        int GridSlotsAvailable => Math.Max(0, GridPositions.Count - 2);
+
+        static string[] GridSizeLabels()
+        {
+            string[] labels = new string[GridSizeChoices.Length];
+            for (int i = 0; i < GridSizeChoices.Length; i++) labels[i] = GridSizeChoices[i].ToString();
+            return labels;
+        }
+
+        // A size stored by an older, denser list may no longer be offered: snap to the nearest one that is.
+        static int NearestGridSize(int stored)
+        {
+            int best = GridSizeChoices[0];
+            foreach (int value in GridSizeChoices) if (Math.Abs(value - stored) < Math.Abs(best - stored)) best = value;
+            return best;
+        }
         List<int> _flareFx = new List<int>();
         FreeCamController _freeCam;
 
@@ -768,17 +790,15 @@ namespace ARS
             _raceMenu.Add(instanceTrackItem);
 
             // ── Grid items (flattened into Race) ──
-            _gridSizeItem = new NativeListItem<string>("Target Grid Size", "Target number of vehicles for the grid.", new[] { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12" });
+            _gridSizeItem = new NativeListItem<string>("Target Grid Size", "Target number of vehicles for the grid.", GridSizeLabels());
             _gridSizeItem.ItemChanged += (sender, args) =>
             {
-                if (args.Index >= 0 && args.Index <= 12)
-                {
-                    _intendedOpponents = args.Index;
-                    RaceMenuStore.Set("GridSize", args.Index);
-                }
+                if (args.Index < 0 || args.Index >= GridSizeChoices.Length) return;
+                _intendedOpponents = GridSizeChoices[args.Index];
+                RaceMenuStore.Set("GridSize", _intendedOpponents);
             };
-            _intendedOpponents = (int)Clamp(RaceMenuStore.GetInt("GridSize", 8), 0, 12);
-            _gridSizeItem.SelectedIndex = _intendedOpponents;
+            _intendedOpponents = NearestGridSize(RaceMenuStore.GetInt("GridSize", 8));
+            _gridSizeItem.SelectedIndex = Array.IndexOf(GridSizeChoices, _intendedOpponents);
             _raceMenu.Add(_gridSizeItem);
 
             // ── Grid PI Mode — the anchor the two PI controls below obey (Race owns all three keys) ──
@@ -1215,8 +1235,11 @@ namespace ARS
             }
 
             Log(LogImportance.Info, "Grid: ranking " + _vehiclePool.Count + " pool files, target " + _resolvedPaceTarget.ToString(CultureInfo.InvariantCulture));
-            FillCachedCandidates(_intendedOpponents, true);
-            LoadGrid(_intendedOpponents);
+            TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, _intendedOpponents, GridPositions);
+            int gridSize = Math.Min(_intendedOpponents, GridSlotsAvailable);
+            if (gridSize != _intendedOpponents) Log(LogImportance.Info, "Grid: the track only yielded " + GridSlotsAvailable + " slots, so " + _intendedOpponents + " was capped to " + gridSize);
+            FillCachedCandidates(gridSize, true);
+            LoadGrid(gridSize);
 
             if (Racers.Count == 0)
             {
@@ -1717,13 +1740,16 @@ namespace ARS
                 {
                     if (_gameTimeNextInLine <= Game.GameTime)
                     {
+                        // Up to six racers per frame: each core tick therefore lands every
+                        // ceil(Racers.Count / 6) frames — ~33 ms at 12 cars, ~280 ms at 100. This batch is
+                        // what paces the AI; the interval below is always under a frame, so it gates nothing.
                         int count = (int)Clamp(Racers.Count, 1, 6);
                         for (int i = 0; i < count; i++)
                         {
                             Racers.GetRange(_nextInLine, 1).FirstOrDefault()?.RunTimedCore();
                             _nextInLine++;
                             if (_nextInLine > Racers.Count - 1) _nextInLine = 0;
-                            _gameTimeNextInLine = Game.GameTime + (10 / (Racers.Count / count));
+                            _gameTimeNextInLine = Game.GameTime + Math.Max(1, 10 / (Racers.Count / count));
                         }
                     }
                 }
