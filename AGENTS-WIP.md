@@ -35,7 +35,7 @@ It deliberately does not ship a track creator or any track-file mutation path. T
 - [ ] Verify a legacy install migrates old per-menu files without losing user-facing values.
 - [ ] Check Show Inputs, Projection, Input Trail, Corner Checkpoints, Edge Chevrons, and Leaderboard against the closest AI car or race state they describe.
 - [ ] Confirm `Log.log` records the session banner and actionable load failures. With **Log Level `None`** (the shipped default) that is *all* it records: the banner, plus forced error lines — one of which is the bridge probe's, which is why the release README's "the log names the reason" still holds.
-- [ ] Confirm `Options.ini` advanced catch-up and reverse-route settings remain readable after the menu-settings migration.
+- [ ] Confirm every retired settings file is removed on load (`Settings.ini`, `Options.ini`, `DevSettings.ini`, `DevConfig.ini`, `MemoryOffsets.ini`, `Menu-Racers.ini`, `Menu-DevSettings.ini`). **`Options.ini` has no reader at all** — there is nothing left in it to verify.
 
 ## Package gate
 
@@ -43,7 +43,7 @@ It deliberately does not ship a track creator or any track-file mutation path. T
 - [ ] Run the generated GitHub artifact from a clean install using a current, matched SHVDN asi/API-dll pair — the verified pair is nightly **`v3.7.0-nightly.188`**: asi `239104` B + `ScriptHookVDotNet2.dll` `984576` B, both from that one zip (`AGENTS-SHVDN.md`).
 - [ ] Confirm the package includes the LemonUI credit — **JustALemon**, its nickname, stating the dll is used under the MIT License — plus tracks, `cars.txt`, `sillynames.txt`, and an **empty `Settings\`** — no settings ship at all; the mod writes its three inis on first run.
   - **No `LemonUI-LICENSE.txt` and no verbatim MIT notice ship. That is a deliberate, informed decision, not an oversight — do not "fix" it.** It sits outside the MIT condition that the notice accompany copies, and the copyright holder's real name is present in the dll's own assembly metadata in any case, so the file bought no privacy.
-- [ ] Confirm it excludes `ScriptHookVDotNet2.dll`, logs, crash artifacts, stale legacy settings files, and untracked `Options.ini`.
+- [ ] Confirm it excludes `ScriptHookVDotNet2.dll`, logs, crash artifacts, and stale legacy settings files.
 - [ ] Read the staged release `README.txt` for installation, matched-SHVDN, menu, and log-troubleshooting instructions.
 
 ## Limitations to disclose
