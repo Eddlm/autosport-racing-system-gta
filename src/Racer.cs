@@ -583,7 +583,7 @@ namespace ARS
         }
 
         // Hold the outside line on entry, then release it for the high-speed inside line.
-        static float OutsideReleaseSeconds = 0.5f;
+        static float OutsideReleaseSeconds = 1.05f;
         static float OutsideEngageSeconds => OutsideReleaseSeconds + 3f;
 
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
