@@ -10,6 +10,7 @@ namespace ARS
         readonly ARS _ars;
         bool _droneMode = true;
         bool _isActive = false;
+        int _previousViewMode = -1;
         Vector3 _movement = Vector3.Zero;
         float _intendedHeight = 4f;
 
@@ -132,6 +133,12 @@ namespace ARS
             if (_isActive)
             {
                 _isActive = false;
+                // The ride borrows the player's first-person camera, so the player's own mode has to come back.
+                if (_previousViewMode >= 0)
+                {
+                    Function.Call(Hash.SET_FOLLOW_PED_CAM_VIEW_MODE, _previousViewMode);
+                    _previousViewMode = -1;
+                }
                 Game.Player.Character.Heading = ARS.FreeCamRide.Heading;
                 Game.Player.Character.IsVisible = true;
                 Game.Player.Character.HasGravity = true;
@@ -143,7 +150,8 @@ namespace ARS
             }
 
             if (!ARS.CanWeUse(ARS.FreeCamRide)) return;
-            if (Function.Call<int>(Hash.GET_FOLLOW_PED_CAM_VIEW_MODE) != 4)
+            _previousViewMode = Function.Call<int>(Hash.GET_FOLLOW_PED_CAM_VIEW_MODE);
+            if (_previousViewMode != 4)
                 Function.Call(Hash.SET_FOLLOW_PED_CAM_VIEW_MODE, 4);
 
             _isActive = true;
