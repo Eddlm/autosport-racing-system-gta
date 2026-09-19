@@ -792,7 +792,10 @@ namespace ARS
         // Yaw-rate damping is grip-normalised: the menu scale is divided by the car's base grip, so the
         // damping ratio can hold across the fleet. The floor only guards a degenerate grip.
         const float SteerDampingGripFloor = 1f;
-        float SteerDamping => ARS.SteerDampingScale / Math.Max(VehicleData.BaseMechanicalGrip, SteerDampingGripFloor);
+        // Kill switch for the yaw-rate damper. Driven with it off the cars cannot hold centre — the term is the
+        // only thing opposing a rotation the course chain has already started, so it is load-bearing, not trim.
+        const bool SteerDampingEnabled = true;
+        float SteerDamping => SteerDampingEnabled ? ARS.SteerDampingScale / Math.Max(VehicleData.BaseMechanicalGrip, SteerDampingGripFloor) : 0f;
         // Vanilla's player steering limiter used as a ceiling (AGENTS.md pipeline step 4): vanilla divides by
         // 1 + 0.075 × (forward speed − 5) in m/s and skips it while the car is sliding. The 5 m/s shift and its
         // gate are deliberately dropped here, so the ceiling starts closing from a standstill instead of
