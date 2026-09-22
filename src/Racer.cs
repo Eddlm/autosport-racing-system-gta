@@ -1661,6 +1661,17 @@ namespace ARS
             return Math.Max(0f, (totalLaps + 1f - Lap) * nodeCount - CurrentTrackPoint.Node);
         }
 
+        // Fastest completed lap, or null when none was timed. Lap 1 is never timed, for anyone.
+        public TimeSpan? BestLap()
+        {
+            TimeSpan? best = null;
+            foreach (TimeSpan lap in LapTimes)
+            {
+                if (!best.HasValue || lap < best.Value) best = lap;
+            }
+            return best;
+        }
+
         void StartNitrous()
         {
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, NitrousPtfxAsset);
@@ -2197,7 +2208,7 @@ namespace ARS
                     {
                         TimeSpan lapTime = ARS.ParseToTimeSpan(Game.GameTime - LapStartTime);
                         ARS.Log(ARS.LogImportance.Info, "Laptime " + Name + ": " + lapTime.ToString("m':'ss'.'f"));
-                        if (Driver.IsPlayer) UI.Notify(Name + "'s laptime: ~b~" + lapTime.ToString("m':'ss'.'f"));
+                        if (Driver.IsPlayer || ARS.DebugToggles[Options.ShowAiLapTimes]) UI.Notify(Name + "'s laptime: ~b~" + lapTime.ToString("m':'ss'.'f"));
                         LapTimes.Add(lapTime);
                         LapStartTime = Game.GameTime;
                     }

@@ -49,7 +49,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        FindCustomProps, ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis
+        FindCustomProps, ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes
     }
 
     public enum DebugDisplay
@@ -184,7 +184,8 @@ namespace ARS
         { Options.HighDownforceOnline, false },
         { Options.ShowCheckpoints, true },
         { Options.ShowEdgeChevrons, false },
-        { Options.ShowLeaderboard, true }
+        { Options.ShowLeaderboard, true },
+        { Options.ShowAiLapTimes, false }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -275,6 +276,12 @@ namespace ARS
         internal float TimeScale { get => _timeScale; set => _timeScale = value; }
         int _posUpdateTickMs = 0;
         int _longTickMs = 0;
+
+        // Race-end results readout. Queued rather than posted together: the notification feed only shows a
+        // handful at once, so a full grid in one frame would lose most of them.
+        const int LapSummaryIntervalMs = 1500;
+        readonly List<string> _lapSummaryQueue = new List<string>();
+        int _lapSummaryNextMs = 0;
 
         public enum TerrainTypes
         {
@@ -841,6 +848,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
+            AddDebugCheckbox(debugMenu, Options.ShowAiLapTimes, "Show AI Lap Times", "Announce each AI racer's lap time as they cross the line, the same way your own is. One notification per racer per lap, so a full grid is a lot of them.");
             AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
 
             // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
@@ -1737,9 +1745,17 @@ namespace ARS
                 {
                     foreach (Racer r in Racers.Where(r => r.FinalPosition == 0).OrderByDescending(r => r.RaceProgress))
                         r.FinalPosition = LeaderboardFinish.Count + 1;
+                    QueueLapSummary();
                     if (LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
                     RaceStatus = RaceState.Finished;
                     CleanEverything();
+                }
+
+                if (_lapSummaryQueue.Count > 0 && Game.GameTime >= _lapSummaryNextMs)
+                {
+                    _lapSummaryNextMs = Game.GameTime + LapSummaryIntervalMs;
+                    UI.Notify(_lapSummaryQueue[0]);
+                    _lapSummaryQueue.RemoveAt(0);
                 }
 
                 if (_longTickMs < Game.GameTime)
@@ -1762,6 +1778,21 @@ namespace ARS
                 Log(LogImportance.Error, "OnTick error: " + ex, true);
             }
         }
+        // Race-end results readout: each racer's best lap, in finishing order. Gated like the live
+        // announcements - your own always, the field when the toggle is on.
+        void QueueLapSummary()
+        {
+            _lapSummaryQueue.Clear();
+            foreach (Racer r in Racers.OrderBy(r => r.FinalPosition))
+            {
+                bool isPlayer = r.Driver != null && r.Driver.IsPlayer;
+                if (!isPlayer && !DebugToggles[Options.ShowAiLapTimes]) continue;
+                TimeSpan? best = r.BestLap();
+                _lapSummaryQueue.Add(r.Name + " - best lap: ~b~" + (best.HasValue ? best.Value.ToString("m':'ss'.'f") : "no timed lap"));
+            }
+            _lapSummaryNextMs = Game.GameTime;
+        }
+
         public static TimeSpan ParseToTimeSpan(int gameTime)
         {
             TimeSpan t = new TimeSpan();
