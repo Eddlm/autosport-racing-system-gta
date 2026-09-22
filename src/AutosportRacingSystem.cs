@@ -1681,9 +1681,11 @@ namespace ARS
                         int count = (int)Clamp(Racers.Count, 1, 6);
                         for (int i = 0; i < count; i++)
                         {
-                            Racers.GetRange(_nextInLine, 1).FirstOrDefault()?.RunTimedCore();
+                            // Wrap before indexing, not after: Racers shrinks between races, and a leftover
+                            // cursor past the end threw out of OnTick, skipping the rest of the tick.
+                            if (_nextInLine >= Racers.Count) _nextInLine = 0;
+                            Racers[_nextInLine]?.RunTimedCore();
                             _nextInLine++;
-                            if (_nextInLine > Racers.Count - 1) _nextInLine = 0;
                             _gameTimeNextInLine = Game.GameTime + Math.Max(1, 10 / (Racers.Count / count));
                         }
                     }
@@ -1959,6 +1961,10 @@ namespace ARS
                 r.Delete();
             }
             Racers.Clear();
+            // The batch cursor indexes Racers, so it dies with the list; a stale one is out of range for the
+            // next grid, which is only guaranteed to be smaller.
+            _nextInLine = 0;
+            _gameTimeNextInLine = 0;
             LeaderboardFinish.Clear();
             RaceStatus = RaceState.None;
             _gridInstanced = false;
