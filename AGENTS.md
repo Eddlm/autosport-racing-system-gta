@@ -52,6 +52,7 @@ The two-reviewer pair that checks work already done (a commit range or the uncom
 - **`Scripts\AutosportRacingSystem\Log.log` is truncated at script init**, so an earlier session's evidence is gone — copy it out live when debugging.
 - Sub-200 ms lags don't matter; don't restructure call order to kill one-frame quirks.
 - **Default branch is `master`** (the `2026` branch is redundant). Rollback points: **`54b33a7`** = last commit before the live corner-creation experiments; tag **`checkpoint-pre-gs-aware`** = before the Gs-aware preview steering experiment.
+- **A dev build number auto-increments per compiled build** (`GenerateBuildNumber` in `NewRacingSystem.csproj`) and the init banner prints it beside the DLL's write time. It is deliberately **not** the assembly version — that stays the release identity and only moves by hand — and its `Inputs`/`Outputs` make it skip exactly when `CoreCompile` does, so it can never tick ahead of the DLL it labels. The counter lives in a gitignored `build\` so a build never dirties the tree; CI supplies its own via `-p:BuildNumber`.
 
 ## Dependencies and UI
 - **Two folder constants drive every path**: `ARS.ScriptsFolder` (`scripts\AutosportRacingSystem`) and `ARS.SettingsFolder` (its `Settings\`). The `.csproj` `GtaArsScriptsDir` mirrors the first independently — keep them in sync.
@@ -74,8 +75,8 @@ The two-reviewer pair that checks work already done (a commit range or the uncom
 
 ## Code map
 - `AutosportRacingSystem.cs` — orchestration: race flow, track/corner generation, grid, leaderboard, helpers (`Remap`/`Clamp`/`Circumradius`), native wrappers, and the static AI math (`FindNextCorner` `AutosportRacingSystem.cs:2644`, `CornerApexSpeed` `AutosportRacingSystem.cs:2417`, `MaxSpeedForBrakingDistance` `AutosportRacingSystem.cs:2801`). `class ARS` is **partial**, with the two files below split out byte-verbatim.
-- `AutosportRacingSystem.TrackCreator.cs` — the in-game track creator (`HandleTrackCreator` `AutosportRacingSystem.TrackCreator.cs:21`, `GenerateBezier` `AutosportRacingSystem.TrackCreator.cs:218`). **DORMANT**: `_routeEditorActive` is never set true and no menu item, cheat or hotkey enters creator mode.
-- `AutosportRacingSystem.TrackFile.cs` — the dormant track XML writer (`UpdateRoute` `AutosportRacingSystem.TrackFile.cs:40`, `SaveRoute` `AutosportRacingSystem.TrackFile.cs:188`, `FindCustomProps` `AutosportRacingSystem.TrackFile.cs:20`). **No track mutation ships in the first release**, and `UpdateRoute` still carries the `Wide` off-by-one for whenever it is deliberately revived.
+- `AutosportRacingSystem.TrackCreator.cs` — the in-game track creator, **LIVE again**: `StartTrackCreator` (the Track Creator root submenu) is its entry point and takes over the freecam, because that camera is the editing surface — `HandleTrackCreator` records only while it is active. Sections are **constant-radius circular arcs** (`GenerateArc` `AutosportRacingSystem.TrackCreator.cs:245`), tangent-continuous at the joints, replacing the quadratic Bézier whose radius was graded within a section and stepped at each joint.
+- `AutosportRacingSystem.TrackFile.cs` — the track XML writer. `SaveRoute` (`AutosportRacingSystem.TrackFile.cs:188`) is **LIVE** behind the creator's Save Track, so creating a track does write `Tracks\*.xml`; `UpdateRoute` (rewriting a loaded track) stays unwired and still carries the `Wide` off-by-one. Both serialisers round coordinates to 2 decimals, which is coarse enough to perturb the measured `PreciseCurveRadius` — see the open item below.
 - `Racer.cs` — per-car intelligence: the steering/speed pipeline, pressure, maneuvers, TCS, stuck recovery, debug drawing.
 - `DataStructures.cs` — `RacerBrain`, `Rival`, `TrackPoint`, `CornerPoint`/`Corner`, `VehicleControl`, `VehicleState`, `HandlingData`, `Maneuver`.
 - `VehicleMemory.cs` — **the single memory layer**: the control writes (`VehicleMemory.cs:19`), handling reads (`VehicleMemory.cs:31`) and the **memoized** AOB scanner they share (`VehicleMemory.cs:98`). A second copy of any of it is the defect the consolidation removed.
@@ -170,7 +171,8 @@ Toggles live in `Menu-Debug.ini` and the load loop walks `DebugToggles.Keys` (`A
 
 ## Known TODOs / open items
 One line each; **a simplest→most-complex ranking of the whole list sits at the top of `AGENTS-BACKLOG.md`**, and the detail for each is in `AGENTS-BACKLOG.md` or `AGENTS-TECHNOTES.md`.
-- **Track creation and mutation are OFF for the WIP release** — nothing creates, edits or deletes a track, and the `Wide` off-by-one waits for a deliberate revival.
+- **Creating a track is ON again (driver-verified)** — the creator records and `SaveRoute` writes a new `Tracks\*.xml`; **updating** a loaded track (`UpdateRoute`) and the `Wide` off-by-one stay deliberately unwired.
+- **`SaveRoute` rounds coordinates to 2 decimals**, and that rounding alone moves a *perfect* arc's measured `PreciseCurveRadius` well off its true value — because `BuildApexTable` keeps each chunk's *tightest* radius, the noise biases apex radius low. Raising the precision rewrites every saved file, so decide it deliberately rather than as a drive-by.
 - **Menu-only settings migration needs in-game verification**: a fresh install must create only the three `Menu-*.ini` files.
 - **Start-line flares** are disabled (misaligned) and the creator's `Trackside` props have no reader.
 - **Council review backlog**: what remains is MenuSettings save-per-scroll, per-tick store reads in `Racer.cs`, and the listed minors.
