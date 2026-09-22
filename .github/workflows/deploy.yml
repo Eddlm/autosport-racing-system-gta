@@ -14,7 +14,9 @@ jobs:
 
       - name: Build (Release)
         shell: pwsh
-        run: dotnet build NewRacingSystem.sln -c Release -p:Platform="Any CPU" -consoleloggerparameters:ErrorsOnly
+        # A fresh checkout has no local build counter, so CI supplies its own: run_number increments per
+        # workflow run and is what the release banner reports. The local counter stays out of git.
+        run: dotnet build NewRacingSystem.sln -c Release -p:Platform="Any CPU" -p:BuildNumber=${{ github.run_number }} -consoleloggerparameters:ErrorsOnly
 
       - name: Stage deploy folder
         shell: pwsh
@@ -28,6 +30,9 @@ jobs:
           # Never wildcard bin\Release\* here: that folder also holds ScriptHookVDotNet2.dll,
           # which must always come from the user's own matched SHVDN install (AGENTS-SHVDN.md).
           Copy-Item 'libs\LemonUI.SHVDN2.dll' $ars -Force
+          # The banner reads this beside ARS.dll. Stage the number the build actually used rather than
+          # re-deriving it here, so the two can never drift.
+          Copy-Item 'build\build-number.txt' $ars -Force
           @'
           Autosport Racing System (ARS) - WIP build
 

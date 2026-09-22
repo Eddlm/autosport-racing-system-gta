@@ -366,9 +366,24 @@ namespace ARS
             scriptDate = File.GetLastWriteTimeUtc(ScriptsFolder + @"\ARS.dll").ToString();
 
 
-            UI.Notify("~b~" + scriptName + "~g~e~w~" + "~y~ " + scriptVer + "~n~Build: ~g~" + scriptDate);
+            UI.Notify("~b~" + scriptName + "~g~e~w~" + "~y~ " + scriptVer + "~n~Build: ~g~" + ReadDevBuildNumber() + " ~w~(" + scriptDate + ")");
 
             UpdateChecker.CheckLatestRelease();
+        }
+
+        // The build number is a sidecar the build writes beside the DLL (NewRacingSystem.csproj,
+        // GenerateBuildNumber). It is not the assembly version: that is the release identity and only
+        // moves by hand. A missing file means the DLL was copied on its own, so say so rather than lie.
+        static string ReadDevBuildNumber()
+        {
+            try
+            {
+                string path = ScriptsFolder + @"\build-number.txt";
+                if (!File.Exists(path)) return "?";
+                string value = File.ReadAllText(path).Trim();
+                return value.Length > 0 ? value : "?";
+            }
+            catch (Exception) { return "?"; }
         }
 
         // SHVDN's asi and API dll are a matched pair; a mismatch throws inside the API's native bridge.

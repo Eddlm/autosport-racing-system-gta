@@ -99,12 +99,16 @@
   <PropertyGroup>
     <GtaScriptsRoot Condition="'$(GtaScriptsRoot)' == ''">D:\SteamLibrary\steamapps\common\Grand Theft Auto V\Scripts</GtaScriptsRoot>
     <GtaArsScriptsDir>$(GtaScriptsRoot)\AutosportRacingSystem</GtaArsScriptsDir>
+    <!-- Auto-incrementing development build number; written by the GenerateBuildNumber target and read
+         by the init banner. Deliberately NOT the assembly version - see that target's comment. -->
+    <BuildNumberFile>$(MSBuildProjectDirectory)\build\build-number.txt</BuildNumberFile>
     <PostBuildEvent>if exist "$(GtaScriptsRoot)" (if not exist "$(GtaArsScriptsDir)" mkdir "$(GtaArsScriptsDir)" &amp; copy /Y "$(TargetPath)" "$(GtaArsScriptsDir)" &gt;nul)</PostBuildEvent>
   </PropertyGroup>
   <Target Name="CopyArsDll" AfterTargets="Build" Condition="Exists('$(GtaScriptsRoot)')">
     <MakeDir Directories="$(GtaArsScriptsDir)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GtaArsScriptsDir)" />
     <Copy SourceFiles="$(TargetDir)LemonUI.SHVDN2.dll" DestinationFolder="$(GtaArsScriptsDir)" Condition="Exists('$(TargetDir)LemonUI.SHVDN2.dll')" />
+    <Copy SourceFiles="$(BuildNumberFile)" DestinationFolder="$(GtaArsScriptsDir)" Condition="Exists('$(BuildNumberFile)')" />
   </Target>
   <!-- Mirror the live install into Dist\AutosportRacingSystem (the version-controlled, ship-ready
        set). Excludes runtime cruft: zip, log, and crash-backup files. Settings is excluded as a whole:
@@ -112,7 +116,41 @@
        copy the developer's session values in (they would be the shipped defaults otherwise). -->
   <Target Name="RefreshDist" AfterTargets="Build" Condition="Exists('$(GtaArsScriptsDir)')">
     <MakeDir Directories="$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem" />
-    <Exec Command="robocopy &quot;$(GtaArsScriptsDir)&quot; &quot;$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem&quot; /E /XD &quot;$(GtaArsScriptsDir)\Settings&quot; /XF *.zip *.log *.bak-crash pidump.txt /NFL /NDL /NJH /NJS" IgnoreExitCode="true" />
+    <Exec Command="robocopy &quot;$(GtaArsScriptsDir)&quot; &quot;$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem&quot; /E /XD &quot;$(GtaArsScriptsDir)\Settings&quot; /XF *.zip *.log *.bak-crash pidump.txt build-number.txt /NFL /NDL /NJH /NJS" IgnoreExitCode="true" />
+  </Target>
+  <!-- Development build counter. This is deliberately NOT the assembly version: 0.8.6.0 in
+       src\Properties\AssemblyInfo.cs is the release identity and only moves by hand. The counter is a
+       separate, auto-incrementing identity that the init banner reports, so two builds of one release
+       version are still told apart. It lives in build\ (gitignored, and excluded from the Dist mirror)
+       so a build never dirties the tree. CI passes its own via -p:BuildNumber, because a fresh checkout
+       would otherwise restart at 1 on every run.
+       Inputs/Outputs is what makes the number describe the binary rather than the invocation: MSBuild
+       skips this target when no source is newer than the counter, which is exactly when CoreCompile is
+       skipped too, so the number can never tick ahead of the DLL it labels. Deleting build\ resets it. -->
+  <Target Name="GenerateBuildNumber" BeforeTargets="CoreCompile"
+          Inputs="@(Compile);$(MSBuildProjectFullPath)" Outputs="$(BuildNumberFile)"
+          Condition="'$(DesignTimeBuild)' != 'true' AND '$(_BuildNumberGenerated)' != 'true'">
+    <MakeDir Directories="$(MSBuildProjectDirectory)\build" />
+    <ReadLinesFromFile File="$(BuildNumberFile)" Condition="'$(BuildNumber)' == '' AND Exists('$(BuildNumberFile)')">
+      <Output TaskParameter="Lines" ItemName="_StoredBuildNumber" />
+    </ReadLinesFromFile>
+
+    <PropertyGroup>
+      <!-- An item list cannot be passed straight into a property function, so bind it to a property
+           first. A truncated or hand-edited counter must not break the build: take the digits, else 0. -->
+      <_StoredBuildNumberText>@(_StoredBuildNumber)</_StoredBuildNumberText>
+    </PropertyGroup>
+    <PropertyGroup>
+      <_StoredBuildNumberDigits>$([System.Text.RegularExpressions.Regex]::Match($(_StoredBuildNumberText), '[0-9]+').Value)</_StoredBuildNumberDigits>
+      <_StoredBuildNumberValue Condition="'$(_StoredBuildNumberDigits)' == ''">0</_StoredBuildNumberValue>
+      <_StoredBuildNumberValue Condition="'$(_StoredBuildNumberDigits)' != ''">$(_StoredBuildNumberDigits)</_StoredBuildNumberValue>
+      <BuildNumber Condition="'$(BuildNumber)' == ''">$([MSBuild]::Add($(_StoredBuildNumberValue), 1))</BuildNumber>
+      <_BuildNumberGenerated>true</_BuildNumberGenerated>
+    </PropertyGroup>
+
+    <!-- The file always holds the number this build used, including one passed in from CI, so the
+         sidecar copied beside the DLL can never disagree with the banner. -->
+    <WriteLinesToFile File="$(BuildNumberFile)" Lines="$(BuildNumber)" Overwrite="true" />
   </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

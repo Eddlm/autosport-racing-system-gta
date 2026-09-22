@@ -2,6 +2,10 @@
 bin/
 obj/
 
+# Auto-incrementing development build counter (NewRacingSystem.csproj, GenerateBuildNumber).
+# Gitignored so that building never dirties the tree; CI supplies its own number instead.
+build/build-number.txt
+
 # Visual Studio
 .vs/
 *.suo
