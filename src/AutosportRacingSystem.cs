@@ -1698,7 +1698,10 @@ namespace ARS
                 foreach (Racer racer in Racers)
                 {
                     racer.ProcessTick();
-                    if (((!IsPointToPoint && racer.Lap >= raceLaps) || (IsPointToPoint && racer.Lap > 1)) && !LeaderboardFinish.Contains(racer))
+                    // Lap is 1-based and counts the lap being driven, so a full race reaches raceLaps + 1:
+                    // RemainingRaceDistanceMeters and the green-blip check already agree on that, and this
+                    // gate alone ended the race a lap early.
+                    if (((!IsPointToPoint && racer.Lap > raceLaps) || (IsPointToPoint && racer.Lap > 1)) && !LeaderboardFinish.Contains(racer))
                     {
                         if (racer.Car.CurrentBlip != null) racer.Car.CurrentBlip.Color = BlipColor.Green;
 
