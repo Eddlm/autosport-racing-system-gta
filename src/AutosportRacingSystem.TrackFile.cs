@@ -208,6 +208,12 @@ namespace ARS
                 filename = World.GetStreetName(RouteNodes[0]);
             }
 
+            // The name comes from Game.GetUserInput free text, and the write below throws on any
+            // character the filesystem rejects, which OnTick would only log.
+            foreach (char invalid in Path.GetInvalidFileNameChars()) filename = filename.Replace(invalid, '_');
+            filename = filename.Trim();
+            if (filename == "") filename = "New Track";
+
             if (File.Exists(ScriptsFolder + @"\Tracks\" + filename + ".xml"))
             {
                 DateTime today = DateTime.Now;
@@ -400,8 +406,11 @@ namespace ARS
             document.Save(ScriptsFolder + @"\Tracks\" + filename + ".xml");
 
             DisplayHelpTextTimed("Refreshing the track list...", 1000);
-            FillKnownTracks();
-            DisplayHelpTextTimed("~g~Done.", 2000);
+            // Deliberately no script yield: this runs from a menu handler, inside the menu pool's process
+            // step, and yielding mid-frame from there is what the init path already avoids.
+            FillKnownTracks(false);
+            RefreshTrackList();
+            DisplayHelpTextTimed("~g~" + filename + " ~w~saved to Tracks.", 2000);
         }
     }
 }

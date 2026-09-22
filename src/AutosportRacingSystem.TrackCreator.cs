@@ -33,6 +33,25 @@ namespace ARS
             if (!_freeCam.IsActive) _freeCam.Toggle();
         }
 
+        // SaveRoute always builds a fresh document, so this is the new-track path only. Rewriting a loaded
+        // track's file is UpdateRoute, which stays unwired.
+        void SaveTrackFromCreator()
+        {
+            if (!_routeEditorActive)
+            {
+                UI.Notify("~r~Start the track creator before saving a route.");
+                return;
+            }
+            if (RouteNodes.Count < 2)
+            {
+                UI.Notify("~r~Record a route before saving: place the start line, then Apply Section.");
+                return;
+            }
+
+            UI.ShowSubtitle("Write a name for the track.", 5000);
+            SaveRoute(Game.GetUserInput(30));
+        }
+
         void HandleTrackCreator()
         {
 

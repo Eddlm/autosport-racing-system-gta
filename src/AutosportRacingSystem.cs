@@ -790,13 +790,21 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            NativeItem startCreatorItem = new NativeItem("Start Creator", "Take over the free camera and record a new route. Place the start line, then build the route; the two spawn items in Race are ignored while creating.");
+            NativeItem startCreatorItem = new NativeItem("Start Creator", "Take over the free camera and record a new route. Place the start line, then build the route: Weapon Wheel Widen/Tighten, Attack applies the pending section, Aim deletes a node.");
             startCreatorItem.Activated += (sender, args) =>
             {
                 creatorMenu.Visible = false;
                 StartTrackCreator();
             };
             creatorMenu.Add(startCreatorItem);
+
+            NativeItem saveCreatorItem = new NativeItem("Save Track", "Write the recorded route to a new file in Tracks.");
+            saveCreatorItem.Activated += (sender, args) =>
+            {
+                creatorMenu.Visible = false;
+                SaveTrackFromCreator();
+            };
+            creatorMenu.Add(saveCreatorItem);
 
             NativeItem exitCreatorItem = new NativeItem("Exit Creator", "Leave route-creation mode and discard the recorded route.");
             exitCreatorItem.Activated += (sender, args) =>
