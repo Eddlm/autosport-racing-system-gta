@@ -1372,11 +1372,10 @@ namespace ARS
         // TCS wheelspin targets: more negative = more spin allowed, so the deepening is subtracted.
         const float IdealWheelspinBase = -1.5f;
         const float IdealWheelspinDeepening = 0.5f;
-        const bool TcsEnabled = true;   // kill switch for judging a change without TCS in the way
 
         void TractionControl()
         {
-            if (!TcsEnabled) { Control.MaxThrottleFromTCS = 1f; return; }
+            if (!ARS.TcsEnabled) { Control.MaxThrottleFromTCS = 1f; return; }
 
             float wheelspin = ARS.MaxWheelSlip(Car);
 

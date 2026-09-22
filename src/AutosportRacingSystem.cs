@@ -149,6 +149,8 @@ namespace ARS
         public static bool SmartTuning = true;
         // Learn the effective braking decel that keeps the car at full brake through a braking phase.
         public static bool BrakeLearning = true;
+        // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
+        public static bool TcsEnabled = true;
         // On = route curvature limits speed (sweeping corners); off = the corner braking plan alone.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
@@ -933,6 +935,14 @@ namespace ARS
                 SaveRacerSetting("BrakeLearning", BrakeLearning.ToString());
             };
             aiMenu.Add(brakeLearningItem);
+
+            NativeCheckboxItem tcsItem = new NativeCheckboxItem("TCS", "Cap AI throttle against a wheelspin target. Off lets AI throttle go unlimited - no traction control at all.", TcsEnabled);
+            tcsItem.CheckboxChanged += (sender, args) =>
+            {
+                TcsEnabled = tcsItem.Checked;
+                SaveRacerSetting("TcsEnabled", TcsEnabled.ToString());
+            };
+            aiMenu.Add(tcsItem);
 
             string[] steerKDOptions = { "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00" };
             NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping as a multiple of the grip-normalised baseline (baseline = 1 / car grip). 1.00 reproduces the tuned feel on a 2.2G car; lower is crisper, higher is calmer.", steerKDOptions);
@@ -3018,6 +3028,7 @@ namespace ARS
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
+            TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             CrestEffect = SettingsMenuStore.GetInt("CrestEffect", 100) * 0.01f;
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 0);
