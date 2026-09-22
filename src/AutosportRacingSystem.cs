@@ -783,6 +783,29 @@ namespace ARS
             };
             cameraMenu.Add(freecamItem);
 
+            // ── Track Creator submenu (root) — the route editor's only entry point ──
+            NativeMenu creatorMenu = new NativeMenu("Track Creator", "Track Creator", "Record a new race route with the free camera.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+            NativeItem startCreatorItem = new NativeItem("Start Creator", "Take over the free camera and record a new route. Place the start line, then build the route; the two spawn items in Race are ignored while creating.");
+            startCreatorItem.Activated += (sender, args) =>
+            {
+                creatorMenu.Visible = false;
+                StartTrackCreator();
+            };
+            creatorMenu.Add(startCreatorItem);
+
+            NativeItem exitCreatorItem = new NativeItem("Exit Creator", "Leave route-creation mode and discard the recorded route.");
+            exitCreatorItem.Activated += (sender, args) =>
+            {
+                creatorMenu.Visible = false;
+                CleanEverything();
+            };
+            creatorMenu.Add(exitCreatorItem);
+
             // ── Settings submenu (root) — standing preferences, set once ──
             NativeMenu debugMenu = new NativeMenu("Debug", "Debug", "Configure ARS debug and race setup options.")
             {
@@ -1033,6 +1056,7 @@ namespace ARS
             _arsMenu.AddSubMenu(_raceMenu);
             _arsMenu.AddSubMenu(settingsMenu);
             _arsMenu.AddSubMenu(cameraMenu);
+            _arsMenu.AddSubMenu(creatorMenu);
             _arsMenu.Add(resetItem);
 
             // Register all menus in the pool
@@ -1044,6 +1068,7 @@ namespace ARS
             _menuPool.Add(racersMenu);
             _menuPool.Add(advancedMenu);
             _menuPool.Add(cameraMenu);
+            _menuPool.Add(creatorMenu);
         }
         void SaveRacerSetting(string key, string value)
         {

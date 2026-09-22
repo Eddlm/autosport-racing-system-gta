@@ -5,10 +5,10 @@ using System.Drawing;
 
 namespace ARS
 {
-    // The in-game track creator (route editor). Split out of AutosportRacingSystem.cs 2026-10; the code is
-    // unchanged. DORMANT: _routeEditorActive has no writer that sets it true, so the editing branch below
-    // never runs and no menu item, cheat or hotkey enters creator mode - the route-recording loop, the
-    // section preview and the route-node visuals are all unreachable today. Kept for a later revival pass.
+    // The in-game track creator (route editor). Split out of AutosportRacingSystem.cs; the recording code
+    // below is unchanged by that move. StartTrackCreator is the mode's entry point, reached from the Track
+    // Creator submenu, and it takes over the free camera because that camera is the editing surface:
+    // HandleTrackCreator records only while it is active. Saving the recorded route is still unwired.
     public partial class ARS
     {
         public static Dictionary<int, float> EditNodeHalfWidths = new Dictionary<int, float>();
@@ -17,6 +17,21 @@ namespace ARS
         Vector3 _bezierStartAnchor = Vector3.Zero;
         float _bezierScale = 1.5f;
         int _pathWidth = 5;
+
+        // CleanEverything tears down any loaded track and clears the route statics, so it must run first.
+        void StartTrackCreator()
+        {
+            if (!CanWeUse(FreeCamRide))
+            {
+                Log(LogImportance.Error, "Track creator: the freecam ride is unavailable, so creator mode was not entered.");
+                return;
+            }
+
+            CleanEverything();
+            _routeSection.Clear();
+            _routeEditorActive = true;
+            if (!_freeCam.IsActive) _freeCam.Toggle();
+        }
 
         void HandleTrackCreator()
         {
