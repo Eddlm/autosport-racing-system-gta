@@ -865,6 +865,22 @@ namespace ARS
             gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(EnumLabel(ParseEnum(SettingsMenuStore.Get("GridSorting", "Random"), GridSort.Random))));
             racersMenu.Add(gridSortItem);
 
+            // ── Car pool: which Vehicles\*.txt roster the grid draws from ──
+            List<string> poolFiles = VehicleCatalog.ListRosterFiles();
+            string storedPool = SettingsMenuStore.Get("VehiclePool", "cars.txt");
+            if (!poolFiles.Contains(storedPool, StringComparer.OrdinalIgnoreCase)) { storedPool = "cars.txt"; SaveRacerSetting("VehiclePool", storedPool); }
+            VehicleCatalog.SelectRosterFile(storedPool);
+            NativeListItem<string> carPoolItem = new NativeListItem<string>("Car Pool", "Which Vehicles\\*.txt roster the grid draws from. Drop any .txt file (one model key per line, # comments) into Vehicles and it shows up here. Changing it rebuilds the pool immediately.", poolFiles.ToArray());
+            carPoolItem.ItemChanged += (sender, args) =>
+            {
+                VehicleCatalog.SelectRosterFile(carPoolItem.Items[args.Index]);
+                SaveRacerSetting("VehiclePool", carPoolItem.Items[args.Index]);
+                RefreshRoster();
+                UI.Notify("~b~[ARS]:~w~ Car pool: " + carPoolItem.Items[args.Index] + " (" + _vehiclePool.Count + " cars).");
+            };
+            carPoolItem.SelectedIndex = Math.Max(0, carPoolItem.Items.FindIndex(i => string.Equals(i, VehicleCatalog.SelectedRosterFile, StringComparison.OrdinalIgnoreCase)));
+            racersMenu.Add(carPoolItem);
+
             NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", new[] { "15", "30", "45", "60" });
             timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
             timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(SettingsMenuStore.GetInt("TimeoutSeconds", 60).ToString()));
@@ -2213,7 +2229,7 @@ namespace ARS
                 }
                 int added = VehicleCatalog.AddToRoster(keys);
                 RefreshRoster();
-                UI.Notify("~b~[ARS]:~w~ cars.txt - " + added + " new model(s) added.");
+                UI.Notify("~b~[ARS]:~w~ " + VehicleCatalog.SelectedRosterFile + " - " + added + " new model(s) added.");
             }
 
             if (WasCheatStringJustEntered("arsbuilddumpcarlist"))
@@ -2235,7 +2251,7 @@ namespace ARS
 
                     int added = VehicleCatalog.AddToRoster(keys);
                     RefreshRoster();
-                    UI.Notify("~b~[ARS]:~w~ cars.txt - " + added + " new model(s) added from " + modelNames.Length + " entries.");
+                    UI.Notify("~b~[ARS]:~w~ " + VehicleCatalog.SelectedRosterFile + " - " + added + " new model(s) added from " + modelNames.Length + " entries.");
                 }
                 else
                 {

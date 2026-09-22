@@ -11,7 +11,32 @@ namespace ARS
     {
         // The roster is one flat file: one model key per line, blank lines and # comments ignored.
         // A key is a model name ("sabregt") or a hash; BuildPowerCache canonicalises both to hash keys.
-        public static string RosterPath { get { return ARS.ScriptsFolder + @"\Vehicles\cars.txt"; } }
+        // Every *.txt in the Vehicles folder is a selectable pool; SelectedRosterFile says which one.
+        public static string RosterFolder { get { return ARS.ScriptsFolder + @"\Vehicles"; } }
+        public static string SelectedRosterFile { get; private set; }
+
+        static VehicleCatalog() { SelectRosterFile("cars.txt"); }
+
+        public static void SelectRosterFile(string fileName)
+        {
+            string name = (fileName ?? "").Trim();
+            if (name.Length == 0 || !name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) name = "cars.txt";
+            SelectedRosterFile = name;
+        }
+
+        // Discovery only — pure file I/O, safe on the background load thread.
+        public static List<string> ListRosterFiles()
+        {
+            try
+            {
+                if (!Directory.Exists(RosterFolder)) return new List<string> { SelectedRosterFile };
+                List<string> files = Directory.GetFiles(RosterFolder, "*.txt").Select(Path.GetFileName).OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+                return files.Count > 0 ? files : new List<string> { SelectedRosterFile };
+            }
+            catch (Exception) { return new List<string> { SelectedRosterFile }; }
+        }
+
+        public static string RosterPath { get { return RosterFolder + @"\" + SelectedRosterFile; } }
 
         // Discovery only — no natives, so it is safe on the background load thread.
         public static void FillPool(List<string> pool)
