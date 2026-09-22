@@ -1,5 +1,6 @@
 using GTA;
 using GTA.Math;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 
@@ -15,7 +16,6 @@ namespace ARS
         static bool _routeEditorActive = false;
         List<Vector3> _routeSection = new List<Vector3>();
         Vector3 _bezierStartAnchor = Vector3.Zero;
-        float _bezierScale = 1.5f;
         int _pathWidth = 5;
 
         // CleanEverything tears down any loaded track and clears the route statics, so it must run first.
@@ -98,10 +98,14 @@ namespace ARS
             // Route editing is available only from freecam.
             if (_routeEditorActive && _freeCam.IsActive)
             {
-                if (_pathWidth < 1) _pathWidth = 1;
-                if (_bezierScale < 5f) _bezierScale = 5f;
                 RaycastResult ray = World.Raycast(GameplayCamera.Position, GameplayCamera.Position + ((GameplayCamera.Direction.Normalized) * 100), IntersectOptions.Everything);
 
+                // Width is the only knob the geometry leaves open: the arc always runs to the aim point, so
+                // the old reach multiplier has nothing left to scale. The floor is applied after adjusting,
+                // or a single tap to the minimum commits a zero-width track.
+                if (Game.IsControlJustPressed(2, GTA.Control.NextWeapon)) _pathWidth--;
+                if (Game.IsControlJustPressed(2, GTA.Control.PrevWeapon)) _pathWidth++;
+                if (_pathWidth < 1) _pathWidth = 1;
                 
                 if (RouteNodes.Count > 0)
                 {
@@ -111,14 +115,6 @@ namespace ARS
 
 
                     
-                    if (Game.IsControlJustPressed(2, GTA.Control.NextWeapon))
-                    {
-                        if (!Game.IsControlPressed(2, GTA.Control.Sprint)) _bezierScale -= 5f; else _pathWidth--;
-                    }
-                    if (Game.IsControlJustPressed(2, GTA.Control.PrevWeapon))
-                    {
-                        if (!Game.IsControlPressed(2, GTA.Control.Sprint)) _bezierScale += 5f; else _pathWidth++;
-                    }
                     // Aim removes one node; Sprint + Aim removes up to ten.
                     if (Game.IsControlJustPressed(2, GTA.Control.Aim))
                     {
@@ -158,10 +154,6 @@ namespace ARS
                 else 
                 {
                     DisplayHelpTextThisFrame("Place the ~b~Start Line.");
-
-                    if (Game.IsControlJustPressed(2, GTA.Control.NextWeapon)) _pathWidth--;
-                    if (Game.IsControlJustPressed(2, GTA.Control.PrevWeapon)) _pathWidth++;
-
                 }
 
 
@@ -177,9 +169,8 @@ namespace ARS
                         Vector3 sStart = RouteNodes[RouteNodes.Count - 1];
                         Vector3 sDirection = (RouteNodes[RouteNodes.Count - 1] - RouteNodes[RouteNodes.Count - 2]).Normalized;
                         Vector3 sEnd = ray.HitCoords;
-                        float sScale = sStart.DistanceTo(sEnd) * 0.5f;
 
-                        List<Vector3> temporaryRouteNodes = GenerateBezier(sStart, sDirection, sEnd, sScale);
+                        List<Vector3> temporaryRouteNodes = GenerateArc(sStart, sDirection, sEnd);
 
                         foreach (Vector3 p in temporaryRouteNodes)
                         {
@@ -248,61 +239,75 @@ namespace ARS
             }
         }
 
-        // Generate evenly spaced curve points from the route end to the raycast target.
-        public static List<Vector3> GenerateBezier(Vector3 sStart, Vector3 sDirection, Vector3 sEnd, float sScale)
+        // One constant-radius section: a circular arc running from the route end to the aim point, leaving
+        // that end tangent to the incoming heading. Plan-view constant radius specifically, because that is
+        // the plane the racing system measures - Circumradius3D drops Z - so this reads back as one radius
+        // per section instead of the graded one a quadratic Bezier produced.
+        public static List<Vector3> GenerateArc(Vector3 sStart, Vector3 sDirection, Vector3 sEnd)
         {
+            const float separationDist = 1f;
+            // Past this the centre is so distant that building the points loses more precision than the
+            // curvature is worth, so the section is simply straight.
+            const float straightRadiusFactor = 100f;
+            const float halfPi = 1.5707964f;
+            // The aim is a raycast hit, so the arc is short; this only bounds a pathological caller.
+            const int maxSteps = 4000;
+
             List<Vector3> points = new List<Vector3>();
-            sScale = sStart.DistanceTo2D(sEnd) * Remap(Vector3.Angle((sEnd - sStart).Normalized, sDirection), 0f, 90f, 1f, 1.5f, true);
+            Vector3 flat = new Vector3(sEnd.X - sStart.X, sEnd.Y - sStart.Y, 0f);
+            Vector3 heading = new Vector3(sDirection.X, sDirection.Y, 0f);
 
-
-            Vector3 middlePoint = sStart + (sDirection * (sScale / 2));
-            Vector3 directionStart = sStart - middlePoint;
-            Vector3 directionEnd = ((sEnd) - middlePoint).Normalized * (sScale / 2f);
-
-            
-            
-
-            float separationDist = 1f;
-
-            float addition = (1 / directionEnd.DistanceTo(directionStart));
-
-            float stepLerp = 0;
-            int step = 0;
-            float scaleAdjust = 0;
-            while (stepLerp < 1.0f && step < 400)
+            float chord = flat.Length();
+            if (chord < 0.01f || heading.LengthSquared() < 0.0001f)
             {
-                step++;
+                points.Add(sEnd);
+                return points;
+            }
+            heading.Normalize();
 
-                scaleAdjust = 0f;
+            // The tangent-chord theorem puts the chord at half the arc's central angle off the entry
+            // tangent, so the sweep is twice the aim's bearing. Past 90 degrees the aim is behind the
+            // heading, which no forward-tangent arc can reach: hold a semicircle, so the preview shows the
+            // aim is out of range rather than silently doubling the route back on itself.
+            float bearing = (float)Math.Atan2((heading.X * flat.Y) - (heading.Y * flat.X), (heading.X * flat.X) + (heading.Y * flat.Y));
+            if (bearing > halfPi) bearing = halfPi;
+            if (bearing < -halfPi) bearing = -halfPi;
+            float sweep = bearing * 2f;
 
-                Vector3 currentPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp);
-                Vector3 addPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp + addition);
+            float radius = chord / (2f * (float)Math.Sin(Math.Abs(sweep) / 2f));
 
-                int tries = 0;
-                while (currentPos.DistanceTo2D(addPos) < separationDist - 0.001f && tries < 200)
+            if (!float.IsInfinity(radius) && radius <= chord * straightRadiusFactor)
+            {
+                float sign = Math.Sign(sweep);
+                Vector3 centre = sStart + new Vector3(-heading.Y * sign, heading.X * sign, 0f) * radius;
+                float startAngle = (float)Math.Atan2(sStart.Y - centre.Y, sStart.X - centre.X);
+                int steps = (int)Math.Min(maxSteps, Math.Max(1.0, Math.Ceiling(radius * Math.Abs(sweep) / separationDist)));
+
+                // Index 0 is the route end itself: the apply loop starts at 1, so the node already in
+                // RouteNodes is not written twice.
+                points.Add(sStart);
+                for (int i = 1; i <= steps; i++)
                 {
-                    tries++;
-                    scaleAdjust += 0.001f;
-                    addPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp + addition + scaleAdjust);
+                    float angle = startAngle + (sweep * i / steps);
+                    points.Add(new Vector3(centre.X + (radius * (float)Math.Cos(angle)), centre.Y + (radius * (float)Math.Sin(angle)), sStart.Z));
                 }
-                tries = 0;
-                while (currentPos.DistanceTo2D(addPos) > separationDist + 0.001f && tries < 200)
-                {
-                    tries++;
-                    scaleAdjust -= 0.001f;
-                    addPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp + addition + scaleAdjust);
-                }
-                stepLerp += addition + scaleAdjust;
+            }
+            else
+            {
+                int straightSteps = (int)Math.Min(maxSteps, Math.Max(1.0, Math.Ceiling(chord / separationDist)));
+                points.Add(sStart);
+                for (int i = 1; i <= straightSteps; i++) points.Add(sStart + (flat * (i / (float)straightSteps)));
+            }
 
-                
-                
-                if (!Game.IsControlPressed(2, GTA.Control.Sprint))
+            // Follow the terrain: the arc is computed in plan, so every point below the route end takes its
+            // height from the map. Sprint holds the section level, as it always did.
+            if (!Game.IsControlPressed(2, GTA.Control.Sprint))
+            {
+                for (int i = 1; i < points.Count; i++)
                 {
-                    RaycastResult toGround = World.Raycast(addPos + new Vector3(0, 0, 2f), addPos + (Vector3.WorldDown * 30f), IntersectOptions.Map);
-                    if (toGround.DitHitAnything) addPos.Z = toGround.HitCoords.Z;
+                    RaycastResult toGround = World.Raycast(points[i] + new Vector3(0, 0, 2f), points[i] + (Vector3.WorldDown * 30f), IntersectOptions.Map);
+                    if (toGround.DitHitAnything) points[i] = new Vector3(points[i].X, points[i].Y, toGround.HitCoords.Z);
                 }
-                points.Add(addPos);
-
             }
             return points;
         }
@@ -511,11 +516,6 @@ namespace ARS
                 abCw.Y = -ab.X;
             }
             return a + abCw * length;
-        }
-
-        public static Vector3 Bezier2(Vector3 Start, Vector3 End, float t)
-        {
-            return (((1 - t) * (1 - t)) * Start) + (2 * t * (1 - t) * Vector3.Zero) + ((t * t) * End);
         }
     }
 }
