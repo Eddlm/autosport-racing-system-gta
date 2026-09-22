@@ -305,11 +305,48 @@ namespace ARS
             {
                 for (int i = 1; i < points.Count; i++)
                 {
-                    RaycastResult toGround = World.Raycast(points[i] + new Vector3(0, 0, 2f), points[i] + (Vector3.WorldDown * 30f), IntersectOptions.Map);
-                    if (toGround.DitHitAnything) points[i] = new Vector3(points[i].X, points[i].Y, toGround.HitCoords.Z);
+                    float ground;
+                    if (TryResolveGround(points[i], out ground)) points[i] = new Vector3(points[i].X, points[i].Y, ground);
                 }
             }
             return points;
+        }
+
+        // Ground height directly under a plan-view point. The probe starts well above the point rather than
+        // just over it, because a probe anchored below the surface finds nothing at all and the point then
+        // keeps a stale height - so a camera under the map, or a road rising toward the point, could never
+        // pull it up. The hit is absolute, so the probe's offset needs no correction back out.
+        // A single probe from that high would return the topmost surface, which over a road is a bridge
+        // deck; so when the first hit is nowhere near the expected height, keep walking down through the
+        // stacked surfaces and take the one nearest it. The common case accepts the first hit and stops.
+        static bool TryResolveGround(Vector3 point, out float ground)
+        {
+            const float probeUpMeters = 50f;
+            const float probeDownMeters = 30f;
+            const float acceptWithinMeters = 3f;
+            const int maxSurfaces = 4;
+
+            ground = point.Z;
+            float ceiling = point.Z + probeUpMeters;
+            float floorHeight = point.Z - probeDownMeters;
+            bool found = false;
+
+            for (int pass = 0; pass < maxSurfaces; pass++)
+            {
+                RaycastResult hit = World.Raycast(new Vector3(point.X, point.Y, ceiling), new Vector3(point.X, point.Y, floorHeight), IntersectOptions.Map);
+                if (!hit.DitHitAnything) break;
+                if (Math.Abs(hit.HitCoords.Z - point.Z) < acceptWithinMeters)
+                {
+                    ground = hit.HitCoords.Z;
+                    return true;
+                }
+                if (!found || Math.Abs(hit.HitCoords.Z - point.Z) < Math.Abs(ground - point.Z)) ground = hit.HitCoords.Z;
+                found = true;
+
+                ceiling = hit.HitCoords.Z - 0.05f;
+                if (ceiling <= floorHeight) break;
+            }
+            return found;
         }
 
         public bool PlayerOrCameraNearPos(Vector3 pos, float dist)
