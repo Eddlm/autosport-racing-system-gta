@@ -279,12 +279,6 @@ namespace ARS
         int _posUpdateTickMs = 0;
         int _longTickMs = 0;
 
-        // Race-end results readout. Queued rather than posted together: the notification feed only shows a
-        // handful at once, so a full grid in one frame would lose most of them.
-        const int LapSummaryIntervalMs = 1500;
-        readonly List<string> _lapSummaryQueue = new List<string>();
-        int _lapSummaryNextMs = 0;
-
         public enum TerrainTypes
         {
             Sand = 1288448767,
@@ -1336,16 +1330,18 @@ namespace ARS
 
             _powerTargetValues.Clear();
             AddPowerValues(_powerTargetValues, min, max, 2.0f);
+            // A span narrower than the step offers no grid point, and LemonUI throws on SelectedIndex when an item has none.
+            if (_powerTargetValues.Count == 0) _powerTargetValues.Add(RoundToNearestEven(Clamp(PowerTargetScale, min, max)));
+            Log(LogImportance.Info, "Pace span " + min.ToString("0.0") + ".." + max.ToString("0.0") + " over " + ModelPaceIndexCache.Count + " models, " + _powerTargetValues.Count + " PI Target value(s).", true);
 
             _powerTargetItem.Items.Clear();
             foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0"));
-            if (!targetStored && _powerTargetValues.Count > 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
-            else _powerTargetItem.SelectedIndex = _powerTargetValues.Count > 0 ? FindNearestPowerValue(_powerTargetValues, PowerTargetScale) : 0;
-            if (_powerTargetItem.SelectedIndex < 0 && _powerTargetValues.Count > 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
+            _powerTargetItem.SelectedIndex = !targetStored ? _powerTargetValues.Count / 2 : FindNearestPowerValue(_powerTargetValues, PowerTargetScale);
+            if (_powerTargetItem.SelectedIndex < 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
             if (_powerTargetValues.Count > 0) PowerTargetScale = _powerTargetValues[_powerTargetItem.SelectedIndex];
             _resolvedPaceTarget = PowerTargetScale;
 
-            _paceOffsetItem.SelectedIndex = FindNearestPowerValue(_paceOffsetValues, PaceOffsetScale);
+            if (_paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = FindNearestPowerValue(_paceOffsetValues, PaceOffsetScale);
             if (_paceOffsetItem.SelectedIndex < 0 && _paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = _paceOffsetValues.Count / 2;
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
             RaceMenuStore.Migrate("PaceTarget", PowerTargetScale.ToString(CultureInfo.InvariantCulture));
@@ -1771,17 +1767,9 @@ namespace ARS
                 {
                     foreach (Racer r in Racers.Where(r => r.FinalPosition == 0).OrderByDescending(r => r.RaceProgress))
                         r.FinalPosition = LeaderboardFinish.Count + 1;
-                    QueueLapSummary();
                     if (LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
                     RaceStatus = RaceState.Finished;
                     CleanEverything();
-                }
-
-                if (_lapSummaryQueue.Count > 0 && Game.GameTime >= _lapSummaryNextMs)
-                {
-                    _lapSummaryNextMs = Game.GameTime + LapSummaryIntervalMs;
-                    UI.Notify(_lapSummaryQueue[0]);
-                    _lapSummaryQueue.RemoveAt(0);
                 }
 
                 if (_longTickMs < Game.GameTime)
@@ -1804,21 +1792,6 @@ namespace ARS
                 Log(LogImportance.Error, "OnTick error: " + ex, true);
             }
         }
-        // Race-end results readout: each racer's best lap, in finishing order. Gated like the live
-        // announcements - your own always, the field when the toggle is on.
-        void QueueLapSummary()
-        {
-            _lapSummaryQueue.Clear();
-            foreach (Racer r in Racers.OrderBy(r => r.FinalPosition))
-            {
-                bool isPlayer = r.Driver != null && r.Driver.IsPlayer;
-                if (!isPlayer && !DebugToggles[Options.ShowAiLapTimes]) continue;
-                TimeSpan? best = r.BestLap();
-                _lapSummaryQueue.Add(r.Name + " - best lap: ~b~" + (best.HasValue ? best.Value.ToString("m':'ss'.'f") : "no timed lap"));
-            }
-            _lapSummaryNextMs = Game.GameTime;
-        }
-
         public static TimeSpan ParseToTimeSpan(int gameTime)
         {
             TimeSpan t = new TimeSpan();
@@ -1870,7 +1843,11 @@ namespace ARS
             const float colPos = 0.02f;
             const float colPI = 0.05f;
             const float colCar = 0.10f;
-            const float colName = 0.18f;
+            const float colBest = 0.22f;
+            const float colAcc = 0.32f;
+            const float colDec = 0.39f;
+            const float colLat = 0.46f;
+            const float colTop = 0.53f;
             const float scale = 0.336f;
             const DrawTextFont font = DrawTextFont.Standard;
             Color hCol = Color.FromArgb(180, 180, 180);
@@ -1879,7 +1856,11 @@ namespace ARS
             DrawText(new Vector2(colPos, headerY), "POS", hCol, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colPI, headerY), "PI", hCol, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colCar, headerY), "CAR", hCol, font, DrawTextAlign.Left, scale);
-            DrawText(new Vector2(colName, headerY), "RACER", hCol, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colBest, headerY), "BEST LAP", hCol, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colAcc, headerY), "ACCGS", hCol, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colDec, headerY), "DECGS", hCol, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colLat, headerY), "LATGS", hCol, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colTop, headerY), "TOP MPH", hCol, font, DrawTextAlign.Left, scale);
 
             float y = headerY + step;
             int pos = 1;
@@ -1891,7 +1872,7 @@ namespace ARS
                 DrawText(new Vector2(colPos, y), pos + "º", c, font, DrawTextAlign.Left, scale);
                 DrawText(new Vector2(colPI, y), r.VehicleData.TextPerformanceIndex, c, font, DrawTextAlign.Left, scale);
                 DrawText(new Vector2(colCar, y), r.CarModelName, c, font, DrawTextAlign.Left, scale);
-                DrawText(new Vector2(colName, y), r._baseName, c, font, DrawTextAlign.Left, scale);
+                DrawLapStats(r, y, c, font, scale, colBest, colAcc, colDec, colLat, colTop);
                 y += step;
                 pos++;
             }
@@ -1904,10 +1885,21 @@ namespace ARS
                 DrawText(new Vector2(colPos, y), pos + "º", c, font, DrawTextAlign.Left, scale);
                 DrawText(new Vector2(colPI, y), r.VehicleData.TextPerformanceIndex, c, font, DrawTextAlign.Left, scale);
                 DrawText(new Vector2(colCar, y), r.CarModelName, c, font, DrawTextAlign.Left, scale);
-                DrawText(new Vector2(colName, y), r._baseName, c, font, DrawTextAlign.Left, scale);
+                DrawLapStats(r, y, c, font, scale, colBest, colAcc, colDec, colLat, colTop);
                 y += step;
                 pos++;
             }
+        }
+
+        // Best lap time beside the peaks of the lap in progress: those live on the racer and reset at the line.
+        static void DrawLapStats(Racer r, float y, Color c, DrawTextFont font, float scale, float colBest, float colAcc, float colDec, float colLat, float colTop)
+        {
+            TimeSpan? best = r.BestLap();
+            DrawText(new Vector2(colBest, y), best.HasValue ? best.Value.ToString("m':'ss'.'f") : "-", c, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colAcc, y), r.VehicleData.PeakAccelG.ToString("0.00"), c, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colDec, y), Math.Abs(r.VehicleData.PeakDecelG).ToString("0.00"), c, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colLat, y), r.VehicleData.PeakLateralG.ToString("0.00"), c, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colTop, y), ARS.MpsToMph(r.VehicleData.PeakTopSpeedMps).ToString("0"), c, font, DrawTextAlign.Left, scale);
         }
         public static float GetPercent(float current, float max)
         {

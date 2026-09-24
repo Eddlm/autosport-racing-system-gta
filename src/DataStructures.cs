@@ -59,8 +59,42 @@ namespace ARS
             Vector3 right = Vector3.Cross(horizontalForward, Vector3.WorldUp).Normalized;
             return Vector3.Dot(AverageAcceleration, right) / 9.8f;
         }
-        
-        
+
+        // Per-lap peaks ride the raw 20 ms sample, not the 200 ms mean; the G side is invalid past grip × margin, speed is uncapped.
+        public const float LapPeakGripMargin = 1.33f;
+        public float PeakAccelG;
+        public float PeakDecelG;
+        public float PeakLateralG;
+        public float PeakTopSpeedMps;
+
+        public void AccumulateLapPeaks(Vector3 accel, Vector3 velocity, Vector3 forward)
+        {
+            Vector3 horizontalForward = new Vector3(forward.X, forward.Y, 0f);
+            if (horizontalForward.LengthSquared() < 0.0001f) return;
+            horizontalForward.Normalize();
+            float forwardSpeed = Vector3.Dot(new Vector3(velocity.X, velocity.Y, 0f), horizontalForward);
+            if (forwardSpeed > PeakTopSpeedMps) PeakTopSpeedMps = forwardSpeed;
+
+            float ceilingG = CurrentMechanicalGrip * LapPeakGripMargin;
+            if (!(ceilingG > 0f)) return;
+            float longitudinalG = Vector3.Dot(accel, horizontalForward) / 9.8f;
+            Vector3 right = Vector3.Cross(horizontalForward, Vector3.WorldUp).Normalized;
+            float lateralG = Math.Abs(Vector3.Dot(accel, right) / 9.8f);
+            if (Math.Abs(longitudinalG) > ceilingG || lateralG > ceilingG) return;
+            if (longitudinalG > PeakAccelG) PeakAccelG = longitudinalG;
+            if (longitudinalG < PeakDecelG) PeakDecelG = longitudinalG;
+            if (lateralG > PeakLateralG) PeakLateralG = lateralG;
+        }
+
+        public void ResetLapPeaks()
+        {
+            PeakAccelG = 0f;
+            PeakDecelG = 0f;
+            PeakLateralG = 0f;
+            PeakTopSpeedMps = 0f;
+        }
+
+
         public float PerformanceIndex = 0;
         public float PowerScale = 0;
         public string TextPerformanceIndex = "0";

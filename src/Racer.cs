@@ -1371,13 +1371,18 @@ namespace ARS
         }
 
         // TCS wheelspin targets: more negative = more spin allowed, so the deepening is subtracted.
-        // Slip at peak longitudinal grip is 0.4 on the per-wheel slip scale the game keeps at wheel+0x174: the grip
-        // curve peaks at argument 1.0 and the longitudinal input is that slip times sfTractionMinAngle (2.5).
-        // The peak sits at fLoss on that same scale, so the target scales with the ground's grip multiplier - a wet,
-        // worn or low-grip surface peaks at a smaller slip, and the whole schedule keeps its position against the peak.
-        const float IdealWheelspinPeakSlip = 0.4f;
-        const float IdealWheelspinDeepening = 0.5f;
-        const float IdealWheelspinGripFloor = 0.3f;  // sanity guard on the grip read
+        // The number is the slip the controller drives toward, on the per-wheel slip scale the game keeps at
+        // wheel+0x174. Landmarks on that scale: free rolling is 0, the grip curve peaks at argument 1.0 (slip 0.4)
+        // and is flat at fTractionCurveMin from argument 2.5 (slip 1.0, full lockup). The branch between the two is
+        // shallow - the whole drop from peak to floor is about a tenth of the grip - so a target just past the peak
+        // buys visible wheelspin for very little traction, and nothing at all is gained beyond slip 1.0.
+        // The target sits past the peak on purpose: a powerful RWD car should be able to spin its wheels on launch
+        // and out of slow corners, while the deepening under slide still stops short of the sliding floor.
+        // The peak sits at fLoss on that scale, so the target scales with the ground's grip multiplier - a wet,
+        // worn or low-grip surface peaks at a smaller slip, and the schedule keeps its position against the peak.
+        const float IdealWheelspinSlipTarget = 0.6f;  // past the 0.4 peak, well short of the 1.0 lockup floor
+        const float IdealWheelspinDeepening = 0.3f;   // deepest 0.9 - spin under slide, still short of the floor
+        const float IdealWheelspinGripFloor = 0.3f;   // sanity guard on the grip read
 
         void TractionControl()
         {
@@ -1397,7 +1402,7 @@ namespace ARS
                 // Descending *input* with ascending output on purpose: a descending output is inverted by Remap's
                 // clamp (Clamp(r, min, max) with min > max collapses to min), and trlat == 0 would divide by zero.
                 float gripScale = ARS.Clamp(GroundGripMultiplier, IdealWheelspinGripFloor, 1f);
-                float IdealWheelspinBase = -IdealWheelspinPeakSlip * gripScale;
+                float IdealWheelspinBase = -IdealWheelspinSlipTarget * gripScale;
                 float trlat = Handling.LateralTractionCurve;
                 float slide = Math.Abs(VehicleData.SlideAngle);
                 float deepest = IdealWheelspinBase - IdealWheelspinDeepening * gripScale;
