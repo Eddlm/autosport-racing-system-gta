@@ -1371,8 +1371,13 @@ namespace ARS
         }
 
         // TCS wheelspin targets: more negative = more spin allowed, so the deepening is subtracted.
-        const float IdealWheelspinBase = -1.5f;
+        // Slip at peak longitudinal grip is 0.4 on the per-wheel slip scale the game keeps at wheel+0x174: the grip
+        // curve peaks at argument 1.0 and the longitudinal input is that slip times sfTractionMinAngle (2.5).
+        // The peak sits at fLoss on that same scale, so the target scales with the ground's grip multiplier - a wet,
+        // worn or low-grip surface peaks at a smaller slip, and the whole schedule keeps its position against the peak.
+        const float IdealWheelspinPeakSlip = 0.4f;
         const float IdealWheelspinDeepening = 0.5f;
+        const float IdealWheelspinGripFloor = 0.3f;  // sanity guard on the grip read
 
         void TractionControl()
         {
@@ -1383,7 +1388,7 @@ namespace ARS
             float IdealWheelspin;
             if (OutOfTrackDistance() > 0f)
             {
-                IdealWheelspin = -0.25f;  // off-track: tame target
+                IdealWheelspin = -0.25f;  // off-track: tame target, already derated - not scaled a second time
             }
             else
             {
@@ -1391,9 +1396,11 @@ namespace ARS
                 // returns to the base at twice that - a car sliding that far needs the throttle back, not more of it.
                 // Descending *input* with ascending output on purpose: a descending output is inverted by Remap's
                 // clamp (Clamp(r, min, max) with min > max collapses to min), and trlat == 0 would divide by zero.
+                float gripScale = ARS.Clamp(GroundGripMultiplier, IdealWheelspinGripFloor, 1f);
+                float IdealWheelspinBase = -IdealWheelspinPeakSlip * gripScale;
                 float trlat = Handling.LateralTractionCurve;
                 float slide = Math.Abs(VehicleData.SlideAngle);
-                float deepest = IdealWheelspinBase - IdealWheelspinDeepening;
+                float deepest = IdealWheelspinBase - IdealWheelspinDeepening * gripScale;
                 if (trlat <= 0.01f) IdealWheelspin = IdealWheelspinBase;
                 else if (slide <= trlat) IdealWheelspin = ARS.Remap(slide, trlat, 0f, deepest, IdealWheelspinBase, true);
                 else IdealWheelspin = ARS.Remap(slide, trlat, trlat * 2f, deepest, IdealWheelspinBase, true);
