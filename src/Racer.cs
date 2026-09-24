@@ -1402,12 +1402,14 @@ namespace ARS
         // shallow - the whole drop from peak to floor is about a tenth of the grip - so a target just past the peak
         // buys visible wheelspin for very little traction, and nothing at all is gained beyond slip 1.0.
         // The target sits past the peak on purpose: a powerful RWD car should be able to spin its wheels on launch
-        // and out of slow corners, while the deepening under slide still stops short of the sliding floor.
+        // and out of slow corners, and wheelspin is rotation - a car denied it turns in less eagerly. Above slip 1.0
+        // the target is past the sliding floor as well, so the driven wheels spin freely and the cap only tracks
+        // grip; the cost is the whole plateau drop, about a tenth of the tyre's longitudinal grip.
         // The peak sits at fLoss on that scale, so the target scales with the ground's grip multiplier - a wet,
         // worn or low-grip surface peaks at a smaller slip, and the schedule keeps its position against the peak.
-        const float IdealWheelspinSlipTarget = 0.6f;  // past the 0.4 peak, well short of the 1.0 lockup floor
-        const float IdealWheelspinDeepening = 0.3f;   // deepest 0.9 - spin under slide, still short of the floor
-        const float IdealWheelspinGripFloor = 0.3f;   // sanity guard on the grip read
+        const float IdealWheelspinSlipTarget = 1.25f;  // past the 1.0 lockup floor: spin is allowed, not just trimmed
+        const float IdealWheelspinDeepening = 0.3f;    // deepest 1.55 - more of the same under slide
+        const float IdealWheelspinGripFloor = 0.3f;    // sanity guard on the grip read
 
         void TractionControl()
         {
