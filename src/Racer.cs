@@ -132,6 +132,10 @@ namespace ARS
 
         const float OffshootRangeMeters = 2f;
         const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
+        // A node deflection below this is a straight, which has no outside to judge.
+        const float OffshootMinRouteAngleDeg = 2f;
+        // Ceiling on the lane steer toward the outside of the corner's turn.
+        const float OutsideLaneMaxSteerDeg = 6f;
         const float FullPedalSpeedErrorMps = 3f;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
         const float BrakeErrorMultiplier = 2f;
@@ -150,7 +154,7 @@ namespace ARS
         float _debugPreLimitSteerDeg = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
-        const float BrakeFactorDefault = 0.8f; // TEMP: hardcoded for testing
+        const float BrakeFactorDefault = 0.66f; // TEMP: hardcoded for testing
         readonly Dictionary<int, float> _brakeFactorsByApex = new Dictionary<int, float>();
         float _brakeSampleSeconds = 0f;
         float _brakeSampleFullInput = 0f;
@@ -350,6 +354,7 @@ namespace ARS
 
             LapTimes.Clear();
             LapStartTime = 0;
+            VehicleData.ResetLapPeaks();
             Lap = 0;
             NitroChargedLap = -1;
             _nitrousLapUsed = -1;
@@ -383,7 +388,7 @@ namespace ARS
 
             _brakeFactorsByApex.Clear();
             foreach (CornerPoint corner in ARS.Corners)
-                _brakeFactorsByApex[corner.Node] = 0.8f; // TEMP: uniform starting assumption
+                _brakeFactorsByApex[corner.Node] = BrakeFactorDefault; // TEMP: uniform starting assumption
 
             Car.Repair();
         }
@@ -458,12 +463,13 @@ namespace ARS
                     laneErrorMeters = laneErrorMeters * (1f - blend) + (targetLane - projectedLaneMeters) * blend;
                 }
                 if (float.IsNaN(laneErrorMeters)) laneErrorMeters = 0f;
-                // Proportional lane steer: degrees per meter of lane error (no ceiling).
-                // Halve the gain when heading to the outside of a tight curve for smoother transitions.
-                bool outsideOfCurve = CurrentTrackPoint != null && Brain.CurrentPerception.CurveRadiusToFollowPoint < 500f
-                    && Math.Sign(targetLane) != 0 && Math.Sign(targetLane) != Math.Sign(CurrentTrackPoint.Angle);
-                float laneGainDegPerMeter = outsideOfCurve ? 1.5f : 3f;
+                // Proportional lane steer: degrees per meter of lane error, one gain for every lane.
+                const float laneGainDegPerMeter = 3f;
                 laneSteerDeg = -laneErrorMeters * laneGainDegPerMeter;
+                // The outside of the corner's turn is capped, not damped: the swing out to the edge is
+                // exactly the large lane error a fixed ceiling should bound.
+                bool outsideOfCorner = gotActiveCorner && Math.Sign(targetLane) != 0 && Math.Sign(targetLane) == Math.Sign(Brain.Corner.Point.Angle);
+                if (outsideOfCorner) laneSteerDeg = ARS.Clamp(laneSteerDeg, -OutsideLaneMaxSteerDeg, OutsideLaneMaxSteerDeg);
             }
             // Physical repulsion: inside the "no touching" box, steer away from rivals
             // actually closing laterally; parallel traffic must not kill the lane steer.
@@ -584,7 +590,7 @@ namespace ARS
         }
 
         // Hold the outside line on entry, then release it for the high-speed inside line.
-        static float OutsideReleaseSeconds = 1.05f;
+        static float OutsideReleaseSeconds = 0.95f;
         static float OutsideEngageSeconds => OutsideReleaseSeconds + 3f;
 
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
@@ -920,6 +926,7 @@ namespace ARS
             BaseBehavior = RacerBaseBehavior.Race;
             Lap = 1;
             LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
+            VehicleData.ResetLapPeaks();
             CanRegisterNewLap = false;
             _previousNode = -1;
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
@@ -1019,7 +1026,6 @@ namespace ARS
         {
             if (Brain.CurrentIntention.Speed >= 0f)
             {
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, ARS.EngineTopSpeed(Car) * 1.3f);
                 Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, Brain.CurrentIntention.MaxSpeed);
             }
         }
@@ -1044,13 +1050,8 @@ namespace ARS
             float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
             float halfWidth = Math.Max(tp.TrackHalfWidth, 0.1f);
 
-            // Outside is judged from the track angle behind the projected point, so it stays relevant through the corner.
-            int count = ARS.TrackPoints.Count;
-            int behindOffset = (int)(Car.Velocity.Length() * seconds);
-            int behindNode = ARS.IsPointToPoint
-                ? (int)ARS.Clamp(CurrentTrackPoint.Node - behindOffset, 0, count - 1)
-                : ((CurrentTrackPoint.Node - behindOffset) % count + count) % count;
-            float turnDirection = Math.Sign(ARS.TrackPoints[behindNode].Angle);
+            // Outside is the side the corner the car is in turns away from.
+            float turnDirection = Math.Abs(CurrentTrackPoint.Angle) > OffshootMinRouteAngleDeg ? Math.Sign(CurrentTrackPoint.Angle) : 0f;
 
             if (Math.Sign(signedOffset) != turnDirection) return 1f;
 
@@ -1722,6 +1723,7 @@ namespace ARS
                 VehicleData.AccelHead = (VehicleData.AccelHead + 1) % VehicleState.AccelWindow;
                 if (VehicleData.AccelCount < VehicleState.AccelWindow) VehicleData.AccelCount++;
                 _lastSpeed = cSpeed;
+                VehicleData.AccumulateLapPeaks(accel, cSpeed, Car.ForwardVector);
             }
 
             VehicleData.SpeedVectorGlobal = cSpeed;
@@ -2202,14 +2204,16 @@ namespace ARS
                     if (Lap == 2 && !ARS.IsPointToPoint)
                     {
                         LapStartTime = Game.GameTime;
+                        VehicleData.ResetLapPeaks();
                     }
                     else if (Lap > 1)
                     {
                         TimeSpan lapTime = ARS.ParseToTimeSpan(Game.GameTime - LapStartTime);
-                        ARS.Log(ARS.LogImportance.Info, "Laptime " + Name + ": " + lapTime.ToString("m':'ss'.'f"));
-                        if (Driver.IsPlayer || ARS.DebugToggles[Options.ShowAiLapTimes]) UI.Notify(Name + "'s laptime: ~b~" + lapTime.ToString("m':'ss'.'f"));
+                        string peaks = "accel " + VehicleData.PeakAccelG.ToString("0.00") + "G decel " + Math.Abs(VehicleData.PeakDecelG).ToString("0.00") + "G lat " + VehicleData.PeakLateralG.ToString("0.00") + "G top " + ARS.MpsToMph(VehicleData.PeakTopSpeedMps).ToString("0") + "mph";
+                        ARS.Log(ARS.LogImportance.Info, "Laptime " + CarModelName + ": " + lapTime.ToString("m':'ss'.'f") + " | " + peaks);
                         LapTimes.Add(lapTime);
                         LapStartTime = Game.GameTime;
+                        VehicleData.ResetLapPeaks();
                     }
                 }
             }
