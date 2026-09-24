@@ -1832,6 +1832,22 @@ namespace ARS
                 ARS.DrawLine(carPos, carPos + pdDir * lineLen, Color.Yellow);
                 ARS.DrawLine(carPos, carPos + apDir * lineLen, Color.Lime);
 
+                // The limiter's two side limits (red = left, orange = right) against the commanded angle. If the
+                // green applied line sits inside them, the clamp is not binding on this tick - which is the whole
+                // question when tuning the slip term, and previously invisible: SteerLimitLeft/Right were drawn
+                // nowhere and _steerLimitedThisFrame was written and never read. Orange = SteerLimitRight (drawn
+                // first, so a binding right side shows orange under the green), red = SteerLimitLeft.
+                float limLRad = -SteerLimitLeft * (float)Math.PI / 180f;
+                float limRRad = SteerLimitRight * (float)Math.PI / 180f;
+                Vector3 limLDir = new Vector3(fwd.X * (float)Math.Cos(limLRad) - fwd.Y * (float)Math.Sin(limLRad), fwd.X * (float)Math.Sin(limLRad) + fwd.Y * (float)Math.Cos(limLRad), 0f);
+                Vector3 limRDir = new Vector3(fwd.X * (float)Math.Cos(limRRad) - fwd.Y * (float)Math.Sin(limRRad), fwd.X * (float)Math.Sin(limRRad) + fwd.Y * (float)Math.Cos(limRRad), 0f);
+                ARS.DrawLine(carPos, carPos + limLDir * lineLen, Color.Red);
+                ARS.DrawLine(carPos, carPos + limRDir * lineLen, Color.Orange);
+
+                // A white marker above the car on any tick where the clamp actually bit: over a lap this says
+                // whether the ceiling binds constantly, occasionally, or never.
+                if (_steerLimitedThisFrame) DrawPointMarker(carPos + new Vector3(0f, 0f, 1.6f), 0.7f, Color.White);
+
                 // Input trail.
                 DrawInputTrail();
             }
