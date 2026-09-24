@@ -161,8 +161,10 @@ namespace ARS
         public static float SteerCeilingBias = 2f;
         // Fraction of the outer front wheel's peak-slip term added to the steer ceiling. The ceiling's Ackermann
         // half is the corner geometry alone; a limit corner also needs the slip angle that generates the force.
-        // 0 is the kinematic ceiling exactly as it was, 1 is the full term. It ships as a dial because the full
-        // term is a large loosening at speed (roughly 2x the ceiling near 100 km/h), so it wants winding in.
+        // 0 is the kinematic ceiling exactly as it was - the old system, unchanged. 1 adds the full term, which is
+        // what a limit corner takes. Negative subtracts it, giving a ceiling tighter than the corner geometry, so
+        // the front runs short of its peak on purpose (conservative, understeer-prone). Note the ceiling's own
+        // floor - half the geometry - bounds how far negative this can actually bite.
         public static float SteerSlipCeiling = 0f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
@@ -979,14 +981,17 @@ namespace ARS
             steerCeilingItem.SelectedIndex = Math.Max(0, steerCeilingItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingBias", SteerCeilingBias).ToString("0.0", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerCeilingItem);
 
-            string[] steerSlipOptions = { "0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" };
-            NativeListItem<string> steerSlipItem = new NativeListItem<string>("Steer-In Slip Term", "How much of the outer front wheel's peak slip angle is added to the speed-based steer ceiling. A limit corner needs the Ackermann corner geometry PLUS the slip angle that makes the force, but the ceiling has only ever had the geometry half - so at speed the AI is capped below the angle its tyres can use. 0.0 is the old behaviour, 1.0 is the full term.", steerSlipOptions);
+            string[] steerSlipOptions = { "-1.0", "-0.9", "-0.8", "-0.7", "-0.6", "-0.5", "-0.4", "-0.3", "-0.2", "-0.1", "0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" };
+            NativeListItem<string> steerSlipItem = new NativeListItem<string>("Steer-In Slip Term", "How much of the outer front wheel's peak slip angle is added to the speed-based steer ceiling. A limit corner needs the Ackermann corner geometry PLUS the slip angle that makes the force, but the ceiling has only ever had the geometry half - so at speed the AI is capped below the angle its tyres can use. 0.0 is the old behaviour, unchanged; 1.0 is the full term; negative takes the ceiling below the corner geometry, so the front stays short of its peak on purpose.", steerSlipOptions);
             steerSlipItem.ItemChanged += (sender, args) =>
             {
                 SteerSlipCeiling = float.Parse(steerSlipItem.Items[args.Index], CultureInfo.InvariantCulture);
                 SaveRacerSetting("SteerSlipCeiling", steerSlipItem.Items[args.Index]);
             };
-            steerSlipItem.SelectedIndex = Math.Max(0, steerSlipItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerSlipCeiling", SteerSlipCeiling).ToString("0.0", CultureInfo.InvariantCulture)));
+            // Guard the fallback: with a negative range, an unrecognised stored value would otherwise select the
+            // first item - the most extreme setting - instead of leaving the dial at the old system's 0.0.
+            int steerSlipIndex = steerSlipItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerSlipCeiling", SteerSlipCeiling).ToString("0.0", CultureInfo.InvariantCulture));
+            steerSlipItem.SelectedIndex = steerSlipIndex >= 0 ? steerSlipIndex : steerSlipItem.Items.IndexOf("0.0");
             aiMenu.Add(steerSlipItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
