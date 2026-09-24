@@ -843,6 +843,27 @@ namespace ARS
             return ARS.RadToDeg((float)Math.Atan(ratio));
         }
 
+        // The game steers one front wheel 0.75 of the command (CWheel::SetSteerAngle's quasi-Ackermann step),
+        // so the command that lands the OUTER front wheel on its peak slip angle is that angle / 0.75.
+        const float SlipCeilingOuterWheelShare = 1f / 0.75f;
+        // Same sanity floor the TCS target uses: a lifted wheel reads ~0 on the grip multiplier.
+        const float SlipCeilingGripFloor = 0.3f;
+
+        // Steer angle whose OUTER front wheel sits on its peak slip angle. A limit corner needs the kinematic
+        // Ackermann angle PLUS the slip angle that generates the force; the ceiling below has only ever had the
+        // kinematic half, so on its own it caps the AI below the angle its tyres can use, and the shortfall grows
+        // as 1/v² - i.e. with speed. The peak is fTractionCurveLateral shrunk by the same speed stiffness the TCS
+        // targets use, scaled by the ground's grip multiplier because fLoss moves the peak angle, not just the force.
+        // Dialled by ARS.SteerSlipCeiling: 0 leaves the kinematic ceiling exactly as it was, 1 adds the full term.
+        float SlipCeilingDegrees(float fwdSpeed)
+        {
+            float lat = Handling.LateralTractionCurve;
+            if (lat <= 0.01f || fwdSpeed <= 0f) return 0f;
+            float stiffness = 1f + Math.Min(5f, 0.1f * fwdSpeed);
+            float gripScale = ARS.Clamp(GroundGripMultiplier, SlipCeilingGripFloor, 1f);
+            return ARS.SteerSlipCeiling * SlipCeilingOuterWheelShare * lat * gripScale / stiffness;
+        }
+
 
         void ApplySteerLimits()
         {
@@ -869,10 +890,14 @@ namespace ARS
             {
                 float vanillaCeiling = VehicleData.SteeringLock / (1f + SteerReductionPerMps * fwdSpeed);
                 float geometryCeiling = Math.Min(vanillaCeiling, AckermannCeilingDegrees(fwdSpeed));
+                // The corner geometry is the kinematic half only; a limit corner also needs the slip angle that
+                // generates the force, so the outer wheel's peak slip is added here rather than left out. Scaled
+                // by ARS.SteerSlipCeiling, so 0 reproduces the old ceiling exactly.
+                float slipCeiling = SlipCeilingDegrees(fwdSpeed);
                 // The one deliberate skew: the geometry is computed 1:1 and then biased, so the ceiling's shape
                 // and the crossover stay where the physics puts them and only the number moves. The floor stops
                 // a negative bias from reaching zero (a car that cannot steer) or below (an inverted clamp).
-                speedCeiling = ARS.Clamp(geometryCeiling + ARS.SteerCeilingBias, geometryCeiling * SteerCeilingBiasFloor, VehicleData.SteeringLock);
+                speedCeiling = ARS.Clamp(geometryCeiling + slipCeiling + ARS.SteerCeilingBias, geometryCeiling * SteerCeilingBiasFloor, VehicleData.SteeringLock);
             }
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;

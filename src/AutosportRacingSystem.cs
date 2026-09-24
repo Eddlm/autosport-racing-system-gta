@@ -159,6 +159,11 @@ namespace ARS
         // default is a deliberate +2 skew (driver-tuned), not a physics term. Being additive, its effect is
         // proportionally largest where the ceiling is smallest — i.e. at speed.
         public static float SteerCeilingBias = 2f;
+        // Fraction of the outer front wheel's peak-slip term added to the steer ceiling. The ceiling's Ackermann
+        // half is the corner geometry alone; a limit corner also needs the slip angle that generates the force.
+        // 0 is the kinematic ceiling exactly as it was, 1 is the full term. It ships as a dial because the full
+        // term is a large loosening at speed (roughly 2x the ceiling near 100 km/h), so it wants winding in.
+        public static float SteerSlipCeiling = 0f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -973,6 +978,16 @@ namespace ARS
             };
             steerCeilingItem.SelectedIndex = Math.Max(0, steerCeilingItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingBias", SteerCeilingBias).ToString("0.0", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerCeilingItem);
+
+            string[] steerSlipOptions = { "0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" };
+            NativeListItem<string> steerSlipItem = new NativeListItem<string>("Steer-In Slip Term", "How much of the outer front wheel's peak slip angle is added to the speed-based steer ceiling. A limit corner needs the Ackermann corner geometry PLUS the slip angle that makes the force, but the ceiling has only ever had the geometry half - so at speed the AI is capped below the angle its tyres can use. 0.0 is the old behaviour, 1.0 is the full term.", steerSlipOptions);
+            steerSlipItem.ItemChanged += (sender, args) =>
+            {
+                SteerSlipCeiling = float.Parse(steerSlipItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerSlipCeiling", steerSlipItem.Items[args.Index]);
+            };
+            steerSlipItem.SelectedIndex = Math.Max(0, steerSlipItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerSlipCeiling", SteerSlipCeiling).ToString("0.0", CultureInfo.InvariantCulture)));
+            aiMenu.Add(steerSlipItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
