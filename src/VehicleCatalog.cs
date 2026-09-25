@@ -24,6 +24,19 @@ namespace ARS
             SelectedRosterFile = name;
         }
 
+        // The menu lists a pool without its extension; the file name is what gets stored and read back.
+        public static string PoolLabel(string fileName)
+        {
+            string name = (fileName ?? "").Trim();
+            return name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ? name.Substring(0, name.Length - 4) : name;
+        }
+
+        public static string PoolFileName(string label)
+        {
+            string name = (label ?? "").Trim();
+            return name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ? name : name + ".txt";
+        }
+
         // Discovery only — pure file I/O, safe on the background load thread.
         public static List<string> ListRosterFiles()
         {

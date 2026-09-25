@@ -515,6 +515,32 @@ namespace ARS
             RefreshPowerControls();
         }
 
+        // The Vehicles folder is scanned once at init, so the Car Pool item re-checks it every time its menu opens.
+        void RefreshCarPoolItem(NativeListItem<string> item)
+        {
+            List<string> files = VehicleCatalog.ListRosterFiles().Select(VehicleCatalog.PoolLabel).ToList();
+            if (files.SequenceEqual(_carPoolFiles, StringComparer.OrdinalIgnoreCase)) return;
+            List<string> added = files.Where(f => !_carPoolFiles.Contains(f, StringComparer.OrdinalIgnoreCase)).ToList();
+            List<string> removed = _carPoolFiles.Where(f => !files.Contains(f, StringComparer.OrdinalIgnoreCase)).ToList();
+            string current = VehicleCatalog.PoolLabel(VehicleCatalog.SelectedRosterFile);
+            string target = files.Find(f => string.Equals(f, current, StringComparison.OrdinalIgnoreCase));
+            _carPoolFiles = files;
+            bool lost = target == null;
+            if (lost) { target = files.Find(f => string.Equals(f, VehicleCatalog.PoolLabel("cars.txt"), StringComparison.OrdinalIgnoreCase)); if (target == null) target = files[0]; }
+            // The index is parked on a valid entry before the swap, because the Items setter reads Items[index] as it lands.
+            _carPoolRefreshing = true;
+            try
+            {
+                item.SelectedIndex = 0;
+                item.Items = new List<string>(files);
+                item.SelectedIndex = Math.Max(0, item.Items.FindIndex(i => string.Equals(i, target, StringComparison.OrdinalIgnoreCase)));
+            }
+            finally { _carPoolRefreshing = false; }
+            if (lost) { string fallback = VehicleCatalog.PoolFileName(target); VehicleCatalog.SelectRosterFile(fallback); SaveRacerSetting("VehiclePool", fallback); RefreshRoster(); }
+            string changes = (added.Count > 0 ? " +" + string.Join(", ", added) : "") + (removed.Count > 0 ? " -" + string.Join(", ", removed) : "");
+            UI.Notify("~b~[ARS]:~w~ Car pools changed:" + changes + " (" + files.Count + " available)." + (lost ? " " + current + " is gone - using " + target + "." : ""));
+        }
+
         public static float SignedLaneOffset(Vector3 pos, Vector3 refPoint, Vector3 refDir)
         {
             Vector3 right = Vector3.Cross(refDir, Vector3.WorldUp);
@@ -618,8 +644,11 @@ namespace ARS
         // Set to null (or empty list) to re-enable pace-matched selection.
         public static List<string> HardcodedRoster = null;
 
-        // The vehicle pool: every supplier XML path, discovered by RefreshCatalogs on the load thread.
+        // The vehicle pool: the selected roster's model keys, discovered by RefreshCatalogs on the load thread.
         List<string> _vehiclePool = new List<string>();
+        // The Car Pool item's current listing, and the guard that hides its own rebuild from its ItemChanged.
+        List<string> _carPoolFiles = new List<string>();
+        bool _carPoolRefreshing;
         public static int TrackListPos = 0;
         readonly ObjectPool _menuPool = new ObjectPool();
         NativeMenu _arsMenu;
@@ -867,20 +896,29 @@ namespace ARS
             racersMenu.Add(gridSortItem);
 
             // ── Car pool: which Vehicles\*.txt roster the grid draws from ──
+            // Listed without the extension; the ini keeps the file name.
             List<string> poolFiles = VehicleCatalog.ListRosterFiles();
             string storedPool = SettingsMenuStore.Get("VehiclePool", "cars.txt");
             if (!poolFiles.Contains(storedPool, StringComparer.OrdinalIgnoreCase)) { storedPool = "cars.txt"; SaveRacerSetting("VehiclePool", storedPool); }
             VehicleCatalog.SelectRosterFile(storedPool);
-            NativeListItem<string> carPoolItem = new NativeListItem<string>("Car Pool", "Which Vehicles\\*.txt roster the grid draws from. Drop any .txt file (one model key per line, # comments) into Vehicles and it shows up here. Changing it rebuilds the pool immediately.", poolFiles.ToArray());
+            _carPoolFiles = poolFiles.Select(VehicleCatalog.PoolLabel).ToList();
+            NativeListItem<string> carPoolItem = new NativeListItem<string>("Car Pool", "Which Vehicles\\*.txt roster the grid draws from. This list is re-checked every time the menu opens and reports anything that changed. Switching it rebuilds the pool immediately.", _carPoolFiles.ToArray());
             carPoolItem.ItemChanged += (sender, args) =>
             {
-                VehicleCatalog.SelectRosterFile(carPoolItem.Items[args.Index]);
-                SaveRacerSetting("VehiclePool", carPoolItem.Items[args.Index]);
+                if (_carPoolRefreshing) return;
+                string pool = VehicleCatalog.PoolFileName(carPoolItem.Items[args.Index]);
+                VehicleCatalog.SelectRosterFile(pool);
+                SaveRacerSetting("VehiclePool", pool);
                 RefreshRoster();
                 UI.Notify("~b~[ARS]:~w~ Car pool: " + carPoolItem.Items[args.Index] + " (" + _vehiclePool.Count + " cars).");
             };
-            carPoolItem.SelectedIndex = Math.Max(0, carPoolItem.Items.FindIndex(i => string.Equals(i, VehicleCatalog.SelectedRosterFile, StringComparison.OrdinalIgnoreCase)));
+            // The index below only restores the stored pool, so it must not read as a user change.
+            _carPoolRefreshing = true;
+            string currentPool = VehicleCatalog.PoolLabel(VehicleCatalog.SelectedRosterFile);
+            carPoolItem.SelectedIndex = Math.Max(0, carPoolItem.Items.FindIndex(i => string.Equals(i, currentPool, StringComparison.OrdinalIgnoreCase)));
+            _carPoolRefreshing = false;
             racersMenu.Add(carPoolItem);
+            racersMenu.Shown += (sender, args) => RefreshCarPoolItem(carPoolItem);
 
             NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", new[] { "15", "30", "45", "60" });
             timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
