@@ -721,7 +721,7 @@ namespace ARS
             _raceMenu.Add(instanceTrackItem);
 
             // ── Grid items (flattened into Race) ──
-            _gridSizeItem = new NativeListItem<string>("Target Grid Size", "Target number of vehicles for the grid.", GridSizeLabels());
+            _gridSizeItem = new NativeListItem<string>("Target Grid Size", "Target number of AI opponents for the grid. 0 races the track alone.", GridSizeLabels());
             _gridSizeItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index < 0 || args.Index >= GridSizeChoices.Length) return;
@@ -1274,7 +1274,8 @@ namespace ARS
             FillCachedCandidates(gridSize, true);
             LoadGrid(gridSize);
 
-            if (Racers.Count == 0)
+            // Zero opponents is a solo race, not a roster failure.
+            if (Racers.Count == 0 && _intendedOpponents > 0)
             {
                 UI.Notify("~o~No vehicles found with a performance index. Check the Vehicles folder.");
                 _gridInstanced = false;
