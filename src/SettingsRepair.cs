@@ -143,6 +143,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("RouteOffset", "6", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
             settings.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("AiNitro", TriState.IfPlayerHas.ToString(), Kind.Text, Enum.GetNames(typeof(TriState))));
+            settings.Specs.Add(new KeySpec("TipRate", TipFrequency.Medium.ToString(), Kind.Text, Enum.GetNames(typeof(TipFrequency))));
             settings.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));

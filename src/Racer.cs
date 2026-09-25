@@ -2350,6 +2350,7 @@ namespace ARS
                 int shift = 0;
                 while (shift < heldNodes.Length && heldNodes[shift] >= 0 && HasPassedApex(heldNodes[shift])) shift++;
                 if (shift > 0) CommitBrakeLearning();
+                if (shift > 0 && Driver != null && Driver.IsPlayer) Tips.ApexPassed(shift);
                 if (shift > 0)
                 {
                     for (int i = 0; i < heldNodes.Length - shift; i++)

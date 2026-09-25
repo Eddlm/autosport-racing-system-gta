@@ -143,6 +143,8 @@ namespace ARS
         // Player-facing AI/grid options (Settings.ini [RACERS]).
         // AiNitro: may AI racers use nitrous? IfPlayerHas = only when the player has it.
         public static TriState AiNitro = TriState.IfPlayerHas;
+        // TipRate: how often a passed apex rolls for a tip. High = 1 in 20, Medium = 1 in 50, Low = 1 in 100.
+        public static TipFrequency TipRate = TipFrequency.Medium;
         // Apply Menyoo vehicle-appearance skins to grid cars when a matching file exists.
         public static bool UseMenyooSkins = true;
         public static bool OverspeedEnabled = true;
@@ -956,6 +958,16 @@ namespace ARS
                 SaveRacerSetting("UseMenyooSkins", UseMenyooSkins.ToString());
             };
             racersMenu.Add(menyooItem);
+
+            // ── Racing tips, shown through the help box after an apex ──
+            NativeListItem<string> tipRateItem = new NativeListItem<string>("Racing Tips", "How often a tip is shown when you pass an apex. The tips themselves are in tips.txt, next to sillynames.txt.", EnumLabels<TipFrequency>());
+            tipRateItem.ItemChanged += (sender, args) =>
+            {
+                TipRate = (TipFrequency)args.Index;
+                SaveRacerSetting("TipRate", TipRate.ToString());
+            };
+            tipRateItem.SelectedIndex = Math.Max(0, tipRateItem.Items.IndexOf(EnumLabel(TipRate)));
+            racersMenu.Add(tipRateItem);
 
             // ── AI Settings submenu (under Settings) — how the AI racers drive; shares Settings\Menu-Settings.ini ──
             NativeMenu aiMenu = new NativeMenu("AI Settings", "AI Settings", "How the AI racers behave on track.")
@@ -3100,6 +3112,7 @@ namespace ARS
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 0);
             CurrentRubberbandMode = ParseEnum(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString()), CurrentRubberbandMode);
             StagedSpawns = SettingsMenuStore.GetBool("StagedSpawns", StagedSpawns);
+            TipRate = ParseEnum(SettingsMenuStore.Get("TipRate", TipRate.ToString()), TipRate);
             RaceMenuStore.Migrate("PaceMode", legacyPaceMode);
             // The mode's option was relabelled and then re-spelled as an enum name; rewrite either older
             // spelling so the repair pass cannot reset a stored mode to the default.
@@ -3449,6 +3462,7 @@ namespace ARS
         {
             SetLoadingPromptText("Loading vehicles...");
             ResetSillyNames();
+            Tips.Reset();
 
             Log(LogImportance.Info, "Loading vehicle models");
             Vehicle lastCar = null;

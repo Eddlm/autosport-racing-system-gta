@@ -94,6 +94,7 @@
     <Compile Include="src\UpdateChecker.cs" />
     <Compile Include="src\SkillSet.cs" />
     <Compile Include="src\MenyooAppearance.cs" />
+    <Compile Include="src\Tips.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
