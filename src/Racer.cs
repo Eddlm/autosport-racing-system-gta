@@ -148,10 +148,11 @@ namespace ARS
         const int InputTrailMaxSamples = 40;
 
 
-        // True when the steer limiter actually reduced the steer this frame; read only by the ZOMBIE block below.
+        // True when the steer limiter actually reduced the steer this frame; read by the Show Inputs clamp marker.
         bool _steerLimitedThisFrame = false;
         // The limiter's two side limits, recomputed every tick in ApplySteerLimits. Public so a rule can grant
-        // an allowance to one side, and so the debug view can draw them.
+        // an allowance to one side, and so the debug view can draw them. LEFT bounds positive commands and RIGHT
+        // negative ones, because a positive command steers left (AGENTS.md's steer-sign gotcha).
         public float SteerLimitRight = 40f;
         public float SteerLimitLeft = 40f;
         float _debugPreLimitSteerDeg = 0f;
@@ -1008,11 +1009,11 @@ namespace ARS
             if (countersteering && Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * CountersteerBlendStartFraction)
             {
                 float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle), VehicleData.SteeringLock);
-                if (requestedSteer > 0f) SteerLimitRight = Math.Max(SteerLimitRight, countersteerAllowance);
-                else SteerLimitLeft = Math.Max(SteerLimitLeft, countersteerAllowance);
+                if (requestedSteer > 0f) SteerLimitLeft = Math.Max(SteerLimitLeft, countersteerAllowance);
+                else SteerLimitRight = Math.Max(SteerLimitRight, countersteerAllowance);
             }
 
-            Control.SteerDegrees = ARS.Clamp(requestedSteer, -SteerLimitLeft, SteerLimitRight);
+            Control.SteerDegrees = ARS.Clamp(requestedSteer, -SteerLimitRight, SteerLimitLeft);
             if (Control.SteerDegrees != requestedSteer) _steerLimitedThisFrame = true;
         }
 
@@ -1992,17 +1993,15 @@ namespace ARS
                 ARS.DrawLine(carPos, carPos + pdDir * lineLen, Color.Yellow);
                 ARS.DrawLine(carPos, carPos + apDir * lineLen, Color.Lime);
 
-                // The limiter's two side limits (red = left, orange = right) against the commanded angle. If the
-                // green applied line sits inside them, the clamp is not binding on this tick - which is the whole
-                // question when tuning the slip term, and previously invisible: SteerLimitLeft/Right were drawn
-                // nowhere and _steerLimitedThisFrame was written and never read. Orange = SteerLimitRight (drawn
-                // first, so a binding right side shows orange under the green), red = SteerLimitLeft.
-                float limLRad = -SteerLimitLeft * (float)Math.PI / 180f;
-                float limRRad = SteerLimitRight * (float)Math.PI / 180f;
+                // The limiter's two side limits against the commanded angle - orange is the left limit, red the right
+                // one, because a positive command steers left. If the green applied line sits inside them the clamp
+                // is not binding on this tick, which is the whole question when tuning the slip term.
+                float limRRad = -SteerLimitRight * (float)Math.PI / 180f;
+                float limLRad = SteerLimitLeft * (float)Math.PI / 180f;
                 Vector3 limLDir = new Vector3(fwd.X * (float)Math.Cos(limLRad) - fwd.Y * (float)Math.Sin(limLRad), fwd.X * (float)Math.Sin(limLRad) + fwd.Y * (float)Math.Cos(limLRad), 0f);
                 Vector3 limRDir = new Vector3(fwd.X * (float)Math.Cos(limRRad) - fwd.Y * (float)Math.Sin(limRRad), fwd.X * (float)Math.Sin(limRRad) + fwd.Y * (float)Math.Cos(limRRad), 0f);
-                ARS.DrawLine(carPos, carPos + limLDir * lineLen, Color.Red);
-                ARS.DrawLine(carPos, carPos + limRDir * lineLen, Color.Orange);
+                ARS.DrawLine(carPos, carPos + limLDir * lineLen, Color.Orange);
+                ARS.DrawLine(carPos, carPos + limRDir * lineLen, Color.Red);
 
                 // A white marker above the car on any tick where the clamp actually bit: over a lap this says
                 // whether the ceiling binds constantly, occasionally, or never.
