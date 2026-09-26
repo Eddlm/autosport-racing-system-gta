@@ -339,7 +339,7 @@ namespace ARS
                 
                 BuildPowerCache();
                 RefreshPowerControls();
-                FillCachedCandidates(_intendedOpponents, true);
+                FillCachedCandidates(_intendedOpponents);
                 RefreshTrackList(); // tracks are now discovered in _trackTags. Populate the menu list.
                 Log(LogImportance.Info, "Initialization complete.", true);
                 DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
@@ -995,7 +995,7 @@ namespace ARS
             routeOffsetItem.SelectedIndex = Math.Max(0, routeOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(routeOffsetItem);
 
-            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the effective braking decel that keeps the car at full brake ~0.33s per braking phase.", BrakeLearning);
+            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the braking decel that keeps the car at 100% brake for a fifth of each braking phase. Announces every corner it adjusts.", BrakeLearning);
             brakeLearningItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearning = brakeLearningItem.Checked;
@@ -1271,7 +1271,7 @@ namespace ARS
             TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, _intendedOpponents + 1, GridPositions);
             int gridSize = Math.Min(_intendedOpponents, Math.Max(0, GridSlotsAvailable - 1));
             if (gridSize != _intendedOpponents) Log(LogImportance.Info, "Grid: the track only yielded " + GridSlotsAvailable + " slots, so " + _intendedOpponents + " was capped to " + gridSize);
-            FillCachedCandidates(gridSize, true);
+            FillCachedCandidates(gridSize);
             LoadGrid(gridSize);
 
             // Zero opponents is a solo race, not a roster failure.
@@ -3419,11 +3419,11 @@ namespace ARS
 
         List<string> _cachedCandidates = new List<string>();
 
-        void FillCachedCandidates(int maxcars, bool allowScriptYield = true)
+        void FillCachedCandidates(int maxcars)
         {
             if (HardcodedRoster != null && HardcodedRoster.Count > 0)
             {
-                _cachedCandidates = VehicleSelector.SelectHardcoded(HardcodedRoster, maxcars, Yield, GetRandomInt, text => Log(LogImportance.Info, text));
+                _cachedCandidates = VehicleSelector.SelectHardcoded(HardcodedRoster, maxcars, GetRandomInt, text => Log(LogImportance.Info, text));
             }
             else
             {
@@ -3431,7 +3431,9 @@ namespace ARS
                 GetPaceSpan(out float paceMin, out float paceMax);
                 if (ModelPaceIndexCache.Count > 0 && !ARS.IsBetween(_resolvedPaceTarget, paceMin, paceMax))
                     Log(LogImportance.Info, "Pace target " + _resolvedPaceTarget + " outside fleet span " + paceMin + ".." + paceMax + " - ranking from the closest end");
-                _cachedCandidates = VehicleSelector.SelectClosestByPace(_vehiclePool, ModelPaceIndexCache, maxcars, allowScriptYield, Yield, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget);
+                DateTime rankingStarted = DateTime.UtcNow;
+                _cachedCandidates = VehicleSelector.SelectClosestByPace(_vehiclePool, ModelPaceIndexCache, maxcars, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget);
+                Log(LogImportance.Info, "Ranking took " + (int)(DateTime.UtcNow - rankingStarted).TotalMilliseconds + " ms for " + _vehiclePool.Count + " pool files");
                 if (_cachedCandidates.Count == 0) Log(LogImportance.Error, "No vehicles in the pool with a pace index.");
             }
         }

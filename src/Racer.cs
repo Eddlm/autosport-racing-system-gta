@@ -154,14 +154,14 @@ namespace ARS
         float _debugPreLimitSteerDeg = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
-        const float BrakeFactorDefault = 0.66f; // TEMP: hardcoded for testing
+        const float BrakeFactorDefault = 0.75f; // TEMP: hardcoded for testing
         readonly Dictionary<int, float> _brakeFactorsByApex = new Dictionary<int, float>();
-        float _brakeSampleSeconds = 0f;
-        float _brakeSampleFullInput = 0f;
+        float _brakeSampleSeconds = 0f;      // sampled braking time: the denominator of the full-brake share
+        float _brakeSampleFullSeconds = 0f;  // of which, the time pinned at 100% brake: the numerator
         int _brakeSampleApexNode = -1;
-        const float BrakeSampleThreshold = 0.5f; // only samples above this count toward the average
-        const float BrakeFullTimeTarget = 0.33f; // target seconds at full brake per braking phase
-        const float BrakeAdjustGain = 0.3f;      // proportional factor step on the full-brake-time error
+        const float BrakeSampleThreshold = 0.5f;    // only pedal above this counts as braking at all
+        const float BrakeFullFractionTarget = 0.2f; // target share of the braking phase spent at 100% brake
+        const float BrakeAdjustGain = 0.8f;         // proportional factor step on the full-brake share error
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
         const float BrakeMaxFactor = 1.2f;
         // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
@@ -1105,22 +1105,33 @@ namespace ARS
             {
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleSeconds = 0f;
-                _brakeSampleFullInput = 0f;
+                _brakeSampleFullSeconds = 0f;
             }
 
             if (Control.Brake <= BrakeSampleThreshold) return;
             _brakeSampleSeconds += TickScale;
-            if (Control.Brake >= 1f) _brakeSampleFullInput += Control.Brake * TickScale;
+            // The numerator is time actually pinned at 100%: the target is a share of the phase, not an amount.
+            if (Control.Brake >= 1f) _brakeSampleFullSeconds += TickScale;
         }
 
         void CommitBrakeLearning()
         {
             if (!ARS.BrakeLearning) return;
-            if (_brakeSampleSeconds < MinimumBrakeSampleSeconds || _brakeSampleFullInput <= 0f || _brakeSampleApexNode < 0) return;
-            float fullTime = _brakeSampleFullInput; // seconds at full brake
-            float step = (BrakeFullTimeTarget - fullTime) * BrakeAdjustGain;
-            float factor = BrakeFactorForApex(_brakeSampleApexNode) * (1f + step);
-            _brakeFactorsByApex[_brakeSampleApexNode] = ARS.Clamp(factor, BrakeMinFactor, BrakeMaxFactor);
+            // Any braking at all above the sample threshold is enough to score a share — the only thing that can
+            // block a commit now is having no sample, which the division needs anyway.
+            if (_brakeSampleSeconds <= 0f || _brakeSampleApexNode < 0) return;
+            // The error is the *share* of the braking phase spent at 100% brake, not the length of the phase:
+            // a corner the AI takes without ever pinning the pedal scores 0, so it asks for the largest correction.
+            float fullShare = _brakeSampleFullSeconds / _brakeSampleSeconds;
+            float step = (BrakeFullFractionTarget - fullShare) * BrakeAdjustGain;
+            float before = BrakeFactorForApex(_brakeSampleApexNode);
+            float factor = ARS.Clamp(before * (1f + step), BrakeMinFactor, BrakeMaxFactor);
+            _brakeFactorsByApex[_brakeSampleApexNode] = factor;
+            // Every commit is announced: the learned factor is otherwise invisible, and this is the only read-out
+            // of what the AI decided braking that corner costs.
+            UI.Notify("~b~[ARS]:~w~ " + _baseName + " apex " + _brakeSampleApexNode + " brake " + before.ToString("0.00")
+                + " -> " + factor.ToString("0.00") + " (full " + (int)Math.Round(fullShare * 100f) + "% of "
+                + _brakeSampleSeconds.ToString("0.00") + "s)");
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
@@ -2326,7 +2337,6 @@ namespace ARS
 
         // Braking map close-corner filtering and entrance timing.
         const float ApexBufferSeconds = 2f;
-        const float MinimumBrakeSampleSeconds = 0.25f;
         const float EntranceBrakeBufferSeconds = 0.25f;
         const float EntranceBrakeExtraDistance = 0f;
         const float SecondaryApexSpeedDifference = 5f;
