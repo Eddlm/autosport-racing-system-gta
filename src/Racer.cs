@@ -2920,22 +2920,6 @@ namespace ARS
                 ComputeTargetSpeed();
                 ComputeSteering();
 
-                // Two-wheel stability: steer into the airborne side to regain all four wheels.
-                // TEMPORARILY DISABLED while tuning the speed-based steering limiter.
-                if (1 == 2)
-                {
-                    List<bool> wg = ARS.WheelsOnGround(Car);
-                    if (wg.Count >= 4)
-                    {
-                        bool leftDown = wg[0] && wg[2];
-                        bool rightDown = wg[1] && wg[3];
-                        if (!leftDown && rightDown)
-                            Control.SteerDegrees = -VehicleData.SteeringLock;
-                        else if (!rightDown && leftDown)
-                            Control.SteerDegrees = VehicleData.SteeringLock;
-                    }
-                }
-
                 ConvertSpeedToPedals();
 
                 UpdateStuckCheck();
