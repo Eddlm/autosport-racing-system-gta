@@ -170,6 +170,8 @@ namespace ARS
         // the front runs short of its peak on purpose (conservative, understeer-prone). Note the ceiling's own
         // floor - half the geometry - bounds how far negative this can actually bite.
         public static float SteerSlipCeiling = 0f;
+        // Cap the steer limit at the live peak slip angle instead of the corner-geometry ceiling (Racer.PeakSlipSteerCeiling).
+        public static bool SteerPeakSlipCap = false;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1053,6 +1055,14 @@ namespace ARS
             int steerSlipIndex = steerSlipItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerSlipCeiling", SteerSlipCeiling).ToString("0.0", CultureInfo.InvariantCulture));
             steerSlipItem.SelectedIndex = steerSlipIndex >= 0 ? steerSlipIndex : steerSlipItem.Items.IndexOf("0.0");
             aiMenu.Add(steerSlipItem);
+
+            NativeCheckboxItem peakSlipItem = new NativeCheckboxItem("Peak-Slip Steer Cap", "Cap the steer limit at half the live peak slip angle - the handling curve's zero-speed peak narrowed by speed - instead of the corner geometry (vanilla curve vs Ackermann, whichever is lower). The brake halves it again, so full pedal leaves a quarter of the peak. While this is on, Steer-In Slip Term has no effect.", SteerPeakSlipCap);
+            peakSlipItem.CheckboxChanged += (sender, args) =>
+            {
+                SteerPeakSlipCap = peakSlipItem.Checked;
+                SaveRacerSetting("SteerPeakSlipCap", SteerPeakSlipCap.ToString());
+            };
+            aiMenu.Add(peakSlipItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -3115,6 +3125,7 @@ namespace ARS
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingScale = SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale);
             SteerCeilingBias = SettingsMenuStore.GetFloat("SteerCeilingBias", SteerCeilingBias);
+            SteerPeakSlipCap = SettingsMenuStore.GetBool("SteerPeakSlipCap", SteerPeakSlipCap);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

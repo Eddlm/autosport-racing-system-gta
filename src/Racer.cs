@@ -829,6 +829,10 @@ namespace ARS
         const float SteerCapGripFloor = 0.5f;
         // The bias dial may cut the ceiling but never below this fraction of the geometry.
         const float SteerCeilingBiasFloor = 0.5f;
+        // Peak-slip cap: the share of the live peak the cap starts from, before the brake narrows it further.
+        const float PeakSlipCapShare = 0.5f;
+        // ...and the share it narrows to at full brake pedal, on top of the above.
+        const float PeakSlipCapBrakeFloor = 0.5f;
 
         // Live ceiling coefficient: the useful steer angle at speed is ~ grip × g × wheelbase / v², so grip
         // belongs in that numerator and the cap loosens as √grip — the same √grip the speed maths uses.
@@ -890,6 +894,32 @@ namespace ARS
             return ARS.SteerSlipCeiling * SlipCeilingOuterWheelShare * TRLateralAtSpeed * gripScale;
         }
 
+        // The shipped ceiling: the corner geometry (vanilla's grip-scaled authority curve vs Ackermann, whichever is
+        // lower) plus the outer wheel's peak-slip term, biased and floored so the bias can only ever cut to half.
+        float GeometrySteerCeiling(float fwdSpeed)
+        {
+            float vanillaCeiling = VehicleData.SteeringLock / (1f + SteerReductionPerMps * fwdSpeed);
+            float geometryCeiling = Math.Min(vanillaCeiling, AckermannCeilingDegrees(fwdSpeed));
+            // The corner geometry is the kinematic half only; a limit corner also needs the slip angle that
+            // generates the force, so the outer wheel's peak slip is added here rather than left out. Scaled
+            // by ARS.SteerSlipCeiling, so 0 reproduces the old ceiling exactly.
+            float slipCeiling = SlipCeilingDegrees(fwdSpeed);
+            // The one deliberate skew: the geometry is computed 1:1 and then biased, so the ceiling's shape
+            // and the crossover stay where the physics puts them and only the number moves. The floor stops
+            // a negative bias from reaching zero (a car that cannot steer) or below (an inverted clamp).
+            return ARS.Clamp(geometryCeiling + slipCeiling + ARS.SteerCeilingBias, geometryCeiling * SteerCeilingBiasFloor, VehicleData.SteeringLock);
+        }
+
+        // The tyre's own ceiling, the ARS.SteerPeakSlipCap alternative: a fixed share of the live peak slip angle,
+        // which narrows as the brake goes down - a braking tyre spends its lateral capacity on the brake, so the
+        // angle it can still hold is smaller. Both shares keep the front short of the peak the tyres could use.
+        float PeakSlipSteerCeiling()
+        {
+            // Descending *input*, ascending output on purpose: a descending output is inverted by Remap's clamp.
+            float brakeNarrowing = ARS.Remap(Control.Brake, 1f, 0f, PeakSlipCapBrakeFloor, 1f, true);
+            return ARS.Clamp(TRLateralAtSpeed * PeakSlipCapShare * brakeNarrowing + ARS.SteerCeilingBias, 0f, VehicleData.SteeringLock);
+        }
+
 
         void ApplySteerLimits()
         {
@@ -907,30 +937,24 @@ namespace ARS
 
             // The limiter is two independent limits, one per side, closed by a single clamp at the end: nothing
             // is exempt from being limited, so an allowance has to be granted to a side rather than a check
-            // skipped. Both sides start at the corner-geometry ceiling — vanilla's grip-scaled authority curve
-            // and the Ackermann limit, whichever is lower. A reversing car keeps the raw lock: the vanilla
-            // term's 1 + k × v goes negative below −13 m/s and would invert the ceiling.
+            // skipped. Both sides start at the same ceiling — the corner geometry (vanilla's grip-scaled authority
+            // curve and the Ackermann limit, whichever is lower), or the tyre's peak slip angle under the cap above.
+            // A reversing car keeps the raw lock: the vanilla term's 1 + k × v goes negative below −13 m/s and
+            // would invert the ceiling.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f)
             {
-                float vanillaCeiling = VehicleData.SteeringLock / (1f + SteerReductionPerMps * fwdSpeed);
-                float geometryCeiling = Math.Min(vanillaCeiling, AckermannCeilingDegrees(fwdSpeed));
-                // The corner geometry is the kinematic half only; a limit corner also needs the slip angle that
-                // generates the force, so the outer wheel's peak slip is added here rather than left out. Scaled
-                // by ARS.SteerSlipCeiling, so 0 reproduces the old ceiling exactly.
-                float slipCeiling = SlipCeilingDegrees(fwdSpeed);
-                // The one deliberate skew: the geometry is computed 1:1 and then biased, so the ceiling's shape
-                // and the crossover stay where the physics puts them and only the number moves. The floor stops
-                // a negative bias from reaching zero (a car that cannot steer) or below (an inverted clamp).
-                speedCeiling = ARS.Clamp(geometryCeiling + slipCeiling + ARS.SteerCeilingBias, geometryCeiling * SteerCeilingBiasFloor, VehicleData.SteeringLock);
+                // Two ceilings, one slot: the corner geometry (the shipped one) or the tyre's own peak slip angle,
+                // which falls back to the geometry while the peak is unreadable.
+                speedCeiling = ARS.SteerPeakSlipCap && TRLateralAtSpeed > 0.01f ? PeakSlipSteerCeiling() : GeometrySteerCeiling(fwdSpeed);
             }
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;
 
-            // The one whitelisted allowance: the side answering a slide may reach past the corner geometry, up
-            // to the slide angle itself. It is a raise and never a reduction, so the geometry ceiling still
-            // holds everywhere a slide does not justify more.
+            // The one whitelisted allowance: the side answering a slide may reach past the ceiling, up to the slide
+            // angle itself. It is a raise and never a reduction, so the ceiling still holds everywhere a slide does
+            // not justify more.
             if (countersteering && Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * CountersteerBlendStartFraction)
             {
                 float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle), VehicleData.SteeringLock);
