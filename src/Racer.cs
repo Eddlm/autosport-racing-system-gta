@@ -3170,8 +3170,8 @@ namespace ARS
             handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 100f);
             handlingGrip /= 1f + 0.035f * Handling.Downforce;
 
-            // TEMP experiment: bake the gravity multiplier into base grip when the off-road
-            // flag pushes gravity in Gs above 1 (normally 1.2).
+            // TEMP experiment: a car carrying the off-road FLAG has permanently raised gravity (set once in
+            // Initialize, not a surface state), and its grip is scaled with it.
             float gravityGs = Handling.Gravity / 9.8f;
             if (gravityGs > 1f) handlingGrip *= gravityGs;
 
