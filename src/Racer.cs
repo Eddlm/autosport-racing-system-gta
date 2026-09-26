@@ -154,7 +154,9 @@ namespace ARS
         float _debugPreLimitSteerDeg = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
-        const float BrakeFactorDefault = 0.75f; // TEMP: hardcoded for testing
+        const float BrakeFactorSeed = 0.9f;
+        // Each corner's initial factor is the seed plus a draw of +/- this many hundredths.
+        const int BrakeFactorSeedJitterHundredths = 5;
         readonly Dictionary<int, float> _brakeFactorsByApex = new Dictionary<int, float>();
         float _brakeSampleSeconds = 0f;      // sampled braking time: the denominator of the full-pedal share
         float _brakeSampleFullSeconds = 0f;  // of which, the time at full pedal: the numerator
@@ -178,7 +180,7 @@ namespace ARS
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
         const float BrakeMaxFactor = 1.2f;
         // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
-        public float BrakeFactorForApex(int apexNode) => _brakeFactorsByApex.TryGetValue(apexNode, out float f) ? f : BrakeFactorDefault;
+        public float BrakeFactorForApex(int apexNode) => _brakeFactorsByApex.TryGetValue(apexNode, out float f) ? f : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
 
         // While diving, a temp bonus is appended to the learned factor; the stored factor itself never changes.
@@ -401,8 +403,10 @@ namespace ARS
 
             _brakeFactorsByApex.Clear();
             _brakeCommitApexNode = -1;
+            // One independent draw per corner, so a fresh grid does not brake every corner on one assumption.
+            // The +1 makes the draw symmetric: GetRandomInt's max is exclusive.
             foreach (CornerPoint corner in ARS.Corners)
-                _brakeFactorsByApex[corner.Node] = BrakeFactorDefault; // TEMP: uniform starting assumption
+                _brakeFactorsByApex[corner.Node] = BrakeFactorSeed + ARS.GetRandomInt(-BrakeFactorSeedJitterHundredths, BrakeFactorSeedJitterHundredths + 1) / 100f;
 
             Car.Repair();
         }
