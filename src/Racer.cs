@@ -155,6 +155,9 @@ namespace ARS
         public float SteerLimitRight = 40f;
         public float SteerLimitLeft = 40f;
         float _debugPreLimitSteerDeg = 0f;
+        // Yaw damper steer contributions in degrees, for Show Inputs: against zero and against the track's required yaw.
+        float _debugDamperZeroRefDeg = 0f;
+        float _debugDamperTermDeg = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
         const float BrakeFactorSeed = 0.9f;
@@ -521,7 +524,13 @@ namespace ARS
             // --- PD assembly: damped course terms + lane steer + slide blend ---
 
             const float steerKP = 1.0f;
-            float dampedCourseSteerDeg = (steerKP * (courseErrorDeg + recoveryDeg + sideBySideSteerDeg)) - (SteerDamping * VehicleData.YawRotationPerSecondDegrees);
+            // Damp the excess over the yaw the track requires, not over zero which taxes every steady corner; the slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
+            float fwdSpeed = ARS.GetForwardSpeed(Car);
+            float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees;
+            if (SteerDampingTrackReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) yawRateToDamp -= RequiredYawRatePerSecond(steerRefPoint, fwdSpeed);
+            _debugDamperZeroRefDeg = -SteerDamping * VehicleData.YawRotationPerSecondDegrees;
+            _debugDamperTermDeg = -SteerDamping * yawRateToDamp;
+            float dampedCourseSteerDeg = (steerKP * (courseErrorDeg + recoveryDeg + sideBySideSteerDeg)) - (SteerDamping * yawRateToDamp);
             Control.SteerDegrees = dampedCourseSteerDeg + (steerKP * laneSteerDeg);
 
             if (Handling.LateralTractionCurve > 1f)
@@ -831,7 +840,16 @@ namespace ARS
         // Kill switch for the yaw-rate damper. Driven with it off the cars cannot hold centre — the term is the
         // only thing opposing a rotation the course chain has already started, so it is load-bearing, not trim.
         const bool SteerDampingEnabled = true;
+        // Reference the yaw damper to the yaw the track requires; false restores the zero-referenced term in one line.
+        const bool SteerDampingTrackReference = true;
         float SteerDamping => SteerDampingEnabled ? ARS.SteerDampingScale / Math.Max(VehicleData.BaseMechanicalGrip, SteerDampingGripFloor) : 0f;
+        // The yaw the track requires at a node: Angle is already the node's signed turn in the steer command's own convention (a left-hand corner is positive, as is the yaw rate that takes it), so it is used as-is; the span is twice the half width because nodes are one metre apart.
+        float RequiredYawRatePerSecond(TrackPoint point, float fwdSpeed)
+        {
+            float span = 2f * (int)(point.TrackHalfWidth * 2);
+            if (span <= 1f) return 0f;
+            return fwdSpeed * point.Angle / span;
+        }
         // Vanilla's player steering limiter used as a ceiling (AGENTS.md pipeline step 4): vanilla divides by
         // 1 + 0.075 × (forward speed − 5) in m/s and skips it while the car is sliding. The 5 m/s shift and its
         // gate are deliberately dropped here, so the ceiling starts closing from a standstill instead of
@@ -1988,6 +2006,15 @@ namespace ARS
 
                 // A white marker above the car on any tick where the clamp actually bit: over a lap this says
                 // whether the ceiling binds constantly, occasionally, or never.
+                // Yaw damper contributions, same origin so their gap reads as an angle: magenta against zero (the old toll), cyan as it now runs against the track's required yaw.
+                Vector3 dampOrigin = carPos + new Vector3(0f, 0f, 1.2f);
+                float zeroRefRad = _debugDamperZeroRefDeg * (float)Math.PI / 180f;
+                float dampRad = _debugDamperTermDeg * (float)Math.PI / 180f;
+                Vector3 zeroRefDir = new Vector3(fwd.X * (float)Math.Cos(zeroRefRad) - fwd.Y * (float)Math.Sin(zeroRefRad), fwd.X * (float)Math.Sin(zeroRefRad) + fwd.Y * (float)Math.Cos(zeroRefRad), 0f);
+                Vector3 dampDir = new Vector3(fwd.X * (float)Math.Cos(dampRad) - fwd.Y * (float)Math.Sin(dampRad), fwd.X * (float)Math.Sin(dampRad) + fwd.Y * (float)Math.Cos(dampRad), 0f);
+                ARS.DrawLine(dampOrigin, dampOrigin + zeroRefDir * lineLen, Color.Magenta);
+                ARS.DrawLine(dampOrigin, dampOrigin + dampDir * lineLen, Color.Cyan);
+
                 if (_steerLimitedThisFrame) DrawPointMarker(carPos + new Vector3(0f, 0f, 1.6f), 0.7f, Color.White);
 
                 // Input trail.
