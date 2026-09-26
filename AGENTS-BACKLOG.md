@@ -21,6 +21,8 @@
 
 1. ~~Dist shipped defaults~~ — **DONE (`7696db3`), then SUPERSEDED (`19611ec`)**: the decision committed deliberate first-run values under the renamed files; the WIP release now ships `Settings\` **empty** (an inert `.gitkeep` only) and lets the mod write its three `Menu-*.ini` on first run, so `Dist` tracks **no** settings file at all. See the section below.
 2. ~~Menu-persistence verification~~ — **DONE**: both paths verified in game (fresh install + legacy upgrade — see the section below).
+2a. **Lane-repulsion ceiling** — whether anything should bound the contact-avoidance add, and what; a decision first, then at most a one-method edit. Detail below.
+2b. **The player's special ability in a race** — the engine really does hand the player's car more grip and a faster steering ramp while it slows the world clock, and the AI can never match it; whether ARS ignores it, logs it or cancels it at the line is a fairness decision with two defensible answers, and both routes have natives. Detail in `AGENTS-VANILLA-STEERING.md`.
 
 **Tier 1 — localised edits, low risk**
 
@@ -53,6 +55,7 @@
 17. Gravity vs grip & speed — settle how gravity scales grip against each site that multiplies it again.
 18. Pace: model-theoretical vs instance — structural: pre-race selection is spawn-free by design.
 19. Overrotation via the pedal — a rotation-driven throttle authority; the wheel now reads rotation directly so countersteer no longer waits on slip, but the correction is **unwind-only**, so the pedal is still the lever that acts on **rear grip** (section below).
+19a. **The yaw damper's reference, then its speed schedule** — damp against the curvature the target requires rather than against zero, then make the gain track speed. `AGENTS-STEERING.md` carries the depth and ranks this first among its ideas; the two halves are separate defects and the reference is the bigger one.
 
 **Tier 6 — subsystem reworks**
 
@@ -70,6 +73,14 @@
 **Tier 9 — recorded ideas, not started**
 
 24. Brake learning: a slide-learned ceiling per corner — the share loop keeps aiming, the skid verdict caps the rise, and the cap creeps back up on clean passes. A design call first, then wheel time. Detail below.
+
+## Lane repulsion — unbounded on purpose, and that is the open question
+
+**What it does**: for rivals inside a lateral and longitudinal gate box that are **actually closing laterally**, it *adds* a steer-away term to the lane steer — the code owns the curve; closing speed sets the magnitude and distance scales it, and a hard close at close range can dwarf the lane P. It sits **after** the P, so nothing the P does bounds it, and it is inside the lane component rather than a separate term.
+
+**Why it was left alone**: it is the contact-avoidance term, and the lane P is now deliberately uncapped, so clamping the *sum* would weaken exactly the case that must not be weakened. It has always observed one rule — parallel traffic must not kill the lane steer — which is why it fires only on closing rivals and **adds** instead of overwriting.
+
+**Open**: whether anything should bound it, and what: the whole lane component, the repulsion alone, or nothing, leaving the limiter as its only ceiling. Driving has not called it broken, so this is a decision rather than a defect — but if a car ever reads as swerving at nothing, this is the first term to look at.
 
 ## GitHub issue triage
 
