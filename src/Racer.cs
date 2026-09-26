@@ -156,12 +156,25 @@ namespace ARS
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
         const float BrakeFactorDefault = 0.75f; // TEMP: hardcoded for testing
         readonly Dictionary<int, float> _brakeFactorsByApex = new Dictionary<int, float>();
-        float _brakeSampleSeconds = 0f;      // sampled braking time: the denominator of the full-brake share
-        float _brakeSampleFullSeconds = 0f;  // of which, the time pinned at 100% brake: the numerator
+        float _brakeSampleSeconds = 0f;      // sampled braking time: the denominator of the full-pedal share
+        float _brakeSampleFullSeconds = 0f;  // of which, the time at full pedal: the numerator
+        float _brakeSampleMaxSlideDeg = 0f;  // largest slip seen between this apex's entrance and the apex itself
         int _brakeSampleApexNode = -1;
-        const float BrakeSampleThreshold = 0.5f;    // only pedal above this counts as braking at all
-        const float BrakeFullFractionTarget = 0.2f; // target share of the braking phase spent at 100% brake
-        const float BrakeAdjustGain = 0.8f;         // proportional factor step on the full-brake share error
+        // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
+        // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
+        // BrakeCommitDelaySeconds gathering the exit's slide before it is allowed to teach anything.
+        int _brakeCommitApexNode = -1;
+        int _brakeCommitAtGameTime = 0;
+        float _brakeCommitSampleSeconds = 0f;
+        float _brakeCommitFullSeconds = 0f;
+        float _brakeCommitMaxSlideDeg = 0f;
+        const float BrakeSampleThreshold = 0.25f;   // only pedal above this counts as braking at all
+        const float BrakeFullPedalThreshold = 0.9f; // pedal at or above this counts as full brake
+        const float BrakeFullFractionTarget = 0.2f; // target share of the braking phase spent at full pedal
+        const float BrakeAdjustGain = 1f;           // step per unit of share error: 0.1 for every 10 points off
+        const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
+        const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
+        const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
         const float BrakeMaxFactor = 1.2f;
         // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
@@ -387,6 +400,7 @@ namespace ARS
             if (!ControlledByPlayer) Name = _baseName + " (" + VehicleData.PowerScale.ToString("0.00") + ")";
 
             _brakeFactorsByApex.Clear();
+            _brakeCommitApexNode = -1;
             foreach (CornerPoint corner in ARS.Corners)
                 _brakeFactorsByApex[corner.Node] = BrakeFactorDefault; // TEMP: uniform starting assumption
 
@@ -849,19 +863,31 @@ namespace ARS
         // Same sanity floor the TCS target uses: a lifted wheel reads ~0 on the grip multiplier.
         const float SlipCeilingGripFloor = 0.3f;
 
+        // The live lateral grip peak, in degrees of slip. The authored fTractionCurveLateral is the ZERO-SPEED
+        // peak: the tyre stiffens with speed, so the real peak is `lat / (1 + Min(5, 0.1 x speed_m_s))` — 22.5 at
+        // a standstill, 11.25 at 10 m/s, 3.75 at 180 km/h where it caps. Refreshed once per timed core so every
+        // consumer in a frame reads the same value.
+        public float TRLateralAtSpeed = 22f;
+
+        void UpdateTRLateralAtSpeed()
+        {
+            float lat = Handling.LateralTractionCurve;
+            float speed = Car.Velocity.Length();
+            if (lat <= 0.01f || float.IsNaN(speed)) { TRLateralAtSpeed = 0f; return; }
+            TRLateralAtSpeed = lat / (1f + Math.Min(5f, 0.1f * speed));
+        }
+
         // Steer angle whose OUTER front wheel sits on its peak slip angle. A limit corner needs the kinematic
         // Ackermann angle PLUS the slip angle that generates the force; the ceiling below has only ever had the
         // kinematic half, so on its own it caps the AI below the angle its tyres can use, and the shortfall grows
-        // as 1/v² - i.e. with speed. The peak is fTractionCurveLateral shrunk by the same speed stiffness the TCS
-        // targets use, scaled by the ground's grip multiplier because fLoss moves the peak angle, not just the force.
+        // as 1/v² - i.e. with speed. The peak is TRLateralAtSpeed, scaled by the ground's grip multiplier because
+        // fLoss moves the peak angle, not just the force.
         // Dialled by ARS.SteerSlipCeiling: 0 leaves the kinematic ceiling exactly as it was, 1 adds the full term.
         float SlipCeilingDegrees(float fwdSpeed)
         {
-            float lat = Handling.LateralTractionCurve;
-            if (lat <= 0.01f || fwdSpeed <= 0f) return 0f;
-            float stiffness = 1f + Math.Min(5f, 0.1f * fwdSpeed);
+            if (TRLateralAtSpeed <= 0.01f || fwdSpeed <= 0f) return 0f;
             float gripScale = ARS.Clamp(GroundGripMultiplier, SlipCeilingGripFloor, 1f);
-            return ARS.SteerSlipCeiling * SlipCeilingOuterWheelShare * lat * gripScale / stiffness;
+            return ARS.SteerSlipCeiling * SlipCeilingOuterWheelShare * TRLateralAtSpeed * gripScale;
         }
 
 
@@ -1087,51 +1113,98 @@ namespace ARS
             return 1f;
         }
 
-        // Samples braking quality across the approach to the current apex; the factor is
-        // only committed when that apex is passed — in-progress braking never adjusts live.
+        // Samples braking quality across the approach to the current apex. The verdict waits: the sample is parked
+        // at the apex pass and only lands a couple of seconds later, once the exit has had its say.
         void UpdateBrakeLearning()
         {
             if (!ARS.BrakeLearning)
             {
                 _brakeFactorsByApex.Clear();
+                _brakeCommitApexNode = -1;
                 return;
+            }
+
+            // Deferred commit: still watching, now for the slide a too-hot entry shows on the way out.
+            if (_brakeCommitApexNode >= 0)
+            {
+                float exitSlide = Math.Abs(VehicleData.SlideAngle);
+                if (!float.IsNaN(exitSlide) && exitSlide > _brakeCommitMaxSlideDeg) _brakeCommitMaxSlideDeg = exitSlide;
+                if (Game.GameTime >= _brakeCommitAtGameTime) CommitBrakeLearning();
+            }
+
+            // The apex this sample belongs to, reset here rather than after the gates below, so a corner change
+            // during a maneuver or past its own entrance cannot leave the sample pointing at an older apex.
+            if (NextApexNode != _brakeSampleApexNode)
+            {
+                _brakeSampleApexNode = NextApexNode;
+                _brakeSampleSeconds = 0f;
+                _brakeSampleFullSeconds = 0f;
+                _brakeSampleMaxSlideDeg = 0f;
+            }
+
+            // Slide watch: runs on the corner proper, entrance to apex — exactly where the sample has stopped.
+            // A car that slid on the way in was on a tyre that had already let go, so the braking it took to get
+            // there says nothing about the decel this corner allows, and the commit below throws that sample away.
+            if (_brakeSampleApexNode >= 0 && HasPassedBrakingTarget() && !HasPassedApex(_brakeSampleApexNode))
+            {
+                float slide = Math.Abs(VehicleData.SlideAngle);
+                if (!float.IsNaN(slide) && slide > _brakeSampleMaxSlideDeg) _brakeSampleMaxSlideDeg = slide;
             }
 
             if (ActiveManeuver.Type != ManeuverType.None) return;
 
             if (HasPassedBrakingTarget()) return;
 
-            if (NextApexNode != _brakeSampleApexNode)
-            {
-                _brakeSampleApexNode = NextApexNode;
-                _brakeSampleSeconds = 0f;
-                _brakeSampleFullSeconds = 0f;
-            }
-
             if (Control.Brake <= BrakeSampleThreshold) return;
             _brakeSampleSeconds += TickScale;
-            // The numerator is time actually pinned at 100%: the target is a share of the phase, not an amount.
-            if (Control.Brake >= 1f) _brakeSampleFullSeconds += TickScale;
+            // The numerator is time at full pedal: the target is a share of the phase, not an amount.
+            if (Control.Brake >= BrakeFullPedalThreshold) _brakeSampleFullSeconds += TickScale;
+        }
+
+        // Park the sample at the apex pass; the verdict lands BrakeCommitDelaySeconds later.
+        void ScheduleBrakeCommit()
+        {
+            // Two apexes inside the delay (a chicane) settle the older one now rather than lose it.
+            if (_brakeCommitApexNode >= 0) CommitBrakeLearning();
+            _brakeCommitApexNode = _brakeSampleApexNode;
+            _brakeCommitAtGameTime = Game.GameTime + (int)(BrakeCommitDelaySeconds * 1000f);
+            _brakeCommitSampleSeconds = _brakeSampleSeconds;
+            _brakeCommitFullSeconds = _brakeSampleFullSeconds;
+            _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
         }
 
         void CommitBrakeLearning()
         {
-            if (!ARS.BrakeLearning) return;
-            // Any braking at all above the sample threshold is enough to score a share — the only thing that can
-            // block a commit now is having no sample, which the division needs anyway.
-            if (_brakeSampleSeconds <= 0f || _brakeSampleApexNode < 0) return;
-            // The error is the *share* of the braking phase spent at 100% brake, not the length of the phase:
-            // a corner the AI takes without ever pinning the pedal scores 0, so it asks for the largest correction.
-            float fullShare = _brakeSampleFullSeconds / _brakeSampleSeconds;
+            if (!ARS.BrakeLearning || _brakeCommitApexNode < 0) return;
+            int apexNode = _brakeCommitApexNode;
+            float sampleSeconds = _brakeCommitSampleSeconds;
+            float maxSlideDeg = _brakeCommitMaxSlideDeg;
+            float fullShare = sampleSeconds > 0f ? _brakeCommitFullSeconds / sampleSeconds : 0f;
+            _brakeCommitApexNode = -1;
+            // The notices ride the track-analysis debug view, so a normal race is quiet.
+            bool announce = ARS.DebugToggles[Options.ShowTrackAnalysis];
+
+            float before = BrakeFactorForApex(apexNode);
+            // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
+            // curve has fallen all the way to fTractionCurveMin, so that is sliding rather than merely cornering at
+            // the limit. The factor then takes a flat cut — sample or no sample, the slide is the evidence.
+            if (TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple)
+            {
+                float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
+                _brakeFactorsByApex[apexNode] = skidFactor;
+                if (announce) UI.Notify("~b~[ARS]~w~ skid detected > " + skidFactor.ToString("0.00"));
+                return;
+            }
+            // Nothing to score: the car never braked above the sample threshold on the way in.
+            if (sampleSeconds <= 0f) return;
+            // The error is the *share* of the braking phase spent at full pedal, not the length of the phase:
+            // a corner the AI takes without ever pressing hard scores 0, so it asks for the largest correction.
             float step = (BrakeFullFractionTarget - fullShare) * BrakeAdjustGain;
-            float before = BrakeFactorForApex(_brakeSampleApexNode);
             float factor = ARS.Clamp(before * (1f + step), BrakeMinFactor, BrakeMaxFactor);
-            _brakeFactorsByApex[_brakeSampleApexNode] = factor;
-            // Every commit is announced: the learned factor is otherwise invisible, and this is the only read-out
-            // of what the AI decided braking that corner costs.
-            UI.Notify("~b~[ARS]:~w~ " + _baseName + " apex " + _brakeSampleApexNode + " brake " + before.ToString("0.00")
-                + " -> " + factor.ToString("0.00") + " (full " + (int)Math.Round(fullShare * 100f) + "% of "
-                + _brakeSampleSeconds.ToString("0.00") + "s)");
+            _brakeFactorsByApex[apexNode] = factor;
+            // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
+            // braking that corner costs.
+            if (announce) UI.Notify("~b~[ARS]~w~ " + (int)Math.Round(fullShare * 100f) + "% brake > " + factor.ToString("0.00"));
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
@@ -1929,6 +2002,7 @@ namespace ARS
             UpdateTrackPosition();
             UpdateSlideAndBoundingBox();
             UpdatePerceivedGrip();
+            UpdateTRLateralAtSpeed();
             // Legacy live-corner scan and route probe remain disabled.
             // UpdateApexLeapfrog supplies corner state.
             // UpdateCornerValidity();
@@ -2359,7 +2433,7 @@ namespace ARS
                 // Leapfrog passed apexes forward through the held queue.
                 int shift = 0;
                 while (shift < heldNodes.Length && heldNodes[shift] >= 0 && HasPassedApex(heldNodes[shift])) shift++;
-                if (shift > 0) CommitBrakeLearning();
+                if (shift > 0) ScheduleBrakeCommit();
                 if (shift > 0 && Driver != null && Driver.IsPlayer) Tips.ApexPassed(shift);
                 if (shift > 0)
                 {

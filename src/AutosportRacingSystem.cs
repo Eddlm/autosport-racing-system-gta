@@ -995,7 +995,7 @@ namespace ARS
             routeOffsetItem.SelectedIndex = Math.Max(0, routeOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(routeOffsetItem);
 
-            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the braking decel that keeps the car at 100% brake for a fifth of each braking phase. Announces every corner it adjusts.", BrakeLearning);
+            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the braking decel that keeps the car at full pedal (90%+) for a fifth of each braking phase. A corner it slides through takes a flat 0.1 cut instead. Announces each change while Show Track Analysis is on.", BrakeLearning);
             brakeLearningItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearning = brakeLearningItem.Checked;
