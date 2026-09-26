@@ -343,6 +343,79 @@ Seven flags have **no consumer anywhere** in `src\dev_ng`: `FLAG_NO_BOOT` (2), `
 
 So 39 cars carry the off-road gravity bit, `RETINUEL` is the only car with the rally-tyre curve, and `TAMPADRL` and `MINIMUSFD` are the only two the gravity model treats as normal.
 
+## `strAdvancedFlags` — `CarAdvancedFlags` (`CF_*`), `handlingMgr.h:140-186`
+
+Lives on `CCarHandlingData`, not on `CHandlingData` — so a car only has this set if its `<SubHandlingData>` carries a `CCarHandlingData` item. `CCarHandlingData::ConvertToGameUnits` (`handlingMgr.cpp:1186-1192`) does `sscanf(m_strAdvancedFlags, "%x", &aFlags)`; **`aFlags` is not a schema field** (the structdef at `HandlingInfo.psc:304-321` has no entry for it), so it is always derived from the string. The enum stops at `0x20000000` — bits 30 and 31 are unused.
+**This set is not a flat flag list**: the first nine members are two *enumerated groups* (a differential type and a gearbox type) where the engine tests combinations, and the rest are independent bits.
+
+| bit | engine name | header comment | consumer → meaning |
+|---|---|---|---|
+| `0x00000001` | `CF_DIFF_FRONT` | — | `wheel.cpp:5362`, `:8284`, `Automobile.cpp:9757` — front diff defers the wheel's rot-vel clamp and feeds the torque split |
+| `0x00000002` | `CF_DIFF_REAR` | — | the same three sites, rear axle |
+| `0x00000004` | `CF_DIFF_CENTRE` | — | `wheel.cpp:6550` — drive force split evenly for the diff to resolve |
+| `0x00000008` | `CF_DIFF_LIMITED_FRONT` | — | `wheel.cpp:8325` — limited-slip lock ratio from the two wheels' rot speeds |
+| `0x00000010` | `CF_DIFF_LIMITED_REAR` | — | `wheel.cpp:8323` |
+| `0x00000020` | `CF_DIFF_LIMITED_CENTRE` | — | `Automobile.cpp:9762` — sets `hasViscousCoupling` |
+| `0x00000040` | `CF_DIFF_LOCKING_FRONT` | — | `wheel.cpp:8318` — `lockRatio = 1.0` |
+| `0x00000080` | `CF_DIFF_LOCKING_REAR` | — | `wheel.cpp:8316` |
+| `0x00000100` | `CF_DIFF_LOCKING_CENTRE` | — | **inert** — nothing reads it |
+| `0x00000200` | `CF_GEARBOX_FULL_AUTO` | — | **inert** |
+| `0x00000400` | `CF_GEARBOX_MANUAL` | — | `Transmission.cpp:700`, `:1049` — no auto-clutch creep; under braking, revs follow speed only when *not* manual |
+| `0x00000800` | `CF_GEARBOX_DIRECT_SHIFT` | — | **inert** |
+| `0x00001000` | `CF_GEARBOX_ELECTRIC` | — | **inert** |
+| `0x00002000` | `CF_ASSIST_TRACTION_CONTROL` | `// JUST REDUCE THROTTLE` | **inert** — verified across the whole tree, see the note below |
+| `0x00004000` | `CF_ASSIST_STABILITY_CONTROL` | `// APPLY BRAKES TO INDIVIDUAL WHEELS` | **inert** — same |
+| `0x00008000` | `CF_ALLOW_REDUCED_SUSPENSION_FORCE` | `// Reduce suspension force can be used for "stancing" cars` | `wheel.cpp:3511` — static suspension force drops to `sfSuspensionHealthSpringMult2` |
+| `0x00010000` | `CF_HARD_REV_LIMIT` | — | `vehicle.h:942` via `Transmission.cpp:1151` — hard rev limiter (suppressed for tuners unless in top gear); force-set at `Automobile.cpp:4941` |
+| `0x00020000` | `CF_HOLD_GEAR_WITH_WHEELSPIN` | — | `wheel.cpp:5281`, `Transmission.cpp:817` — keeps full slip ratio and blocks upshifts while wheel speed exceeds vehicle speed by 20% |
+| `0x00040000` | `CF_INCREASE_SUSPENSION_FORCE_WITH_SPEED` | — | `wheel.cpp:477`, `:3489` — suspension force rises with speed |
+| `0x00080000` | `CF_BLOCK_INCREASED_ROT_VELOCITY_WITH_DRIVE_FORCE` | — | `wheel.cpp:5238` — outside a burnout, drive force no longer raises rot velocity |
+| `0x00100000` | `CF_REDUCED_SELF_RIGHTING_SPEED` | — | `Automobile.cpp:1246` — in-air rotation limit switches to the reduced constant |
+| `0x00200000` | `CF_CLOSE_RATIO_GEARBOX` | — | `Transmission.cpp:2136` — first gear ratio scaled by `sfCloseRatioGearboxFirstGearRatio` |
+| `0x00400000` | `CF_FORCE_SMOOTH_RPM` | — | `Transmission.cpp:1112`, `:1251` — smoothed idle floor and rev rate |
+| `0x00800000` | `CF_ALLOW_TURN_ON_SPOT` | — | `Automobile.cpp:3992-4106`, `Transmission.cpp:2238` — low-speed turn-on-spot torque, reverse creep |
+| `0x01000000` | `CF_CAN_WHEELIE` | — | `Automobile.cpp:1454` — joins the wheelie-capable set with muscle cars and the Tornado6 |
+| `0x02000000` | `CF_ENABLE_WHEEL_BLOCKER_SIDE_IMPACTS` | — | `wheel.cpp:1510` — wheel blockers collide with the ground on side impacts |
+| `0x04000000` | `CF_FIX_OLD_BUGS` | — | `wheel.cpp:1354`, `:3424`, `:3503`, `:7866` — rim radius, static delta, spring clamp and slip averaging all take the corrected path |
+| `0x08000000` | `CF_USE_DOWNFORCE_BIAS` | — | `wheel.cpp:7536`, `VehicleModelInfo.cpp:1409` — **per-axle downforce, and it changes what the traction natives return** (see the note) |
+| `0x10000000` | `CF_REDUCE_BODY_ROLL_WITH_SUSPENSION_MODS` | — | `wheel.cpp:3621`, `:4044` — roll-centre height biased by the suspension lowering |
+| `0x20000000` | `CF_ALLOWS_EXTENDED_MODS` | — | `Vehicle.cpp:31592` — `HasExpandedMods`, the gate on all `m_AdvancedData` reads |
+
+**30 members: 24 consumed, 6 inert** (`CF_DIFF_LOCKING_CENTRE`, `CF_GEARBOX_FULL_AUTO`, `CF_GEARBOX_DIRECT_SHIFT`, `CF_GEARBOX_ELECTRIC`, and both `CF_ASSIST_*`). Commented-out code and `__BANK` debug text were *not* counted as consumers; the scan returned every one of the 30 definition lines, so the six absences are real.
+**`CF_USE_DOWNFORCE_BIAS` changes the number a script reads.** `CommandGetVehicleMaxTraction` adds a downforce term only when this bit is set (`commands_vehicle.cpp:6216`, and `:6291` for the model variant, plus the model-level `VehicleModelInfo.cpp:1411`) — so **the same car with the same handling values answers a different max-traction value depending on one bit.** ARS divides that term out by its own formula, which makes it immune, but any comparison of ARS's grip against the raw native must account for it.
+
+## The advanced data: `CCarHandlingData` and `CAdvancedData`
+
+`CCarHandlingData` (`handlingMgr.h:688-718`) — **15 members, every one read somewhere** (12 floats plus the string, the derived `aFlags`, and the array):
+
+| field | schema name | consumer → meaning |
+|---|---|---|
+| `m_fBackEndPopUpCarImpulseMult` | :305 | `physics.cpp:2734` — vertical impulse when rear-ending another car |
+| `m_fBackEndPopUpBuildingImpulseMult` | :306 | `physics.cpp:2739` — the same against non-car geometry |
+| `m_fBackEndPopUpMaxDeltaSpeed` | :307 | `physics.cpp:2741` — caps that impulse by mass |
+| `m_fToeFront` | :308 | `wheel.cpp:6456-6469` — toe applied to steering wheels |
+| `m_fToeRear` | :309 | `wheel.cpp:6457-6481` — steer angle of the non-steering wheels |
+| `m_fCamberFront` | :310 | `wheel.cpp:697` (contact point), `WheelRendering.cpp:331` (rendered) |
+| `m_fCamberRear` | :311 | the same two sites, rear |
+| `m_fCastor` | :312 | `WheelRendering.cpp:341` — **rendering only**, no physics reader found |
+| `m_fEngineResistance` | :313 | `Transmission.cpp:1298` — engine braking, scaled by `(1 - |throttle|)` |
+| `m_fMaxDriveBiasTransfer` | :314 | `Automobile.cpp:9814-9826` — clamps the front/rear torque split; the `handlingMgr.h:1001-1003` inlines read it where **`> -1` means all-wheel drive** |
+| `m_fJumpForceScale` | :315 | `Vehicle.cpp:37503` — scales the jump impulse |
+| `m_fIncreasedRammingForceScale` | :316 | `vehicle.h:655` → `Vehicle.cpp:21123` — scales the shunt force on the other car |
+| `m_strAdvancedFlags` | :317 | parsed only by its own `ConvertToGameUnits` — the source of `aFlags` |
+| `aFlags` | **not in the schema** | derived; ~40 read sites covering the 24 live flags above |
+| `m_AdvancedData` | :318-320 | `Automobile.cpp:1543` (wheelie torque), `Transmission.cpp:150-198` (turbo power from VMT_KNOB, max-turbo scan), `VehicleModelInfoVariation.cpp:875-1057` (VMT_ICE top speed, front/rear downforce) |
+
+`CAdvancedData` (`handlingMgr.h:229-239`) — one entry per mod slot, **3 members, all read**:
+
+| field | schema name | meaning |
+|---|---|---|
+| `m_Slot` | :93 | the mod slot the value applies to (`-1` = any slot) |
+| `m_Index` | :94 | the mod index, compared against the applied mod |
+| `m_Value` | :95 | the value applied when that mod is fitted |
+
+**18 of 18 fields are live** — no dead member in either struct. One provenance limit worth knowing: **the literal `<...>` tag spelling in `handling.meta` cannot be traced from the source** (the schema's `name=` attributes are C++ member names and there is no `.meta` in the tree). The spellings quoted throughout this file come from the live file itself, cross-checked against the schema's member names — with `<strFlags>` the one *inferred* spelling, since no car in this fleet carries it.
+
 ## ARS relevance — what these flags mean for this project
 
 - **Read by ARS**: only `HF_OFFROAD_ABILITIES_X2` and `HF_OFFROAD_INCREASED_GRAVITY_NO_FOLIAGE_DRAG` (`Racer.cs:391`), and the ×1.2 they carry is the engine's own value. `HF_OFFROAD_ABILITIES` (the ×1.1 tier) is **not tested**, and the precedence trap means a car with both bits is modelled as ×1.2 where the engine gives it ×1.1. See the open item in `AGENTS.md` for the double-count that rides along with this.
@@ -360,3 +433,9 @@ So 39 cars carry the off-road gravity bit, `RETINUEL` is the only car with the r
 - **Wheel and suspension presentation**: `FLAG_DROP_SUSPENSION_WHEN_STOPPED` (bit 157) lowers the car at rest and `FLAG_RENDER_WHEELS_WITH_ZERO_COMPRESSION` (bit 201) renders wheels uncompressed regardless of suspension — both matter when judging whether a car "looks sunk", which is otherwise a `HF_TYRES_CAN_CLIP` question.
 - **Boost and braking flags are a fairness and model-accuracy question for the grid**: `FLAG_HAS_NITROUS_MOD` (174), `FLAG_HAS_ROCKET_BOOST` (126), `FLAG_HAS_JATO_BOOST_MOD` (148) and `FLAG_HAS_VERTICAL_ROCKET_BOOST` (161) mark cars with a built-in boost ARS does not know about — the same class of asymmetry as `HF_HAS_KERS` — while `FLAG_HAS_SUPER_BRAKES_MOD` (177) marks cars whose braking is better than the grip-based model predicts.
 - **Two roster hazards**: `FLAG_CANNOT_BE_DRIVEN_BY_PLAYER` (bit 60) would make a grid car undrivable, and `FLAG_INCREASE_LOW_SPEED_TORQUE` (138) / `FLAG_DONT_HOLD_LOW_GEARS_WHEN_ENGINE_UNDER_LOAD` (136) change the acceleration the pace model assumes.
+- **The engine has no traction or stability assist at all** — `CF_ASSIST_TRACTION_CONTROL` and `CF_ASSIST_STABILITY_CONTROL` are **inert**, verified across the whole tree, despite carrying the comments "JUST REDUCE THROTTLE" and "APPLY BRAKES TO INDIVIDUAL WHEELS". So ARS's TCS is not fighting an engine assist on any car; the only assists in play are the bike cheat gated by `HF_FORCE_NO_TC_OR_SC` and the AI-side `STATUS_PHYSICS` ABS.
+- **`CF_USE_DOWNFORCE_BIAS` decides what the traction native answers** — with it set, `GET_VEHICLE_MAX_TRACTION` adds a downforce term (`commands_vehicle.cpp:6216`), so the raw native is **not comparable between cars** without checking the bit. ARS divides that term out with its own formula, which makes it immune; only an outside comparison needs the caveat.
+- **`m_fMaxDriveBiasTransfer`** is the field behind ARS's AWD exemption — the header inlines read it as `> -1` means all-wheel drive (`handlingMgr.h:1001-1003`), which is worth naming where that rule is documented.
+- **Engine braking is authored and ARS ignores it**: `m_fEngineResistance` scales the engine-braking force by `(1 - |throttle|)` (`Transmission.cpp:1298`). The pedal pipeline models braking only through the brake command and the tyres, so off-throttle behaviour differs per car in a way ARS does not predict.
+- **Camber and toe are authored, and the traction native does not include them.** `m_fCamberFront`/`m_fCamberRear` move the contact geometry (`wheel.cpp:697`) and `m_fToeFront`/`m_fToeRear` steer the axles statically (`wheel.cpp:6456`), while ARS's grip comes from the native — so a car with meaningful camber (the `MF_EXTRA_CAMBER` flag exists for exactly this) is modelled without it. `m_fCastor` is rendering-only.
+- **`m_AdvancedData` is the mechanism by which fitted mods change performance** — per-slot, per-index values for turbo power (`VMT_KNOB`, `Transmission.cpp:150-198`), top speed (`VMT_ICE`, `VehicleModelInfoVariation.cpp:875-894`) and front/rear downforce (`:1021-1057`). It is the data an upgrade-aware pace model would read, which makes it the concrete answer to the "pace is model-theoretical, stock and fully upgraded score identically" open item in `AGENTS.md`.
