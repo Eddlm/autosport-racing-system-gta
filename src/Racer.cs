@@ -559,7 +559,8 @@ namespace ARS
             }
         }
 
-        // Phase 1: match an overlapping rival's heading so side-by-side cars follow the same arc.
+        // Phase 1: match an overlapping rival's heading so side-by-side cars follow the same arc, but only while
+        // that rival is moving toward this car's side - one drifting away is leaving room, not asking to be followed.
         float ComputeSideBySideSteerCorrection(Vector3 courseDir)
         {
             float correction = 0f;
@@ -575,6 +576,15 @@ namespace ARS
                 float fullAssistDistance = rival.CombinedSize.X + SideBySideFullAssistExtraGap;
                 float wideDistance = rival.CombinedSize.X + SideBySideAssistRangeExtra;
                 if (lateralDistance > wideDistance) continue;
+
+                // Only while the rival is moving toward this car's side, taken on the axis that separates the two:
+                // one drifting away is leaving room, and matching their heading there would steer this car across
+                // the gap after them. This car's own closure is the rival walls' job, not this term's.
+                Vector3 toRival = rival.RivalRacer.Car.Position - Car.Position;
+                Vector3 lateralAxis = toRival - Car.ForwardVector * Vector3.Dot(toRival, Car.ForwardVector);
+                float lateralGap = lateralAxis.Length();
+                // No lateral separation to close - a same-lane overlap has no "away", so the match stays on.
+                if (lateralGap > 0.01f && Vector3.Dot(rival.RivalRacer.Car.Velocity, lateralAxis / lateralGap) >= 0f) continue;
 
                 float proximity = ARS.Remap(lateralDistance, wideDistance, fullAssistDistance, SideBySideMinimumAssist, 1f, true);
                 float headingDifference = -Vector3.SignedAngle(rival.RivalRacer.Car.ForwardVector, courseDir, Vector3.WorldUp);
