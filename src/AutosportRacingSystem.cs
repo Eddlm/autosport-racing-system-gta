@@ -3023,6 +3023,7 @@ namespace ARS
         
 
         static Random _random = new Random();
+        // Random.Next semantics: max is exclusive, so an index bound is the length itself, never length - 1.
         public static int GetRandomInt(int min, int max)
         {
             return _random.Next(min, max);
@@ -3535,7 +3536,7 @@ namespace ARS
                 if (car.ColorCombinationCount > 2) car.ColorCombination = GetRandomInt(0, car.ColorCombinationCount);
                 else
                 {
-                    VehicleColor c = _randomColors[GetRandomInt(0, _randomColors.Length - 1)];
+                    VehicleColor c = _randomColors[GetRandomInt(0, _randomColors.Length)];
                     car.PrimaryColor = c;
                     car.SecondaryColor = c;
                     car.PearlescentColor = c;
@@ -3544,7 +3545,7 @@ namespace ARS
 
             Ped CreateDriverPed(Vehicle car)
             {
-                Model driverModel = StreetRacerModels[GetRandomInt(0, StreetRacerModels.Length - 1)];
+                Model driverModel = StreetRacerModels[GetRandomInt(0, StreetRacerModels.Length)];
                 Ped driverPed = null;
                 try
                 {

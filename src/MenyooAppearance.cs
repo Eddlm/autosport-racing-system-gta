@@ -103,7 +103,7 @@ namespace ARS
             List<string> matches = FilesMatching(car);
             if (matches.Count == 0) return;
 
-            string chosen = matches[ARS.GetRandomInt(0, matches.Count - 1)];
+            string chosen = matches[ARS.GetRandomInt(0, matches.Count)];
             try
             {
                 XmlDocument doc = new XmlDocument();

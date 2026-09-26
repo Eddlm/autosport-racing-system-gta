@@ -54,7 +54,8 @@ namespace ARS
         {
             for (int i = list.Count - 1; i > 0; i--)
             {
-                int index = random(0, i);
+                // Fisher-Yates needs the whole 0..i range, and random's max is exclusive, hence i + 1.
+                int index = random(0, i + 1);
                 T item = list[i];
                 list[i] = list[index];
                 list[index] = item;
