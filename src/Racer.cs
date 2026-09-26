@@ -843,10 +843,12 @@ namespace ARS
         const float SteerCapGripFloor = 0.5f;
         // The bias dial may cut the ceiling but never below this fraction of the geometry.
         const float SteerCeilingBiasFloor = 0.5f;
-        // Peak-slip cap: the share of the live peak the cap starts from, before the brake narrows it further.
+        // Peak-slip cap: the share of the live peak slip angle the cap is set to.
         const float PeakSlipCapShare = 0.5f;
-        // ...and the share it narrows to at full brake pedal, on top of the above.
-        const float PeakSlipCapBrakeFloor = 0.5f;
+        // Below the ramp's end speed the ceiling eases back to the car's full lock, so a slow car can steer in
+        // fully; above it the ceiling is the law's own. The band is in mph because that is how it is judged.
+        const float SteerLimitRampStartMph = 5f;
+        const float SteerLimitRampEndMph = 40f;
 
         // Live ceiling coefficient: the useful steer angle at speed is ~ grip × g × wheelbase / v², so grip
         // belongs in that numerator and the cap loosens as √grip — the same √grip the speed maths uses.
@@ -889,10 +891,15 @@ namespace ARS
 
         void UpdateTRLateralAtSpeed()
         {
-            float lat = Handling.LateralTractionCurve;
             float speed = Car.Velocity.Length();
-            if (lat <= 0.01f || float.IsNaN(speed)) { TRLateralAtSpeed = 0f; return; }
-            TRLateralAtSpeed = lat / (1f + Math.Min(5f, 0.1f * speed));
+            TRLateralAtSpeed = float.IsNaN(speed) ? 0f : LateralPeakAtSpeed(speed);
+        }
+
+        // The tyre's peak slip angle at an arbitrary speed; the live field is this value at the current speed.
+        float LateralPeakAtSpeed(float speed)
+        {
+            float lat = Handling.LateralTractionCurve;
+            return lat <= 0.01f ? 0f : lat / (1f + Math.Min(5f, 0.1f * speed));
         }
 
         // Steer angle whose OUTER front wheel sits on its peak slip angle. A limit corner needs the kinematic
@@ -924,14 +931,31 @@ namespace ARS
             return ARS.Clamp(geometryCeiling + slipCeiling + ARS.SteerCeilingBias, geometryCeiling * SteerCeilingBiasFloor, VehicleData.SteeringLock);
         }
 
-        // The tyre's own ceiling, the ARS.SteerPeakSlipCap alternative: a fixed share of the live peak slip angle,
-        // which narrows as the brake goes down - a braking tyre spends its lateral capacity on the brake, so the
-        // angle it can still hold is smaller. Both shares keep the front short of the peak the tyres could use.
-        float PeakSlipSteerCeiling()
+        // The tyre's own ceiling, the ARS.SteerPeakSlipCap alternative: a fixed share of a peak slip angle, so the
+        // cap keeps the front short of the peak the tyres could use. Fixed for a given speed - the brake pedal
+        // deliberately does not narrow it.
+        float PeakSlipCeilingAt(float peakSlipDeg)
         {
-            // Descending *input*, ascending output on purpose: a descending output is inverted by Remap's clamp.
-            float brakeNarrowing = ARS.Remap(Control.Brake, 1f, 0f, PeakSlipCapBrakeFloor, 1f, true);
-            return ARS.Clamp(TRLateralAtSpeed * PeakSlipCapShare * brakeNarrowing + ARS.SteerCeilingBias, 0f, VehicleData.SteeringLock);
+            return ARS.Clamp(peakSlipDeg * PeakSlipCapShare + ARS.SteerCeilingBias, 0f, VehicleData.SteeringLock);
+        }
+
+        // The ceiling in force at this speed: whichever mechanism is selected, eased back towards full lock below
+        // the ramp's end speed, where it meets what the car gets at that end speed anyway.
+        float ResolveSteerCeiling(float fwdSpeed)
+        {
+            // The peak-slip cap falls back to the corner geometry while the peak reads unusable.
+            bool peakSlipCap = ARS.SteerPeakSlipCap && TRLateralAtSpeed > 0.01f;
+            float ceiling = peakSlipCap ? PeakSlipCeilingAt(TRLateralAtSpeed) : GeometrySteerCeiling(fwdSpeed);
+            float speedMph = ARS.MpsToMph(fwdSpeed);
+            if (speedMph >= SteerLimitRampEndMph) return ceiling;
+
+            float endSpeed = ARS.MphToMps(SteerLimitRampEndMph);
+            float endPeak = LateralPeakAtSpeed(endSpeed);
+            float endCeiling = ARS.SteerPeakSlipCap && endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) : GeometrySteerCeiling(endSpeed);
+            // Descending *input* with ascending output, because Remap's own clamp inverts a descending output.
+            float ramped = ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, endCeiling, VehicleData.SteeringLock, true);
+            // max() keeps the ramp a raise only: the straight line sits a degree under the curved law near 25 mph.
+            return Math.Max(ceiling, ramped);
         }
 
 
@@ -957,12 +981,7 @@ namespace ARS
             // would invert the ceiling.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float speedCeiling = VehicleData.SteeringLock;
-            if (fwdSpeed > 0f)
-            {
-                // Two ceilings, one slot: the corner geometry (the shipped one) or the tyre's own peak slip angle,
-                // which falls back to the geometry while the peak is unreadable.
-                speedCeiling = ARS.SteerPeakSlipCap && TRLateralAtSpeed > 0.01f ? PeakSlipSteerCeiling() : GeometrySteerCeiling(fwdSpeed);
-            }
+            if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;
 

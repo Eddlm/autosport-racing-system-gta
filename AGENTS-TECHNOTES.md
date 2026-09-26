@@ -42,8 +42,9 @@ Small details removed from AGENTS.md pointers during the final trim, preserved h
 
 ## Peak-slip steer cap (`SteerPeakSlipCap`, AI Settings) — the alternative ceiling
 
-- **It replaces the ceiling rather than adding to it.** `PeakSlipSteerCeiling` (`Racer.cs`) is `TRLateralAtSpeed × PeakSlipCapShare × brake narrowing + SteerCeilingBias`, clamped to the lock, and the narrowing is the *applied* brake pedal — 1 at none, `PeakSlipCapBrakeFloor` at full — so the limit is a share of the tyre's live peak that tightens as the brake goes down. `ApplySteerLimits` picks it over `GeometrySteerCeiling` on the toggle, and a peak that reads unusable falls back to the geometry.
-- **Because it is a replacement, three things follow**: `Steer-In Slip Term` and *both* halves of the geometry (vanilla curve, Ackermann) are inert while it is on, so a drive that feels capped is the cap and not a dial left over; the countersteer allowance still raises a sliding side to the slide angle, which matters because the bare cap is a handful of degrees; and `Control.Brake` is read after `ConvertSpeedToPedals` has run, so the countersteer brake release reaches the cap on its own.
+- **It replaces the ceiling rather than adding to it.** `PeakSlipSteerCeiling` (`Racer.cs`) is `TRLateralAtSpeed × PeakSlipCapShare + SteerCeilingBias`, clamped to the lock — a fixed share of the tyre's live peak slip angle, fixed for a given speed. `ApplySteerLimits` picks it over `GeometrySteerCeiling` on the toggle, and a peak that reads unusable falls back to the geometry.
+- **Because it is a replacement, two things follow**: `Steer-In Slip Term` and *both* halves of the geometry (vanilla curve, Ackermann) are inert while it is on, so a drive that feels capped is the cap and not a dial left over; and the countersteer allowance still raises a sliding side to the slide angle, which matters because the bare cap is a handful of degrees.
+- **The pedal is deliberately not a factor.** A brake-narrowed form was tried — the cap halved again at full brake, on the reasoning that a braking tyre spends its lateral capacity on the brake — and removed at the user's word; do not re-add it as an "obvious" improvement.
 
 ## Side-by-side heading match (`ComputeSideBySideSteerCorrection`, `Racer.cs`)
 

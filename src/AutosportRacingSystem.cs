@@ -170,7 +170,7 @@ namespace ARS
         // the front runs short of its peak on purpose (conservative, understeer-prone). Note the ceiling's own
         // floor - half the geometry - bounds how far negative this can actually bite.
         public static float SteerSlipCeiling = 0f;
-        // Cap the steer limit at the live peak slip angle instead of the corner-geometry ceiling (Racer.PeakSlipSteerCeiling).
+        // Cap the steer limit at a share of the live peak slip angle instead of the corner geometry (Racer.ResolveSteerCeiling).
         public static bool SteerPeakSlipCap = false;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
@@ -1056,7 +1056,7 @@ namespace ARS
             steerSlipItem.SelectedIndex = steerSlipIndex >= 0 ? steerSlipIndex : steerSlipItem.Items.IndexOf("0.0");
             aiMenu.Add(steerSlipItem);
 
-            NativeCheckboxItem peakSlipItem = new NativeCheckboxItem("Peak-Slip Steer Cap", "Cap the steer limit at half the live peak slip angle - the handling curve's zero-speed peak narrowed by speed - instead of the corner geometry (vanilla curve vs Ackermann, whichever is lower). The brake halves it again, so full pedal leaves a quarter of the peak. While this is on, Steer-In Slip Term has no effect.", SteerPeakSlipCap);
+            NativeCheckboxItem peakSlipItem = new NativeCheckboxItem("Peak-Slip Steer Cap", "Cap the steer limit at half the live peak slip angle - the handling curve's zero-speed peak narrowed by speed - instead of the corner geometry (vanilla curve vs Ackermann, whichever is lower). Fixed for a given speed: the brake pedal does not narrow it. While this is on, Steer-In Slip Term has no effect.", SteerPeakSlipCap);
             peakSlipItem.CheckboxChanged += (sender, args) =>
             {
                 SteerPeakSlipCap = peakSlipItem.Checked;
