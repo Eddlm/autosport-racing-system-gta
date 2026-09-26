@@ -147,6 +147,8 @@ namespace ARS
         public static TipFrequency TipRate = TipFrequency.Medium;
         // Apply Menyoo vehicle-appearance skins to grid cars when a matching file exists.
         public static bool UseMenyooSkins = true;
+        // Repeat the pool's car models when it holds fewer cars than the grid target (tests.txt holds one).
+        public static bool ForceFillGrid = true;
         public static bool OverspeedEnabled = true;
         public static bool SmartTuning = true;
         // Learn the effective braking decel that keeps the car at full brake through a braking phase.
@@ -921,6 +923,14 @@ namespace ARS
             _carPoolRefreshing = false;
             racersMenu.Add(carPoolItem);
             racersMenu.Shown += (sender, args) => RefreshCarPoolItem(carPoolItem);
+
+            NativeCheckboxItem forceFillItem = new NativeCheckboxItem("Force-Fill Grid", "Repeat the pool's car models until the grid reaches Target Grid Size, so a short pool still fields a full grid. Off leaves the grid as short as the pool.", ForceFillGrid);
+            forceFillItem.CheckboxChanged += (sender, args) =>
+            {
+                ForceFillGrid = forceFillItem.Checked;
+                SaveRacerSetting("ForceFillGrid", ForceFillGrid.ToString());
+            };
+            racersMenu.Add(forceFillItem);
 
             NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", new[] { "15", "30", "45", "60" });
             timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
@@ -3098,6 +3108,7 @@ namespace ARS
             SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
             AiNitro = ParseEnum(SettingsMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
             UseMenyooSkins = SettingsMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
+            ForceFillGrid = SettingsMenuStore.GetBool("ForceFillGrid", ForceFillGrid);
             OverspeedEnabled = SettingsMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
@@ -3578,8 +3589,11 @@ namespace ARS
                 }
             }
 
-            foreach (string modelKey in _cachedCandidates)
+            // One model -> at most one racer. The live count is the honest answer: a model that would not load,
+            // a driver ped that would not spawn and a car the game handed back unusable all add nobody.
+            bool SpawnRacer(string modelKey)
             {
+                int before = Racers.Count;
                 Vehicle car = null;
                 Ped driverPed = null;
                 try
@@ -3588,7 +3602,7 @@ namespace ARS
                     if (!vehicleModel.IsLoaded)
                     {
                         Log(LogImportance.Error, "Skipping " + modelKey + " - model not loaded", true);
-                        continue;
+                        return false;
                     }
 
                     car = World.CreateVehicle(vehicleModel, RouteNodes[(Racers.Count + 1) * 10]);
@@ -3608,7 +3622,7 @@ namespace ARS
                     {
                         Log(LogImportance.Error, "Skipping " + modelKey + " - no driver ped.", true);
                         car.Delete();
-                        continue;
+                        return false;
                     }
                     AddRacer(car, driverPed);
 
@@ -3620,7 +3634,28 @@ namespace ARS
                     try { if (driverPed != null) driverPed.Delete(); } catch (Exception) { }
                     try { if (car != null) car.Delete(); } catch (Exception) { }
                 }
+                return Racers.Count > before;
             }
+
+            List<string> spawnedKeys = new List<string>();
+            foreach (string modelKey in _cachedCandidates)
+            {
+                if (SpawnRacer(modelKey)) spawnedKeys.Add(modelKey);
+            }
+
+            // Force-Fill repeats the models that did spawn until the grid target is met, so a pool smaller than
+            // the grid (tests.txt holds one car) still fields a full one. A model that spawned nobody is never
+            // retried, so a broken roster entry costs its load wait once rather than on every pass.
+            int cycle = 0;
+            int failures = 0;
+            while (ForceFillGrid && Racers.Count < maxcars && failures < spawnedKeys.Count)
+            {
+                bool spawned = SpawnRacer(spawnedKeys[cycle % spawnedKeys.Count]);
+                cycle++;
+                failures = spawned ? 0 : failures + 1;
+            }
+            if (Racers.Count < maxcars) Log(LogImportance.Info, "Grid: " + Racers.Count + " of " + maxcars + " cars spawned from " + _cachedCandidates.Count + " candidate(s), Force-Fill " + (ForceFillGrid ? "on" : "off") + ".");
+            else if (cycle > 0) Log(LogImportance.Info, "Force-Fill: repeated the pool's models " + cycle + " time(s) to reach the grid target of " + maxcars + ".");
 
             result.Add(lastCar);
 
