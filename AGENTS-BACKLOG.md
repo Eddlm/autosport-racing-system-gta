@@ -23,6 +23,7 @@
 2. ~~Menu-persistence verification~~ — **DONE**: both paths verified in game (fresh install + legacy upgrade — see the section below).
 2a. **Lane-repulsion ceiling** — whether anything should bound the contact-avoidance add, and what; a decision first, then at most a one-method edit. Detail below.
 2b. **The player's special ability in a race** — the engine really does hand the player's car more grip and a faster steering ramp while it slows the world clock, and the AI can never match it; whether ARS ignores it, logs it or cancels it at the line is a fairness decision with two defensible answers, and both routes have natives. Detail in `AGENTS-VANILLA-STEERING.md`.
+2c. **The AI's free ABS** — a non-player driver makes the car `STATUS_PHYSICS`, which grants anti-lock brakes (`Automobile.cpp:3774`), so every AI car can use full brake pressure while the player must modulate and the player's car never gets it; accept GTA's own rule or even it out, noting that no native exposes ABS (a memory write through `VehicleMemory` would be the only route). Detail in `AGENTS-VANILLA-STEERING.md`.
 
 **Tier 1 — localised edits, low risk**
 

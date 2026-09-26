@@ -195,6 +195,7 @@ One line each; **a simplest→most-complex ranking of the whole list sits at the
 - **The yaw damper has two defects, not one** — it damps against **zero** (a permanent toll of `SteerDamping × ω`, paid as a standing lane offset) and its gain does not track **speed**; the reference is the larger of the two fixes, and `AGENTS-STEERING.md`'s ranked list puts it first.
 - **The repulsion add is the lane component's one unbounded term** — up to ±30° added *after* the uncapped lane P for a rival closing laterally, left unbounded on purpose as contact avoidance; decide whether anything should bound it (`AGENTS-BACKLOG.md`).
 - **The player's special ability during a race (open decision)** — a real grip and steering advantage the AI can never match, and ARS does not notice it; decide whether to ignore it, log it or cancel it (`AGENTS-BACKLOG.md`, `AGENTS-VANILLA-STEERING.md`).
+- **The AI's cars get free ABS and the player's does not (open decision)** — `STATUS_PHYSICS` grants it (`Automobile.cpp:3774`), and no native exposes ABS; accept GTA's rule or even it out (`AGENTS-BACKLOG.md`).
 - **Overrotation via the pedal (idea)** — the pedal is the lever on **rear grip** while the wheel answers through the slide blend, and the sign flips between power and load-transfer oversteer.
 - **The corrections rule** — never blend toward a correction value as if it were a target; it steers into the slide.
 - **Reverse throttle path** is removed from the pedal pipeline by design, and **nitro is charged at launch and per lap** with no free-roam refill.
