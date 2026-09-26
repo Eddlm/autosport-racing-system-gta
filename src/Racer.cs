@@ -134,8 +134,11 @@ namespace ARS
         const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
-        // Ceiling on the lane steer toward the outside of the corner's turn.
-        const float OutsideLaneMaxSteerDeg = 6f;
+        // Lane steer gain: degrees per metre of lane error, one gain for every lane, and uncapped - the lane
+        // systems bound the target, so the term is free to chase a big error.
+        const float LaneGainDegPerMeter = 3f;
+        // The move out to the outside is the big deliberate one, so it gets half the gain and cannot whip.
+        const float OutsideLaneGainFraction = 0.5f;
         const float FullPedalSpeedErrorMps = 3f;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
         const float BrakeErrorMultiplier = 2f;
@@ -481,13 +484,9 @@ namespace ARS
                     laneErrorMeters = laneErrorMeters * (1f - blend) + (targetLane - projectedLaneMeters) * blend;
                 }
                 if (float.IsNaN(laneErrorMeters)) laneErrorMeters = 0f;
-                // Proportional lane steer: degrees per meter of lane error, one gain for every lane.
-                const float laneGainDegPerMeter = 3f;
-                laneSteerDeg = -laneErrorMeters * laneGainDegPerMeter;
-                // The outside of the corner's turn is capped, not damped: the swing out to the edge is
-                // exactly the large lane error a fixed ceiling should bound.
                 bool outsideOfCorner = gotActiveCorner && Math.Sign(targetLane) != 0 && Math.Sign(targetLane) == Math.Sign(Brain.Corner.Point.Angle);
-                if (outsideOfCorner) laneSteerDeg = ARS.Clamp(laneSteerDeg, -OutsideLaneMaxSteerDeg, OutsideLaneMaxSteerDeg);
+                float laneGain = outsideOfCorner ? LaneGainDegPerMeter * OutsideLaneGainFraction : LaneGainDegPerMeter;
+                laneSteerDeg = -laneErrorMeters * laneGain;
             }
             // Physical repulsion: inside the "no touching" box, steer away from rivals
             // actually closing laterally; parallel traffic must not kill the lane steer.
