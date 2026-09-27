@@ -1456,12 +1456,6 @@ namespace ARS
                 }
             }
 
-            // During the generated corner region, let route speed govern by invalidating the corner map.
-            CornerPoint activeCorner = NextApexNode >= 0
-                ? ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode)
-                : null;
-
-
             // Steer-limited speed: max speed for current steer angle before sliding. Blended into route speed so an outside car (less steering) may carry more speed.
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
             if (steerRad > 0.001f)
@@ -1535,11 +1529,8 @@ namespace ARS
             return 1f + norm * 0.33f * (ARS.RubberbandingPct * 0.01f);
         }
 
-        const float SlopeGripLossK = 3f;
-        const float SlopeGripLossExp = 2f;
         // TrackPoint.Elevation is 90·sin(pitch), so this converts it back to the slope sine.
         const float ElevationToSlopeSine = 1f / 90f;
-        // Reduces crest-induced grip loss as curvature allows more aggressive traversal.
 
         float GetFollowPointSlopeAngle()
         {

@@ -15,7 +15,6 @@ namespace ARS
         public static Dictionary<int, float> EditNodeHalfWidths = new Dictionary<int, float>();
         static bool _routeEditorActive = false;
         List<Vector3> _routeSection = new List<Vector3>();
-        Vector3 _bezierStartAnchor = Vector3.Zero;
         int _pathWidth = 5;
 
         // CleanEverything tears down any loaded track and clears the route statics, so it must run first.
@@ -214,8 +213,6 @@ namespace ARS
                         RouteNodes.Add(p);
                         p = ray.HitCoords - (FreeCamRide.ForwardVector * 1);
                         RouteNodes.Add(p);
-                        _bezierStartAnchor = (ray.HitCoords - (FreeCamRide.ForwardVector * 6));
-
                     }
                 }
 
@@ -458,42 +455,27 @@ namespace ARS
         {
             if (nodes.Count == 0) return;
             int closestnode = ClosestNodeToPlace(Game.Player.Character.Position, nodes);
-            Vector3 oldpos = Vector3.Zero;
+            Vector3 oldpos = nodes[nodes.Count - 1];
 
             int start = closestnode - 100;
             int end = closestnode + 100;
-            int countmax = 1;
-            int count = 0;
-            int dd = 0;
             Vector3 pos = Vector3.Zero;
-            Vector3 lastline = Vector3.Zero;
             if (start < 0) start = 0;
             if (end > nodes.Count - 1) end = nodes.Count - 1;
-            dd = start;
             for (int ph = start; ph < end; ph += 1)
             {
-
                     pos = nodes[ph];
                     float w = 0f;
-                    float oldw = 0f;
                     if (widedict != null)
                     {
-                        if (widedict.ContainsKey(dd)) w = widedict[dd];
-                        if (widedict.ContainsKey(dd - 1)) oldw = widedict[dd - 1]; else oldw = w;
+                        widedict.TryGetValue(ph, out w);
                     }
 
-                    if (oldpos == Vector3.Zero) oldpos = nodes[nodes.Count - 1];
-
-
-                    if (oldpos != Vector3.Zero && PlayerOrCameraNearPos(nodes[ph], 120))
+                    if (PlayerOrCameraNearPos(nodes[ph], 120))
                     {
 
                             Vector3 rWidepos = GetPerpendicular(pos, oldpos, w, true);
                             Vector3 lWidepos = GetPerpendicular(pos, oldpos, w, false);
-
-                            Vector3 oldrWidepos = GetPerpendicular(pos, oldpos, oldw, true) - (pos - oldpos);
-                            Vector3 oldlWidepos = GetPerpendicular(pos, oldpos, oldw, false) - (pos - oldpos);
-
 
                             Color col = Color.Green;
 
@@ -533,8 +515,6 @@ namespace ARS
                         }
 
                 oldpos = pos;
-
-                dd++;
             }
         }
         Vector3 GetPerpendicular(Vector3 a, Vector3 b, float length, bool clockwise)

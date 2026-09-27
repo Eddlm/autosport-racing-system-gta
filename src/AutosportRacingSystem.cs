@@ -92,7 +92,6 @@ namespace ARS
         // score is the ramp's midpoint — the average of a linear ramp. Top speed is NOT discounted:
         // 0.9 is the ramp's endpoint, not a reduction of the car's top speed.
         const float ElectricDrivePeak = 5f;
-        const float ElectricDriveAtTopSpeed = 0.9f;
 
         public static float ComputePaceIndex(float topSpeedMph, float grip, float accelRaw, bool isElectric)
         {
@@ -622,10 +621,6 @@ namespace ARS
         int _countdown = 7;
         int _nitroProbeAt = 0;
         int _nitroTopUpAt = 0;
-
-        Vector3 _freeCamMovement = Vector3.Zero;
-        Vector3 _freeCamRotation = Vector3.Zero;
-
 
         public static Scaleform InstructionalScaleform = new Scaleform("INSTRUCTIONAL_BUTTONS");
         public static Scaleform Racertext = null;
@@ -1545,10 +1540,6 @@ namespace ARS
             _gridInstanced = false;
         }
 
-        int _shortTickMs = Game.GameTime;
-
-
-        
         int _nextInLine = 0;
         int _gameTimeNextInLine = 0;
 
@@ -1843,7 +1834,6 @@ namespace ARS
                 {
                     _posUpdateTickMs = Game.GameTime + 200;
 
-                    List<Racer> LapPos = new List<Racer>();
                     var unfinished = Racers.Where(r => r.FinalPosition == 0).ToList();
                     if (unfinished.Any())
                     {
@@ -3470,9 +3460,6 @@ namespace ARS
             Tips.Reset();
 
             Log(LogImportance.Info, "Loading vehicle models");
-            Vehicle lastCar = null;
-            List<dynamic> result = new List<dynamic>();
-
             Model LoadVehicleModel(string modelName)
             {
                 int modelHash = 0;
@@ -3616,8 +3603,6 @@ namespace ARS
                         return false;
                     }
                     AddRacer(car, driverPed);
-
-                    lastCar = car;
                 }
                 catch (Exception ex)
                 {
@@ -3647,8 +3632,6 @@ namespace ARS
             }
             if (Racers.Count < maxcars) Log(LogImportance.Info, "Grid: " + Racers.Count + " of " + maxcars + " cars spawned from " + _cachedCandidates.Count + " candidate(s), Force-Fill " + (ForceFillGrid ? "on" : "off") + ".");
             else if (cycle > 0) Log(LogImportance.Info, "Force-Fill: repeated the pool's models " + cycle + " time(s) to reach the grid target of " + maxcars + ".");
-
-            result.Add(lastCar);
 
             // Stay in None — the race isn't ready to start until SetupRace (phase 3)
             // explicitly moves to NotInitiated. Setting it here caused auto-start.
