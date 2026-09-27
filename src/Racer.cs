@@ -1994,8 +1994,6 @@ namespace ARS
                 ARS.DrawLine(carPos, carPos + limLDir * lineLen, Color.Orange);
                 ARS.DrawLine(carPos, carPos + limRDir * lineLen, Color.Red);
 
-                // A white marker above the car on any tick where the clamp actually bit: over a lap this says
-                // whether the ceiling binds constantly, occasionally, or never.
                 // Yaw damper contributions, same origin so their gap reads as an angle: magenta against zero (the old toll), cyan as it now runs against the track's required yaw.
                 Vector3 dampOrigin = carPos + new Vector3(0f, 0f, 1.2f);
                 float zeroRefRad = _debugDamperZeroRefDeg * (float)Math.PI / 180f;
@@ -2005,6 +2003,7 @@ namespace ARS
                 ARS.DrawLine(dampOrigin, dampOrigin + zeroRefDir * lineLen, Color.Magenta);
                 ARS.DrawLine(dampOrigin, dampOrigin + dampDir * lineLen, Color.Cyan);
 
+                // One white blip per tick the clamp actually bit, so a lap shows whether the ceiling binds.
                 if (_steerLimitedThisFrame) DrawPointMarker(carPos + new Vector3(0f, 0f, 1.6f), 0.7f, Color.White);
 
                 // Input trail.

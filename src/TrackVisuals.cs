@@ -29,7 +29,7 @@ namespace ARS
 
         // Racing path (player on the grid): draw the checkpoint at every corner apex that is both
         // ahead of the player AND within the ahead node window, using the player racer's live
-        // CurrentTrackPoint.Node as the LOD center. Unchanged racing visuals.
+        // CurrentTrackPoint.Node as the LOD center.
         public static void DrawCornerCheckpoints(Racer player, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             if (corners.Count == 0 || trackPoints.Count == 0) return;

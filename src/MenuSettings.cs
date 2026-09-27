@@ -4,7 +4,7 @@ using System.Globalization;
 namespace ARS
 {
     // One ini per menu: a single ScriptSettings object for Settings\Menu-<Name>.ini,
-    // loaded lazily, written on every change. Never Load() the same file twice.
+    // loaded lazily and written on every change.
     public class MenuSettings
     {
         readonly string _path;

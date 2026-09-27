@@ -9,7 +9,7 @@ namespace ARS
     // The in-game track creator (route editor). Split out of AutosportRacingSystem.cs; the recording code
     // below is unchanged by that move. StartTrackCreator is the mode's entry point, reached from the Track
     // Creator submenu, and it takes over the free camera because that camera is the editing surface:
-    // HandleTrackCreator records only while it is active. Saving the recorded route is still unwired.
+    // HandleTrackCreator records only while it is active.
     public partial class ARS
     {
         public static Dictionary<int, float> EditNodeHalfWidths = new Dictionary<int, float>();

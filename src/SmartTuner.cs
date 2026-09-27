@@ -349,8 +349,7 @@ namespace ARS
             return Style.Clean;
         }
 
-        // Most slots of the style's set get filled, but not all of them - two cars of the same style should not
-        // come out identical.
+        // A quarter of the slots stay stock, so two cars of one style do not come out identical.
         static void ApplyParts(Vehicle veh, Style style, Func<int, int, int> random)
         {
             foreach (VehicleMod slot in Parts[style])

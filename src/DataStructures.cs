@@ -117,8 +117,7 @@ namespace ARS
     {
         public Perception CurrentPerception = new Perception();
         public List<Rival> Rivals = new List<Rival> { new Rival(), new Rival(), new Rival() };
-        // The ahead rival this racer is currently reacting to for avoidance. Set during
-        // RivalInfoUpdate(); steering code consumes it without re-scanning the rival list.
+        // The ahead rival this racer is reacting to for avoidance; UpdateRivalInfo sets it, steering reads it.
         public Rival AvoidanceTarget = null;
         public Corner Corner =null;
 
@@ -276,7 +275,7 @@ namespace ARS
     }
 
 
-    // One sample of the applied pedal input, kept every metre of travel for the debug trail.
+    // One sample of the applied pedal input every half metre of travel, for the debug trail.
     public struct InputTrailSample
     {
         public Vector3 Position;

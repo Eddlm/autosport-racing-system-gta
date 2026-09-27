@@ -8,12 +8,9 @@ using System.Xml;
 
 namespace ARS
 {
-    // Track file writing: serialising the loaded route and props back to Tracks\*.xml.
-    // UpdateRoute and SaveRoute have no callers while track mutation is disabled for the WIP release.
-    // SaveRoute is the dead "new track from scratch" path: it builds a whole document and writes the Trackside/Tags
-    // metadata. Split out of AutosportRacingSystem.cs 2026-10; the shared
-    // statics it reads (CurrentFile, RouteNodes, NodeHalfWidths, CustomProps) stay in AutosportRacingSystem.cs.
-    // Nothing in this file may write to Tracks\ until track mutation is deliberately re-enabled.
+    // Track file writing: serialising a route and its props to Tracks\*.xml. SaveRoute is live behind the
+    // creator's Save Track; UpdateRoute (rewriting an already-loaded track) is unwired. Split out of
+    // AutosportRacingSystem.cs; the statics it reads (CurrentFile, RouteNodes, NodeHalfWidths, CustomProps) stay there.
     public partial class ARS
     {
         // RouteNodes holds one node per metre, so OrderBy(...).First() sorts the whole list just to take

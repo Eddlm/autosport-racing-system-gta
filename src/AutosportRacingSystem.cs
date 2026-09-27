@@ -139,7 +139,7 @@ namespace ARS
         public static bool PlayerModulatesThrottle = false;
         public static bool PlayerLaunchTestActive = false;
 
-        // Player-facing AI/grid options (Settings.ini [RACERS]).
+        // Player-facing AI/grid options (Settings\Menu-Settings.ini).
         // AiNitro: may AI racers use nitrous? IfPlayerHas = only when the player has it.
         public static TriState AiNitro = TriState.IfPlayerHas;
         // TipRate: how often a passed apex rolls for a tip. High = 1 in 20, Medium = 1 in 50, Low = 1 in 100.
@@ -154,7 +154,7 @@ namespace ARS
         public static bool BrakeLearning = true;
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
-        // On = route curvature limits speed (sweeping corners); off = the corner braking plan alone.
+        // Flat mph added to the corner braking plan; Route Offset is the same knob for the route term.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
         public static float SteerDampingScale = 1f;
@@ -185,7 +185,6 @@ namespace ARS
         static readonly Keys[] MenuHotkeyKeys = Enum.GetValues(typeof(Keys)).Cast<Keys>().Where(key => (int)key >= 8 && (int)key <= 255).Distinct().OrderBy(key => (int)key).ToArray();
         public static readonly string[] MenuHotkeyValues = MenuHotkeyKeys.Select(key => ((int)key).ToString(CultureInfo.InvariantCulture)).ToArray();
         public static LogImportance LogLevel = LogImportance.None;
-        // Flat mph added to every racer's intended speed plan; 0 = the physics plan alone.
 
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowProjection/ShowInputTrail visuals.
         public static Racer DebugFocusRacer;
