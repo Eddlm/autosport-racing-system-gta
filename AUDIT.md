@@ -23,7 +23,7 @@ grep the symbol if one misses.
 | 6. Comment prose (§4.1) | `e705bf9` + this commit | **partial** — TCS, `SmartTuner`'s brand block and the downforce block done |
 | 6b. Whitespace residue (§5.3) | — | **not started** |
 | 7b. `ComputeTargetSpeed`'s crest/dip law (§2) | `6e2847a` | landed, wants a drive |
-| 7c. The remaining splits (§2) | — | **not started** |
+| 7c. The remaining splits (§2) | `9b209b9` + this commit | **partial** — lap counter done; `HandleCheats`, `OnTick`, `LoadTrack`, `SaveRoute`, `InitializeMenu` left |
 
 **Still open, in the order I would take it:**
 
@@ -36,11 +36,11 @@ grep the symbol if one misses.
 2. **Whitespace residue (§5.3).** 319 lines in 67 runs, untouched — including six whitespace-only lines left
    where `DrawRouteNodes` was (in `TrackCreator.cs`, just above `DrawSection`). The trap: many of those lines
    carry spaces, so an exact-match edit needs their real space counts, which the scan reports.
-3. **The remaining splits (§2)**, safest first: `ComputeTargetSpeed`'s duplicated crest/dip block into one
-   `ApplyVerticalGripFactor` (~25 lines, the biggest readability win left) → `HandleCheats`' three handlers →
-   `OnTick`'s draw/cheat/HUD blocks → `UpdateTrackPosition`'s lap block → `LoadTrack` → `SaveRoute` (the 22×
-   `InnerText` idiom first) → **`InitializeMenu` last**, because its submenu locals are captured by the item
-   handlers and the staged-spawn slot indices are load-bearing.
+3. **The remaining splits (§2)**, safest first: `HandleCheats`' three handlers → `OnTick`'s draw/cheat/HUD
+   blocks → `LoadTrack` → `SaveRoute` (the 22× `InnerText` idiom first) → **`InitializeMenu` last**, because
+   its submenu locals are captured by the item handlers and the staged-spawn slot indices are load-bearing.
+   Done so far: `Rival.Update` into four, `ComputeTargetSpeed`'s crest law into `CrestGripSpeedFactor`, and
+   `UpdateTrackPosition`'s lap counter into `UpdateLapRegistration`.
 4. **CPU items deferred out of batch 4**, each verified real but left for their own pass: caching
    `Game.GameTime` per tick (~20 call sites), the leaderboard's per-frame re-sort and per-row `BestLap()`, and
    the creator's one-`DrawMarker`-per-preview-point.
