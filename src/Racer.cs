@@ -899,10 +899,8 @@ namespace ARS
         // Same sanity floor the TCS target uses: a lifted wheel reads ~0 on the grip multiplier.
         const float SlipCeilingGripFloor = 0.3f;
 
-        // The live lateral grip peak, in degrees of slip. The authored fTractionCurveLateral is the ZERO-SPEED
-        // peak: the tyre stiffens with speed, so the real peak is `lat / (1 + Min(5, 0.1 x speed_m_s))` — 22.5 at
-        // a standstill, 11.25 at 10 m/s, 3.75 at 180 km/h where it caps. Refreshed once per timed core so every
-        // consumer in a frame reads the same value.
+        // The authored fTractionCurveLateral is the ZERO-SPEED peak — the tyre stiffens with speed, which is what
+        // LateralPeakAtSpeed models. Refreshed once per timed core so every consumer in a frame reads the same value.
         public float TRLateralAtSpeed = 22f;
 
         void UpdateTRLateralAtSpeed()
@@ -1507,7 +1505,7 @@ namespace ARS
         // flat from 2.5, so nothing past it is gained). Set past the peak on purpose - a powerful RWD car should
         // light them up on launch and out of slow corners, and wheelspin is rotation - and scaled by the grip
         // multiplier so a low-grip surface keeps it in the same place against the peak. More negative = more spin.
-        const float IdealWheelspinSlipTarget = 1.25f;  // past the 1.0 lockup floor: spin is allowed, not just trimmed
+        const float IdealWheelspinSlipTarget = 1.25f;
         const float IdealWheelspinDeepening = 0.3f;
         const float IdealWheelspinGripFloor = 0.3f;
 
@@ -1524,10 +1522,9 @@ namespace ARS
             }
             else
             {
-                // Slide modulates the allowed spin: the base allowance deepens by the extra at the traction limit, then
-                // returns to the base at twice that - a car sliding that far needs the throttle back, not more of it.
-                // Descending *input* with ascending output on purpose: a descending output is inverted by Remap's
-                // clamp (Clamp(r, min, max) with min > max collapses to min), and trlat == 0 would divide by zero.
+                // A car sliding past twice the traction limit needs the throttle back, not more of it. Descending
+                // *input* with ascending output on purpose: a descending output is inverted by Remap's clamp
+                // (Clamp(r, min, max) with min > max collapses to min), and trlat == 0 would divide by zero.
                 float gripScale = ARS.Clamp(GroundGripMultiplier, IdealWheelspinGripFloor, 1f);
                 float IdealWheelspinBase = -IdealWheelspinSlipTarget * gripScale;
                 float trlat = Handling.LateralTractionCurve;
@@ -1645,10 +1642,8 @@ namespace ARS
             if (_nitrousActiveUntil > 0) StopNitrous();
         }
 
-        // Nitro card: valid when the shot is available and the straight is long enough;
-        // appropriate when contested (faster rival ahead), defended (rival behind closing in
-        // within the burn's reach), lonely (empty endless straight while slow), or spent
-        // near the finish with a rival nearby.
+        // Valid when a shot is available and the straight is long enough; appropriate when contested, defended,
+        // lonely, or spent near the finish with a rival close.
         bool TryPlayNitrousCard()
         {
             if (!ARS.AiNitroAllowed() || Lap <= _nitrousLapUsed) return false;
@@ -2082,10 +2077,9 @@ namespace ARS
             }
         }
 
-        // The engine resets the cheat multiplier every physics step, so this must re-write it each frame —
-        // it is the single per-frame writer of it, and nitro rides on the same write.
-        // Force-side compensation only: a fade is a multiplication so its inverse restores it, whereas a cut
-        // to zero cannot be (drive force is proportional to throttle) and grip-side losses only add wheelspin.
+        // The engine resets the cheat multiplier every physics step, so this re-writes it each frame — the single
+        // per-frame writer, with nitro riding on the same write. Force side only: a fade is a multiplication so its
+        // inverse restores it, whereas a cut to zero cannot be, and grip-side losses only add wheelspin.
         void UpdatePowerCompensation()
         {
             float counter = 1f;
@@ -2119,10 +2113,9 @@ namespace ARS
             Function.Call((Hash)CheatPowerIncreaseHash, Car, multiplier);
         }
 
-        // Match the player's launch capability. A keyboard pedal is a hard 0/1 and 1.0 is exactly what sets
-        // the engine's full-throttle grip loss, so a binary player's cars are quantised the same way; a player
-        // who can modulate gets a cap that stays under it. Reverse and braking are never shaped, and there is
-        // nothing to shape once the grip loss has faded out with speed.
+        // Match the player's launch capability: a keyboard pedal is a hard 0/1 and 1.0 is exactly what sets the
+        // engine's full-throttle grip loss, so a binary player's cars are quantised the same way, while a player who
+        // can modulate gets a cap that stays under it. Reverse, braking and the post-fade speed stay unshaped.
         float ShapeLaunchThrottle(float throttle)
         {
             if (throttle <= 0f || ARS.GetForwardSpeed(Car) > LaunchShapeMaxSpeed) return throttle;

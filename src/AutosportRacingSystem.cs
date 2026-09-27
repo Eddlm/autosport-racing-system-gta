@@ -159,12 +159,10 @@ namespace ARS
         // default is a deliberate +2 skew (driver-tuned), not a physics term. Being additive, its effect is
         // proportionally largest where the ceiling is smallest — i.e. at speed.
         public static float SteerCeilingBias = 2f;
-        // Fraction of the outer front wheel's peak-slip term added to the steer ceiling. The ceiling's Ackermann
-        // half is the corner geometry alone; a limit corner also needs the slip angle that generates the force.
-        // 0 is the kinematic ceiling exactly as it was - the old system, unchanged. 1 adds the full term, which is
-        // what a limit corner takes. Negative subtracts it, giving a ceiling tighter than the corner geometry, so
-        // the front runs short of its peak on purpose (conservative, understeer-prone). Note the ceiling's own
-        // floor - half the geometry - bounds how far negative this can actually bite.
+        // Fraction of the outer front wheel's peak-slip term added to the steer ceiling, on top of the Ackermann
+        // geometry. 0 reproduces the old kinematic ceiling exactly; 1 is what a limit corner takes; negative gives a
+        // ceiling tighter than the geometry (deliberate, understeer-prone), bounded by the ceiling's own floor at
+        // half the geometry.
         public static float SteerSlipCeiling = 0f;
         // Cap the steer limit at a share of the live peak slip angle instead of the corner geometry (Racer.ResolveSteerCeiling).
         public static bool SteerPeakSlipCap = false;
@@ -3216,10 +3214,8 @@ namespace ARS
         }
 
         public enum DrawTextAlign { Center, Left, Right }
-        // Font IDs match GTA V's FONT_STYLE enum (src\dev_ng\game\text\text.h):
-        // 0 = Standard, 1 = Cursive, 2 = RockstarTag, 3 = Leaderboard,
-        // 4 = Condensed, 5 = FixedWidthNumbers, 6 = CondensedNotGamername,
-        // 7 = Pricedown, 8 = Taxi
+        // Font IDs are GTA V's own FONT_STYLE enum (src\dev_ng\game\text\text.h); only the members the HUD uses
+        // are declared below.
         public enum DrawTextFont { Standard = 0, Cursive = 1, Leaderboard = 3, Condensed = 4, FixedWidthNumbers = 5, Pricedown = 7 }
         public static void DrawText(Vector3 pos, string t, Color c, float scale)
         {
