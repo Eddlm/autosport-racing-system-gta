@@ -382,9 +382,8 @@ namespace ARS
             UpdateChecker.CheckLatestRelease();
         }
 
-        // The build number is a sidecar the build writes beside the DLL (NewRacingSystem.csproj,
-        // GenerateBuildNumber). It is not the assembly version: that is the release identity and only
-        // moves by hand. A missing file means the DLL was copied on its own, so say so rather than lie.
+        // The build number is a sidecar NewRacingSystem.csproj writes beside the DLL, deliberately NOT the assembly
+        // version (that is the release identity and only moves by hand); a missing file means the DLL came alone.
         static string ReadDevBuildNumber()
         {
             try
@@ -467,9 +466,8 @@ namespace ARS
             Log(LogImportance.Info, "-------------");
         }
 
-        // Called on the main script thread (NOT from the background load task).
-        // GTA natives are not safe to call off the main thread, so we fill the
-        // modelName -> power cache here rather than during the pool scan.
+        // Called on the main script thread, NOT from the background load task: GTA natives hard-crash the game off
+        // the main thread, so the stat caches are filled here rather than during the pool scan.
         public void BuildPowerCache()
         {
             VehicleCatalog.BuildPowerCache(_vehiclePool, ModelGripCache, ModelTopSpeedMphCache, ModelAccelCache, ModelElectricCache, ModelNameCache, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
@@ -1222,9 +1220,7 @@ namespace ARS
         {
             DebugMenuStore.Set(option.ToString(), value.ToString());
         }
-        // ── Phased race instancing ──
-        // Each phase is a self-contained method callable individually or chained
-        // back-to-back (for future presets that instance everything in one go).
+        // ── Phased race instancing: each phase is a self-contained method, callable on its own or chained. ──
 
         // Phase 1: load the selected track, compute route/corners, teleport the player.
         public void InstanceTrack()
@@ -1338,9 +1334,7 @@ namespace ARS
             car.Velocity = direction * MphToMps(10f);
         }
 
-        // (Re)build the "Select Track" list from every discovered race, keeping the current
-        // choice when the file still exists. Must run after FillKnownTracks has populated
-        // _trackTags (that is, after the load task completes).
+        // Must run after FillKnownTracks has populated _trackTags (that is, after the load task completes).
         void SelectTrackInMenu(string path)
         {
             if (_trackListItem == null || _trackListPaths.Count == 0 || string.IsNullOrEmpty(path)) return;
@@ -1364,9 +1358,8 @@ namespace ARS
             _trackListPaths.Clear();
             for (int i = 0; i < sorted.Count; i++) _trackListPaths.Add(sorted[i]);
 
-            // The list item shows the file name (without extension). _trackListPaths holds the
-            // full paths in the same order so selection maps back cleanly.
-            // Use the property setter (not direct .Items manipulation) so LemonUI's UpdateIndex() fires.
+            // Items are file names while _trackListPaths holds the full paths in the same order, and the property
+            // setter is used (not .Items) so LemonUI's UpdateIndex() fires.
             List<string> names = new List<string>();
             foreach (string path in sorted)
                 names.Add(System.IO.Path.GetFileNameWithoutExtension(path));
@@ -1481,9 +1474,8 @@ namespace ARS
 
         static void AddPowerValues(List<float> values, float min, float max, float step)
         {
-            // Anchor the grid at clean multiples of the step (e.g. 2, 4, 6...) rather than
-            // at the raw cache min, so the offered values are always rounded and the default lands
-            // exactly on a grid point.
+            // Anchor at clean multiples of the step rather than the raw cache min, so every offered value is
+            // rounded and the default lands exactly on a grid point.
             int startIndex = (int)Math.Ceiling(min / step);
             int endIndex = (int)Math.Floor(max / step);
             for (int i = startIndex; i <= endIndex; i++)
@@ -1785,9 +1777,8 @@ namespace ARS
                 {
                     if (_gameTimeNextInLine <= Game.GameTime)
                     {
-                        // Up to six racers per frame: each core tick therefore lands every
-                        // ceil(Racers.Count / 6) frames — ~33 ms at 12 cars, ~280 ms at 100. This batch is
-                        // what paces the AI; the interval below is always under a frame, so it gates nothing.
+                        // Six racers per frame, so a core tick lands every ceil(Racers.Count / 6) frames — this
+                        // batch is what paces the AI; the interval below is always under a frame and gates nothing.
                         int count = (int)Clamp(Racers.Count, 1, 6);
                         for (int i = 0; i < count; i++)
                         {
@@ -1813,9 +1804,8 @@ namespace ARS
                 foreach (Racer racer in Racers)
                 {
                     racer.ProcessTick();
-                    // Lap is 1-based and counts the lap being driven, so a full race reaches raceLaps + 1:
-                    // RemainingRaceDistanceMeters and the green-blip check already agree on that, and this
-                    // gate alone ended the race a lap early.
+                    // Lap is 1-based and counts the lap being driven, so a full race reaches raceLaps + 1; this
+                    // gate alone once ended the race a lap early.
                     if (((!IsPointToPoint && racer.Lap > raceLaps) || (IsPointToPoint && racer.Lap > 1)) && !LeaderboardFinish.Contains(racer))
                     {
                         if (racer.Car.CurrentBlip != null) racer.Car.CurrentBlip.Color = BlipColor.Green;
@@ -2231,9 +2221,8 @@ namespace ARS
         
 
 
-        // One row per cached model, so the electric corrections can be weighed against ICE cars of the same class
-        // instead of guessed at. electricNative probes GET_IS_VEHICLE_ELECTRIC, the game's own model-hash native;
-        // cacheFlag is the old flag, kept in the dump for comparison.
+        // One row per cached model, so electrics can be weighed against ICE cars of the same class. electricNative
+        // is the game's own GET_IS_VEHICLE_ELECTRIC; cacheFlag is the old flag, kept for comparison.
         void DumpPaceIndex()
         {
             List<string> rows = new List<string>();
@@ -2741,8 +2730,7 @@ namespace ARS
         {
             if (WheelPowerOffset == 0x0)
             {
-                // Pattern: COMISS xmm, [r/m+disp32] ; SETNBE al ; JMP short ; (SHL/SHR)
-                // FiveM >= b2060: "0F 2F ? ? ? 00 00 0F 97 C0 EB ? D1"
+                // Pattern: COMISS xmm, [r/m+disp32] ; SETNBE al ; JMP short ; (SHL/SHR) — FiveM >= b2060.
                 // The 4-byte displacement at +3 is wheelSteeringAngleOffset; +8 = wheelPowerOffset.
                 IntPtr addr = (IntPtr)VehicleMemory.FindPattern(
                     "\x0F\x2F\x00\x00\x00\x00\x00\x0F\x97\xC0\xEB\x00\xD1",
@@ -3073,9 +3061,8 @@ namespace ARS
             SettingsRepair.DeleteLegacyFiles();
             Log(LogImportance.Info, "Checked the Settings folder.");
         }
-        // None sits last on purpose: Log() returns when `LogLevel > i`, so the highest value silences every
-        // level without a second test. Forced calls still write - those are error paths only, so they cannot
-        // hammer the disk, and a silent install failure is worse than a line in the log.
+        // None sits last on purpose: Log() returns when `LogLevel > i`, so the highest value silences every level
+        // without a second test. Forced calls still write — a silent install failure is worse than a log line.
         public enum LogImportance { Info, Error, Fatal, None }
 
         // Stored text -> enum value; unknown or undefined text falls back.
@@ -3546,9 +3533,8 @@ namespace ARS
                 if (SpawnRacer(modelKey)) spawnedKeys.Add(modelKey);
             }
 
-            // Force-Fill repeats the models that did spawn until the grid target is met, so a pool smaller than
-            // the grid (tests.txt holds one car) still fields a full one. A model that spawned nobody is never
-            // retried, so a broken roster entry costs its load wait once rather than on every pass.
+            // Force-Fill repeats the models that did spawn until the grid target is met, so a pool smaller than the
+            // grid still fields a full one; a model that spawned nobody is never retried.
             int cycle = 0;
             int failures = 0;
             while (ForceFillGrid && Racers.Count < maxcars && failures < spawnedKeys.Count)

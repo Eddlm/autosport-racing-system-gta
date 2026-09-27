@@ -144,9 +144,8 @@ namespace ARS
 
         // True when the steer limiter actually reduced the steer this frame; read by the Show Inputs clamp marker.
         bool _steerLimitedThisFrame = false;
-        // The limiter's two side limits, recomputed every tick in ApplySteerLimits. Public so a rule can grant
-        // an allowance to one side, and so the debug view can draw them. LEFT bounds positive commands and RIGHT
-        // negative ones, because a positive command steers left (AGENTS.md's steer-sign gotcha).
+        // Public so a rule can grant an allowance to one side and the debug view can draw them. LEFT bounds positive
+        // commands and RIGHT negative ones, because a positive command steers left (AGENTS.md's steer-sign gotcha).
         public float SteerLimitRight = 40f;
         public float SteerLimitLeft = 40f;
         float _debugPreLimitSteerDeg = 0f;
@@ -881,9 +880,8 @@ namespace ARS
             }
         }
 
-        // Steer angle that holds the tightest corner this car's grip allows at this speed: the Ackermann
-        // relation R = v² / (grip × g), δ = atan(wheelbase / R). Deliberately the same 9.8 and grip that
-        // SteerLimitedSpeed uses, so the ceiling and the steer-limited speed are one law read two ways.
+        // Deliberately the same grip and gravity that SteerLimitedSpeed uses, so the ceiling and the steer-limited
+        // speed stay one law read two ways.
         float AckermannCeilingDegrees(float fwdSpeed)
         {
             float grip = VehicleData.CurrentMechanicalGrip;
@@ -939,9 +937,8 @@ namespace ARS
             return ARS.Clamp(geometryCeiling + slipCeiling + ARS.SteerCeilingBias, geometryCeiling * SteerCeilingBiasFloor, VehicleData.SteeringLock);
         }
 
-        // The tyre's own ceiling, the ARS.SteerPeakSlipCap alternative: a fixed share of a peak slip angle, so the
-        // cap keeps the front short of the peak the tyres could use. Fixed for a given speed - the brake pedal
-        // deliberately does not narrow it.
+        // The ARS.SteerPeakSlipCap alternative: a fixed share of a peak slip angle, keeping the front short of the
+        // peak the tyres could use. Fixed for a given speed — the brake pedal deliberately does not narrow it.
         float PeakSlipCeilingAt(float peakSlipDeg)
         {
             return ARS.Clamp(peakSlipDeg * PeakSlipCapShare + ARS.SteerCeilingBias, 0f, VehicleData.SteeringLock);
@@ -1079,9 +1076,8 @@ namespace ARS
             combinedInput = ApplyThrottleCap(combinedInput);
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
 
-            // Rubber-band torque boost: gate on the raw target (pre-slew) so the boost
-            // doesn't fire during the throttle-to-brake transition where Control.Throttle
-            // slews down slowly and could still read >= 1.0 while the car is already braking.
+            // Gate on the raw target (pre-slew): in the throttle-to-brake transition Control.Throttle slews down
+            // slowly and could still read >= 1.0 while the car is already braking.
             bool rbFreeZonePedal = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
             if (ARS.RubberbandingPct > 0 && ARS.CurrentRubberbandMode == RubberbandMode.Artificial && newThrottle >= 1.00f && !rbFreeZonePedal)
             {
@@ -1199,9 +1195,8 @@ namespace ARS
                 _brakeSampleMaxSlideDeg = 0f;
             }
 
-            // Slide watch: runs on the corner proper, entrance to apex — exactly where the sample has stopped.
-            // A car that slid on the way in was on a tyre that had already let go, so the braking it took to get
-            // there says nothing about the decel this corner allows, and the commit below throws that sample away.
+            // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. A car that slid on
+            // the way in was on a tyre that had already let go, so the commit below throws that sample away.
             if (_brakeSampleApexNode >= 0 && HasPassedBrakingTarget() && !HasPassedApex(_brakeSampleApexNode))
             {
                 float slide = Math.Abs(VehicleData.SlideAngle);
@@ -1431,17 +1426,13 @@ namespace ARS
                 }
             }
 
-            // Rubber-banding: slow leaders via lower speed target (laggard boost is in ConvertSpeedToPedals).
-            // Natural mode skips the penalty when any rival is nearby — lets them race without interference.
-            // First 500 nodes (~500 m) of the first lap are rubberband-free.
+            // Rubber-banding: slow leaders via a lower speed target (the laggard boost is in ConvertSpeedToPedals).
+            // Natural mode skips the penalty while any rival is nearby, so they can race without interference.
             float rbFactor = ComputeRubberBandFactor();
             bool rbNearbyRival = Brain.Rivals.Any(r => r.RivalRacer != null && r.Distance < 100f);
             bool rbFreeZone = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
             if (rbFactor < 1f && !rbFreeZone && !(ARS.CurrentRubberbandMode == RubberbandMode.Natural && rbNearbyRival))
                 Brain.CurrentIntention.Speed *= rbFactor;
-
-            // Temporarily neutralized: keep the acceleration cap at 1 until rear-end
-            // avoidance has a dedicated speed-control implementation.
         }
 
         // Vertical-curvature grip factor over the three-node window centred on a node, as a speed multiplier.
@@ -1948,9 +1939,8 @@ namespace ARS
 
             _appliedThrottleLastFrame = VehicleMemory.GetThrottle(Car);
 
-            // Judge the player's launch input once per race: sample while the window is open (a keyboard
-            // pedal is a hard 0/1, a gamepad is not), then freeze the verdict so the AI's shaping cannot
-            // change mid-race. The window closes where the grip loss it exists for stops mattering.
+            // Judge the player's launch input once per race: sample while the window is open (a keyboard pedal is a
+            // hard 0/1, a gamepad is not), then freeze the verdict so the AI's shaping cannot change mid-race.
             if (ControlledByPlayer && ARS.PlayerLaunchTestActive)
             {
                 float playerThrottle = Math.Abs(_appliedThrottleLastFrame);
@@ -2959,9 +2949,8 @@ namespace ARS
             Control.Throttle = -0.5f;
             Control.Brake = 0f;
 
-            // Even recovery = straight reverse. Odd = steer toward nearest track point. Written as an angle so
-            // the limiter, which runs after this, is the one that bounds it — a stuck car is at ~0 speed, where
-            // the limit is the full lock, so recovery keeps its authority without an exemption.
+            // Even attempts reverse straight, odd ones steer toward the nearest track point — written as an angle so
+            // the limiter, which runs after this, is the one that bounds it: at ~0 speed that limit is full lock.
             if (_stuckRecoveryAttempts % 2 == 0)
             {
                 Control.SteerDegrees = 0f;
@@ -2997,9 +2986,8 @@ namespace ARS
 
             GroundGripMultiplier = ARS.MeanWheelGripMultiplier(Car);
 
-            // Centripetal acceleration v²/r is the proxy for cornering load (engine applies
-            // downforce scaled by lateral speed, but pure-pursuit driving keeps world-frame lateral
-            // velocity near zero — centripetal accel captures the same load physically).
+            // Centripetal acceleration v²/r stands in for the cornering load the engine scales downforce by; see
+            // GetDownforceGsAtSpeed for why world-frame lateral velocity cannot be used here.
             float forwardMs = ARS.GetForwardSpeed(Car);
             float routeRadius = Brain.CurrentPerception.CurveRadiusToFollowPoint;
             float lateralMs = 0f;
@@ -3027,9 +3015,8 @@ namespace ARS
                 if (!allDown)
                     Control.MaxThrottle = Math.Max(Control.MaxThrottle - 0.5f * TickScale, 0.1f);
 
-                // Overspeed detection: compare measured forward Gs against wheel-pushed Gs.
-                // GTA bug — uphill cars accelerate beyond what wheel power should produce.
-                // 0.1G leeway; each 0.1G excess cuts MaxThrottle by 0.5, floor 0.
+                // Compare measured forward Gs against wheel-pushed Gs: GTA lets an uphill car accelerate beyond
+                // what its wheel power should produce, and this is the correction for that.
                 if (ARS.OverspeedEnabled)
                 {
                     List<float> wheelPowers = ARS.WheelPowers(Car);
