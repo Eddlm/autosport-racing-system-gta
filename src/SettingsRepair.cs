@@ -7,13 +7,9 @@ using System.Windows.Forms;
 
 namespace ARS
 {
-    // The declared shape of the menu-owned Settings folder. LoadSettings runs three passes in this order:
-    //   CreateMissingFiles  Settings\ exists.
-    //   PruneOwnedFiles     Menu-*.ini lose keys the schema no longer declares.
-    //   CompleteOwnedKeys   Menu-*.ini gain missing keys and lose values the schema rejects.
-    // Retired standalone files are read only for migration, then deleted after menu settings are complete.
-    // Known limit: an optional key holding a value of the wrong type (PaceTarget = abc) is left alone,
-    // since there is no default to repair it to and absence is expressed by removing the line by hand.
+    // The three passes run in this order on purpose: files must exist before pruning, and pruning must finish
+    // before keys are completed, or a default would shadow a migration. Known limit: an optional key holding a
+    // value of the wrong type is left alone, since there is no default to repair it to.
     static class SettingsRepair
     {
         enum Kind { Text, Bool, Number }

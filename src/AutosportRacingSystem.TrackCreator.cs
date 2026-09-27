@@ -322,13 +322,9 @@ namespace ARS
             return points;
         }
 
-        // Ground height directly under a plan-view point. The probe starts well above the point rather than
-        // just over it, because a probe anchored below the surface finds nothing at all and the point then
-        // keeps a stale height - so a camera under the map, or a road rising toward the point, could never
-        // pull it up. The hit is absolute, so the probe's offset needs no correction back out.
-        // A single probe from that high would return the topmost surface, which over a road is a bridge
-        // deck; so when the first hit is nowhere near the expected height, keep walking down through the
-        // stacked surfaces and take the one nearest it. The common case accepts the first hit and stops.
+        // The probe starts well above the point: anchored below the surface it finds nothing and the point keeps
+        // a stale height. Over a road the topmost hit is a bridge deck, so when the first hit is nowhere near the
+        // expected height, walk down the stacked surfaces and take the nearest - the common case stops at the first.
         static bool TryResolveGround(Vector3 point, out float ground)
         {
             const float probeUpMeters = 50f;

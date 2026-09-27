@@ -9,13 +9,8 @@ using System.Xml;
 
 namespace ARS
 {
-    // Loads Menyoo-style vehicle appearance XMLs (the "menyooStuff\Vehicle" save format)
-    // and applies one matching file's tuning to a spawned vehicle. Purely cosmetic — no
-    // handling/stat tuning — and entirely separate from ARS's own Vehicles\*.xml supplier pool.
-    // Match is by the file's <ModelHash> against the spawned vehicle's model hash. When several
-    // files match (multiple liveries for one car) one is picked at random. Folder is the game
-    // install's menyooStuff\Vehicle, searched recursively (including the "SAM - Track Cars"
-    // subfolder where livery skins live).
+    // Purely cosmetic - no handling or stat tuning - and separate from ARS's own Vehicles\*.xml pool. Several
+    // files can match one model (one per livery), so the pick is random rather than first.
     public static class MenyooAppearance
     {
         private const string MenyooSubPath = @"menyooStuff\Vehicle";
