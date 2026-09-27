@@ -2236,6 +2236,60 @@ namespace ARS
         
 
 
+        // One row per cached model, so the electric corrections can be weighed against ICE cars of the same class
+        // instead of guessed at. electricNative probes GET_IS_VEHICLE_ELECTRIC, the game's own model-hash native;
+        // cacheFlag is the old flag, kept in the dump for comparison.
+        void DumpPaceIndex()
+        {
+            List<string> rows = new List<string>();
+            rows.Add("model\telectricNative\tcacheFlag\tclass\taccelRaw\ttopMph\tgrip\tpiCurrent\tpiNoCorrection\tname");
+            int electricCount = 0;
+            int probeErrors = 0;
+            foreach (KeyValuePair<string, float> entry in ModelPaceIndexCache)
+            {
+                float topMph, grip, accel;
+                if (!ModelTopSpeedMphCache.TryGetValue(entry.Key, out topMph)) continue;
+                if (!ModelGripCache.TryGetValue(entry.Key, out grip)) continue;
+                if (!ModelAccelCache.TryGetValue(entry.Key, out accel)) continue;
+                bool cacheFlag = false;
+                ModelElectricCache.TryGetValue(entry.Key, out cacheFlag);
+                string name;
+                if (!ModelNameCache.TryGetValue(entry.Key, out name)) name = entry.Key;
+                int hash;
+                bool numeric = int.TryParse(entry.Key, out hash);
+                string vehicleClass = numeric ? Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, hash).ToString() : "?";
+                string electricNative = "n/a";
+                if (numeric)
+                {
+                    try
+                    {
+                        electricNative = Function.Call<int>((Hash)0x1FCB07FE230B6639, hash) == 0 ? "0" : "1";
+                        if (electricNative == "1") electricCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        probeErrors++;
+                        if (probeErrors == 1) Log(LogImportance.Error, "GET_IS_VEHICLE_ELECTRIC probe failed: " + ex.Message, true);
+                    }
+                }
+                rows.Add(string.Join("\t", new[]
+                {
+                    entry.Key,
+                    electricNative,
+                    cacheFlag ? "electric" : "ice",
+                    vehicleClass,
+                    accel.ToString("0.####", CultureInfo.InvariantCulture),
+                    topMph.ToString("0.##", CultureInfo.InvariantCulture),
+                    grip.ToString("0.###", CultureInfo.InvariantCulture),
+                    entry.Value.ToString("0.##", CultureInfo.InvariantCulture),
+                    ComputePaceIndex(topMph, grip, accel, false).ToString("0.##", CultureInfo.InvariantCulture),
+                    name
+                }));
+            }
+            File.WriteAllLines(ScriptsFolder + @"\pidump.txt", rows.ToArray());
+            UI.Notify("~b~[ARS]:~w~ pidump.txt - " + (rows.Count - 1) + " models, " + electricCount + " electric by GET_IS_VEHICLE_ELECTRIC" + (probeErrors > 0 ? ", " + probeErrors + " probe errors" : ""));
+        }
+
         // The roster from modeldump.txt - a comma/whitespace separated list of model names, already lowercase in
         // practice but normalised here so a hand-edited dump cannot smuggle in a key the catalog will not match.
         void BuildRosterFromDumpFile()
@@ -2289,60 +2343,7 @@ namespace ARS
 
 
 
-            if (WasCheatStringJustEntered("arspidump"))
-            {
-                // The pacing numbers behind the grid: one row per cached model, so the electric
-                // corrections can be weighed against ICE cars of the same class instead of guessed at.
-                // electricNative probes GET_IS_VEHICLE_ELECTRIC (0x1FCB07FE230B6639), the game's own
-                // model-hash native (build 3258+); cacheFlag is the old, unverified flag for comparison.
-                List<string> rows = new List<string>();
-                rows.Add("model\telectricNative\tcacheFlag\tclass\taccelRaw\ttopMph\tgrip\tpiCurrent\tpiNoCorrection\tname");
-                int electricCount = 0;
-                int probeErrors = 0;
-                foreach (KeyValuePair<string, float> entry in ModelPaceIndexCache)
-                {
-                    float topMph, grip, accel;
-                    if (!ModelTopSpeedMphCache.TryGetValue(entry.Key, out topMph)) continue;
-                    if (!ModelGripCache.TryGetValue(entry.Key, out grip)) continue;
-                    if (!ModelAccelCache.TryGetValue(entry.Key, out accel)) continue;
-                    bool cacheFlag = false;
-                    ModelElectricCache.TryGetValue(entry.Key, out cacheFlag);
-                    string name;
-                    if (!ModelNameCache.TryGetValue(entry.Key, out name)) name = entry.Key;
-                    int hash;
-                    bool numeric = int.TryParse(entry.Key, out hash);
-                    string vehicleClass = numeric ? Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, hash).ToString() : "?";
-                    string electricNative = "n/a";
-                    if (numeric)
-                    {
-                        try
-                        {
-                            electricNative = Function.Call<int>((Hash)0x1FCB07FE230B6639, hash) == 0 ? "0" : "1";
-                            if (electricNative == "1") electricCount++;
-                        }
-                        catch (Exception ex)
-                        {
-                            probeErrors++;
-                            if (probeErrors == 1) Log(LogImportance.Error, "GET_IS_VEHICLE_ELECTRIC probe failed: " + ex.Message, true);
-                        }
-                    }
-                    rows.Add(string.Join("\t", new[]
-                    {
-                        entry.Key,
-                        electricNative,
-                        cacheFlag ? "electric" : "ice",
-                        vehicleClass,
-                        accel.ToString("0.####", CultureInfo.InvariantCulture),
-                        topMph.ToString("0.##", CultureInfo.InvariantCulture),
-                        grip.ToString("0.###", CultureInfo.InvariantCulture),
-                        entry.Value.ToString("0.##", CultureInfo.InvariantCulture),
-                        ComputePaceIndex(topMph, grip, accel, false).ToString("0.##", CultureInfo.InvariantCulture),
-                        name
-                    }));
-                }
-                File.WriteAllLines(ScriptsFolder + @"\pidump.txt", rows.ToArray());
-                UI.Notify("~b~[ARS]:~w~ pidump.txt - " + (rows.Count - 1) + " models, " + electricCount + " electric by GET_IS_VEHICLE_ELECTRIC" + (probeErrors > 0 ? ", " + probeErrors + " probe errors" : ""));
-            }
+            if (WasCheatStringJustEntered("arspidump")) DumpPaceIndex();
             if (WasCheatStringJustEntered("arsbuildcarlist")) BuildRosterFromEnum();
 
             if (WasCheatStringJustEntered("arsbuilddumpcarlist")) BuildRosterFromDumpFile();
