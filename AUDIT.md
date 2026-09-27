@@ -46,9 +46,10 @@ grep the symbol if one misses.
 4. **The rest of the per-frame `Game.GameTime` readers** (`Racer.cs`): the three scheduler and stuck-detection
    sites are done (`e1f948e`, `c2ee51a`), the leaderboard item is closed as deliberate (see the table), and the
    creator's one-`DrawMarker`-per-preview-point is still open.
-5. **One deliberate leftover:** `ARS.FindNextCorner` and the `LiveCorner` / `CornerScanNode` pair it drives are
-   unreferenced, but `FindNextCorner` is named in `AGENTS.md`'s code map as live static AI math, so removing it
-   wants a decision rather than a cleanup side effect.
+5. **The live-corner scan is cut (`dad1f32`).** `FindNextCorner`, its three scan constants and the
+   `LiveCorner` / `CornerScanNode` pair are gone from `src\`. `FillCornerPoint` was the field's only reader and
+   its only caller was the deleted method, so it is now unreferenced — the last of the cluster, and it wants
+   cutting once its body is read in full.
 
 Deferred out of batch 4 on purpose, each checked first: caching `Game.GameTime` per tick (§3.1, real but
 ~20 call sites — worth its own pass), the leaderboard's per-frame re-sort and per-row `BestLap()` (§3.6),
@@ -608,11 +609,10 @@ Surfaced because the audit read the code; each is worth a decision.
 | `Racer.cs:2105 UpdateCornerValidity` | 4 | Referenced only from the comment at `:2090`. |
 | `Racer.cs:1699 BehindNodeDistance` | ~7 | No caller. |
 
-**≈ 370 lines.** The dormant state they drive (`LiveCorner`, `CornerScanNode`, `RouteTargetNode`,
-`RouteTargetRadius` — `Racer.cs:34-38`) is annotated as deliberately retained, so this is a decision, not an
-oversight: either cut the lot (git keeps it) or delete the call-less wrappers and leave the state with an
-honest comment. What should not stay is the current state of affairs, where the dead twin of a live method
-sits 100 lines away with a subtly different rule.
+**≈ 370 lines, all now cut.** The dormant state they drove went with them — `RouteTargetNode` and
+`RouteTargetRadius` in `c2ad2de`, `LiveCorner` and `CornerScanNode` in `dad1f32` — so the dead twin of a live
+method no longer sits 100 lines away with a subtly different rule. The one remnant is `FillCornerPoint`, whose
+only caller was `FindNextCorner`: unreferenced, and it wants cutting when its body is read in full.
 
 Related: `AutosportRacingSystem.cs:52`'s `Options` enum still declares **`FindCustomProps`** with no menu
 item and no handler, which implies to a reader that the method is wired. It is not.
