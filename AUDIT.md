@@ -46,10 +46,10 @@ grep the symbol if one misses.
 4. **The rest of the per-frame `Game.GameTime` readers** (`Racer.cs`): the three scheduler and stuck-detection
    sites are done (`e1f948e`, `c2ee51a`), the leaderboard item is closed as deliberate (see the table), and the
    creator's one-`DrawMarker`-per-preview-point is still open.
-5. **The live-corner scan is cut (`dad1f32`).** `FindNextCorner`, its three scan constants and the
-   `LiveCorner` / `CornerScanNode` pair are gone from `src\`. `FillCornerPoint` was the field's only reader and
-   its only caller was the deleted method, so it is now unreferenced — the last of the cluster, and it wants
-   cutting once its body is read in full.
+5. **The live-corner cluster is fully cut.** `FindNextCorner`, its three scan constants and the
+   `LiveCorner` / `CornerScanNode` pair went in `dad1f32`; `FillCornerPoint` — the field's only reader, whose
+   own only caller was the deleted method — followed once its body had been read in full and the 60-node
+   lip-detection block it carried was confirmed to have no other route to it.
 
 Deferred out of batch 4 on purpose, each checked first: caching `Game.GameTime` per tick (§3.1, real but
 ~20 call sites — worth its own pass), the leaderboard's per-frame re-sort and per-row `BestLap()` (§3.6),
@@ -609,10 +609,10 @@ Surfaced because the audit read the code; each is worth a decision.
 | `Racer.cs:2105 UpdateCornerValidity` | 4 | Referenced only from the comment at `:2090`. |
 | `Racer.cs:1699 BehindNodeDistance` | ~7 | No caller. |
 
-**≈ 370 lines, all now cut.** The dormant state they drove went with them — `RouteTargetNode` and
-`RouteTargetRadius` in `c2ad2de`, `LiveCorner` and `CornerScanNode` in `dad1f32` — so the dead twin of a live
-method no longer sits 100 lines away with a subtly different rule. The one remnant is `FillCornerPoint`, whose
-only caller was `FindNextCorner`: unreferenced, and it wants cutting when its body is read in full.
+**≈ 450 lines, all now cut** — `FillCornerPoint` and the 60-node lip-detection block inside it were the tail.
+The dormant state they drove went with them — `RouteTargetNode` and `RouteTargetRadius` in `c2ad2de`,
+`LiveCorner` and `CornerScanNode` in `dad1f32` — so the dead twin of a live method no longer sits 100 lines
+away with a subtly different rule, and no unreferenced remnant of the cluster is left.
 
 Related: `AutosportRacingSystem.cs:52`'s `Options` enum still declares **`FindCustomProps`** with no menu
 item and no handler, which implies to a reader that the method is wired. It is not.
