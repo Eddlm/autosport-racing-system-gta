@@ -171,11 +171,22 @@ namespace ARS
             RelativePosition = RelativePos.Unreachable;
             if (RivalRacer == null) return;
 
-            // One read each of the four entity vectors: every use below used to call the native again.
-            Vector3 myPosition = me.Car.Position;
+            // One read each of the two entity vectors, handed to the parts that need them: every use below
+            // used to call the native again.
             Vector3 myVelocity = me.Car.Velocity;
-            Vector3 rivalPosition = RivalRacer.Car.Position;
             Vector3 rivalVelocity = RivalRacer.Car.Velocity;
+
+            UpdateOffsets(me);
+            UpdateSpeedGaps(me, myVelocity, rivalVelocity);
+            ClassifyRelativePosition();
+            UpdateClosingTime(me, myVelocity, rivalVelocity);
+        }
+
+        // Where the rival sits relative to me, and how much room the pair takes up.
+        void UpdateOffsets(Racer me)
+        {
+            Vector3 myPosition = me.Car.Position;
+            Vector3 rivalPosition = RivalRacer.Car.Position;
 
             RelativeOffset = ARS.EntityRelativeOffset(me.Car, RivalRacer.Car);
             LongitudinalGap = RelativeOffset.Y;
@@ -187,15 +198,17 @@ namespace ARS
             OccupiedLaneWidth = CombinedSize.X;
             OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
             Distance = (myPosition - rivalPosition).Length();
+        }
 
-            // Forward speed gap: project relative velocity onto me's forward axis.
-            // Positive = me faster than rival; negative = rival faster.
+        // Speed gaps and the times they imply. Two laws live here on purpose: ForwardSpeedGap projects the
+        // relative velocity onto my forward axis, while SecondsToReach and TimeToContact use the longitudinal gap.
+        void UpdateSpeedGaps(Racer me, Vector3 myVelocity, Vector3 rivalVelocity)
+        {
             float mySpeedSquared = myVelocity.LengthSquared();
             Vector3 meForward = mySpeedSquared > 0.01f ? myVelocity.Normalized : me.Car.ForwardVector;
             Vector3 relativeVelocity = myVelocity - rivalVelocity;
             ForwardSpeedGap = Vector3.Dot(relativeVelocity, meForward);
 
-            // SecondsToReach and TimeToContact use longitudinal gap, not Euclidean.
             // Legacy SecondsToReach kept for existing consumers (avoidance filter expects 0..3 range).
             float longitudinalAbs = Math.Abs(LongitudinalGap);
             float absoluteSpeedGap = (float)Math.Round(myVelocity.Length() - rivalVelocity.Length(), 4);
@@ -217,28 +230,34 @@ namespace ARS
             {
                 TimeToContact = float.PositiveInfinity;
             }
+        }
 
+        // Ahead, behind, or alongside: the longitudinal gap against the pair's combined length.
+        void ClassifyRelativePosition()
+        {
             if (RelativeOffset.Y > CombinedSize.Y)
             {
                 RelativePosition = RelativePos.Ahead;
             }
+            else if (RelativeOffset.Y < -CombinedSize.Y)
+            {
+                RelativePosition = RelativePos.Behind;
+            }
             else
             {
-
-                if(RelativeOffset.Y < -CombinedSize.Y)
-                {
-                    RelativePosition = RelativePos.Behind;
-                }
-                else
-                {
-                    if (RelativeOffset.X > 0) RelativePosition = RelativePos.Right;
-                    else RelativePosition = RelativePos.Left;
-                }
+                if (RelativeOffset.X > 0) RelativePosition = RelativePos.Right;
+                else RelativePosition = RelativePos.Left;
             }
+        }
 
+        // Swept-box closing time, and the heading difference: the two velocity-derived quantities kept last,
+        // in the order they were computed before this was split.
+        void UpdateClosingTime(Racer me, Vector3 myVelocity, Vector3 rivalVelocity)
+        {
             SecondsToHit = ComputeSecondsToHit(me);
 
             // DirectionDiff: angle between velocity vectors. Guard against zero velocity (NaN).
+            float mySpeedSquared = myVelocity.LengthSquared();
             float rivalSpeed = rivalVelocity.LengthSquared();
             if (mySpeedSquared < 0.01f || rivalSpeed < 0.01f)
             {
