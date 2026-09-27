@@ -5,11 +5,9 @@ using System.Collections.Generic;
 
 namespace ARS
 {
-    // Smart tuning: reads a car's own livery names, picks a style from those keywords, applies the livery,
-    // fits the body parts that suit that style, and paints last (a livery can dirty the appearance otherwise).
-    // Replaces the old random-index tuning. Runs post-spawn from a per-tick queue - one car per tick - so the
-    // race start is not extended and the mod-part streaming is spread over frames instead of landing in a burst.
-    // Enum member names here were taken from GTA.VehicleMod / GTA.VehicleColor by reflection on SHVDN2, not guessed.
+    // A car's own livery names pick its style, which fits the body parts and paints last (a livery can dirty the
+    // appearance anyway). Queued post-spawn one car per tick so a full grid does not extend the race start.
+    // The GTA.VehicleMod / GTA.VehicleColor members here came from reflection on SHVDN2, not guesses.
     internal static class SmartTuner
     {
         enum Style { Clean, Racing, Stripes, Muscle, Offroad, Tuner, Beater }
@@ -92,8 +90,7 @@ namespace ARS
         // Brand liveries imply their own colours. The value is (preferred body families, the artwork's colours),
         // both LISTS because most are two- or three-tone; accent and rims come from the artwork so variety stays
         // inside the brand's own palette. Evidence: the GTA Wiki, the respray-colour pages and the fan livery DB,
-        // with the game's own artwork beating real-world folklore. Anchors: the Sprunk Buffalo is white with green
-        // wheels, the Redwood Gauntlet white with red. Medium-confidence bodies are taste, not fact.
+        // with the game's own artwork beating real-world folklore. Medium-confidence bodies are taste, not fact.
         static readonly Dictionary<string, KeyValuePair<string[], string[]>> Brands = new Dictionary<string, KeyValuePair<string[], string[]>>
         {
             { "redwood", new KeyValuePair<string[], string[]>(new[] { "white" }, new[] { "red", "yellow" }) },
@@ -366,12 +363,9 @@ namespace ARS
             VehicleColor accent;
             if (brand != null)
             {
-                // A brand livery dictates the paint: body from the brand's preferred families, accent and rims
-                // from the colours its artwork carries. Rims take the brand because R*'s own Sprunk Buffalo is
-                // white/white with green wheels (trial - may go back to neutrals).
-                // The name often says which variant it is ("Karin Performance White", "Xero Gas Black"), and a
-                // brand rule alone cannot know whether this car is the white one or the gold one - so a colour the
-                // name states narrows the brand's sets rather than being ignored.
+                // Body from the brand's families, accent and rims from the colours its artwork carries — rims take
+                // the brand because R*'s own Sprunk Buffalo is white with green wheels. A colour the name states
+                // ("Xero Gas Black") narrows the brand's sets instead of being ignored.
                 KeyValuePair<string[], string[]> rule = Brands[brand];
                 body = PreferStated(rule.Key, named, random);
                 accent = PreferStated(rule.Value, named, random);

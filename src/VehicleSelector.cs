@@ -7,12 +7,9 @@ namespace ARS
 {
     public static class VehicleSelector
     {
-        // One pool pass: rank every paced model by pace distance to the target, take the closest maxCars.
-        // The pool holds canonical hash-string keys, so no file is touched here.
-        // **No script yield in this loop, deliberately.** The pass is pure C# over a few hundred entries with no
-        // native call in it, so it stays far under SHVDN's per-tick timeout on its own — while a mid-tick yield
-        // parks this entire call stack (race start: track load -> grid build -> ranking) inside SHVDN's per-script
-        // handshake across frames, which is the one window in ARS that can strand a tick. Keep it synchronous.
+        // **No script yield in this loop, deliberately.** A yield parks the whole race-start stack (track load ->
+        // grid build -> ranking) inside SHVDN's per-script handshake across frames, the one window in ARS that can
+        // strand a tick; the pass itself is pure C# over a few hundred entries and never needs one.
         public static List<string> SelectClosestByPace(List<string> pool, Dictionary<string, float> paceIndex, int maxCars, Func<int, int, int> random, Action<string> log, float powerTarget)
         {
             List<KeyValuePair<float, string>> ranked = new List<KeyValuePair<float, string>>();

@@ -918,12 +918,9 @@ namespace ARS
             return lat <= 0.01f ? 0f : lat / (1f + Math.Min(5f, 0.1f * speed));
         }
 
-        // Steer angle whose OUTER front wheel sits on its peak slip angle. A limit corner needs the kinematic
-        // Ackermann angle PLUS the slip angle that generates the force; the ceiling below has only ever had the
-        // kinematic half, so on its own it caps the AI below the angle its tyres can use, and the shortfall grows
-        // as 1/v² - i.e. with speed. The peak is TRLateralAtSpeed, scaled by the ground's grip multiplier because
-        // fLoss moves the peak angle, not just the force.
-        // Dialled by ARS.SteerSlipCeiling: 0 leaves the kinematic ceiling exactly as it was, 1 adds the full term.
+        // Steer angle whose OUTER front wheel sits on its peak slip angle — the live TRLateralAtSpeed scaled by the
+        // ground's grip multiplier, because fLoss moves the peak angle and not just the force. The kinematic ceiling
+        // alone leaves the tyres short of the angle they can use, and the shortfall grows with speed.
         float SlipCeilingDegrees(float fwdSpeed)
         {
             if (TRLateralAtSpeed <= 0.01f || fwdSpeed <= 0f) return 0f;
@@ -937,9 +934,6 @@ namespace ARS
         {
             float vanillaCeiling = VehicleData.SteeringLock / (1f + SteerReductionPerMps * fwdSpeed);
             float geometryCeiling = Math.Min(vanillaCeiling, AckermannCeilingDegrees(fwdSpeed));
-            // The corner geometry is the kinematic half only; a limit corner also needs the slip angle that
-            // generates the force, so the outer wheel's peak slip is added here rather than left out. Scaled
-            // by ARS.SteerSlipCeiling, so 0 reproduces the old ceiling exactly.
             float slipCeiling = SlipCeilingDegrees(fwdSpeed);
             // The one deliberate skew: the geometry is computed 1:1 and then biased, so the ceiling's shape
             // and the crossover stay where the physics puts them and only the number moves. The floor stops
@@ -989,21 +983,17 @@ namespace ARS
             float requestedSteer = Control.SteerDegrees;
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
 
-            // The limiter is two independent limits, one per side, closed by a single clamp at the end: nothing
-            // is exempt from being limited, so an allowance has to be granted to a side rather than a check
-            // skipped. Both sides start at the same ceiling — the corner geometry (vanilla's grip-scaled authority
-            // curve and the Ackermann limit, whichever is lower), or the tyre's peak slip angle under the cap above.
-            // A reversing car keeps the raw lock: the vanilla term's 1 + k × v goes negative below −13 m/s and
-            // would invert the ceiling.
+            // Two limits, one per side, closed by one clamp: nothing is exempt from being limited, so an allowance
+            // is granted to a side rather than a check skipped. A reversing car keeps the raw lock — vanilla's
+            // 1 + k × v goes negative below −13 m/s and would invert the ceiling.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;
 
-            // The one whitelisted allowance: the side answering a slide may reach past the ceiling, up to the slide
-            // angle itself. It is a raise and never a reduction, so the ceiling still holds everywhere a slide does
-            // not justify more.
+            // The one whitelisted allowance: the side answering a slide reaches past the ceiling up to the slide
+            // angle itself — a raise, never a reduction.
             if (countersteering && Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * CountersteerBlendStartFraction)
             {
                 float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle), VehicleData.SteeringLock);

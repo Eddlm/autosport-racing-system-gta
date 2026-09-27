@@ -82,15 +82,12 @@ namespace ARS
         // Display name per model, keyed same as ModelGripCache. Used by the PI ballpark descriptions.
         public static Dictionary<string, string> ModelNameCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Pace score per model (raw units, reaches ~124+), keyed same as the stat caches.
+        // Pace score per model — raw units, not a 0–1 fraction — keyed same as the stat caches.
         public static Dictionary<string, float> ModelPaceIndexCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Pace score from raw native values: effectiveAccel × 30 + topSpeed (mph) + grip × 4.
-        // Electric drive force is not constant: the game multiplies it by 5 at standstill and ramps it
-        // linearly down to 0.9 at top speed. The reported raw G is the pre-ramp value (a Virtue at
-        // 0.26 G × 5 = 1.3 G matches its ~2 s launch), so the honest single-number accel for a pace
-        // score is the ramp's midpoint — the average of a linear ramp. Top speed is NOT discounted:
-        // 0.9 is the ramp's endpoint, not a reduction of the car's top speed.
+        // Electric drive force follows the game's own ramp: ×5 at standstill down to ×0.9 at top speed, applied to
+        // a raw G that is the pre-ramp value. So an electric is scored at the ramp's peak, and its top speed is not
+        // discounted — 0.9 is the ramp's endpoint, not a reduction of the car's top speed.
         const float ElectricDrivePeak = 5f;
 
         public static float ComputePaceIndex(float topSpeedMph, float grip, float accelRaw, bool isElectric)
@@ -2739,12 +2736,9 @@ namespace ARS
             return w;
         }
 
-        // Per-wheel drive power (offset 0x1C4). Raw Gs — the force the drivetrain actually
-        // applies to each wheel this frame. Sum across driven wheels for total wheel-pushed accel.
-        // Source: ikt32/GTAVManualTransmission VehicleExtensions — pattern resolves
-        // Per-wheel drive power. Offset discovered at runtime via pattern scan
-        // (FiveM's VehicleExtraNatives: COMISS xmm0,[rcx+<steerOffset>] → steer+8 = power).
-        // Cached after first discovery. Falls back to 0x1D8 (b2060 default) if pattern not found.
+        // Per-wheel drive power in raw Gs; sum the driven wheels for total wheel-pushed accel. The offset is
+        // learned at runtime by the scan below and cached, falling back to the b2060 value if the pattern misses.
+        // Source: ikt32/GTAVManualTransmission VehicleExtensions.
         static public unsafe List<float> WheelPowers(Vehicle handle)
         {
             if (WheelPowerOffset == 0x0)
