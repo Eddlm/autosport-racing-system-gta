@@ -21,7 +21,8 @@ grep the symbol if one misses.
 | 5. Dead methods + the route probe, 406 lines (§5.2) | `c2ad2de` | landed |
 | 7a. `Rival.Update` split into four methods (§2) | `141d712` | landed, wants a drive |
 | 6. Comment prose (§4.1) | `e705bf9` + this commit | **partial** — TCS, `SmartTuner`'s brand block and the downforce block done |
-| 6b. Whitespace residue (§5.3) | — | **not started** |
+| 6b. Whitespace residue (§5.3) | — | **not started** — needs a script go-ahead or a line-range tool; see below |
+| 4b. Repeated `Game.GameTime` reads (§3) | `e1f948e`, `c2ee51a` | **partial** — `ProcessAI`, `ProcessTimedAI` and `UpdateStuckCheck` done (14 reads → 3 per car per tick). **`UpdateStuckRecovery` is NOT a site**: its two reads are on mutually exclusive paths and the common case reads the clock zero times, so hoisting there *adds* a read. |
 | 7b. `ComputeTargetSpeed`'s crest/dip law (§2) | `6e2847a` | landed, wants a drive |
 | 7c. The remaining splits (§2) | `9b209b9` + this commit | **partial** — lap counter done; `HandleCheats`, `OnTick`, `LoadTrack`, `SaveRoute`, `InitializeMenu` left |
 
