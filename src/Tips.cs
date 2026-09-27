@@ -132,7 +132,7 @@ namespace ARS
             if (ARS.HelpMessages.Count > 0) return;
             for (int i = 0; i < passedApexes; i++)
             {
-                if (ARS.GetRandomInt(1, Denominator) != 1) continue;
+                if (ARS.GetRandomInt(1, Denominator + 1) != 1) continue;
                 string tip = NextTip();
                 if (tip == null) return;
                 ARS.HelpMessages.Add(tip);

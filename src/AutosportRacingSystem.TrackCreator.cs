@@ -352,9 +352,8 @@ namespace ARS
         public bool PlayerOrCameraNearPos(Vector3 pos, float dist)
         {
             if (_freeCam.IsActive) return Game.Player.Character.Position.DistanceTo(pos) < dist;
-            else return World.RenderingCamera.Position.DistanceTo(pos) < dist;
-
-
+            if (World.RenderingCamera == null) return false;
+            return World.RenderingCamera.Position.DistanceTo(pos) < dist;
         }
 
         public void DrawRouteNodes(List<Vector3> nodes, Dictionary<int, float> widedict, int fidelity)

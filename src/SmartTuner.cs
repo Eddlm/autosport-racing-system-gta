@@ -333,9 +333,9 @@ namespace ARS
             if (groups.Count == 0) return Style.Clean;
 
             List<Style> styles = new List<Style>(groups.Keys);
-            Style picked = styles[random(0, styles.Count - 1)];
+            Style picked = styles[random(0, styles.Count)];
             List<int> options = groups[picked];
-            liveryIndex = options[random(0, options.Count - 1)];
+            liveryIndex = options[random(0, options.Count)];
             return picked;
         }
 
@@ -357,8 +357,8 @@ namespace ARS
             {
                 int count = veh.GetModCount(slot);
                 if (count <= 0) continue;
-                if (random(0, 99) >= 75) continue;
-                veh.SetMod(slot, random(0, count - 1), false);
+                if (random(0, 100) >= 75) continue;
+                veh.SetMod(slot, random(0, count), false);
             }
         }
 
@@ -476,7 +476,7 @@ namespace ARS
                 if (Array.IndexOf(families, entry.Value) >= 0) options.Add(entry.Key);
             }
             if (options.Count == 0) return VehicleColor.MetallicBlack;
-            return options[random(0, options.Count - 1)];
+            return options[random(0, options.Count)];
         }
 
         // Uses a colour the livery name states when the given set contains it, and picks freely otherwise. This is
@@ -537,7 +537,7 @@ namespace ARS
             {
                 if (entry.Key != colour) continue;
                 VehicleColor[] matte;
-                if (MatteByFamily.TryGetValue(entry.Value, out matte)) return matte[random(0, matte.Length - 1)];
+                if (MatteByFamily.TryGetValue(entry.Value, out matte)) return matte[random(0, matte.Length)];
                 break;
             }
             return VehicleColor.MatteGray;

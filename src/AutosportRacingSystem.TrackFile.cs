@@ -319,7 +319,8 @@ namespace ARS
                 p.AppendChild(info);
 
                 info = document.CreateElement("Wide");
-                if (NodeHalfWidths.ContainsKey(i)) int.TryParse(NodeHalfWidths[i].ToString(), out W);
+                // A node missing from the table keeps the previous width rather than defaulting to zero.
+                W = (int)(NodeHalfWidths.ContainsKey(i) ? NodeHalfWidths[i] : W);
                 info.InnerText = W.ToString();
                 p.AppendChild(info);
 

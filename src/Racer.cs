@@ -1370,7 +1370,7 @@ namespace ARS
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
-            if (cornerSpd <= 5) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
+            if (cornerSpd <= 5 && Brain.Corner != null) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
             // Hold the apex braking plan until the braking target (entrance) is reached AND the car has
             // actually braked down to the corner speed; route speed takes over inside the corner.
