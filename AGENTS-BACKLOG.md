@@ -285,7 +285,7 @@ The reach multiplier went with the curve: the arc always runs to the aim point, 
 
 ## Rear-end prevention — open ideas
 
-**Rear-end prevention** (`ComputeTargetSpeed`): current live behavior (closest rival ahead within 6 m on roughly the same line, lateral offset within `r.CombinedSize.X`, speed blend saturating at 1 m, floored at `rivalSpeed`) is summarized in AGENTS.md; the corner-specific **Yield** maneuver is separate — it arms only when trailing a *faster* rival near a corner entrance **and overrides the speed blend locally**. No further open-idea notes existed in the original file beyond the summary itself (honest note, restructure).
+**Rear-end prevention** (`ComputeTargetSpeed`): current live behavior (closest rival ahead within 6 m on roughly the same line, lateral offset within `r.CombinedSize.X`, speed blend saturating at 1 m, floored at `rivalSpeed`) is summarized in AGENTS.md; the corner-specific **Yield** maneuver is separate — it arms only when trailing a *faster* rival near a corner entrance **and overrides the speed blend locally**. **The acceleration cap is deliberately held at 1**: `ComputeTargetSpeed` carried a "temporarily neutralized" note saying it stays that way until rear-end avoidance has a dedicated speed-control implementation, and that note is the open idea — it now lives here rather than as a dangling comment in the method, since it describes intent and no longer-adjacent code.
 
 ## Details moved out of AGENTS.md (`7575318` trim)
 
