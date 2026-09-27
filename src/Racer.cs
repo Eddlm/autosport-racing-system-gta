@@ -1384,35 +1384,7 @@ namespace ARS
             // Crest/dip vertical curvature grip effect (route speed only).
             int count = ARS.TrackPoints.Count;
             int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteLookAheadSeconds), 0, count - 1);
-            int crestStartNode, crestEndNode;
-            if (ARS.IsPointToPoint)
-            {
-                crestStartNode = (int)ARS.Clamp(followNode - 3, 0, count - 1);
-                crestEndNode = (int)ARS.Clamp(followNode + 3, 0, count - 1);
-            }
-            else
-            {
-                crestStartNode = ((followNode - 3) % count + count) % count;
-                crestEndNode = ((followNode + 3) % count + count) % count;
-            }
-            if (crestStartNode != crestEndNode && crestStartNode != followNode && crestEndNode != followNode)
-            {
-                Vector3 crestStart = ARS.TrackPoints[crestStartNode].Position;
-                Vector3 crestMid = ARS.TrackPoints[followNode].Position;
-                Vector3 crestEnd = ARS.TrackPoints[crestEndNode].Position;
-                float deltaGs = ARS.HillGripDeltaGs(crestStart, crestMid, crestEnd, Car.Velocity.Length());
-                // Crest aggression scales with route curvature: tight = cautious, straight = aggressive.
-                float routeRadius = Brain.CurrentPerception.CurveRadiusToFollowPoint;
-                float routeAggression = ARS.MapGamma(routeRadius, 100f, 300f, 0f, 1f, 0.5f, true);
-                float routeCrestFloor = ARS.MapGamma(routeRadius, 100f, 500f, 0.4f, 0.8f, 0.5f, true);
-                float effectiveDeltaGs = deltaGs;
-                if (effectiveDeltaGs < 0f) effectiveDeltaGs *= (1f - routeAggression);
-                float verticalGripFactor = Math.Max(1f + effectiveDeltaGs, routeCrestFloor);
-                if (verticalGripFactor < 1f) verticalGripFactor = 1f - Math.Min((1f - verticalGripFactor) * ARS.CrestEffect, 0.9f);
-                followTrackSpd *= (float)Math.Sqrt(verticalGripFactor);
-            }
-
-
+            followTrackSpd *= CrestGripSpeedFactor(followNode, Brain.CurrentPerception.CurveRadiusToFollowPoint, Car.Velocity.Length());
 
             // Pure apex speed for the corner-approach gate.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
@@ -1421,35 +1393,9 @@ namespace ARS
             // Corner crest/dip: same check as route, centered on the apex node.
             if (Brain.Corner != null)
             {
-                int apexNode = Brain.Corner.Point.Node;
-                int cornerCrestStart, cornerCrestEnd;
-                if (ARS.IsPointToPoint)
-                {
-                    cornerCrestStart = (int)ARS.Clamp(apexNode - 3, 0, count - 1);
-                    cornerCrestEnd = (int)ARS.Clamp(apexNode + 3, 0, count - 1);
-                }
-                else
-                {
-                    cornerCrestStart = ((apexNode - 3) % count + count) % count;
-                    cornerCrestEnd = ((apexNode + 3) % count + count) % count;
-                }
-                if (cornerCrestStart != cornerCrestEnd && cornerCrestStart != apexNode && cornerCrestEnd != apexNode)
-                {
-                    Vector3 ccStart = ARS.TrackPoints[cornerCrestStart].Position;
-                    Vector3 ccMid = ARS.TrackPoints[apexNode].Position;
-                    Vector3 ccEnd = ARS.TrackPoints[cornerCrestEnd].Position;
-                    float cornerDeltaGs = ARS.HillGripDeltaGs(ccStart, ccMid, ccEnd, _cornerSpd);
-                    float cornerEffectiveDelta = cornerDeltaGs;
-                    float cornerRadius = NextApexRadius;
-                    float cornerAggression = ARS.MapGamma(cornerRadius, 100f, 300f, 0f, 1f, 0.5f, true);
-                    float cornerCrestFloor = ARS.MapGamma(cornerRadius, 100f, 500f, 0.4f, 0.8f, 0.5f, true);
-                    if (cornerEffectiveDelta < 0f) cornerEffectiveDelta *= (1f - cornerAggression);
-                    float cornerVerticalGrip = Math.Max(1f + cornerEffectiveDelta, cornerCrestFloor);
-                    if (cornerVerticalGrip < 1f) cornerVerticalGrip = 1f - Math.Min((1f - cornerVerticalGrip) * ARS.CrestEffect, 0.9f);
-                    float cornerVerticalSpeedFactor = (float)Math.Sqrt(cornerVerticalGrip);
-                    cornerSpd *= cornerVerticalSpeedFactor;
-                    cornerApexSpeedWithVerticalGrip *= cornerVerticalSpeedFactor;
-                }
+                float cornerCrestFactor = CrestGripSpeedFactor(Brain.Corner.Point.Node, NextApexRadius, _cornerSpd);
+                cornerSpd *= cornerCrestFactor;
+                cornerApexSpeedWithVerticalGrip *= cornerCrestFactor;
             }
 
             // Steer-limited speed: max speed for current steer angle before sliding. Blended into route speed so an outside car (less steering) may carry more speed.
@@ -1510,6 +1456,34 @@ namespace ARS
 
             // Temporarily neutralized: keep the acceleration cap at 1 until rear-end
             // avoidance has a dedicated speed-control implementation.
+        }
+
+        // Vertical-curvature grip factor over the three-node window centred on a node, as a speed multiplier.
+        // 1 means the window is degenerate or a straight; both the aggression and the floor scale with the local
+        // radius, so a tight corner is cautious and a straight is aggressive. One law, read twice above.
+        float CrestGripSpeedFactor(int centreNode, float radius, float entrySpeed)
+        {
+            int count = ARS.TrackPoints.Count;
+            int startNode, endNode;
+            if (ARS.IsPointToPoint)
+            {
+                startNode = (int)ARS.Clamp(centreNode - 3, 0, count - 1);
+                endNode = (int)ARS.Clamp(centreNode + 3, 0, count - 1);
+            }
+            else
+            {
+                startNode = ((centreNode - 3) % count + count) % count;
+                endNode = ((centreNode + 3) % count + count) % count;
+            }
+            if (startNode == endNode || startNode == centreNode || endNode == centreNode) return 1f;
+
+            float deltaGs = ARS.HillGripDeltaGs(ARS.TrackPoints[startNode].Position, ARS.TrackPoints[centreNode].Position, ARS.TrackPoints[endNode].Position, entrySpeed);
+            float aggression = ARS.MapGamma(radius, 100f, 300f, 0f, 1f, 0.5f, true);
+            float crestFloor = ARS.MapGamma(radius, 100f, 500f, 0.4f, 0.8f, 0.5f, true);
+            if (deltaGs < 0f) deltaGs *= (1f - aggression);
+            float verticalGripFactor = Math.Max(1f + deltaGs, crestFloor);
+            if (verticalGripFactor < 1f) verticalGripFactor = 1f - Math.Min((1f - verticalGripFactor) * ARS.CrestEffect, 0.9f);
+            return (float)Math.Sqrt(verticalGripFactor);
         }
 
         // Rubber-band factor: <1 for leaders (penalty), >1 for laggards (boost), 1 at center.
