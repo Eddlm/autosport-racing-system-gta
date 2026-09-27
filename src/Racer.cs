@@ -458,7 +458,7 @@ namespace ARS
 
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float absDev = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
-            // The centre defines the edge — the box may overhang, because the lane hug rides the track edge.
+            // Centre-based by design: the recovery reads the raw half width, unlike the lane targets, which inset.
             float safeEdge = roadWide;
             float overshoot = absDev - safeEdge;
             float recoveryDeg = 0f;
@@ -622,7 +622,10 @@ namespace ARS
             if (Math.Abs(signedAngle) <= 5f) return 0f;
 
             float cornerDir = Math.Sign(signedAngle);
-            return -cornerDir * roadWide;
+            // Inset by half the car's width, as the outside line and the avoidance bound both are: the aim point
+            // is the inside edge less the car, so the body stays on the track instead of overhanging it.
+            float insideBound = Math.Max(roadWide - VehicleData.BoundingBox * 0.5f, 0f);
+            return -cornerDir * insideBound;
         }
 
         // Hold the outside line on entry, then release it for the high-speed inside line.
@@ -766,8 +769,8 @@ namespace ARS
         float ApplyRivalWalls(float targetLane, float roadWide)
         {
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-            // The track edge itself, no car-width inset: the lane hug targets the true edge, so the car's centre
-            // reaches it and the box overhangs. The rival walls below still carry both cars' widths.
+            // The outer bound here is the raw track edge with no car-width inset; the per-rival walls below carry
+            // both cars' widths instead.
             float trackBound = roadWide;
 
             if (!_avoidWallsInitialized)
