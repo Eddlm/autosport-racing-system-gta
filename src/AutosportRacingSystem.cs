@@ -49,7 +49,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        FindCustomProps, ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes
+        ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes
     }
 
     public enum DebugDisplay

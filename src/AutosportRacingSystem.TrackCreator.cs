@@ -37,8 +37,7 @@ namespace ARS
             if (!_freeCam.IsActive) _freeCam.Toggle();
         }
 
-        // SaveRoute always builds a fresh document, so this is the new-track path only. Rewriting a loaded
-        // track's file is UpdateRoute, which stays unwired.
+        // SaveRoute always builds a fresh document, so this is the new-track path only.
         void SaveTrackFromCreator()
         {
             if (!_routeEditorActive)
@@ -367,104 +366,13 @@ namespace ARS
             return World.RenderingCamera.Position.DistanceTo(pos) < dist;
         }
 
-        public void DrawRouteNodes(List<Vector3> nodes, Dictionary<int, float> widedict, int fidelity)
-        {
-            if (nodes.Count == 0) return;
-            int closestnode = ClosestNodeToPlace(Game.Player.Character.Position, nodes);
-            Vector3 oldpos = Vector3.Zero;
-
-            int start = closestnode - 50;
-            int end = closestnode + 50;
-            int countmax = 1;
-            int count = 0;
-            int dd = 0;
-            Vector3 pos = Vector3.Zero;
-            Vector3 lastline = Vector3.Zero;
-            if (start < 0) start = 0;
-            if (end > nodes.Count - 1) end = nodes.Count - 1;
-            dd = start;
-
-
-            if (_routeEditorActive) World.DrawMarker(MarkerType.CheckeredFlagRect, nodes[0] + new Vector3(0, 0, 3f), (nodes[1] - nodes[0]).Normalized, new Vector3(0, 0, 0), new Vector3(5f, 5f, 5f), Color.White);
-
-            for (int ph = start; ph < end; ph += 1)
-            {
-
-                    pos = nodes[ph];
-                    float w = 0f;
-                    float oldw = 0f;
-                    if (widedict != null)
-                    {
-                        if (widedict.ContainsKey(dd)) w = widedict[dd];
-                        if (widedict.ContainsKey(dd - 1)) oldw = widedict[dd - 1]; else oldw = w;
-                    }
-
-                    if (oldpos == Vector3.Zero) oldpos = nodes[nodes.Count - 1];
-
-
-                    if (oldpos != Vector3.Zero && PlayerOrCameraNearPos(nodes[ph], 120))
-                    {
-
-                            Vector3 rWidepos = GetPerpendicular(pos, oldpos, w, true);
-                            Vector3 lWidepos = GetPerpendicular(pos, oldpos, w, false);
-
-                            Vector3 oldrWidepos = GetPerpendicular(pos, oldpos, oldw, true) - (pos - oldpos);
-                            Vector3 oldlWidepos = GetPerpendicular(pos, oldpos, oldw, false) - (pos - oldpos);
-
-
-
-
-                            Color col = Color.Green;
-
-
-
                             
 
-                            if (w != 0f)
-                            {
-
-                                if (_routeEditorActive)
-                                {
-
-                                    if (ph == end - 1)
-                                    {
-
                                         
                                         
                                         
-
-                                    }
-                                    else
-                                        if (pos != nodes[0] && ph % 5 == 0)
-                                        {
-
-
-                                            World.DrawMarker(MarkerType.DebugSphere, lWidepos, new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Blue);
-                                            World.DrawMarker(MarkerType.DebugSphere, rWidepos, new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Blue);
                                                                                                                                                                                       
-
-
-
-                                        }
-                                }
-
-                                col.ToArgb();
-
-                                Color chevcolor = Color.FromArgb(50, col);
-
                                 
-
-
-                            }
-                        }
-
-                oldpos = pos;
-
-                dd++;
-            }
-        }
-
-
         public void DrawSection(List<Vector3> nodes, Dictionary<int, float> widedict)
         {
             if (nodes.Count == 0) return;

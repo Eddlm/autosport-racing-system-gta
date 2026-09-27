@@ -65,20 +65,5 @@ namespace ARS
             return tags;
         }
 
-        public static Vector3 ReadTrackStartPosition(string path)
-        {
-            XmlNode point = Load(path).SelectNodes("//Route/Point")[0];
-            Vector3 position = Vector3.Zero;
-            foreach (XmlNode node in point.ChildNodes)
-            {
-                float value = 0f;
-                float.TryParse(node.InnerText.Replace('.', ','), out value);
-                if (node.Name == "X") position.X = value;
-                if (node.Name == "Y") position.Y = value;
-                if (node.Name == "Z") position.Z = value;
-            }
-            return position;
-        }
-
     }
 }

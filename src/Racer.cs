@@ -31,11 +31,9 @@ namespace ARS
         public VehicleControl Control = new VehicleControl();
         public RacerBrain Brain = new RacerBrain();
 
-        // Dormant legacy state retained for the disabled live-corner and route-probe systems.
+        // Dormant legacy state for the disabled live-corner scan.
         public CornerPoint LiveCorner = new CornerPoint();
         public int CornerScanNode = -1;
-        public int RouteTargetNode = -1;
-        public float RouteTargetRadius = 999f;
 
         // Four nearest precomputed apexes ahead, nearest first.
         public int NextApexNode = -1;
@@ -1035,8 +1033,6 @@ namespace ARS
 
             Brain.Corner = null;
             CornerScanNode = -1;
-            RouteTargetNode = -1;
-            RouteTargetRadius = 999f;
             NextApexNode = -1;
             NextApexRadius = 999f;
             NextApexSpeed = 999f;
@@ -1049,7 +1045,6 @@ namespace ARS
             NextApexNode4 = -1;
             NextApexRadius4 = 999f;
             NextApexSpeed4 = 999f;
-            ResetRouteProbe();
             BaseBehavior = RacerBaseBehavior.Race;
             Lap = 1;
             LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
@@ -1688,13 +1683,6 @@ namespace ARS
                 || CurrentTrackPoint.Node <= corner.EndNode;
         }
 
-        int BehindNodeDistance(int targetNode)
-        {
-            int behind = CurrentTrackPoint.Node - targetNode;
-            if (!ARS.IsPointToPoint && behind < 0) behind += ARS.TrackPoints.Count;
-            return behind;
-        }
-
         void UpdateNitrous()
         {
             if (ControlledByPlayer || !ARS.AiNitroAllowed()) return;
@@ -2074,10 +2062,6 @@ namespace ARS
             UpdateSlideAndBoundingBox();
             UpdatePerceivedGrip();
             UpdateTRLateralAtSpeed();
-            // Legacy live-corner scan and route probe remain disabled.
-            // UpdateApexLeapfrog supplies corner state.
-            // UpdateCornerValidity();
-            // UpdateRouteTarget();
 
             ProcessAI();
 
@@ -2091,16 +2075,6 @@ namespace ARS
             VehicleData.BoundingBox = ARS.SlidingBoundingBoxWidth(Car);
             VehicleData.SlideAngle = (float)Math.Round(Vector3.SignedAngle(Car.Velocity.Normalized, Car.ForwardVector, Car.UpVector), 3);
         }
-        void UpdateCornerValidity()
-        {
-            ARS.FindNextCorner(this);
-        }
-
-
-
-
-
-
 
         void UpdatePassengerSeat()
         {
@@ -2711,104 +2685,6 @@ namespace ARS
                 sum += ARS.TrackPoints[sample].Elevation;
             }
             return sum / samples * ElevationToSlopeSine;
-        }
-
-        // Dormant legacy route-probe state; the static apex table now supplies braking targets.
-        const float RouteProbeSeconds = 5f;
-        int _probeLastNode = -1;
-        float _probeLastRadius = 999f;
-        bool _probeShrinking = false;
-        bool _probeInitialized = false;
-        int _probeMinNode = -1;
-        float _probeMinRadius = 999f;
-
-        void ResetRouteProbe()
-        {
-            _probeLastNode = -1;
-            _probeLastRadius = 999f;
-            _probeShrinking = false;
-            _probeInitialized = false;
-            _probeMinNode = -1;
-            _probeMinRadius = 999f;
-        }
-
-        void UpdateRouteTarget()
-        {
-            // Hold the locked target until its node is crossed.
-            if (RouteTargetNode >= 0 && CurrentTrackPoint.Node <= RouteTargetNode)
-                return;
-
-            // Re-arm when the target is crossed.
-            if (RouteTargetNode >= 0)
-            {
-                RouteTargetNode = -1;
-                RouteTargetRadius = 999f;
-                ResetRouteProbe();
-            }
-
-            float speed = Car.Velocity.Length();
-            int count = ARS.TrackPoints.Count;
-            if (speed < 1f || count < 10) return;
-
-            int probeNode = CurrentTrackPoint.Node + (int)(speed * RouteProbeSeconds);
-            if (ARS.IsPointToPoint)
-                probeNode = (int)ARS.Clamp(probeNode, 0, count - 1);
-            else
-                probeNode = ((probeNode % count) + count) % count;
-
-            float r = ARS.TrackPoints[probeNode].PreciseCurveRadius;
-            if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
-            r = ARS.Clamp(r, 5f, 999f);
-
-            // First read after arming: baseline.
-            if (!_probeInitialized)
-            {
-                _probeInitialized = true;
-                _probeLastNode = probeNode;
-                _probeLastRadius = r;
-                _probeMinNode = probeNode;
-                _probeMinRadius = r;
-                return;
-            }
-
-            // Only judge when the probe advanced (speed drops can pull it backwards).
-            bool advanced = probeNode > _probeLastNode;
-            if (advanced)
-            {
-                if (r < _probeLastRadius)
-                {
-                    _probeShrinking = true;
-                    if (r < _probeMinRadius) { _probeMinRadius = r; _probeMinNode = probeNode; }
-                }
-                else if (_probeShrinking)
-                {
-                    // If next node is larger, the descent ended. Lock the minimum as the apex.
-                    int nextNode = probeNode + 1;
-                    if (ARS.IsPointToPoint)
-                        nextNode = (int)ARS.Clamp(nextNode, 0, count - 1);
-                    else
-                        nextNode = ((nextNode % count) + count) % count;
-
-                    float nextR = ARS.TrackPoints[nextNode].PreciseCurveRadius;
-                    if (float.IsNaN(nextR) || float.IsInfinity(nextR)) nextR = 999f;
-                    nextR = ARS.Clamp(nextR, 5f, 999f);
-
-                    if (nextR > r)
-                    {
-                        RouteTargetNode = _probeMinNode;
-                        RouteTargetRadius = _probeMinRadius;
-                        return;
-                    }
-                }
-            }
-
-            _probeLastNode = probeNode;
-            _probeLastRadius = r;
-            if (!_probeShrinking)
-            {
-                _probeMinNode = probeNode;
-                _probeMinRadius = r;
-            }
         }
 
         // Centripetal speed limit for a radius.
