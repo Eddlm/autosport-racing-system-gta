@@ -89,16 +89,11 @@ namespace ARS
             { Style.Beater, new[] { VehicleMod.Exhaust, VehicleMod.PlateHolder, VehicleMod.Ornaments, VehicleMod.Trunk, VehicleMod.Hydraulics, VehicleMod.VanityPlates } },
         };
 
-        // Brand liveries imply their own colours: the artwork is the brand's, so the paint should be too. The
-        // value is (preferred body families, the artwork's colours). Both are LISTS on purpose - most brand
-        // liveries are two- or three-tone (Atomic yellow on blue, Redwood red/white/yellow), so a single accent
-        // string would drop half the identity. Accent and rims are picked at random from the artwork colours,
-        // keeping variety inside the brand's own palette.
-        // Evidence: a research pass over the GTA Wiki, Rockstar's respray-colour pages and the fan livery DB
-        // (2026-10). Real-world marque folklore is ignored on purpose - the game's own artwork wins (Ocelot's
-        // works livery is red/white/blue, not Jaguar green). Two canonical pairings anchor the set: the Sprunk
-        // Buffalo ships white with green wheels, the Redwood Gauntlet white with red wheels. Body choices marked
-        // medium here are inferred from artwork rather than stated, so treat them as taste, not fact.
+        // Brand liveries imply their own colours. The value is (preferred body families, the artwork's colours),
+        // both LISTS because most are two- or three-tone; accent and rims come from the artwork so variety stays
+        // inside the brand's own palette. Evidence: the GTA Wiki, the respray-colour pages and the fan livery DB,
+        // with the game's own artwork beating real-world folklore. Anchors: the Sprunk Buffalo is white with green
+        // wheels, the Redwood Gauntlet white with red. Medium-confidence bodies are taste, not fact.
         static readonly Dictionary<string, KeyValuePair<string[], string[]>> Brands = new Dictionary<string, KeyValuePair<string[], string[]>>
         {
             { "redwood", new KeyValuePair<string[], string[]>(new[] { "white" }, new[] { "red", "yellow" }) },

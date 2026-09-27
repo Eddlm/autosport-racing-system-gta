@@ -3323,15 +3323,10 @@ namespace ARS
         
 
 
-        // Engine reference: wheel.cpp UpdateDownforce() lines 7625-7670 + the per-tick application at 8194-8199.
-        // Two velocities drive downforce: forward speed scales downForceScale (how strong the downforce CAN be),
-        // and lateral speed scales the actual vertical acceleration. We approximate the lateral input with
-        // centripetal acceleration (v²/r) instead of world-frame velocity·right because ARS drives via
-        // pure-pursuit and rarely slides — world-frame lateral velocity is near zero under good driving,
-        // which would zero out the bonus. Centripetal acceleration is what determines tire grip load
-        // in steady-state cornering; that's the load the downforce actually counteracts.
-        // forwardMs: |velocity·forward| (m/s). lateralMs: centripetal accel v²/r (m/s²).
-        // Returns total extra grip in Gs that should be added to mechanical grip under this load.
+        // Downforce grip: forward speed scales how strong it can be, centripetal v²/r how much of it lands. The
+        // lateral input is v²/r rather than world-frame velocity·right because ARS drives by pure pursuit and
+        // rarely slides, which would zero the bonus. Engine reference: wheel.cpp UpdateDownforce() 7625-7670 with
+        // the per-tick application at 8194-8199. forwardMs is |velocity·forward| (m/s); returns extra grip in Gs.
         public static float GetDownforceGsAtSpeed(Racer r, float forwardMs, float lateralMs)
         {
             if (lateralMs <= 0f || float.IsNaN(lateralMs)) return 0f;

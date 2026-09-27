@@ -20,17 +20,19 @@ grep the symbol if one misses.
 | 4b. Creator preview loop + `ClosestNodeToPlace` (§3.7–3.8) | `01d5344` | landed, creator wants a check |
 | 5. Dead methods + the route probe, 406 lines (§5.2) | `c2ad2de` | landed |
 | 7a. `Rival.Update` split into four methods (§2) | `141d712` | landed, wants a drive |
-| 6. Comment prose (§4.1) and whitespace residue (§5.3) | — | **partial** — see below |
-| 7b. The remaining method splits (§2) | — | **not started** |
+| 6. Comment prose (§4.1) | `e705bf9` + this commit | **partial** — TCS, `SmartTuner`'s brand block and the downforce block done |
+| 6b. Whitespace residue (§5.3) | — | **not started** |
+| 7b. `ComputeTargetSpeed`'s crest/dip law (§2) | `6e2847a` | landed, wants a drive |
+| 7c. The remaining splits (§2) | — | **not started** |
 
 **Still open, in the order I would take it:**
 
-1. **Comment prose (§4.1).** Only the TCS block (`Racer.cs`) has been compressed, 12 lines → 4. The rest is
-   untouched: the downforce derivation (`AutosportRacingSystem.cs`), `SmartTuner.cs`'s brand-palette block, the
-   seven steer-ceiling blocks in `Racer.cs`, `TrackCreator`'s ground-probe note, and the `SettingsRepair` /
-   `MenyooAppearance` / `VehicleSelector` / `DataStructures` / `MenuSettings` / `VehicleCatalog` one-offs. The
-   depth goes to `AGENTS-STEERING.md` / `AGENTS-TECHNOTES.md` / `AGENTS-SMARTTUNING.md` with a one-line pointer
-   left behind.
+1. **The rest of the comment prose (§4.1).** Compressed so far: the TCS block (`Racer.cs`, 12 lines → 4),
+   `SmartTuner.cs`'s brand-palette evidence (10 → 5) and the downforce derivation
+   (`AutosportRacingSystem.cs`, 9 → 4). Untouched: the seven steer-ceiling blocks in `Racer.cs`,
+   `TrackCreator`'s ground-probe note, and the `SettingsRepair` / `MenyooAppearance` / `VehicleSelector` /
+   `DataStructures` / `MenuSettings` / `VehicleCatalog` one-offs. The depth goes to `AGENTS-STEERING.md` /
+   `AGENTS-TECHNOTES.md` / `AGENTS-SMARTTUNING.md` with a one-line pointer left behind.
 2. **Whitespace residue (§5.3).** 319 lines in 67 runs, untouched — including six whitespace-only lines left
    where `DrawRouteNodes` was (in `TrackCreator.cs`, just above `DrawSection`). The trap: many of those lines
    carry spaces, so an exact-match edit needs their real space counts, which the scan reports.
