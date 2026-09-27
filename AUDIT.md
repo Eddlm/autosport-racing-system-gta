@@ -24,7 +24,7 @@ grep the symbol if one misses.
 | 6b. Whitespace residue (§5.3) | — | **not started** — needs a script go-ahead or a line-range tool; see below |
 | 4b. Repeated `Game.GameTime` reads (§3) | `e1f948e`, `c2ee51a` | **partial** — `ProcessAI`, `ProcessTimedAI` and `UpdateStuckCheck` done (14 reads → 3 per car per tick). **`UpdateStuckRecovery` is NOT a site**: its two reads are on mutually exclusive paths and the common case reads the clock zero times, so hoisting there *adds* a read. |
 | 7b. `ComputeTargetSpeed`'s crest/dip law (§2) | `6e2847a` | landed, wants a drive |
-| 7c. The remaining splits (§2) | `9b209b9` + this commit | **partial** — lap counter done; `HandleCheats`, `OnTick`, `LoadTrack`, `SaveRoute`, `InitializeMenu` left |
+| 7c. The remaining splits (§2) | `4146c43` | **partial** — lap counter and `HandleCheats` done (104 → 9 lines: three named handlers behind a dispatcher); `OnTick`, `LoadTrack`, `SaveRoute`, `InitializeMenu` left |
 
 **Still open, in the order I would take it:**
 
