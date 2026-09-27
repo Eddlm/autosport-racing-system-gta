@@ -2336,7 +2336,27 @@ namespace ARS
             float currentPct = ARS.GetPercent(currentNode, nodeCount);
             float previousPct = _previousNode >= 0 ? ARS.GetPercent(_previousNode, nodeCount) : 0f;
             bool wrappedStartLine = !ARS.IsPointToPoint && _previousNode >= 0 && previousPct > 90f && currentPct < 10f;
+            UpdateLapRegistration(currentNode, nodeCount, currentPct, wrappedStartLine);
 
+            UpdateRaceProgress();
+
+            _previousNode = currentNode;
+
+            // Route radius from three sample points.
+            Brain.CurrentPerception.CurveRadiusToFollowPoint = RouteRadiusSampled();
+            UpdateApexLeapfrog();
+            if (_apexUpdateTick + _phaseOffsetMs < Game.GameTime)
+            {
+                _apexUpdateTick = Game.GameTime + 500;
+                RefillApexQueue();
+            }
+            // High-speed lane radius: short 0.5s to 1.0s window.
+            Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius((int)(speed * 0.5f), (int)(speed * 1.0f));
+        }
+
+        // The lap counter: closed by crossing the line, and reopened mid-track so the next crossing can register.
+        void UpdateLapRegistration(int currentNode, int nodeCount, float currentPct, bool wrappedStartLine)
+        {
             if (CanRegisterNewLap)
             {
                 if (wrappedStartLine || (ARS.IsPointToPoint && currentPct > 99f && ARS.EntityRelativeOffset(Car, ARS.TrackPoints.Last().Position).Y < 0f))
@@ -2369,21 +2389,6 @@ namespace ARS
             {
                 CanRegisterNewLap = true;
             }
-
-            UpdateRaceProgress();
-
-            _previousNode = currentNode;
-
-            // Route radius from three sample points.
-            Brain.CurrentPerception.CurveRadiusToFollowPoint = RouteRadiusSampled();
-            UpdateApexLeapfrog();
-            if (_apexUpdateTick + _phaseOffsetMs < Game.GameTime)
-            {
-                _apexUpdateTick = Game.GameTime + 500;
-                RefillApexQueue();
-            }
-            // High-speed lane radius: short 0.5s to 1.0s window.
-            Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius((int)(speed * 0.5f), (int)(speed * 1.0f));
         }
 
         // Circumradius through three route-window sample points.
