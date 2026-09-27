@@ -2236,6 +2236,25 @@ namespace ARS
         
 
 
+        // The roster from the game's own VehicleHash enum: every model SHVDN knows that can race, yielded every
+        // 25 models so a synchronous scan of the whole enum cannot stall the frame.
+        void BuildRosterFromEnum()
+        {
+            UI.Notify("~b~[ARS]:~w~ Generating the car list for all SHVDN known vehicles in the game.");
+
+            List<string> keys = new List<string>();
+            int inspected = 0;
+            foreach (VehicleHash hash in Enum.GetValues(typeof(VehicleHash)).Cast<VehicleHash>())
+            {
+                Model m = new Model(hash);
+                if (m.IsBike || m.IsQuadbike || m.IsBicycle || m.IsCar) keys.Add(RosterKeyFor(hash));
+                if (++inspected % 25 == 0) Script.Yield();
+            }
+            int added = VehicleCatalog.AddToRoster(keys);
+            RefreshRoster();
+            UI.Notify("~b~[ARS]:~w~ " + VehicleCatalog.SelectedRosterFile + " - " + added + " new model(s) added.");
+        }
+
         public void HandleCheats()
         {
 
@@ -2295,22 +2314,7 @@ namespace ARS
                 File.WriteAllLines(ScriptsFolder + @"\pidump.txt", rows.ToArray());
                 UI.Notify("~b~[ARS]:~w~ pidump.txt - " + (rows.Count - 1) + " models, " + electricCount + " electric by GET_IS_VEHICLE_ELECTRIC" + (probeErrors > 0 ? ", " + probeErrors + " probe errors" : ""));
             }
-            if (WasCheatStringJustEntered("arsbuildcarlist"))
-            {
-                UI.Notify("~b~[ARS]:~w~ Generating the car list for all SHVDN known vehicles in the game.");
-
-                List<string> keys = new List<string>();
-                int inspected = 0;
-                foreach (VehicleHash hash in Enum.GetValues(typeof(VehicleHash)).Cast<VehicleHash>())
-                {
-                    Model m = new Model(hash);
-                    if (m.IsBike || m.IsQuadbike || m.IsBicycle || m.IsCar) keys.Add(RosterKeyFor(hash));
-                    if (++inspected % 25 == 0) Script.Yield();
-                }
-                int added = VehicleCatalog.AddToRoster(keys);
-                RefreshRoster();
-                UI.Notify("~b~[ARS]:~w~ " + VehicleCatalog.SelectedRosterFile + " - " + added + " new model(s) added.");
-            }
+            if (WasCheatStringJustEntered("arsbuildcarlist")) BuildRosterFromEnum();
 
             if (WasCheatStringJustEntered("arsbuilddumpcarlist"))
             {
