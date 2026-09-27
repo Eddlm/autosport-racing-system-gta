@@ -188,6 +188,8 @@ namespace ARS
 
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowProjection/ShowInputTrail visuals.
         public static Racer DebugFocusRacer;
+        // The player's racer on the current grid; re-resolved only when it is missing from the list.
+        public static Racer PlayerRacer;
 
         public static Dictionary<Options, bool> DebugToggles = new Dictionary<Options, bool>()
     {
@@ -1617,27 +1619,27 @@ namespace ARS
 
                 
                 if (_routeEditorActive) TrackVisuals.DrawRoute(RouteNodes, NodeHalfWidths, _routeEditorActive);
-                Racer playerRacer = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
+                if (PlayerRacer == null || !Racers.Contains(PlayerRacer)) PlayerRacer = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
                 bool raceLive = RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress;
 
                 if (DebugToggles[Options.ShowCheckpoints] && ARS.Corners.Count > 0)
                 {
-                    if (playerRacer != null)
-                        TrackVisuals.DrawCornerCheckpoints(playerRacer, ARS.Corners, ARS.TrackPoints);
+                    if (PlayerRacer != null)
+                        TrackVisuals.DrawCornerCheckpoints(PlayerRacer, ARS.Corners, ARS.TrackPoints);
                     else if (raceLive)
                         TrackVisuals.DrawCornerCheckpoints(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
                 }
                 if (DebugToggles[Options.ShowEdgeChevrons])
                 {
-                    if (playerRacer != null)
-                        TrackVisuals.DrawEdgeChevrons(playerRacer, ARS.TrackPoints);
+                    if (PlayerRacer != null)
+                        TrackVisuals.DrawEdgeChevrons(PlayerRacer, ARS.TrackPoints);
                     else if (raceLive)
                         TrackVisuals.DrawEdgeChevrons(Game.Player.Character.Position, ARS.TrackPoints);
                 }
                 if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
                 {
-                    if (playerRacer != null)
-                        TrackVisuals.DrawCornerRegions(playerRacer, ARS.Corners, ARS.TrackPoints);
+                    if (PlayerRacer != null)
+                        TrackVisuals.DrawCornerRegions(PlayerRacer, ARS.Corners, ARS.TrackPoints);
                     else if (raceLive)
                         TrackVisuals.DrawCornerRegions(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
                     if (DebugFocusRacer != null)
@@ -1784,7 +1786,7 @@ namespace ARS
                 }
 
 
-                if (Racers.Any())
+                if (Racers.Count > 0)
                 {
                     if (_gameTimeNextInLine <= Game.GameTime)
                     {
@@ -1805,8 +1807,13 @@ namespace ARS
                 }
 
                 
-                Vector3 focusPos = Game.Player.Character.Position;
-                DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
+                // Only the debug visuals read the focus racer, so the scan and its sort run only for them.
+                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis])
+                {
+                    Vector3 focusPos = Game.Player.Character.Position;
+                    DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
+                }
+                else DebugFocusRacer = null;
                 int raceLaps = RaceMenuStore.GetInt("Laps", 6);
                 foreach (Racer racer in Racers)
                 {
@@ -1896,7 +1903,7 @@ namespace ARS
 
         static void DrawRaceHud()
         {
-            Racer player = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
+            Racer player = PlayerRacer;
 
             // Leaderboard draws even when the player is off the grid (spectating), gated by the toggle.
             if (DebugToggles[Options.ShowLeaderboard] && !HideHudMode) DrawLeaderboard();
@@ -2684,17 +2691,19 @@ namespace ARS
 
         
 
-        static public unsafe List<float> WheelGripMultipliers(Vehicle handle)
+        // Mean grip multiplier across the wheels, which is all the one caller ever wanted: the per-wheel
+        // list it used to build cost two allocations a call plus a boxed enumerator in Average().
+        static public unsafe float MeanWheelGripMultiplier(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            if (wheelPtrs.Count == 0) return 0f;
             ulong offset = 0x198;
-            List<float> angle = new List<float>();
+            double total = 0d;
             foreach (var wheel in wheelPtrs)
             {
-                float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
-                angle.Add(pos);
+                total += Math.Round(*((float*)(wheel + offset)), 2);
             }
-            return angle;
+            return (float)(total / wheelPtrs.Count);
         }
 
         // A wheel is grounded when its grip multiplier is positive.
@@ -3291,7 +3300,7 @@ namespace ARS
         }
 
 
-        public static float DrawText(Vector2 pos, string t, Color c, DrawTextFont font, DrawTextAlign align, float scale)
+        public static void DrawText(Vector2 pos, string t, Color c, DrawTextFont font, DrawTextAlign align, float scale)
         {
             Function.Call(Hash._SET_TEXT_ENTRY, "STRING");
             Function.Call(Hash.SET_TEXT_COLOUR, c.R, c.G, c.B, c.A);
@@ -3301,12 +3310,6 @@ namespace ARS
             Function.Call(Hash.SET_TEXT_FONT, (int)font);
             Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, t);
             Function.Call(Hash._DRAW_TEXT, pos.X, pos.Y);
-            Function.Call(Hash._0x54CE8AC98E120CAB, "STRING");
-            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, t);
-
-            float size = Function.Call<float>(Hash._0x85F061DA64ED2F67, 1);
-
-            return size;
         }
 
 

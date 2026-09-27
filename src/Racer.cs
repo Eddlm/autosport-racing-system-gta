@@ -201,6 +201,7 @@ namespace ARS
 
 
         bool _isPassengerized = false;
+        const float RivalSearchRangeMeters = 200f;
 
         // Feature gate for AI nitrous (permission resolved via ARS.AiNitro setting).
         const float NitrousPowerMultiplier = 2.5f;
@@ -1915,9 +1916,7 @@ namespace ARS
                 VehicleData.AccumulateLapPeaks(accel, cSpeed, Car.ForwardVector);
             }
 
-            VehicleData.SpeedVectorGlobal = cSpeed;
             VehicleData.SpeedVectorLocal = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
-            Brain.CurrentPerception.SpeedVector = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, true);
         }
 
 
@@ -1933,10 +1932,10 @@ namespace ARS
         {
             UpdateTickData();
 
-            if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer) SampleInputTrail();
+            if (ARS.DebugToggles[Options.ShowInputs] && !ControlledByPlayer) SampleInputTrail();
 
             // Lane aim line + wall stubs (track analysis).
-            if (ARS.DebugToggles[Options.ShowTrackAnalysis] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
+            if (ARS.DebugToggles[Options.ShowTrackAnalysis] && !ControlledByPlayer && ARS.DebugFocusRacer == this)
             {
                 Vector3 from = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z * 0.5f);
                 if (Math.Abs(_targetLane) > 0.01f)
@@ -1957,7 +1956,7 @@ namespace ARS
             }
 
             // Projection + input trail (inputs).
-            if (ARS.DebugToggles[Options.ShowInputs] && !Driver.IsPlayer && ARS.DebugFocusRacer == this)
+            if (ARS.DebugToggles[Options.ShowInputs] && !ControlledByPlayer && ARS.DebugFocusRacer == this)
             {
                 // Projection: 0.5s / 1s / 1.5s kinematic forecast.
                 Vector3 halfSec = ProjectAhead(0.5f);
@@ -2029,7 +2028,7 @@ namespace ARS
                 }
             }
 
-            if (!Driver.IsPlayer)
+            if (!ControlledByPlayer)
             {
                 ApplyInputs();
             }
@@ -2105,7 +2104,7 @@ namespace ARS
 
         void UpdatePassengerSeat()
         {
-            if (Driver.IsPlayer) return;
+            if (ControlledByPlayer) return;
 
             float myHalfLen = Math.Abs(VehicleData.ModelDimensions.Y) * 0.5f;
 
@@ -2136,11 +2135,11 @@ namespace ARS
         {
 
 
-            if (Driver.IsSittingInVehicle(Car) && !Driver.IsPlayer)
+            if (Driver.IsSittingInVehicle(Car))
             {
                 UpdatePassengerSeat();
 
-                if (Control.HandBrakeTime > Game.GameTime) Car.HandbrakeOn = true; else Car.HandbrakeOn = false;
+                Car.HandbrakeOn = Control.HandBrakeTime > Game.GameTime;
 
                 VehicleMemory.SetThrottle(Car, ShapeLaunchThrottle(ARS.Clamp(Control.Throttle, -1, 1)));
                 VehicleMemory.SetBrakes(Car, ARS.Clamp(Control.Brake, 0f, 1f));
@@ -2250,6 +2249,7 @@ namespace ARS
         {
             float nearestThrottleCap = 1f;
             float nearestSpeedLimit = float.PositiveInfinity;
+            float ourSpeed = Car.Velocity.Length();
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || r.RelativePosition != RelativePos.Ahead) continue;
@@ -2262,7 +2262,6 @@ namespace ARS
                 if (ARS.IsBetween(r.FrontGap, 0f, 2f))
                 {
                     float rivalSpeed = r.RivalRacer.Car.Velocity.Length();
-                    float ourSpeed = Car.Velocity.Length();
                     float safeSpeedLimit = ARS.Remap(r.FrontGap, 0f, 2f, rivalSpeed, Math.Max(ourSpeed, rivalSpeed), true);
                     nearestSpeedLimit = Math.Min(nearestSpeedLimit, safeSpeedLimit);
                 }
@@ -2280,10 +2279,11 @@ namespace ARS
             if (ARS.TrackPoints.Count == 0) return;
 
             TrackPoint closestPoint = ARS.TrackPoints[0];
-            float closestDistance = closestPoint.Position.DistanceTo(Car.Position);
+            Vector3 carPosition = Car.Position;
+            float closestDistance = closestPoint.Position.DistanceTo(carPosition);
             foreach (TrackPoint point in ARS.TrackPoints)
             {
-                float distance = point.Position.DistanceTo(Car.Position);
+                float distance = point.Position.DistanceTo(carPosition);
                 if (distance < closestDistance)
                 {
                     closestPoint = point;
@@ -2330,11 +2330,12 @@ namespace ARS
                 }
             }
 
+            Vector3 carPosition = Car.Position;
             TrackPoint closestPoint = _trackPositionScratch[0];
-            float closestDistance = closestPoint.Position.DistanceTo(Car.Position);
+            float closestDistance = closestPoint.Position.DistanceTo(carPosition);
             foreach (TrackPoint point in _trackPositionScratch)
             {
-                float distance = point.Position.DistanceTo(Car.Position);
+                float distance = point.Position.DistanceTo(carPosition);
                 if (distance < closestDistance)
                 {
                     closestPoint = point;
@@ -2347,7 +2348,7 @@ namespace ARS
             {
                 foreach (TrackPoint point in ARS.TrackPoints)
                 {
-                    float distance = point.Position.DistanceTo(Car.Position);
+                    float distance = point.Position.DistanceTo(carPosition);
                     if (distance < closestDistance)
                     {
                         closestPoint = point;
@@ -2357,7 +2358,7 @@ namespace ARS
             }
 
             CurrentTrackPoint = closestPoint;
-            Brain.CurrentPerception.DeviationFromCenter = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
+            Brain.CurrentPerception.DeviationFromCenter = ARS.SignedLaneOffset(carPosition, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
 
             LookAheads.Clear();
             float speed = Car.Velocity.Length();
@@ -2379,18 +2380,13 @@ namespace ARS
                 return ARS.TrackPoints[node % ARS.TrackPoints.Count];
             }
 
-            var lookAheadOffsets = new (LookAhead key, int offset)[]
-            {
-                (LookAhead.SteerRef, steerRef),
-                (LookAhead.QuarterSec, quarterSec),
-                (LookAhead.HalfSec, halfSec),
-                (LookAhead.ThreeQuarterSec, threeQuarterSec),
-                (LookAhead.OneSec, oneSec),
-                (LookAhead.OneHalfSec, oneHalfSec),
-                (LookAhead.TwoSec, twoSec),
-            };
-            foreach (var (key, offset) in lookAheadOffsets)
-                LookAheads.Add(key, ResolveLookAhead(offset));
+            LookAheads[LookAhead.SteerRef] = ResolveLookAhead(steerRef);
+            LookAheads[LookAhead.QuarterSec] = ResolveLookAhead(quarterSec);
+            LookAheads[LookAhead.HalfSec] = ResolveLookAhead(halfSec);
+            LookAheads[LookAhead.ThreeQuarterSec] = ResolveLookAhead(threeQuarterSec);
+            LookAheads[LookAhead.OneSec] = ResolveLookAhead(oneSec);
+            LookAheads[LookAhead.OneHalfSec] = ResolveLookAhead(oneHalfSec);
+            LookAheads[LookAhead.TwoSec] = ResolveLookAhead(twoSec);
 
 
 
@@ -2447,8 +2443,7 @@ namespace ARS
                 RefillApexQueue();
             }
             // High-speed lane radius: short 0.5s to 1.0s window.
-            Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius((int)(Car.Velocity.Length() * 0.5f), (int)(Car.Velocity.Length() * 1.0f));
-            Brain.CurrentPerception.CurveRadiusAfterFollowPoint = ComputeRouteRadius((int)(Car.Velocity.Length() * 2.5f), (int)(Car.Velocity.Length() * 4.5f));
+            Brain.CurrentPerception.HighSpeedCurveRadius = ComputeRouteRadius((int)(speed * 0.5f), (int)(speed * 1.0f));
         }
 
         // Circumradius through three route-window sample points.
@@ -2506,7 +2501,7 @@ namespace ARS
                 int shift = 0;
                 while (shift < heldNodes.Length && heldNodes[shift] >= 0 && HasPassedApex(heldNodes[shift])) shift++;
                 if (shift > 0) ScheduleBrakeCommit();
-                if (shift > 0 && Driver != null && Driver.IsPlayer) Tips.ApexPassed(shift);
+                if (shift > 0 && ControlledByPlayer) Tips.ApexPassed(shift);
                 if (shift > 0)
                 {
                     for (int i = 0; i < heldNodes.Length - shift; i++)
@@ -3092,11 +3087,12 @@ namespace ARS
             if (!_isRecoveringFromStuck) return;
 
             // Find nearest track point (shared by teleport and steering-align).
+            Vector3 carPosition = Car.Position;
             TrackPoint nearest = ARS.TrackPoints[0];
             float best = float.MaxValue;
             foreach (TrackPoint point in ARS.TrackPoints)
             {
-                float distance = point.Position.DistanceTo(Car.Position);
+                float distance = point.Position.DistanceTo(carPosition);
                 if (distance >= best) continue;
                 best = distance;
                 nearest = point;
@@ -3165,7 +3161,7 @@ namespace ARS
             float gravityGs = Handling.Gravity / 9.8f;
             if (gravityGs > 1f) handlingGrip *= gravityGs;
 
-            GroundGripMultiplier = ARS.WheelGripMultipliers(Car).Average();
+            GroundGripMultiplier = ARS.MeanWheelGripMultiplier(Car);
 
             // Centripetal acceleration v²/r is the proxy for cornering load (engine applies
             // downforce scaled by lateral speed, but pure-pursuit driving keeps world-frame lateral
@@ -3233,25 +3229,30 @@ namespace ARS
         }
         public void UpdateRivals()
         {
+            Vector3 myPosition = Car.Position;
+            Vector3 hoodPosition = myPosition + Car.ForwardVector;
             List<Racer> candidates = new List<Racer>();
+            List<float> candidateDistances = new List<float>();
             foreach (Racer r in ARS.Racers)
             {
-                if (r.Car.Handle != Car.Handle && r.Car.Position.DistanceTo(Car.Position) < 200f)
-                {
-                    candidates.Add(r);
-                }
+                if (r.Car.Handle == Car.Handle) continue;
+                Vector3 rivalPosition = r.Car.Position;
+                if (Vector3.Distance(rivalPosition, myPosition) >= RivalSearchRangeMeters) continue;
+                candidates.Add(r);
+                candidateDistances.Add((rivalPosition - hoodPosition).LengthSquared());
             }
 
             foreach (Rival r in Brain.Rivals) r.RivalRacer = null;
-            if (candidates.Count > 0)
+            for (int slot = 0; slot < Brain.Rivals.Count && candidates.Count > 0; slot++)
             {
-                Vector3 hoodPos = Car.Position + Car.ForwardVector;
-                candidates.Sort((a, b) => Vector3.Distance(a.Car.Position, hoodPos).CompareTo(Vector3.Distance(b.Car.Position, hoodPos)));
-                for (int i = 0; i < Brain.Rivals.Count; i++)
+                int nearest = 0;
+                for (int i = 1; i < candidates.Count; i++)
                 {
-                    if (i == candidates.Count) break;
-                    Brain.Rivals[i].RivalRacer = candidates[i];
+                    if (candidateDistances[i] < candidateDistances[nearest]) nearest = i;
                 }
+                Brain.Rivals[slot].RivalRacer = candidates[nearest];
+                candidates.RemoveAt(nearest);
+                candidateDistances.RemoveAt(nearest);
             }
         }
 

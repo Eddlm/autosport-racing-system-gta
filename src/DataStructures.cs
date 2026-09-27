@@ -17,7 +17,6 @@ namespace ARS
         public int AccelHead = 0;
         public int AccelCount = 0;
         public int LastAccelSampleTime = 0;
-        public Vector3 SpeedVectorGlobal = Vector3.Zero;
         public Vector3 SpeedVectorLocal = Vector3.Zero;
         public float WheelBase = 2.7f;
         public float YawRotationPerSecondDegrees = 1f;
@@ -130,7 +129,6 @@ namespace ARS
             public float HighSpeedCurveRadius = 0f;
             // NEVER USED. Kept for future "two conflicting corners" work.
             public float CurveRadiusAfterFollowPoint = 0f;
-            public Vector3 SpeedVector = Vector3.Zero;
         }
 
         public Intention CurrentIntention = new Intention();
@@ -173,6 +171,12 @@ namespace ARS
             RelativePosition = RelativePos.Unreachable;
             if (RivalRacer == null) return;
 
+            // One read each of the four entity vectors: every use below used to call the native again.
+            Vector3 myPosition = me.Car.Position;
+            Vector3 myVelocity = me.Car.Velocity;
+            Vector3 rivalPosition = RivalRacer.Car.Position;
+            Vector3 rivalVelocity = RivalRacer.Car.Velocity;
+
             RelativeOffset = ARS.EntityRelativeOffset(me.Car, RivalRacer.Car);
             LongitudinalGap = RelativeOffset.Y;
             LateralGap = RelativeOffset.X;
@@ -182,20 +186,19 @@ namespace ARS
             CombinedSize.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
             OccupiedLaneWidth = CombinedSize.X;
             OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
-            Distance =  (me.Car.Position -RivalRacer.Car.Position).Length();
+            Distance = (myPosition - rivalPosition).Length();
 
             // Forward speed gap: project relative velocity onto me's forward axis.
             // Positive = me faster than rival; negative = rival faster.
-            Vector3 meForward = me.Car.Velocity.LengthSquared() > 0.01f
-                ? me.Car.Velocity.Normalized
-                : me.Car.ForwardVector;
-            Vector3 relativeVelocity = me.Car.Velocity - RivalRacer.Car.Velocity;
+            float mySpeedSquared = myVelocity.LengthSquared();
+            Vector3 meForward = mySpeedSquared > 0.01f ? myVelocity.Normalized : me.Car.ForwardVector;
+            Vector3 relativeVelocity = myVelocity - rivalVelocity;
             ForwardSpeedGap = Vector3.Dot(relativeVelocity, meForward);
 
             // SecondsToReach and TimeToContact use longitudinal gap, not Euclidean.
             // Legacy SecondsToReach kept for existing consumers (avoidance filter expects 0..3 range).
             float longitudinalAbs = Math.Abs(LongitudinalGap);
-            float absoluteSpeedGap = (float)Math.Round(me.Car.Velocity.Length() - RivalRacer.Car.Velocity.Length(), 4);
+            float absoluteSpeedGap = (float)Math.Round(myVelocity.Length() - rivalVelocity.Length(), 4);
             if (absoluteSpeedGap <= 0.001f)
             {
                 SecondsToReach = float.PositiveInfinity;
@@ -236,15 +239,14 @@ namespace ARS
             SecondsToHit = ComputeSecondsToHit(me);
 
             // DirectionDiff: angle between velocity vectors. Guard against zero velocity (NaN).
-            float meSpeed = me.Car.Velocity.LengthSquared();
-            float rivalSpeed = RivalRacer.Car.Velocity.LengthSquared();
-            if (meSpeed < 0.01f || rivalSpeed < 0.01f)
+            float rivalSpeed = rivalVelocity.LengthSquared();
+            if (mySpeedSquared < 0.01f || rivalSpeed < 0.01f)
             {
                 DirectionDiff = 0f;
             }
             else
             {
-                DirectionDiff = Vector3.SignedAngle(me.Car.Velocity, RivalRacer.Car.Velocity, me.Car.UpVector);
+                DirectionDiff = Vector3.SignedAngle(myVelocity, rivalVelocity, me.Car.UpVector);
             }
         }
 
