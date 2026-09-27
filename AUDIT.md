@@ -38,14 +38,14 @@ grep the symbol if one misses.
 2. **Whitespace residue (§5.3).** 319 lines in 67 runs, untouched — including six whitespace-only lines left
    where `DrawRouteNodes` was (in `TrackCreator.cs`, just above `DrawSection`). The trap: many of those lines
    carry spaces, so an exact-match edit needs their real space counts, which the scan reports.
-3. **The remaining splits (§2)**, safest first: `HandleCheats`' three handlers → `OnTick`'s draw/cheat/HUD
-   blocks → `LoadTrack` → `SaveRoute` (the 22× `InnerText` idiom first) → **`InitializeMenu` last**, because
-   its submenu locals are captured by the item handlers and the staged-spawn slot indices are load-bearing.
-   Done so far: `Rival.Update` into four, `ComputeTargetSpeed`'s crest law into `CrestGripSpeedFactor`, and
-   `UpdateTrackPosition`'s lap counter into `UpdateLapRegistration`.
-4. **CPU items deferred out of batch 4**, each verified real but left for their own pass: caching
-   `Game.GameTime` per tick (~20 call sites), the leaderboard's per-frame re-sort and per-row `BestLap()`, and
-   the creator's one-`DrawMarker`-per-preview-point.
+3. **The remaining splits (§2)**, safest first: `OnTick`'s draw/cheat/HUD blocks → `LoadTrack` → `SaveRoute`
+   (the 22× `InnerText` idiom first) → **`InitializeMenu` last**, because its submenu locals are captured by
+   the item handlers and the staged-spawn slot indices are load-bearing. Done so far: `Rival.Update` into
+   four, `ComputeTargetSpeed`'s crest law into `CrestGripSpeedFactor`, `UpdateTrackPosition`'s lap counter
+   into `UpdateLapRegistration`, and `HandleCheats` into a dispatcher plus three named handlers.
+4. **The rest of the per-frame `Game.GameTime` readers** (`Racer.cs`): the three scheduler and stuck-detection
+   sites are done (`e1f948e`, `c2ee51a`), the leaderboard item is closed as deliberate (see the table), and the
+   creator's one-`DrawMarker`-per-preview-point is still open.
 5. **One deliberate leftover:** `ARS.FindNextCorner` and the `LiveCorner` / `CornerScanNode` pair it drives are
    unreferenced, but `FindNextCorner` is named in `AGENTS.md`'s code map as live static AI math, so removing it
    wants a decision rather than a cleanup side effect.
