@@ -2236,6 +2236,35 @@ namespace ARS
         
 
 
+        // The roster from modeldump.txt - a comma/whitespace separated list of model names, already lowercase in
+        // practice but normalised here so a hand-edited dump cannot smuggle in a key the catalog will not match.
+        void BuildRosterFromDumpFile()
+        {
+            UI.Notify("~b~[ARS]:~w~ Generating the car list from modeldump.txt.");
+
+            string dumpFilePath = ScriptsFolder + @"\modeldump.txt";
+            if (File.Exists(dumpFilePath))
+            {
+                string content = File.ReadAllText(dumpFilePath);
+                string[] modelNames = content.Split(new[] { ',', '\n', '\r', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+                List<string> keys = new List<string>();
+                foreach (string modelName in modelNames)
+                {
+                    string trimmedName = modelName.Trim().ToLowerInvariant();
+                    if (!string.IsNullOrEmpty(trimmedName)) keys.Add(trimmedName);
+                }
+
+                int added = VehicleCatalog.AddToRoster(keys);
+                RefreshRoster();
+                UI.Notify("~b~[ARS]:~w~ " + VehicleCatalog.SelectedRosterFile + " - " + added + " new model(s) added from " + modelNames.Length + " entries.");
+            }
+            else
+            {
+                UI.Notify("~r~[ARS]:~w~ modeldump.txt not found in " + ScriptsFolder + "\\");
+            }
+        }
+
         // The roster from the game's own VehicleHash enum: every model SHVDN knows that can race, yielded every
         // 25 models so a synchronous scan of the whole enum cannot stall the frame.
         void BuildRosterFromEnum()
@@ -2316,33 +2345,7 @@ namespace ARS
             }
             if (WasCheatStringJustEntered("arsbuildcarlist")) BuildRosterFromEnum();
 
-            if (WasCheatStringJustEntered("arsbuilddumpcarlist"))
-            {
-                UI.Notify("~b~[ARS]:~w~ Generating the car list from modeldump.txt.");
-
-                string dumpFilePath = ScriptsFolder + @"\modeldump.txt";
-                if (File.Exists(dumpFilePath))
-                {
-                    string content = File.ReadAllText(dumpFilePath);
-                    string[] modelNames = content.Split(new[] { ',', '\n', '\r', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-
-                    List<string> keys = new List<string>();
-                    foreach (string modelName in modelNames)
-                    {
-                        string trimmedName = modelName.Trim().ToLowerInvariant();
-                        if (!string.IsNullOrEmpty(trimmedName)) keys.Add(trimmedName);
-                    }
-
-                    int added = VehicleCatalog.AddToRoster(keys);
-                    RefreshRoster();
-                    UI.Notify("~b~[ARS]:~w~ " + VehicleCatalog.SelectedRosterFile + " - " + added + " new model(s) added from " + modelNames.Length + " entries.");
-                }
-                else
-                {
-                    UI.Notify("~r~[ARS]:~w~ modeldump.txt not found in " + ScriptsFolder + "\\");
-                }
-            }
-
+            if (WasCheatStringJustEntered("arsbuilddumpcarlist")) BuildRosterFromDumpFile();
         }
         
 
