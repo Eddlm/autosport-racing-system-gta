@@ -2856,8 +2856,10 @@ namespace ARS
                 return;
             }
 
+            int now = Game.GameTime;
+
             // Cooldown after each recovery ends: the car must get a real chance to drive away.
-            if (Game.GameTime < _stuckRecoveryCooldownEndTime)
+            if (now < _stuckRecoveryCooldownEndTime)
             {
                 IsStuckByThrottle = false;
                 _lastStuckGameTime = 0;
@@ -2883,17 +2885,17 @@ namespace ARS
 
             if (_lastStuckGameTime == 0)
             {
-                _lastStuckGameTime = Game.GameTime;
+                _lastStuckGameTime = now;
             }
 
-            bool stuckForLongEnough = (Game.GameTime - _lastStuckGameTime) >= StuckCheckTimeMs;
+            bool stuckForLongEnough = (now - _lastStuckGameTime) >= StuckCheckTimeMs;
             IsStuckByThrottle = stuckForLongEnough;
 
             if (stuckForLongEnough && !_isRecoveringFromStuck)
             {
                 _isRecoveringFromStuck = true;
                 _stuckRecoveryAttempts++;
-                _stuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
+                _stuckRecoveryEndTime = now + StuckRecoveryTimeMs;
                 IsStuckByThrottle = false;
                 _lastStuckGameTime = 0;
             }
