@@ -1541,21 +1541,13 @@ namespace ARS
             return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
         }
 
-        // TCS wheelspin targets: more negative = more spin allowed, so the deepening is subtracted.
-        // The number is the slip the controller drives toward, on the per-wheel slip scale the game keeps at
-        // wheel+0x174. Landmarks on that scale: free rolling is 0, the grip curve peaks at argument 1.0 (slip 0.4)
-        // and is flat at fTractionCurveMin from argument 2.5 (slip 1.0, full lockup). The branch between the two is
-        // shallow - the whole drop from peak to floor is about a tenth of the grip - so a target just past the peak
-        // buys visible wheelspin for very little traction, and nothing at all is gained beyond slip 1.0.
-        // The target sits past the peak on purpose: a powerful RWD car should be able to spin its wheels on launch
-        // and out of slow corners, and wheelspin is rotation - a car denied it turns in less eagerly. Above slip 1.0
-        // the target is past the sliding floor as well, so the driven wheels spin freely and the cap only tracks
-        // grip; the cost is the whole plateau drop, about a tenth of the tyre's longitudinal grip.
-        // The peak sits at fLoss on that scale, so the target scales with the ground's grip multiplier - a wet,
-        // worn or low-grip surface peaks at a smaller slip, and the schedule keeps its position against the peak.
+        // TCS slip target, on the game's per-wheel scale at wheel+0x174 (0 free rolling, grip peaks at argument 1.0,
+        // flat from 2.5, so nothing past it is gained). Set past the peak on purpose - a powerful RWD car should
+        // light them up on launch and out of slow corners, and wheelspin is rotation - and scaled by the grip
+        // multiplier so a low-grip surface keeps it in the same place against the peak. More negative = more spin.
         const float IdealWheelspinSlipTarget = 1.25f;  // past the 1.0 lockup floor: spin is allowed, not just trimmed
-        const float IdealWheelspinDeepening = 0.3f;    // deepest 1.55 - more of the same under slide
-        const float IdealWheelspinGripFloor = 0.3f;    // sanity guard on the grip read
+        const float IdealWheelspinDeepening = 0.3f;
+        const float IdealWheelspinGripFloor = 0.3f;
 
         void TractionControl()
         {

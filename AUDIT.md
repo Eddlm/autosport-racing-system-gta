@@ -13,14 +13,38 @@ grep the symbol if one misses.
 
 | Batch | Commit | State |
 |---|---|---|
-| 1. Defects (§5.1 items 1–3, §1.4) | `9517976` | landed, unverified in game |
+| 1. Defects (§5.1 items 1–3, §1.4) | `9517976` | landed; its `Tips` change was **reverted** in `342d5d0` |
 | 2. Dead members (§1.3) | `b586070` | landed, unverified in game |
 | 3. Stale comments (§4.2–4.3) | `f4f5d05` | landed |
-| 4a. Perf: repeated natives, hoists, dead writes (§3.1–3.4, §3.6) | `15e9847` | landed, **wants a drive** |
-| 4b. Track-creator preview loop (§3.7) | — | **not started** |
-| 5. Dead methods, ~370 lines (§5.2) | — | **not started** |
-| 6. Comment prose → companions, whitespace residue (§4.1, §5.3) | — | **not started** |
-| 7. Method splits (§2) | — | **not started** |
+| 4a. Perf: repeated natives, hoists, dead writes (§3.1–3.4, §3.6) | `15e9847` | landed, wants a drive |
+| 4b. Creator preview loop + `ClosestNodeToPlace` (§3.7–3.8) | `01d5344` | landed, creator wants a check |
+| 5. Dead methods + the route probe, 406 lines (§5.2) | `c2ad2de` | landed |
+| 7a. `Rival.Update` split into four methods (§2) | `141d712` | landed, wants a drive |
+| 6. Comment prose (§4.1) and whitespace residue (§5.3) | — | **partial** — see below |
+| 7b. The remaining method splits (§2) | — | **not started** |
+
+**Still open, in the order I would take it:**
+
+1. **Comment prose (§4.1).** Only the TCS block (`Racer.cs`) has been compressed, 12 lines → 4. The rest is
+   untouched: the downforce derivation (`AutosportRacingSystem.cs`), `SmartTuner.cs`'s brand-palette block, the
+   seven steer-ceiling blocks in `Racer.cs`, `TrackCreator`'s ground-probe note, and the `SettingsRepair` /
+   `MenyooAppearance` / `VehicleSelector` / `DataStructures` / `MenuSettings` / `VehicleCatalog` one-offs. The
+   depth goes to `AGENTS-STEERING.md` / `AGENTS-TECHNOTES.md` / `AGENTS-SMARTTUNING.md` with a one-line pointer
+   left behind.
+2. **Whitespace residue (§5.3).** 319 lines in 67 runs, untouched — including six whitespace-only lines left
+   where `DrawRouteNodes` was (in `TrackCreator.cs`, just above `DrawSection`). The trap: many of those lines
+   carry spaces, so an exact-match edit needs their real space counts, which the scan reports.
+3. **The remaining splits (§2)**, safest first: `ComputeTargetSpeed`'s duplicated crest/dip block into one
+   `ApplyVerticalGripFactor` (~25 lines, the biggest readability win left) → `HandleCheats`' three handlers →
+   `OnTick`'s draw/cheat/HUD blocks → `UpdateTrackPosition`'s lap block → `LoadTrack` → `SaveRoute` (the 22×
+   `InnerText` idiom first) → **`InitializeMenu` last**, because its submenu locals are captured by the item
+   handlers and the staged-spawn slot indices are load-bearing.
+4. **CPU items deferred out of batch 4**, each verified real but left for their own pass: caching
+   `Game.GameTime` per tick (~20 call sites), the leaderboard's per-frame re-sort and per-row `BestLap()`, and
+   the creator's one-`DrawMarker`-per-preview-point.
+5. **One deliberate leftover:** `ARS.FindNextCorner` and the `LiveCorner` / `CornerScanNode` pair it drives are
+   unreferenced, but `FindNextCorner` is named in `AGENTS.md`'s code map as live static AI math, so removing it
+   wants a decision rather than a cleanup side effect.
 
 Deferred out of batch 4 on purpose, each checked first: caching `Game.GameTime` per tick (§3.1, real but
 ~20 call sites — worth its own pass), the leaderboard's per-frame re-sort and per-row `BestLap()` (§3.6),
