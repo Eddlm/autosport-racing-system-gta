@@ -135,10 +135,9 @@ namespace ARS
                 i++;
             }
 
-            // Detect circuit vs point-to-point BEFORE GenerateRouteInfo so the geometry pass
-            // (Angle/Direction/Elevation/PreciseCurveRadius) and BuildApexTable can wrap node
-            // indices across the start/finish seam. Without this, corners sitting on the finish
-            // line are invisible to the apex table on circuits.
+            // Detect circuit vs point-to-point BEFORE GenerateRouteInfo so the geometry pass and BuildApexTable can
+            // wrap node indices across the start/finish seam; without it, a corner sitting on the finish line is
+            // invisible to the apex table on circuits.
             ARS.IsPointToPoint = false;
             if (ARS.RouteNodes[0].DistanceTo(ARS.RouteNodes[ARS.RouteNodes.Count - 1]) > 20) ARS.IsPointToPoint = true;
 
@@ -316,9 +315,7 @@ namespace ARS
 
             ARS.Log(ARS.LogImportance.Info, "Apex table: " + ARS.Corners.Count + " corners");
 
-            // Chicane detection: walk trackwidth × 4 nodes backward and forward from the
-            // apex, find the peak signed angle in each direction. If they differ in sign
-            // the track reverses curvature = chicane.
+            // A chicane reverses curvature: the peak signed angle each side of the apex differs in sign.
             int nodeCount = ARS.TrackPoints.Count;
             for (int i = 0; i < ARS.Corners.Count; i++)
             {
@@ -469,9 +466,8 @@ namespace ARS
             Function.Call(Hash.CLEAR_FOCUS);
         }
 
-        // Built to order rather than to a fixed ceiling: the grid only needs slots for the size being spawned,
-        // plus two that GridBuilder.Place reads ahead into while aiming each car. The walk is cheap, so this is
-        // redone at every grid spawn — the size can change between spawns, and between spawns and track load.
+        // Built to order rather than to a fixed ceiling: the grid needs slots for the size being spawned plus two
+        // that GridBuilder.Place reads ahead into, and the size can change between spawns, so it is redone each time.
         public static void BuildGridSlots(List<Vector3> nodes, Dictionary<int, float> widths, bool isPointToPoint, int wantedCars, List<Vector3> grid)
         {
             grid.Clear();

@@ -50,10 +50,8 @@ namespace ARS
             new KeyValuePair<string, Style>("abstraction", Style.Tuner),
             new KeyValuePair<string, Style>("geometric", Style.Tuner),
             new KeyValuePair<string, Style>("halftone", Style.Tuner),
-            // Tuner and Japanese-street brands. Before this block their liveries matched nothing and fell through
-            // to a Clean build. Tenshun, Kabel, Hyper Function and Jackal were in the Racing block above and moved
-            // here - they are tuner brands, not race sponsors. No colour evidence exists for any of these, so
-            // they stay on the generic colour paths.
+            // Tuner and Japanese-street brands: they are tuner brands rather than race sponsors, and no colour
+            // evidence exists for any of them, so they stay on the generic colour paths.
             new KeyValuePair<string, Style>("yogarishima", Style.Tuner),
             new KeyValuePair<string, Style>("teast", Style.Tuner),
             new KeyValuePair<string, Style>("tenshun", Style.Tuner),
@@ -118,10 +116,9 @@ namespace ARS
             { "vapid", new KeyValuePair<string[], string[]>(new[] { "white", "black", "silver" }, new[] { "red" }) },
         };
 
-        // Marques whose liveries carry no brand palette - the artwork is per-livery, or it is a plain monochrome
-        // badge (Ubermacht is orange/yellow/white on a Zion Classic but a flat diamond on a Sentinel XS4, and
-        // Benefactor has no works livery at all). They stay monochrome, which is what a works livery looks like,
-        // and only pick up colours the livery name itself states.
+        // Marques whose liveries carry no brand palette: the artwork is per-livery or a plain monochrome badge
+        // (Ubermacht is orange/white on a Zion Classic but a flat diamond on a Sentinel XS4). They stay monochrome,
+        // which is what a works livery looks like, and only pick up colours the livery name states.
         static readonly string[] Marques = { "ubermacht", "benefactor", "pegassi", "truffade", "coil", "willard", "dinka", "obey", "bravado", "declasse", "fathom" };
 
         // Body paints, grouped so a livery that names a colour can pull from its whitelist. **Metallic only, by
@@ -209,9 +206,8 @@ namespace ARS
             { "cream", new[] { VehicleColor.MatteDesertTan, VehicleColor.MatteWhite } },
         };
 
-        // WHITELIST: the body colours that sit well with a livery of this colour. Anything unlisted is out - a
-        // blacklist ("anything but white") plus a uniform draw is what produced muddy pairings, while these sets
-        // stay broad enough (4+ families) that a pick is still a surprise.
+        // WHITELIST: the body colours that sit well with a livery of this colour. A blacklist plus a uniform draw
+        // produced muddy pairings; these sets stay broad enough (4+ families) that a pick is still a surprise.
         static readonly Dictionary<string, string[]> BodyWith = new Dictionary<string, string[]>
         {
             { "white", new[] { "red", "black", "blue", "orange", "green", "purple", "gold" } },
@@ -256,9 +252,8 @@ namespace ARS
             Apply(veh, random);
         }
 
-        // A livery the car actually offers, and which space it came from: modern cars carry liveries as mod slot
-        // 48 (GET_MOD_TEXT_LABEL, applied with SET_VEHICLE_MOD), older ones in the livery list (GET_LIVERY_NAME,
-        // applied with SET_VEHICLE_LIVERY). Enumerating only the latter is why the first test found no names.
+        // A livery the car actually offers, and which space it came from: modern cars carry liveries as mod slot 48
+        // (GET_MOD_TEXT_LABEL / SET_VEHICLE_MOD), older ones in the livery list (GET_LIVERY_NAME / SET_VEHICLE_LIVERY).
         struct LiveryOption
         {
             public int Index;

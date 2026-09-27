@@ -9,9 +9,8 @@ namespace ARS
 {
     public static class VehicleCatalog
     {
-        // The roster is one flat file: one model key per line, blank lines and # comments ignored.
-        // A key is a model name ("sabregt") or a hash; BuildPowerCache canonicalises both to hash keys.
-        // Every *.txt in the Vehicles folder is a selectable pool; SelectedRosterFile says which one.
+        // The roster is one flat file: one model key per line, blank lines and # comments ignored, and a key is
+        // either a model name or a hash. Every *.txt in the Vehicles folder is a pool; SelectedRosterFile picks one.
         public static string RosterFolder { get { return ARS.ScriptsFolder + @"\Vehicles"; } }
         public static string SelectedRosterFile { get; private set; }
 
@@ -65,9 +64,9 @@ namespace ARS
             }
         }
 
-        // Called on the main script thread (NOT from the background load task).        // GTA natives are not safe to call off the main thread, so the stat reads live here. The pool
-        // arrives holding the raw roster lines and is rewritten in place to canonical hash-string keys,
-        // which is what the pace cache and the grid selection are keyed by; unresolvable lines are dropped.
+        // Called on the main script thread, NOT from the background load task: GTA natives hard-crash the game off
+        // the main thread, so the stat reads live here. The pool is rewritten in place to canonical hash-string
+        // keys, which the pace cache and grid selection are keyed by; unresolvable roster lines are dropped.
         public static void BuildPowerCache(List<string> pool, Dictionary<string, float> gripByModel, Dictionary<string, float> topSpeedMphByModel, Dictionary<string, float> accelByModel, Dictionary<string, bool> electricByModel, Dictionary<string, string> nameByModel, HashSet<VehicleClass> blacklistedClasses, Action<string> log)
         {
             gripByModel.Clear();
@@ -75,9 +74,8 @@ namespace ARS
             accelByModel.Clear();
             electricByModel.Clear();
             nameByModel.Clear();
-            // GET_IS_VEHICLE_ELECTRIC (0x1FCB07FE230B6639) is a model-hash native that only exists from
-            // game build 3258. Probe it once: on a build without it, every car must degrade to ICE rather
-            // than throwing inside the loop, where the catch would swallow that model's stats entirely.
+            // GET_IS_VEHICLE_ELECTRIC (0x1FCB07FE230B6639) only exists from game build 3258. Probed once so an
+            // older build degrades to ICE rather than throwing inside the loop and losing that model's stats.
             bool canAskElectric = true;
             try { Function.Call<int>((Hash)0x1FCB07FE230B6639, new Model(VehicleHash.Adder).Hash); }
             catch (Exception)

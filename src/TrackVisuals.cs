@@ -27,9 +27,8 @@ namespace ARS
             }
         }
 
-        // Racing path (player on the grid): draw the checkpoint at every corner apex that is both
-        // ahead of the player AND within the ahead node window, using the player racer's live
-        // CurrentTrackPoint.Node as the LOD center.
+        // Racing path: a checkpoint at every corner apex ahead of the player and inside the lookahead window, with
+        // the player's live CurrentTrackPoint.Node as the LOD centre (see the center/radius overload below).
         public static void DrawCornerCheckpoints(Racer player, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             if (corners.Count == 0 || trackPoints.Count == 0) return;
@@ -49,9 +48,7 @@ namespace ARS
             }
         }
 
-        // Draw a FiveM-style checkpoint (torus ring + orange chevron) at every corner apex that is
-        // within the given radius of the center position. Chevrons are centered above the apex and
-        // point toward the next corner.
+        // FiveM-style checkpoint: a torus ring plus an orange chevron above the apex, pointing at the next corner.
         public static void DrawCornerCheckpoints(Vector3 center, float radiusMeters, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             if (corners.Count == 0 || trackPoints.Count == 0) return;

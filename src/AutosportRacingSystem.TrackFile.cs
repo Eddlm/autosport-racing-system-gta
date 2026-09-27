@@ -12,9 +12,8 @@ namespace ARS
     // Split out of AutosportRacingSystem.cs; the statics it reads (CurrentFile, RouteNodes, NodeHalfWidths, CustomProps) stay there.
     public partial class ARS
     {
-        // RouteNodes holds one node per metre, so OrderBy(...).First() sorts the whole list just to take
-        // its minimum - once per world prop, synchronously inside a save. Both serialisers only ever want
-        // the nearest node, which is a single pass.
+        // RouteNodes holds one node per metre, so OrderBy(...).First() would sort the whole list to take its
+        // minimum — once per world prop, synchronously inside a save. Both serialisers only want the nearest.
         static int NearestRouteNode(Vector3 pos, out float distance)
         {
             int nearest = 0;

@@ -519,7 +519,8 @@ namespace ARS
             // --- PD assembly: damped course terms + lane steer + slide blend ---
 
             const float steerKP = 1.0f;
-            // Damp the excess over the yaw the track requires, not over zero which taxes every steady corner; the slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
+            // Damp the excess over the yaw the track requires, not over zero which taxes every steady corner; the
+            // slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
             float fwdSpeed = ARS.GetForwardSpeed(Car);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees;
             if (SteerDampingTrackReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) yawRateToDamp -= RequiredYawRatePerSecond(steerRefPoint, fwdSpeed);
@@ -841,7 +842,9 @@ namespace ARS
         // Reference the yaw damper to the yaw the track requires; false restores the zero-referenced term in one line.
         const bool SteerDampingTrackReference = true;
         float SteerDamping => SteerDampingEnabled ? ARS.SteerDampingScale / Math.Max(VehicleData.BaseMechanicalGrip, SteerDampingGripFloor) : 0f;
-        // The yaw the track requires at a node: Angle is already the node's signed turn in the steer command's own convention (a left-hand corner is positive, as is the yaw rate that takes it), so it is used as-is; the span is twice the half width because nodes are one metre apart.
+        // The yaw the track requires at a node: Angle is already the node's signed turn in the steer command's own
+        // convention (a left-hand corner is positive, as is the yaw rate that takes it), so it is used as-is; the
+        // span is twice the half width because nodes are one metre apart.
         float RequiredYawRatePerSecond(TrackPoint point, float fwdSpeed)
         {
             float span = 2f * (int)(point.TrackHalfWidth * 2);

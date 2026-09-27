@@ -6,8 +6,7 @@ using System.Drawing;
 
 namespace ARS
 {
-    // The in-game track creator (route editor). Split out of AutosportRacingSystem.cs; the recording code
-    // below is unchanged by that move. StartTrackCreator is the mode's entry point, reached from the Track
+    // The in-game track creator (route editor). StartTrackCreator is the entry point, reached from the Track
     // Creator submenu, and it takes over the free camera because that camera is the editing surface:
     // HandleTrackCreator records only while it is active.
     public partial class ARS
@@ -103,9 +102,8 @@ namespace ARS
             {
                 RaycastResult ray = World.Raycast(GameplayCamera.Position, GameplayCamera.Position + ((GameplayCamera.Direction.Normalized) * 100), IntersectOptions.Everything);
 
-                // Width is the only knob the geometry leaves open: the arc always runs to the aim point, so
-                // the old reach multiplier has nothing left to scale. The floor is applied after adjusting,
-                // or a single tap to the minimum commits a zero-width track.
+                // Width is the only knob the geometry leaves open — the arc always runs to the aim point, so the
+                // old reach multiplier has nothing left to scale. The floor is applied after adjusting, not before.
                 if (Game.IsControlJustPressed(2, GTA.Control.NextWeapon)) _pathWidth--;
                 if (Game.IsControlJustPressed(2, GTA.Control.PrevWeapon)) _pathWidth++;
                 if (_pathWidth < 1) _pathWidth = 1;
@@ -249,10 +247,9 @@ namespace ARS
             }
         }
 
-        // One constant-radius section: a circular arc running from the route end to the aim point, leaving
-        // that end tangent to the incoming heading. Plan-view constant radius specifically, because that is
-        // the plane the racing system measures - Circumradius3D drops Z - so this reads back as one radius
-        // per section instead of the graded one a quadratic Bezier produced.
+        // One constant-radius section: a circular arc from the route end to the aim point, leaving that end tangent
+        // to the incoming heading. Plan-view constant radius specifically, because that is the plane the racing
+        // system measures (Circumradius3D drops Z) — so this reads back as one radius per section.
         public static List<Vector3> GenerateArc(Vector3 sStart, Vector3 sDirection, Vector3 sEnd)
         {
             const float separationDist = 1f;
@@ -275,10 +272,9 @@ namespace ARS
             }
             heading.Normalize();
 
-            // The tangent-chord theorem puts the chord at half the arc's central angle off the entry
-            // tangent, so the sweep is twice the aim's bearing. Past 90 degrees the aim is behind the
-            // heading, which no forward-tangent arc can reach: hold a semicircle, so the preview shows the
-            // aim is out of range rather than silently doubling the route back on itself.
+            // The tangent-chord theorem puts the chord at half the arc's central angle off the entry tangent, so
+            // the sweep is twice the aim's bearing. Past 90 degrees the aim is behind the heading, which no
+            // forward-tangent arc can reach: hold a semicircle, which shows the aim is out of range.
             float bearing = (float)Math.Atan2((heading.X * flat.Y) - (heading.Y * flat.X), (heading.X * flat.X) + (heading.Y * flat.Y));
             if (bearing > halfPi) bearing = halfPi;
             if (bearing < -halfPi) bearing = -halfPi;
