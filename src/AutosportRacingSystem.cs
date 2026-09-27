@@ -2340,9 +2340,6 @@ namespace ARS
 
         public void HandleCheats()
         {
-
-
-
             if (WasCheatStringJustEntered("arspidump")) DumpPaceIndex();
             if (WasCheatStringJustEntered("arsbuildcarlist")) BuildRosterFromEnum();
 
