@@ -2707,14 +2707,16 @@ namespace ARS
 
         void ProcessTimedAI()
         {
-            if (_halfSecondTick + _phaseOffsetMs < Game.GameTime)
+            int now = Game.GameTime;
+
+            if (_halfSecondTick + _phaseOffsetMs < now)
             {
-                _halfSecondTick = Game.GameTime + 500 + (int)ARS.Remap(Car.Velocity.Length(), 0, 100, -250, 250, true);
+                _halfSecondTick = now + 500 + (int)ARS.Remap(Car.Velocity.Length(), 0, 100, -250, 250, true);
             }
 
-            if (_oneSecondTick + _phaseOffsetMs < Game.GameTime)
+            if (_oneSecondTick + _phaseOffsetMs < now)
             {
-                _oneSecondTick = Game.GameTime + 1000;
+                _oneSecondTick = now + 1000;
 
                 if (!ControlledByPlayer)
                 {
@@ -2757,20 +2759,22 @@ namespace ARS
 
         public void ProcessAI()
         {
+            int now = Game.GameTime;
+
             ProcessTimedAI();
-            if (_pressureTick + _phaseOffsetMs < Game.GameTime)
+            if (_pressureTick + _phaseOffsetMs < now)
             {
-                _pressureTick = Game.GameTime + 500;
+                _pressureTick = now + 500;
                 UpdatePressure();
             }
 
-            if (BaseBehavior == RacerBaseBehavior.GridWait && Control.HandBrakeTime < Game.GameTime) Control.HandBrakeTime = Game.GameTime + (100 * ARS.GetRandomInt(2, 6));
+            if (BaseBehavior == RacerBaseBehavior.GridWait && Control.HandBrakeTime < now) Control.HandBrakeTime = now + (100 * ARS.GetRandomInt(2, 6));
 
             if (!ControlledByPlayer)
             {
-                if (_rivalInfoTick + _phaseOffsetMs < Game.GameTime)
+                if (_rivalInfoTick + _phaseOffsetMs < now)
                 {
-                    _rivalInfoTick = Game.GameTime + 500;
+                    _rivalInfoTick = now + 500;
                     UpdateRivalInfo();
                 }
                 ApplyRivalThrottleCap();
