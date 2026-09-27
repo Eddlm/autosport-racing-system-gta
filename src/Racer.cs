@@ -31,10 +31,6 @@ namespace ARS
         public VehicleControl Control = new VehicleControl();
         public RacerBrain Brain = new RacerBrain();
 
-        // Dormant legacy state for the disabled live-corner scan.
-        public CornerPoint LiveCorner = new CornerPoint();
-        public int CornerScanNode = -1;
-
         // Four nearest precomputed apexes ahead, nearest first.
         public int NextApexNode = -1;
         public float NextApexRadius = 999f;
@@ -1035,7 +1031,6 @@ namespace ARS
             if (ControlledByPlayer) ARS.PlayerLaunchTestActive = true;
 
             Brain.Corner = null;
-            CornerScanNode = -1;
             NextApexNode = -1;
             NextApexRadius = 999f;
             NextApexSpeed = 999f;

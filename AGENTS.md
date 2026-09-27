@@ -25,7 +25,7 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 - **Method names must be honest** — extra filtering/computing → refactor.
 - **Do not use scripts to edit code files** — direct file tools only (scripts OK for XML/meta).
 - **C# 7.3 ceiling** (no `LangVersion` override): no switch expressions, records, init-only properties, top-level statements or `??=`.
-- **Minimize comments**: at most one line, only when the code isn't obvious; prefer honest names.
+- **Comments are a failure signal**: if a line needs one, the code is not clear enough — rename, extract or restructure instead, and aim for none. The only comments that earn their place are an engine or leaked-source citation, a deliberate asymmetry or floor a reader would otherwise "fix", and a unit or sentinel that the name cannot carry. **Never restate the next line.**
 - **Corrections require sources** — correct the user only when confident and after checking the code; if uncertain, say so.
 - **FiveM reference tree hazard** (`S:\FiveM\server-data\resources\`): `[gameplay]\chat\` hides a huge `node_modules`, so any `-Recurse` walk from `resources\` times out. Target `[eddlm]\[ars-fivem]` directly.
 
@@ -77,7 +77,7 @@ The two-reviewer pair that checks work already done (a commit range or the uncom
 - **A second distribution — SHVDN Enhanced (SHVDNE)** — satisfies the matched pair *by construction* and un-deprecates the v2 API; ARS's whole v2 surface resolves against it. **Static analysis only, never run in game**, and it would falsify our published install instructions: `AGENTS-SHVDN.md`.
 
 ## Code map
-- `AutosportRacingSystem.cs` — orchestration: race flow, track/corner generation, grid, leaderboard, helpers (`Remap`/`Clamp`/`Circumradius`), native wrappers, and the static AI math (`FindNextCorner` `AutosportRacingSystem.cs:2644`, `CornerApexSpeed` `AutosportRacingSystem.cs:2417`, `MaxSpeedForBrakingDistance` `AutosportRacingSystem.cs:2801`). `class ARS` is **partial**, with the two files below split out byte-verbatim.
+- `AutosportRacingSystem.cs` — orchestration: race flow, track/corner generation, grid, leaderboard, helpers (`Remap`/`Clamp`/`Circumradius`), native wrappers, and the static AI math (`CornerApexSpeed` `AutosportRacingSystem.cs:2417`, `MaxSpeedForBrakingDistance` `AutosportRacingSystem.cs:2801`). `class ARS` is **partial**, with the two files below split out byte-verbatim.
 - `AutosportRacingSystem.TrackCreator.cs` — the in-game track creator, **LIVE again**: `StartTrackCreator` (the Track Creator root submenu) is its entry point and takes over the freecam, because that camera is the editing surface — `HandleTrackCreator` records only while it is active. Sections are **constant-radius circular arcs** (`GenerateArc` `AutosportRacingSystem.TrackCreator.cs:245`), tangent-continuous at the joints, replacing the quadratic Bézier whose radius was graded within a section and stepped at each joint.
 - `AutosportRacingSystem.TrackFile.cs` — the track XML writer. `SaveRoute` (`AutosportRacingSystem.TrackFile.cs:188`) is **LIVE** behind the creator's Save Track, so creating a track does write `Tracks\*.xml`; `UpdateRoute` (rewriting a loaded track) stays unwired and still carries the `Wide` off-by-one. Both serialisers round coordinates to 2 decimals, which is coarse enough to perturb the measured `PreciseCurveRadius` — see the open item below.
 - `Racer.cs` — per-car intelligence: the steering/speed pipeline, pressure, maneuvers, TCS, stuck recovery, debug drawing.

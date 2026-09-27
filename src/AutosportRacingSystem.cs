@@ -2822,83 +2822,11 @@ namespace ARS
             return closest;
         }
         
-        // Legacy live corner scan; superseded by the apex-table pipeline.
-        const int ChunkScanNodesPerCore = 10;
-        const float CornerLimitRadius = 300f;
-        const int MaxCornerRegionWalk = 300;
-
-        public static void FindNextCorner(Racer r)
-        {
-            // Keep the current corner active through its apex.
-            if (r.Brain.Corner != null && r.CurrentTrackPoint.Node <= r.Brain.Corner.Point.Node)
-                return;
-
-            int count = TrackPoints.Count;
-            if (count < 20)
-            {
-                r.Brain.Corner = null;
-                return;
-            }
-
-            int cur = r.CurrentTrackPoint.Node;
-            // After an apex, jump the scan head 5s past it to skip the exit zone.
-            if (r.CornerScanNode < 0 || r.CornerScanNode <= cur)
-            {
-                if (r.Brain.Corner != null)
-                    r.CornerScanNode = r.Brain.Corner.Point.Node + (int)(r.Brain.Corner.Speed * 5f) - 1;
-                else
-                    r.CornerScanNode = cur + 1;
-            }
-
-            // Check the next chunk of nodes forward from the scan head.
-            int chunkStart = r.CornerScanNode;
-            for (int i = 0; i < ChunkScanNodesPerCore; i++)
-            {
-                int n = chunkStart + 1 + i;
-                if (!IsPointToPoint) n %= count;
-                if (n >= count) n = count - 1;
-
-                // Interior nodes only (seam blind spot over the start-line straight).
-                if (n < 6 || n > count - 6) continue;
-
-                if (TrackPoints[n].PreciseCurveRadius >= CornerLimitRadius) continue;
-
-                // Inside a corner region: walk to its limits on each side.
-                int start = n;
-                while (start > 6 && TrackPoints[start - 1].PreciseCurveRadius < CornerLimitRadius && n - start < MaxCornerRegionWalk)
-                    start--;
-                int end = n;
-                while (end < count - 7 && TrackPoints[end + 1].PreciseCurveRadius < CornerLimitRadius && end - n < MaxCornerRegionWalk)
-                    end++;
-
-                // Apex = region midpoint (symmetric for a clean circumradius read).
-                int apex = start + (end - start) / 2;
-
-                // Apex already behind us: skip past the region.
-                if (apex <= cur)
-                {
-                    r.CornerScanNode = end;
-                    r.Brain.Corner = null;
-                    return;
-                }
-
-                // Corner found. Head past the region end and 5s exit window.
-                CornerPoint nextCorner = FillCornerPoint(r, start, end, apex);
-                float apexSpeed = CornerApexSpeed(nextCorner, r);
-                r.CornerScanNode = Math.Max(end, apex + (int)(apexSpeed * 5f) - 1);
-                if (r.Brain.Corner == null || r.Brain.Corner.Point.Node != nextCorner.Node)
-                    r.Brain.Corner = new Corner(apexSpeed, nextCorner);
-                return;
-            }
-
-            // No corner in this chunk. Advance and keep scanning next core.
-            r.CornerScanNode = chunkStart + ChunkScanNodesPerCore;
-            r.Brain.Corner = null;
-        }
-
+        // Fills a corner point from a region's limits and apex. Its only caller was the legacy live
+        // corner scan, so nothing reaches it now - it is the last of that cluster to be cut.
         static CornerPoint FillCornerPoint(Racer r, int start, int end, int apex)
         {
-            CornerPoint c = r.LiveCorner;
+            CornerPoint c = new CornerPoint();
             c.Node = apex;
             c.StartNode = start;
             c.EndNode = end;
