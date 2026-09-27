@@ -2805,9 +2805,16 @@ namespace ARS
 
         public static int ClosestNodeToPlace(Vector3 v, List<Vector3> PathRoute)
         {
-            Vector3 closest = PathRoute.OrderBy(p => p.DistanceTo(v)).ToList()[0];
-            for (int i = 0; i < PathRoute.Count - 1; i++) if (PathRoute[i] == closest) return i;
-            return 0;
+            int closest = 0;
+            float best = float.MaxValue;
+            for (int i = 0; i < PathRoute.Count; i++)
+            {
+                float distance = PathRoute[i].DistanceTo(v);
+                if (distance >= best) continue;
+                best = distance;
+                closest = i;
+            }
+            return closest;
         }
         
         // Legacy live corner scan; superseded by the apex-table pipeline.

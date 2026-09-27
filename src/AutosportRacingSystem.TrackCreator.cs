@@ -16,6 +16,11 @@ namespace ARS
         static bool _routeEditorActive = false;
         List<Vector3> _routeSection = new List<Vector3>();
         int _pathWidth = 5;
+        // The pending section is rebuilt only when its aim, the route end or the width moves.
+        Vector3 _previewAim = Vector3.Zero;
+        int _previewRouteNodes = -1;
+        int _previewWidth = 0;
+        const float PreviewRebuildDistance = 1f;
 
         // CleanEverything tears down any loaded track and clears the route statics, so it must run first.
         void StartTrackCreator()
@@ -165,25 +170,35 @@ namespace ARS
                         
                         World.DrawMarker(MarkerType.DebugSphere, ray.HitCoords, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.25f, 0.25f, 0.25f), Color.Blue);
 
-                        Vector3 sStart = RouteNodes[RouteNodes.Count - 1];
-                        Vector3 sDirection = (RouteNodes[RouteNodes.Count - 1] - RouteNodes[RouteNodes.Count - 2]).Normalized;
-                        Vector3 sEnd = ray.HitCoords;
+                        // GenerateArc probes the ground under every point, so it runs only when the aim has
+                        // moved a metre, the route end changed or the width did - what is drawn is what applies.
+                        bool aimMoved = _previewRouteNodes != RouteNodes.Count || Vector3.Distance(_previewAim, ray.HitCoords) > PreviewRebuildDistance;
+                        if (aimMoved)
+                        {
+                            Vector3 sStart = RouteNodes[RouteNodes.Count - 1];
+                            Vector3 sDirection = (RouteNodes[RouteNodes.Count - 1] - RouteNodes[RouteNodes.Count - 2]).Normalized;
 
-                        List<Vector3> temporaryRouteNodes = GenerateArc(sStart, sDirection, sEnd);
+                            List<Vector3> temporaryRouteNodes = GenerateArc(sStart, sDirection, ray.HitCoords);
 
-                        foreach (Vector3 p in temporaryRouteNodes)
+                            _routeSection.Clear();
+                            _routeSection.AddRange(temporaryRouteNodes);
+                            _previewAim = ray.HitCoords;
+                            _previewRouteNodes = RouteNodes.Count;
+                        }
+
+                        if (aimMoved || _previewWidth != _pathWidth)
+                        {
+                            EditNodeHalfWidths.Clear();
+                            for (int d = 0; d < _routeSection.Count - 1; d++)
+                            {
+                                EditNodeHalfWidths.Add(d, _pathWidth);
+                            }
+                            _previewWidth = _pathWidth;
+                        }
+
+                        foreach (Vector3 p in _routeSection)
                         {
                             World.DrawMarker(MarkerType.DebugSphere, p, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.25f, 0.25f, 0.25f), Color.Blue);
-                        }
-                        _routeSection.Clear();
-                        _routeSection.AddRange(temporaryRouteNodes);
-
-
-
-                        EditNodeHalfWidths.Clear();
-                        for (int d = 0; d < _routeSection.Count - 1; d++)
-                        {
-                            EditNodeHalfWidths.Add(d, _pathWidth);
                         }
                         if (_routeSection.Count > 4)
                         {
@@ -196,7 +211,6 @@ namespace ARS
                 else
                 {
 
-                    World.DrawMarker(MarkerType.ChevronUpx3, ray.HitCoords, FreeCamRide.ForwardVector, new Vector3(-90, 0, 0), new Vector3(1, 1, 1), Color.Blue);
                     World.DrawMarker(MarkerType.ChevronUpx3, ray.HitCoords, FreeCamRide.ForwardVector, new Vector3(-90, 0, 0), new Vector3(1, 1, 1), Color.Blue);
                     DrawLine(ray.HitCoords, ray.HitCoords - (FreeCamRide.ForwardVector * 10), Color.Blue);
 
@@ -216,10 +230,10 @@ namespace ARS
                     }
                 }
 
-                // Keep one half-width entry for every route segment.
-                for (int i = 0; i < RouteNodes.Count - 1; i++)
+                // Keep one half-width entry for every route segment; the fill only runs while it is short.
+                if (NodeHalfWidths.Count - 1 < RouteNodes.Count - 1)
                 {
-                    if (NodeHalfWidths.Count - 1 < RouteNodes.Count - 1)
+                    for (int i = 0; i < RouteNodes.Count - 1; i++)
                     {
                         if (!NodeHalfWidths.ContainsKey(i))
                         {
