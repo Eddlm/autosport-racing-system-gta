@@ -164,8 +164,6 @@ namespace ARS
         // ceiling tighter than the geometry (deliberate, understeer-prone), bounded by the ceiling's own floor at
         // half the geometry.
         public static float SteerSlipCeiling = 0f;
-        // Cap the steer limit at a share of the live peak slip angle instead of the corner geometry (Racer.ResolveSteerCeiling).
-        public static bool SteerPeakSlipCap = false;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -694,12 +692,14 @@ namespace ARS
                 }
             };
             _raceMenu.Add(_trackListItem);
+            HookListTextPicker(_trackListItem);
 
             NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", new[] { "2", "4", "6", "8", "10" });
             lapsItem.ItemChanged += (sender, args) => RaceMenuStore.Set("Laps", lapsItem.Items[args.Index]);
             int laps = RaceMenuStore.GetInt("Laps", 6);
             lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(laps.ToString()));
             _raceMenu.Add(lapsItem);
+            HookListTextPicker(lapsItem);
 
             // Reverse Route: player-facing race option, persisted in Menu-Race.ini.
             AddDebugCheckbox(_raceMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.", null, RaceMenuStore);
@@ -724,6 +724,7 @@ namespace ARS
             _intendedOpponents = NearestGridSize(RaceMenuStore.GetInt("GridSize", 8));
             _gridSizeItem.SelectedIndex = Array.IndexOf(GridSizeChoices, _intendedOpponents);
             _raceMenu.Add(_gridSizeItem);
+            HookListTextPicker(_gridSizeItem);
 
             // ── Grid PI Mode — the anchor the two PI controls below obey (Race owns all three keys) ──
             _paceModeItem = new NativeListItem<string>("Grid PI Mode", "How the grid's performance index (PI - the score the leaderboard shows) is chosen. Absolute = every grid uses the fixed PI Target. Relative To Mine = your car's own PI + PI Offset. Governs menu starts and E-joins alike.", EnumLabels<PaceMode>());
@@ -734,6 +735,7 @@ namespace ARS
                 ApplyPaceModeUI();
             };
             _raceMenu.Add(_paceModeItem);
+            HookListTextPicker(_paceModeItem);
 
             // ── PI offset / target (merged Council design; the mode above decides which one governs) ──
             _paceOffsetItem = new NativeListItem<string>("PI Offset", "Field PI = your car's performance index + this offset, resolved at Spawn Grid (clamped to the fleet's range).", Array.Empty<string>());
@@ -752,6 +754,7 @@ namespace ARS
                 }
             };
             _raceMenu.Add(_paceOffsetItem);
+            HookListTextPicker(_paceOffsetItem);
 
             _powerTargetItem = new NativeListItem<string>("PI Target", "Fixed performance index the grid is selected around.", Array.Empty<string>());
             _powerTargetItem.ItemChanged += (sender, args) =>
@@ -764,6 +767,7 @@ namespace ARS
                 }
             };
             _raceMenu.Add(_powerTargetItem);
+            HookListTextPicker(_powerTargetItem);
             // Set last: assigning SelectedIndex fires ItemChanged, and the mode's handler rewrites both PI items.
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
 
@@ -889,6 +893,7 @@ namespace ARS
             gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", ((GridSort)args.Index).ToString());
             gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(EnumLabel(ParseEnum(SettingsMenuStore.Get("GridSorting", "Random"), GridSort.Random))));
             racersMenu.Add(gridSortItem);
+            HookListTextPicker(gridSortItem);
 
             // ── Car pool: which Vehicles\*.txt roster the grid draws from ──
             // Listed without the extension; the ini keeps the file name.
@@ -913,6 +918,7 @@ namespace ARS
             carPoolItem.SelectedIndex = Math.Max(0, carPoolItem.Items.FindIndex(i => string.Equals(i, currentPool, StringComparison.OrdinalIgnoreCase)));
             _carPoolRefreshing = false;
             racersMenu.Add(carPoolItem);
+            HookListTextPicker(carPoolItem);
             racersMenu.Shown += (sender, args) => RefreshCarPoolItem(carPoolItem);
 
             NativeCheckboxItem forceFillItem = new NativeCheckboxItem("Force-Fill Grid", "Repeat the pool's car models until the grid reaches Target Grid Size, so a short pool still fields a full grid. Off leaves the grid as short as the pool.", ForceFillGrid);
@@ -927,11 +933,13 @@ namespace ARS
             timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
             timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(SettingsMenuStore.GetInt("TimeoutSeconds", 60).ToString()));
             racersMenu.Add(timeoutItem);
+            HookListTextPicker(timeoutItem);
 
             NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", new[] { "0", "1", "2" });
             autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
             autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(SettingsMenuStore.GetInt("AIRacerAutofix", 2).ToString()));
             racersMenu.Add(autofixItem);
+            HookListTextPicker(autofixItem);
 
             NativeCheckboxItem tuningItem = new NativeCheckboxItem("Smart Tuning", "Pick the livery that fits a style, then the body parts that go with it, then paint to suit. Runs during the countdown so it adds no load time.", SmartTuning);
             tuningItem.CheckboxChanged += (sender, args) =>
@@ -950,6 +958,7 @@ namespace ARS
             };
             aiNitroItem.SelectedIndex = Math.Max(0, aiNitroItem.Items.IndexOf(EnumLabel(AiNitro)));
             racersMenu.Add(aiNitroItem);
+            HookListTextPicker(aiNitroItem);
 
             // ── Menyoo vehicle skins on grid cars ──
             NativeCheckboxItem menyooItem = new NativeCheckboxItem("Use Menyoo Skins", "Apply Menyoo vehicle-appearance files (menyooStuff\\Vehicle) to grid cars that have a matching skin.", UseMenyooSkins);
@@ -969,6 +978,7 @@ namespace ARS
             };
             tipRateItem.SelectedIndex = Math.Max(0, tipRateItem.Items.IndexOf(EnumLabel(TipRate)));
             racersMenu.Add(tipRateItem);
+            HookListTextPicker(tipRateItem);
 
             // ── AI Settings submenu (under Settings) — how the AI racers drive; shares Settings\Menu-Settings.ini ──
             NativeMenu aiMenu = new NativeMenu("AI Settings", "AI Settings", "How the AI racers behave on track.")
@@ -986,6 +996,7 @@ namespace ARS
             };
             cornerOffsetItem.SelectedIndex = Math.Max(0, cornerOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(cornerOffsetItem);
+            HookListTextPicker(cornerOffsetItem);
 
             NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Route Offset (mph)", "Flat mph added to the route curvature plan. Higher = racers carry more speed through sweeping corners.", speedOffsetOptions);
             routeOffsetItem.ItemChanged += (sender, args) =>
@@ -995,6 +1006,7 @@ namespace ARS
             };
             routeOffsetItem.SelectedIndex = Math.Max(0, routeOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(routeOffsetItem);
+            HookListTextPicker(routeOffsetItem);
 
             NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the braking decel that keeps the car at full pedal (90%+) for a fifth of each braking phase. A corner it slides through takes a flat 0.1 cut instead. Announces each change while Show Track Analysis is on.", BrakeLearning);
             brakeLearningItem.CheckboxChanged += (sender, args) =>
@@ -1013,7 +1025,7 @@ namespace ARS
             aiMenu.Add(tcsItem);
 
             string[] steerKDOptions = { "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00" };
-            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping as a multiple of the grip-normalised baseline (baseline = 1 / car grip). 1.00 reproduces the tuned feel on a 2.2G car; lower is crisper, higher is calmer.", steerKDOptions);
+            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping as a multiple of the grip-normalised baseline (baseline = 1 / car grip). 1.00 is the tuned baseline; the gain divides by each car's own grip so the relative effect is the same across the fleet. Lower is crisper, higher is calmer.", steerKDOptions);
             steerKDItem.ItemChanged += (sender, args) =>
             {
                 SteerDampingScale = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1021,6 +1033,7 @@ namespace ARS
             };
             steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale).ToString("0.00", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerKDItem);
+            HookListTextPicker(steerKDItem);
 
             string[] steerCeilingOptions = { "0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0" };
             NativeListItem<string> steerCeilingItem = new NativeListItem<string>("Steer-In Bias (deg)", "Degrees added to the speed-based steer ceiling (vanilla curve vs Ackermann, whichever is lower). 0.0 is the corner geometry 1:1; higher turns in more, with the effect proportionally largest at speed, where the ceiling is smallest.", steerCeilingOptions);
@@ -1031,6 +1044,7 @@ namespace ARS
             };
             steerCeilingItem.SelectedIndex = Math.Max(0, steerCeilingItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingBias", SteerCeilingBias).ToString("0.0", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerCeilingItem);
+            HookListTextPicker(steerCeilingItem);
 
             string[] steerSlipOptions = { "-1.0", "-0.9", "-0.8", "-0.7", "-0.6", "-0.5", "-0.4", "-0.3", "-0.2", "-0.1", "0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" };
             NativeListItem<string> steerSlipItem = new NativeListItem<string>("Steer-In Slip Term", "How much of the outer front wheel's peak slip angle is added to the speed-based steer ceiling. A limit corner needs the Ackermann corner geometry PLUS the slip angle that makes the force, but the ceiling has only ever had the geometry half - so at speed the AI is capped below the angle its tyres can use. 0.0 is the old behaviour, unchanged; 1.0 is the full term; negative takes the ceiling below the corner geometry, so the front stays short of its peak on purpose.", steerSlipOptions);
@@ -1044,14 +1058,7 @@ namespace ARS
             int steerSlipIndex = steerSlipItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerSlipCeiling", SteerSlipCeiling).ToString("0.0", CultureInfo.InvariantCulture));
             steerSlipItem.SelectedIndex = steerSlipIndex >= 0 ? steerSlipIndex : steerSlipItem.Items.IndexOf("0.0");
             aiMenu.Add(steerSlipItem);
-
-            NativeCheckboxItem peakSlipItem = new NativeCheckboxItem("Peak-Slip Steer Cap", "Cap the steer limit at half the live peak slip angle - the handling curve's zero-speed peak narrowed by speed - instead of the corner geometry (vanilla curve vs Ackermann, whichever is lower). Fixed for a given speed: the brake pedal does not narrow it. While this is on, Steer-In Slip Term has no effect.", SteerPeakSlipCap);
-            peakSlipItem.CheckboxChanged += (sender, args) =>
-            {
-                SteerPeakSlipCap = peakSlipItem.Checked;
-                SaveRacerSetting("SteerPeakSlipCap", SteerPeakSlipCap.ToString());
-            };
-            aiMenu.Add(peakSlipItem);
+            HookListTextPicker(steerSlipItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -1062,6 +1069,7 @@ namespace ARS
             };
             crestEffectItem.SelectedIndex = Math.Max(0, crestEffectItem.Items.IndexOf(SettingsMenuStore.GetInt("CrestEffect", 100).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(crestEffectItem);
+            HookListTextPicker(crestEffectItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Hill Effect (%)", "How much a hill's pitch cuts a racer's intended speed. 0% ignores slopes, 100% is the tuned default (15 degrees halves grip).", terrainEffectOptions);
             hillEffectItem.ItemChanged += (sender, args) =>
@@ -1071,6 +1079,7 @@ namespace ARS
             };
             hillEffectItem.SelectedIndex = Math.Max(0, hillEffectItem.Items.IndexOf(SettingsMenuStore.GetInt("HillGripEffect", 100).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(hillEffectItem);
+            HookListTextPicker(hillEffectItem);
 
             string[] rubberbandOptions = { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" };
             NativeListItem<string> rubberbandItem = new NativeListItem<string>("Rubberbanding (%)", "Keeps the field packed: leaders are slowed and laggards are boosted, scaled by distance from the center position. 0 = off; 100 = max effect (0.66× for the leader, 1.33× for last place).", rubberbandOptions);
@@ -1081,6 +1090,7 @@ namespace ARS
             };
             rubberbandItem.SelectedIndex = Math.Max(0, rubberbandItem.Items.IndexOf(SettingsMenuStore.GetInt("Rubberbanding", 0).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(rubberbandItem);
+            HookListTextPicker(rubberbandItem);
 
             NativeListItem<string> rubberModeItem = new NativeListItem<string>("Rubberband Mode", "Natural = leaders are slowed only. Artificial = leaders are slowed and laggards get a torque boost.", Enum.GetNames(typeof(RubberbandMode)));
             rubberModeItem.ItemChanged += (sender, args) =>
@@ -1090,6 +1100,7 @@ namespace ARS
             };
             rubberModeItem.SelectedIndex = Math.Max(0, rubberModeItem.Items.IndexOf(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString())));
             aiMenu.Add(rubberModeItem);
+            HookListTextPicker(rubberModeItem);
 
             // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
             NativeMenu advancedMenu = new NativeMenu("Advanced Settings", "Advanced Settings", "Low-level physics overrides and AI corrections.")
@@ -1141,6 +1152,7 @@ namespace ARS
             };
             menuModifierItem.SelectedIndex = Math.Max(0, Array.IndexOf(MenuHotkeyKeys, MenuModifierKey));
             advancedMenu.Add(menuModifierItem);
+            HookListTextPicker(menuModifierItem);
 
             NativeListItem<string> menuKeyItem = new NativeListItem<string>("Menu Key", "Second key of the ARS menu chord (Windows virtual-key code).", MenuHotkeyKeys.Select(MenuHotkeyLabel).ToArray());
             menuKeyItem.ItemChanged += (sender, args) =>
@@ -1151,6 +1163,7 @@ namespace ARS
             };
             menuKeyItem.SelectedIndex = Math.Max(0, Array.IndexOf(MenuHotkeyKeys, MenuKey));
             advancedMenu.Add(menuKeyItem);
+            HookListTextPicker(menuKeyItem);
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
@@ -1160,6 +1173,7 @@ namespace ARS
             };
             logLevelItem.SelectedIndex = Math.Max(0, logLevelItem.Items.IndexOf(EnumLabel(LogLevel)));
             advancedMenu.Add(logLevelItem);
+            HookListTextPicker(logLevelItem);
 
             if (!StagedSpawns)
             {
@@ -1186,7 +1200,7 @@ namespace ARS
             _arsMenu.AddSubMenu(_raceMenu);
             _arsMenu.AddSubMenu(settingsMenu);
             _arsMenu.AddSubMenu(cameraMenu);
-            _arsMenu.AddSubMenu(creatorMenu);
+            //_arsMenu.AddSubMenu(creatorMenu);
             _arsMenu.Add(resetItem);
 
             // Register all menus in the pool
@@ -1198,7 +1212,7 @@ namespace ARS
             _menuPool.Add(racersMenu);
             _menuPool.Add(advancedMenu);
             _menuPool.Add(cameraMenu);
-            _menuPool.Add(creatorMenu);
+            //_menuPool.Add(creatorMenu);
         }
         void SaveRacerSetting(string key, string value)
         {
@@ -1219,6 +1233,24 @@ namespace ARS
         void SaveDevToggle(Options option, bool value)
         {
             DebugMenuStore.Set(option.ToString(), value.ToString());
+        }
+        // Hook Enter on a list item to open Game.GetUserInput and substring-match against the items. First match wins
+        // (case-insensitive). Selecting the matched index fires the existing ItemChanged handler, so persistence runs.
+        void HookListTextPicker(NativeListItem<string> item)
+        {
+            item.Activated += (sender, args) =>
+            {
+                string typed = Game.GetUserInput(64);
+                if (string.IsNullOrEmpty(typed)) return;
+                int match = item.Items.FindIndex(s => s.IndexOf(typed, StringComparison.OrdinalIgnoreCase) >= 0);
+                if (match < 0)
+                {
+                    UI.Notify("~r~[ARS]:~w~ No list item contains '" + typed + "'.");
+                    return;
+                }
+                if (match == item.SelectedIndex) return;
+                item.SelectedIndex = match;
+            };
         }
         // ── Phased race instancing: each phase is a self-contained method, callable on its own or chained. ──
 
@@ -2944,7 +2976,6 @@ namespace ARS
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingScale = SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale);
             SteerCeilingBias = SettingsMenuStore.GetFloat("SteerCeilingBias", SteerCeilingBias);
-            SteerPeakSlipCap = SettingsMenuStore.GetBool("SteerPeakSlipCap", SteerPeakSlipCap);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

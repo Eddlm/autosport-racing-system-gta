@@ -944,19 +944,34 @@ namespace ARS
             return ARS.Clamp(peakSlipDeg * PeakSlipCapShare + ARS.SteerCeilingBias, 0f, VehicleData.SteeringLock);
         }
 
-        // The ceiling in force at this speed: whichever mechanism is selected, eased back towards full lock below
-        // the ramp's end speed, where it meets what the car gets at that end speed anyway.
+        // Maximum sustained yaw rate the car can hold at the current speed: the slip ceiling's radius from the
+        // Ackermann relation, then v / R. Above ~100% the car is over-rotating — the slide blend or the limiter
+        // owns what happens next. Returns 0 when no grip data is available yet (early init).
+        float YawHeadroomPercent()
+        {
+            if (TRLateralAtSpeed <= 0.01f) return 0f;
+            float fwdSpeed = ARS.GetForwardSpeed(Car);
+            if (fwdSpeed <= 0.1f) return 0f;
+            float steerLockRad = PeakSlipCeilingAt(TRLateralAtSpeed) * (float)Math.PI / 180f;
+            if (steerLockRad <= 0.001f) return 0f;
+            float turnRadius = VehicleData.WheelBase / (float)Math.Tan(steerLockRad);
+            float maxYawRadPerSec = fwdSpeed / Math.Max(turnRadius, 1f);
+            float maxYawDegPerSec = maxYawRadPerSec * 180f / (float)Math.PI;
+            return Math.Abs(VehicleData.YawRotationPerSecondDegrees) / maxYawDegPerSec * 100f;
+        }
+
+        // The ceiling in force at this speed: the peak-slip cap, with the corner geometry as a fallback only when the
+        // live peak reads unusable. Eased back towards full lock below the ramp's end speed, where it meets what
+        // the car gets at that end speed anyway.
         float ResolveSteerCeiling(float fwdSpeed)
         {
-            // The peak-slip cap falls back to the corner geometry while the peak reads unusable.
-            bool peakSlipCap = ARS.SteerPeakSlipCap && TRLateralAtSpeed > 0.01f;
-            float ceiling = peakSlipCap ? PeakSlipCeilingAt(TRLateralAtSpeed) : GeometrySteerCeiling(fwdSpeed);
+            float ceiling = TRLateralAtSpeed > 0.01f ? PeakSlipCeilingAt(TRLateralAtSpeed) : GeometrySteerCeiling(fwdSpeed);
             float speedMph = ARS.MpsToMph(fwdSpeed);
             if (speedMph >= SteerLimitRampEndMph) return ceiling;
 
             float endSpeed = ARS.MphToMps(SteerLimitRampEndMph);
             float endPeak = LateralPeakAtSpeed(endSpeed);
-            float endCeiling = ARS.SteerPeakSlipCap && endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) : GeometrySteerCeiling(endSpeed);
+            float endCeiling = endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) : GeometrySteerCeiling(endSpeed);
             // Descending *input* with ascending output, because Remap's own clamp inverts a descending output.
             float ramped = ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, endCeiling, VehicleData.SteeringLock, true);
             // max() keeps the ramp a raise only: the straight line sits a degree under the curved law near 25 mph.
@@ -1935,6 +1950,8 @@ namespace ARS
 
                 // Input trail.
                 DrawInputTrail();
+
+                DrawYawDamperHud();
             }
 
             _appliedThrottleLastFrame = VehicleMemory.GetThrottle(Car);
@@ -1993,6 +2010,23 @@ namespace ARS
         {
             float v = ARS.Clamp(input, -1f, 1f);
             return Color.FromArgb((int)(255f * (1f - Math.Max(v, 0f))), (int)(255f * (1f + Math.Min(v, 0f))), 0);
+        }
+
+        // Yaw damper HUD: yaw rate (deg/s) and damper instruction (deg) on the first line, final steer command (deg) on the
+        // second, headroom (% of the centripetal yaw rate the car can hold at the current speed) on the third. Drawn
+        // top-centre in red on the debug-focus AI racer.
+        void DrawYawDamperHud()
+        {
+            if (ControlledByPlayer) return;
+            if (ARS.DebugFocusRacer != this) return;
+            float yaw = VehicleData.YawRotationPerSecondDegrees;
+            float damper = _debugDamperTermDeg;
+            float steer = Control.SteerDegrees;
+            float headroomPct = YawHeadroomPercent();
+            Color red = Color.FromArgb(255, 230, 30, 30);
+            ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " deg/s  /  DAMP " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            ARS.DrawText(new Vector2(0.5f, 0.110f), "STEER " + steer.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW HEADROOM " + headroomPct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
         }
 
         public void RunTimedCore()
