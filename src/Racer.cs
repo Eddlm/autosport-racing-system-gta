@@ -453,15 +453,12 @@ namespace ARS
 
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float absDev = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
-            // Centre-based by design: the recovery reads the raw half width, unlike the lane targets, which inset.
-            float safeEdge = roadWide;
+            float safeEdge = roadWide - carHalfWidth;
             float overshoot = absDev - safeEdge;
             float recoveryDeg = 0f;
             if (overshoot > 0f)
             {
-                float maxRecoveryDeg = ARS.Remap(ARS.MpsToMph(speedMps), 100f, 10f, 3f, 45f, true);
-                float severity = ARS.Clamp(overshoot / Math.Max(carHalfWidth, 0.1f), 0f, 1f);
-                recoveryDeg = Math.Sign(Brain.CurrentPerception.DeviationFromCenter) * maxRecoveryDeg * severity;
+                recoveryDeg = Math.Sign(Brain.CurrentPerception.DeviationFromCenter) * Math.Min(overshoot * 2f, 80f);
             }
 
 
@@ -2277,9 +2274,7 @@ namespace ARS
             LookAheads.Clear();
             float speed = Car.Velocity.Length();
 
-            // Manual grip -> lead scale: low grip shortens the steer reference, high grip lengthens it.
-            float leadScale = ARS.Remap(VehicleData.CurrentMechanicalGrip, 1f, 3f, 0.8f, 1.2f, true);
-            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f) * leadScale), (int)SteerLookaheadMinMeters, 500);
+            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f) * 0.8f), (int)SteerLookaheadMinMeters, 500);
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
             int threeQuarterSec = (int)(speed * 0.75f);
