@@ -1493,14 +1493,14 @@ namespace ARS
             return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
         }
 
-        // TCS slip-ratio target, on the game's per-wheel rotation-slip ratio at wheel+0x174 (0 free rolling, the
-        // traction curve peaks at argument 1.0, flat from 2.5 — the curve's argument IS this ratio, leaked
-        // wheel.cpp:94-97, and the effective slip angle is a later derived quantity). Set past the peak on purpose
-        // - a powerful RWD car should light them up on launch and out of slow corners, and wheelspin is rotation -
-        // and scaled by the grip multiplier so a low-grip surface keeps it in the same place against the peak.
-        // More negative = more spin.
-        const float IdealWheelspinSlipTarget = 1.25f;
-        const float IdealWheelspinDeepening = 0.3f;
+        // TCS slip-ratio targets, on the game's per-wheel rotation-slip ratio at wheel+0x174: 0 free rolling, the
+        // traction curve rises linearly to its peak at 0.4 (curve argument sfTractionPeakAngle 1.0, rescaled by
+        // sfTractionMinAngle 2.5 at the wheel.cpp:4497 call), degrades linearly to CurveMin at 1.0 and is flat past
+        // it. The three targets are points on that curve; more negative = more spin. Leaked wheel.cpp:94-97, :4497.
+        const float IdealWheelspinLaunchRatio = 0.7f;    // standstill: mid-traction, the CurveMax-CurveMin midpoint (argument 1.75)
+        const float IdealWheelspinPeakRatio = 0.4f;      // normal driving: the traction peak (argument 1.0)
+        const float IdealWheelspinOffTrackRatio = 0.2f;  // off-track: half the peak coefficient
+        const float IdealWheelspinLaunchTaperEndMph = 30f;
         const float IdealWheelspinGripFloor = 0.3f;
 
         void TractionControl()
@@ -1508,25 +1508,18 @@ namespace ARS
             if (!ARS.TcsEnabled) { Control.MaxThrottleFromTCS = 1f; return; }
 
             float wheelspin = ARS.MaxWheelSlip(Car);
-
             float IdealWheelspin;
             if (OutOfTrackDistance() > 0f)
             {
-                IdealWheelspin = -0.25f;  // off-track: tame target, already derated - not scaled a second time
+                // The surface's own grip multiplier is already inside the wheelspin read, so the fixed half-peak
+                // point is not scaled a second time.
+                IdealWheelspin = -IdealWheelspinOffTrackRatio;
             }
             else
             {
-                // A car sliding past twice the traction limit needs the throttle back, not more of it. Descending
-                // *input* with ascending output on purpose: a descending output is inverted by Remap's clamp
-                // (Clamp(r, min, max) with min > max collapses to min), and trlat == 0 would divide by zero.
                 float gripScale = ARS.Clamp(GroundGripMultiplier, IdealWheelspinGripFloor, 1f);
-                float IdealWheelspinBase = -IdealWheelspinSlipTarget * gripScale;
-                float trlat = Handling.LateralTractionCurve;
-                float slide = Math.Abs(VehicleData.SlideAngle);
-                float deepest = IdealWheelspinBase - IdealWheelspinDeepening * gripScale;
-                if (trlat <= 0.01f) IdealWheelspin = IdealWheelspinBase;
-                else if (slide <= trlat) IdealWheelspin = ARS.Remap(slide, trlat, 0f, deepest, IdealWheelspinBase, true);
-                else IdealWheelspin = ARS.Remap(slide, trlat, trlat * 2f, deepest, IdealWheelspinBase, true);
+                IdealWheelspin = -ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()),
+                    IdealWheelspinLaunchTaperEndMph, 0f, IdealWheelspinPeakRatio * gripScale, IdealWheelspinLaunchRatio * gripScale, true);
             }
 
             float error = wheelspin - IdealWheelspin;
