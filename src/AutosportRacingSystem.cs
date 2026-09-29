@@ -151,6 +151,7 @@ namespace ARS
         public static bool BrakeLearning = true;
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
+        public static bool AbsEnabled = true;
         // Flat mph added to the corner braking plan; Route Offset is the same knob for the route term.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
@@ -1016,6 +1017,14 @@ namespace ARS
                 SaveRacerSetting("TcsEnabled", TcsEnabled.ToString());
             };
             aiMenu.Add(tcsItem);
+
+            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "Cap AI brake against a wheel-lock target, the TCS mirror on the brake side. Off lets AI brake go unlimited - plain brake force, engine-side ABS only.", AbsEnabled);
+            absItem.CheckboxChanged += (sender, args) =>
+            {
+                AbsEnabled = absItem.Checked;
+                SaveRacerSetting("AbsEnabled", AbsEnabled.ToString());
+            };
+            aiMenu.Add(absItem);
 
             string[] steerKDOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
             NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds against zero yaw. Lower is crisper; higher opposes rotation more strongly.", steerKDOptions);
@@ -2780,6 +2789,21 @@ namespace ARS
             return powers;
         }
 
+        // Per-wheel positive (lock-side) slip on the same +0x174 ratio TCS reads: braking slip is positive
+        // (leaked wheel.cpp:5233 the spin branch negative, :5268 the lock branch positive).
+        static public unsafe float MaxWheelLockSlip(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            ulong offset = 0x174;
+            float w = 0f;
+            foreach (var wheel in wheelPtrs)
+            {
+                float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
+                if (pos > w) w = pos;
+            }
+            return w;
+        }
+
         // Per-wheel slip ratio (offset 0x174, same data TCS uses) - a dimensionless rotational slip ratio, not a
         // slip angle (leaked wheel.cpp:94-97, the traction curve's own argument, peaks at 1.0 and flat from 2.5).
         // A lifted wheel reads 0.00 slip, so
@@ -2973,6 +2997,7 @@ namespace ARS
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
+            AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             CrestEffect = SettingsMenuStore.GetInt("CrestEffect", 100) * 0.01f;
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 0);

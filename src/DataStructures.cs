@@ -323,6 +323,7 @@ namespace ARS
         public float MaxThrottle = 1f;
         public float MaxBrake = 1f;
         public float MaxThrottleFromTCS = 1f;
+        public float MaxBrakeFromABS = 1f;
 
         public int HandBrakeTime = 0;
 

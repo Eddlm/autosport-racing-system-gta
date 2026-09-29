@@ -1044,6 +1044,7 @@ namespace ARS
             Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
             Control.MaxThrottle = 1f;
             Control.MaxBrake = 1f;
+            Control.MaxBrakeFromABS = 1f;
             IsStuckByThrottle = false;
             _lastStuckGameTime = 0;
             _isRecoveringFromStuck = false;
@@ -1085,6 +1086,7 @@ namespace ARS
 
             // Gate on the raw target (pre-slew): in the throttle-to-brake transition Control.Throttle slews down
             // slowly and could still read >= 1.0 while the car is already braking.
+            newBrake = Math.Min(newBrake, Math.Min(Control.MaxBrake, Control.MaxBrakeFromABS));
             bool rbFreeZonePedal = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
             if (ARS.RubberbandingPct > 0 && ARS.CurrentRubberbandMode == RubberbandMode.Artificial && newThrottle >= 1.00f && !rbFreeZonePedal)
             {
@@ -1501,7 +1503,7 @@ namespace ARS
         const float IdealWheelspinPeakRatio = 0.4f;      // normal driving: the traction peak (argument 1.0)
         const float IdealWheelspinOffTrackRatio = 0.2f;  // off-track: half the peak coefficient
         const float IdealWheelspinLaunchTaperEndMph = 30f;
-        const float IdealWheelspinGripFloor = 0.3f;
+        const float SlipTargetGripFloor = 0.3f;
 
         void TractionControl()
         {
@@ -1517,7 +1519,7 @@ namespace ARS
             }
             else
             {
-                float gripScale = ARS.Clamp(GroundGripMultiplier, IdealWheelspinGripFloor, 1f);
+                float gripScale = ARS.Clamp(GroundGripMultiplier, SlipTargetGripFloor, 1f);
                 IdealWheelspin = -ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()),
                     IdealWheelspinLaunchTaperEndMph, 0f, IdealWheelspinPeakRatio * gripScale, IdealWheelspinLaunchRatio * gripScale, true);
             }
@@ -1525,6 +1527,24 @@ namespace ARS
             float error = wheelspin - IdealWheelspin;
             float change = error * TickScale * 2f;
             Control.MaxThrottleFromTCS = ARS.Clamp(Control.MaxThrottleFromTCS + change, 0.25f, 1);
+        }
+
+        // ABS mirrors TCS on the brake side, holding the lock slip at the CurveMax-CurveMin midpoint instead of
+        // letting it grow. Lock reads positive on the same +0x174 ratio (leaked wheel.cpp:5233 spin negative,
+        // :5268 lock positive), and the engine's own free ABS clamps coarsely at +-5, so this engages first; the
+        // per-wheel FLAG_WD_ABS is left alone, and a driver sign check is the first thing to watch.
+        const float AbsIdealBrakeSlip = 0.7f;
+        const float AbsBrakeFloor = 0.25f;
+
+        void ABSControl()
+        {
+            if (!ARS.AbsEnabled) { Control.MaxBrakeFromABS = 1f; return; }
+
+            float gripScale = ARS.Clamp(GroundGripMultiplier, SlipTargetGripFloor, 1f);
+            float lockSlip = ARS.MaxWheelLockSlip(Car);
+            float error = AbsIdealBrakeSlip * gripScale - lockSlip;
+            float change = error * TickScale * 2f;
+            Control.MaxBrakeFromABS = ARS.Clamp(Control.MaxBrakeFromABS + change, AbsBrakeFloor, 1f);
         }
         void ConsiderManeuvers()
         {
@@ -2754,6 +2774,7 @@ namespace ARS
                 UpdateStuckRecovery();
 
                 TractionControl();
+                ABSControl();
                 ApplyStuckRecoveryOverride();
 
                 // The limiter closes the steering last, after every writer above, so nothing escapes it.
