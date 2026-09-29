@@ -162,6 +162,7 @@ namespace ARS
         public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals
         public float SecondsToHit = float.PositiveInfinity;    // physical swept bounding-box hit time
         public float FrontGap = float.PositiveInfinity;        // front-to-rear distance to rival
+        public float RouteGapMeters = float.PositiveInfinity;  // nearest-node route distance, 1 node = 1 m
 
         public Vector2 CombinedSize = Vector2.Zero;
         public float OccupiedLane=0f;
@@ -198,6 +199,15 @@ namespace ARS
             OccupiedLaneWidth = CombinedSize.X;
             OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
             Distance = (myPosition - rivalPosition).Length();
+            UpdateRouteGap(me);
+        }
+
+        // Near-zero only when the cars are neighbours along the route; physical closeness alone cannot separate a
+        // real side-by-side from the opposite leg of a U, whose nodes sit hundreds of metres of route apart.
+        void UpdateRouteGap(Racer me)
+        {
+            int nodeGap = Math.Abs(RivalRacer.CurrentTrackPoint.Node - me.CurrentTrackPoint.Node);
+            RouteGapMeters = ARS.IsPointToPoint ? nodeGap : Math.Min(nodeGap, ARS.TrackPoints.Count - nodeGap);
         }
 
         // Speed gaps and the times they imply. Two laws live here on purpose: ForwardSpeedGap projects the

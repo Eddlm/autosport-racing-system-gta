@@ -697,6 +697,13 @@ namespace ARS
             return 0f;
         }
 
+        // A rival ahead is only a pass target while the two velocity vectors sit within this angle; past it the
+        // rival is not in a valid position to avoid, and the car falls back to follow-behind.
+        const float AvoidAngleGateDegrees = 20f;
+        // The wall and pass geometry only trust an adjacency when the pair also sits on neighbouring route nodes,
+        // so an overlapping car on the far leg of a U is never mistaken for a trackside blockage.
+        const float SameSectionMaxGapMeters = 30f;
+
         // Pick a lane to pass a rival ahead. If two rivals trigger on opposite sides, thread the needle.
         float ComputeAvoidAheadLane(float roadWide)
         {
@@ -715,7 +722,8 @@ namespace ARS
             {
                 if (r.RivalRacer == null || r == target) continue;
                 if (r.RelativePosition != RelativePos.Ahead) continue;
-                if (!ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, 30f)) continue;
+                if (r.RouteGapMeters > SameSectionMaxGapMeters) continue;
+                if (!ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, AvoidAngleGateDegrees)) continue;
                 if (!ARS.IsBetween(r.FrontGap, 0f, 3f) && !ARS.IsBetween(r.SecondsToHit, 0f, 5f)) continue;
 
                 if (!TryPickAvoidanceSide(r, trackBound, aggroBuffer, carHalfWidth, currentLaneMeters, out float secondTarget, out bool secondGoLeft))
@@ -786,8 +794,8 @@ namespace ARS
             {
                 if (r.RivalRacer == null) continue;
 
-                bool overlaps = Math.Abs(r.LongitudinalGap) < r.CombinedSize.Y;
-                bool aheadAndClose = r.RelativePosition == RelativePos.Ahead && r.SecondsToReach < 3f;
+                bool overlaps = Math.Abs(r.LongitudinalGap) < r.CombinedSize.Y && r.RouteGapMeters <= SameSectionMaxGapMeters;
+                bool aheadAndClose = r.RelativePosition == RelativePos.Ahead && r.SecondsToReach < 3f && r.RouteGapMeters <= SameSectionMaxGapMeters && Math.Abs(r.DirectionDiff) <= AvoidAngleGateDegrees;
                 if (!overlaps && !aheadAndClose) continue;
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
@@ -2142,10 +2150,7 @@ namespace ARS
             foreach (Rival r in Brain.Rivals)
             {
                 r.Update(this);
-                bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead
-                    && (ARS.IsBetween(r.FrontGap, 0f, 3f)
-                        || ARS.IsBetween(r.SecondsToHit, 0f, 5f))
-                    && ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, 30f);
+                bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead && r.RouteGapMeters <= SameSectionMaxGapMeters && (ARS.IsBetween(r.FrontGap, 0f, 3f) || ARS.IsBetween(r.SecondsToHit, 0f, 5f)) && ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, AvoidAngleGateDegrees);
                 if (Brain.AvoidanceTarget == null && isAvoidanceCandidate)
                 {
                     Brain.AvoidanceTarget = r;
