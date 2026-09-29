@@ -145,9 +145,9 @@ namespace ARS
             settings.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TcsEnabled", "True", Kind.Bool));
-            settings.Specs.Add(new KeySpec("SteerDampingScale", "1.00", Kind.Number, new[] { "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00" }));
-            settings.Specs.Add(new KeySpec("SteerCeilingBias", "2.0", Kind.Number, new[] { "0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0" }));
-            settings.Specs.Add(new KeySpec("SteerSlipCeiling", "0.0", Kind.Number, new[] { "-1.0", "-0.9", "-0.8", "-0.7", "-0.6", "-0.5", "-0.4", "-0.3", "-0.2", "-0.1", "0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" }));
+            settings.Specs.Add(new KeySpec("SteerDampingGain", "0.50", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));
+            settings.Specs.Add(new KeySpec("YawTurnInMinimumPercent", "20", Kind.Number, new[] { "0", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100" }));
+            settings.Specs.Add(new KeySpec("YawTurnInMaximumPercent", "100", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
             settings.Specs.Add(new KeySpec("CrestEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("Rubberbanding", "0", Kind.Number, new[] { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" }));

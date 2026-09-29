@@ -142,8 +142,6 @@ namespace ARS
         const int InputTrailMaxSamples = 40;
 
 
-        // True when the steer limiter actually reduced the steer this frame; read by the Show Inputs clamp marker.
-        bool _steerLimitedThisFrame = false;
         // Public so a rule can grant an allowance to one side and the debug view can draw them. LEFT bounds positive
         // commands and RIGHT negative ones, because a positive command steers left (AGENTS.md's steer-sign gotcha).
         public float SteerLimitRight = 40f;
@@ -152,6 +150,8 @@ namespace ARS
         // Yaw damper steer contributions in degrees, for Show Inputs: against zero and against the track's required yaw.
         float _debugDamperZeroRefDeg = 0f;
         float _debugDamperTermDeg = 0f;
+        float _debugYawTargetPerSecond = 0f;
+        float _debugDamperGainSeconds = 0f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
         const float BrakeFactorSeed = 0.9f;
@@ -519,11 +519,15 @@ namespace ARS
             // Damp the excess over the yaw the track requires, not over zero which taxes every steady corner; the
             // slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
             float fwdSpeed = ARS.GetForwardSpeed(Car);
-            float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees;
-            if (SteerDampingTrackReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) yawRateToDamp -= RequiredYawRatePerSecond(steerRefPoint, fwdSpeed);
-            _debugDamperZeroRefDeg = -SteerDamping * VehicleData.YawRotationPerSecondDegrees;
-            _debugDamperTermDeg = -SteerDamping * yawRateToDamp;
-            float dampedCourseSteerDeg = (steerKP * (courseErrorDeg + recoveryDeg + sideBySideSteerDeg)) - (SteerDamping * yawRateToDamp);
+            float yawTarget = 0f;
+            if (SteerDampingTrackReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) yawTarget = RequiredYawRatePerSecond(steerRefPoint, fwdSpeed);
+            float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
+            float damperGain = SteerDamping;
+            _debugYawTargetPerSecond = yawTarget;
+            _debugDamperGainSeconds = damperGain;
+            _debugDamperZeroRefDeg = -damperGain * VehicleData.YawRotationPerSecondDegrees;
+            _debugDamperTermDeg = -damperGain * yawRateToDamp;
+            float dampedCourseSteerDeg = (steerKP * (courseErrorDeg + recoveryDeg + sideBySideSteerDeg)) + _debugDamperTermDeg;
             Control.SteerDegrees = dampedCourseSteerDeg + (steerKP * laneSteerDeg);
 
             if (Handling.LateralTractionCurve > 1f)
@@ -828,17 +832,13 @@ namespace ARS
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
-        const float SteerSlewRate = 180f;                // fixed steering slew rate (degrees/second)
-        const float SteerSlewRateCountersteer = 360f;    // doubled when countersteering (steer opposes yaw)
-        // Yaw-rate damping is grip-normalised: the menu scale is divided by the car's base grip, so the
-        // damping ratio can hold across the fleet. The floor only guards a degenerate grip.
-        const float SteerDampingGripFloor = 1f;
+        const float SteerSlewRate = 90f;
+        const float SteerSlewRateCountersteer = 180f;
         // Kill switch for the yaw-rate damper. Driven with it off the cars cannot hold centre — the term is the
         // only thing opposing a rotation the course chain has already started, so it is load-bearing, not trim.
         const bool SteerDampingEnabled = true;
-        // Reference the yaw damper to the yaw the track requires; false restores the zero-referenced term in one line.
-        const bool SteerDampingTrackReference = true;
-        float SteerDamping => SteerDampingEnabled ? ARS.SteerDampingScale / Math.Max(VehicleData.BaseMechanicalGrip, SteerDampingGripFloor) : 0f;
+        const bool SteerDampingTrackReference = false;
+        float SteerDamping => SteerDampingEnabled ? ARS.SteerDampingGain : 0f;
         // The yaw the track requires at a node: Angle is already the node's signed turn in the steer command's own
         // convention (a left-hand corner is positive, as is the yaw rate that takes it), so it is used as-is; the
         // span is twice the half width because nodes are one metre apart.
@@ -856,10 +856,7 @@ namespace ARS
         // Grip is read as a ratio to this reference, floored so a low-grip car cannot blow the coefficient up.
         const float SteerCapGripReference = 1f;
         const float SteerCapGripFloor = 0.5f;
-        // The bias dial may cut the ceiling but never below this fraction of the geometry.
-        const float SteerCeilingBiasFloor = 0.5f;
-        // Peak-slip cap: the share of the live peak slip angle the cap is set to.
-        const float PeakSlipCapShare = 0.5f;
+        const float PeakSlipOuterWheelCommandShare = 1f / 0.75f;
         // Below the ramp's end speed the ceiling eases back to the car's full lock, so a slow car can steer in
         // fully; above it the ceiling is the law's own. The band is in mph because that is how it is judged.
         const float SteerLimitRampStartMph = 5f;
@@ -891,12 +888,6 @@ namespace ARS
             return ARS.RadToDeg((float)Math.Atan(ratio));
         }
 
-        // The game steers one front wheel 0.75 of the command (CWheel::SetSteerAngle's quasi-Ackermann step),
-        // so the command that lands the OUTER front wheel on its peak slip angle is that angle / 0.75.
-        const float SlipCeilingOuterWheelShare = 1f / 0.75f;
-        // Same sanity floor the TCS target uses: a lifted wheel reads ~0 on the grip multiplier.
-        const float SlipCeilingGripFloor = 0.3f;
-
         // The authored fTractionCurveLateral is the ZERO-SPEED peak — the tyre stiffens with speed, which is what
         // LateralPeakAtSpeed models. Refreshed once per timed core so every consumer in a frame reads the same value.
         public float TRLateralAtSpeed = 22f;
@@ -914,34 +905,15 @@ namespace ARS
             return lat <= 0.01f ? 0f : lat / (1f + Math.Min(5f, 0.1f * speed));
         }
 
-        // Steer angle whose OUTER front wheel sits on its peak slip angle — the live TRLateralAtSpeed scaled by the
-        // ground's grip multiplier, because fLoss moves the peak angle and not just the force. The kinematic ceiling
-        // alone leaves the tyres short of the angle they can use, and the shortfall grows with speed.
-        float SlipCeilingDegrees(float fwdSpeed)
-        {
-            if (TRLateralAtSpeed <= 0.01f || fwdSpeed <= 0f) return 0f;
-            float gripScale = ARS.Clamp(GroundGripMultiplier, SlipCeilingGripFloor, 1f);
-            return ARS.SteerSlipCeiling * SlipCeilingOuterWheelShare * TRLateralAtSpeed * gripScale;
-        }
-
-        // The shipped ceiling: the corner geometry (vanilla's grip-scaled authority curve vs Ackermann, whichever is
-        // lower) plus the outer wheel's peak-slip term, biased and floored so the bias can only ever cut to half.
         float GeometrySteerCeiling(float fwdSpeed)
         {
             float vanillaCeiling = VehicleData.SteeringLock / (1f + SteerReductionPerMps * fwdSpeed);
-            float geometryCeiling = Math.Min(vanillaCeiling, AckermannCeilingDegrees(fwdSpeed));
-            float slipCeiling = SlipCeilingDegrees(fwdSpeed);
-            // The one deliberate skew: the geometry is computed 1:1 and then biased, so the ceiling's shape
-            // and the crossover stay where the physics puts them and only the number moves. The floor stops
-            // a negative bias from reaching zero (a car that cannot steer) or below (an inverted clamp).
-            return ARS.Clamp(geometryCeiling + slipCeiling + ARS.SteerCeilingBias, geometryCeiling * SteerCeilingBiasFloor, VehicleData.SteeringLock);
+            return Math.Min(vanillaCeiling, AckermannCeilingDegrees(fwdSpeed));
         }
 
-        // The ARS.SteerPeakSlipCap alternative: a fixed share of a peak slip angle, keeping the front short of the
-        // peak the tyres could use. Fixed for a given speed — the brake pedal deliberately does not narrow it.
         float PeakSlipCeilingAt(float peakSlipDeg)
         {
-            return ARS.Clamp(peakSlipDeg * PeakSlipCapShare + ARS.SteerCeilingBias, 0f, VehicleData.SteeringLock);
+            return ARS.Clamp(peakSlipDeg * PeakSlipOuterWheelCommandShare, 0f, VehicleData.SteeringLock);
         }
 
         // Maximum sustained yaw rate the car can hold at the current speed: the slip ceiling's radius from the
@@ -981,8 +953,6 @@ namespace ARS
 
         void ApplySteerLimits()
         {
-            _steerLimitedThisFrame = false;
-
             // NaN guard: Clamp would turn NaN into full-lock.
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
             {
@@ -1011,8 +981,22 @@ namespace ARS
                 else SteerLimitRight = Math.Max(SteerLimitRight, countersteerAllowance);
             }
 
+            float yawRate = VehicleData.YawRotationPerSecondDegrees;
+            if (fwdSpeed > 0f && requestedSteer * yawRate >= 0f)
+            {
+                float yawUsage = YawHeadroomPercent() * 0.01f;
+                if (float.IsNaN(yawUsage) || float.IsInfinity(yawUsage)) yawUsage = 0f;
+                float maximumShare = ARS.YawTurnInMaximumPercent * 0.01f;
+                float minimumShare = Math.Min(ARS.YawTurnInMinimumPercent * 0.01f, maximumShare);
+                float turnInShare = ARS.Remap(yawUsage, 0f, maximumShare, minimumShare, maximumShare, true);
+                float turnInCeiling = Math.Min(speedCeiling * turnInShare, VehicleData.SteeringLock);
+                float speedMph = ARS.MpsToMph(fwdSpeed);
+                turnInCeiling = ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, turnInCeiling, VehicleData.SteeringLock, true);
+                if (requestedSteer > 0f) SteerLimitLeft = Math.Min(SteerLimitLeft, turnInCeiling);
+                else if (requestedSteer < 0f) SteerLimitRight = Math.Min(SteerLimitRight, turnInCeiling);
+            }
+
             Control.SteerDegrees = ARS.Clamp(requestedSteer, -SteerLimitRight, SteerLimitLeft);
-            if (Control.SteerDegrees != requestedSteer) _steerLimitedThisFrame = true;
         }
 
 
@@ -1301,18 +1285,12 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees)) Control.SteerDegrees = 0f;
 
-            // Fixed slew-rate limiter: the applied steer moves toward the target at a
-            // fixed rate (180°/s), doubled to 360°/s when countersteering (steer opposes yaw).
             float error = Control.SteerDegrees - Control.LastAppliedSteerDegrees;
             bool countersteering = Math.Sign(Control.SteerDegrees) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float rate = countersteering ? SteerSlewRateCountersteer : SteerSlewRate;
             float maxDeltaPerTick = rate * TickScale;
             float delta = ARS.Clamp(error, -maxDeltaPerTick, maxDeltaPerTick);
             Control.SteerDegrees = Control.LastAppliedSteerDegrees + delta;
-
-            // Average with the previous frame's applied steer to soften twitch.
-            Control.SteerDegrees = (Control.SteerDegrees + Control.LastAppliedSteerDegrees) * 0.5f;
-
             Control.LastAppliedSteerDegrees = Control.SteerDegrees;
 
             if (float.IsNaN(Control.SteerInput) || float.IsInfinity(Control.SteerInput)) Control.SteerInput = 0f;
@@ -1926,15 +1904,6 @@ namespace ARS
                 ARS.DrawLine(carPos, carPos + pdDir * lineLen, Color.Yellow);
                 ARS.DrawLine(carPos, carPos + apDir * lineLen, Color.Lime);
 
-                // The limiter's two side limits against the commanded angle - orange is the left limit, red the right
-                // one, because a positive command steers left. If the green applied line sits inside them the clamp
-                // is not binding on this tick, which is the whole question when tuning the slip term.
-                float limRRad = -SteerLimitRight * (float)Math.PI / 180f;
-                float limLRad = SteerLimitLeft * (float)Math.PI / 180f;
-                Vector3 limLDir = new Vector3(fwd.X * (float)Math.Cos(limLRad) - fwd.Y * (float)Math.Sin(limLRad), fwd.X * (float)Math.Sin(limLRad) + fwd.Y * (float)Math.Cos(limLRad), 0f);
-                Vector3 limRDir = new Vector3(fwd.X * (float)Math.Cos(limRRad) - fwd.Y * (float)Math.Sin(limRRad), fwd.X * (float)Math.Sin(limRRad) + fwd.Y * (float)Math.Cos(limRRad), 0f);
-                ARS.DrawLine(carPos, carPos + limLDir * lineLen, Color.Orange);
-                ARS.DrawLine(carPos, carPos + limRDir * lineLen, Color.Red);
 
                 // Yaw damper contributions, same origin so their gap reads as an angle: magenta against zero (the old toll), cyan as it now runs against the track's required yaw.
                 Vector3 dampOrigin = carPos + new Vector3(0f, 0f, 1.2f);
@@ -1944,9 +1913,6 @@ namespace ARS
                 Vector3 dampDir = new Vector3(fwd.X * (float)Math.Cos(dampRad) - fwd.Y * (float)Math.Sin(dampRad), fwd.X * (float)Math.Sin(dampRad) + fwd.Y * (float)Math.Cos(dampRad), 0f);
                 ARS.DrawLine(dampOrigin, dampOrigin + zeroRefDir * lineLen, Color.Magenta);
                 ARS.DrawLine(dampOrigin, dampOrigin + dampDir * lineLen, Color.Cyan);
-
-                // One white blip per tick the clamp actually bit, so a lap shows whether the ceiling binds.
-                if (_steerLimitedThisFrame) DrawPointMarker(carPos + new Vector3(0f, 0f, 1.6f), 0.7f, Color.White);
 
                 // Input trail.
                 DrawInputTrail();
@@ -2012,20 +1978,17 @@ namespace ARS
             return Color.FromArgb((int)(255f * (1f - Math.Max(v, 0f))), (int)(255f * (1f + Math.Min(v, 0f))), 0);
         }
 
-        // Yaw damper HUD: yaw rate (deg/s) and damper instruction (deg) on the first line, final steer command (deg) on the
-        // second, headroom (% of the centripetal yaw rate the car can hold at the current speed) on the third. Drawn
-        // top-centre in red on the debug-focus AI racer.
         void DrawYawDamperHud()
         {
             if (ControlledByPlayer) return;
             if (ARS.DebugFocusRacer != this) return;
             float yaw = VehicleData.YawRotationPerSecondDegrees;
+            float yawError = yaw - _debugYawTargetPerSecond;
             float damper = _debugDamperTermDeg;
-            float steer = Control.SteerDegrees;
             float headroomPct = YawHeadroomPercent();
             Color red = Color.FromArgb(255, 230, 30, 30);
-            ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " deg/s  /  DAMP " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-            ARS.DrawText(new Vector2(0.5f, 0.110f), "STEER " + steer.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " / TARGET " + _debugYawTargetPerSecond.ToString("0.0") + " deg/s", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            ARS.DrawText(new Vector2(0.5f, 0.110f), "ERROR " + yawError.ToString("0.0") + " x GAIN " + _debugDamperGainSeconds.ToString("0.00") + " s = STEER " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
             ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW HEADROOM " + headroomPct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
         }
 

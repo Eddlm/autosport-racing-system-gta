@@ -154,16 +154,9 @@ namespace ARS
         // Flat mph added to the corner braking plan; Route Offset is the same knob for the route term.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
-        public static float SteerDampingScale = 1f;
-        // Degrees added to the computed corner-geometry steer ceiling. 0.0 is the geometry 1:1; the shipped
-        // default is a deliberate +2 skew (driver-tuned), not a physics term. Being additive, its effect is
-        // proportionally largest where the ceiling is smallest — i.e. at speed.
-        public static float SteerCeilingBias = 2f;
-        // Fraction of the outer front wheel's peak-slip term added to the steer ceiling, on top of the Ackermann
-        // geometry. 0 reproduces the old kinematic ceiling exactly; 1 is what a limit corner takes; negative gives a
-        // ceiling tighter than the geometry (deliberate, understeer-prone), bounded by the ceiling's own floor at
-        // half the geometry.
-        public static float SteerSlipCeiling = 0f;
+        public static float SteerDampingGain = 0.5f;
+        public static int YawTurnInMinimumPercent = 20;
+        public static int YawTurnInMaximumPercent = 100;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1024,41 +1017,38 @@ namespace ARS
             };
             aiMenu.Add(tcsItem);
 
-            string[] steerKDOptions = { "0.50", "0.75", "1.00", "1.25", "1.50", "1.75", "2.00" };
-            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping as a multiple of the grip-normalised baseline (baseline = 1 / car grip). 1.00 is the tuned baseline; the gain divides by each car's own grip so the relative effect is the same across the fleet. Lower is crisper, higher is calmer.", steerKDOptions);
+            string[] steerKDOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
+            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds against zero yaw. Lower is crisper; higher opposes rotation more strongly.", steerKDOptions);
             steerKDItem.ItemChanged += (sender, args) =>
             {
-                SteerDampingScale = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerDampingScale", steerKDItem.Items[args.Index]);
+                SteerDampingGain = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerDampingGain", steerKDItem.Items[args.Index]);
             };
-            steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale).ToString("0.00", CultureInfo.InvariantCulture)));
+            steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain).ToString("0.00", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerKDItem);
             HookListTextPicker(steerKDItem);
 
-            string[] steerCeilingOptions = { "0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "3.5", "4.0" };
-            NativeListItem<string> steerCeilingItem = new NativeListItem<string>("Steer-In Bias (deg)", "Degrees added to the speed-based steer ceiling (vanilla curve vs Ackermann, whichever is lower). 0.0 is the corner geometry 1:1; higher turns in more, with the effect proportionally largest at speed, where the ceiling is smallest.", steerCeilingOptions);
-            steerCeilingItem.ItemChanged += (sender, args) =>
+            string[] yawTurnInOptions = { "0", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100" };
+            NativeListItem<string> yawTurnInItem = new NativeListItem<string>("Turn-In Minimum (%)", "Steer authority allowed at zero yaw usage. It scales linearly from this amount to Turn-In Maximum.", yawTurnInOptions);
+            yawTurnInItem.ItemChanged += (sender, args) =>
             {
-                SteerCeilingBias = float.Parse(steerCeilingItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerCeilingBias", steerCeilingItem.Items[args.Index]);
+                YawTurnInMinimumPercent = int.Parse(yawTurnInItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("YawTurnInMinimumPercent", yawTurnInItem.Items[args.Index]);
             };
-            steerCeilingItem.SelectedIndex = Math.Max(0, steerCeilingItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingBias", SteerCeilingBias).ToString("0.0", CultureInfo.InvariantCulture)));
-            aiMenu.Add(steerCeilingItem);
-            HookListTextPicker(steerCeilingItem);
+            yawTurnInItem.SelectedIndex = Math.Max(0, yawTurnInItem.Items.IndexOf(SettingsMenuStore.GetInt("YawTurnInMinimumPercent", YawTurnInMinimumPercent).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(yawTurnInItem);
+            HookListTextPicker(yawTurnInItem);
 
-            string[] steerSlipOptions = { "-1.0", "-0.9", "-0.8", "-0.7", "-0.6", "-0.5", "-0.4", "-0.3", "-0.2", "-0.1", "0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" };
-            NativeListItem<string> steerSlipItem = new NativeListItem<string>("Steer-In Slip Term", "How much of the outer front wheel's peak slip angle is added to the speed-based steer ceiling. A limit corner needs the Ackermann corner geometry PLUS the slip angle that makes the force, but the ceiling has only ever had the geometry half - so at speed the AI is capped below the angle its tyres can use. 0.0 is the old behaviour, unchanged; 1.0 is the full term; negative takes the ceiling below the corner geometry, so the front stays short of its peak on purpose.", steerSlipOptions);
-            steerSlipItem.ItemChanged += (sender, args) =>
+            string[] yawTurnInMaximumOptions = { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" };
+            NativeListItem<string> yawTurnInMaximumItem = new NativeListItem<string>("Turn-In Maximum (%)", "Maximum authority and yaw-usage endpoint for the turn-in envelope. 100% commands the outer front wheel's modelled peak-slip angle; above 100% allows extra authority up to mechanical lock.", yawTurnInMaximumOptions);
+            yawTurnInMaximumItem.ItemChanged += (sender, args) =>
             {
-                SteerSlipCeiling = float.Parse(steerSlipItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerSlipCeiling", steerSlipItem.Items[args.Index]);
+                YawTurnInMaximumPercent = int.Parse(yawTurnInMaximumItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("YawTurnInMaximumPercent", yawTurnInMaximumItem.Items[args.Index]);
             };
-            // Guard the fallback: with a negative range, an unrecognised stored value would otherwise select the
-            // first item - the most extreme setting - instead of leaving the dial at the old system's 0.0.
-            int steerSlipIndex = steerSlipItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerSlipCeiling", SteerSlipCeiling).ToString("0.0", CultureInfo.InvariantCulture));
-            steerSlipItem.SelectedIndex = steerSlipIndex >= 0 ? steerSlipIndex : steerSlipItem.Items.IndexOf("0.0");
-            aiMenu.Add(steerSlipItem);
-            HookListTextPicker(steerSlipItem);
+            yawTurnInMaximumItem.SelectedIndex = Math.Max(0, yawTurnInMaximumItem.Items.IndexOf(SettingsMenuStore.GetInt("YawTurnInMaximumPercent", YawTurnInMaximumPercent).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(yawTurnInMaximumItem);
+            HookListTextPicker(yawTurnInMaximumItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -2974,8 +2964,9 @@ namespace ARS
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
-            SteerDampingScale = SettingsMenuStore.GetFloat("SteerDampingScale", SteerDampingScale);
-            SteerCeilingBias = SettingsMenuStore.GetFloat("SteerCeilingBias", SteerCeilingBias);
+            SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
+            YawTurnInMinimumPercent = SettingsMenuStore.GetInt("YawTurnInMinimumPercent", YawTurnInMinimumPercent);
+            YawTurnInMaximumPercent = SettingsMenuStore.GetInt("YawTurnInMaximumPercent", YawTurnInMaximumPercent);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
