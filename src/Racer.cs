@@ -1493,10 +1493,12 @@ namespace ARS
             return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
         }
 
-        // TCS slip target, on the game's per-wheel scale at wheel+0x174 (0 free rolling, grip peaks at argument 1.0,
-        // flat from 2.5, so nothing past it is gained). Set past the peak on purpose - a powerful RWD car should
-        // light them up on launch and out of slow corners, and wheelspin is rotation - and scaled by the grip
-        // multiplier so a low-grip surface keeps it in the same place against the peak. More negative = more spin.
+        // TCS slip-ratio target, on the game's per-wheel rotation-slip ratio at wheel+0x174 (0 free rolling, the
+        // traction curve peaks at argument 1.0, flat from 2.5 — the curve's argument IS this ratio, leaked
+        // wheel.cpp:94-97, and the effective slip angle is a later derived quantity). Set past the peak on purpose
+        // - a powerful RWD car should light them up on launch and out of slow corners, and wheelspin is rotation -
+        // and scaled by the grip multiplier so a low-grip surface keeps it in the same place against the peak.
+        // More negative = more spin.
         const float IdealWheelspinSlipTarget = 1.25f;
         const float IdealWheelspinDeepening = 0.3f;
         const float IdealWheelspinGripFloor = 0.3f;

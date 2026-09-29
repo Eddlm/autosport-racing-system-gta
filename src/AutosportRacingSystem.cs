@@ -2780,7 +2780,9 @@ namespace ARS
             return powers;
         }
 
-        // Per-wheel slip (offset 0x174, same data TCS uses). A lifted wheel reads 0.00 slip, so
+        // Per-wheel slip ratio (offset 0x174, same data TCS uses) - a dimensionless rotational slip ratio, not a
+        // slip angle (leaked wheel.cpp:94-97, the traction curve's own argument, peaks at 1.0 and flat from 2.5).
+        // A lifted wheel reads 0.00 slip, so
         // counting wheels with ~0 slip detects ground contact for the stability factor.
         static public unsafe List<float> WheelSlips(Vehicle handle)
         {
