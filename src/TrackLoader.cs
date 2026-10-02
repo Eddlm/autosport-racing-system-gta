@@ -414,7 +414,12 @@ namespace ARS
                 CornerPoint previous = ARS.Corners[ARS.Corners.Count - 1];
                 int gap = ARS.IsPointToPoint ? corner.Node - previous.Node : Wrap(corner.Node - previous.Node, count);
                 float referenceSpeed = Math.Max(previous.Speed, corner.Speed);
-                if (gap / Math.Max(referenceSpeed, 1f) < closeCornerSeconds)
+                float gapSeconds = gap / Math.Max(referenceSpeed, 1f);
+                // A fast kink seconds before a slow corner is one the car clears before it can react to the next: where
+                // the two aim the same way there is no S to drive, so the slower apex should own the whole bend. The
+                // aligned case needs its own ceiling, or two similar corners half a lap apart would merge.
+                bool sameBend = gapSeconds < AlignedCornerSeconds && AimsSameWay(previous, corner, AlignedCornerDegrees);
+                if (gapSeconds < closeCornerSeconds || sameBend)
                 {
                     CornerPoint survivor = corner.Speed < previous.Speed ? corner : previous;
                     ExtendMergedCorner(survivor, previous.StartNode, corner.EndNode, count);
@@ -423,6 +428,17 @@ namespace ARS
                 }
             }
             ARS.Corners.Add(corner);
+        }
+
+        // Whether one corner's exit aims where the next one's entrance aims: joined by a straight or a steady curve, so
+        // the pair is really one bend rather than an S.
+        static bool AimsSameWay(CornerPoint previous, CornerPoint corner, float degrees)
+        {
+            if (previous.EndNode < 0 || corner.StartNode < 0) return false;
+            Vector3 exitDirection = ARS.TrackPoints[previous.EndNode].Direction;
+            Vector3 entranceDirection = ARS.TrackPoints[corner.StartNode].Direction;
+            float angle = Vector3.SignedAngle(exitDirection, entranceDirection, Vector3.WorldUp);
+            return !float.IsNaN(angle) && !float.IsInfinity(angle) && Math.Abs(angle) <= degrees;
         }
 
         // The entrance is the exit's mirror, walked back from the apex to the first node whose road holds one radius.
@@ -444,6 +460,8 @@ namespace ARS
         const float SpanRadiusTolerance = 0.3f;
         const int SpanNodeLimit = 500;
         const float MaximumApexRadius = 200f;
+        const float AlignedCornerSeconds = 8f;
+        const float AlignedCornerDegrees = 15f;
 
         // Where a corner hands over to a consistent curve: the first node past the apex whose road holds one radius.
         // The apex is a local minimum, so this cannot fire beside it. Returns the bound if nothing settles.
