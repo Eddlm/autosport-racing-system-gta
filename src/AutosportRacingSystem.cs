@@ -2855,7 +2855,7 @@ namespace ARS
             
             int apexNode = c.Node;
             if (!IsPointToPoint && apexNode < 0) apexNode += TrackPoints.Count;
-            float velTarget = r.Brain.Corner.Speed;
+            float velTarget = CornerApexSpeed(c, r);
             // Reserve coasting distance before the apex.
             float coastReserve = velTarget * BrakingCoastSecondsBeforeApex;
             // Pressure scales the reserve: low pressure brakes earlier.

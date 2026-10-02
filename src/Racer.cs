@@ -128,11 +128,9 @@ namespace ARS
         const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
-        // Lane steer gain: degrees per metre of lane error, one gain for every lane, and uncapped - the lane
+        // Lane steer gain: degrees per metre of lane error at a corner of neutral aggression, and uncapped - the lane
         // systems bound the target, so the term is free to chase a big error.
         const float LaneGainDegPerMeter = 3f;
-        // The move out to the outside is the big deliberate one, so it gets half the gain and cannot whip.
-        const float OutsideLaneGainFraction = 0.5f;
         const float FullPedalSpeedErrorMps = 3f;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
         const float BrakeErrorMultiplier = 2f;
@@ -528,8 +526,13 @@ namespace ARS
                     laneErrorMeters = laneErrorMeters * (1f - blend) + (targetLane - projectedLaneMeters) * blend;
                 }
                 if (float.IsNaN(laneErrorMeters)) laneErrorMeters = 0f;
-                bool outsideOfCorner = gotActiveCorner && Math.Sign(targetLane) != 0 && Math.Sign(targetLane) == Math.Sign(Brain.Corner.Point.Angle);
-                float laneGain = outsideOfCorner ? LaneGainDegPerMeter * OutsideLaneGainFraction : LaneGainDegPerMeter;
+                // A lane steering into the curve pulls by the corner's steer percentage; steering out of it is halved
+                // again, so a hard curve commits fully and releases at half.
+                float steerPercent = Brain.Corner != null ? LaneSteerPercent(Brain.Corner.Point.SupposedRadius) : _insideLineSteerPercent;
+                float curveAngle = Brain.Corner != null ? Brain.Corner.Point.Angle : _insideLineAngle;
+                bool steeringIntoCurve = Math.Sign(-laneErrorMeters) == Math.Sign(curveAngle);
+                if (!steeringIntoCurve) steerPercent *= LaneSteerOutsidePercent;
+                float laneGain = LaneGainDegPerMeter * steerPercent;
                 laneSteerDeg = -laneErrorMeters * laneGain;
             }
             // Physical repulsion: inside the "no touching" box, steer away from rivals
@@ -648,24 +651,40 @@ namespace ARS
         }
 
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
+        const float HighSpeedLaneRadiusMeters = 500f;
+
+        // The lane's steer strength as a percentage of the full gain, straight from how tight the local radius is: at
+        // half the gate it pulls half as hard, and a move out of the line is halved again. The bottom is a hard zero
+        // rather than a floor, because a negative percentage would invert the lane steer.
+        const float LaneSteerOutsidePercent = 0.5f;
+
+        static float LaneSteerPercent(float radius)
+        {
+            if (float.IsNaN(radius) || float.IsInfinity(radius)) return 0f;
+            return Math.Max(1f - radius / HighSpeedLaneRadiusMeters, 0f);
+        }
+
+        float _insideLineSteerPercent = 1f;
+        float _insideLineAngle = 0f;
+
         float ComputeHighSpeedLane(float roadWide, float speedMps)
         {
             int count = ARS.TrackPoints.Count;
             int fwdNode;
-            int fwdOffset = (int)(speedMps * 1.2f);
+            int fwdOffset = (int)(speedMps * 0.575f);
             if (ARS.IsPointToPoint)
                 fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + fwdOffset, 0, count - 1);
             else
                 fwdNode = ((CurrentTrackPoint.Node + fwdOffset) % count + count) % count;
 
-            Vector3 currentDir = CurrentTrackPoint.Direction;
-            Vector3 futureDir = ARS.TrackPoints[fwdNode].Direction;
+            TrackPoint ahead = ARS.TrackPoints[fwdNode];
+            _insideLineSteerPercent = LaneSteerPercent(ahead.PreciseCurveRadius);
+            _insideLineAngle = ahead.Angle;
+            if (!(ahead.PreciseCurveRadius < HighSpeedLaneRadiusMeters)) return 0f;
 
-            float signedAngle = Vector3.SignedAngle(currentDir, futureDir, Vector3.WorldUp);
-            if (float.IsNaN(signedAngle) || float.IsInfinity(signedAngle)) return 0f;
-            if (Math.Abs(signedAngle) <= 5f) return 0f;
+            float cornerDir = Math.Sign(ahead.Angle);
+            if (cornerDir == 0f) return 0f;
 
-            float cornerDir = Math.Sign(signedAngle);
             // Inset by half the car's width, as the outside line and the avoidance bound both are: the aim point
             // is the inside edge less the car, so the body stays on the track instead of overhanging it.
             float insideBound = Math.Max(roadWide - VehicleData.BoundingBox * 0.5f, 0f);
@@ -1330,15 +1349,17 @@ namespace ARS
         int TurnInNode(CornerPoint corner, float speedMps)
         {
             if (corner == null || corner.Node < 0) return -1;
-            return OffsetCornerNode(corner.Node, -(int)(speedMps * corner.SupposedRadius / 10f));
+            // A lead of a lap or more would wrap to an arbitrary node, so it stops just short of one.
+            int lead = Math.Min((int)(speedMps * corner.SupposedRadius / 10f), ARS.TrackPoints.Count - 1);
+            return OffsetCornerNode(corner.Node, -lead);
         }
 
         // Where the braking target is anchored: a fixed lead before the turn-in, which the learned factor moves from
         // there toward the apex.
-        int BrakeTargetBaseNode(CornerPoint corner, float speedMps, int fallbackApexNode)
+        int BrakeTargetBaseNode(CornerPoint corner, float speedMps, int fallbackNode)
         {
             int turnInNode = TurnInNode(corner, speedMps);
-            return turnInNode < 0 ? fallbackApexNode : OffsetCornerNode(turnInNode, -BrakeTargetLeadMeters);
+            return turnInNode < 0 ? fallbackNode : OffsetCornerNode(turnInNode, -BrakeTargetLeadMeters);
         }
 
         // Past the braking target the plan expects apex speed; later braking is corner-exit scrub, not approach.
@@ -2933,11 +2954,11 @@ namespace ARS
             float velTarget = apexSpeed;
 
             CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
-            int entranceNode = CornerEntranceNode(corner, apexNode);
+            int fallbackNode = CornerEntranceNode(corner, apexNode);
             int targetNode = ActiveManeuver.Type == ManeuverType.DiveBomb
                 ? BrakingTargetNode(corner, apexSpeed, BrakingTargetFactor)
-                : entranceNode;
-            if (targetNode < 0) targetNode = entranceNode;
+                : BrakeTargetBaseNode(corner, Car.Velocity.Length(), fallbackNode);
+            if (targetNode < 0) targetNode = fallbackNode;
 
             int targetDistance = ForwardNodeDistance(targetNode);
             int apexDistance = ForwardNodeDistance(apexNode);
