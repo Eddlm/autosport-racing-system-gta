@@ -313,6 +313,21 @@ namespace ARS
         public float Input;
     }
 
+    public enum ThrottleReason
+    {
+        Plan,
+        Tcs,
+        Stability,
+        Overspeed,
+        Rival,
+        ChillOut,
+        Yield,
+        Offtrack,
+        GridWait,
+        Countersteer,
+        StuckRecovery
+    }
+
     public class VehicleControl
     {
         public float SteerDegrees = 0f;
@@ -324,6 +339,13 @@ namespace ARS
         public float MaxBrake = 1f;
         public float MaxThrottleFromTCS = 1f;
         public float MaxBrakeFromABS = 1f;
+        public float MaxThrottleFromStability = 1f;
+        public float MaxThrottleFromOverspeed = 1f;
+        public float MaxThrottleFromRival = 1f;
+        public float MaxThrottleFromChillOut = 1f;
+        public float MaxThrottleFromYield = 1f;
+        public ThrottleReason ThrottleReason = ThrottleReason.Plan;
+        public float ThrottleReasonLevel = 1f;
 
         public int HandBrakeTime = 0;
 

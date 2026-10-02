@@ -54,6 +54,7 @@ namespace ARS
 
         
         int _lastStabilityCheck = 0;
+        bool _wheelsOffGround = false;
         bool _gripLogged = false;
 
         // Racer progress along the route.
@@ -1041,6 +1042,13 @@ namespace ARS
             Control.MaxThrottle = 1f;
             Control.MaxBrake = 1f;
             Control.MaxBrakeFromABS = 1f;
+            Control.MaxThrottleFromStability = 1f;
+            Control.MaxThrottleFromOverspeed = 1f;
+            Control.MaxThrottleFromRival = 1f;
+            Control.MaxThrottleFromChillOut = 1f;
+            Control.MaxThrottleFromYield = 1f;
+            Control.ThrottleReason = ThrottleReason.Plan;
+            Control.ThrottleReasonLevel = 1f;
             IsStuckByThrottle = false;
             _lastStuckGameTime = 0;
             _isRecoveringFromStuck = false;
@@ -1069,16 +1077,19 @@ namespace ARS
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
+            float preBlendInput = combinedInput;
             combinedInput = ApplyOffshootBlend(combinedInput);
-            // Full countersteer: no brake, just enough throttle to keep the wheels rolling. TCS still caps it.
-            // The release is instant; the cap recovers on its own at the MaxThrottle rate below.
-            if (IsFullCountersteer())
+            bool offtrackLimited = combinedInput < preBlendInput;
+            // Full countersteer: no brake, just enough throttle to keep the wheels rolling. The reason caps still
+            // apply on top; the release is instant.
+            bool countersteering = IsFullCountersteer();
+            if (countersteering)
             {
                 combinedInput = CountersteerRollThrottle;
                 Control.MaxBrake = 0f;
             }
-            combinedInput = ApplyThrottleCap(combinedInput);
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
+            newThrottle = ComposeThrottleCap(newThrottle, offtrackLimited, countersteering);
 
             // Gate on the raw target (pre-slew): in the throttle-to-brake transition Control.Throttle slews down
             // slowly and could still read >= 1.0 while the car is already braking.
@@ -1096,8 +1107,6 @@ namespace ARS
             UpdateBrakeLearning();
             Control.Brake = Math.Min(Control.Brake, Control.MaxBrake);
             if (Control.MaxBrake < 1f) Control.MaxBrake += 2 * TickScale;
-            Control.Throttle = Math.Min(Control.Throttle, Control.MaxThrottle);
-            if (Control.MaxThrottle < 1.00f && !VehicleData.OverspeedThisTick) Control.MaxThrottle += 2 * TickScale;
 
             if (Brain.CurrentIntention.MaxSpeed < AiConstants.MaxSpeed) Brain.CurrentIntention.MaxSpeed += 15 * TickScale;
 
@@ -1108,14 +1117,6 @@ namespace ARS
         {
             float divisor = intendedSpeedChange < 0f ? FullPedalSpeedErrorMps * BrakeErrorMultiplier : FullPedalSpeedErrorMps;
             return ARS.Clamp(intendedSpeedChange / divisor, -1f, 1f);
-        }
-
-        float ApplyThrottleCap(float combinedInput)
-        {
-            float throttleCap = Math.Min(Control.MaxThrottleFromTCS, 1f);
-
-            if (combinedInput > 0f) return Math.Min(combinedInput, throttleCap);
-            return combinedInput;
         }
 
         void SplitCombinedInput(float combinedInput, ref float newThrottle, ref float newBrake)
@@ -1404,16 +1405,9 @@ namespace ARS
             // Physics-limited cornering speed for the current high-speed curve radius.
             Brain.CurrentIntention.CorneringSpeedLimit = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Brain.CurrentPerception.HighSpeedCurveRadius) + ARS.MphToMps(ARS.CornerOffsetMph);
 
-            // Yield: cap throttle to 0.5 to stay behind.
-            if (ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null)
-            {
-                Control.MaxThrottle = Math.Min(Control.MaxThrottle, 0.5f);
-            }
-
-            // ChillOut: half throttle and hold a standoff behind the closest rival ahead.
+            // ChillOut: hold a standoff behind the closest rival ahead.
             if (ActiveManeuver.Type == ManeuverType.ChillOut)
             {
-                Control.MaxThrottle = Math.Min(Control.MaxThrottle, ChillThrottleCap);
                 Rival standoffRival = Brain.Rivals
                     .Where(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Ahead && r.RivalRacer.Car.Exists())
                     .OrderBy(r => r.Distance)
@@ -1501,9 +1495,49 @@ namespace ARS
         const float IdealWheelspinLaunchTaperEndMph = 30f;
         const float SlipTargetGripFloor = 0.3f;
 
-        void TractionControl()
+        // One home for the throttle reason caps: each reason states the level it wants, its field glides toward
+        // that level at the shared rate both ways, and ConvertSpeedToPedals takes the minimum against the plan's
+        // own throttle and tags the winner. The level is the logic half, the shared rate the clock half.
+        const float ReasonCapSlewRate = 3.5f;
+        const float TcsCapFloor = 0.25f;
+        // The commanded level reaches TcsCapFloor exactly at the spin depth where the curve is flat past its minimum (2.5).
+        const float TcsLevelSpinDepthGain = 0.3f;
+        const float AirborneThrottleLevel = 0.1f;
+        const float YieldThrottleLevel = 0.5f;
+
+        float GlideCap(float current, float level)
         {
-            if (!ARS.TcsEnabled) { Control.MaxThrottleFromTCS = 1f; return; }
+            float step = ReasonCapSlewRate * TickScale;
+            return ARS.Clamp(current + ARS.Clamp(level - current, -step, step), 0f, 1f);
+        }
+
+        void UpdateThrottleReasonCaps()
+        {
+            Control.MaxThrottleFromTCS = GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
+
+            Control.MaxThrottleFromStability = GlideCap(Control.MaxThrottleFromStability, _wheelsOffGround ? AirborneThrottleLevel : 1f);
+
+            float overspeedLevel = 1f;
+            if (ARS.OverspeedEnabled && VehicleData.OverspeedExcessGs > 0f)
+                overspeedLevel = ARS.Clamp(1f - (float)Math.Floor(VehicleData.OverspeedExcessGs / 0.1f) * 0.5f, 0f, 1f);
+            Control.MaxThrottleFromOverspeed = GlideCap(Control.MaxThrottleFromOverspeed, overspeedLevel);
+
+            float rivalLevel = 1f;
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || r.RelativePosition != RelativePos.Ahead) continue;
+                if (ARS.IsBetween(r.SecondsToHit, 0f, 3f)) rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.SecondsToHit, 0f, 3f, 0f, 1f, true));
+                if (ARS.IsBetween(r.FrontGap, 0f, 1f)) rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.FrontGap, 0f, 1f, 0f, 1f, true));
+            }
+            Control.MaxThrottleFromRival = GlideCap(Control.MaxThrottleFromRival, rivalLevel);
+
+            Control.MaxThrottleFromChillOut = GlideCap(Control.MaxThrottleFromChillOut, ActiveManeuver.Type == ManeuverType.ChillOut ? ChillThrottleCap : 1f);
+            Control.MaxThrottleFromYield = GlideCap(Control.MaxThrottleFromYield, ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null ? YieldThrottleLevel : 1f);
+        }
+
+        float TcsCapLevel()
+        {
+            if (!ARS.TcsEnabled) return 1f;
 
             float wheelspin = ARS.MaxWheelSlip(Car);
             float IdealWheelspin;
@@ -1520,9 +1554,37 @@ namespace ARS
                     IdealWheelspinLaunchTaperEndMph, 0f, IdealWheelspinPeakRatio * gripScale, IdealWheelspinLaunchRatio * gripScale, true);
             }
 
-            float error = wheelspin - IdealWheelspin;
-            float change = error * TickScale * 2f;
-            Control.MaxThrottleFromTCS = ARS.Clamp(Control.MaxThrottleFromTCS + change, 0.25f, 1);
+            float spinDepth = Math.Max(0f, IdealWheelspin - wheelspin);
+            return ARS.Clamp(1f - spinDepth * TcsLevelSpinDepthGain, TcsCapFloor, 1f);
+        }
+
+        // The one throttle composition: the plan's throttle against every reason field, the argmin named into the
+        // tag (first reason wins ties). Offtrack's cut and the countersteer replacement pre-empt the ordinary
+        // reasons; grid wait owns the pedal outright and stuck recovery re-tags after.
+        float ComposeThrottleCap(float baseThrottle, bool offtrackLimited, bool countersteering)
+        {
+            float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromStability);
+            ceiling = Math.Min(ceiling, Control.MaxThrottleFromOverspeed);
+            ceiling = Math.Min(ceiling, Control.MaxThrottleFromRival);
+            ceiling = Math.Min(ceiling, Control.MaxThrottleFromChillOut);
+            ceiling = Math.Min(ceiling, Control.MaxThrottleFromYield);
+            Control.MaxThrottle = ceiling;
+
+            float binding = baseThrottle;
+            ThrottleReason reason = ThrottleReason.Plan;
+            if (Control.MaxThrottleFromTCS < binding) { binding = Control.MaxThrottleFromTCS; reason = ThrottleReason.Tcs; }
+            if (Control.MaxThrottleFromStability < binding) { binding = Control.MaxThrottleFromStability; reason = ThrottleReason.Stability; }
+            if (Control.MaxThrottleFromOverspeed < binding) { binding = Control.MaxThrottleFromOverspeed; reason = ThrottleReason.Overspeed; }
+            if (Control.MaxThrottleFromRival < binding) { binding = Control.MaxThrottleFromRival; reason = ThrottleReason.Rival; }
+            if (Control.MaxThrottleFromChillOut < binding) { binding = Control.MaxThrottleFromChillOut; reason = ThrottleReason.ChillOut; }
+            if (Control.MaxThrottleFromYield < binding) { binding = Control.MaxThrottleFromYield; reason = ThrottleReason.Yield; }
+            if (offtrackLimited) reason = ThrottleReason.Offtrack;
+            if (countersteering) reason = ThrottleReason.Countersteer;
+            if (BaseBehavior == RacerBaseBehavior.GridWait) reason = ThrottleReason.GridWait;
+
+            Control.ThrottleReason = reason;
+            Control.ThrottleReasonLevel = binding;
+            return binding;
         }
 
         // ABS mirrors TCS on the brake side, holding the lock slip at the CurveMax-CurveMin midpoint instead of
@@ -1902,6 +1964,8 @@ namespace ARS
 
                 DrawPedalBar();
 
+                DrawThrottleReasonHud();
+
                 DrawYawDamperHud();
             }
 
@@ -1994,6 +2058,16 @@ namespace ARS
                 ARS.DrawText(new Vector2(0.5f, 0.110f), "ERROR " + yawError.ToString("0.0") + " x GAIN " + _debugDamperGainSeconds.ToString("0.00") + " s = STEER " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
                 ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW HEADROOM " + headroomPct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
             }
+        }
+
+        void DrawThrottleReasonHud()
+        {
+            if (ControlledByPlayer) return;
+            if (ARS.DebugFocusRacer != this) return;
+            Color reasonColor = Color.FromArgb(255, 200, 200, 200);
+            ARS.DrawText(new Vector2(0.5f, 0.16f),
+                "THR " + (Control.Throttle * 100f).ToString("0") + "% <- " + Control.ThrottleReason + " " + Control.ThrottleReasonLevel.ToString("0.00"),
+                reasonColor, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
         }
 
         public void RunTimedCore()
@@ -2153,35 +2227,6 @@ namespace ARS
                 }
             }
         }
-
-        void ApplyRivalThrottleCap()
-        {
-            float nearestThrottleCap = 1f;
-            float nearestSpeedLimit = float.PositiveInfinity;
-            float ourSpeed = Car.Velocity.Length();
-            foreach (Rival r in Brain.Rivals)
-            {
-                if (r.RivalRacer == null || r.RelativePosition != RelativePos.Ahead) continue;
-
-                if (ARS.IsBetween(r.SecondsToHit, 0f, 3f))
-                    nearestThrottleCap = Math.Min(nearestThrottleCap, ARS.Remap(r.SecondsToHit, 0f, 3f, 0f, 1f, true));
-                if (ARS.IsBetween(r.FrontGap, 0f, 1f))
-                    nearestThrottleCap = Math.Min(nearestThrottleCap, ARS.Remap(r.FrontGap, 0f, 1f, 0f, 1f, true));
-
-                if (ARS.IsBetween(r.FrontGap, 0f, 2f))
-                {
-                    float rivalSpeed = r.RivalRacer.Car.Velocity.Length();
-                    float safeSpeedLimit = ARS.Remap(r.FrontGap, 0f, 2f, rivalSpeed, Math.Max(ourSpeed, rivalSpeed), true);
-                    nearestSpeedLimit = Math.Min(nearestSpeedLimit, safeSpeedLimit);
-                }
-            }
-            Control.MaxThrottle = Math.Min(Control.MaxThrottle, nearestThrottleCap);
-            if (nearestSpeedLimit < float.PositiveInfinity)
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, nearestSpeedLimit);
-        }
-
-
-
 
         public void InitializeTrackPosition()
         {
@@ -2744,17 +2789,15 @@ namespace ARS
                     _rivalInfoTick = now + 500;
                     UpdateRivalInfo();
                 }
-                ApplyRivalThrottleCap();
-
                 ComputeTargetSpeed();
                 ComputeSteering();
 
+                UpdateThrottleReasonCaps();
                 ConvertSpeedToPedals();
 
                 UpdateStuckCheck();
                 UpdateStuckRecovery();
 
-                TractionControl();
                 ABSControl();
                 ApplyStuckRecoveryOverride();
 
@@ -2944,7 +2987,7 @@ namespace ARS
             }
 
             Control.Throttle = -0.5f;
-            Control.Brake = 0f;
+            Control.ThrottleReason = ThrottleReason.StuckRecovery;
 
             // Even attempts reverse straight, odd ones steer toward the nearest track point — written as an angle so
             // the limiter, which runs after this, is the one that bounds it: at ~0 speed that limit is full lock.
@@ -3003,14 +3046,12 @@ namespace ARS
                     + ", current " + VehicleData.CurrentMechanicalGrip + " (steer cap k " + SteerReductionPerMps + ")");
             }
 
-            // Airborne vehicles temporarily lose available throttle; normal pedal processing restores it.
+            // Sampling wheels-on-ground at ~3 Hz so the throttle reason can glide on a cheap read.
             if (Game.GameTime - _lastStabilityCheck >= 333) // ~3 Hz
             {
                 _lastStabilityCheck = Game.GameTime;
                 List<bool> wheelsOnGround = ARS.WheelsOnGround(Car);
-                bool allDown = wheelsOnGround.Count > 0 && wheelsOnGround.All(w => w);
-                if (!allDown)
-                    Control.MaxThrottle = Math.Max(Control.MaxThrottle - 0.5f * TickScale, 0.1f);
+                _wheelsOffGround = !(wheelsOnGround.Count > 0 && wheelsOnGround.All(w => w));
 
                 // Compare measured forward Gs against wheel-pushed Gs: GTA lets an uphill car accelerate beyond
                 // what its wheel power should produce, and this is the correction for that.
