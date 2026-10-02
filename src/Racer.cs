@@ -672,20 +672,22 @@ namespace ARS
             return -cornerDir * insideBound;
         }
 
-        // Hold the outside line on entry, then release it for the high-speed inside line.
-        static float OutsideReleaseSeconds = 0.95f;
-        static float OutsideEngageSeconds => OutsideReleaseSeconds + 3f;
+        // The outside hold lives between these two times to the apex: engaged inside the first, lifted at the second.
+        // Lifting it does not command a turn-in, which is a separate lane decision.
+        const float OutsideEngageSeconds = 4f;
+        const float OutsideReleaseSeconds = 2f;
+        // How far ahead of a corner the car decides whether it wants to position or brake for it.
+        const float RequirementLookaheadSeconds = 3.95f;
 
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
         {
             CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
-            // Time to entrance — the single reference for both engage and release.
-            int entranceNode = c.StartNode >= 0 ? c.StartNode : OffsetCornerNode(apexNode, -c.LengthStart);
-            int fwdToEntrance = entranceNode - CurrentTrackPoint.Node;
-            if (!ARS.IsPointToPoint && fwdToEntrance < 0) fwdToEntrance += ARS.TrackPoints.Count;
-            float timeToEntrance = fwdToEntrance / Math.Max(speedMps, 1f);
+            // Time to the apex — the single reference for both engage and release.
+            int fwdToApex = apexNode - CurrentTrackPoint.Node;
+            if (!ARS.IsPointToPoint && fwdToApex < 0) fwdToApex += ARS.TrackPoints.Count;
+            float timeToApex = fwdToApex / Math.Max(speedMps, 1f);
 
             // New corner: reset latch.
             if (apexNode != _approachCornerNode)
@@ -695,15 +697,15 @@ namespace ARS
                 _approachHoldsOutside = false;
             }
 
-            // Past the entrance: kill the hold so it can't re-engage mid-corner.
-            if (fwdToEntrance <= 2)
+            // Past the release the hold is over, so it cannot re-engage mid-corner.
+            if (timeToApex <= OutsideReleaseSeconds)
             {
                 _approachHoldsOutside = false;
                 return 0f;
             }
 
-            // Outside is only valid in the [Release, Engage] window before the entrance.
-            if (timeToEntrance < OutsideReleaseSeconds || timeToEntrance > OutsideEngageSeconds)
+            // Outside is only valid inside the engage window.
+            if (timeToApex > OutsideEngageSeconds)
                 return 0f;
 
             // The car decides: a corner it has not asked to position for gets no outside hold.
@@ -1315,16 +1317,40 @@ namespace ARS
             return corner == null ? apexNode : (corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(apexNode, -corner.LengthStart));
         }
 
-        // Past the braking target (entrance node) the plan expects apex speed; later braking is corner-exit scrub, not approach.
+        int CornerExitNode(CornerPoint corner)
+        {
+            if (corner == null || corner.Node < 0) return -1;
+            return corner.EndNode >= 0 ? corner.EndNode : OffsetCornerNode(corner.Node, corner.LengthEnd);
+        }
+
+        const int BrakeTargetLeadMeters = 10;
+
+        // The turn-in sits a tenth of the apex radius in SECONDS before the apex, so a wide corner gets proportionally
+        // more time to prepare and the lead scales with the corner rather than being a flat distance.
+        int TurnInNode(CornerPoint corner, float speedMps)
+        {
+            if (corner == null || corner.Node < 0) return -1;
+            return OffsetCornerNode(corner.Node, -(int)(speedMps * corner.SupposedRadius / 10f));
+        }
+
+        // Where the braking target is anchored: a fixed lead before the turn-in, which the learned factor moves from
+        // there toward the apex.
+        int BrakeTargetBaseNode(CornerPoint corner, float speedMps, int fallbackApexNode)
+        {
+            int turnInNode = TurnInNode(corner, speedMps);
+            return turnInNode < 0 ? fallbackApexNode : OffsetCornerNode(turnInNode, -BrakeTargetLeadMeters);
+        }
+
+        // Past the braking target the plan expects apex speed; later braking is corner-exit scrub, not approach.
         bool HasPassedBrakingTarget()
         {
             if (NextApexNode < 0) return true;
             CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode);
-            int entranceNode = CornerEntranceNode(corner, NextApexNode);
-            if (entranceNode < 0) return true;
-            int entranceDistance = ForwardNodeDistance(entranceNode);
+            int targetNode = BrakeTargetBaseNode(corner, Car.Velocity.Length(), NextApexNode);
+            if (targetNode < 0) return true;
+            int targetDistance = ForwardNodeDistance(targetNode);
             int apexDistance = ForwardNodeDistance(NextApexNode);
-            return entranceDistance <= 0 || (!ARS.IsPointToPoint && entranceDistance > apexDistance);
+            return targetDistance <= 0 || (!ARS.IsPointToPoint && targetDistance > apexDistance);
         }
 
         float TickScale => (0.001f * TimeSince_lastCoreTick);
@@ -1409,7 +1435,7 @@ namespace ARS
             // Crest/dip vertical curvature grip effect (route speed only).
             int count = ARS.TrackPoints.Count;
             int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteLookAheadSeconds), 0, count - 1);
-            followTrackSpd *= CrestGripSpeedFactor(followNode, Brain.CurrentPerception.CurveRadiusToFollowPoint, Car.Velocity.Length());
+            followTrackSpd *= CrestGripSpeedFactor(OffsetCornerNode(followNode, -3), followNode, OffsetCornerNode(followNode, 3), Brain.CurrentPerception.CurveRadiusToFollowPoint, Car.Velocity.Length(), out _);
 
             // Pure apex speed for the corner-approach gate.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
@@ -1418,7 +1444,8 @@ namespace ARS
             // Corner crest/dip: same check as route, centered on the apex node.
             if (Brain.Corner != null)
             {
-                float cornerCrestFactor = CrestGripSpeedFactor(Brain.Corner.Point.Node, NextApexRadius, _cornerSpd);
+                CornerPoint crestCorner = Brain.Corner.Point;
+                float cornerCrestFactor = CrestGripSpeedFactor(CornerEntranceNode(crestCorner, crestCorner.Node), crestCorner.Node, CornerExitNode(crestCorner), NextApexRadius, _cornerSpd, out _);
                 cornerSpd *= cornerCrestFactor;
                 cornerApexSpeedWithVerticalGrip *= cornerCrestFactor;
             }
@@ -1474,24 +1501,17 @@ namespace ARS
 
         // Vertical-curvature grip factor over the three-node window centred on a node, as a speed multiplier.
         // 1 means the window is degenerate or a straight; both the aggression and the floor scale with the local
-        // radius, so a tight corner is cautious and a straight is aggressive. One law, read twice above.
-        float CrestGripSpeedFactor(int centreNode, float radius, float entrySpeed)
+        // radius, so a tight corner is cautious and a straight is aggressive. A corner reads its own entrance and exit
+        // as the outer samples, the route a short window around its lookahead point.
+        float CrestGripSpeedFactor(int startNode, int centreNode, int endNode, float radius, float entrySpeed, out float rawDeltaGs)
         {
-            int count = ARS.TrackPoints.Count;
-            int startNode, endNode;
-            if (ARS.IsPointToPoint)
-            {
-                startNode = (int)ARS.Clamp(centreNode - 3, 0, count - 1);
-                endNode = (int)ARS.Clamp(centreNode + 3, 0, count - 1);
-            }
-            else
-            {
-                startNode = ((centreNode - 3) % count + count) % count;
-                endNode = ((centreNode + 3) % count + count) % count;
-            }
+            rawDeltaGs = 0f;
+            if (startNode < 0 || centreNode < 0 || endNode < 0) return 1f;
             if (startNode == endNode || startNode == centreNode || endNode == centreNode) return 1f;
 
             float deltaGs = ARS.HillGripDeltaGs(ARS.TrackPoints[startNode].Position, ARS.TrackPoints[centreNode].Position, ARS.TrackPoints[endNode].Position, entrySpeed);
+            rawDeltaGs = deltaGs;
+            if (deltaGs > 0f) deltaGs = 0f;
             float aggression = ARS.MapGamma(radius, 100f, 300f, 0f, 1f, 0.5f, true);
             float crestFloor = ARS.MapGamma(radius, 100f, 500f, 0.4f, 0.8f, 0.5f, true);
             if (deltaGs < 0f) deltaGs *= (1f - aggression);
@@ -2143,7 +2163,13 @@ namespace ARS
             string carContext = TryGetCornerContext(corner.Node, out CornerContext context)
                 ? (context.RequiresBraking ? " B+" : " B-") + (context.RequiresPositioning ? " P+" : " P-") + "  BF " + context.BrakeFactor.ToString("0.00")
                 : "";
-            ARS.DrawText(new Vector3(centre.X, centre.Y, z + 1f), "R " + radius.ToString("0.0") + "/" + corner.DetectedRadius.ToString("0.0") + " m" + carContext, Color.Magenta, 0.45f);
+            int crestStart = CornerEntranceNode(corner, corner.Node);
+            int crestEnd = CornerExitNode(corner);
+            float crestFactor = CrestGripSpeedFactor(crestStart, corner.Node, crestEnd, NextApexRadius, _cornerSpd, out float crestDeltaGs);
+            int crestSpan = crestEnd - crestStart;
+            if (!ARS.IsPointToPoint && crestSpan < 0) crestSpan += ARS.TrackPoints.Count;
+            string crestContext = "  crest " + crestDeltaGs.ToString("0.00") + "G x" + crestFactor.ToString("0.00") + " / " + crestSpan + "m";
+            ARS.DrawText(new Vector3(centre.X, centre.Y, z + 1f), "R " + radius.ToString("0.0") + "/" + corner.DetectedRadius.ToString("0.0") + " m" + carContext + crestContext, Color.Magenta, 0.45f);
 
             Vector3 apexPosition = ARS.TrackPoints[corner.Node].Position;
             Vector3 toApex = new Vector3(apexPosition.X - centre.X, apexPosition.Y - centre.Y, 0f);
@@ -2618,6 +2644,7 @@ namespace ARS
                         string peaks = "accel " + VehicleData.PeakAccelG.ToString("0.00") + "G decel " + Math.Abs(VehicleData.PeakDecelG).ToString("0.00") + "G lat " + VehicleData.PeakLateralG.ToString("0.00") + "G top " + ARS.MpsToMph(VehicleData.PeakTopSpeedMps).ToString("0") + "mph";
                         ARS.Log(ARS.LogImportance.Info, "Laptime " + CarModelName + ": " + lapTime.ToString("m':'ss'.'f") + " | " + peaks);
                         LapTimes.Add(lapTime);
+                        if (ARS.DebugToggles[Options.ShowAiLapTimes]) UI.Notify("~b~[ARS]~w~ " + Name + " lap " + (Lap - 1) + ": " + lapTime.ToString("m':'ss'.'f"));
                         LapStartTime = Game.GameTime;
                         VehicleData.ResetLapPeaks();
                     }
@@ -2731,7 +2758,7 @@ namespace ARS
                 float decel = Math.Max(BrakingDecelBase(corner.Node), 0.1f);
                 float brakingDistance = (speed * speed - intended * intended) / (2f * decel);
                 bool inBrakingRange = distance <= brakingDistance + BrakeHorizonMargin;
-                bool inPositionRange = tight && timeToEntrance <= OutsideEngageSeconds;
+                bool inPositionRange = tight && timeToEntrance <= RequirementLookaheadSeconds;
                 if (!inBrakingRange && !inPositionRange) continue;
 
                 float arrival = speed + forwardGs * Handling.Gravity * timeToEntrance * RequirementExtrapolationScale;
@@ -2884,22 +2911,20 @@ namespace ARS
             return ForwardNodeDistance(apexNode) > ARS.TrackPoints.Count / 2;
         }
 
-        // Kinematic braking map reaches apex speed at the corner entrance.
-        int BrakingTargetNode(CornerPoint corner, float factor)
+        // Kinematic braking map reaches apex speed at the braking target: a fixed lead before the corner's turn-in.
+        int BrakingTargetNode(CornerPoint corner, float apexSpeed, float factor)
         {
             if (corner == null || corner.Node < 0) return -1;
 
-            int entranceNode = corner.StartNode >= 0
-                ? corner.StartNode
-                : OffsetCornerNode(corner.Node, -corner.LengthStart);
-            if (entranceNode < 0) return -1;
+            int targetNode = BrakeTargetBaseNode(corner, apexSpeed, -1);
+            if (targetNode < 0) return -1;
 
             factor = ARS.Clamp(factor, 0f, 1f);
-            int distance = corner.Node - entranceNode;
+            int distance = corner.Node - targetNode;
             if (!ARS.IsPointToPoint && distance < 0) distance += ARS.TrackPoints.Count;
             if (ARS.IsPointToPoint && distance < 0) distance = 0;
 
-            return OffsetCornerNode(entranceNode, (int)Math.Round(distance * factor));
+            return OffsetCornerNode(targetNode, (int)Math.Round(distance * factor));
         }
 
         float ApexBrakingSpeed(int apexNode, float apexSpeed)
@@ -2910,7 +2935,7 @@ namespace ARS
             CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
             int entranceNode = CornerEntranceNode(corner, apexNode);
             int targetNode = ActiveManeuver.Type == ManeuverType.DiveBomb
-                ? BrakingTargetNode(corner, BrakingTargetFactor)
+                ? BrakingTargetNode(corner, apexSpeed, BrakingTargetFactor)
                 : entranceNode;
             if (targetNode < 0) targetNode = entranceNode;
 

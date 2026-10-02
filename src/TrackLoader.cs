@@ -210,6 +210,8 @@ namespace ARS
                     if (float.IsNaN(point.Angle) || float.IsInfinity(point.Angle)) point.Angle = 0f;
                     point.GeneralCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 10, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 10, nodeCount)], ARS.RouteNodes[point.Node]);
                     point.PreciseCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 4, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 4, nodeCount)], ARS.RouteNodes[point.Node]);
+                    // Tightest window, read by the corner span walk: the stability window is what absorbs its noise.
+                    point.ExactRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)], ARS.RouteNodes[point.Node]);
                 }
                 else
                 {
@@ -318,7 +320,8 @@ namespace ARS
             foreach (CornerPoint counted in ARS.Corners) widestApexRadius = Math.Max(widestApexRadius, counted.SupposedRadius);
             ARS.Log(ARS.LogImportance.Info, "Apex table: " + ARS.Corners.Count + " corners, widest apex radius " + widestApexRadius.ToString("0") + "m");
 
-            // A chicane reverses curvature: the peak signed angle each side of the apex differs in sign.
+            // A chicane turns the heading back on itself, so the headings either side of the apex lie on the same
+            // side of the apex direction and the signed angles match. A single corner keeps turning, so they differ.
             int nodeCount = ARS.TrackPoints.Count;
             for (int i = 0; i < ARS.Corners.Count; i++)
             {
@@ -375,10 +378,14 @@ namespace ARS
             if (float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
 
             int apexNode = scanNodes[apexPosition];
-            startPosition = apexPosition - EntranceStep(apexNode, apexRadius, apexPosition - regionStart, count);
-            endPosition = apexPosition + ExitStep(apexNode, apexRadius, regionEnd - apexPosition, count);
-            // A span is at least the apex radius either side of the apex, so it scales with the corner's own tightness.
-            float minEntranceExit = apexRadius;
+            // A span is capped at the corner's own diameter: offroad the radius never settles, and the walk would
+            // otherwise run all the way out to the region bound.
+            int spanLimit = (int)(apexRadius * 2f);
+            startPosition = apexPosition - EntranceStep(apexNode, Math.Min(apexPosition - regionStart, spanLimit), count);
+            endPosition = apexPosition + ExitStep(apexNode, Math.Min(regionEnd - apexPosition, spanLimit), count);
+            // Flat rather than the apex radius: scaling it gave a sweeper a span of twice its own radius, so the cars
+            // prepared across the whole corner.
+            float minEntranceExit = Math.Min(SpanMinimumMeters, spanLimit);
             if (apexPosition - startPosition < minEntranceExit) startPosition = Math.Max(regionStart, apexPosition - (int)minEntranceExit);
             if (endPosition - apexPosition < minEntranceExit) endPosition = Math.Min(regionEnd, apexPosition + (int)minEntranceExit);
             CornerPoint corner = new CornerPoint
@@ -415,69 +422,35 @@ namespace ARS
             ARS.Corners.Add(corner);
         }
 
-        // The entrance is the exit's mirror, walked back from the apex: the first node behind it that has reached
-        // twice the apex radius, with the nodes between it and the apex still inside the corner and the road it comes
-        // from holding one radius. Returns the bound if nothing qualifies.
-        static int EntranceStep(int apexNode, float apexRadius, int maxStep, int count)
+        // The entrance is the exit's mirror, walked back from the apex to the first node whose road holds one radius.
+        // An apex is the region's tightest node, so the radius is unsettled around it and the walk has to travel out
+        // to where the corner has released before it can stop. Returns the bound if it never settles.
+        static int EntranceStep(int apexNode, int maxStep, int count)
         {
-            float openRadius = apexRadius * 2f;
-            int fallback = maxStep;
-            bool sawOpen = false;
             for (int step = 1; step <= maxStep; step++)
             {
                 int node = ARS.IsPointToPoint ? apexNode - step : Wrap(apexNode - step, count);
                 if (ARS.IsPointToPoint && node < 0) break;
-                if (ARS.TrackPoints[node].PreciseCurveRadius < openRadius) continue;
-                if (!sawOpen)
-                {
-                    sawOpen = true;
-                    fallback = step;
-                }
-                if (!StaysInsideCorner(node, openRadius, 1, count)) continue;
-                if (!HoldsOneRadius(node, -1, count)) return step;
+                if (HoldsOneRadius(node, -1, count)) return step;
             }
-            return fallback;
+            return maxStep;
         }
 
-        const int SpanStabilityNodes = 10;
+        const int SpanStabilityNodes = 20;
+        const float SpanMinimumMeters = 20f;
         const float SpanRadiusTolerance = 0.2f;
 
-        // Where a corner hands over to a consistent, more open curve: the first node past the apex that has reached
-        // twice the apex radius, with the nodes behind it still inside that radius and the nodes ahead of it holding
-        // one radius between them. Anchored at the apex rather than at the region end, so the corner's own extent is
-        // not decided by wherever region detection happened to stop. Returns the bound if nothing qualifies.
-        static int ExitStep(int apexNode, float apexRadius, int maxStep, int count)
+        // Where a corner hands over to a consistent curve: the first node past the apex whose road holds one radius.
+        // The apex is a local minimum, so this cannot fire beside it. Returns the bound if nothing settles.
+        static int ExitStep(int apexNode, int maxStep, int count)
         {
-            float openRadius = apexRadius * 2f;
-            int fallback = maxStep;
-            bool sawOpen = false;
             for (int step = 1; step <= maxStep; step++)
             {
                 int node = ARS.IsPointToPoint ? apexNode + step : Wrap(apexNode + step, count);
                 if (ARS.IsPointToPoint && node >= count) break;
-                if (ARS.TrackPoints[node].PreciseCurveRadius < openRadius) continue;
-                if (!sawOpen)
-                {
-                    sawOpen = true;
-                    fallback = step;
-                }
-                if (!StaysInsideCorner(node, openRadius, -1, count)) continue;
-                if (!HoldsOneRadius(node, 1, count)) return step;
+                if (HoldsOneRadius(node, 1, count)) return step;
             }
-            return fallback;
-        }
-
-        // A lone reading past twice the apex cannot end a span: every node between the candidate and its apex must
-        // still be inside the corner. Direction is the node step that leads back to the apex.
-        static bool StaysInsideCorner(int node, float openRadius, int direction, int count)
-        {
-            for (int back = 1; back <= SpanStabilityNodes; back++)
-            {
-                int sample = ARS.IsPointToPoint ? node + direction * back : Wrap(node + direction * back, count);
-                if (sample < 0 || sample >= count) return false;
-                if (ARS.TrackPoints[sample].PreciseCurveRadius >= openRadius) return false;
-            }
-            return true;
+            return maxStep;
         }
 
         // A span end must hand the car to a curve that is more open but constant, so the run beyond it holds one
@@ -490,13 +463,13 @@ namespace ARS
             {
                 int sample = ARS.IsPointToPoint ? node + direction * ahead : Wrap(node + direction * ahead, count);
                 if (sample < 0 || sample >= count) return false;
-                total += ARS.TrackPoints[sample].PreciseCurveRadius;
+                total += ARS.TrackPoints[sample].ExactRadius;
             }
             float mean = total / SpanStabilityNodes;
             for (int ahead = 0; ahead < SpanStabilityNodes; ahead++)
             {
                 int sample = ARS.IsPointToPoint ? node + direction * ahead : Wrap(node + direction * ahead, count);
-                if (Math.Abs(ARS.TrackPoints[sample].PreciseCurveRadius - mean) > mean * SpanRadiusTolerance) return false;
+                if (Math.Abs(ARS.TrackPoints[sample].ExactRadius - mean) > mean * SpanRadiusTolerance) return false;
             }
             return true;
         }
@@ -507,13 +480,14 @@ namespace ARS
         // handed, so a chain of merges stops at the first corner of the complex.
         static void ExtendMergedCorner(CornerPoint survivor, int unionStart, int unionEnd, int count)
         {
-            int entranceDistance = ARS.IsPointToPoint ? survivor.Node - unionStart : Wrap(survivor.Node - unionStart, count);
-            int entranceStep = EntranceStep(survivor.Node, survivor.SupposedRadius, entranceDistance, count);
+            int spanLimit = (int)(survivor.SupposedRadius * 2f);
+            int entranceDistance = Math.Min(ARS.IsPointToPoint ? survivor.Node - unionStart : Wrap(survivor.Node - unionStart, count), spanLimit);
+            int entranceStep = EntranceStep(survivor.Node, entranceDistance, count);
             int entrance = ARS.IsPointToPoint ? survivor.Node - entranceStep : Wrap(survivor.Node - entranceStep, count);
-            int exitDistance = ARS.IsPointToPoint ? unionEnd - survivor.Node : Wrap(unionEnd - survivor.Node, count);
-            int exitStep = ExitStep(survivor.Node, survivor.SupposedRadius, exitDistance, count);
+            int exitDistance = Math.Min(ARS.IsPointToPoint ? unionEnd - survivor.Node : Wrap(unionEnd - survivor.Node, count), spanLimit);
+            int exitStep = ExitStep(survivor.Node, exitDistance, count);
             int exit = ARS.IsPointToPoint ? survivor.Node + exitStep : Wrap(survivor.Node + exitStep, count);
-            float minEntranceExit = survivor.SupposedRadius;
+            float minEntranceExit = Math.Min(SpanMinimumMeters, spanLimit);
             if ((ARS.IsPointToPoint ? survivor.Node - entrance : Wrap(survivor.Node - entrance, count)) < minEntranceExit)
                 entrance = ARS.IsPointToPoint ? Math.Max(unionStart, survivor.Node - (int)minEntranceExit) : Wrap(survivor.Node - (int)minEntranceExit, count);
             if ((ARS.IsPointToPoint ? exit - survivor.Node : Wrap(exit - survivor.Node, count)) < minEntranceExit)
