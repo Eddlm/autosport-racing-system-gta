@@ -1517,6 +1517,13 @@ namespace ARS
         const float InstabilityYawTolerance = 1.2f;
         const float InstabilityThrottleLevel = 0f;
 
+        // The overspeed correction only arms while the car is going straight and up to speed: steering or slide of
+        // its own puts lateral work and bump transients into the longitudinal read, and below the speed gate the
+        // launch assist is what it would otherwise be reading.
+        const float OverspeedArmMaxSteerDegrees = 2f;
+        const float OverspeedArmMaxSlideDegrees = 2f;
+        const float OverspeedArmMinSpeedMph = 30f;
+
         // Cutting is fast, recovering is deliberate: the shared rate going down, half of it coming back.
         const float ReasonCapRecoveryScale = 0.5f;
 
@@ -1532,8 +1539,9 @@ namespace ARS
             Control.MaxThrottleFromTCS = GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
             Control.MaxThrottleFromInstability = GlideCap(Control.MaxThrottleFromInstability, IsUnstable() ? InstabilityThrottleLevel : 1f);
 
+            bool overspeedArmed = Math.Abs(Control.SteerDegrees) < OverspeedArmMaxSteerDegrees && Math.Abs(VehicleData.SlideAngle) < OverspeedArmMaxSlideDegrees && Car.Velocity.Length() > ARS.MphToMps(OverspeedArmMinSpeedMph);
             float overspeedLevel = 1f;
-            if (ARS.OverspeedEnabled && VehicleData.OverspeedExcessGs > 0f)
+            if (ARS.OverspeedEnabled && overspeedArmed && VehicleData.OverspeedExcessGs > 0f)
                 overspeedLevel = ARS.Clamp(1f - (float)Math.Floor(VehicleData.OverspeedExcessGs / 0.1f) * 0.5f, 0f, 1f);
             Control.MaxThrottleFromOverspeed = GlideCap(Control.MaxThrottleFromOverspeed, overspeedLevel);
 
