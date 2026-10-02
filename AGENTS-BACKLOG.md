@@ -38,6 +38,7 @@
 8. ~~Side-by-side heading assist~~ — **VERIFIED in game (`77d3729`)**.
 9. ~~Start-line flare placement~~ — **DONE and driver-verified (`4779a31`)**: one pair per track on the last node at the track edges, its effect in the file's colour. The two root causes and the attribute semantics are in the section below.
 10. ~~Stuck-recovery escalation~~ — **already in the code**: `ApplyStuckRecoveryOverride` teleports the racer to the nearest track edge after 5 failed reverse attempts, using the same math as the player's `ResetToTrack()`; user confirms it works for player and AI.
+10a. **Apex speed reads the biased radius** — `SupposedRadius` is the region's *minimum* precise radius, i.e. the noise tail, while `DetectedRadius` (the region's min *smoothed* radius) is far steadier and now feeds only the 50 m positioning gate. Apex speed is `√(grip·g·R)`, so the low bias holds every corner speed down; the switch wants its own drive. Detail below.
 
 **Tier 3 — single-method changes**
 
@@ -338,4 +339,14 @@ The menu restructure (`9b8da25`; per-menu ini stores, Pace Mode under Settings, 
 ## Smart Tuning (the grid auto-tuner) - moved to AGENTS-SMARTTUNING.md
 
 The tick-queue rationale, the two-livery-spaces trap, style taxonomy, colour precedence and whitelists, brand evidence and open items all live in that companion now.
+
+## Apex speed reads the biased radius — the smoother radius is unused
+
+`BuildApexTable` stores **two** radii per corner: `SupposedRadius`, the **minimum `PreciseCurveRadius`** over the region, and `DetectedRadius`, the **minimum `SmoothedRadius`** over the same region (`TrackLoader.cs:412`; smoothing is the harmonic mean of `1/radius` across a ±2-node window). Registration compares the *smoothed* reading, and the 50 m positioning gate reads `DetectedRadius` — but everything the car actually drives to reads `SupposedRadius`: the stored apex speed, `NextApexRadius`, `ApexSpeedWithDownforce`, and the `intended` speed the requirement flags compare against.
+
+**Why the gap matters.** A minimum over many noisy samples of an 8 m-chord circumradius is the low tail of that noise, and apex speed goes as `√(grip·g·R)`, so a radius biased low holds **every** corner speed down — the AI brakes more than the arc calls for. `DetectedRadius` is the steadier number, which is exactly why registration trusts it; so the two halves of the system disagree by construction.
+
+**The change to make.** Move the four read sites onto `DetectedRadius` — or store the smoothed value into `SupposedRadius` at build time and keep one field, which also stops the debug label needing two numbers. It **raises corner speeds everywhere**, so it wants its own drive rather than riding along with another change. The circle label already prints both as `R plan/detected`, which is how to see the current per-corner gap.
+
+**Deliberately not done yet**: the user asked for this to be noted for a deeper look later rather than changed in the corner-requirements session.
 
