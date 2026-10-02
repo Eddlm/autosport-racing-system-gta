@@ -341,7 +341,7 @@ Seven flags have **no consumer anywhere** in `src\dev_ng`: `FLAG_NO_BOOT` (2), `
 | `20000` | 1 — `MINIMUSFD` | `HF_TYRES_CAN_CLIP` only |
 | `20000001` | 1 — `TAMPADRL` | `HF_SMOOTHED_COMPRESSION` + `HF_IMPROVED_RIGHTING_FORCE` (no gravity bit) |
 
-So 39 cars carry the off-road gravity bit, `RETINUEL` is the only car with the rally-tyre curve, and `TAMPADRL` and `MINIMUSFD` are the only two the gravity model treats as normal.
+So 39 cars carry the off-road gravity bit, `RETINUEL` is the only car with the rally-tyre curve, and `TAMPADRL` and `MINIMUSFD` are the only two the gravity model treats as normal. **`TAMPADRL` is also the file's only `fEngineResistance`** (`0.04`, `handling.meta:2128`) — so the single car that blanks the bottom of its throttle is also one of the three that keeps normal off-throttle wheel drag instead of freewheeling.
 
 ## `strAdvancedFlags` — `CarAdvancedFlags` (`CF_*`), `handlingMgr.h:140-186`
 
@@ -398,7 +398,7 @@ Lives on `CCarHandlingData`, not on `CHandlingData` — so a car only has this s
 | `m_fCamberFront` | :310 | `wheel.cpp:697` (contact point), `WheelRendering.cpp:331` (rendered) |
 | `m_fCamberRear` | :311 | the same two sites, rear |
 | `m_fCastor` | :312 | `WheelRendering.cpp:341` — **rendering only**, no physics reader found |
-| `m_fEngineResistance` | :313 | `Transmission.cpp:1298` — engine braking, scaled by `(1 - |throttle|)` |
+| `m_fEngineResistance` | :313 | `Transmission.cpp:1298` — **part-throttle** drive-force loss (a low-throttle deadband); dead at zero throttle, where the clamp bound is the throttled force and `:1261` makes that zero |
 | `m_fMaxDriveBiasTransfer` | :314 | `Automobile.cpp:9814-9826` — clamps the front/rear torque split; the `handlingMgr.h:1001-1003` inlines read it where **`> -1` means all-wheel drive** |
 | `m_fJumpForceScale` | :315 | `Vehicle.cpp:37503` — scales the jump impulse |
 | `m_fIncreasedRammingForceScale` | :316 | `vehicle.h:655` → `Vehicle.cpp:21123` — scales the shunt force on the other car |
@@ -436,6 +436,6 @@ Lives on `CCarHandlingData`, not on `CHandlingData` — so a car only has this s
 - **The engine has no traction or stability assist at all** — `CF_ASSIST_TRACTION_CONTROL` and `CF_ASSIST_STABILITY_CONTROL` are **inert**, verified across the whole tree, despite carrying the comments "JUST REDUCE THROTTLE" and "APPLY BRAKES TO INDIVIDUAL WHEELS". So ARS's TCS is not fighting an engine assist on any car; the only assists in play are the bike cheat gated by `HF_FORCE_NO_TC_OR_SC` and the AI-side `STATUS_PHYSICS` ABS.
 - **`CF_USE_DOWNFORCE_BIAS` decides what the traction native answers** — with it set, `GET_VEHICLE_MAX_TRACTION` adds a downforce term (`commands_vehicle.cpp:6216`), so the raw native is **not comparable between cars** without checking the bit. ARS divides that term out with its own formula, which makes it immune; only an outside comparison needs the caveat.
 - **`m_fMaxDriveBiasTransfer`** is the field behind ARS's AWD exemption — the header inlines read it as `> -1` means all-wheel drive (`handlingMgr.h:1001-1003`), which is worth naming where that rule is documented.
-- **Engine braking is authored and ARS ignores it**: `m_fEngineResistance` scales the engine-braking force by `(1 - |throttle|)` (`Transmission.cpp:1298`). The pedal pipeline models braking only through the brake command and the tyres, so off-throttle behaviour differs per car in a way ARS does not predict.
+- **`m_fEngineResistance` is a part-throttle loss, not lift-off engine braking** — it multiplies the base drive force by revs × clutch × `(1 - |throttle|)` and is clamped to the *throttled* force, which `Transmission.cpp:1261` makes zero at zero throttle, so lift-off deceleration never comes from it; an earlier note here called it engine braking and was wrong about when it acts. **The real lift-off deceleration is off-gas wheel friction** (`wheel.cpp:3838-3840`, using the `fFrictionMult` chosen at `:3797-3814`) — exactly what `HF_FREEWHEEL_NO_GAS` cuts — plus material/extra wheel drag and aero drag; ARS models none of them, so off-throttle behaviour still differs per car.
 - **Camber and toe are authored, and the traction native does not include them.** `m_fCamberFront`/`m_fCamberRear` move the contact geometry (`wheel.cpp:697`) and `m_fToeFront`/`m_fToeRear` steer the axles statically (`wheel.cpp:6456`), while ARS's grip comes from the native — so a car with meaningful camber (the `MF_EXTRA_CAMBER` flag exists for exactly this) is modelled without it. `m_fCastor` is rendering-only.
 - **`m_AdvancedData` is the mechanism by which fitted mods change performance** — per-slot, per-index values for turbo power (`VMT_KNOB`, `Transmission.cpp:150-198`), top speed (`VMT_ICE`, `VehicleModelInfoVariation.cpp:875-894`) and front/rear downforce (`:1021-1057`). It is the data an upgrade-aware pace model would read, which makes it the concrete answer to the "pace is model-theoretical, stock and fully upgraded score identically" open item in `AGENTS.md`.
