@@ -372,7 +372,6 @@ namespace ARS
         public float GeneralCurveRadius = 999f;
         public float PreciseCurveRadius = 999f;
         public float ExactRadius = 999f;
-        public float SmoothedCurveRadius = 999f;
         public float Elevation = 0f;
         public float TrackHalfWidth = 5f;
         public float CumulativeDistance = 0f;

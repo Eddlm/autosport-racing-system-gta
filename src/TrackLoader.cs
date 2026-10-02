@@ -210,12 +210,7 @@ namespace ARS
                     if (float.IsNaN(point.Angle) || float.IsInfinity(point.Angle)) point.Angle = 0f;
                     point.GeneralCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 10, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 10, nodeCount)], ARS.RouteNodes[point.Node]);
                     point.PreciseCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 4, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 4, nodeCount)], ARS.RouteNodes[point.Node]);
-                    // Tightest window, kept for reference only: too noisy to settle on, so the span walk tests the
-                    // smoothed reading below instead.
                     point.ExactRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)], ARS.RouteNodes[point.Node]);
-                    // Read by the corner span walk: harmonic mean of the precise readings, and it saturates on open road
-                    // where the chord radius is ill-conditioned and explodes.
-                    point.SmoothedCurveRadius = SmoothedRadius(point.Node, nodeCount, SpanStabilitySmoothingNodes);
                 }
                 else
                 {
@@ -241,8 +236,8 @@ namespace ARS
             const float exitRadius = 200f;
             const int smoothingNodes = 2;
             const int exitRelaxationNodes = 4;
-            const int minimumCornerNodes = 5;
-            const float closeCornerSeconds = 5f;
+            const int minimumCornerNodes = 25;
+            const float closeCornerSeconds = 2f;
 
             // Start a circuit scan on a straight so a corner crossing the node-zero boundary
             // is detected as one region rather than split between the end and beginning.
@@ -380,6 +375,9 @@ namespace ARS
             }
 
             if (float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
+            // A wide region is a bend, not a corner: the apex reads the precise radius, which the region's smoothed
+            // radius can sit well under, so a region does open without a tight node inside it.
+            if (apexRadius > MaximumApexRadius) return;
 
             int apexNode = scanNodes[apexPosition];
             // A span is capped at a hard node count each way rather than by the corner's own size: offroad the radius
@@ -441,11 +439,11 @@ namespace ARS
             return maxStep;
         }
 
-        const int SpanStabilityNodes = 20;
-        const int SpanStabilitySmoothingNodes = 2;
+        const int SpanStabilityNodes = 10;
         const float SpanMinimumMeters = 20f;
-        const float SpanRadiusTolerance = 0.1f;
+        const float SpanRadiusTolerance = 0.3f;
         const int SpanNodeLimit = 500;
+        const float MaximumApexRadius = 200f;
 
         // Where a corner hands over to a consistent curve: the first node past the apex whose road holds one radius.
         // The apex is a local minimum, so this cannot fire beside it. Returns the bound if nothing settles.
@@ -470,15 +468,24 @@ namespace ARS
             {
                 int sample = ARS.IsPointToPoint ? node + direction * ahead : Wrap(node + direction * ahead, count);
                 if (sample < 0 || sample >= count) return false;
-                total += ARS.TrackPoints[sample].SmoothedCurveRadius;
+                total += OpenRoadRadius(sample);
             }
             float mean = total / SpanStabilityNodes;
             for (int ahead = 0; ahead < SpanStabilityNodes; ahead++)
             {
                 int sample = ARS.IsPointToPoint ? node + direction * ahead : Wrap(node + direction * ahead, count);
-                if (Math.Abs(ARS.TrackPoints[sample].SmoothedCurveRadius - mean) > mean * SpanRadiusTolerance) return false;
+                if (Math.Abs(OpenRoadRadius(sample) - mean) > mean * SpanRadiusTolerance) return false;
             }
             return true;
+        }
+
+        // Open road reads arbitrarily wide on a four-node chord, so it saturates on the sentinel the point carries.
+        // Without that clamp the window mean explodes and no run ever settles.
+        static float OpenRoadRadius(int node)
+        {
+            float radius = ARS.TrackPoints[node].PreciseCurveRadius;
+            if (radius <= 0f || radius >= 999f || float.IsNaN(radius) || float.IsInfinity(radius)) return 999f;
+            return radius;
         }
 
         // A merged survivor's extensions, re-walked rather than inherited: the entrance runs in over the absorbed
