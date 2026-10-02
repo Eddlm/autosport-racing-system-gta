@@ -323,7 +323,8 @@ namespace ARS
         Offtrack,
         GridWait,
         Countersteer,
-        StuckRecovery
+        StuckRecovery,
+        Instability
     }
 
     public enum BrakeReason
@@ -352,6 +353,7 @@ namespace ARS
         public float MaxThrottleFromRival = 1f;
         public float MaxThrottleFromChillOut = 1f;
         public float MaxThrottleFromYield = 1f;
+        public float MaxThrottleFromInstability = 1f;
         public ThrottleReason ThrottleReason = ThrottleReason.Plan;
         public float ThrottleReasonLevel = 1f;
         public BrakeReason BrakeReason = BrakeReason.Plan;

@@ -55,6 +55,8 @@ namespace ARS
         
         int _lastGsCheck = 0;
         bool _gripLogged = false;
+        // -1 until Launch captures the at-rest ride height; the height test is skipped while it has no value.
+        float _restHeightAboveGround = -1f;
 
         // Racer progress along the route.
         public TrackPoint CurrentTrackPoint = new TrackPoint();
@@ -154,7 +156,7 @@ namespace ARS
         float _offtrackInputCap = 1f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
-        const float BrakeFactorSeed = 0.9f;
+        const float BrakeFactorSeed = 0.75f;
         // Each corner's initial factor is the seed plus a draw of +/- this many hundredths.
         const int BrakeFactorSeedJitterHundredths = 5;
         readonly Dictionary<int, float> _brakeFactorsByApex = new Dictionary<int, float>();
@@ -379,6 +381,7 @@ namespace ARS
             CanRegisterNewLap = false;
             _previousNode = -1;
             _inputTrail.Clear();
+            _restHeightAboveGround = -1f;
 
             string flags = VehicleMemory.GetHandlingFlags(Car).ToString("X");
             int flagsHex = Convert.ToInt32(flags, 16);
@@ -1039,12 +1042,15 @@ namespace ARS
             VehicleData.ResetLapPeaks();
             CanRegisterNewLap = false;
             _previousNode = -1;
-            Control.HandBrakeTime = Game.GameTime + ARS.GetRandomInt(100, 400);
+            // The grid is the one moment the car is known to be at rest, so this is where the baseline comes from.
+            float restHeight = Car.HeightAboveGround;
+            if (restHeight > 0f) _restHeightAboveGround = restHeight;
             Control.MaxThrottle = 1f;
             Control.MaxBrake = 1f;
             Control.MaxBrakeFromABS = 1f;
             Control.MaxBrakeFromCountersteer = 1f;
             Control.MaxThrottleFromTCS = 1f;
+            Control.MaxThrottleFromInstability = 1f;
             Control.MaxThrottleFromOverspeed = 1f;
             Control.MaxThrottleFromRival = 1f;
             Control.MaxThrottleFromChillOut = 1f;
@@ -1502,15 +1508,29 @@ namespace ARS
         const float SlipCurveKnee = 2.5f;
         const float YieldThrottleLevel = 0.5f;
 
+        // Instability, the replacement's first cut: off-road the chassis is thrown around and the two consequences
+        // are losing grip and losing control. The ride height is captured at Launch, where the car is known to be at
+        // rest, so a rise above it is the chassis unloading off its suspension; the yaw side is the friction circle,
+        // since at this speed the tyres allow at most grip*g of lateral acceleration.
+        const float InstabilityRideHeightMargin = 0.1f;
+        const float InstabilityMinSpeedMps = 8f;
+        const float InstabilityYawTolerance = 1.2f;
+        const float InstabilityThrottleLevel = 0f;
+
+        // Cutting is fast, recovering is deliberate: the shared rate going down, half of it coming back.
+        const float ReasonCapRecoveryScale = 0.5f;
+
         float GlideCap(float current, float level)
         {
-            float step = ReasonCapSlewRate * TickScale;
+            float rate = level < current ? ReasonCapSlewRate : ReasonCapSlewRate * ReasonCapRecoveryScale;
+            float step = rate * TickScale;
             return ARS.Clamp(current + ARS.Clamp(level - current, -step, step), 0f, 1f);
         }
 
         void UpdateThrottleReasonCaps()
         {
             Control.MaxThrottleFromTCS = GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
+            Control.MaxThrottleFromInstability = GlideCap(Control.MaxThrottleFromInstability, IsUnstable() ? InstabilityThrottleLevel : 1f);
 
             float overspeedLevel = 1f;
             if (ARS.OverspeedEnabled && VehicleData.OverspeedExcessGs > 0f)
@@ -1528,6 +1548,19 @@ namespace ARS
 
             Control.MaxThrottleFromChillOut = GlideCap(Control.MaxThrottleFromChillOut, ActiveManeuver.Type == ManeuverType.ChillOut ? ChillThrottleCap : 1f);
             Control.MaxThrottleFromYield = GlideCap(Control.MaxThrottleFromYield, ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null ? YieldThrottleLevel : 1f);
+        }
+
+        // Both signals are read every tick: the old system latched them at 3 Hz and missed crests shorter than the
+        // sample period. Riding above the at-rest height means the chassis is unloaded, bouncing or airborne;
+        // demanding more lateral acceleration than the grip allows means the car is rotating, not cornering.
+        bool IsUnstable()
+        {
+            if (_restHeightAboveGround > 0f && Car.HeightAboveGround - _restHeightAboveGround > InstabilityRideHeightMargin) return true;
+
+            float speed = Car.Velocity.Length();
+            if (speed < InstabilityMinSpeedMps) return false;
+            float lateralDemand = ARS.DegToRad(Math.Abs(VehicleData.YawRotationPerSecondDegrees)) * speed;
+            return lateralDemand > VehicleData.CurrentMechanicalGrip * Handling.Gravity * InstabilityYawTolerance;
         }
 
         float TcsCapLevel()
@@ -1584,7 +1617,8 @@ namespace ARS
         // reasons; grid wait owns the pedal outright and stuck recovery re-tags after.
         float ComposeThrottleCap(float baseThrottle, bool offtrackLimited, bool countersteering)
         {
-            float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromOverspeed);
+            float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromInstability);
+            ceiling = Math.Min(ceiling, Control.MaxThrottleFromOverspeed);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRival);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromChillOut);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromYield);
@@ -1593,6 +1627,7 @@ namespace ARS
             float binding = baseThrottle;
             ThrottleReason reason = ThrottleReason.Plan;
             if (Control.MaxThrottleFromTCS < binding) { binding = Control.MaxThrottleFromTCS; reason = ThrottleReason.Tcs; }
+            if (Control.MaxThrottleFromInstability < binding) { binding = Control.MaxThrottleFromInstability; reason = ThrottleReason.Instability; }
             if (Control.MaxThrottleFromOverspeed < binding) { binding = Control.MaxThrottleFromOverspeed; reason = ThrottleReason.Overspeed; }
             if (Control.MaxThrottleFromRival < binding) { binding = Control.MaxThrottleFromRival; reason = ThrottleReason.Rival; }
             if (Control.MaxThrottleFromChillOut < binding) { binding = Control.MaxThrottleFromChillOut; reason = ThrottleReason.ChillOut; }
@@ -2033,19 +2068,30 @@ namespace ARS
 
         // Pedal bar over the car along its forward axis: centre neutral, front end full throttle, back end full
         // brake, reverse throttle placed ahead by magnitude. The applied pedal is green (throttle) or red (brake);
-        // a white sphere is the composed ceiling or an override command; a coloured sphere is a per-reason limit,
-        // drawn only where it actually bites.
+        // a white sphere is an override command; a coloured sphere is a per-reason limit, drawn only where it bites.
+        // The inputs go down first and then every cap from highest to lowest, so the binding cap paints last.
         const float PedalBarHalfLength = 1.25f;
         // The applied pedal sits a hair under both cap classes, so a cap that coincides with it still rings it.
         const float PedalBarReasonSize = 0.1f;
         const float PedalBarCapSize = 0.09f;
         const float PedalBarInputSize = 0.08f;
         // Etiquette limits (rival, chill-out, yield) are harmless, so they read cool; grip limits yellow; the
-        // overspeed cut black; countersteer orange.
+        // overspeed cut black; countersteer orange; instability violet.
         static readonly Color NonDangerousReasonColor = Color.FromArgb(255, 120, 200, 255);
         static readonly Color GripReasonColor = Color.Yellow;
         static readonly Color OverspeedReasonColor = Color.Black;
         static readonly Color CountersteerReasonColor = Color.Orange;
+        static readonly Color InstabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
+
+        struct PedalCapSphere
+        {
+            public Vector3 Axis;
+            public float Level;
+            public Color Color;
+            public float Size;
+        }
+
+        readonly PedalCapSphere[] _pedalCaps = new PedalCapSphere[12];
 
         void DrawPedalBar()
         {
@@ -2053,29 +2099,53 @@ namespace ARS
             Vector3 fwd = Car.ForwardVector;
             ARS.DrawLine(center + fwd * PedalBarHalfLength, center - fwd * PedalBarHalfLength, Color.White);
 
-            DrawPedalBarSphere(center, fwd, Math.Abs(Control.Throttle), Color.Green, PedalBarInputSize);
-            DrawPedalBarSphere(center, -fwd, Control.Brake, Color.Red, PedalBarInputSize);
+            float throttle = Math.Abs(Control.Throttle);
+            if (throttle > 0f) DrawPedalBarSphere(center, fwd, throttle, Color.Green, PedalBarInputSize);
+            if (Control.Brake > 0f) DrawPedalBarSphere(center, -fwd, Control.Brake, Color.Red, PedalBarInputSize);
 
-            DrawPedalBarSphere(center, fwd, Control.MaxThrottle, Color.White, PedalBarCapSize);
-            DrawPedalBarSphere(center, -fwd, Control.MaxBrake, Color.White, PedalBarCapSize);
-            if (IsFullCountersteer()) DrawPedalBarSphere(center, fwd, CountersteerRollThrottle, Color.White, PedalBarCapSize);
-            if (_offtrackInputCap < 0f) DrawPedalBarSphere(center, -fwd, -_offtrackInputCap, Color.White, PedalBarCapSize);
-            else if (_offtrackInputCap < 1f) DrawPedalBarSphere(center, fwd, _offtrackInputCap, Color.White, PedalBarCapSize);
+            int count = 0;
+            AddPedalCap(fwd, Control.MaxThrottleFromTCS, GripReasonColor, PedalBarReasonSize, ref count);
+            AddPedalCap(fwd, Control.MaxThrottleFromInstability, InstabilityReasonColor, PedalBarReasonSize, ref count);
+            AddPedalCap(fwd, Control.MaxThrottleFromOverspeed, OverspeedReasonColor, PedalBarReasonSize, ref count);
+            AddPedalCap(fwd, Control.MaxThrottleFromRival, NonDangerousReasonColor, PedalBarReasonSize, ref count);
+            AddPedalCap(fwd, Control.MaxThrottleFromChillOut, NonDangerousReasonColor, PedalBarReasonSize, ref count);
+            AddPedalCap(fwd, Control.MaxThrottleFromYield, NonDangerousReasonColor, PedalBarReasonSize, ref count);
+            AddPedalCap(-fwd, Control.MaxBrakeFromABS, GripReasonColor, PedalBarReasonSize, ref count);
+            AddPedalCap(-fwd, Control.MaxBrakeFromCountersteer, CountersteerReasonColor, PedalBarReasonSize, ref count);
+            if (IsFullCountersteer()) AddPedalCap(fwd, CountersteerRollThrottle, Color.White, PedalBarCapSize, ref count);
+            if (_offtrackInputCap < 0f) AddPedalCap(-fwd, -_offtrackInputCap, Color.White, PedalBarCapSize, ref count);
+            else if (_offtrackInputCap < 1f) AddPedalCap(fwd, _offtrackInputCap, Color.White, PedalBarCapSize, ref count);
 
-            DrawReasonCapSphere(center, fwd, Control.MaxThrottleFromTCS, GripReasonColor);
-            DrawReasonCapSphere(center, fwd, Control.MaxThrottleFromOverspeed, OverspeedReasonColor);
-            DrawReasonCapSphere(center, fwd, Control.MaxThrottleFromRival, NonDangerousReasonColor);
-            DrawReasonCapSphere(center, fwd, Control.MaxThrottleFromChillOut, NonDangerousReasonColor);
-            DrawReasonCapSphere(center, fwd, Control.MaxThrottleFromYield, NonDangerousReasonColor);
-            DrawReasonCapSphere(center, -fwd, Control.MaxBrakeFromABS, GripReasonColor);
-            DrawReasonCapSphere(center, -fwd, Control.MaxBrakeFromCountersteer, CountersteerReasonColor);
+            DrawPedalCaps(center, count);
         }
 
-        // A reason at full authority is not limiting anything, so it draws nothing rather than stacking on the cap.
-        void DrawReasonCapSphere(Vector3 center, Vector3 axis, float level, Color color)
+        // A limit at full authority is not limiting anything, so it is not queued.
+        void AddPedalCap(Vector3 axis, float level, Color color, float size, ref int count)
         {
-            if (level >= 1f) return;
-            DrawPedalBarSphere(center, axis, level, color, PedalBarReasonSize);
+            if (level >= 1f || count >= _pedalCaps.Length) return;
+            _pedalCaps[count].Axis = axis;
+            _pedalCaps[count].Level = level;
+            _pedalCaps[count].Color = color;
+            _pedalCaps[count].Size = size;
+            count++;
+        }
+
+        void DrawPedalCaps(Vector3 center, int count)
+        {
+            for (int i = 1; i < count; i++)
+            {
+                PedalCapSphere cap = _pedalCaps[i];
+                int j = i - 1;
+                while (j >= 0 && _pedalCaps[j].Level < cap.Level)
+                {
+                    _pedalCaps[j + 1] = _pedalCaps[j];
+                    j--;
+                }
+                _pedalCaps[j + 1] = cap;
+            }
+
+            for (int i = 0; i < count; i++)
+                DrawPedalBarSphere(center, _pedalCaps[i].Axis, _pedalCaps[i].Level, _pedalCaps[i].Color, _pedalCaps[i].Size);
         }
 
         void DrawPedalBarSphere(Vector3 center, Vector3 axis, float fraction, Color color, float size)
