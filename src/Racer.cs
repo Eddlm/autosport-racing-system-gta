@@ -146,9 +146,7 @@ namespace ARS
         // commands and RIGHT negative ones, because a positive command steers left (AGENTS.md's steer-sign gotcha).
         public float SteerLimitRight = 40f;
         public float SteerLimitLeft = 40f;
-        float _debugPreLimitSteerDeg = 0f;
-        // Yaw damper steer contributions in degrees, for Show Inputs: against zero and against the track's required yaw.
-        float _debugDamperZeroRefDeg = 0f;
+        // Yaw damper term in degrees: read by the steer sum below and by the yaw HUD.
         float _debugDamperTermDeg = 0f;
         float _debugYawTargetPerSecond = 0f;
         float _debugDamperGainSeconds = 0f;
@@ -525,7 +523,6 @@ namespace ARS
             float damperGain = SteerDamping;
             _debugYawTargetPerSecond = yawTarget;
             _debugDamperGainSeconds = damperGain;
-            _debugDamperZeroRefDeg = -damperGain * VehicleData.YawRotationPerSecondDegrees;
             _debugDamperTermDeg = -damperGain * yawRateToDamp;
             float dampedCourseSteerDeg = (steerKP * (courseErrorDeg + recoveryDeg + sideBySideSteerDeg)) + _debugDamperTermDeg;
             Control.SteerDegrees = dampedCourseSteerDeg + (steerKP * laneSteerDeg);
@@ -547,7 +544,6 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
                 Control.SteerDegrees = 0f;
-            _debugPreLimitSteerDeg = Control.SteerDegrees;
 
             // --- Local function: TryGetSteerContext ---
 
@@ -1899,46 +1895,12 @@ namespace ARS
                 }
             }
 
-            // Projection + input trail (inputs).
+            // Input trail + pedal bar (inputs).
             if (ARS.DebugToggles[Options.ShowInputs] && !ControlledByPlayer && ARS.DebugFocusRacer == this)
             {
-                // Projection: 0.5s / 1s / 1.5s kinematic forecast.
-                Vector3 halfSec = ProjectAhead(0.5f);
-                Vector3 fullSec = ProjectAhead(1f);
-                Vector3 extraSec = ProjectAhead(1.5f);
-                Color halfSecColour = InputColour(OffshootInputCap(0.5f));
-                Color fullSecColour = InputColour(OffshootInputCap(1f));
-                Color extraSecColour = InputColour(OffshootInputCap(1.5f));
-                ARS.DrawLine(Car.Position, halfSec, halfSecColour);
-                ARS.DrawLine(halfSec, fullSec, fullSecColour);
-                ARS.DrawLine(fullSec, extraSec, extraSecColour);
-                DrawPointMarker(halfSec, 0.4f, halfSecColour);
-                DrawPointMarker(fullSec, 0.6f, fullSecColour);
-                DrawPointMarker(extraSec, 0.6f, extraSecColour);
-
-                // Steering angle lines: PD target (yellow) vs applied (green).
-                Vector3 carPos = Car.Position + new Vector3(0, 0, 0.5f);
-                Vector3 fwd = Car.ForwardVector;
-                float lineLen = 5f;
-                float pdRad = _debugPreLimitSteerDeg * (float)Math.PI / 180f;
-                float apRad = Control.SteerDegrees * (float)Math.PI / 180f;
-                Vector3 pdDir = new Vector3(fwd.X * (float)Math.Cos(pdRad) - fwd.Y * (float)Math.Sin(pdRad), fwd.X * (float)Math.Sin(pdRad) + fwd.Y * (float)Math.Cos(pdRad), 0f);
-                Vector3 apDir = new Vector3(fwd.X * (float)Math.Cos(apRad) - fwd.Y * (float)Math.Sin(apRad), fwd.X * (float)Math.Sin(apRad) + fwd.Y * (float)Math.Cos(apRad), 0f);
-                ARS.DrawLine(carPos, carPos + pdDir * lineLen, Color.Yellow);
-                ARS.DrawLine(carPos, carPos + apDir * lineLen, Color.Lime);
-
-
-                // Yaw damper contributions, same origin so their gap reads as an angle: magenta against zero (the old toll), cyan as it now runs against the track's required yaw.
-                Vector3 dampOrigin = carPos + new Vector3(0f, 0f, 1.2f);
-                float zeroRefRad = _debugDamperZeroRefDeg * (float)Math.PI / 180f;
-                float dampRad = _debugDamperTermDeg * (float)Math.PI / 180f;
-                Vector3 zeroRefDir = new Vector3(fwd.X * (float)Math.Cos(zeroRefRad) - fwd.Y * (float)Math.Sin(zeroRefRad), fwd.X * (float)Math.Sin(zeroRefRad) + fwd.Y * (float)Math.Cos(zeroRefRad), 0f);
-                Vector3 dampDir = new Vector3(fwd.X * (float)Math.Cos(dampRad) - fwd.Y * (float)Math.Sin(dampRad), fwd.X * (float)Math.Sin(dampRad) + fwd.Y * (float)Math.Cos(dampRad), 0f);
-                ARS.DrawLine(dampOrigin, dampOrigin + zeroRefDir * lineLen, Color.Magenta);
-                ARS.DrawLine(dampOrigin, dampOrigin + dampDir * lineLen, Color.Cyan);
-
-                // Input trail.
                 DrawInputTrail();
+
+                DrawPedalBar();
 
                 DrawYawDamperHud();
             }
@@ -1970,13 +1932,6 @@ namespace ARS
             ApplyPowerMultiplier();
         }
 
-        // Sphere plus a drop line, so a marked point can be placed against the ground.
-        void DrawPointMarker(Vector3 point, float radius, Color color)
-        {
-            World.DrawMarker(MarkerType.DebugSphere, point, Vector3.Zero, Vector3.Zero, new Vector3(radius, radius, radius), color);
-            ARS.DrawLine(point, point - new Vector3(0, 0, 2f), color);
-        }
-
         // One sample every half metre travelled measured against the last recorded point; the oldest drops off at the cap.
         void SampleInputTrail()
         {
@@ -1994,6 +1949,28 @@ namespace ARS
             ARS.DrawLine(Car.Position, _inputTrail[_inputTrail.Count - 1].Position, Color.White);
         }
 
+        // Pedal bar over the car along its forward axis: centre neutral, front end full throttle, back end full
+        // brake, reverse throttle placed ahead by magnitude. Applied sits inside its cap on each side, so a pair
+        // only separates when that cap actually bites.
+        const float PedalBarHalfLength = 2.5f;
+        const float PedalBarSphereSize = 0.2f;
+
+        void DrawPedalBar()
+        {
+            Vector3 center = Car.Position + new Vector3(0f, 0f, Car.Model.GetDimensions().Z + 0.75f);
+            Vector3 fwd = Car.ForwardVector;
+            ARS.DrawLine(center + fwd * PedalBarHalfLength, center - fwd * PedalBarHalfLength, Color.White);
+            DrawPedalBarSphere(center, fwd, ARS.Clamp(Math.Abs(Control.Throttle), 0f, 1f));
+            DrawPedalBarSphere(center, fwd, ARS.Clamp(Control.MaxThrottle, 0f, 1f));
+            DrawPedalBarSphere(center, -fwd, ARS.Clamp(Control.Brake, 0f, 1f));
+            DrawPedalBarSphere(center, -fwd, ARS.Clamp(Control.MaxBrake, 0f, 1f));
+        }
+
+        void DrawPedalBarSphere(Vector3 center, Vector3 axis, float fraction)
+        {
+            World.DrawMarker(MarkerType.DebugSphere, center + axis * fraction * PedalBarHalfLength, Vector3.Zero, Vector3.Zero, new Vector3(PedalBarSphereSize, PedalBarSphereSize, PedalBarSphereSize), Color.White);
+        }
+
         // Full throttle green, neutral yellow, full brake red.
         static Color InputColour(float input)
         {
@@ -2001,18 +1978,22 @@ namespace ARS
             return Color.FromArgb((int)(255f * (1f - Math.Max(v, 0f))), (int)(255f * (1f + Math.Min(v, 0f))), 0);
         }
 
+        // Yaw HUD parked: the false gate skips the red text; flip it to re-arm. A guard-return disables nothing.
         void DrawYawDamperHud()
         {
             if (ControlledByPlayer) return;
             if (ARS.DebugFocusRacer != this) return;
-            float yaw = VehicleData.YawRotationPerSecondDegrees;
-            float yawError = yaw - _debugYawTargetPerSecond;
-            float damper = _debugDamperTermDeg;
-            float headroomPct = YawHeadroomPercent();
-            Color red = Color.FromArgb(255, 230, 30, 30);
-            ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " / TARGET " + _debugYawTargetPerSecond.ToString("0.0") + " deg/s", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-            ARS.DrawText(new Vector2(0.5f, 0.110f), "ERROR " + yawError.ToString("0.0") + " x GAIN " + _debugDamperGainSeconds.ToString("0.00") + " s = STEER " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-            ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW HEADROOM " + headroomPct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            if (1 == 2)
+            {
+                float yaw = VehicleData.YawRotationPerSecondDegrees;
+                float yawError = yaw - _debugYawTargetPerSecond;
+                float damper = _debugDamperTermDeg;
+                float headroomPct = YawHeadroomPercent();
+                Color red = Color.FromArgb(255, 230, 30, 30);
+                ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " / TARGET " + _debugYawTargetPerSecond.ToString("0.0") + " deg/s", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+                ARS.DrawText(new Vector2(0.5f, 0.110f), "ERROR " + yawError.ToString("0.0") + " x GAIN " + _debugDamperGainSeconds.ToString("0.00") + " s = STEER " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+                ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW HEADROOM " + headroomPct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            }
         }
 
         public void RunTimedCore()

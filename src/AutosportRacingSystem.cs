@@ -868,7 +868,7 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's projection (0.5s/1s/1.5s), input trail (coloured by pedal input), and lane aim with wall stubs.");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail (coloured by pedal input) and pedal bar (white line above the car: centre no input, front full throttle, back full brake; outer sphere is the cap).");
             AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's lane aim line and wall limits at the steering reference node.");
             AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
