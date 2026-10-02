@@ -29,7 +29,6 @@ namespace ARS
         public float OverspeedMeasuredGs;
         public float OverspeedWheelGs;
         public float OverspeedExcessGs;
-        public bool OverspeedThisTick;
 
         public Vector3 AverageAcceleration
         {
@@ -317,7 +316,6 @@ namespace ARS
     {
         Plan,
         Tcs,
-        Stability,
         Overspeed,
         Rival,
         ChillOut,
@@ -325,6 +323,16 @@ namespace ARS
         Offtrack,
         GridWait,
         Countersteer,
+        StuckRecovery
+    }
+
+    public enum BrakeReason
+    {
+        Plan,
+        Abs,
+        Countersteer,
+        Offtrack,
+        GridWait,
         StuckRecovery
     }
 
@@ -339,13 +347,15 @@ namespace ARS
         public float MaxBrake = 1f;
         public float MaxThrottleFromTCS = 1f;
         public float MaxBrakeFromABS = 1f;
-        public float MaxThrottleFromStability = 1f;
+        public float MaxBrakeFromCountersteer = 1f;
         public float MaxThrottleFromOverspeed = 1f;
         public float MaxThrottleFromRival = 1f;
         public float MaxThrottleFromChillOut = 1f;
         public float MaxThrottleFromYield = 1f;
         public ThrottleReason ThrottleReason = ThrottleReason.Plan;
         public float ThrottleReasonLevel = 1f;
+        public BrakeReason BrakeReason = BrakeReason.Plan;
+        public float BrakeReasonLevel = 1f;
 
         public int HandBrakeTime = 0;
 

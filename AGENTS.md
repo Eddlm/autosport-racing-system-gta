@@ -32,7 +32,7 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 ## Workflow
 - **Docs drift; the code wins** — check a claim against the source before relying on it, and fix the line you are touching rather than reconciling a file wholesale.
 - **Scrutinize, never rubber-stamp.** When an instruction conflicts with physics, a known invariant or the code's behavior, say so *before* implementing; the user's standing rule is "call me out on these, never be a yes-man".
-- **Ask when an instruction is open to interpretation** (thresholds, which rule it replaces, kept-vs-dropped) — a wrong guess costs a build cycle, and the ask tool is welcome.
+- **Ask when an instruction is open to interpretation** (thresholds, which rule it replaces, kept-vs-dropped) — a wrong guess costs a build cycle. **Ask in prose**; the multiple-choice ask tool is only for a decision that blocks progress, never for a design discussion.
 - **No 1.0 is scheduled** — ongoing updates, not a feature freeze; don't reflexively talk the user out of features, but keep changes modest.
 - **Every code change → compile (with autocopy) → user verifies in game → then commit.** The human is the verification gatekeeper; a successful compile is not "verified".
 - **Documentation-only changes** may be committed without in-game verification if the build passes.

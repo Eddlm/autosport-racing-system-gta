@@ -868,7 +868,7 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail (coloured by pedal input) and pedal bar (white line above the car: centre no input, front full throttle, back full brake; outer sphere is the cap).");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail (coloured by pedal input) and pedal bar (white line above the car: centre no input, front full throttle, back full brake; a sphere is drawn for the applied pedal, the composed cap and every reason limit that is actually biting).");
             AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's lane aim line and wall limits at the steering reference node.");
             AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
@@ -2726,19 +2726,6 @@ namespace ARS
             return (float)(total / wheelPtrs.Count);
         }
 
-        // A wheel is grounded when its grip multiplier is positive.
-        static public unsafe List<bool> WheelsOnGround(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            ulong offset = 0x198;
-            List<bool> onGround = new List<bool>();
-            foreach (var wheel in wheelPtrs)
-            {
-                float grip = *((float*)(wheel + offset));
-                onGround.Add(grip > 0.01f);
-            }
-            return onGround;
-        }
         
 
         static public unsafe float MaxWheelSlip(Vehicle handle)
