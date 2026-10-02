@@ -531,8 +531,10 @@ namespace ARS
                 float steerPercent = Brain.Corner != null ? LaneSteerPercent(Brain.Corner.Point.SupposedRadius) : _insideLineSteerPercent;
                 float curveAngle = Brain.Corner != null ? Brain.Corner.Point.Angle : _insideLineAngle;
                 bool steeringIntoCurve = Math.Sign(-laneErrorMeters) == Math.Sign(curveAngle);
-                if (!steeringIntoCurve) steerPercent *= LaneSteerOutsidePercent;
                 float laneGain = LaneGainDegPerMeter * steerPercent;
+                if (!steeringIntoCurve) laneGain *= LaneSteerOutsidePercent;
+                // Only where the gate closes the percentage outright: a floor on the graded path would flatten it.
+                if (steerPercent <= 0f) laneGain = LaneMinGainDegPerMeter;
                 laneSteerDeg = -laneErrorMeters * laneGain;
             }
             // Physical repulsion: inside the "no touching" box, steer away from rivals
@@ -657,6 +659,9 @@ namespace ARS
         // half the gate it pulls half as hard, and a move out of the line is halved again. The bottom is a hard zero
         // rather than a floor, because a negative percentage would invert the lane steer.
         const float LaneSteerOutsidePercent = 0.5f;
+        // A lane still has to move where the percentage bottoms out past the gate, so any lane keeps this gain as a
+        // floor rather than pulling with nothing.
+        const float LaneMinGainDegPerMeter = 2f;
 
         static float LaneSteerPercent(float radius)
         {
@@ -671,7 +676,7 @@ namespace ARS
         {
             int count = ARS.TrackPoints.Count;
             int fwdNode;
-            int fwdOffset = (int)(speedMps * 0.575f);
+            int fwdOffset = (int)(speedMps * 1.01f);
             if (ARS.IsPointToPoint)
                 fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + fwdOffset, 0, count - 1);
             else
@@ -694,7 +699,7 @@ namespace ARS
         // The outside hold lives between these two times to the apex: engaged inside the first, lifted at the second.
         // Lifting it does not command a turn-in, which is a separate lane decision.
         const float OutsideEngageSeconds = 4f;
-        const float OutsideReleaseSeconds = 2f;
+        const float OutsideReleaseSeconds = 1.5f;
         // How far ahead of a corner the car decides whether it wants to position or brake for it.
         const float RequirementLookaheadSeconds = 3.95f;
 

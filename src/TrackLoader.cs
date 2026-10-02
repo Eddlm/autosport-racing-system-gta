@@ -210,8 +210,12 @@ namespace ARS
                     if (float.IsNaN(point.Angle) || float.IsInfinity(point.Angle)) point.Angle = 0f;
                     point.GeneralCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 10, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 10, nodeCount)], ARS.RouteNodes[point.Node]);
                     point.PreciseCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 4, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 4, nodeCount)], ARS.RouteNodes[point.Node]);
-                    // Tightest window, read by the corner span walk: the stability window is what absorbs its noise.
+                    // Tightest window, kept for reference only: too noisy to settle on, so the span walk tests the
+                    // smoothed reading below instead.
                     point.ExactRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)], ARS.RouteNodes[point.Node]);
+                    // Read by the corner span walk: harmonic mean of the precise readings, and it saturates on open road
+                    // where the chord radius is ill-conditioned and explodes.
+                    point.SmoothedCurveRadius = SmoothedRadius(point.Node, nodeCount, SpanStabilitySmoothingNodes);
                 }
                 else
                 {
@@ -378,11 +382,12 @@ namespace ARS
             if (float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
 
             int apexNode = scanNodes[apexPosition];
-            // A span is capped at the corner's own diameter: offroad the radius never settles, and the walk would
-            // otherwise run all the way out to the region bound.
-            int spanLimit = (int)(apexRadius * 2f);
-            startPosition = apexPosition - EntranceStep(apexNode, Math.Min(apexPosition - regionStart, spanLimit), count);
-            endPosition = apexPosition + ExitStep(apexNode, Math.Min(regionEnd - apexPosition, spanLimit), count);
+            // A span is capped at a hard node count each way rather than by the corner's own size: offroad the radius
+            // never settles, so without a cap the walk runs all the way out to the region bound. The step is also capped
+            // by what the scan list holds, because the walk returns a step count and these are list positions.
+            int spanLimit = Math.Min(SpanNodeLimit, count - 1);
+            startPosition = apexPosition - EntranceStep(apexNode, Math.Min(spanLimit, apexPosition), count);
+            endPosition = apexPosition + ExitStep(apexNode, Math.Min(spanLimit, scanNodes.Count - 1 - apexPosition), count);
             // Flat rather than the apex radius: scaling it gave a sweeper a span of twice its own radius, so the cars
             // prepared across the whole corner.
             float minEntranceExit = Math.Min(SpanMinimumMeters, spanLimit);
@@ -437,8 +442,10 @@ namespace ARS
         }
 
         const int SpanStabilityNodes = 20;
+        const int SpanStabilitySmoothingNodes = 2;
         const float SpanMinimumMeters = 20f;
-        const float SpanRadiusTolerance = 0.2f;
+        const float SpanRadiusTolerance = 0.1f;
+        const int SpanNodeLimit = 500;
 
         // Where a corner hands over to a consistent curve: the first node past the apex whose road holds one radius.
         // The apex is a local minimum, so this cannot fire beside it. Returns the bound if nothing settles.
@@ -463,24 +470,24 @@ namespace ARS
             {
                 int sample = ARS.IsPointToPoint ? node + direction * ahead : Wrap(node + direction * ahead, count);
                 if (sample < 0 || sample >= count) return false;
-                total += ARS.TrackPoints[sample].ExactRadius;
+                total += ARS.TrackPoints[sample].SmoothedCurveRadius;
             }
             float mean = total / SpanStabilityNodes;
             for (int ahead = 0; ahead < SpanStabilityNodes; ahead++)
             {
                 int sample = ARS.IsPointToPoint ? node + direction * ahead : Wrap(node + direction * ahead, count);
-                if (Math.Abs(ARS.TrackPoints[sample].ExactRadius - mean) > mean * SpanRadiusTolerance) return false;
+                if (Math.Abs(ARS.TrackPoints[sample].SmoothedCurveRadius - mean) > mean * SpanRadiusTolerance) return false;
             }
             return true;
         }
 
         // A merged survivor's extensions, re-walked rather than inherited: the entrance runs in over the absorbed
-        // region to the twice-the-apex-radius rule a fresh region uses, and the exit is re-derived from the apex the
+        // region to the same hard node limit a fresh region uses, and the exit is re-derived from the apex the
         // same way a fresh region's is, bounded by the absorbed region's end. The floor is capped by what is left of
         // each bound, so neither walk can pass it and a chain of merges stops at the first corner of the complex.
         static void ExtendMergedCorner(CornerPoint survivor, int unionStart, int unionEnd, int count)
         {
-            int spanLimit = (int)(survivor.SupposedRadius * 2f);
+            int spanLimit = Math.Min(SpanNodeLimit, count - 1);
             int entranceDistance = Math.Min(ARS.IsPointToPoint ? survivor.Node - unionStart : Wrap(survivor.Node - unionStart, count), spanLimit);
             int entranceStep = EntranceStep(survivor.Node, entranceDistance, count);
             int entrance = ARS.IsPointToPoint ? survivor.Node - entranceStep : Wrap(survivor.Node - entranceStep, count);
