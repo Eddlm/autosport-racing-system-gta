@@ -8,7 +8,7 @@
 
 The WIP ships the playable race loop, bundled `Tracks\`, the flat `Vehicles\cars.txt` roster, ARS menu settings, Smart Tuning, optional Menyoo appearance application, and LemonUI.SHVDN2.
 
-It deliberately does not ship a track creator or any track-file mutation path. The retired per-vehicle XML, saved-driver, personality, and discipline systems are also outside this WIP.
+The track creator is live in the build — a root Track Creator submenu records a route and the creator's Save Track writes `Tracks\*.xml` (revived and driver-verified, per `AGENTS-BACKLOG.md`). There is no track-update path — the dead `UpdateRoute` was cut outright (`c2ad2de`) — and the retired per-vehicle XML, saved-driver, personality, and discipline systems are also outside this WIP.
 
 ## Race-loop gate
 
@@ -33,7 +33,7 @@ It deliberately does not ship a track creator or any track-file mutation path. T
 - [ ] Verify Race, General Settings, AI Settings, Advanced Settings, and Debug menu changes persist across a script reload.
 - [ ] Verify a fresh settings folder creates usable defaults and a second load does not rewrite it.
 - [ ] Verify a legacy install migrates old per-menu files without losing user-facing values.
-- [ ] Check Show Inputs, Projection, Input Trail, Corner Checkpoints, Edge Chevrons, and Leaderboard against the closest AI car or race state they describe.
+- [ ] Check Show Inputs, Track Analysis, Corner Checkpoints, Edge Chevrons, and Leaderboard against the closest AI car or race state they describe.
 - [ ] Confirm `Log.log` records the session banner and actionable load failures. With **Log Level `None`** (the shipped default) that is *all* it records: the banner, plus forced error lines — one of which is the bridge probe's, which is why the release README's "the log names the reason" still holds.
 - [ ] Confirm every retired settings file is removed on load (`Settings.ini`, `Options.ini`, `DevSettings.ini`, `DevConfig.ini`, `MemoryOffsets.ini`, `Menu-Racers.ini`, `Menu-DevSettings.ini`). **`Options.ini` has no reader at all** — there is nothing left in it to verify.
 
@@ -48,7 +48,7 @@ It deliberately does not ship a track creator or any track-file mutation path. T
 
 ## Limitations to disclose
 
-- No in-game track creation, editing, update, or deletion.
+- In-game creation is live (the creator's Save Track); no track update, editing or deletion — the `UpdateRoute` path was cut outright (`c2ad2de`).
 - No per-car XML saves, saved drivers, personalities, or discipline filtering.
 - The grid uses model-level pace, not the installed upgrades of a particular vehicle instance.
 - Low-grip steering behavior still needs the dedicated release-gate drive above.
