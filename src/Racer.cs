@@ -706,7 +706,7 @@ namespace ARS
             if (timeToEntrance < OutsideReleaseSeconds || timeToEntrance > OutsideEngageSeconds)
                 return 0f;
 
-            // Flagged corners are too close to the previous one: no outside hold, no corner-commit.
+            // The car decides: a corner it has not asked to position for gets no outside hold.
             bool suppressOutside = TryGetCornerContext(apexNode, out CornerContext apexContext) && !apexContext.RequiresPositioning;
             // Prepare outside when the car arrives within 20 mph of the apex speed.
             bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.SupposedRadius) - ARS.MphToMps(20f);
@@ -2060,6 +2060,7 @@ namespace ARS
                     ARS.DrawLine(rightWall, rightWall + new Vector3(0, 0, wallHeight), Color.Red);
                 }
 
+                DrawCornerTable();
                 DrawCornerCircle();
             }
 
@@ -2117,43 +2118,68 @@ namespace ARS
             ARS.DrawLine(Car.Position, _inputTrail[_inputTrail.Count - 1].Position, Color.White);
         }
 
+        // Every noted corner, dimmed, so a close pair can be read off the road; eight segments places a ring well
+        // enough. The held corner gets the full twenty plus its label.
+        void DrawCornerTable()
+        {
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                if (Brain.Corner != null && corner.Node == Brain.Corner.Point.Node) continue;
+                if (!TryCornerCircle(corner, out Vector3 centre, out float radius, out float z)) continue;
+                DrawCornerRing(centre, radius, z, 8, Color.FromArgb(150, 150, 150));
+            }
+        }
+
         // The active corner's own circle, so its fitted radius can be measured against the road: 20 plan-view
         // segments plus the diameter through the apex. DRAW_LINE, not markers, so it spends no marker budget.
         void DrawCornerCircle()
         {
             if (Brain.Corner == null) return;
             CornerPoint corner = Brain.Corner.Point;
-            float radius = corner.SupposedRadius;
-            if (!(radius > 0.1f) || radius > 500f) return;
+            if (!TryCornerCircle(corner, out Vector3 centre, out float radius, out float z)) return;
 
-            Vector3 apexPosition = ARS.TrackPoints[corner.Node].Position;
-            Vector3 heading = ARS.TrackPoints[corner.Node].Direction;
-            Vector3 right = Vector3.Cross(heading, Vector3.WorldUp).Normalized;
-            // The centre sits a radius to the inside: a positive angle is a left-hand corner, whose inside is -right.
-            Vector3 centre = apexPosition - right * (radius * Math.Sign(corner.Angle));
-            float z = apexPosition.Z + 0.5f;
-
-            const int segments = 20;
-            Vector3 previous = Vector3.Zero;
-            for (int i = 0; i <= segments; i++)
-            {
-                float step = i * 2f * (float)Math.PI / segments;
-                Vector3 point = new Vector3(centre.X + (float)Math.Cos(step) * radius, centre.Y + (float)Math.Sin(step) * radius, z);
-                if (i > 0) ARS.DrawLine(previous, point, Color.Magenta);
-                previous = point;
-            }
+            DrawCornerRing(centre, radius, z, 20, Color.Magenta);
 
             string carContext = TryGetCornerContext(corner.Node, out CornerContext context)
                 ? (context.RequiresBraking ? " B+" : " B-") + (context.RequiresPositioning ? " P+" : " P-") + "  BF " + context.BrakeFactor.ToString("0.00")
                 : "";
             ARS.DrawText(new Vector3(centre.X, centre.Y, z + 1f), "R " + radius.ToString("0.0") + "/" + corner.DetectedRadius.ToString("0.0") + " m" + carContext, Color.Magenta, 0.45f);
 
+            Vector3 apexPosition = ARS.TrackPoints[corner.Node].Position;
             Vector3 toApex = new Vector3(apexPosition.X - centre.X, apexPosition.Y - centre.Y, 0f);
             if (toApex.LengthSquared() < 0.0001f) return;
             toApex.Normalize();
             Vector3 from = centre - toApex * radius;
             Vector3 to = centre + toApex * radius;
             ARS.DrawLine(new Vector3(from.X, from.Y, z), new Vector3(to.X, to.Y, z), Color.Magenta);
+        }
+
+        // The centre sits a radius to the inside: a positive angle is a left-hand corner, whose inside is -right.
+        bool TryCornerCircle(CornerPoint corner, out Vector3 centre, out float radius, out float z)
+        {
+            radius = corner.SupposedRadius;
+            z = 0f;
+            centre = Vector3.Zero;
+            if (!(radius > 0.1f) || radius > 500f) return false;
+
+            Vector3 apexPosition = ARS.TrackPoints[corner.Node].Position;
+            Vector3 heading = ARS.TrackPoints[corner.Node].Direction;
+            Vector3 right = Vector3.Cross(heading, Vector3.WorldUp).Normalized;
+            centre = apexPosition - right * (radius * Math.Sign(corner.Angle));
+            z = apexPosition.Z + 0.5f;
+            return true;
+        }
+
+        void DrawCornerRing(Vector3 centre, float radius, float z, int segments, Color colour)
+        {
+            Vector3 previous = Vector3.Zero;
+            for (int i = 0; i <= segments; i++)
+            {
+                float step = i * 2f * (float)Math.PI / segments;
+                Vector3 point = new Vector3(centre.X + (float)Math.Cos(step) * radius, centre.Y + (float)Math.Sin(step) * radius, z);
+                if (i > 0) ARS.DrawLine(previous, point, colour);
+                previous = point;
+            }
         }
 
         // Pedal bar over the car along its forward axis: centre neutral, front end full throttle, back end full
@@ -2634,7 +2660,7 @@ namespace ARS
         }
 
         // Braking map close-corner filtering and entrance timing.
-        const float ApexBufferSeconds = 2f;
+        const float ApexBufferSeconds = 5f;
         const float EntranceBrakeBufferSeconds = 0.25f;
         const float EntranceBrakeExtraDistance = 0f;
         const float SecondaryApexSpeedDifference = 5f;

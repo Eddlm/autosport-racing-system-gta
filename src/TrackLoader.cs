@@ -231,11 +231,12 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             if (count < 1) return;
 
-            const float entryRadius = 500f;
-            const float exitRadius = 500f;
+            const float entryRadius = 200f;
+            const float exitRadius = 200f;
             const int smoothingNodes = 2;
             const int exitRelaxationNodes = 4;
             const int minimumCornerNodes = 5;
+            const float closeCornerSeconds = 5f;
 
             // Start a circuit scan on a straight so a corner crossing the node-zero boundary
             // is detected as one region rather than split between the end and beginning.
@@ -288,7 +289,7 @@ namespace ARS
 
                 if (direction != 0 && direction != cornerDirection && cornerSignal)
                 {
-                    AddCornerRegion(scanNodes, cornerStartPosition, position - 1, count, smoothingNodes, minimumCornerNodes);
+                    AddCornerRegion(scanNodes, cornerStartPosition, position - 1, count, smoothingNodes, minimumCornerNodes, closeCornerSeconds);
                     cornerStartPosition = position;
                     cornerDirection = direction;
                     relaxedNodes = 0;
@@ -302,7 +303,7 @@ namespace ARS
 
                 if (relaxedNodes >= exitRelaxationNodes)
                 {
-                    AddCornerRegion(scanNodes, cornerStartPosition, position - relaxedNodes, count, smoothingNodes, minimumCornerNodes);
+                    AddCornerRegion(scanNodes, cornerStartPosition, position - relaxedNodes, count, smoothingNodes, minimumCornerNodes, closeCornerSeconds);
                     inCorner = false;
                     cornerStartPosition = -1;
                     cornerDirection = 0;
@@ -311,7 +312,7 @@ namespace ARS
             }
 
             if (inCorner)
-                AddCornerRegion(scanNodes, cornerStartPosition, scanNodes.Count - 1, count, smoothingNodes, minimumCornerNodes);
+                AddCornerRegion(scanNodes, cornerStartPosition, scanNodes.Count - 1, count, smoothingNodes, minimumCornerNodes, closeCornerSeconds);
 
             float widestApexRadius = 0f;
             foreach (CornerPoint counted in ARS.Corners) widestApexRadius = Math.Max(widestApexRadius, counted.SupposedRadius);
@@ -340,14 +341,13 @@ namespace ARS
                 if (Math.Abs(angleBack) > 1f && Math.Abs(angleFwd) > 1f && Math.Sign(angleBack) == Math.Sign(angleFwd))
                 {
                     corner.IsChicane = true;
-                    corner.SuppressOutsideApproach = true;
                 }
             }
 
             ARS.CornersRevision++;
         }
 
-        static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int smoothingNodes, int minimumCornerNodes)
+        static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int smoothingNodes, int minimumCornerNodes, float closeCornerSeconds)
         {
             if (startPosition < 0 || endPosition < startPosition || endPosition - startPosition + 1 < minimumCornerNodes)
                 return;
@@ -374,33 +374,14 @@ namespace ARS
 
             if (float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
 
-            float entranceRadiusTarget = apexRadius * 2f;
-            for (int position = startPosition; position < apexPosition; position++)
-            {
-                float radius = ARS.TrackPoints[scanNodes[position]].PreciseCurveRadius;
-                if (radius < entranceRadiusTarget)
-                {
-                    startPosition = position;
-                    break;
-                }
-            }
+            startPosition += EntranceWalkLength(scanNodes[startPosition], scanNodes[apexPosition], apexRadius, count);
 
             int apexNode = scanNodes[apexPosition];
             // Enforce a minimum entrance/exit distance from the apex: full track width at the apex + 10 m.
             float minEntranceExit = ARS.TrackPoints[apexNode].TrackHalfWidth * 2f + 10f;
             if (apexPosition - startPosition < minEntranceExit) startPosition = Math.Max(regionStart, apexPosition - (int)minEntranceExit);
             if (endPosition - apexPosition < minEntranceExit) endPosition = Math.Min(regionEnd, apexPosition + (int)minEntranceExit);
-            bool suppressOutside = false;
-            if (ARS.Corners.Count > 0)
-            {
-                int prevNode = ARS.Corners[ARS.Corners.Count - 1].Node;
-                int dist = ARS.IsPointToPoint ? apexNode - prevNode : Wrap(apexNode - prevNode, count);
-                // Inside 30 nodes the two apexes read as one corner: drop it. Up to 100, keep it but
-                // flag it — the outside approach would fight over the same braking/line window.
-                if (dist <= 30) return;
-                if (dist <= 100) suppressOutside = true;
-            }
-            ARS.Corners.Add(new CornerPoint
+            CornerPoint corner = new CornerPoint
             {
                 Node = apexNode,
                 Angle = ARS.TrackPoints[apexNode].Angle,
@@ -410,9 +391,59 @@ namespace ARS
                 LengthEnd = endPosition - apexPosition,
                 SupposedRadius = apexRadius,
                 DetectedRadius = detectedRadius,
-                Speed = (float)Math.Sqrt(9.81f * apexRadius),
-                SuppressOutsideApproach = suppressOutside
-            });
+                Speed = (float)Math.Sqrt(9.81f * apexRadius)
+            };
+
+            // Coexistence is a question of time, not distance: the outside-approach window is a few seconds long, so
+            // two apexes the car reaches within this many seconds fight over the same stretch. The table has no car
+            // in it, so the corners' own 1 g apex speeds stand in — which is how the radius drives the decision.
+            // Keeping the slower of the pair is deliberate, and the survivor's extensions are then re-walked over
+            // the region it absorbed: leaving them alone registers no corner where the car actually is.
+            if (ARS.Corners.Count > 0)
+            {
+                CornerPoint previous = ARS.Corners[ARS.Corners.Count - 1];
+                int gap = ARS.IsPointToPoint ? corner.Node - previous.Node : Wrap(corner.Node - previous.Node, count);
+                float referenceSpeed = Math.Max(previous.Speed, corner.Speed);
+                if (gap / Math.Max(referenceSpeed, 1f) < closeCornerSeconds)
+                {
+                    CornerPoint survivor = corner.Speed < previous.Speed ? corner : previous;
+                    ExtendMergedCorner(survivor, previous.StartNode, corner.EndNode, count);
+                    ARS.Corners[ARS.Corners.Count - 1] = survivor;
+                    return;
+                }
+            }
+            ARS.Corners.Add(corner);
+        }
+
+        // How far a corner's entrance runs back from a region start: to the first node whose precise radius is within
+        // twice the apex radius. A fresh region and a merged survivor walk the same rule.
+        static int EntranceWalkLength(int startNode, int apexNode, float apexRadius, int count)
+        {
+            float target = apexRadius * 2f;
+            int distance = ARS.IsPointToPoint ? apexNode - startNode : Wrap(apexNode - startNode, count);
+            for (int step = 0; step < distance; step++)
+            {
+                int node = ARS.IsPointToPoint ? startNode + step : Wrap(startNode + step, count);
+                if (ARS.TrackPoints[node].PreciseCurveRadius < target) return step;
+            }
+            return 0;
+        }
+
+        // A merged survivor's extensions, re-walked rather than inherited: the entrance runs back over the absorbed
+        // region to where the complex really begins, the exit to that region's end, and the minimum distance from
+        // the apex still holds. The walk cannot pass the start it is handed, so a chain of merges stops at the first
+        // corner of the complex instead of walking the entrance back over the whole run.
+        static void ExtendMergedCorner(CornerPoint survivor, int unionStart, int unionEnd, int count)
+        {
+            int offset = EntranceWalkLength(unionStart, survivor.Node, survivor.SupposedRadius, count);
+            int entrance = ARS.IsPointToPoint ? unionStart + offset : Wrap(unionStart + offset, count);
+            float minEntranceExit = ARS.TrackPoints[survivor.Node].TrackHalfWidth * 2f + 10f;
+            if ((ARS.IsPointToPoint ? survivor.Node - entrance : Wrap(survivor.Node - entrance, count)) < minEntranceExit)
+                entrance = ARS.IsPointToPoint ? Math.Max(unionStart, survivor.Node - (int)minEntranceExit) : Wrap(survivor.Node - (int)minEntranceExit, count);
+            survivor.StartNode = entrance;
+            survivor.EndNode = unionEnd;
+            survivor.LengthStart = ARS.IsPointToPoint ? survivor.Node - entrance : Wrap(survivor.Node - entrance, count);
+            survivor.LengthEnd = ARS.IsPointToPoint ? unionEnd - survivor.Node : Wrap(unionEnd - survivor.Node, count);
         }
 
         static float SmoothedRadius(int node, int count, int halfWindow)
