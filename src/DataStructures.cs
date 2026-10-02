@@ -399,6 +399,9 @@ namespace ARS
         public bool IsChicane = false;
         // The corner radius from its region limits. Used for apex-speed calculation.
         public float SupposedRadius = 999f;
+        // The region's tightest smoothed radius: what registration compares, and a far less noisy read than the
+        // min-precise SupposedRadius.
+        public float DetectedRadius = 999f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }
@@ -412,6 +415,15 @@ namespace ARS
             Speed = speed;
             Point = point;
         }
+    }
+    // Per-racer corner context: the shared corner plus what this car knows about it. Lives on the racer, never on
+    // CornerPoint, because every racer holds a reference to the same table entry.
+    public class CornerContext
+    {
+        public CornerPoint Point;
+        public float BrakeFactor = 0f;
+        public bool RequiresBraking = false;
+        public bool RequiresPositioning = false;
     }
     public class TrackStartInfo
     {

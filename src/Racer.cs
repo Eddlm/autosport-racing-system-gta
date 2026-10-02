@@ -31,7 +31,7 @@ namespace ARS
         public VehicleControl Control = new VehicleControl();
         public RacerBrain Brain = new RacerBrain();
 
-        // Four nearest precomputed apexes ahead, nearest first.
+        // Held apexes ahead: the nearest first, then the ones the car would have to brake earliest for.
         public int NextApexNode = -1;
         public float NextApexRadius = 999f;
         public float NextApexSpeed = 999f;
@@ -41,9 +41,7 @@ namespace ARS
         public int NextApexNode3 = -1;
         public float NextApexRadius3 = 999f;
         public float NextApexSpeed3 = 999f;
-        public int NextApexNode4 = -1;
-        public float NextApexRadius4 = 999f;
-        public float NextApexSpeed4 = 999f;
+        const int HeldApexCount = 3;
 
 
 
@@ -157,9 +155,19 @@ namespace ARS
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
         const float BrakeFactorSeed = 0.75f;
+        // The radius under which a corner counts as tight, i.e. where the outside line is worth having.
+        const float CornerTightRadius = 50f;
+        // Arrival is extrapolated from the live forward Gs at this discount: holding a G flat across the window
+        // over-predicts, because acceleration tapers with speed. Tuned by driving.
+        const float RequirementExtrapolationScale = 0.9f;
+        const float PositionExcessMph = 10f;
+        const float BrakeExcessMph = 25f;
+        // Braking is judged from the distance it actually needs, plus this much road for the plan to take hold.
+        const float BrakeHorizonMargin = 40f;
         // Each corner's initial factor is the seed plus a draw of +/- this many hundredths.
         const int BrakeFactorSeedJitterHundredths = 5;
-        readonly Dictionary<int, float> _brakeFactorsByApex = new Dictionary<int, float>();
+        readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
+        int _cornersRevisionSeeded = -1;
         float _brakeSampleSeconds = 0f;      // sampled braking time: the denominator of the full-pedal share
         float _brakeSampleFullSeconds = 0f;  // of which, the time at full pedal: the numerator
         float _brakeSampleMaxSlideDeg = 0f;  // largest slip seen between this apex's entrance and the apex itself
@@ -182,8 +190,49 @@ namespace ARS
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
         const float BrakeMaxFactor = 1.2f;
         // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
-        public float BrakeFactorForApex(int apexNode) => _brakeFactorsByApex.TryGetValue(apexNode, out float f) ? f : BrakeFactorSeed;
+        public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
+
+        // The car's own view of a corner: keyed by node and rebuilt only when the apex table changes, so a learned
+        // factor survives a mid-session rebuild and a corner that no longer exists cannot linger.
+        bool TryGetCornerContext(int apexNode, out CornerContext context)
+        {
+            SyncCornerContexts();
+            return _cornerContexts.TryGetValue(apexNode, out context);
+        }
+
+        // Gates the braking plan, not the held queue: the queue must keep the real next corners or Brain.Corner,
+        // NextApexSpeed and the low-speed invalidation all read a corner that is a lap away.
+        bool CornerRequiresBraking(int apexNode) => apexNode >= 0 && TryGetCornerContext(apexNode, out CornerContext context) && context.RequiresBraking;
+
+        CornerContext CornerContextForWrite(int apexNode)
+        {
+            if (!TryGetCornerContext(apexNode, out CornerContext context))
+            {
+                context = new CornerContext { BrakeFactor = SeededBrakeFactor() };
+                _cornerContexts[apexNode] = context;
+            }
+            return context;
+        }
+
+        void SyncCornerContexts()
+        {
+            if (_cornersRevisionSeeded == ARS.CornersRevision) return;
+            _cornersRevisionSeeded = ARS.CornersRevision;
+
+            foreach (CornerPoint corner in ARS.Corners)
+                if (!_cornerContexts.ContainsKey(corner.Node))
+                    _cornerContexts[corner.Node] = new CornerContext { Point = corner, BrakeFactor = SeededBrakeFactor() };
+
+            List<int> stale = new List<int>();
+            foreach (int node in _cornerContexts.Keys)
+                if (!ARS.Corners.Exists(corner => corner.Node == node)) stale.Add(node);
+            foreach (int node in stale) _cornerContexts.Remove(node);
+        }
+
+        // One independent draw per corner, so a fresh grid does not brake every corner on one assumption.
+        // The +1 makes the draw symmetric: GetRandomInt's max is exclusive.
+        static float SeededBrakeFactor() => BrakeFactorSeed + ARS.GetRandomInt(-BrakeFactorSeedJitterHundredths, BrakeFactorSeedJitterHundredths + 1) / 100f;
 
         // While diving, a temp bonus is appended to the learned factor; the stored factor itself never changes.
         public float EffectiveBrakeFactor(int apexNode)
@@ -405,12 +454,9 @@ namespace ARS
             VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.00");
             if (!ControlledByPlayer) Name = _baseName + " (" + VehicleData.PowerScale.ToString("0.00") + ")";
 
-            _brakeFactorsByApex.Clear();
+            _cornerContexts.Clear();
+            _cornersRevisionSeeded = -1;
             _brakeCommitApexNode = -1;
-            // One independent draw per corner, so a fresh grid does not brake every corner on one assumption.
-            // The +1 makes the draw symmetric: GetRandomInt's max is exclusive.
-            foreach (CornerPoint corner in ARS.Corners)
-                _brakeFactorsByApex[corner.Node] = BrakeFactorSeed + ARS.GetRandomInt(-BrakeFactorSeedJitterHundredths, BrakeFactorSeedJitterHundredths + 1) / 100f;
 
             Car.Repair();
         }
@@ -661,7 +707,7 @@ namespace ARS
                 return 0f;
 
             // Flagged corners are too close to the previous one: no outside hold, no corner-commit.
-            bool suppressOutside = ARS.Corners.Exists(cp => cp.Node == apexNode && cp.SuppressOutsideApproach);
+            bool suppressOutside = TryGetCornerContext(apexNode, out CornerContext apexContext) && !apexContext.RequiresPositioning;
             // Prepare outside when the car arrives within 20 mph of the apex speed.
             bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.SupposedRadius) - ARS.MphToMps(20f);
             bool shouldHoldOutside = !suppressOutside && aboveApexSpeed;
@@ -1033,9 +1079,6 @@ namespace ARS
             NextApexNode3 = -1;
             NextApexRadius3 = 999f;
             NextApexSpeed3 = 999f;
-            NextApexNode4 = -1;
-            NextApexRadius4 = 999f;
-            NextApexSpeed4 = 999f;
             BaseBehavior = RacerBaseBehavior.Race;
             Lap = 1;
             LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
@@ -1181,7 +1224,6 @@ namespace ARS
         {
             if (!ARS.BrakeLearning)
             {
-                _brakeFactorsByApex.Clear();
                 _brakeCommitApexNode = -1;
                 return;
             }
@@ -1252,7 +1294,7 @@ namespace ARS
             if (TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple)
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
-                _brakeFactorsByApex[apexNode] = skidFactor;
+                CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
                 if (announce) UI.Notify("~b~[ARS]~w~ skid detected > " + skidFactor.ToString("0.00"));
                 return;
             }
@@ -1262,7 +1304,7 @@ namespace ARS
             // a corner the AI takes without ever pressing hard scores 0, so it asks for the largest correction.
             float step = (BrakeFullFractionTarget - fullShare) * BrakeAdjustGain;
             float factor = ARS.Clamp(before * (1f + step), BrakeMinFactor, BrakeMaxFactor);
-            _brakeFactorsByApex[apexNode] = factor;
+            CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
             // braking that corner costs.
             if (announce) UI.Notify("~b~[ARS]~w~ " + (int)Math.Round(fullShare * 100f) + "% brake > " + factor.ToString("0.00"));
@@ -1334,14 +1376,13 @@ namespace ARS
             float cornerSpd = 999f;
             if (NextApexNode >= 0)
             {
-                // Plan braking against all held apexes; the most restrictive target governs.
-                cornerSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
-                if (NextApexNode2 >= 0)
+                // Held apexes set the plan, but only the ones this car decided it needs one for; every other
+                // corner is route speed's job.
+                if (CornerRequiresBraking(NextApexNode)) cornerSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
+                if (NextApexNode2 >= 0 && CornerRequiresBraking(NextApexNode2))
                     cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode2, NextApexSpeed2)));
-                if (NextApexNode3 >= 0)
+                if (NextApexNode3 >= 0 && CornerRequiresBraking(NextApexNode3))
                     cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode3, NextApexSpeed3)));
-                if (NextApexNode4 >= 0)
-                    cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode4, NextApexSpeed4)));
             }
             else if (Brain.Corner != null) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
 
@@ -2018,6 +2059,8 @@ namespace ARS
                     ARS.DrawLine(leftWall, leftWall + new Vector3(0, 0, wallHeight), Color.Red);
                     ARS.DrawLine(rightWall, rightWall + new Vector3(0, 0, wallHeight), Color.Red);
                 }
+
+                DrawCornerCircle();
             }
 
             // Input trail + pedal bar (inputs).
@@ -2072,6 +2115,45 @@ namespace ARS
             foreach (InputTrailSample sample in _inputTrail)
                 World.DrawMarker(MarkerType.DebugSphere, sample.Position, Vector3.Zero, Vector3.Zero, new Vector3(0.105f, 0.105f, 0.105f), InputColour(sample.Input));
             ARS.DrawLine(Car.Position, _inputTrail[_inputTrail.Count - 1].Position, Color.White);
+        }
+
+        // The active corner's own circle, so its fitted radius can be measured against the road: 20 plan-view
+        // segments plus the diameter through the apex. DRAW_LINE, not markers, so it spends no marker budget.
+        void DrawCornerCircle()
+        {
+            if (Brain.Corner == null) return;
+            CornerPoint corner = Brain.Corner.Point;
+            float radius = corner.SupposedRadius;
+            if (!(radius > 0.1f) || radius > 500f) return;
+
+            Vector3 apexPosition = ARS.TrackPoints[corner.Node].Position;
+            Vector3 heading = ARS.TrackPoints[corner.Node].Direction;
+            Vector3 right = Vector3.Cross(heading, Vector3.WorldUp).Normalized;
+            // The centre sits a radius to the inside: a positive angle is a left-hand corner, whose inside is -right.
+            Vector3 centre = apexPosition - right * (radius * Math.Sign(corner.Angle));
+            float z = apexPosition.Z + 0.5f;
+
+            const int segments = 20;
+            Vector3 previous = Vector3.Zero;
+            for (int i = 0; i <= segments; i++)
+            {
+                float step = i * 2f * (float)Math.PI / segments;
+                Vector3 point = new Vector3(centre.X + (float)Math.Cos(step) * radius, centre.Y + (float)Math.Sin(step) * radius, z);
+                if (i > 0) ARS.DrawLine(previous, point, Color.Magenta);
+                previous = point;
+            }
+
+            string carContext = TryGetCornerContext(corner.Node, out CornerContext context)
+                ? (context.RequiresBraking ? " B+" : " B-") + (context.RequiresPositioning ? " P+" : " P-") + "  BF " + context.BrakeFactor.ToString("0.00")
+                : "";
+            ARS.DrawText(new Vector3(centre.X, centre.Y, z + 1f), "R " + radius.ToString("0.0") + "/" + corner.DetectedRadius.ToString("0.0") + " m" + carContext, Color.Magenta, 0.45f);
+
+            Vector3 toApex = new Vector3(apexPosition.X - centre.X, apexPosition.Y - centre.Y, 0f);
+            if (toApex.LengthSquared() < 0.0001f) return;
+            toApex.Normalize();
+            Vector3 from = centre - toApex * radius;
+            Vector3 to = centre + toApex * radius;
+            ARS.DrawLine(new Vector3(from.X, from.Y, z), new Vector3(to.X, to.Y, z), Color.Magenta);
         }
 
         // Pedal bar over the car along its forward axis: centre neutral, front end full throttle, back end full
@@ -2473,7 +2555,9 @@ namespace ARS
             // Route radius from three sample points.
             Brain.CurrentPerception.CurveRadiusToFollowPoint = RouteRadiusSampled();
             UpdateApexLeapfrog();
-            if (_apexUpdateTick + _phaseOffsetMs < Game.GameTime)
+            // Requirements run ahead of the refill and force one on a flip, so a corner that has just asked for a
+            // plan gets it this tick rather than up to 500 ms later.
+            if (UpdateCornerRequirements() || _apexUpdateTick + _phaseOffsetMs < Game.GameTime)
             {
                 _apexUpdateTick = Game.GameTime + 500;
                 RefillApexQueue();
@@ -2559,8 +2643,8 @@ namespace ARS
         // Cheap: drop passed apexes and invalidate stale entries every tick.
         void UpdateApexLeapfrog()
         {
-            int[] heldNodes = { NextApexNode, NextApexNode2, NextApexNode3, NextApexNode4 };
-            float[] heldRadii = { NextApexRadius, NextApexRadius2, NextApexRadius3, NextApexRadius4 };
+            int[] heldNodes = { NextApexNode, NextApexNode2, NextApexNode3 };
+            float[] heldRadii = { NextApexRadius, NextApexRadius2, NextApexRadius3 };
 
             bool heldTableChanged = heldNodes.Any(node => node >= 0 && !ARS.Corners.Any(corner => corner.Node == node));
             bool lowSpeedInvalidation = heldNodes[0] >= 0 && Car.Velocity.Length() < NextApexSpeed * 0.5f;
@@ -2594,57 +2678,109 @@ namespace ARS
         }
 
         // Expensive: scan all corners and refill empty queue slots. Gated to 0.5s.
+        // Decide, per car and per corner, whether the corner wants a braking plan and an outside line. It reads the
+        // car's own predicted arrival against its own apex speed, so it never depends on the held queue — a corner
+        // the queue has not selected still gets evaluated, which is what lets a flag turn on in the first place.
+        // The two flags answer different questions and so are judged on different axes: braking is a v²/2a distance
+        // problem and is tested from the road it actually needs, while positioning is a lateral move and is tested
+        // inside the time window the move belongs in.
+        bool UpdateCornerRequirements()
+        {
+            float speed = Math.Max(Car.Velocity.Length(), 1f);
+            float forwardGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
+            bool flipped = false;
+
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                int entranceNode = corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(corner.Node, -corner.LengthStart);
+                int distance = ForwardNodeDistance(entranceNode);
+                if (distance <= 0) continue;
+                if (!TryGetCornerContext(corner.Node, out CornerContext context)) continue;
+
+                bool tight = corner.DetectedRadius < CornerTightRadius;
+                // The intended speed must be the one the plan itself will target, or the flag reads a wider corner
+                // than the car is actually asked to take and never fires. That is SupposedRadius, not the smoothed one.
+                float intended = ApexSpeedWithDownforce(corner.SupposedRadius);
+                float timeToEntrance = distance / speed;
+                float decel = Math.Max(BrakingDecelBase(corner.Node), 0.1f);
+                float brakingDistance = (speed * speed - intended * intended) / (2f * decel);
+                bool inBrakingRange = distance <= brakingDistance + BrakeHorizonMargin;
+                bool inPositionRange = tight && timeToEntrance <= OutsideEngageSeconds;
+                if (!inBrakingRange && !inPositionRange) continue;
+
+                float arrival = speed + forwardGs * Handling.Gravity * timeToEntrance * RequirementExtrapolationScale;
+                float excess = arrival - intended;
+
+                // A tight corner that wants positioning is braking regardless, because the held queue is the only
+                // route to an outside line — so its braking threshold is the lower one.
+                if (!context.RequiresBraking && inBrakingRange && excess > ARS.MphToMps(tight ? PositionExcessMph : BrakeExcessMph))
+                {
+                    context.RequiresBraking = true;
+                    flipped = true;
+                }
+                if (!context.RequiresPositioning && inPositionRange && excess > ARS.MphToMps(PositionExcessMph))
+                {
+                    context.RequiresPositioning = true;
+                    flipped = true;
+                }
+            }
+            return flipped;
+        }
+
         void RefillApexQueue()
         {
-            int[] heldNodes = { NextApexNode, NextApexNode2, NextApexNode3, NextApexNode4 };
-            float[] heldRadii = { NextApexRadius, NextApexRadius2, NextApexRadius3, NextApexRadius4 };
-
             int count = ARS.TrackPoints.Count;
             if (count < 10 || ARS.Corners.Count == 0)
             {
-                CommitApexQueue(new[] { -1, -1, -1, -1 }, new[] { 999f, 999f, 999f, 999f });
+                CommitApexQueue(new[] { -1, -1, -1 }, new[] { 999f, 999f, 999f });
                 return;
             }
 
-            List<int> selectedNodes = new List<int>();
-            List<float> selectedRadii = new List<float>();
-            for (int i = 0; i < heldNodes.Length && selectedNodes.Count < 4; i++)
-            {
-                if (heldNodes[i] < 0) break;
-                selectedNodes.Add(heldNodes[i]);
-                selectedRadii.Add(heldRadii[i]);
-            }
-
-            // Scan forward from the last held apex, leapfrogging each accepted target.
             List<int> upcoming = new List<int>();
             for (int i = 0; i < ARS.Corners.Count; i++)
             {
-                int d = ForwardNodeDistance(ARS.Corners[i].Node);
-                if (d > 0) upcoming.Add(i);
+                if (ForwardNodeDistance(ARS.Corners[i].Node) > 0) upcoming.Add(i);
+            }
+            upcoming.Sort((left, right) => ForwardNodeDistance(ARS.Corners[left].Node).CompareTo(ForwardNodeDistance(ARS.Corners[right].Node)));
+
+            // Derived fresh every refill and never carried over: slot one must be the nearest corner each time, or
+            // the line, the commit lane and the chevron aim past it the moment the other slots are occupied.
+            List<int> selectedNodes = new List<int>();
+            List<float> selectedRadii = new List<float>();
+            if (upcoming.Count > 0)
+            {
+                selectedNodes.Add(ARS.Corners[upcoming[0]].Node);
+                selectedRadii.Add(ARS.Corners[upcoming[0]].SupposedRadius);
             }
 
-            upcoming.Sort((left, right) => ForwardNodeDistance(ARS.Corners[left].Node).CompareTo(ForwardNodeDistance(ARS.Corners[right].Node)));
-            for (int i = 0; i < upcoming.Count && selectedNodes.Count < 4; i++)
+            // The remaining slots only feed the braking plan, so they go to the most restrictive corners this car
+            // has decided it needs one for — the ones that make it brake earliest.
+            float speed = Car.Velocity.Length();
+            while (selectedNodes.Count < HeldApexCount)
             {
-                int candidate = upcoming[i];
-                int distance = ForwardNodeDistance(ARS.Corners[candidate].Node);
-                if (selectedNodes.Contains(ARS.Corners[candidate].Node)) continue;
-                float candidateSpeed = RouteIdealSpeedForRadius(ARS.Corners[candidate].SupposedRadius);
-
-                if (selectedNodes.Count > 0)
+                int best = -1;
+                float bestBrakingSpeed = float.MaxValue;
+                for (int i = 0; i < upcoming.Count; i++)
                 {
-                    int previousDistance = ForwardNodeDistance(selectedNodes[selectedNodes.Count - 1]);
-                    float previousSpeed = RouteIdealSpeedForRadius(selectedRadii[selectedRadii.Count - 1]);
-                    if (distance <= previousDistance) continue;
+                    int node = ARS.Corners[upcoming[i]].Node;
+                    if (selectedNodes.Contains(node)) continue;
+                    if (!CornerRequiresBraking(node)) continue;
 
-                    float closeCornerDistance = Math.Max(5f, previousSpeed * ApexBufferSeconds);
-                    bool closeToPrevious = distance - previousDistance <= closeCornerDistance;
-                    bool materiallySlower = previousSpeed - candidateSpeed >= SecondaryApexSpeedDifference;
-                    if (closeToPrevious && !materiallySlower) continue;
+                    float radius = ARS.Corners[upcoming[i]].SupposedRadius;
+                    float apexSpeed = ApexSpeedWithDownforce(radius);
+                    if (apexSpeed >= speed) continue;
+                    if (!CornerWorthHolding(node, radius, selectedNodes, selectedRadii)) continue;
+
+                    float brakingSpeed = ApexBrakingSpeed(node, apexSpeed);
+                    if (brakingSpeed < bestBrakingSpeed)
+                    {
+                        bestBrakingSpeed = brakingSpeed;
+                        best = i;
+                    }
                 }
-
-                selectedNodes.Add(ARS.Corners[candidate].Node);
-                selectedRadii.Add(ARS.Corners[candidate].SupposedRadius);
+                if (best < 0) break;
+                selectedNodes.Add(ARS.Corners[upcoming[best]].Node);
+                selectedRadii.Add(ARS.Corners[upcoming[best]].SupposedRadius);
             }
 
             CommitApexQueue(
@@ -2652,16 +2788,35 @@ namespace ARS
                 {
                     selectedNodes.Count > 0 ? selectedNodes[0] : -1,
                     selectedNodes.Count > 1 ? selectedNodes[1] : -1,
-                    selectedNodes.Count > 2 ? selectedNodes[2] : -1,
-                    selectedNodes.Count > 3 ? selectedNodes[3] : -1
+                    selectedNodes.Count > 2 ? selectedNodes[2] : -1
                 },
                 new[]
                 {
                     selectedRadii.Count > 0 ? selectedRadii[0] : 999f,
                     selectedRadii.Count > 1 ? selectedRadii[1] : 999f,
-                    selectedRadii.Count > 2 ? selectedRadii[2] : 999f,
-                    selectedRadii.Count > 3 ? selectedRadii[3] : 999f
+                    selectedRadii.Count > 2 ? selectedRadii[2] : 999f
                 });
+        }
+
+        // A candidate that belongs to a corner already held adds nothing unless it is materially slower: the pair is
+        // one complex, and the tighter of the two is the one that has to be planned for.
+        bool CornerWorthHolding(int node, float radius, List<int> selectedNodes, List<float> selectedRadii)
+        {
+            int distance = ForwardNodeDistance(node);
+            float candidateSpeed = RouteIdealSpeedForRadius(radius);
+            float nearestGap = float.MaxValue;
+            float nearestSpeed = 999f;
+            for (int i = 0; i < selectedNodes.Count; i++)
+            {
+                float gap = Math.Abs(distance - ForwardNodeDistance(selectedNodes[i]));
+                if (gap < nearestGap)
+                {
+                    nearestGap = gap;
+                    nearestSpeed = RouteIdealSpeedForRadius(selectedRadii[i]);
+                }
+            }
+            if (nearestGap > Math.Max(5f, nearestSpeed * ApexBufferSeconds)) return true;
+            return nearestSpeed - candidateSpeed >= SecondaryApexSpeedDifference;
         }
 
         void CommitApexQueue(int[] nodes, float[] radii)
@@ -2675,9 +2830,6 @@ namespace ARS
             NextApexNode3 = nodes[2];
             NextApexRadius3 = radii[2];
             NextApexSpeed3 = NextApexNode3 >= 0 ? ApexSpeedWithDownforce(NextApexRadius3) : 999f;
-            NextApexNode4 = nodes[3];
-            NextApexRadius4 = radii[3];
-            NextApexSpeed4 = NextApexNode4 >= 0 ? ApexSpeedWithDownforce(NextApexRadius4) : 999f;
 
             if (NextApexNode >= 0)
             {
@@ -2762,11 +2914,17 @@ namespace ARS
         // The solve is v² = vApex² + 2∫a·ds, so the mean decel over the span is the exact quantity.
         public float BrakingDecel(int apexNode, float spanMeters)
         {
-            float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
-            float decel = brakingAbility * Handling.Gravity * EffectiveBrakeFactor(apexNode)
-                + Handling.Gravity * BrakingGradeSine(spanMeters);
-            if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
+            float decel = BrakingDecelBase(apexNode) + Handling.Gravity * BrakingGradeSine(spanMeters);
             return Math.Max(decel, 0.1f);
+        }
+
+        // The grade-free half, so a horizon test can ask the same question without walking the span.
+        float BrakingDecelBase(int apexNode)
+        {
+            float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
+            float decel = brakingAbility * Handling.Gravity * EffectiveBrakeFactor(apexNode);
+            if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
+            return decel;
         }
 
         // Mean grade over the braking span as sin(pitch): negative downhill loses decel, positive uphill gains it.

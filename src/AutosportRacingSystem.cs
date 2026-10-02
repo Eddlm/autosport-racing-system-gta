@@ -64,6 +64,8 @@ namespace ARS
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
         // Pre-computed apex table. Built in BuildApexTable after track generation.
         public static List<CornerPoint> Corners = new List<CornerPoint>();
+        // Bumped on every apex-table rebuild so each racer's corner contexts know to re-sync.
+        public static int CornersRevision = 0;
 
         public static List<string> KnownTracks = new List<string>();
         // Raw grip (max traction, in G) per model, keyed by the XML <Model> hash text.
@@ -1199,7 +1201,7 @@ namespace ARS
             _arsMenu.AddSubMenu(_raceMenu);
             _arsMenu.AddSubMenu(settingsMenu);
             _arsMenu.AddSubMenu(cameraMenu);
-            //_arsMenu.AddSubMenu(creatorMenu);
+            _arsMenu.AddSubMenu(creatorMenu);
             _arsMenu.Add(resetItem);
 
             // Register all menus in the pool
@@ -1211,7 +1213,7 @@ namespace ARS
             _menuPool.Add(racersMenu);
             _menuPool.Add(advancedMenu);
             _menuPool.Add(cameraMenu);
-            //_menuPool.Add(creatorMenu);
+            _menuPool.Add(creatorMenu);
         }
         void SaveRacerSetting(string key, string value)
         {
@@ -3148,13 +3150,14 @@ namespace ARS
         }
 
 
-        static Vector2 World3DToScreen2d(Vector3 pos)
+        static bool World3DToScreen2d(Vector3 pos, out Vector2 screen)
         {
             var x2dp = new OutputArgument();
             var y2dp = new OutputArgument();
 
-            Function.Call<bool>(Hash._WORLD3D_TO_SCREEN2D, pos.X, pos.Y, pos.Z, x2dp, y2dp);
-            return new Vector2(x2dp.GetResult<float>(), y2dp.GetResult<float>());
+            bool onScreen = Function.Call<bool>(Hash._WORLD3D_TO_SCREEN2D, pos.X, pos.Y, pos.Z, x2dp, y2dp);
+            screen = new Vector2(x2dp.GetResult<float>(), y2dp.GetResult<float>());
+            return onScreen;
         }
 
         public enum DrawTextAlign { Center, Left, Right }
@@ -3163,14 +3166,15 @@ namespace ARS
         public enum DrawTextFont { Standard = 0, Cursive = 1, Leaderboard = 3, Condensed = 4, FixedWidthNumbers = 5, Pricedown = 7 }
         public static void DrawText(Vector3 pos, string t, Color c, float scale)
         {
-            Vector2 screeninfo = World3DToScreen2d(pos);
+            if (!World3DToScreen2d(pos, out Vector2 screenInfo)) return;
             Function.Call(Hash._SET_TEXT_ENTRY, "STRING");
             Function.Call(Hash.SET_TEXT_CENTRE, true);
             Function.Call(Hash.SET_TEXT_COLOUR, c.R, c.G, c.B, c.A);
             Function.Call(Hash.SET_TEXT_SCALE, 1f, scale);
             Function.Call(Hash.SET_TEXT_DROP_SHADOW, true);
+            Function.Call(Hash.SET_TEXT_FONT, (int)DrawTextFont.Standard);
             Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, t);
-            Function.Call(Hash._DRAW_TEXT, screeninfo.X, screeninfo.Y);
+            Function.Call(Hash._DRAW_TEXT, screenInfo.X, screenInfo.Y);
         }
 
 

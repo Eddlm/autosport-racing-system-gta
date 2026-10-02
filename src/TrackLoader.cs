@@ -231,8 +231,8 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             if (count < 1) return;
 
-            const float entryRadius = 100f;
-            const float exitRadius = 130f;
+            const float entryRadius = 500f;
+            const float exitRadius = 500f;
             const int smoothingNodes = 2;
             const int exitRelaxationNodes = 4;
             const int minimumCornerNodes = 5;
@@ -313,7 +313,9 @@ namespace ARS
             if (inCorner)
                 AddCornerRegion(scanNodes, cornerStartPosition, scanNodes.Count - 1, count, smoothingNodes, minimumCornerNodes);
 
-            ARS.Log(ARS.LogImportance.Info, "Apex table: " + ARS.Corners.Count + " corners");
+            float widestApexRadius = 0f;
+            foreach (CornerPoint counted in ARS.Corners) widestApexRadius = Math.Max(widestApexRadius, counted.SupposedRadius);
+            ARS.Log(ARS.LogImportance.Info, "Apex table: " + ARS.Corners.Count + " corners, widest apex radius " + widestApexRadius.ToString("0") + "m");
 
             // A chicane reverses curvature: the peak signed angle each side of the apex differs in sign.
             int nodeCount = ARS.TrackPoints.Count;
@@ -341,6 +343,8 @@ namespace ARS
                     corner.SuppressOutsideApproach = true;
                 }
             }
+
+            ARS.CornersRevision++;
         }
 
         static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int smoothingNodes, int minimumCornerNodes)
@@ -353,6 +357,7 @@ namespace ARS
 
             int apexPosition = startPosition;
             float apexRadius = float.MaxValue;
+            float detectedRadius = float.MaxValue;
             for (int position = startPosition; position <= endPosition; position++)
             {
                 // The apex radius remains the precise node radius: circumradius through
@@ -363,6 +368,8 @@ namespace ARS
                     apexRadius = radius;
                     apexPosition = position;
                 }
+                float smoothed = SmoothedRadius(scanNodes[position], count, smoothingNodes);
+                if (smoothed < detectedRadius) detectedRadius = smoothed;
             }
 
             if (float.IsNaN(apexRadius) || float.IsInfinity(apexRadius)) return;
@@ -402,6 +409,7 @@ namespace ARS
                 LengthStart = apexPosition - startPosition,
                 LengthEnd = endPosition - apexPosition,
                 SupposedRadius = apexRadius,
+                DetectedRadius = detectedRadius,
                 Speed = (float)Math.Sqrt(9.81f * apexRadius),
                 SuppressOutsideApproach = suppressOutside
             });
