@@ -48,7 +48,7 @@ Small details removed from AGENTS.md pointers during the final trim, preserved h
 ## Lane steer — one flat P, and deliberately no ceiling
 
 - **The lane term is a single proportional law on the lane error, and it must stay uncapped.** A ceiling looks like the gentler instrument and is not: it flattens the top of the P, so most of a big lane move runs at a constant command that builds lateral velocity the short proportional tail cannot shed — bang-then-taper, which is exactly the overshoot it was added to cure. Driven both ways in one session, and uncapped won.
-- **Two levers came out of that session**: the gain, halved for the move out to the outside because that is the big deliberate one (`LaneGainDegPerMeter` / `OutsideLaneGainFraction`), and the low-speed ramp on the ceiling, which is what lets the P's taper reach the tyres at the speeds lane moves actually happen. A position-only P carries no rate feedback of its own, so the damped approach survives only because the yaw damper is opposing the rotation the P has just started.
+- **Two levers came out of that session**: the gain, halved for the move out to the outside because that is the big deliberate one (`LaneGainDegPerMeter` / `LaneSteerOutsidePercent`), and the low-speed ramp on the ceiling, which is what lets the P's taper reach the tyres at the speeds lane moves actually happen. A position-only P carries no rate feedback of its own, so the damped approach survives only because the yaw damper is opposing the rotation the P has just started.
 
 ## Steering damping (`SteerDamping`)
 
