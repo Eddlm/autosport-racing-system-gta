@@ -496,10 +496,11 @@ namespace ARS
                 holdOwnsLane = false;
             }
             float targetLane = ApplyRivalWalls(defaultLane, roadWide);
+            targetLane = 0.1f;
             _targetLane = targetLane;
 
-            Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
-            _debugLaneAimPoint = steerRefPoint.Position + steerRight * targetLane;
+            // Aim at the track center at the lookahead distance — no lane offset.
+            _debugLaneAimPoint = steerRefPoint.Position;
 
 
             // --- Off-track recovery: push back toward center if past the safe edge ---
@@ -710,13 +711,13 @@ namespace ARS
         // Outward moves, as multiples of a full inside hug. The hold's error is the whole half-width, so one hug's
         // Pure pursuit's steer carries a factor of two the plain bearing misses: the curvature to a point at a given
         // bearing is 2 sin(angle) over the distance, not the angle over it. This is the knob if the lane is still shy.
-        const float LanePursuitGain = 2f;
+        const float PursuitGain = 1f;
 
         // Pure pursuit: the bearing from the car's heading to an aim point, turned into a steer angle by the wheelbase.
         // The lane law and the off-track recovery both drive through this so they agree on sign and scale. SignedAngle
         // is antisymmetric, so the car's-heading-to-the-aim ordering is what the course error ends up in; a minus here
         // inverts the steer.
-        const float MaxPursuitBearingDegrees = 10f;
+        const float MaxPursuitBearingDegrees = 90f;
 
         float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading)
         {
@@ -725,7 +726,7 @@ namespace ARS
             if (distance <= 0.5f) return 0f;
             float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
             if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
-            return LanePursuitGain * bearing * VehicleData.WheelBase / distance;
+            return PursuitGain * bearing * VehicleData.WheelBase / distance;
         }
 
         float PursuitSteerDegreesCapped(Vector3 aimPoint, Vector3 heading)
@@ -736,7 +737,8 @@ namespace ARS
             float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
             if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
             bearing = ARS.Clamp(bearing, -MaxPursuitBearingDegrees, MaxPursuitBearingDegrees);
-            return LanePursuitGain * bearing * VehicleData.WheelBase / distance;
+            bearing /= Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
+            return PursuitGain * bearing * VehicleData.WheelBase / distance;
         }
 
         float ComputeHighSpeedLane(float roadWide, float speedMps)
@@ -2663,7 +2665,7 @@ namespace ARS
             LookAheads.Clear();
             float speed = Car.Velocity.Length();
 
-            int steerRef = (int)ARS.Clamp((int)(speed / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f) * 1.0f), (int)SteerLookaheadMinMeters, 15);
+            int steerRef = 10;
             _currentLookaheadMeters = steerRef;
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
