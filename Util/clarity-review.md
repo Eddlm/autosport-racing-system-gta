@@ -30,8 +30,8 @@ That is the drift the cluster close-out warned about, one level up.
 | 4 | applied, verified | rode the round 7 commit |
 | 5 | applied, verified | `9f6564d` |
 | 6 | absorbed by round 3 | — |
-| 7 | applied, verified | rode the round 8 commit |
-| 8 | not started | — |
+| 7 | applied, verified | `de61358` |
+| 8 | applied, verified | in this commit |
 | 9 | not started | — |
 
 Scope order: newest first — the crest code written this session — then outward through the files
@@ -251,6 +251,16 @@ the bottom. Observably identical.
 
 **Not touched, deliberately:** `peak = ARS.Clamp(toCrest, lo, hi)` earns its place. On point-to-point
 `toCrest` goes negative once the car is inside the crest, and the clamp moves the peak to 0.
+
+**Applied and verified.** All three parts in one edit: the early `CrestGs >= 0f` return before the
+wrap/extent/ratio work, `hi <= lo` deleted, and the `Math.Min` gone. Equivalence on every path: with
+`CrestGs < 0` the unload factor is negative so `unload < 1` and the removed `Min` was already a no-op;
+with `CrestGs >= 0` the early return gives exactly 1, which is what `Min` → `Max` → tail produced. The
+case worth naming because neither of us did at first: an infinite `speedRatio` makes `unload` −inf, which
+the existing `IsInfinity` guard catches before the `Max`, so the removed `Min` never saw it either. NaN
+is caught there too, since `NaN >= 0f` is false and the code proceeds to the guard.
+`peak = Clamp(toCrest, lo, hi)` stays: on point-to-point `toCrest` goes negative inside the crest, so
+that clamp does real work.
 
 ## Round 9 — the run state in `AssignCrestNodes`, `TrackLoader.cs:377` (Lead's pick)
 

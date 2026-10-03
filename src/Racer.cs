@@ -3078,6 +3078,7 @@ namespace ARS
         {
             CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
             if (corner == null || corner.CrestNode < 0 || corner.CrestSpanNodes <= 0 || spanMeters < 1f) return 1f;
+            if (corner.CrestGs >= 0f) return 1f;
             int count = ARS.TrackPoints.Count;
             int toCrest = corner.CrestNode - CurrentTrackPoint.Node;
             if (!ARS.IsPointToPoint) toCrest = ((toCrest % count) + count) % count;
@@ -3086,14 +3087,14 @@ namespace ARS
             float end = toCrest + halfExtent;
             float lo = Math.Max(start, 0f);
             float hi = Math.Min(end, spanMeters);
-            if (end <= 0f || start >= spanMeters || hi <= lo) return 1f;
+            if (end <= 0f || start >= spanMeters) return 1f;
             float peak = ARS.Clamp(toCrest, lo, hi);
             float risingUnscaled = RampIntegralUnscaled(start, lo, peak);
             float fallingUnscaled = RampIntegralUnscaled(end, hi, peak);
             float speedRatio = Car.Velocity.Length() / CrestProbeSpeed;
             float unload = 1f + corner.CrestGs * speedRatio * speedRatio * (risingUnscaled + fallingUnscaled) / (2f * halfExtent * spanMeters);
             if (float.IsNaN(unload) || float.IsInfinity(unload)) return 1f;
-            unload = Math.Max(Math.Min(unload, 1f), CrestDecelFloor);
+            unload = Math.Max(unload, CrestDecelFloor);
             return 1f - Math.Min((1f - unload) * ARS.CrestEffect, 0.9f);
         }
 
