@@ -3351,7 +3351,7 @@ namespace ARS
         // route and not sliding - and has held all of that, because one good sample off a bounce is not recovery.
         bool HasRegainedControl()
         {
-            bool tracking = OutOfTrackDistance() <= 0f && ARS.MpsToMph(Vector3.Dot(Car.Velocity, Car.ForwardVector)) >= RecoveredMinSpeedMph && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * RecoveredSlideFraction && Math.Abs(Vector3.SignedAngle(Car.ForwardVector, CurrentTrackPoint.Direction, Vector3.WorldUp)) <= RecoveredHeadingDeg;
+            bool tracking = Math.Abs(Brain.CurrentPerception.DeviationFromCenter) <= CurrentTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f && ARS.MpsToMph(Vector3.Dot(Car.Velocity, Car.ForwardVector)) >= RecoveredMinSpeedMph && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * RecoveredSlideFraction && Math.Abs(Vector3.SignedAngle(Car.ForwardVector, CurrentTrackPoint.Direction, Vector3.WorldUp)) <= RecoveredHeadingDeg;
 
             if (!tracking)
             {
@@ -3428,14 +3428,6 @@ namespace ARS
                 return;
             }
 
-            if (!_isRecoveringFromStuck && IsStuckByThrottle)
-            {
-                _isRecoveringFromStuck = true;
-                _stuckRecoveryAttempts++;
-                _stuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
-                IsStuckByThrottle = false;
-            }
-
             if (!_isRecoveringFromStuck) return;
 
             if (HasRegainedControl())
@@ -3492,12 +3484,6 @@ namespace ARS
 
                 _stuckRecoveryAttempts = 0;
                 IsStuckByThrottle = false;
-                FinishStuckRecovery();
-                return;
-            }
-
-            if (Game.GameTime >= _stuckRecoveryEndTime)
-            {
                 FinishStuckRecovery();
                 return;
             }
