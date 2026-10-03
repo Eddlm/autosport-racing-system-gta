@@ -104,7 +104,7 @@
 
 The fix is the **High Downforce: Online** toggle: a **Debug** checkbox (`AutosportRacingSystem.cs:798`, default **off**, key in `Menu-Debug.ini`) consumed in the downforce-scale branch (`AutosportRacingSystem.cs:3174`). Above downforce 100 it swaps the flat singleplayer scale for the speed-scaled online curve, and it arrived in `a8a1caa` with the default **on** — and it lives in the **Debug** menu, not the Advanced Settings the issue comment named.
 
-Other reports still open, all predating the current code and unverified against it: **#1** game-breaking bug (@Cimmanom), **#7** game saving stops functioning (@shifuguru), **#8** not working for update 3095 (@rayvenz3). **#2/#4/#6/#9 are closed**, and #6/#8 carry credit in `AGENTS.md`'s workflow section.
+Other reports still open, all predating the current code and unverified against it: **#1** game-breaking bug (@Cimmanom), **#7** game saving stops functioning (@shifuguru), **#8** not working for update 3095 (@rayvenz3). **#2/#4/#6/#9 are closed.**
 
 ## Downhill braking term — span fixed, one design question open
 
