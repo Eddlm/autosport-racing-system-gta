@@ -104,7 +104,10 @@ namespace ARS
 
         public float RouteLookAheadSeconds = 0.5f;
         public float RouteLookaheadSizeSeconds = 2.0f;
-        const float SteerLookaheadMinMeters = 5f;
+        // The steer reference is a preview *time*: a fixed distance raises the loop's natural frequency with speed.
+        const float SteerPreviewSeconds = 0.5f;
+        const float SteerLookaheadMinMeters = 8f;
+        const float SteerLookaheadMaxMeters = 30f;
 
 
         float _avoidLeftWall = 0f;
@@ -147,7 +150,16 @@ namespace ARS
         float _debugYawTargetPerSecond = 0f;
         float _debugDamperGainSeconds = 0f;
         float _commandedSteerBeforeSlew = 0f;
-        float _pursuitAngleDeg = 0f;
+        float _steerPursuitDeg = 0f;
+        float _steerRecoveryDeg = 0f;
+        float _steerLaneDeg = 0f;
+        float _steerSideBySideDeg = 0f;
+        float _steerBearingDeg = 0f;
+        float _steerBearingCompressFactor = 1f;
+        float _steerCompressedBearingDeg = 0f;
+        float _steerAimCurvature = 0f;
+        float _steerNonLaneDeg = 0f;
+        float _steerCommandDeg = 0f;
         int _currentLookaheadMeters = 0;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _offtrackInputCap = 1f;
@@ -471,13 +483,10 @@ namespace ARS
             float speedMps = Math.Max(Car.Velocity.Length(), 1f);
 
 
-            // --- Course error: how far the velocity direction is off the track direction ---
-            // Kept separate from lane steer; merging them caused oscillation.
+            // --- Travel direction: the pursuit bearing is taken against it, and every term that steers shares it ---
 
             Vector3 courseDir = Car.ForwardVector;
             if (Car.Velocity.LengthSquared() > 0.01f) courseDir = Car.Velocity.Normalized;
-            float courseErrorDeg = -Vector3.SignedAngle(steerRefPoint.Direction, courseDir, Vector3.WorldUp);
-            if (float.IsNaN(courseErrorDeg) || float.IsInfinity(courseErrorDeg)) courseErrorDeg = 0f;
 
 
             // --- Lane resolution: override chain (high-speed → corner → avoidance → walls) ---
@@ -486,16 +495,12 @@ namespace ARS
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
             if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
-            bool holdOwnsLane = cornerLane != 0f;
             if (cornerLane != 0f) defaultLane = cornerLane;
             _rawCornerLane = cornerLane;
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
-            if (avoidAheadLane != 0f)
-            {
-                defaultLane = avoidAheadLane;
-                holdOwnsLane = false;
-            }
+            if (avoidAheadLane != 0f) defaultLane = avoidAheadLane;
             float targetLane = ApplyRivalWalls(defaultLane, roadWide);
+            if (ARS.DebugToggles[Options.LockLaneCentre]) targetLane = LaneLockTestOffsetMeters;
             _targetLane = targetLane;
 
             // Aim at the track center at the lookahead distance, offset by the target lane.
@@ -512,16 +517,13 @@ namespace ARS
             float overshoot = absDev - safeEdge;
             float recoveryDeg = 0f;
             if (overshoot > 0f) recoveryDeg = PursuitSteerDegrees(steerRefPoint.Position, courseDir);
+            _steerRecoveryDeg = recoveryDeg;
 
 
             // --- Lane steer: pure pursuit toward the target lane ---
 
-            float laneSteerDeg = 0f;
-            if (Math.Abs(targetLane) > 0.01f)
-            {
-                laneSteerDeg = PursuitSteerDegreesCapped(_debugLaneAimPoint, courseDir);
-            }
-            _pursuitAngleDeg = laneSteerDeg;
+            float laneSteerDeg = PursuitSteerDegreesCapped(_debugLaneAimPoint, courseDir);
+            _steerPursuitDeg = laneSteerDeg;
             // Physical repulsion: inside the "no touching" box, steer away from rivals
             // actually closing laterally; parallel traffic must not kill the lane steer.
             Vector3 velDir = speedMps > 0.5f ? Car.Velocity / speedMps : courseDir;
@@ -545,28 +547,31 @@ namespace ARS
                 float strength = ARS.Remap(Math.Abs(latRelVel), 0.3f, 3f, 0f, 15f, true) * distScale;
                 laneSteerDeg += Math.Sign(latSide) * strength;
             }
+            _steerLaneDeg = laneSteerDeg;
 
 
             // --- Heading assist: match a side-by-side rival's heading ---
 
             float sideBySideSteerDeg = ComputeSideBySideSteerCorrection(courseDir);
+            _steerSideBySideDeg = sideBySideSteerDeg;
 
 
-            // --- PD assembly: damped course terms + lane steer + slide blend ---
+            // --- Assembly: lane pursuit + corrections + damper + slide blend ---
 
             const float steerKP = 1.0f;
-            // Damp the excess over the yaw the track requires, not over zero which taxes every steady corner; the
+            // Damp the excess over the yaw the aim point requires, not over zero which taxes every steady corner; the
             // slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
             float fwdSpeed = ARS.GetForwardSpeed(Car);
             float yawTarget = 0f;
-            if (SteerDampingTrackReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) yawTarget = RequiredYawRatePerSecond(steerRefPoint, fwdSpeed);
+            if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
             float damperGain = SteerDamping;
             _debugYawTargetPerSecond = yawTarget;
             _debugDamperGainSeconds = damperGain;
             _debugDamperTermDeg = -damperGain * yawRateToDamp;
-            float dampedCourseSteerDeg = (steerKP * (courseErrorDeg + recoveryDeg + sideBySideSteerDeg)) + _debugDamperTermDeg;
-            Control.SteerDegrees = dampedCourseSteerDeg + (steerKP * laneSteerDeg);
+            float nonLaneSteerDeg = (steerKP * (recoveryDeg + sideBySideSteerDeg)) + _debugDamperTermDeg;
+            _steerNonLaneDeg = nonLaneSteerDeg;
+            Control.SteerDegrees = nonLaneSteerDeg + (steerKP * laneSteerDeg);
 
             if (Handling.LateralTractionCurve > 1f)
             {
@@ -577,7 +582,7 @@ namespace ARS
                     if (slidePriority > 0f)
                     {
                         // Countersteer equals the slide angle - the correction term only, not the slidePriority ramp.
-                        float countersteerTarget = dampedCourseSteerDeg - VehicleData.SlideAngle;
+                        float countersteerTarget = nonLaneSteerDeg - VehicleData.SlideAngle;
                         Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
                     }
                 }
@@ -585,6 +590,7 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
                 Control.SteerDegrees = 0f;
+            _steerCommandDeg = Control.SteerDegrees;
 
             // --- Local function: TryGetSteerContext ---
 
@@ -708,16 +714,34 @@ namespace ARS
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
         const float HighSpeedLaneRadiusMeters = 500f;
 
-        // Outward moves, as multiples of a full inside hug. The hold's error is the whole half-width, so one hug's
+        // Debug lock for the centring test: a near-centre aim offset, pinned for every racer.
+        const float LaneLockTestOffsetMeters = 0.1f;
+
         // Pure pursuit's steer carries a factor of two the plain bearing misses: the curvature to a point at a given
         // bearing is 2 sin(angle) over the distance, not the angle over it. This is the knob if the lane is still shy.
-        const float PursuitGain = 1f;
-
-        // Pure pursuit: the bearing from the car's heading to an aim point, turned into a steer angle by the wheelbase.
-        // The lane law and the off-track recovery both drive through this so they agree on sign and scale. SignedAngle
-        // is antisymmetric, so the car's-heading-to-the-aim ordering is what the course error ends up in; a minus here
-        // inverts the steer.
+        const float PursuitGain = 2f;
+        // sin falls again past a right angle, so an aim point abeam or behind the car would fade instead of saturating.
         const float MaxPursuitBearingDegrees = 90f;
+
+        // Pure pursuit's curvature law: the bearing to an aim point is the chord of the circle through the car, so the
+        // path's curvature is 2 sin(bearing) over the distance and the steer it demands is that curvature times the
+        // wheelbase. The lane law and the off-track recovery both drive through this so they agree on sign and scale.
+        float PursuitSteerFromBearing(float bearing, float distance)
+        {
+            bearing = ARS.Clamp(bearing, -MaxPursuitBearingDegrees, MaxPursuitBearingDegrees);
+            return ARS.RadToDeg((float)Math.Atan(PursuitGain * Math.Sin(ARS.DegToRad(bearing)) * VehicleData.WheelBase / distance));
+        }
+
+        // Soft compression on the pursuit bearing: the excess over the threshold grows slower and slower, so it
+        // asymptotes to threshold + scale instead of following the angle.
+        float CompressBearingAngle(float angle)
+        {
+            float threshold = ARS.PursuitCompressThreshold;
+            float magnitude = Math.Abs(angle);
+            if (magnitude <= threshold) return angle;
+            float compressedExcess = ARS.PursuitCompressScale * (float)Math.Tanh((magnitude - threshold) / ARS.PursuitCompressScale);
+            return Math.Sign(angle) * (threshold + compressedExcess);
+        }
 
         float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading)
         {
@@ -726,7 +750,7 @@ namespace ARS
             if (distance <= 0.5f) return 0f;
             float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
             if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
-            return PursuitGain * bearing * VehicleData.WheelBase / distance;
+            return PursuitSteerFromBearing(bearing, distance);
         }
 
         float PursuitSteerDegreesCapped(Vector3 aimPoint, Vector3 heading)
@@ -736,9 +760,12 @@ namespace ARS
             if (distance <= 0.5f) return 0f;
             float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
             if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
-            bearing = ARS.Clamp(bearing, -MaxPursuitBearingDegrees, MaxPursuitBearingDegrees);
-            bearing /= Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
-            return PursuitGain * bearing * VehicleData.WheelBase / distance;
+            _steerBearingDeg = bearing;
+            _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / distance;
+            float compressedBearing = CompressBearingAngle(bearing);
+            _steerCompressedBearingDeg = compressedBearing;
+            _steerBearingCompressFactor = Math.Abs(bearing) > 0.001f ? Math.Abs(compressedBearing) / Math.Abs(bearing) : 1f;
+            return PursuitSteerFromBearing(compressedBearing, distance);
         }
 
         float ComputeHighSpeedLane(float roadWide, float speedMps)
@@ -985,17 +1012,10 @@ namespace ARS
         // Kill switch for the yaw-rate damper. Driven with it off the cars cannot hold centre — the term is the
         // only thing opposing a rotation the course chain has already started, so it is load-bearing, not trim.
         const bool SteerDampingEnabled = true;
-        const bool SteerDampingTrackReference = false;
+        // The damper's reference: the yaw the aim point requires removes the standing-offset toll, and the zero
+        // reference stays one flip away for A/B — the drive that preferred it was confounded by the course error.
+        const bool SteerDampingAimReference = true;
         float SteerDamping => SteerDampingEnabled ? ARS.SteerDampingGain / Math.Max(VehicleData.BaseMechanicalGrip, 1f) : 0f;
-        // The yaw the track requires at a node: Angle is already the node's signed turn in the steer command's own
-        // convention (a left-hand corner is positive, as is the yaw rate that takes it), so it is used as-is; the
-        // span is twice the half width because nodes are one metre apart.
-        float RequiredYawRatePerSecond(TrackPoint point, float fwdSpeed)
-        {
-            float span = 2f * (int)(point.TrackHalfWidth * 2);
-            if (span <= 1f) return 0f;
-            return fwdSpeed * point.Angle / span;
-        }
         // Vanilla's player steering limiter used as a ceiling (AGENTS.md pipeline step 4): vanilla divides by
         // 1 + 0.075 × (forward speed − 5) in m/s and skips it while the car is sliding. The 5 m/s shift and its
         // gate are deliberately dropped here, so the ceiling starts closing from a standstill instead of
@@ -2171,15 +2191,15 @@ namespace ARS
                 float lineLen = 5f;
 
                 // Yellow: pursuit angle (what the lane tracking wants)
-                ARS.DrawLine(origin + new Vector3(0, 0, 0.05f), origin + new Vector3(0, 0, 0.05f) + RotateZ(fwd, _pursuitAngleDeg) * lineLen, Color.Yellow);
+                ARS.DrawLine(origin + new Vector3(0, 0, 0.05f), origin + new Vector3(0, 0, 0.05f) + RotateZ(fwd, _steerPursuitDeg) * lineLen, Color.Yellow);
 
                 // Red: pursuit angle + damper
-                ARS.DrawLine(origin + new Vector3(0, 0, 0.10f), origin + new Vector3(0, 0, 0.10f) + RotateZ(fwd, _pursuitAngleDeg + _debugDamperTermDeg) * lineLen, Color.Red);
+                ARS.DrawLine(origin + new Vector3(0, 0, 0.10f), origin + new Vector3(0, 0, 0.10f) + RotateZ(fwd, _steerPursuitDeg + _debugDamperTermDeg) * lineLen, Color.Red);
 
                 // White: final slewed steer (what the wheels actually request)
                 ARS.DrawLine(origin + new Vector3(0, 0, 0.15f), origin + new Vector3(0, 0, 0.15f) + RotateZ(fwd, Control.SteerDegrees) * lineLen, Color.White);
 
-                ARS.DrawText(new Vector2(0.5f, 0.45f), _currentLookaheadMeters.ToString(), Color.Red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 1.0f);
+                ARS.DrawText(new Vector2(0.5f, 0.5f), _steerBearingDeg.ToString("0.0") + "° x " + _steerBearingCompressFactor.ToString("0.00"), Color.Red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.8f);
             }
 
             // Input trail + pedal bar (inputs).
@@ -2665,7 +2685,7 @@ namespace ARS
             LookAheads.Clear();
             float speed = Car.Velocity.Length();
 
-            int steerRef = 10;
+            int steerRef = (int)ARS.Clamp(speed * SteerPreviewSeconds, SteerLookaheadMinMeters, SteerLookaheadMaxMeters);
             _currentLookaheadMeters = steerRef;
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
