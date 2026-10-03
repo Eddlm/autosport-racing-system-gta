@@ -485,19 +485,30 @@ namespace ARS
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
             if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
+            bool holdOwnsLane = cornerLane != 0f;
             if (cornerLane != 0f) defaultLane = cornerLane;
             _rawCornerLane = cornerLane;
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
-            if (avoidAheadLane != 0f) defaultLane = avoidAheadLane;
+            if (avoidAheadLane != 0f)
+            {
+                defaultLane = avoidAheadLane;
+                holdOwnsLane = false;
+            }
             float targetLane = ApplyRivalWalls(defaultLane, roadWide);
             _targetLane = targetLane;
 
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
             _debugLaneAimPoint = steerRefPoint.Position + steerRight * targetLane;
 
+            // The turn the road asks for between here and the steering reference: the heading change across it, taken
+            // from the same node the course error and the lane bounds use, rather than the lane's own lookahead.
+            _insideLineTurnDegrees = -Vector3.SignedAngle(CurrentTrackPoint.Direction, steerRefPoint.Direction, Vector3.WorldUp);
+            if (float.IsNaN(_insideLineTurnDegrees) || float.IsInfinity(_insideLineTurnDegrees)) _insideLineTurnDegrees = 0f;
+
 
             // --- Off-track recovery: push back toward center if past the safe edge ---
 
+            LogCornerCrossings();
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float absDev = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
             float safeEdge = roadWide - carHalfWidth;
@@ -531,11 +542,17 @@ namespace ARS
                 float steerPercent = Brain.Corner != null ? LaneSteerPercent(Brain.Corner.Point.SupposedRadius) : _insideLineSteerPercent;
                 float curveAngle = Brain.Corner != null ? Brain.Corner.Point.Angle : _insideLineAngle;
                 bool steeringIntoCurve = Math.Sign(-laneErrorMeters) == Math.Sign(curveAngle);
-                float laneGain = LaneGainDegPerMeter * steerPercent;
-                if (!steeringIntoCurve) laneGain *= LaneSteerOutsidePercent;
-                // Only where the gate closes the percentage outright: a floor on the graded path would flatten it.
-                if (steerPercent <= 0f) laneGain = LaneMinGainDegPerMeter;
+                // Holding the outside runs flat, any other outward move at half of that, and only inside hugging is
+                // graded by the corner -- with no floor under the demand it computes.
+                bool insideHugging = !holdOwnsLane && steeringIntoCurve;
+                float laneGain;
+                if (holdOwnsLane) laneGain = LaneHoldOutsideGainDegPerMeter;
+                else if (!insideHugging) laneGain = LaneOutsideMoveGainDegPerMeter;
+                else laneGain = LaneGainDegPerMeter * steerPercent;
                 laneSteerDeg = -laneErrorMeters * laneGain;
+                // Inside hugging also gets the road's own turn as a feed-forward, taken across the steering reference:
+                // the car commits before the position error has to build. Outward moves keep the plain P.
+                if (insideHugging) laneSteerDeg += _insideLineTurnDegrees * 0.25f;
             }
             // Physical repulsion: inside the "no touching" box, steer away from rivals
             // actually closing laterally; parallel traffic must not kill the lane steer.
@@ -652,17 +669,85 @@ namespace ARS
             return correction;
         }
 
+        // TEMPORARY diagnostic: logs entrance, apex and exit per corner with the car's offset, so a corner that is
+        // consistently missed can be read off the log instead of the screen. Remove with its call in ComputeSteering.
+        const int CornerLogApexBandNodes = 2;
+        int _logCornerIndex = -1;
+        int _logCornerPhase = -1;
+
+        int ForwardNodes(int fromNode, int toNode)
+        {
+            int count = ARS.TrackPoints.Count;
+            int d = toNode - fromNode;
+            if (!ARS.IsPointToPoint) d = ((d % count) + count) % count;
+            return d;
+        }
+
+        void LogCornerPhase(int index, string phase)
+        {
+            CornerPoint c = ARS.Corners[index];
+            ARS.Log(ARS.LogImportance.Info, "[CORNER] " + (index + 1) + "/" + ARS.Corners.Count
+                + " apex=" + c.Node + " sign=" + Math.Sign(c.Angle)
+                + " R=" + c.SupposedRadius.ToString("0") + " Rdet=" + c.DetectedRadius.ToString("0")
+                + " " + phase + " off=" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.00"));
+        }
+
+        void LogCornerCrossings()
+        {
+            if (ARS.Corners.Count == 0 || ARS.TrackPoints.Count == 0) return;
+            int node = CurrentTrackPoint.Node;
+            int foundIndex = -1;
+            int foundPhase = -1;
+            for (int i = 0; i < ARS.Corners.Count; i++)
+            {
+                CornerPoint c = ARS.Corners[i];
+                if (c == null || c.Node < 0) continue;
+                int entrance = CornerEntranceNode(c, c.Node);
+                int exit = CornerExitNode(c);
+                if (entrance < 0 || exit < 0) continue;
+                int along = ForwardNodes(entrance, node);
+                if (along > ForwardNodes(entrance, exit)) continue;
+                int toApex = ForwardNodes(entrance, c.Node);
+                foundIndex = i;
+                foundPhase = along < toApex - CornerLogApexBandNodes ? 0 : (along <= toApex + CornerLogApexBandNodes ? 1 : 2);
+                break;
+            }
+            if (foundIndex < 0)
+            {
+                if (_logCornerIndex >= 0)
+                {
+                    LogCornerPhase(_logCornerIndex, "EXIT");
+                    _logCornerIndex = -1;
+                    _logCornerPhase = -1;
+                }
+                return;
+            }
+            if (foundIndex != _logCornerIndex)
+            {
+                _logCornerIndex = foundIndex;
+                _logCornerPhase = foundPhase;
+                LogCornerPhase(foundIndex, "ENTRANCE");
+                return;
+            }
+            if (foundPhase == 1 && _logCornerPhase != 1)
+            {
+                _logCornerPhase = foundPhase;
+                LogCornerPhase(foundIndex, "APEX");
+            }
+        }
+
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
         const float HighSpeedLaneRadiusMeters = 500f;
 
         // The lane's steer strength as a percentage of the full gain, decaying from full on a hairpin to a relaxed
-        // plateau as the radius opens: the car holds a tight corner and takes its time everywhere else. A move out of
-        // the line is halved again.
-        const float LaneSteerOutsidePercent = 0.5f;
+        // plateau as the radius opens: the car holds a tight corner and takes its time everywhere else. Only inside
+        // hugging is graded this way; outward moves run at their own flat gains.
         const float LaneSteerDecayMeters = 120f;
-        // The plateau the curve settles on, and the gain a non-finite radius falls back to. One number, so crossing
-        // the gate changes nothing.
+        // The plateau the curve settles on, so crossing the gate changes nothing.
         const float LaneMinGainDegPerMeter = 0.5f;
+        // Holding the outside always runs at this; any other outward move runs at half of it.
+        const float LaneHoldOutsideGainDegPerMeter = 1f;
+        const float LaneOutsideMoveGainDegPerMeter = LaneHoldOutsideGainDegPerMeter * 0.5f;
 
         static float LaneSteerPercent(float radius)
         {
@@ -673,6 +758,7 @@ namespace ARS
 
         float _insideLineSteerPercent = 1f;
         float _insideLineAngle = 0f;
+        float _insideLineTurnDegrees = 0f;
 
         float ComputeHighSpeedLane(float roadWide, float speedMps)
         {
@@ -685,9 +771,11 @@ namespace ARS
                 fwdNode = ((CurrentTrackPoint.Node + fwdOffset) % count + count) % count;
 
             TrackPoint ahead = ARS.TrackPoints[fwdNode];
-            _insideLineSteerPercent = LaneSteerPercent(ahead.PreciseCurveRadius);
+            // The shortest chord, so the radius is measured over the same window the sign comes from: on a chicane a
+            // longer chord averages both directions and the two disagree.
+            _insideLineSteerPercent = LaneSteerPercent(ahead.ExactRadius);
             _insideLineAngle = ahead.Angle;
-            if (!(ahead.PreciseCurveRadius < HighSpeedLaneRadiusMeters)) return 0f;
+            if (!(ahead.ExactRadius < HighSpeedLaneRadiusMeters)) return 0f;
 
             float cornerDir = Math.Sign(ahead.Angle);
             if (cornerDir == 0f) return 0f;
