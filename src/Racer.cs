@@ -98,8 +98,18 @@ namespace ARS
         int _stuckRecoveryCooldownEndTime = 0;
         const int StuckRecoveryCooldownMs = 2000;
         int _stuckRecoveryAttempts = 0;
+        int _stuckReverseUntil = 0;
+        int _regainedControlSince = 0;
+        // Backing off is a short, straight phase; the way out is the forward phase after it, which runs until the safe
+        // predicate holds rather than for a fixed time.
+        const int StuckReverseMs = 500;
+        const int RegainedControlHoldMs = 500;
+        const float StuckRouteAimMeters = 10f;
+        const float RecoveredHeadingDeg = 25f;
         public int StuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
         public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
+        const float RecoveredMinSpeedMph = 20f;
+        const float RecoveredSlideFraction = 0.3f;
 
 
         public float RouteLookAheadSeconds = 0.5f;
@@ -137,6 +147,9 @@ namespace ARS
         const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
+        // Line discipline belongs to speed: below this the problem is traction, and a cap would hold an off-edge car
+        // at zero, because the projection of a stationary car is the car.
+        const float OffshootMinSpeedMph = 20f;
         const float FullPedalSpeedErrorMps = 3f;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
         const float BrakeErrorMultiplier = 2f;
@@ -1307,6 +1320,8 @@ namespace ARS
             // Only meaningful when the car is aiming at a lane; with no target lane there is no
             // hug-inside expectation to enforce, so the outside sanity check must not fire.
             if (_targetLane == 0f) return 1f;
+
+            if (ARS.MpsToMph(Car.Velocity.Length()) < OffshootMinSpeedMph) return 1f;
 
             Vector3 proj = ProjectAhead(seconds);
             // 1 node ≈ 1 m: the window has to reach the projected node.
@@ -3332,12 +3347,25 @@ namespace ARS
         }
  
  
+        // A car is out of the woods only when it is on the track, driving forward at a real pace, pointing along the
+        // route and not sliding - and has held all of that, because one good sample off a bounce is not recovery.
+        bool HasRegainedControl()
+        {
+            bool tracking = OutOfTrackDistance() <= 0f && ARS.MpsToMph(Vector3.Dot(Car.Velocity, Car.ForwardVector)) >= RecoveredMinSpeedMph && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * RecoveredSlideFraction && Math.Abs(Vector3.SignedAngle(Car.ForwardVector, CurrentTrackPoint.Direction, Vector3.WorldUp)) <= RecoveredHeadingDeg;
+
+            if (!tracking)
+            {
+                _regainedControlSince = 0;
+                return false;
+            }
+
+            if (_regainedControlSince == 0) _regainedControlSince = Game.GameTime;
+            return Game.GameTime - _regainedControlSince >= RegainedControlHoldMs;
+        }
+
         void UpdateStuckCheck()
         {
-            if (ARS.MpsToMph(Car.Velocity.Length()) > 10f && Math.Abs(Brain.CurrentPerception.DeviationFromCenter) < CurrentTrackPoint.TrackHalfWidth)
-            {
-                _stuckRecoveryAttempts = 0;
-            }
+            if (HasRegainedControl()) _stuckRecoveryAttempts = 0;
 
             if (_isRecoveringFromStuck)
             {
@@ -3410,10 +3438,18 @@ namespace ARS
 
             if (!_isRecoveringFromStuck) return;
 
-            if (Game.GameTime >= _stuckRecoveryEndTime)
+            if (HasRegainedControl())
             {
                 FinishStuckRecovery();
                 return;
+            }
+
+            // The clock is the escalation, not the verdict: a manoeuvre still freeing the car is not cut off, and one
+            // that is not counts as another failed attempt so the teleport can take over.
+            if (Game.GameTime >= _stuckRecoveryEndTime)
+            {
+                _stuckRecoveryAttempts++;
+                _stuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
             }
         }
 
@@ -3421,6 +3457,7 @@ namespace ARS
         {
             _isRecoveringFromStuck = false;
             _stuckRecoveryEndTime = 0;
+            _stuckReverseUntil = 0;
             _lastStuckGameTime = 0;
             _stuckRecoveryCooldownEndTime = Game.GameTime + StuckRecoveryCooldownMs;
         }
@@ -3465,33 +3502,27 @@ namespace ARS
                 return;
             }
 
-            Control.Throttle = -0.5f;
-            Control.ThrottleReason = ThrottleReason.StuckRecovery;
-            Control.ThrottleReasonLevel = 0f;
             Control.Brake = 0f;
             Control.BrakeReason = BrakeReason.StuckRecovery;
             Control.BrakeReasonLevel = 0f;
+            Control.ThrottleReason = ThrottleReason.StuckRecovery;
+            Control.ThrottleReasonLevel = 0f;
 
-            // Even attempts reverse straight, odd ones steer toward the nearest track point — written as an angle so
-            // the limiter, which runs after this, is the one that bounds it: at ~0 speed that limit is full lock.
-            if (_stuckRecoveryAttempts % 2 == 0)
+            if (_stuckReverseUntil == 0) _stuckReverseUntil = Game.GameTime + StuckReverseMs;
+
+            // Back off straight first: reversing with the wheels turned swings the nose away from where the car is
+            // going. Then drive out toward the route AHEAD, where the steering convention is unambiguous.
+            if (Game.GameTime < _stuckReverseUntil)
             {
+                Control.Throttle = -0.5f;
                 Control.SteerDegrees = 0f;
+                return;
             }
-            else
-            {
-                Vector3 toTrack = nearest.Position - Car.Position;
-                toTrack.Z = 0f;
-                if (toTrack.LengthSquared() > 0.01f)
-                {
-                    toTrack.Normalize();
-                    Control.SteerDegrees = Vector3.SignedAngle(Car.ForwardVector, toTrack, Vector3.WorldUp);
-                }
-                else
-                {
-                    Control.SteerDegrees = 0f;
-                }
-            }
+
+            Control.Throttle = 0.5f;
+            Vector3 toRoute = nearest.Position + nearest.Direction * StuckRouteAimMeters - Car.Position;
+            toRoute.Z = 0f;
+            Control.SteerDegrees = toRoute.LengthSquared() > 0.01f ? Vector3.SignedAngle(Car.ForwardVector, toRoute.Normalized, Vector3.WorldUp) : 0f;
         }
 
         void UpdatePerceivedGrip()
