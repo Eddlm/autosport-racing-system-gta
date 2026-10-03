@@ -128,9 +128,6 @@ namespace ARS
         const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
-        // Lane steer gain: degrees per metre of lane error at a corner of neutral aggression, and uncapped - the lane
-        // systems bound the target, so the term is free to chase a big error.
-        const float LaneGainDegPerMeter = 3f;
         const float FullPedalSpeedErrorMps = 3f;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
         const float BrakeErrorMultiplier = 2f;
@@ -481,7 +478,7 @@ namespace ARS
 
             // --- Lane resolution: override chain (high-speed → corner → avoidance → walls) ---
 
-            float defaultLane = ComputeHighSpeedLane(steerRefPoint, speedMps);
+            float defaultLane = ComputeHighSpeedLane(roadWide, speedMps);
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
             if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
@@ -537,6 +534,8 @@ namespace ARS
                 // here reads a radius: the aim point carries both the cross-track error and the turn ahead of it.
                 float laneScale = holdOwnsLane ? LaneHoldOutsideScale : (insideHugging ? 1f : LaneOutsideMoveScale);
                 laneSteerDeg = PursuitSteerDegrees(_debugLaneAimPoint, courseDir) * laneScale;
+                _debugLaneSteerDeg = laneSteerDeg;
+                _debugLaneScale = laneScale;
             }
             // Physical repulsion: inside the "no touching" box, steer away from rivals
             // actually closing laterally; parallel traffic must not kill the lane steer.
@@ -673,7 +672,9 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Info, "[CORNER] " + (index + 1) + "/" + ARS.Corners.Count
                 + " apex=" + c.Node + " sign=" + Math.Sign(c.Angle)
                 + " R=" + c.SupposedRadius.ToString("0") + " Rdet=" + c.DetectedRadius.ToString("0")
-                + " " + phase + " off=" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.00"));
+                + " " + phase + " off=" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.00")
+                + " lane=" + _debugLaneSteerDeg.ToString("0.0") + " x" + _debugLaneScale.ToString("0.00")
+                + " steer=" + Control.SteerDegrees.ToString("0.0"));
         }
 
         void LogCornerCrossings()
@@ -722,20 +723,15 @@ namespace ARS
 
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
         const float HighSpeedLaneRadiusMeters = 500f;
-        const float LaneInsideStepFraction = 0.2f;
 
-        // The lane's steer strength as a percentage of the full gain, decaying from full on a hairpin to a relaxed
-        // plateau as the radius opens: the car holds a tight corner and takes its time everywhere else. Only inside
-        // hugging is graded this way; outward moves run at their own flat gains.
-        const float LaneSteerDecayMeters = 120f;
-        // The plateau the curve settles on, so crossing the gate changes nothing.
-        const float LaneMinGainDegPerMeter = 0.5f;
-        // Holding the outside always runs at this; any other outward move runs at half of it. The lane law is pure
-        // pursuit now, so these read as strength relative to a full inside hug rather than as gains on a distance.
-        const float LaneHoldOutsideGainDegPerMeter = 1f;
-        const float LaneOutsideMoveGainDegPerMeter = LaneHoldOutsideGainDegPerMeter * 0.5f;
-        const float LaneHoldOutsideScale = LaneHoldOutsideGainDegPerMeter / LaneGainDegPerMeter;
-        const float LaneOutsideMoveScale = LaneOutsideMoveGainDegPerMeter / LaneGainDegPerMeter;
+        // The outside hold and any other outward move, as multiples of a full inside hug. The hold's error is the whole
+        // half-width, so one hug's worth still loses to the corner's own course error and reads as a lazy drift; this
+        // is the knob for how hard the car commits to the outside line.
+        const float LaneHoldOutsideScale = 3f;
+        const float LaneOutsideMoveScale = LaneHoldOutsideScale * 0.5f;
+        // Pure pursuit's steer carries a factor of two the plain bearing misses: the curvature to a point at a given
+        // bearing is 2 sin(angle) over the distance, not the angle over it. This is the knob if the lane is still shy.
+        const float LanePursuitGain = 2f;
 
         // Pure pursuit: the bearing from the car's heading to an aim point, turned into a steer angle by the wheelbase.
         // The lane law and the off-track recovery both drive through this so they agree on sign and scale. SignedAngle
@@ -748,20 +744,14 @@ namespace ARS
             if (distance <= 0.5f) return 0f;
             float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
             if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
-            return bearing * VehicleData.WheelBase / distance;
+            return LanePursuitGain * bearing * VehicleData.WheelBase / distance;
         }
 
-        static float LaneSteerPercent(float radius)
-        {
-            if (float.IsNaN(radius) || float.IsInfinity(radius)) return 0f;
-            float relaxed = LaneMinGainDegPerMeter / LaneGainDegPerMeter;
-            return relaxed + (1f - relaxed) * (float)Math.Exp(-radius / LaneSteerDecayMeters);
-        }
-
-        float _insideLineSteerPercent = 1f;
         float _insideLineAngle = 0f;
+        float _debugLaneSteerDeg = 0f;
+        float _debugLaneScale = 0f;
 
-        float ComputeHighSpeedLane(TrackPoint steerRefPoint, float speedMps)
+        float ComputeHighSpeedLane(float roadWide, float speedMps)
         {
             int count = ARS.TrackPoints.Count;
             int fwdNode;
@@ -773,18 +763,16 @@ namespace ARS
 
             TrackPoint ahead = ARS.TrackPoints[fwdNode];
             // The exact chord is too noisy to gate on; the precise one is the shortest read that holds up.
-            _insideLineSteerPercent = LaneSteerPercent(ahead.PreciseCurveRadius);
             _insideLineAngle = ahead.Angle;
             if (!(ahead.PreciseCurveRadius < HighSpeedLaneRadiusMeters)) return 0f;
 
             float cornerDir = Math.Sign(ahead.Angle);
             if (cornerDir == 0f) return 0f;
 
-            // A step proportional to the lookahead, not a flat one: the command then relaxes with speed instead of with
-            // its square, so a fast corner gets a gentle pull rather than none at all. The rival walls clamp the result.
-            Vector3 toSteerRef = steerRefPoint.Position - Car.Position;
-            float steerRefDistance = new Vector3(toSteerRef.X, toSteerRef.Y, 0f).Length();
-            return Brain.CurrentPerception.DeviationFromCenter - cornerDir * LaneInsideStepFraction * steerRefDistance;
+            // The edge, absolute: a target that steps from wherever the car is holds a constant error and so never
+            // converges on the line. The gentleness belongs in the bearing, which grows as the car falls short.
+            float insideBound = Math.Max(roadWide - VehicleData.BoundingBox * 0.5f, 0f);
+            return -cornerDir * insideBound;
         }
 
         // The outside hold lives between these two times to the apex: engaged inside the first, lifted at the second.
