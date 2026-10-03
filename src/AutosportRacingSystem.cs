@@ -1653,8 +1653,43 @@ namespace ARS
                         TrackVisuals.DrawCornerRegions(PlayerRacer, ARS.Corners, ARS.TrackPoints);
                     else if (raceLive)
                         TrackVisuals.DrawCornerRegions(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
+
                     if (DebugFocusRacer != null)
-                        TrackVisuals.DrawOutsideApproachLine(DebugFocusRacer, ARS.TrackPoints);
+                    {
+                        Racer racer = DebugFocusRacer;
+                        int currentNode = racer.CurrentTrackPoint.Node;
+                        int count = ARS.TrackPoints.Count;
+                        float currentDeviation = racer.Brain.CurrentPerception.DeviationFromCenter;
+                        float intendedDeviation = racer.TargetLane;
+
+                        for (int i = 0; i < 40; i++)
+                        {
+                            int node = (currentNode + i) % count;
+                            int nextNode = (currentNode + i + 1) % count;
+                            if (node >= count || nextNode >= count) continue;
+
+                            Vector3 pos = ARS.TrackPoints[node].Position;
+                            Vector3 nextPos = ARS.TrackPoints[nextNode].Position;
+                            Vector3 dir = ARS.TrackPoints[node].Direction;
+                            Vector3 right = Vector3.Cross(dir, Vector3.WorldUp).Normalized;
+
+                            // White: center of road
+                            Vector3 whiteFrom = pos + new Vector3(0, 0, 0.1f);
+                            Vector3 whiteTo = nextPos + new Vector3(0, 0, 0.1f);
+                            DrawLine(whiteFrom, whiteTo, Color.White);
+
+                            // Green: current lane deviation
+                            Vector3 greenFrom = pos + right * currentDeviation + new Vector3(0, 0, 0.2f);
+                            Vector3 greenTo = nextPos + right * currentDeviation + new Vector3(0, 0, 0.2f);
+                            DrawLine(greenFrom, greenTo, Color.Green);
+
+                            // Black/Red: intended lane deviation
+                            Color intendedColor = Math.Abs(intendedDeviation) < 0.01f ? Color.Black : Color.Red;
+                            Vector3 intendedFrom = pos + right * intendedDeviation + new Vector3(0, 0, 0.3f);
+                            Vector3 intendedTo = nextPos + right * intendedDeviation + new Vector3(0, 0, 0.3f);
+                            DrawLine(intendedFrom, intendedTo, intendedColor);
+                        }
+                    }
                 }
 
                 // Nitro: one charge at launch, then a fresh bottle each lap.
