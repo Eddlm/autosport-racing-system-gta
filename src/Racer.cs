@@ -94,7 +94,7 @@ namespace ARS
         const int StuckCheckTimeMs = 800;
         bool _isRecoveringFromStuck = false;
         int _stuckRecoveryEndTime = 0;
-        const int StuckRecoveryTimeMs = 1000;
+        const int StuckRecoveryTimeMs = 6000;
         int _stuckRecoveryCooldownEndTime = 0;
         const int StuckRecoveryCooldownMs = 2000;
         int _stuckRecoveryAttempts = 0;
@@ -103,6 +103,7 @@ namespace ARS
         // Backing off is a short, straight phase; the way out is the forward phase after it, which runs until the safe
         // predicate holds rather than for a fixed time.
         const int StuckReverseMs = 500;
+        const float StuckSnapMinSpeedMps = 5f;
         const int RegainedControlHoldMs = 500;
         const float StuckRouteAimMeters = 10f;
         const float RecoveredHeadingDeg = 25f;
@@ -3433,15 +3434,6 @@ namespace ARS
             if (HasRegainedControl())
             {
                 FinishStuckRecovery();
-                return;
-            }
-
-            // The clock is the escalation, not the verdict: a manoeuvre still freeing the car is not cut off, and one
-            // that is not counts as another failed attempt so the teleport can take over.
-            if (Game.GameTime >= _stuckRecoveryEndTime)
-            {
-                _stuckRecoveryAttempts++;
-                _stuckRecoveryEndTime = Game.GameTime + StuckRecoveryTimeMs;
             }
         }
 
@@ -3470,8 +3462,10 @@ namespace ARS
                 nearest = point;
             }
 
-            // After 5 failed reverse attempts, teleport to the nearest track edge.
-            if (_stuckRecoveryAttempts >= 5)
+            // The budget runs from the moment the recovery engages and is never paused: a car still moving is not
+            // interrupted, so the snap waits, and once the budget is spent the first time it comes to a stop it is
+            // snapped - the rejoin that met a wall, not a car that is still working its way out.
+            if (Car.Velocity.Length() < StuckSnapMinSpeedMps && Game.GameTime >= _stuckRecoveryEndTime)
             {
                 Vector3 direction = new Vector3(nearest.Direction.X, nearest.Direction.Y, 0f);
                 if (direction == Vector3.Zero) direction = Vector3.WorldNorth;
