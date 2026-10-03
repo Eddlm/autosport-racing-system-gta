@@ -97,3 +97,17 @@ All under the gitignored `Util\shvdn-compat\`:
 - **v3-only** install (modern asi, no `ScriptHookVDotNet2.dll`): predicted dead, never run — no modern v3 dll exists on this machine (the only one is the bundle's 2022 build, itself broken on current game builds). Run `v3only-2026asi` if the signature is needed.
 - The modern **v3 channel's** own asi/dll pairing is unknown.
 - **The v3 migration is the exit from this trap**: the nightly v2 dll marks its own API `[Obsolete] … use the v3 API instead`, SHVDN's log calls it deprecated and warns it "may completely stop being supported", and depending on the v2 bridge is exactly what makes ARS hostage to build matching. `LemonUI.SHVDN3.dll` is already on disk (`Downloads\LemonUI\SHVDN3\`). Migration not yet costed.
+
+## SHVDN2 semantics and native cost (moved out of global memory)
+
+- **`Script.Yield()` is SHVDN v2's `Wait(0)` handshake and must not be used mid-tick.** A race-start ranking that yielded parked its whole stack across ~40 frames and produced a silent `AppHangB1` with no managed exception, and the 5 s watchdog cannot fire because it is checked *after* the blocked handshake. Pure-C#, native-free work should complete inside the tick.
+- **Native cost must be established by IL, not assumption.** `Entity.Position`/`Velocity` are `Function.Call` natives and `InputArgument` is a class, so every native call allocates; ARS's AI path runs ~700–900 natives per frame at 20 cars. `World.DrawMarker` also has a silent per-frame budget, so long debug geometry belongs in `DRAW_LINE`.
+
+
+## SHVDN build compatibility - the AGENTS.md block (moved out, verbatim)
+
+- **The asi and the API dll are a matched build pair and no version check can see a mismatch** — both builds' v2 dll reports `ScriptHookVDotNet2 2.11.6.0` while the bridge (`SHVDN.*`, in the asi's own managed assembly) changes member by member. ARS needs `ScriptHookVDotNet2.dll` from the same build as its asi, or a foreign one loads, resolves as "API version 2.11.6" and dies at the first bridge call with `MissingMethodException`; **compile-clean proves nothing**.
+- **`VerifyScriptBridge()` (`AutosportRacingSystem.cs:375`)** probes `Game.GenerateHash` after the log banner, logs the cause (`forced: true`) and rethrows, so a bad install is diagnosable rather than silent. **Order is load-bearing: no native call may precede it, and none may sit in a static field initializer** — a static initializer cannot be reported by a guard that has not run.
+- **The public 2022 bundle cannot run on a current game at all** (every script dies), so a SHVDN build matching the game version is a prerequisite ARS cannot supply. **Never ship a pinned `ScriptHookVDotNet2.dll` in Dist** (it would manufacture that mismatch); a stray `ScriptHookVDotNet3.dll` is harmless, and the v3 migration is the exit from this trap.
+- **A second distribution — SHVDN Enhanced (SHVDNE)** — satisfies the matched pair *by construction* and un-deprecates the v2 API; ARS's whole v2 surface resolves against it. **Static analysis only, never run in game**, and it would falsify our published install instructions: `AGENTS-SHVDN.md`.
+- **The live install is a v3.6 asi running the v2 compatibility dll, with `ScriptHookVDotNet3.dll` absent** — a supported pairing, but the console is dead and SHVDN's own log says so. **Its v3 ini takes a single `Keys` name per binding: `ShiftKey + Insert` is read as Shift alone, so every sprint reloads the scripts and it reads as "any key reloads the mod".**
