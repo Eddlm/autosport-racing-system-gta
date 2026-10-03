@@ -17,6 +17,13 @@
 > **Docs drift — the code wins.** Any line here may lag the source; check before relying on it,
 > and correct the line you are touching rather than reconciling the file wholesale.
 
+**Agenda — the four workstreams the driver named for the coming days** (no ladder tier yet; each needs scoping before it earns one)
+
+- **A. Corner context, from the ground up** — entrance/exit landmarks are still wobbly and every consumer derives its own. The ask is ONE context-generation system naming the brake point, the turn-in and the apex, so the speed plan and the outside→inside switch read the same landmarks. **Check the data before the logic**: the wobble has a known data cause — `SaveRoute` rounds coordinates to 2 decimals, and apex speed reads the region's *tightest* measured radius, i.e. the noise tail, while the steadier smoothed radius feeds only the 50 m positioning gate (`AGENTS-BACKLOG.md`, 10a). A better model on a noisy radius keeps the wobble. Then the span walks (`BuildApexTable`/`AddCornerRegion`), the constant-radius-arc hole, the two merge rules, the one-way hold latch (`Racer.cs`) and the hard-switched lane phases.
+- **B. TCS and ABS as smooth curves** — the driver suspects `tanh` is simpler than the current remaps. TCS is a reason cap: a proportional level under curve-anchored targets, glided at the shared reason rate, its spin map off `LateralTractionCurve`, with the brake side mirrored. Independent of A, so it is the cheap one to run alongside. The AI/player ABS asymmetry (`STATUS_PHYSICS` grants the AI ABS, no native exposes it) is a **separate open decision, not a curve**.
+- **C. Car-to-car avoidance, every angle and behaviour** — the repulsion box, `ApplyRivalWalls`, the avoidance lane, aggression-scaled buffers, Passengerize, and ghosting which was removed and never rebuilt. **Read `AGENTS-DUEL.md` first**: the duel model is designed and unimplemented, and it is the intended home for overtaking behaviour.
+- **D. The card system** — refine the live maneuvers (priority ChillOut → DefendLane → DiveBomb → Yield, Nitro slotless, a played card never reconsidered) toward that designed duel model. **C and D are coupled and share the time-to-apex primitive, which is itself built from A's corner plan — so A is upstream of the other three.**
+
 **Tier 0 — decisions, no code**
 
 1. ~~Dist shipped defaults~~ — **DONE (`7696db3`), then SUPERSEDED (`19611ec`)**: the decision committed deliberate first-run values under the renamed files; the WIP release now ships `Settings\` **empty** (an inert `.gitkeep` only) and lets the mod write its three `Menu-*.ini` on first run, so `Dist` tracks **no** settings file at all. See the section below.
