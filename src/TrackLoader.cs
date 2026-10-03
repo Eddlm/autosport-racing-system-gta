@@ -371,9 +371,7 @@ namespace ARS
                 corner.CrestSpanNodes = 0;
 
                 int entrance = corner.StartNode;
-                int run = 0;
-                int runPeak = -1;
-                float runPeakGs = 0f;
+                (int peakNode, float peakGs, int length) run = (-1, 0f, 0);
                 for (int back = 1; back <= scanBack; back++)
                 {
                     if (!TryResolveNode(entrance - back, count, out int node)) break;
@@ -383,23 +381,17 @@ namespace ARS
                     if (g >= threshold) break;
                     if (g > -threshold)
                     {
-                        if (run >= minRun) break;
-                        run = 0;
-                        runPeak = -1;
-                        runPeakGs = 0f;
+                        if (run.length >= minRun) break;
+                        run = (-1, 0f, 0);
                         continue;
                     }
-                    run++;
-                    if (runPeak < 0 || g < runPeakGs)
-                    {
-                        runPeakGs = g;
-                        runPeak = node;
-                    }
+                    run.length++;
+                    if (g < run.peakGs) run = (node, g, run.length);
                 }
-                if (run < minRun) continue;
-                corner.CrestNode = runPeak;
-                corner.CrestGs = runPeakGs;
-                corner.CrestSpanNodes = CrestBaseWidth(runPeak, run, count);
+                if (run.length < minRun) continue;
+                corner.CrestNode = run.peakNode;
+                corner.CrestGs = run.peakGs;
+                corner.CrestSpanNodes = CrestBaseWidth(run.peakNode, run.length, count);
             }
 
             int crests = 0;

@@ -32,7 +32,7 @@ That is the drift the cluster close-out warned about, one level up.
 | 6 | absorbed by round 3 | — |
 | 7 | applied, verified | `de61358` |
 | 8 | applied, verified | in this commit |
-| 9 | not started | — |
+| 9 | applied, verified | in this commit |
 
 Scope order: newest first — the crest code written this session — then outward through the files
 that work touched, then beyond.
@@ -282,11 +282,29 @@ structurally impossible:
         continue;
     }
     run.length++;
-    if (run.peakNode < 0 || g < run.peakGs) run = (node, g, run.length);
+    if (g < run.peakGs) run = (node, g, run.length);
 
 Same operations, same order, same stored crests; the loop loses two locals and the reader stops holding
-three coupled values. A private `CrestRun` struct with a `None` value is the identical fix if a value
-tuple is against house style.
+three coupled values. Applied as a value tuple rather than a `CrestRun` struct: it is a single local that
+never crosses a signature, so the tuple's real weakness — names lost at boundaries — never applies, and a
+new type for one consumer is the over-abstraction Round 7 rejected for `PreviousCorner`. Promotion rule:
+the moment this value crosses a signature or gains a second consumer, it becomes a struct.
+
+**One assumption the old peak test did not carry.** `g < run.peakGs` is equivalent to the old
+`runPeak < 0 || g < runPeakGs` only while `threshold > 0`. At `threshold == 0` a zero-curvature sample
+reaches the crest side, increments the run and fails the peak test, so a long enough run would store
+`CrestNode = -1` where the old form stored the node. Unreachable today, and not a defect — but it is a
+new dependency on the threshold's sign, so if that value ever becomes tunable to zero the first-sample
+guard has to come back.
+
+**What this round actually taught.** The shape the Lead brought was drawn from memory and the memory was
+wrong in three places: the scan starts at `back = 1` and runs `<= scanBack`, there is a `g >= threshold`
+break, and the tail is an inverted `continue` followed by flat assignments. Both edits failed and had to
+be rebuilt from the file. The arithmetic was right; the anchors were wrong — and the two
+`&& peakNode >= 0` clauses the reviewer flagged as dead were its catch working against the *proposal*,
+not the code, which never had them. A different failure from Round 2's (correct anchors, wrong branch
+sign), and the sharper one: a shape proposed from memory is not a shape, and this one would have added
+two impossible conditions while supposedly removing drift. Verify the file, never the description.
 
 **Also deliberately not done:** the dip `break` and the out-of-range `break` stay separate even though
 both end the scan — on a circuit the out-of-range case can never fire, and a merged exit would conceal
@@ -295,10 +313,13 @@ that.
 ## Cluster closed — what "done" means here
 
 Both sides are satisfied the crest cluster is covered. **Done means the note is complete, not the code.**
-None of these agreements is in the tree; the apply pass is its own step and is exactly where a recorded
-clarity edit drifts from what was agreed — the failure this exercise exists to catch. Apply in round
-order, then the normal gate: compile, drive, commit. These are code changes and do not qualify for the
-documentation exemption.
+All nine rounds are settled: eight applied and committed in round order (1, 2, 3, 4, 5, 7, 8, 9) and one
+absorbed (6, satisfied by construction when 3 landed). The status table above carries each hash. This is
+where a recorded clarity edit drifts from what was agreed, which is why each round was verified against
+the file by the reviewer *before* its commit rather than after — and why that check caught two real
+defects: a sign error in round 2's argument order, and round 9's dead-clause proposal. The normal gate
+still applies to the code — compile, drive, commit — and these are code changes, so they do not qualify
+for the documentation exemption.
 
 **Stopping here, by agreement.** The crest cluster was the newest and least reviewed, so it earned the
 exercise. `Racer.cs` is 3,600 lines and "outward" has no natural end, so another round would sprawl or
