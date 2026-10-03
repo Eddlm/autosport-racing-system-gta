@@ -123,6 +123,17 @@ contract true in both modes: produce an index into `TrackPoints`, or false.
 **Clamping ruled out.** Out-of-range currently ENDS the scan (`:382`, `:476`), so clamping would
 continue it — a behaviour change, not clarity.
 
+**Applied and verified.** `TryResolveNode(int node, int count, out int resolved)` — `resolved = 0` on
+entry, circuit returns `Wrap(node, count)`, point-to-point fails out of range. The field keeps its `-1`
+and no `-1` remains in the helper or its call sites. The two call blocks are immediate guards
+(`:379-381`, `:494-496`), and the short-circuit is safe because the old helper was pure, so "compute all
+three then test" and "exit at the first failure" reach the same verdict with nothing between them.
+
+**Failure-path placeholder: `0`, deliberately.** Unobservable — the bool is the contract and every call
+site guards on it immediately. Noted, not fixed: `0` is a valid index, so a future caller that ignored
+the bool would silently read node 0, where an out-of-range value would throw at first use. The guard
+convention makes that moot, and putting a sentinel back would undo the point of the round.
+
 ## Round 4 — `CrestCurvature` → `GsAtProbeSpeed`, `TrackLoader.cs:469` (crest-designer's pick)
 
 **Defect.** It returns Gs, not curvature, and the field it feeds is documented in Gs
@@ -162,6 +173,12 @@ says what the cap is a cap on.
 **Agreed.** Replace the inline form with `Wrap(node, count)`. Behaviour-identical — verified for every
 sign, including `index = -count` — one line, and the helper then reads as what it is: a point-to-point
 guard wrapped around `Wrap`.
+
+**ABSORBED BY ROUND 3.** Kept rather than deleted, because the defect was real against the *pre-Round-3*
+image of the helper: the two rounds were agreed against different images of the same method, and Round
+3's rewrite happened to satisfy Round 6 by construction. The reason is worth keeping — an open round
+with nothing left to do invites someone to "apply" it by re-inlining the modulo to make it meaningful,
+which is exactly the performative move the apply pass avoided.
 
 ## Round 7 — `MoveEntrancesToCrests`'s previous-corner lookup (Lead's pick)
 

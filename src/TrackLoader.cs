@@ -376,10 +376,9 @@ namespace ARS
                 float runPeakGs = 0f;
                 for (int back = 1; back <= scanBack; back++)
                 {
-                    int node = CrestNode(entrance - back, count);
-                    int before = CrestNode(entrance - back - window, count);
-                    int after = CrestNode(entrance - back + window, count);
-                    if (node < 0 || before < 0 || after < 0) break;
+                    if (!TryResolveNode(entrance - back, count, out int node)) break;
+                    if (!TryResolveNode(entrance - back - window, count, out int before)) break;
+                    if (!TryResolveNode(entrance - back + window, count, out int after)) break;
                     float g = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position, probeSpeed);
                     if (g >= threshold) break;
                     if (g > -threshold)
@@ -492,17 +491,23 @@ namespace ARS
         {
             const float probeSpeed = ARS.CrestProbeSpeed;
             const int window = 6;
-            int centre = CrestNode(node, count);
-            int before = CrestNode(node - window, count);
-            int after = CrestNode(node + window, count);
-            if (centre < 0 || before < 0 || after < 0) return 0f;
+            if (!TryResolveNode(node, count, out int centre)) return 0f;
+            if (!TryResolveNode(node - window, count, out int before)) return 0f;
+            if (!TryResolveNode(node + window, count, out int after)) return 0f;
             return ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[centre].Position, ARS.TrackPoints[after].Position, probeSpeed);
         }
 
-        static int CrestNode(int node, int count)
+        static bool TryResolveNode(int node, int count, out int resolved)
         {
-            if (node < 0 || node >= count) return ARS.IsPointToPoint ? -1 : ((node % count) + count) % count;
-            return node;
+            resolved = 0;
+            if (ARS.IsPointToPoint)
+            {
+                if (node < 0 || node >= count) return false;
+                resolved = node;
+                return true;
+            }
+            resolved = Wrap(node, count);
+            return true;
         }
 
         static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int smoothingNodes, int minimumCornerNodes, float closeCornerSeconds)
