@@ -372,3 +372,11 @@ The likely mitigating factor: `SaveRoute` rounds coordinates to two decimals and
 
 **Not a bug, but a reader trap**: the corner requirement horizon uses the grade-free `BrakingDecelBase` while the braking plan now uses the crested `BrakingDecel`, so the two no longer compute the same braking distance. It errs safe because the entrance move hands distance back at the same time, but they will read as agreeing when they do not.
 
+## Launch model — designed, not built (parked)
+
+Start at a corner entrance with the car at a multiple of its intended speed and integrate a ballistic projection forward, metre by metre, so a crest that unloads the tyres past gravity shows up as an airborne run. A crest launches exactly when `v²κ/g >= 1`, which is the crest's own stored Gs at that speed, so no third curvature scan is needed — the ballistic half only measures how far the car stays off the road.
+
+Settled shape: read-time, because grip and the offroad gravity multiplier belong to the car rather than the table; walk **backward** from the entrance to find candidate launch nodes and **forward** from each to fly it; the parabola in closed form, `z(s) = z0 + tan(pitch)·s − g·s²/(2v²)`, sampled per node; pure point mass with no damping, since the fleet's suspension is unmodelled and any damping constant would be invented. Gate on **both** distance (car length as the opener) and **time**, because a fixed distance is speed-dependent. Two tiers: at the car's real speed, floor the braking decel across a predicted airborne stretch, as an airborne car cannot brake at all; at a doubled speed, treat the launch as a severity flag and a veto on moving an entrance onto it.
+
+**Why it is parked**: on the smoothest road track nothing launches at 1x or 1.5x, and only two corners launch at 2x — because the crest work already walks the entrance back and hands the car its braking distance. Revisit only if a car is seen genuinely airborne into a corner. The `2x` probe is not a filter on its own: at twice the corner speed the test reduces to `vertical radius < 4 × corner radius`, which flags the smoothest track in the game.
+
