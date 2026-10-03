@@ -45,6 +45,7 @@
 5. ~~Six unreachable writers prune~~ — **DONE (`6bce252`)**, see the teardown section below; the file tools turned out to be usable (drive them from a `line=length` map).
 6. Weaponized grid filter — a marker in `cars.txt`; small, deferred by choice.
 7. Update checker as a separate DLL — self-contained extraction.
+7a. **The outside-approach debug line is stale** — `TrackVisuals.cs`'s `DrawOutsideApproachLine` (`TrackVisuals.cs:149`) still draws the old flat hold at the RAW half width, so with debug on it shows a line the car no longer drives; the lane lines that read `TargetLane` do follow the new profile. Purely cosmetic and deliberately left so the driven build and the debug picture did not diverge mid-test.
 
 **Tier 2 — verify in game, then tune**
 
@@ -53,6 +54,8 @@
 10. ~~Stuck-recovery escalation~~ — **already in the code**: `ApplyStuckRecoveryOverride` teleports the racer to the nearest track edge after 5 failed reverse attempts, using the same math as the player's `ResetToTrack()`; user confirms it works for player and AI.
 10a. **Apex speed reads the biased radius** — `SupposedRadius` is the region's *minimum* precise radius, i.e. the noise tail, while `DetectedRadius` (the region's min *smoothed* radius) is far steadier and now feeds only the 50 m positioning gate. Apex speed is `√(grip·g·R)`, so the low bias holds every corner speed down; the switch wants its own drive. Detail below.
 10b. **A constant-radius track generator undercuts the span rule** — `GenerateArc` gives every section one radius, so a creator-built corner has no genuine tightening away from its apex and the walk that waits for the radius to settle can fire beside it, leaving the entrance (the braking target) almost no distance; the saved file's coarse rounding adds noise that hides it. Watch created tracks specifically, and treat the stability tolerance as the lever. Detail below.
+
+10c. **The exit profile outlives its corner** — the exit saturates at the outside edge and stays there until the next apex is passed, so on a long straight it holds the car wide and outranks the high-speed inside line, because a nonzero corner lane overrides the default. Whether it should decay at its own lead instead, and what it hands back to (a bare cut would step half a lane where no next entry exists), is an open decision not yet seen on track.
 
 **Tier 3 — single-method changes**
 
