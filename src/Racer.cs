@@ -124,9 +124,12 @@ namespace ARS
         float _cornerSpd = 999f;
 
         // Latched on corner approach when entry speed warrants holding the outside line.
-        bool _approachOutsideDecided = false;
-        bool _approachHoldsOutside = false;
-        int _approachCornerNode = -1;
+        int _activeApexNode = -1;
+        float _activeApexRadius = 0f;
+        float _activeApexDirection = 0f;
+        int _passedApexNode = -1;
+        float _passedApexRadius = 0f;
+        float _passedApexDirection = 0f;
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
 
@@ -222,6 +225,11 @@ namespace ARS
         {
             if (_cornersRevisionSeeded == ARS.CornersRevision) return;
             _cornersRevisionSeeded = ARS.CornersRevision;
+            // A rebuilt table renumbers the route, so a remembered apex is a node of the old one.
+            _activeApexNode = -1;
+            _activeApexDirection = 0f;
+            _passedApexNode = -1;
+            _passedApexDirection = 0f;
 
             foreach (CornerPoint corner in ARS.Corners)
                 if (!_cornerContexts.ContainsKey(corner.Node))
@@ -459,6 +467,10 @@ namespace ARS
 
             _cornerContexts.Clear();
             _cornersRevisionSeeded = -1;
+            _activeApexNode = -1;
+            _activeApexDirection = 0f;
+            _passedApexNode = -1;
+            _passedApexDirection = 0f;
             _brakeCommitApexNode = -1;
 
             Car.Repair();
@@ -761,59 +773,57 @@ namespace ARS
             return -cornerDir * insideBound;
         }
 
-        // The outside hold lives between these two times to the apex: engaged inside the first, lifted at the second.
-        // Lifting it does not command a turn-in, which is a separate lane decision.
-        const float OutsideEngageSeconds = 4f;
-        const float OutsideReleaseSeconds = 1.5f;
         // How far ahead of a corner the car decides whether it wants to position or brake for it.
         const float RequirementLookaheadSeconds = 3.95f;
+
+        // The chord meets the outside edge at the lead, and a car cannot change heading at the rate that implies, so
+        // the blend is stretched past the geometric lead: the endpoints stay where the chord put them, the rate of
+        // change falls as one over the multiple, and the path's curvature as one over its square.
+        const float IdealLineLeadMultiple = 2f;
+
+        // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
+        // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
+        // which puts a corner in the target exactly where the car is settling onto it. So the chord supplies the two
+        // ends - the outside edge a lead before the apex, the inside edge at it - and the blend between them leaves and
+        // meets both edges flat, which is the part a car at speed can actually follow.
+        float IdealLineOffset(int distanceFromApex, float apexRadius, float safeBound)
+        {
+            float innerRadius = apexRadius - safeBound;
+            if (!(innerRadius > 0f) || apexRadius >= 999f) return 0f;
+            float leadAngle = (float)Math.Acos(ARS.Clamp(innerRadius / (apexRadius + safeBound), -1f, 1f));
+            float t = ARS.Clamp(Math.Abs(distanceFromApex) / Math.Max(apexRadius * leadAngle * IdealLineLeadMultiple, 1f), 0f, 1f);
+            return safeBound * (2f * t * t * (3f - 2f * t) - 1f);
+        }
 
         float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
         {
             CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
-            // Time to the apex — the single reference for both engage and release.
-            int fwdToApex = apexNode - CurrentTrackPoint.Node;
-            if (!ARS.IsPointToPoint && fwdToApex < 0) fwdToApex += ARS.TrackPoints.Count;
-            float timeToApex = fwdToApex / Math.Max(speedMps, 1f);
-
-            // New corner: reset latch.
-            if (apexNode != _approachCornerNode)
-            {
-                _approachCornerNode = apexNode;
-                _approachOutsideDecided = false;
-                _approachHoldsOutside = false;
-            }
-
-            // Past the release the hold is over, so it cannot re-engage mid-corner.
-            if (timeToApex <= OutsideReleaseSeconds)
-            {
-                _approachHoldsOutside = false;
-                return 0f;
-            }
-
-            // Outside is only valid inside the engage window.
-            if (timeToApex > OutsideEngageSeconds)
-                return 0f;
-
-            // The car decides: a corner it has not asked to position for gets no outside hold.
-            bool suppressOutside = TryGetCornerContext(apexNode, out CornerContext apexContext) && !apexContext.RequiresPositioning;
-            // Prepare outside when the car arrives within 20 mph of the apex speed.
-            bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.SupposedRadius) - ARS.MphToMps(20f);
-            bool shouldHoldOutside = !suppressOutside && aboveApexSpeed;
-            if (!_approachOutsideDecided || (!_approachHoldsOutside && shouldHoldOutside))
-            {
-                _approachHoldsOutside = shouldHoldOutside;
-                _approachOutsideDecided = true;
-            }
+            // The line is a function of the distance to the apex, so no time enters the geometry - and it is measured
+            // at the point the offset is applied to, or the profile is one lookahead stale. The reference sits ahead
+            // of the car, though, so in the last lookahead before an apex it is already past one while the car is
+            // not: falling back to the car's own distance there keeps the entry branch driving to the inside, where
+            // reading the reference would open the profile outward at the apex.
+            int fwdToApex = apexNode - steerRefPoint.Node;
+            if (fwdToApex < 0) fwdToApex = ForwardNodeDistance(apexNode);
 
             float cornerDir = Math.Sign(c.Angle);
             if (cornerDir == 0f) return 0f;
 
+            if (apexNode != _activeApexNode)
+            {
+                _passedApexNode = _activeApexNode;
+                _passedApexRadius = _activeApexRadius;
+                _passedApexDirection = _activeApexDirection;
+                _activeApexNode = apexNode;
+                _activeApexRadius = c.DetectedRadius;
+                _activeApexDirection = cornerDir;
+            }
+
             float halfWidth = steerRefPoint.TrackHalfWidth;
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-            float safeBound = halfWidth - carHalfWidth;
+            float safeBound = Math.Max(halfWidth - carHalfWidth, 0f);
 
             // Corner-commit: hold the defend/dive line for the card's whole life, not just the outside phase.
             bool isCornerCommit = ActiveManeuver.Target != null && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb);
@@ -828,11 +838,26 @@ namespace ARS
                 }
             }
 
-            if (_approachHoldsOutside)
+            // The car decides: a corner it has not asked to position for keeps the inside line, and so does one it
+            // arrives at far below its own apex speed.
+            bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
+            bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.SupposedRadius) - ARS.MphToMps(20f);
+            bool entryActive = wantsPosition && aboveApexSpeed;
+            float offset = entryActive ? IdealLineOffset(fwdToApex, c.DetectedRadius, safeBound) : 0f;
+
+            // A passed apex still owns its exit half until the profile has opened back to the outside edge, and the
+            // next corner's own profile saturates at that same edge, so the handover is the lesser of the two. An
+            // opposite-direction pair is a chicane: two profiles would demand opposite edges with no room to change
+            // sides, so it keeps the apex aim instead.
+            if (_passedApexDirection != 0f && _passedApexDirection == cornerDir)
             {
-                return cornerDir * halfWidth;
+                int pastApex = steerRefPoint.Node - _passedApexNode;
+                if (!ARS.IsPointToPoint && pastApex < 0) pastApex += ARS.TrackPoints.Count;
+                float exitOffset = IdealLineOffset(pastApex, _passedApexRadius, safeBound);
+                offset = entryActive ? Math.Min(offset, exitOffset) : exitOffset;
             }
-            return 0f;
+
+            return cornerDir * offset;
         }
 
         // A rival ahead is only a pass target while the two velocity vectors sit within this angle; past it the
