@@ -420,36 +420,58 @@ namespace ARS
         // rather than the apex: the previous corner's region runs to its exit, and anchoring this corner's braking plan
         // inside that region demands this apex speed while the car is still at the previous corner's curvature, which
         // over-slows that exit and samples this plan across it. ExitStep walks forward, so the exit is past the apex.
+        const int CrestMoveMarginNodes = 10;
+        const int CrestMoveCapNodes = 60;
+
         static void MoveEntrancesToCrests(int count)
         {
-            const int moveMargin = 10;
-            const int moveCap = 60;
-
             for (int i = 0; i < ARS.Corners.Count; i++)
             {
                 CornerPoint corner = ARS.Corners[i];
                 if (corner.CrestNode < 0) continue;
                 int move = ARS.IsPointToPoint ? corner.StartNode - corner.CrestNode : Wrap(corner.StartNode - corner.CrestNode, count);
-                string verdict = move < 1 ? "no move" : move > moveCap ? "over cap" : "applied";
-
                 CornerPoint previous = i > 0 ? ARS.Corners[i - 1] : ARS.IsPointToPoint ? null : ARS.Corners[ARS.Corners.Count - 1];
-                if (verdict == "applied" && previous != null)
-                {
-                    int toApex = ARS.IsPointToPoint ? corner.Node - previous.EndNode : Wrap(corner.Node - previous.EndNode, count);
-                    int toCrest = ARS.IsPointToPoint ? corner.CrestNode - previous.EndNode : Wrap(corner.CrestNode - previous.EndNode, count);
-                    if (toCrest < moveMargin) verdict = "inside previous margin";
-                    else if (toCrest > toApex) verdict = "before previous exit";
-                }
 
-                if (verdict != "applied")
+                if (!CanMoveEntrance(corner, previous, move, count, out string skipReason))
                 {
-                    ARS.Log(ARS.LogImportance.Info, "Crest move skipped: node=" + corner.CrestNode + " move=" + move + "m (" + verdict + ")");
+                    ARS.Log(ARS.LogImportance.Info, "Crest move skipped: node=" + corner.CrestNode + " move=" + move + "m (" + skipReason + ")");
                     continue;
                 }
 
                 corner.StartNode = corner.CrestNode;
                 corner.LengthStart = ARS.IsPointToPoint ? corner.Node - corner.CrestNode : Wrap(corner.Node - corner.CrestNode, count);
             }
+        }
+
+        static bool CanMoveEntrance(CornerPoint corner, CornerPoint previous, int move, int count, out string skipReason)
+        {
+            if (move < 1)
+            {
+                skipReason = "no move";
+                return false;
+            }
+            if (move > CrestMoveCapNodes)
+            {
+                skipReason = "over cap";
+                return false;
+            }
+            if (previous != null)
+            {
+                int toApex = ARS.IsPointToPoint ? corner.Node - previous.EndNode : Wrap(corner.Node - previous.EndNode, count);
+                int toCrest = ARS.IsPointToPoint ? corner.CrestNode - previous.EndNode : Wrap(corner.CrestNode - previous.EndNode, count);
+                if (toCrest < CrestMoveMarginNodes)
+                {
+                    skipReason = "inside previous margin";
+                    return false;
+                }
+                if (toCrest > toApex)
+                {
+                    skipReason = "before previous exit";
+                    return false;
+                }
+            }
+            skipReason = null;
+            return true;
         }
 
         // The run is only the threshold-crossing width and the triangle reaches zero at the inflections, so using the run
