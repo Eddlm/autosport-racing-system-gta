@@ -346,7 +346,141 @@ namespace ARS
                 }
             }
 
+            AssignCrestNodes(nodeCount);
+
             ARS.CornersRevision++;
+        }
+
+        // A crest before a corner unloads the tyres exactly where the car wants to brake, so the braking plan must know
+        // about it and the entrance moves back to its top. Scanned once here, after the merges, because every rule that
+        // rewrites the entrance has to have settled first. The scan is deliberately boundary-free: a crest that belongs
+        // to the previous corner is still crossed before this one, so the unload is real for this corner's plan -- only
+        // the move below is bounded by the previous corner.
+        static void AssignCrestNodes(int count)
+        {
+            const float probeSpeed = ARS.CrestProbeSpeed;
+            const float threshold = 0.15f;
+            const int window = 6;
+            const int scanBack = 100;
+            const int minRun = 3;
+
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                corner.CrestNode = -1;
+                corner.CrestGs = 0f;
+                corner.CrestSpanNodes = 0;
+
+                int entrance = corner.StartNode;
+                int run = 0;
+                int runPeak = -1;
+                float runPeakGs = 0f;
+                for (int back = 1; back <= scanBack; back++)
+                {
+                    int node = CrestNode(entrance - back, count);
+                    int before = CrestNode(entrance - back - window, count);
+                    int after = CrestNode(entrance - back + window, count);
+                    if (node < 0 || before < 0 || after < 0) break;
+                    float g = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position, probeSpeed);
+                    if (g >= threshold) break;
+                    if (g > -threshold)
+                    {
+                        if (run >= minRun) break;
+                        run = 0;
+                        runPeak = -1;
+                        runPeakGs = 0f;
+                        continue;
+                    }
+                    run++;
+                    if (runPeak < 0 || g < runPeakGs)
+                    {
+                        runPeakGs = g;
+                        runPeak = node;
+                    }
+                }
+                if (run < minRun) continue;
+                corner.CrestNode = runPeak;
+                corner.CrestGs = runPeakGs;
+                corner.CrestSpanNodes = CrestBaseWidth(runPeak, run, count);
+            }
+
+            int crests = 0;
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                if (corner.CrestNode < 0) continue;
+                crests++;
+                ARS.Log(ARS.LogImportance.Info, "Crest " + crests + ": node=" + corner.CrestNode + " gs=" + corner.CrestGs.ToString("0.000") + " extent=" + corner.CrestSpanNodes + " from=" + corner.StartNode + " apex=" + corner.Node);
+            }
+
+            MoveEntrancesToCrests(count);
+
+            ARS.Log(ARS.LogImportance.Info, "Crests: " + crests + " of " + ARS.Corners.Count + " corners carry one, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s");
+        }
+
+        // The entrance walks back to the crest top, bounded so it never lands inside the previous corner. The EXIT binds
+        // rather than the apex: the previous corner's region runs to its exit, and anchoring this corner's braking plan
+        // inside that region demands this apex speed while the car is still at the previous corner's curvature, which
+        // over-slows that exit and samples this plan across it. ExitStep walks forward, so the exit is past the apex.
+        static void MoveEntrancesToCrests(int count)
+        {
+            const int moveMargin = 10;
+            const int moveCap = 60;
+
+            for (int i = 0; i < ARS.Corners.Count; i++)
+            {
+                CornerPoint corner = ARS.Corners[i];
+                if (corner.CrestNode < 0) continue;
+                int move = ARS.IsPointToPoint ? corner.StartNode - corner.CrestNode : Wrap(corner.StartNode - corner.CrestNode, count);
+                string verdict = move < 1 ? "no move" : move > moveCap ? "over cap" : "applied";
+
+                CornerPoint previous = i > 0 ? ARS.Corners[i - 1] : ARS.IsPointToPoint ? null : ARS.Corners[ARS.Corners.Count - 1];
+                if (verdict == "applied" && previous != null)
+                {
+                    int toApex = ARS.IsPointToPoint ? corner.Node - previous.EndNode : Wrap(corner.Node - previous.EndNode, count);
+                    int toCrest = ARS.IsPointToPoint ? corner.CrestNode - previous.EndNode : Wrap(corner.CrestNode - previous.EndNode, count);
+                    if (toCrest < moveMargin) verdict = "inside previous margin";
+                    else if (toCrest > toApex) verdict = "before previous exit";
+                }
+
+                if (verdict != "applied")
+                {
+                    ARS.Log(ARS.LogImportance.Info, "Crest move skipped: node=" + corner.CrestNode + " move=" + move + "m (" + verdict + ")");
+                    continue;
+                }
+
+                corner.StartNode = corner.CrestNode;
+                corner.LengthStart = ARS.IsPointToPoint ? corner.Node - corner.CrestNode : Wrap(corner.Node - corner.CrestNode, count);
+            }
+        }
+
+        // The run is only the threshold-crossing width and the triangle reaches zero at the inflections, so using the run
+        // as the extent would under-count the unload. Walks out to zero curvature from the peak, each side capped at the
+        // run, so a shallow shoulder cannot inflate it. The two sides usually differ and the ramp is one scalar, so it
+        // stays symmetric about the peak and averages that asymmetry rather than following it.
+        static int CrestBaseWidth(int peak, int run, int count)
+        {
+            int limit = run;
+            int left = 0;
+            while (left < limit && CrestCurvature(peak - left - 1, count) < 0f) left++;
+            int right = 0;
+            while (right < limit && CrestCurvature(peak + right + 1, count) < 0f) right++;
+            return left + right + 1;
+        }
+
+        static float CrestCurvature(int node, int count)
+        {
+            const float probeSpeed = ARS.CrestProbeSpeed;
+            const int window = 6;
+            int centre = CrestNode(node, count);
+            int before = CrestNode(node - window, count);
+            int after = CrestNode(node + window, count);
+            if (centre < 0 || before < 0 || after < 0) return 0f;
+            return ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[centre].Position, ARS.TrackPoints[after].Position, probeSpeed);
+        }
+
+        static int CrestNode(int node, int count)
+        {
+            if (node < 0 || node >= count) return ARS.IsPointToPoint ? -1 : ((node % count) + count) % count;
+            return node;
         }
 
         static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int smoothingNodes, int minimumCornerNodes, float closeCornerSeconds)

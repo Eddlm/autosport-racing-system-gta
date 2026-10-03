@@ -724,11 +724,11 @@ namespace ARS
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
         const float HighSpeedLaneRadiusMeters = 500f;
 
-        // The outside hold and any other outward move, as multiples of a full inside hug. The hold's error is the whole
-        // half-width, so one hug's worth still loses to the corner's own course error and reads as a lazy drift; this
-        // is the knob for how hard the car commits to the outside line.
+        // Outward moves, as multiples of a full inside hug. The hold's error is the whole half-width, so one hug's
+        // worth still loses to the corner's own course error and reads as a lazy drift; avoidance needs more than the
+        // hold, because it is fighting the racing line rather than choosing one.
         const float LaneHoldOutsideScale = 3f;
-        const float LaneOutsideMoveScale = LaneHoldOutsideScale * 0.5f;
+        const float LaneOutsideMoveScale = 4f;
         // Pure pursuit's steer carries a factor of two the plain bearing misses: the curvature to a point at a given
         // bearing is 2 sin(angle) over the distance, not the angle over it. This is the knob if the lane is still shy.
         const float LanePursuitGain = 2f;
@@ -778,7 +778,7 @@ namespace ARS
         // The outside hold lives between these two times to the apex: engaged inside the first, lifted at the second.
         // Lifting it does not command a turn-in, which is a separate lane decision.
         const float OutsideEngageSeconds = 4f;
-        const float OutsideReleaseSeconds = 2f;
+        const float OutsideReleaseSeconds = 1.5f;
         // How far ahead of a corner the car decides whether it wants to position or brake for it.
         const float RequirementLookaheadSeconds = 3.95f;
 
@@ -1540,7 +1540,7 @@ namespace ARS
             if (Brain.Corner != null)
             {
                 CornerPoint crestCorner = Brain.Corner.Point;
-                float cornerCrestFactor = CrestGripSpeedFactor(CornerEntranceNode(crestCorner, crestCorner.Node), crestCorner.Node, CornerExitNode(crestCorner), NextApexRadius, _cornerSpd, out _);
+                float cornerCrestFactor = CrestGripSpeedFactor(OffsetCornerNode(crestCorner.Node, -3), crestCorner.Node, OffsetCornerNode(crestCorner.Node, 3), NextApexRadius, _cornerSpd, out _);
                 cornerSpd *= cornerCrestFactor;
                 cornerApexSpeedWithVerticalGrip *= cornerCrestFactor;
             }
@@ -3056,12 +3056,45 @@ namespace ARS
             return spd;
         }
 
+        // A crest unloads the tyres before a corner and the span's mean grade cannot see it: an up-then-down bump
+        // averages to no grade at all. Geometry is measured once at generation at this probe, so the live speed
+        // rescales it, and the unload is floored the way the hill grip model floors its own.
+        const float CrestProbeSpeed = ARS.CrestProbeSpeed;
+        const float CrestDecelFloor = 0.5f;
+
         // Braking decel over a span: grip-limited base plus the gravity component of the span's mean grade.
         // The solve is v² = vApex² + 2∫a·ds, so the mean decel over the span is the exact quantity.
         public float BrakingDecel(int apexNode, float spanMeters)
         {
-            float decel = BrakingDecelBase(apexNode) + Handling.Gravity * BrakingGradeSine(spanMeters);
+            float decel = BrakingDecelBase(apexNode) * CrestDecelFactor(apexNode, spanMeters) + Handling.Gravity * BrakingGradeSine(spanMeters);
             return Math.Max(decel, 0.1f);
+        }
+
+        // Vertical curvature changes normal load, so it scales the grip-limited base only -- the grade term is the
+        // along-slope gravity component, which a crest does not change. The crest covers its extent, so the unload is
+        // the area of that ramp clipped to the solve span rather than a point test: a binary in/out steps the planned
+        // decel mid-braking, and those samples are far too sparse to integrate it.
+        float CrestDecelFactor(int apexNode, float spanMeters)
+        {
+            CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
+            if (corner == null || corner.CrestNode < 0 || corner.CrestSpanNodes <= 0 || spanMeters < 1f) return 1f;
+            int count = ARS.TrackPoints.Count;
+            int toCrest = corner.CrestNode - CurrentTrackPoint.Node;
+            if (!ARS.IsPointToPoint) toCrest = ((toCrest % count) + count) % count;
+            float halfExtent = Math.Max(1f, corner.CrestSpanNodes * 0.5f);
+            float start = toCrest - halfExtent;
+            float end = toCrest + halfExtent;
+            float lo = Math.Max(start, 0f);
+            float hi = Math.Min(end, spanMeters);
+            if (end <= 0f || start >= spanMeters || hi <= lo) return 1f;
+            float peak = ARS.Clamp(toCrest, lo, hi);
+            float rising = (peak - start) * (peak - start) - (lo - start) * (lo - start);
+            float falling = (end - peak) * (end - peak) - (end - hi) * (end - hi);
+            float speedRatio = Car.Velocity.Length() / CrestProbeSpeed;
+            float unload = 1f + corner.CrestGs * speedRatio * speedRatio * (rising + falling) / (2f * halfExtent * spanMeters);
+            if (float.IsNaN(unload) || float.IsInfinity(unload)) return 1f;
+            unload = Math.Max(Math.Min(unload, 1f), CrestDecelFloor);
+            return 1f - Math.Min((1f - unload) * ARS.CrestEffect, 0.9f);
         }
 
         // The grade-free half, so a horizon test can ask the same question without walking the span.

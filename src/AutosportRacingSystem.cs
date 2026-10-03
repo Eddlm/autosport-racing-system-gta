@@ -164,6 +164,9 @@ namespace ARS
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
         public static float HillGripEffect = 1f;
+        // The probe speed both the generation scan and the live read scale a crest's Gs to. One home, because the stored
+        // field only means "Gs at the probe" while every reader agrees on the value.
+        public const float CrestProbeSpeed = 40f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
         // Show or hide the staged Spawn Track / Spawn Grid items in the Race menu.
