@@ -151,16 +151,8 @@ namespace ARS
         float _debugDamperTermDeg = 0f;
         float _debugYawTargetPerSecond = 0f;
         float _debugDamperGainSeconds = 0f;
-        float _commandedSteerBeforeSlew = 0f;
         float _steerPursuitDeg = 0f;
-        float _steerRecoveryDeg = 0f;
-        float _steerLaneDeg = 0f;
-        float _steerSideBySideDeg = 0f;
-        float _steerBearingDeg = 0f;
         float _steerAimCurvature = 0f;
-        float _steerNonLaneDeg = 0f;
-        float _steerCommandDeg = 0f;
-        int _currentLookaheadMeters = 0;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _offtrackInputCap = 1f;
 
@@ -491,6 +483,8 @@ namespace ARS
 
             // --- Lane resolution: override chain (high-speed → corner → avoidance → walls) ---
 
+            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
+            float drivableEdge = Math.Max(roadWide - carHalfWidth, 0f);
             float defaultLane = ComputeHighSpeedLane(roadWide, speedMps);
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
@@ -499,38 +493,32 @@ namespace ARS
             _rawCornerLane = cornerLane;
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
             if (avoidAheadLane != 0f) defaultLane = avoidAheadLane;
+            // With no lane demand the car aims at its own live offset, so it holds its line instead of chasing the road
+            // centre. Off the surface that flips to the centre - the only thing that turns an off-track car around,
+            // with no recovery term behind it - or the aim would follow the car off the track.
+            bool hasLaneDemand = defaultLane != 0f;
+            float carOffset = ARS.SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction);
+            bool onTrack = Math.Abs(carOffset) <= drivableEdge;
+            if (!hasLaneDemand) defaultLane = onTrack ? carOffset : 0f;
             float targetLane = ApplyRivalWalls(defaultLane, roadWide);
             if (ARS.DebugToggles[Options.LockLaneCentre]) targetLane = LaneLockTestOffsetMeters;
             _targetLane = targetLane;
 
-            // Aim at the track center at the lookahead distance, offset by the target lane. The Gs-aware preview shifts
+            // Aim at the lookahead distance, offset by the target lane. The Gs-aware preview shifts
             // that offset by the lateral motion the car is already committing to, so the correction leads the drift
             // instead of reacting to it; shifting a real point keeps the pursuit's chord real.
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
-            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-            float drivableEdge = Math.Max(roadWide - carHalfWidth, 0f);
             float aimLane = targetLane;
             if (ARS.DebugToggles[Options.GsAwarePreview])
             {
-                float laneAtCar = ARS.SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction);
                 float laneAtProjection = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), steerRefPoint.Position, steerRefPoint.Direction);
-                aimLane = targetLane - GsPreviewBlend * (laneAtProjection - laneAtCar);
+                aimLane = targetLane - GsPreviewBlend * (laneAtProjection - carOffset);
             }
             // The aim targets the car's centre, so it locks to the drivable edge; the rival walls bound to the raw edge.
             aimLane = ARS.Clamp(aimLane, -drivableEdge, drivableEdge);
             _debugLaneAimPoint = steerRefPoint.Position + steerRight * aimLane;
 
-
-            // --- Off-track recovery: push back toward center if past the safe edge ---
-
             LogCornerCrossings();
-            float absDev = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
-            float safeEdge = roadWide - carHalfWidth;
-            float overshoot = absDev - safeEdge;
-            float recoveryDeg = 0f;
-            if (ARS.DebugToggles[Options.OffTrackRecovery] && overshoot > 0f) recoveryDeg = PursuitSteerDegrees(steerRefPoint.Position, courseDir);
-            _steerRecoveryDeg = recoveryDeg;
-
 
             // --- Lane steer: pure pursuit toward the target lane ---
 
@@ -559,13 +547,11 @@ namespace ARS
                 float strength = ARS.Remap(Math.Abs(latRelVel), 0.3f, 3f, 0f, 15f, true) * distScale;
                 laneSteerDeg += Math.Sign(latSide) * strength;
             }
-            _steerLaneDeg = laneSteerDeg;
 
 
             // --- Heading assist: match a side-by-side rival's heading ---
 
             float sideBySideSteerDeg = ComputeSideBySideSteerCorrection(courseDir);
-            _steerSideBySideDeg = sideBySideSteerDeg;
 
 
             // --- Assembly: lane pursuit + corrections + damper + slide blend ---
@@ -581,8 +567,7 @@ namespace ARS
             _debugYawTargetPerSecond = yawTarget;
             _debugDamperGainSeconds = damperGain;
             _debugDamperTermDeg = -damperGain * yawRateToDamp;
-            float nonLaneSteerDeg = (steerKP * (recoveryDeg + sideBySideSteerDeg)) + _debugDamperTermDeg;
-            _steerNonLaneDeg = nonLaneSteerDeg;
+            float nonLaneSteerDeg = (steerKP * sideBySideSteerDeg) + _debugDamperTermDeg;
             Control.SteerDegrees = nonLaneSteerDeg + (steerKP * laneSteerDeg);
 
             if (Handling.LateralTractionCurve > 1f)
@@ -602,7 +587,6 @@ namespace ARS
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
                 Control.SteerDegrees = 0f;
-            _steerCommandDeg = Control.SteerDegrees;
 
             // --- Local function: TryGetSteerContext ---
 
@@ -737,7 +721,7 @@ namespace ARS
 
         // Pure pursuit's curvature law: the bearing to an aim point is the chord of the circle through the car, so the
         // path's curvature is 2 sin(bearing) over the distance and the steer it demands is that curvature times the
-        // wheelbase. The lane law and the off-track recovery both drive through this so they agree on sign and scale.
+        // wheelbase.
         float PursuitSteerFromBearing(float bearing, float distance)
         {
             bearing = ARS.Clamp(bearing, -MaxPursuitBearingDegrees, MaxPursuitBearingDegrees);
@@ -751,7 +735,6 @@ namespace ARS
             if (distance <= 0.5f) return 0f;
             float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
             if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
-            _steerBearingDeg = bearing;
             _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / distance;
             return PursuitSteerFromBearing(bearing, distance);
         }
@@ -2166,7 +2149,7 @@ namespace ARS
 
             if (ARS.DebugToggles[Options.ShowInputs] && !ControlledByPlayer) SampleInputTrail();
 
-            // Lane aim line + wall stubs (track analysis).
+            // Corner rings + the steer-angle fan (track analysis).
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && !ControlledByPlayer && ARS.DebugFocusRacer == this)
             {
                 DrawCornerTable();
@@ -2672,7 +2655,6 @@ namespace ARS
             float speed = Car.Velocity.Length();
 
             int steerRef = (int)ARS.Clamp(speed * SteerPreviewSeconds, SteerLookaheadMinMeters, SteerLookaheadMaxMeters);
-            _currentLookaheadMeters = steerRef;
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
             int threeQuarterSec = (int)(speed * 0.75f);
@@ -3274,7 +3256,6 @@ namespace ARS
 
                 // The limiter closes the steering last, after every writer above, so nothing escapes it.
                 ApplySteerLimits();
-                _commandedSteerBeforeSlew = Control.SteerDegrees;
                 TranslateSteerToInput();
 
                 UpdateNitrous();

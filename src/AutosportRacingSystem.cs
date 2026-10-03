@@ -44,7 +44,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview, OffTrackRecovery
+        ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview
     }
 
     public enum DebugDisplay
@@ -185,8 +185,7 @@ namespace ARS
         { Options.ShowLeaderboard, true },
         { Options.ShowAiLapTimes, false },
         { Options.LockLaneCentre, false },
-        { Options.GsAwarePreview, true },
-        { Options.OffTrackRecovery, false }
+        { Options.GsAwarePreview, true }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -875,7 +874,6 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
             AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Lead the lane error with the lateral motion the car is already committing to, so the steering anticipates drift instead of reacting to it. Off measures the lane error at the car alone.");
-            AddDebugCheckbox(debugMenu, Options.OffTrackRecovery, "Off-Track Recovery", "Add the centre-node recovery term once the car is past the safe edge. Off leaves the lane pursuit alone to bring an off-track car back.");
 
             // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
             NativeMenu racersMenu = new NativeMenu("General Settings", "General Settings", "Standing preferences: grid sorting, timeout, racer behaviour and tuning.")
