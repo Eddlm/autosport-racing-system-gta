@@ -429,7 +429,9 @@ namespace ARS
                 CornerPoint corner = ARS.Corners[i];
                 if (corner.CrestNode < 0) continue;
                 int move = ARS.IsPointToPoint ? corner.StartNode - corner.CrestNode : Wrap(corner.StartNode - corner.CrestNode, count);
-                CornerPoint previous = i > 0 ? ARS.Corners[i - 1] : ARS.IsPointToPoint ? null : ARS.Corners[ARS.Corners.Count - 1];
+                CornerPoint previous = null;
+                if (i > 0) previous = ARS.Corners[i - 1];
+                else if (!ARS.IsPointToPoint) previous = ARS.Corners[ARS.Corners.Count - 1];
 
                 if (!CanMoveEntrance(corner, previous, move, count, out string skipReason))
                 {

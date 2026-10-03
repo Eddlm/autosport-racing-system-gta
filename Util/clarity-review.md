@@ -16,6 +16,24 @@ Each round ends in an agreement, recorded here **before** either side writes cod
 - **Applying an agreed change is a separate decision** from agreeing it. These are proposals until
   someone asks for the code.
 
+## Status — applied, and where
+
+The hash beside a round is the commit that carries it, so "applied but uncommitted" and "committed but
+unrecorded" are both visible from this file alone rather than depending on either writer remembering.
+That is the drift the cluster close-out warned about, one level up.
+
+| Round | State | Commit |
+|---|---|---|
+| 1 | applied, verified | `c1a46c1` |
+| 2 | applied, verified | `c164f51` |
+| 3 | applied, verified | `54f3f95` |
+| 4 | applied, verified | rode the round 7 commit |
+| 5 | applied, verified | `9f6564d` |
+| 6 | absorbed by round 3 | — |
+| 7 | applied, verified | rode the round 8 commit |
+| 8 | not started | — |
+| 9 | not started | — |
+
 Scope order: newest first — the crest code written this session — then outward through the files
 that work touched, then beyond.
 
@@ -145,6 +163,12 @@ these rounds interact.
 
 **Recorded as a candidate, not folded in** — see below: its only caller tests `< 0f`, so the entire
 probe-speed scaling exists to produce a sign there.
+
+**Applied and verified.** Rename only: the declaration and its two call sites in `CrestBaseWidth`. No
+body change, no comment change, and grep over all of `src` finds zero occurrences of the old name —
+which is the risk a rename always carries. The comment above `CrestBaseWidth` never named the helper, so
+leaving it alone is correct rather than stale. It landed before Round 5 by design, so the extraction
+dispatches `NodesToInflection` → `GsAtProbeSpeed`.
 
 ## Round 5 — `CrestBaseWidth`'s mirrored loops → `NodesToInflection` (Lead's pick)
 
