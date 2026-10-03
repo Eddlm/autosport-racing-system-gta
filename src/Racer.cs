@@ -1098,7 +1098,7 @@ namespace ARS
         // Maximum sustained yaw rate the car can hold at the current speed: the slip ceiling's radius from the
         // Ackermann relation, then v / R. Above ~100% the car is over-rotating — the slide blend or the limiter
         // owns what happens next. Returns 0 when no grip data is available yet (early init).
-        float YawHeadroomPercent()
+        float YawUsagePercent()
         {
             if (TRLateralAtSpeed <= 0.01f) return 0f;
             float fwdSpeed = ARS.GetForwardSpeed(Car);
@@ -1163,7 +1163,7 @@ namespace ARS
             float yawRate = VehicleData.YawRotationPerSecondDegrees;
             if (fwdSpeed > 0f && requestedSteer * yawRate >= 0f)
             {
-                float yawUsage = YawHeadroomPercent() * 0.01f;
+                float yawUsage = YawUsagePercent() * 0.01f;
                 if (float.IsNaN(yawUsage) || float.IsInfinity(yawUsage)) yawUsage = 0f;
                 float maximumShare = ARS.YawTurnInMaximumPercent * 0.01f;
                 float minimumShare = Math.Min(ARS.YawTurnInMinimumPercent * 0.01f, maximumShare);
@@ -2441,11 +2441,11 @@ namespace ARS
                 float yaw = VehicleData.YawRotationPerSecondDegrees;
                 float yawError = yaw - _debugYawTargetPerSecond;
                 float damper = _debugDamperTermDeg;
-                float headroomPct = YawHeadroomPercent();
+                float usagePct = YawUsagePercent();
                 Color red = Color.FromArgb(255, 230, 30, 30);
                 ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " / TARGET " + _debugYawTargetPerSecond.ToString("0.0") + " deg/s", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
                 ARS.DrawText(new Vector2(0.5f, 0.110f), "ERROR " + yawError.ToString("0.0") + " x GAIN " + _debugDamperGainSeconds.ToString("0.00") + " s = STEER " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-                ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW HEADROOM " + headroomPct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+                ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW USAGE " + usagePct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
             }
         }
 
