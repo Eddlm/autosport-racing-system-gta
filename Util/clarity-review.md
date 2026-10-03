@@ -165,6 +165,13 @@ crest-designer pointed out it returns a **count**, not a node and not a walk —
 Round 2's `RampAreaDoubled`. `NodesToInflection` puts the return value in the name and `maxNodes`
 says what the cap is a cap on.
 
+**Applied and verified.** The walk's first sample is `from + step * (walked + 1)`, so at `(peak, -1)`
+the sequence is `peak - 1`, `peak - 2`, … — exactly what the old `peak - left - 1` produced, because
+both increment after the test. Same for the right side. The one-node trap was avoided rather than
+survived: the walk starts at `peak + step`, never at `peak`, so neither side shifts and the ramp extent
+is unchanged. The extraction closed the chain rather than opening a second path —
+`NodesToInflection` has one caller and `GsAtProbeSpeed` one.
+
 ## Round 6 — `TryResolveNode` re-implements `Wrap`, `TrackLoader.cs:482` (crest-designer's pick)
 
 **Defect.** The helper inlines `((node % count) + count) % count` while `Wrap` already exists at

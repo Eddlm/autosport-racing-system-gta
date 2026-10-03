@@ -474,17 +474,19 @@ namespace ARS
         }
 
         // The run is only the threshold-crossing width and the triangle reaches zero at the inflections, so using the run
-        // as the extent would under-count the unload. Walks out to zero curvature from the peak, each side capped at the
-        // run, so a shallow shoulder cannot inflate it. The two sides usually differ and the ramp is one scalar, so it
-        // stays symmetric about the peak and averages that asymmetry rather than following it.
+        // as the extent would under-count the unload. Each side walks to zero curvature, capped at the run, so a shallow
+        // shoulder cannot inflate it. The two sides usually differ and the ramp is one scalar, so it stays symmetric
+        // about the peak and averages that asymmetry rather than following it.
         static int CrestBaseWidth(int peak, int run, int count)
         {
-            int limit = run;
-            int left = 0;
-            while (left < limit && GsAtProbeSpeed(peak - left - 1, count) < 0f) left++;
-            int right = 0;
-            while (right < limit && GsAtProbeSpeed(peak + right + 1, count) < 0f) right++;
-            return left + right + 1;
+            return NodesToInflection(peak, -1, run, count) + NodesToInflection(peak, 1, run, count) + 1;
+        }
+
+        static int NodesToInflection(int from, int step, int maxNodes, int count)
+        {
+            int walked = 0;
+            while (walked < maxNodes && GsAtProbeSpeed(from + step * (walked + 1), count) < 0f) walked++;
+            return walked;
         }
 
         static float GsAtProbeSpeed(int node, int count)
