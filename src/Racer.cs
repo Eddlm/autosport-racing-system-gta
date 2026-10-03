@@ -533,7 +533,7 @@ namespace ARS
                 // Pure pursuit on the lane aim point, the wheelbase turning the bearing into a steer angle. Nothing
                 // here reads a radius: the aim point carries both the cross-track error and the turn ahead of it.
                 float laneScale = holdOwnsLane ? LaneHoldOutsideScale : (insideHugging ? 1f : LaneOutsideMoveScale);
-                laneSteerDeg = PursuitSteerDegrees(_debugLaneAimPoint, courseDir) * laneScale / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
+                laneSteerDeg = PursuitSteerDegreesCapped(_debugLaneAimPoint, courseDir) * laneScale;
                 _debugLaneSteerDeg = laneSteerDeg;
                 _debugLaneScale = laneScale;
             }
@@ -737,6 +737,8 @@ namespace ARS
         // The lane law and the off-track recovery both drive through this so they agree on sign and scale. SignedAngle
         // is antisymmetric, so the car's-heading-to-the-aim ordering is what the course error ends up in; a minus here
         // inverts the steer.
+        const float MaxPursuitBearingDegrees = 10f;
+
         float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading)
         {
             Vector3 toAim = aimPoint - Car.Position;
@@ -744,6 +746,17 @@ namespace ARS
             if (distance <= 0.5f) return 0f;
             float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
             if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
+            return LanePursuitGain * bearing * VehicleData.WheelBase / distance;
+        }
+
+        float PursuitSteerDegreesCapped(Vector3 aimPoint, Vector3 heading)
+        {
+            Vector3 toAim = aimPoint - Car.Position;
+            float distance = new Vector3(toAim.X, toAim.Y, 0f).Length();
+            if (distance <= 0.5f) return 0f;
+            float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
+            if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
+            bearing = ARS.Clamp(bearing, -MaxPursuitBearingDegrees, MaxPursuitBearingDegrees);
             return LanePursuitGain * bearing * VehicleData.WheelBase / distance;
         }
 
