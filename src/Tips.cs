@@ -46,7 +46,7 @@ namespace ARS
         static readonly TipTag[] Tags =
         {
             new TipTag { Tag = "[circuit]", Applies = () => !ARS.IsPointToPoint },
-            new TipTag { Tag = "[nitro]", Applies = () => ARS.AiNitro != TriState.Never },
+            new TipTag { Tag = "[nitro]", Applies = () => ARS.NitrousEnabled },
             new TipTag { Tag = "[tuning-off]", Applies = () => !ARS.SmartTuning }
         };
 

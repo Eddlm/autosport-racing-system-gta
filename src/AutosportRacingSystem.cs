@@ -28,12 +28,7 @@ namespace ARS
         None, NotInitiated, Countdown, InProgress, Finished,
     }
 
-    // Player-facing AI fairness tri-state (currently used by the AiNitro option).
-    // IfPlayerHas = only when the player's own car qualifies.
-    public enum TriState
-    {
-        Never, IfPlayerHas, Always,
-    }
+
 
     // Which performance index every grid is built around (the menu's "Grid PI Mode").
     public enum PaceMode
@@ -130,17 +125,13 @@ namespace ARS
         public static MenuSettings DebugMenuStore;
 
         public static bool HideHudMode = false;
-        // True when the player demonstrably has nitrous: bottle mod installed (slot 17) OR fired nitro
-        // once this session (IS_NITROUS_ACTIVE latch — trainer-forced nitro has no detectable installed state).
-        public static bool PlayerHasNitro = false;
-        // True when the player's own car is on the current race grid (feeds AI nitrous fairness gating).
+        // True when the player's own car is on the current race grid.
         public static bool PlayerParticipating = false;
         public static bool PlayerModulatesThrottle = false;
         public static bool PlayerLaunchTestActive = false;
 
         // Player-facing AI/grid options (Settings\Menu-Settings.ini).
-        // AiNitro: may AI racers use nitrous? IfPlayerHas = only when the player has it.
-        public static TriState AiNitro = TriState.IfPlayerHas;
+        public static bool NitrousEnabled = true;
         // TipRate: how often a passed apex rolls for a tip. High = 1 in 20, Medium = 1 in 50, Low = 1 in 100.
         public static TipFrequency TipRate = TipFrequency.Medium;
         // Apply Menyoo vehicle-appearance skins to grid cars when a matching file exists.
@@ -610,7 +601,6 @@ namespace ARS
         int _countdownTickMs = 0;
         int _maxCountdown = 7;
         int _countdown = 7;
-        int _nitroProbeAt = 0;
         int _nitroTopUpAt = 0;
 
         public static Scaleform InstructionalScaleform = new Scaleform("INSTRUCTIONAL_BUTTONS");
@@ -948,16 +938,14 @@ namespace ARS
             };
             racersMenu.Add(tuningItem);
 
-            // ── Racer nitrous enablement (player fairness) ──
-            NativeListItem<string> aiNitroItem = new NativeListItem<string>("Racer Nitrous", "Whether racers may use nitrous. If Player Has lets them only when the player's own car has it. Racers never fire more than one shot per lap.", EnumLabels<TriState>());
-            aiNitroItem.ItemChanged += (sender, args) =>
+            // ── Nitrous ──
+            NativeCheckboxItem nitroItem = new NativeCheckboxItem("Nitrous", "Give every racer a fresh nitrous bottle each lap. Racers fire theirs automatically on straights; the player fires manually.", NitrousEnabled);
+            nitroItem.CheckboxChanged += (sender, args) =>
             {
-                AiNitro = (TriState)args.Index;
-                SaveRacerSetting("AiNitro", AiNitro.ToString());
+                NitrousEnabled = nitroItem.Checked;
+                SaveRacerSetting("NitrousEnabled", NitrousEnabled.ToString());
             };
-            aiNitroItem.SelectedIndex = Math.Max(0, aiNitroItem.Items.IndexOf(EnumLabel(AiNitro)));
-            racersMenu.Add(aiNitroItem);
-            HookListTextPicker(aiNitroItem);
+            racersMenu.Add(nitroItem);
 
             // ── Menyoo vehicle skins on grid cars ──
             NativeCheckboxItem menyooItem = new NativeCheckboxItem("Use Menyoo Skins", "Apply Menyoo vehicle-appearance files (menyooStuff\\Vehicle) to grid cars that have a matching skin.", UseMenyooSkins);
@@ -1669,30 +1657,19 @@ namespace ARS
                         TrackVisuals.DrawOutsideApproachLine(DebugFocusRacer, ARS.TrackPoints);
                 }
 
-                // Nitro presence probe: latches PlayerHasNitro on a fired boost, a below-full charge
-                // (charge is 3.0 while untouched; only firing drains it), or an installed bottle mod.
-                if (CanWeUse(Game.Player.Character.CurrentVehicle) && Game.GameTime - _nitroProbeAt > 500)
-                {
-                    _nitroProbeAt = Game.GameTime;
-                    Vehicle probeVeh = Game.Player.Character.CurrentVehicle;
-                    PlayerHasNitro |= Function.Call<int>(Hash.GET_VEHICLE_MOD, probeVeh, 17) != -1;
-                    bool active = Function.Call<bool>((Hash)0x491E822B2C464FE4, probeVeh);
-                    float charge = Function.Call<float>((Hash)0xBEC4B8653462450E, probeVeh);
-                    if (active || charge < 2.99f) PlayerHasNitro = true;
-                }
-
-                // Nitro: one charge at launch, then a fresh bottle each lap. AI cars follow the AiNitro setting; the player's own bottle is not gated by it.
-                if ((RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) && Game.GameTime - _nitroTopUpAt > 1000)
+                // Nitro: one charge at launch, then a fresh bottle each lap.
+                if (NitrousEnabled && (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) && Game.GameTime - _nitroTopUpAt > 1000)
                 {
                     _nitroTopUpAt = Game.GameTime;
                     foreach (Racer racer in Racers)
                     {
                         if (!CanWeUse(racer.Car) || racer.NitroChargedLap >= racer.Lap) continue;
-                        bool isPlayer = racer.Driver != null && racer.Driver.IsPlayer;
-                        if (!isPlayer && AiNitro == TriState.Never) continue;
                         if (TopUpNitrous(racer.Car)) racer.NitroChargedLap = racer.Lap;
                     }
                 }
+                // Player nitro: fire on key press when a charged bottle is available.
+                if (NitrousEnabled && PlayerRacer != null && Game.IsKeyPressed(Keys.X))
+                    PlayerRacer.TryFireNitrous();
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
                 if (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) DrawRaceHud();
                 if (DebugVisual == (int)DebugDisplay.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);
@@ -2072,9 +2049,6 @@ namespace ARS
         {
             Log(LogImportance.Info, "Starting race");
 
-            // Nitro presence is a per-race latch: default to no nitro, let the checks flip it.
-            PlayerHasNitro = false;
-
             // Auto-call missing phases: if no track, instance one; if no grid, spawn one.
             // InstanceGrid already requires the track, so order is implicit.
             if (!_trackInstanced)
@@ -2138,7 +2112,6 @@ namespace ARS
             if (CanWeUse(cv))
             {
                 Racers.Add(new Racer(cv, Game.Player.Character));
-                PlayerHasNitro |= Function.Call<int>(Hash.GET_VEHICLE_MOD, cv, 17) != -1;
                 PlayerParticipating = true;
                 return true;
             }
@@ -2973,10 +2946,11 @@ namespace ARS
             SettingsMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", "Random"));
             SettingsMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<int>("RACERS", "TimeoutSeconds", 60).ToString());
             SettingsMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 2).ToString());
-            SettingsMenuStore.Migrate("AiNitro", legacyRacers.GetValue<string>("RACERS", "AiNitro", AiNitro.ToString()));
             SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
-            AiNitro = ParseEnum(SettingsMenuStore.Get("AiNitro", AiNitro.ToString()), AiNitro);
             UseMenyooSkins = SettingsMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
+            string legacyAiNitro = legacyRacers.GetValue<string>("RACERS", "AiNitro", null);
+            if (legacyAiNitro != null) NitrousEnabled = !legacyAiNitro.Equals("Never", StringComparison.OrdinalIgnoreCase);
+            NitrousEnabled = SettingsMenuStore.GetBool("NitrousEnabled", NitrousEnabled);
             ForceFillGrid = SettingsMenuStore.GetBool("ForceFillGrid", ForceFillGrid);
             OverspeedEnabled = SettingsMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
@@ -3075,18 +3049,6 @@ namespace ARS
             string[] labels = new string[values.Length];
             for (int i = 0; i < values.Length; i++) labels[i] = EnumLabel((Enum)values.GetValue(i));
             return labels;
-        }
-
-        // May this AI racer use nitrous? Always/Never are absolute; IfPlayerHas allows it only when
-        // the player demonstrably has nitrous (fairness), regardless of whether the player is racing.
-        public static bool AiNitroAllowed()
-        {
-            switch (AiNitro)
-            {
-                case TriState.Never: return false;
-                case TriState.Always: return true;
-                default: return PlayerHasNitro;
-            }
         }
 
         bool TopUpNitrous(Vehicle car)

@@ -242,7 +242,7 @@ namespace ARS
         bool _isPassengerized = false;
         const float RivalSearchRangeMeters = 200f;
 
-        // Feature gate for AI nitrous (permission resolved via ARS.AiNitro setting).
+        // Feature gate for nitrous (ARS.NitrousEnabled).
         const float NitrousPowerMultiplier = 2.5f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
@@ -533,7 +533,7 @@ namespace ARS
                 // Pure pursuit on the lane aim point, the wheelbase turning the bearing into a steer angle. Nothing
                 // here reads a radius: the aim point carries both the cross-track error and the turn ahead of it.
                 float laneScale = holdOwnsLane ? LaneHoldOutsideScale : (insideHugging ? 1f : LaneOutsideMoveScale);
-                laneSteerDeg = PursuitSteerDegrees(_debugLaneAimPoint, courseDir) * laneScale;
+                laneSteerDeg = PursuitSteerDegrees(_debugLaneAimPoint, courseDir) * laneScale / Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
                 _debugLaneSteerDeg = laneSteerDeg;
                 _debugLaneScale = laneScale;
             }
@@ -1920,7 +1920,7 @@ namespace ARS
 
         void UpdateNitrous()
         {
-            if (ControlledByPlayer || !ARS.AiNitroAllowed()) return;
+            if (!ARS.NitrousEnabled) return;
 
             if (Game.GameTime < _nitrousActiveUntil) return;   // the burn's power rides ApplyPowerMultiplier
             if (_nitrousActiveUntil > 0) StopNitrous();
@@ -1930,7 +1930,7 @@ namespace ARS
         // lonely, or spent near the finish with a rival close.
         bool TryPlayNitrousCard()
         {
-            if (!ARS.AiNitroAllowed() || Lap <= _nitrousLapUsed) return false;
+            if (!ARS.NitrousEnabled || Lap <= _nitrousLapUsed) return false;
             if (Control.Brake > 0f) return false;
             if (OutOfTrackDistance() > 0f) return false;
             if (Math.Abs(Control.SteerDegrees) >= NitrousMaxSteerDegrees) return false;
@@ -2087,9 +2087,16 @@ namespace ARS
         {
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, NitrousPtfxAsset);
             Function.Call((Hash)FullyChargeNitrousHash, Car);
-            Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 50.0f, 100.0f, false);
+            Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 1.0f, 100.0f, false);
             _nitrousActiveUntil = Game.GameTime + NitrousDurationMs;
             _nitrousLapUsed = Lap;
+        }
+
+        public bool TryFireNitrous()
+        {
+            if (Game.GameTime < _nitrousActiveUntil || NitroChargedLap < Lap || Lap <= _nitrousLapUsed) return false;
+            StartNitrous();
+            return true;
         }
 
         void StopNitrous()
@@ -3273,6 +3280,7 @@ namespace ARS
             else
             {
                 IsStuckByThrottle = false;
+                UpdateNitrous();
                 _lastStuckGameTime = 0;
                 _isRecoveringFromStuck = false;
                 _stuckRecoveryEndTime = 0;
