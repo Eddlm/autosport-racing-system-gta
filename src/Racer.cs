@@ -108,6 +108,8 @@ namespace ARS
         const float SteerPreviewSeconds = 0.5f;
         const float SteerLookaheadMinMeters = 8f;
         const float SteerLookaheadMaxMeters = 30f;
+        // The Gs-aware preview: how much of the car's projected lateral motion leads the lane error.
+        const float GsPreviewBlend = 0.5f;
 
 
         float _avoidLeftWall = 0f;
@@ -503,9 +505,18 @@ namespace ARS
             if (ARS.DebugToggles[Options.LockLaneCentre]) targetLane = LaneLockTestOffsetMeters;
             _targetLane = targetLane;
 
-            // Aim at the track center at the lookahead distance, offset by the target lane.
+            // Aim at the track center at the lookahead distance, offset by the target lane. The Gs-aware preview shifts
+            // that offset by the lateral motion the car is already committing to, so the correction leads the drift
+            // instead of reacting to it; shifting a real point keeps the pursuit's chord real.
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
-            _debugLaneAimPoint = steerRefPoint.Position + steerRight * targetLane;
+            float aimLane = targetLane;
+            if (ARS.DebugToggles[Options.GsAwarePreview])
+            {
+                float laneAtCar = ARS.SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction);
+                float laneAtProjection = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), steerRefPoint.Position, steerRefPoint.Direction);
+                aimLane = targetLane - GsPreviewBlend * (laneAtProjection - laneAtCar);
+            }
+            _debugLaneAimPoint = steerRefPoint.Position + steerRight * aimLane;
 
 
             // --- Off-track recovery: push back toward center if past the safe edge ---
