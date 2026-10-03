@@ -481,13 +481,13 @@ namespace ARS
         {
             int limit = run;
             int left = 0;
-            while (left < limit && CrestCurvature(peak - left - 1, count) < 0f) left++;
+            while (left < limit && GsAtProbeSpeed(peak - left - 1, count) < 0f) left++;
             int right = 0;
-            while (right < limit && CrestCurvature(peak + right + 1, count) < 0f) right++;
+            while (right < limit && GsAtProbeSpeed(peak + right + 1, count) < 0f) right++;
             return left + right + 1;
         }
 
-        static float CrestCurvature(int node, int count)
+        static float GsAtProbeSpeed(int node, int count)
         {
             const float probeSpeed = ARS.CrestProbeSpeed;
             const int window = 6;
