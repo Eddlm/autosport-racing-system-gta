@@ -44,7 +44,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview
+        ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview, OffTrackRecovery
     }
 
     public enum DebugDisplay
@@ -149,8 +149,6 @@ namespace ARS
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
         public static float SteerDampingGain = 0.5f;
-        public static int PursuitCompressThreshold = 30;
-        public static int PursuitCompressScale = 30;
         public static int YawTurnInMinimumPercent = 20;
         public static int YawTurnInMaximumPercent = 100;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
@@ -187,7 +185,8 @@ namespace ARS
         { Options.ShowLeaderboard, true },
         { Options.ShowAiLapTimes, false },
         { Options.LockLaneCentre, false },
-        { Options.GsAwarePreview, true }
+        { Options.GsAwarePreview, true },
+        { Options.OffTrackRecovery, false }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -876,6 +875,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
             AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Lead the lane error with the lateral motion the car is already committing to, so the steering anticipates drift instead of reacting to it. Off measures the lane error at the car alone.");
+            AddDebugCheckbox(debugMenu, Options.OffTrackRecovery, "Off-Track Recovery", "Add the centre-node recovery term once the car is past the safe edge. Off leaves the lane pursuit alone to bring an off-track car back.");
 
             // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
             NativeMenu racersMenu = new NativeMenu("General Settings", "General Settings", "Standing preferences: grid sorting, timeout, racer behaviour and tuning.")
@@ -1057,27 +1057,6 @@ namespace ARS
             yawTurnInMaximumItem.SelectedIndex = Math.Max(0, yawTurnInMaximumItem.Items.IndexOf(SettingsMenuStore.GetInt("YawTurnInMaximumPercent", YawTurnInMaximumPercent).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(yawTurnInMaximumItem);
             HookListTextPicker(yawTurnInMaximumItem);
-
-            string[] pursuitCompressOptions = { "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60" };
-            NativeListItem<string> pursuitThresholdItem = new NativeListItem<string>("Pursuit Compress Threshold", "Bearing angle (degrees) above which the pursuit soft-compression kicks in.", pursuitCompressOptions);
-            pursuitThresholdItem.ItemChanged += (sender, args) =>
-            {
-                PursuitCompressThreshold = int.Parse(pursuitThresholdItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("PursuitCompressThreshold", pursuitThresholdItem.Items[args.Index]);
-            };
-            pursuitThresholdItem.SelectedIndex = Math.Max(0, pursuitThresholdItem.Items.IndexOf(SettingsMenuStore.GetInt("PursuitCompressThreshold", PursuitCompressThreshold).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(pursuitThresholdItem);
-            HookListTextPicker(pursuitThresholdItem);
-
-            NativeListItem<string> pursuitScaleItem = new NativeListItem<string>("Pursuit Compress Scale", "How quickly the compressed bearing asymptotes. Lower = tighter cap, higher = more gradual.", pursuitCompressOptions);
-            pursuitScaleItem.ItemChanged += (sender, args) =>
-            {
-                PursuitCompressScale = int.Parse(pursuitScaleItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("PursuitCompressScale", pursuitScaleItem.Items[args.Index]);
-            };
-            pursuitScaleItem.SelectedIndex = Math.Max(0, pursuitScaleItem.Items.IndexOf(SettingsMenuStore.GetInt("PursuitCompressScale", PursuitCompressScale).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(pursuitScaleItem);
-            HookListTextPicker(pursuitScaleItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -3021,8 +3000,6 @@ namespace ARS
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
             YawTurnInMinimumPercent = SettingsMenuStore.GetInt("YawTurnInMinimumPercent", YawTurnInMinimumPercent);
             YawTurnInMaximumPercent = SettingsMenuStore.GetInt("YawTurnInMaximumPercent", YawTurnInMaximumPercent);
-            PursuitCompressThreshold = SettingsMenuStore.GetInt("PursuitCompressThreshold", PursuitCompressThreshold);
-            PursuitCompressScale = SettingsMenuStore.GetInt("PursuitCompressScale", PursuitCompressScale);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

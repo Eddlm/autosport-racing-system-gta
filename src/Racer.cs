@@ -157,8 +157,6 @@ namespace ARS
         float _steerLaneDeg = 0f;
         float _steerSideBySideDeg = 0f;
         float _steerBearingDeg = 0f;
-        float _steerBearingCompressFactor = 1f;
-        float _steerCompressedBearingDeg = 0f;
         float _steerAimCurvature = 0f;
         float _steerNonLaneDeg = 0f;
         float _steerCommandDeg = 0f;
@@ -509,6 +507,8 @@ namespace ARS
             // that offset by the lateral motion the car is already committing to, so the correction leads the drift
             // instead of reacting to it; shifting a real point keeps the pursuit's chord real.
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
+            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
+            float drivableEdge = Math.Max(roadWide - carHalfWidth, 0f);
             float aimLane = targetLane;
             if (ARS.DebugToggles[Options.GsAwarePreview])
             {
@@ -516,24 +516,25 @@ namespace ARS
                 float laneAtProjection = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), steerRefPoint.Position, steerRefPoint.Direction);
                 aimLane = targetLane - GsPreviewBlend * (laneAtProjection - laneAtCar);
             }
+            // The aim targets the car's centre, so it locks to the drivable edge; the rival walls bound to the raw edge.
+            aimLane = ARS.Clamp(aimLane, -drivableEdge, drivableEdge);
             _debugLaneAimPoint = steerRefPoint.Position + steerRight * aimLane;
 
 
             // --- Off-track recovery: push back toward center if past the safe edge ---
 
             LogCornerCrossings();
-            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float absDev = Math.Abs(Brain.CurrentPerception.DeviationFromCenter);
             float safeEdge = roadWide - carHalfWidth;
             float overshoot = absDev - safeEdge;
             float recoveryDeg = 0f;
-            if (overshoot > 0f) recoveryDeg = PursuitSteerDegrees(steerRefPoint.Position, courseDir);
+            if (ARS.DebugToggles[Options.OffTrackRecovery] && overshoot > 0f) recoveryDeg = PursuitSteerDegrees(steerRefPoint.Position, courseDir);
             _steerRecoveryDeg = recoveryDeg;
 
 
             // --- Lane steer: pure pursuit toward the target lane ---
 
-            float laneSteerDeg = PursuitSteerDegreesCapped(_debugLaneAimPoint, courseDir);
+            float laneSteerDeg = PursuitSteerDegrees(_debugLaneAimPoint, courseDir);
             _steerPursuitDeg = laneSteerDeg;
             // Physical repulsion: inside the "no touching" box, steer away from rivals
             // actually closing laterally; parallel traffic must not kill the lane steer.
@@ -743,28 +744,7 @@ namespace ARS
             return ARS.RadToDeg((float)Math.Atan(PursuitGain * Math.Sin(ARS.DegToRad(bearing)) * VehicleData.WheelBase / distance));
         }
 
-        // Soft compression on the pursuit bearing: the excess over the threshold grows slower and slower, so it
-        // asymptotes to threshold + scale instead of following the angle.
-        float CompressBearingAngle(float angle)
-        {
-            float threshold = ARS.PursuitCompressThreshold;
-            float magnitude = Math.Abs(angle);
-            if (magnitude <= threshold) return angle;
-            float compressedExcess = ARS.PursuitCompressScale * (float)Math.Tanh((magnitude - threshold) / ARS.PursuitCompressScale);
-            return Math.Sign(angle) * (threshold + compressedExcess);
-        }
-
         float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading)
-        {
-            Vector3 toAim = aimPoint - Car.Position;
-            float distance = new Vector3(toAim.X, toAim.Y, 0f).Length();
-            if (distance <= 0.5f) return 0f;
-            float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
-            if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
-            return PursuitSteerFromBearing(bearing, distance);
-        }
-
-        float PursuitSteerDegreesCapped(Vector3 aimPoint, Vector3 heading)
         {
             Vector3 toAim = aimPoint - Car.Position;
             float distance = new Vector3(toAim.X, toAim.Y, 0f).Length();
@@ -773,10 +753,7 @@ namespace ARS
             if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
             _steerBearingDeg = bearing;
             _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / distance;
-            float compressedBearing = CompressBearingAngle(bearing);
-            _steerCompressedBearingDeg = compressedBearing;
-            _steerBearingCompressFactor = Math.Abs(bearing) > 0.001f ? Math.Abs(compressedBearing) / Math.Abs(bearing) : 1f;
-            return PursuitSteerFromBearing(compressedBearing, distance);
+            return PursuitSteerFromBearing(bearing, distance);
         }
 
         float ComputeHighSpeedLane(float roadWide, float speedMps)
@@ -2209,8 +2186,6 @@ namespace ARS
 
                 // White: final slewed steer (what the wheels actually request)
                 ARS.DrawLine(origin + new Vector3(0, 0, 0.15f), origin + new Vector3(0, 0, 0.15f) + RotateZ(fwd, Control.SteerDegrees) * lineLen, Color.White);
-
-                ARS.DrawText(new Vector2(0.5f, 0.5f), _steerBearingDeg.ToString("0.0") + "° x " + _steerBearingCompressFactor.ToString("0.00"), Color.Red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.8f);
             }
 
             // Input trail + pedal bar (inputs).
