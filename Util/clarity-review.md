@@ -83,6 +83,15 @@ integral into the span mean. Same operations, same order: **bit-identical**.
 `1/h`, so the raw expression is `2h ×` the area — at `h = 6` that is `12×`, not `2×`. Naming the value
 for what it actually is, unscaled, is honest at every extent.
 
+**Correction found while applying.** The helper is not symmetric in its endpoints: it returns
+`(to - zeroAt)^2 - (from - zeroAt)^2`, so the endpoints must be passed in distance order or the result
+negates. Written the natural way — `RampIntegralUnscaled(end, peak, hi)`, as the review proposed — the
+falling branch yields `(hi-end)^2 - (peak-end)^2`, the **negation** of the original
+`(end-peak)^2 - (end-hi)^2`, which is positive because `peak <= hi`. The correct call is
+`RampIntegralUnscaled(end, hi, peak)`. The compiler cannot see the difference and neither can a
+same-operations reading; only the branch arithmetic can, which is what the per-round check is for. The
+asymmetry carries a comment in the code for exactly that reason.
+
 **On the bar itself.** Bit-identity is stronger than "no behaviour change" needs. A helper returning
 the clipped mean directly would re-associate the final multiply and divide, shifting `unload` by a
 last ulp — not observable downstream. Bit-identity is kept because it is free here, not because one

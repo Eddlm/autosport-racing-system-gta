@@ -3088,13 +3088,20 @@ namespace ARS
             float hi = Math.Min(end, spanMeters);
             if (end <= 0f || start >= spanMeters || hi <= lo) return 1f;
             float peak = ARS.Clamp(toCrest, lo, hi);
-            float rising = (peak - start) * (peak - start) - (lo - start) * (lo - start);
-            float falling = (end - peak) * (end - peak) - (end - hi) * (end - hi);
+            float risingUnscaled = RampIntegralUnscaled(start, lo, peak);
+            float fallingUnscaled = RampIntegralUnscaled(end, hi, peak);
             float speedRatio = Car.Velocity.Length() / CrestProbeSpeed;
-            float unload = 1f + corner.CrestGs * speedRatio * speedRatio * (rising + falling) / (2f * halfExtent * spanMeters);
+            float unload = 1f + corner.CrestGs * speedRatio * speedRatio * (risingUnscaled + fallingUnscaled) / (2f * halfExtent * spanMeters);
             if (float.IsNaN(unload) || float.IsInfinity(unload)) return 1f;
             unload = Math.Max(Math.Min(unload, 1f), CrestDecelFloor);
             return 1f - Math.Min((1f - unload) * ARS.CrestEffect, 0.9f);
+        }
+
+        // The raw expression before the 1/(2h) normalisation: 2h times the area under one half of the ramp. Its endpoints
+        // go in distance order so the result stays positive; swapping them negates the area and the unload with it.
+        static float RampIntegralUnscaled(float zeroAt, float from, float to)
+        {
+            return (to - zeroAt) * (to - zeroAt) - (from - zeroAt) * (from - zeroAt);
         }
 
         // The grade-free half, so a horizon test can ask the same question without walking the span.
