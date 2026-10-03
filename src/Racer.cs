@@ -496,11 +496,11 @@ namespace ARS
                 holdOwnsLane = false;
             }
             float targetLane = ApplyRivalWalls(defaultLane, roadWide);
-            targetLane = 0.1f;
             _targetLane = targetLane;
 
-            // Aim at the track center at the lookahead distance — no lane offset.
-            _debugLaneAimPoint = steerRefPoint.Position;
+            // Aim at the track center at the lookahead distance, offset by the target lane.
+            Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
+            _debugLaneAimPoint = steerRefPoint.Position + steerRight * targetLane;
 
 
             // --- Off-track recovery: push back toward center if past the safe edge ---
