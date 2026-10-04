@@ -101,6 +101,7 @@ namespace ARS
         int _stuckReverseUntil = 0;
         int _stuckEscapeSpentMs = 0;
         bool _stuckMergeTaken = false;
+        bool _stuckJoinPaused = false;
         Vector3 _stuckMergePosition = Vector3.Zero;
         Vector3 _stuckMergeDirection = Vector3.WorldNorth;
         int _regainedControlSince = 0;
@@ -108,6 +109,9 @@ namespace ARS
         // predicate holds rather than for a fixed time.
         const int StuckReverseMs = 500;
         const float StuckSnapMinSpeedMps = 5f;
+        // The recovery starts on a car that is slow and not pushing, and the snap ends it on the same state: a car
+        // accelerating out of the escape is under the snap speed for a while, and snapping it there undoes the escape.
+        const float StuckStillGs = 0.25f;
         const int RegainedControlHoldMs = 500;
         const float StuckRouteAimMeters = 10f;
         const float RecoveredHeadingDeg = 25f;
@@ -177,7 +181,9 @@ namespace ARS
         float _debugDamperTermDeg = 0f;
         float _debugYawTargetPerSecond = 0f;
         float _debugDamperGainSeconds = 0f;
+        float _debugDamperSpeedScale = 0f;
         float _steerPursuitDeg = 0f;
+        float _steerAimBearingDegrees = 0f;
         float _steerAimCurvature = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _offtrackInputCap = 1f;
@@ -528,13 +534,7 @@ namespace ARS
             _rawCornerLane = cornerLane;
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
             if (avoidAheadLane != 0f) defaultLane = avoidAheadLane;
-            // With no lane demand the car aims at its own live offset, so it holds its line instead of chasing the road
-            // centre. Off the surface that flips to the centre - the only thing that turns an off-track car around,
-            // with no recovery term behind it - or the aim would follow the car off the track.
-            bool hasLaneDemand = defaultLane != 0f;
             float carOffset = ARS.SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction);
-            bool onTrack = Math.Abs(carOffset) <= drivableEdge;
-            if (!hasLaneDemand) defaultLane = onTrack ? carOffset : 0f;
             float targetLane = ApplyRivalWalls(defaultLane, roadWide);
             if (ARS.DebugToggles[Options.LockLaneCentre]) targetLane = LaneLockTestOffsetMeters;
             _targetLane = targetLane;
@@ -598,9 +598,10 @@ namespace ARS
             float yawTarget = 0f;
             if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
-            float damperGain = SteerDamping;
+            float damperGain = SteerDampingFor(fwdSpeed, out float damperSpeedScale);
             _debugYawTargetPerSecond = yawTarget;
             _debugDamperGainSeconds = damperGain;
+            _debugDamperSpeedScale = damperSpeedScale;
             _debugDamperTermDeg = -damperGain * yawRateToDamp;
             float nonLaneSteerDeg = (steerKP * sideBySideSteerDeg) + _debugDamperTermDeg;
             Control.SteerDegrees = nonLaneSteerDeg + (steerKP * laneSteerDeg);
@@ -619,6 +620,10 @@ namespace ARS
                     }
                 }
             }
+
+            // On its aim to within the noise the command has nothing to correct and only flips sign from tick to tick,
+            // so the wheel is left still. A slide keeps full authority - that is where the damper is doing the work.
+            if (Math.Abs(_steerAimBearingDegrees) < SmallAimBearingDegrees && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) Control.SteerDegrees = 0f;
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
                 Control.SteerDegrees = 0f;
@@ -753,6 +758,9 @@ namespace ARS
         const float PursuitGain = 2f;
         // sin falls again past a right angle, so an aim point abeam or behind the car would fade instead of saturating.
         const float MaxPursuitBearingDegrees = 90f;
+        // Inside this bearing the car is on its aim to within the noise, so the command only flips sign from tick to
+        // tick. The aim bearing carries the lateral error, so a car merely parallel to the road is not inside it.
+        const float SmallAimBearingDegrees = 1f;
 
         // Pure pursuit's curvature law: the bearing to an aim point is the chord of the circle through the car, so the
         // path's curvature is 2 sin(bearing) over the distance and the steer it demands is that curvature times the
@@ -767,9 +775,18 @@ namespace ARS
         {
             Vector3 toAim = aimPoint - Car.Position;
             float distance = new Vector3(toAim.X, toAim.Y, 0f).Length();
-            if (distance <= 0.5f) return 0f;
+            if (distance <= 0.5f)
+            {
+                _steerAimBearingDegrees = 0f;
+                return 0f;
+            }
             float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
-            if (float.IsNaN(bearing) || float.IsInfinity(bearing)) return 0f;
+            if (float.IsNaN(bearing) || float.IsInfinity(bearing))
+            {
+                _steerAimBearingDegrees = 0f;
+                return 0f;
+            }
+            _steerAimBearingDegrees = bearing;
             _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / distance;
             return PursuitSteerFromBearing(bearing, distance);
         }
@@ -1034,7 +1051,17 @@ namespace ARS
         // The damper's reference: the yaw the aim point requires removes the standing-offset toll, and the zero
         // reference stays one flip away for A/B — the drive that preferred it was confounded by the course error.
         const bool SteerDampingAimReference = true;
-        float SteerDamping => SteerDampingEnabled ? ARS.SteerDampingGain / Math.Max(VehicleData.BaseMechanicalGrip, 1f) : 0f;
+        // The dial is defined at this speed: the damper's steer per unit yaw error is the dial times the reference
+        // over speed, so the term follows the steer a yaw rate actually needs - weaker at speed, stronger below it.
+        // A term that is flat in degrees instead grows into the steer ceiling at speed and stops being proportional.
+        const float SteerDampingReferenceMps = 25f;
+        float SteerDampingFor(float forwardSpeed, out float speedScale)
+        {
+            // Abs, not max: a car travelling backwards needs the same steer per yaw rate as one going forwards, and
+            // the schedule's floor would otherwise hand a spun car the largest gain instead of the smallest.
+            speedScale = SteerDampingReferenceMps / Math.Max(Math.Abs(forwardSpeed), 1f);
+            return SteerDampingEnabled ? ARS.SteerDampingGain * speedScale / Math.Max(VehicleData.BaseMechanicalGrip, 1f) : 0f;
+        }
         // Vanilla's player steering limiter used as a ceiling (AGENTS.md pipeline step 4): vanilla divides by
         // 1 + 0.075 × (forward speed − 5) in m/s and skips it while the car is sliding. The 5 m/s shift and its
         // gate are deliberately dropped here, so the ceiling starts closing from a standstill instead of
@@ -1240,6 +1267,7 @@ namespace ARS
             _stuckRecoveryEndTime = 0;
             _stuckEscapeSpentMs = 0;
             _stuckMergeTaken = false;
+            _stuckJoinPaused = false;
             _stuckRecoveryCooldownEndTime = 0;
             _stuckRecoveryAttempts = 0;
             Control.LastAppliedSteerDegrees = 0f;
@@ -2441,22 +2469,19 @@ namespace ARS
             return Color.FromArgb((int)(255f * (1f - Math.Max(v, 0f))), (int)(255f * (1f + Math.Min(v, 0f))), 0);
         }
 
-        // Yaw HUD parked: the false gate skips the red text; flip it to re-arm. A guard-return disables nothing.
         void DrawYawDamperHud()
         {
             if (ControlledByPlayer) return;
             if (ARS.DebugFocusRacer != this) return;
-            if (1 == 2)
-            {
-                float yaw = VehicleData.YawRotationPerSecondDegrees;
-                float yawError = yaw - _debugYawTargetPerSecond;
-                float damper = _debugDamperTermDeg;
-                float usagePct = YawUsagePercent();
-                Color red = Color.FromArgb(255, 230, 30, 30);
-                ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " / TARGET " + _debugYawTargetPerSecond.ToString("0.0") + " deg/s", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-                ARS.DrawText(new Vector2(0.5f, 0.110f), "ERROR " + yawError.ToString("0.0") + " x GAIN " + _debugDamperGainSeconds.ToString("0.00") + " s = STEER " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-                ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW USAGE " + usagePct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-            }
+            float yaw = VehicleData.YawRotationPerSecondDegrees;
+            float yawError = yaw - _debugYawTargetPerSecond;
+            float damper = _debugDamperTermDeg;
+            float usagePct = YawUsagePercent();
+            Color red = Color.FromArgb(255, 230, 30, 30);
+            ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " / TARGET " + _debugYawTargetPerSecond.ToString("0.0") + " deg/s", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            ARS.DrawText(new Vector2(0.5f, 0.110f), "ERROR " + yawError.ToString("0.0") + " x GAIN " + _debugDamperGainSeconds.ToString("0.00") + " s = STEER " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW USAGE " + usagePct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            ARS.DrawText(new Vector2(0.5f, 0.160f), "DAMPER SCALE x" + _debugDamperSpeedScale.ToString("0.00"), red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
         }
 
         public void RunTimedCore()
@@ -3403,7 +3428,7 @@ namespace ARS
                 return;
             }
 
-            bool lowLongitudinalGs = Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < 0.25f;
+            bool lowLongitudinalGs = Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < StuckStillGs;
             bool stuckCondition = lowLongitudinalGs && ARS.MpsToMph(Car.Velocity.Length()) < 5f;
 
             if (!stuckCondition)
@@ -3428,6 +3453,7 @@ namespace ARS
                 _stuckRecoveryEndTime = now + StuckRecoveryTimeMs;
                 _stuckEscapeSpentMs = 0;
                 _stuckMergeTaken = false;
+                _stuckJoinPaused = false;
                 IsStuckByThrottle = false;
                 _lastStuckGameTime = 0;
             }
@@ -3441,6 +3467,7 @@ namespace ARS
                 _stuckRecoveryEndTime = 0;
                 _stuckEscapeSpentMs = 0;
                 _stuckMergeTaken = false;
+                _stuckJoinPaused = false;
                 return;
             }
 
@@ -3459,6 +3486,7 @@ namespace ARS
             _stuckReverseUntil = 0;
             _stuckEscapeSpentMs = 0;
             _stuckMergeTaken = false;
+            _stuckJoinPaused = false;
             _lastStuckGameTime = 0;
             _stuckRecoveryCooldownEndTime = Game.GameTime + StuckRecoveryCooldownMs;
         }
@@ -3498,7 +3526,21 @@ namespace ARS
                     }
                     gateHolding = IsJoinHeld(out gateStopping, out gateBlockage);
                 }
-                if (!gateHolding || gateBlockage) _stuckEscapeSpentMs += TimeSince_lastCoreTick;
+                if (gateHolding && !gateBlockage)
+                {
+                    _stuckJoinPaused = true;
+                }
+                else if (_stuckJoinPaused)
+                {
+                    // The wait is over: it is forgiven, and the interval that just ended was spent waiting rather than
+                    // escaping, so it is not charged to the fresh window either.
+                    _stuckJoinPaused = false;
+                    _stuckEscapeSpentMs = 0;
+                }
+                else
+                {
+                    _stuckEscapeSpentMs += TimeSince_lastCoreTick;
+                }
             }
 
             // The budget runs from the moment the recovery engages: a car still moving is not interrupted, so the
@@ -3506,7 +3548,7 @@ namespace ARS
             // that met a wall, not a car that is still working its way out. The realistic escape counts only the
             // time it spent not waiting for traffic, because being held is not a failure to get out.
             bool budgetSpent = ARS.RealisticRecovery ? _stuckEscapeSpentMs >= StuckRecoveryTimeMs : Game.GameTime >= _stuckRecoveryEndTime;
-            if (Car.Velocity.Length() < StuckSnapMinSpeedMps && budgetSpent)
+            if (Car.Velocity.Length() < StuckSnapMinSpeedMps && Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < StuckStillGs && budgetSpent)
             {
                 Vector3 direction = new Vector3(nearest.Direction.X, nearest.Direction.Y, 0f);
                 if (direction == Vector3.Zero) direction = Vector3.WorldNorth;
@@ -3579,7 +3621,9 @@ namespace ARS
                 {
                     held = true;
                     firmStop = true;
-                    blockage = true;
+                    // Contact with a rival on the move is traffic and clears itself, so the wait is not a failure to
+                    // get out; contact with one going nowhere is a blockage and still spends the escape budget.
+                    if (Vector3.Dot(rival.RivalRacer.Car.Velocity, _stuckMergeDirection) <= 0f) blockage = true;
                     continue;
                 }
 
