@@ -147,13 +147,6 @@ namespace ARS
 
         float _cornerSpd = 999f;
 
-        // Latched on corner approach when entry speed warrants holding the outside line.
-        int _activeApexNode = -1;
-        float _activeApexRadius = 0f;
-        float _activeApexDirection = 0f;
-        int _passedApexNode = -1;
-        float _passedApexRadius = 0f;
-        float _passedApexDirection = 0f;
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
 
@@ -182,6 +175,13 @@ namespace ARS
         float _debugYawTargetPerSecond = 0f;
         float _debugDamperGainSeconds = 0f;
         float _debugDamperSpeedScale = 0f;
+        // Slip-balance grant state: the demand's own size last evaluation, and whether the imbalance held.
+        float _lastSteerRequestDeg = 0f;
+        bool _demandSettledHeld = false;
+        bool _balanceGrantHeld = false;
+        // How much of the sliding countersteer blend the current slide has earned, 0 to 1; read by the limiter
+        // and the slew within the same frame.
+        float _slidePriority = 0f;
         float _steerPursuitDeg = 0f;
         float _steerAimBearingDegrees = 0f;
         float _steerAimCurvature = 0f;
@@ -254,12 +254,6 @@ namespace ARS
         {
             if (_cornersRevisionSeeded == ARS.CornersRevision) return;
             _cornersRevisionSeeded = ARS.CornersRevision;
-            // A rebuilt table renumbers the route, so a remembered apex is a node of the old one.
-            _activeApexNode = -1;
-            _activeApexDirection = 0f;
-            _passedApexNode = -1;
-            _passedApexDirection = 0f;
-
             foreach (CornerPoint corner in ARS.Corners)
                 if (!_cornerContexts.ContainsKey(corner.Node))
                     _cornerContexts[corner.Node] = new CornerContext { Point = corner, BrakeFactor = SeededBrakeFactor() };
@@ -496,10 +490,6 @@ namespace ARS
 
             _cornerContexts.Clear();
             _cornersRevisionSeeded = -1;
-            _activeApexNode = -1;
-            _activeApexDirection = 0f;
-            _passedApexNode = -1;
-            _passedApexDirection = 0f;
             _brakeCommitApexNode = -1;
 
             Car.Repair();
@@ -507,6 +497,8 @@ namespace ARS
 
         public void ComputeSteering()
         {
+            _slidePriority = 0f;
+
             if (!TryGetSteerContext(out TrackPoint steerRefPoint, out float roadWide))
             {
                 Control.SteerDegrees = 0f;
@@ -595,35 +587,45 @@ namespace ARS
             // Damp the excess over the yaw the aim point requires, not over zero which taxes every steady corner; the
             // slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
             float fwdSpeed = ARS.GetForwardSpeed(Car);
+            float understeerDeg = UndersteerDegrees(fwdSpeed);
+            // The blend's weight: from where the live peak slip is used up to the skid gate's multiple of it, so the
+            // countersteer comes in with the slide and both scale with the car's own tyres. Only a rear-led slide is
+            // its business — the body slip alone cannot tell an oversteer from a deep understeer, and steering against
+            // an understeer would deepen it.
+            if (TRLateralAtSpeed > 0.01f && fwdSpeed >= 2f)
+            {
+                _slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), TRLateralAtSpeed, TRLateralAtSpeed * BrakeSkidPeakMultiple, 0f, 1f, true);
+                _slidePriority *= ARS.Remap(-understeerDeg, 0f, TRLateralAtSpeed, 0f, 1f, true);
+            }
             float yawTarget = 0f;
-            if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
+            if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * SlidingFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
             float damperGain = SteerDampingFor(fwdSpeed, out float damperSpeedScale);
             _debugYawTargetPerSecond = yawTarget;
             _debugDamperGainSeconds = damperGain;
             _debugDamperSpeedScale = damperSpeedScale;
-            _debugDamperTermDeg = -damperGain * yawRateToDamp;
-            float nonLaneSteerDeg = (steerKP * sideBySideSteerDeg) + _debugDamperTermDeg;
+            float nonDamperSteerDeg = (steerKP * sideBySideSteerDeg) + (steerKP * laneSteerDeg);
+            float damperTermDeg = -damperGain * yawRateToDamp;
+            // Past neutral while the rear leads the damper keeps half its crossing. Not a cap tied to the blend: that
+            // fell to zero whenever no slide was granted, which removed the rate feedback from a car going straight
+            // and set it oscillating.
+            float damperOvershootDeg = Math.Abs(damperTermDeg) - Math.Abs(nonDamperSteerDeg);
+            if (understeerDeg < 0f && damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f) damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + damperOvershootDeg * DamperCrossingShare);
+            _debugDamperTermDeg = damperTermDeg;
+            float nonLaneSteerDeg = (steerKP * sideBySideSteerDeg) + damperTermDeg;
             Control.SteerDegrees = nonLaneSteerDeg + (steerKP * laneSteerDeg);
 
-            if (Handling.LateralTractionCurve > 1f)
+            if (_slidePriority > 0f)
             {
-                float forwardMs = ARS.GetForwardSpeed(Car);
-                if (forwardMs >= 2f)
-                {
-                    float slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * CountersteerBlendStartFraction, Handling.LateralTractionCurve * CountersteerFullFraction, 0f, 1f, true);
-                    if (slidePriority > 0f)
-                    {
-                        // Countersteer equals the slide angle - the correction term only, not the slidePriority ramp.
-                        float countersteerTarget = nonLaneSteerDeg - VehicleData.SlideAngle;
-                        Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * slidePriority;
-                    }
-                }
+                // The correction term only - not the slidePriority ramp - and only the share of the slide the
+                // countersteer is allowed to answer.
+                float countersteerTarget = (steerKP * sideBySideSteerDeg) - (VehicleData.SlideAngle * CountersteerSlideShare);
+                Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * _slidePriority;
             }
 
-            // On its aim to within the noise the command has nothing to correct and only flips sign from tick to tick,
-            // so the wheel is left still. A slide keeps full authority - that is where the damper is doing the work.
-            if (Math.Abs(_steerAimBearingDegrees) < SmallAimBearingDegrees && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * CountersteerBlendStartFraction) Control.SteerDegrees = 0f;
+            // On its aim to within the noise the command has nothing to correct and only flips sign from tick to
+            // tick, so the wheel is left still — unless a slide is steering it, which must not be zeroed.
+            if (Math.Abs(_steerAimBearingDegrees) < SmallAimBearingDegrees && _slidePriority <= 0f) Control.SteerDegrees = 0f;
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
                 Control.SteerDegrees = 0f;
@@ -851,16 +853,6 @@ namespace ARS
             float cornerDir = Math.Sign(c.Angle);
             if (cornerDir == 0f) return 0f;
 
-            if (apexNode != _activeApexNode)
-            {
-                _passedApexNode = _activeApexNode;
-                _passedApexRadius = _activeApexRadius;
-                _passedApexDirection = _activeApexDirection;
-                _activeApexNode = apexNode;
-                _activeApexRadius = c.DetectedRadius;
-                _activeApexDirection = cornerDir;
-            }
-
             float halfWidth = steerRefPoint.TrackHalfWidth;
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = Math.Max(halfWidth - carHalfWidth, 0f);
@@ -884,18 +876,6 @@ namespace ARS
             bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.SupposedRadius) - ARS.MphToMps(20f);
             bool entryActive = wantsPosition && aboveApexSpeed;
             float offset = entryActive ? IdealLineOffset(fwdToApex, c.DetectedRadius, safeBound) : 0f;
-
-            // A passed apex still owns its exit half until the profile has opened back to the outside edge, and the
-            // next corner's own profile saturates at that same edge, so the handover is the lesser of the two. An
-            // opposite-direction pair is a chicane: two profiles would demand opposite edges with no room to change
-            // sides, so it keeps the apex aim instead.
-            if (_passedApexDirection != 0f && _passedApexDirection == cornerDir)
-            {
-                int pastApex = steerRefPoint.Node - _passedApexNode;
-                if (!ARS.IsPointToPoint && pastApex < 0) pastApex += ARS.TrackPoints.Count;
-                float exitOffset = IdealLineOffset(pastApex, _passedApexRadius, safeBound);
-                offset = entryActive ? Math.Min(offset, exitOffset) : exitOffset;
-            }
 
             return cornerDir * offset;
         }
@@ -1036,15 +1016,19 @@ namespace ARS
             return ARS.Clamp(targetLane, clampLeft, clampRight);
         }
 
-        // Countersteer blend: starts at TRlat × this, fully engaged at TRlat × the full fraction.
-        const float CountersteerBlendStartFraction = 0.3f;
-        const float CountersteerFullFraction = 0.6f;
+        // Above the authored peak slip × this the car counts as sliding, so the damper drops its aim reference.
+        const float SlidingFraction = 0.3f;
+        // The countersteer aims at this share of the slide angle, not all of it: a neutral countersteer leaves no front
+        // slip at all, and the residual is what keeps the recovery from becoming its own over-correction.
+        const float CountersteerSlideShare = 0.5f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
         const float SteerSlewRate = 90f;
         const float SteerSlewRateCountersteer = 180f;
+        // How much of the damper's overshoot past neutral survives, so it may cross the sign, but at half authority.
+        const float DamperCrossingShare = 0.5f;
         // Kill switch for the yaw-rate damper. Driven with it off the cars cannot hold centre — the term is the
         // only thing opposing a rotation the course chain has already started, so it is load-bearing, not trim.
         const bool SteerDampingEnabled = true;
@@ -1130,6 +1114,14 @@ namespace ARS
             return ARS.Clamp(peakSlipDeg * PeakSlipOuterWheelCommandShare, 0f, VehicleData.SteeringLock);
         }
 
+        // The bicycle model's front-minus-rear slip difference: positive while the front leads, negative while the
+        // rear does. It is the only signal here that names which axle is losing grip.
+        float UndersteerDegrees(float fwdSpeed)
+        {
+            if (fwdSpeed <= 0.1f) return 0f;
+            return Control.LastAppliedSteerDegrees - ARS.RadToDeg((float)Math.Atan(VehicleData.WheelBase * ARS.DegToRad(VehicleData.YawRotationPerSecondDegrees) / fwdSpeed));
+        }
+
         // Maximum sustained yaw rate the car can hold at the current speed: the slip ceiling's radius from the
         // Ackermann relation, then v / R. Above ~100% the car is over-rotating — the slide blend or the limiter
         // owns what happens next. Returns 0 when no grip data is available yet (early init).
@@ -1165,6 +1157,11 @@ namespace ARS
         }
 
 
+        // Below the steer ceiling the front/rear slip balance decides whether the car may have a degree more: the
+        // imbalance is the understeer angle, so a positive one means the front is leading and the rear is not the
+        // axle about to let go. It is a knee, not the cap - the peak-slip ceiling still bounds it.
+        const float BalanceSlackDegrees = 1f;
+
         void ApplySteerLimits()
         {
             // NaN guard: Clamp would turn NaN into full-lock.
@@ -1186,11 +1183,11 @@ namespace ARS
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;
 
-            // The one whitelisted allowance: the side answering a slide reaches past the ceiling up to the slide
-            // angle itself — a raise, never a reduction.
-            if (countersteering && Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * CountersteerBlendStartFraction)
+            // The one whitelisted allowance: the side answering a slide reaches past the ceiling towards the slide
+            // angle itself, in proportion to how much of the blend that slide has earned — a raise, never a reduction.
+            if (countersteering && _slidePriority > 0f)
             {
-                float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle), VehicleData.SteeringLock);
+                float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle) * _slidePriority, VehicleData.SteeringLock);
                 if (requestedSteer > 0f) SteerLimitLeft = Math.Max(SteerLimitLeft, countersteerAllowance);
                 else SteerLimitRight = Math.Max(SteerLimitRight, countersteerAllowance);
             }
@@ -1210,16 +1207,36 @@ namespace ARS
                 else if (requestedSteer < 0f) SteerLimitRight = Math.Min(SteerLimitRight, turnInCeiling);
             }
 
+            // Slip-balance knee: in the bicycle model the front-minus-rear slip angle is the understeer angle,
+            // delta - atan(L * yawRate / speed), and it is positive whenever the front leads. While it holds, and the
+            // demand has settled into it, the commanded side is allowed a degree past the applied command - bounded
+            // by the same peak-slip cap. Walked off the applied angle, not the request, so the ceiling leads the
+            // wheel by a degree rather than handing over the whole demand. Each term holds for two evaluations,
+            // because the yaw rate is noisier than the tyres and the request jitters inside a degree.
+            float yawRateDegrees = VehicleData.YawRotationPerSecondDegrees;
+            float understeerDeg = UndersteerDegrees(fwdSpeed);
+            bool demandSettled = Math.Sign(requestedSteer) == Math.Sign(_lastSteerRequestDeg) && Math.Abs(requestedSteer) <= Math.Abs(_lastSteerRequestDeg);
+            bool balanceGrant = understeerDeg > 0f && !IsUnstable() && demandSettled && requestedSteer * yawRateDegrees >= 0f;
+            if (balanceGrant && _balanceGrantHeld && demandSettled && _demandSettledHeld)
+            {
+                float slackCeiling = Math.Min(Math.Abs(Control.LastAppliedSteerDegrees) + BalanceSlackDegrees, speedCeiling);
+                if (requestedSteer > 0f) SteerLimitLeft = Math.Max(SteerLimitLeft, slackCeiling);
+                else if (requestedSteer < 0f) SteerLimitRight = Math.Max(SteerLimitRight, slackCeiling);
+            }
+            _balanceGrantHeld = balanceGrant;
+            _demandSettledHeld = demandSettled;
+            _lastSteerRequestDeg = requestedSteer;
+
             Control.SteerDegrees = ARS.Clamp(requestedSteer, -SteerLimitRight, SteerLimitLeft);
         }
 
 
-        // True when the slide has saturated the countersteer blend (same threshold ComputeSteering uses).
+        // True when the blend has reached full authority at the skid gate's multiple of the live peak.
         // Forward speed gates it: reversing reads as a ~180° slide, and a reversed car must never be starved.
         bool IsFullCountersteer()
         {
             if (Vector3.Dot(Car.Velocity, Car.ForwardVector) < ARS.MphToMps(CountersteerMinSpeedMph)) return false;
-            return Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * CountersteerFullFraction;
+            return _slidePriority >= 1f;
         }
 
 
@@ -1271,6 +1288,9 @@ namespace ARS
             _stuckRecoveryCooldownEndTime = 0;
             _stuckRecoveryAttempts = 0;
             Control.LastAppliedSteerDegrees = 0f;
+            _lastSteerRequestDeg = 0f;
+            _demandSettledHeld = false;
+            _balanceGrantHeld = false;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
         }
@@ -1573,9 +1593,8 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5 && Brain.Corner != null) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
-            // Hold the apex braking plan until the braking target (entrance) is reached AND the car has
-            // actually braked down to the corner speed; route speed takes over inside the corner.
-            if (NextApexNode >= 0 && HasPassedBrakingTarget() && Car.Velocity.Length() <= NextApexSpeed + ARS.MphToMps(1f)) cornerSpd = 999f;
+            // Past the braking target the corner's entrance is behind the car, so route speed owns the corner.
+            if (NextApexNode >= 0 && HasPassedBrakingTarget()) cornerSpd = 999f;
 
             // Hill grip loss: exponential model, 15 degrees halves grip.
             {
