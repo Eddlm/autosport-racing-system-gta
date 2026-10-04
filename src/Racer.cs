@@ -99,6 +99,10 @@ namespace ARS
         const int StuckRecoveryCooldownMs = 2000;
         int _stuckRecoveryAttempts = 0;
         int _stuckReverseUntil = 0;
+        int _stuckEscapeSpentMs = 0;
+        bool _stuckMergeTaken = false;
+        Vector3 _stuckMergePosition = Vector3.Zero;
+        Vector3 _stuckMergeDirection = Vector3.WorldNorth;
         int _regainedControlSince = 0;
         // Backing off is a short, straight phase; the way out is the forward phase after it, which runs until the safe
         // predicate holds rather than for a fixed time.
@@ -111,6 +115,11 @@ namespace ARS
         public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
         const float RecoveredMinSpeedMph = 20f;
         const float RecoveredSlideFraction = 0.3f;
+        // Rival arrival windows at the merge point on the realistic escape: inside the hold window the car waits
+        // off-line, inside the stop window it brakes instead.
+        const float JoinHoldSeconds = 6f;
+        const float JoinStopSeconds = 1f;
+        const float JoinHoldBrakeLevel = 0.3f;
 
 
         public float RouteLookAheadSeconds = 0.5f;
@@ -1229,6 +1238,8 @@ namespace ARS
             _lastStuckGameTime = 0;
             _isRecoveringFromStuck = false;
             _stuckRecoveryEndTime = 0;
+            _stuckEscapeSpentMs = 0;
+            _stuckMergeTaken = false;
             _stuckRecoveryCooldownEndTime = 0;
             _stuckRecoveryAttempts = 0;
             Control.LastAppliedSteerDegrees = 0f;
@@ -3415,6 +3426,8 @@ namespace ARS
                 _isRecoveringFromStuck = true;
                 _stuckRecoveryAttempts++;
                 _stuckRecoveryEndTime = now + StuckRecoveryTimeMs;
+                _stuckEscapeSpentMs = 0;
+                _stuckMergeTaken = false;
                 IsStuckByThrottle = false;
                 _lastStuckGameTime = 0;
             }
@@ -3426,6 +3439,8 @@ namespace ARS
             {
                 _isRecoveringFromStuck = false;
                 _stuckRecoveryEndTime = 0;
+                _stuckEscapeSpentMs = 0;
+                _stuckMergeTaken = false;
                 return;
             }
 
@@ -3442,6 +3457,8 @@ namespace ARS
             _isRecoveringFromStuck = false;
             _stuckRecoveryEndTime = 0;
             _stuckReverseUntil = 0;
+            _stuckEscapeSpentMs = 0;
+            _stuckMergeTaken = false;
             _lastStuckGameTime = 0;
             _stuckRecoveryCooldownEndTime = Game.GameTime + StuckRecoveryCooldownMs;
         }
@@ -3462,17 +3479,42 @@ namespace ARS
                 nearest = point;
             }
 
-            // The budget runs from the moment the recovery engages and is never paused: a car still moving is not
-            // interrupted, so the snap waits, and once the budget is spent the first time it comes to a stop it is
-            // snapped - the rejoin that met a wall, not a car that is still working its way out.
-            if (Car.Velocity.Length() < StuckSnapMinSpeedMps && Game.GameTime >= _stuckRecoveryEndTime)
+            if (_stuckReverseUntil == 0) _stuckReverseUntil = Game.GameTime + StuckReverseMs;
+
+            bool gateHolding = false;
+            bool gateStopping = false;
+            bool gateBlockage = false;
+            if (ARS.RealisticRecovery)
+            {
+                if (Game.GameTime >= _stuckReverseUntil)
+                {
+                    if (!_stuckMergeTaken)
+                    {
+                        _stuckMergeTaken = true;
+                        _stuckMergePosition = nearest.Position;
+                        _stuckMergeDirection = new Vector3(nearest.Direction.X, nearest.Direction.Y, 0f);
+                        if (_stuckMergeDirection == Vector3.Zero) _stuckMergeDirection = Vector3.WorldNorth;
+                        _stuckMergeDirection.Normalize();
+                    }
+                    gateHolding = IsJoinHeld(out gateStopping, out gateBlockage);
+                }
+                if (!gateHolding || gateBlockage) _stuckEscapeSpentMs += TimeSince_lastCoreTick;
+            }
+
+            // The budget runs from the moment the recovery engages: a car still moving is not interrupted, so the
+            // snap waits, and once the budget is spent the first time it comes to a stop it is snapped - the rejoin
+            // that met a wall, not a car that is still working its way out. The realistic escape counts only the
+            // time it spent not waiting for traffic, because being held is not a failure to get out.
+            bool budgetSpent = ARS.RealisticRecovery ? _stuckEscapeSpentMs >= StuckRecoveryTimeMs : Game.GameTime >= _stuckRecoveryEndTime;
+            if (Car.Velocity.Length() < StuckSnapMinSpeedMps && budgetSpent)
             {
                 Vector3 direction = new Vector3(nearest.Direction.X, nearest.Direction.Y, 0f);
                 if (direction == Vector3.Zero) direction = Vector3.WorldNorth;
                 direction.Normalize();
                 Vector3 right = Vector3.Cross(direction, Vector3.WorldUp);
                 float side = ARS.SignedLaneOffset(Car.Position, nearest.Position, nearest.Direction) >= 0f ? 1f : -1f;
-                Car.Position = nearest.Position + right * (nearest.TrackHalfWidth * side) + new Vector3(0f, 0f, 0.5f);
+                float laneOffset = Math.Max(nearest.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f) * side;
+                Car.Position = nearest.Position + right * laneOffset + new Vector3(0f, 0f, 0.5f);
                 Car.Heading = direction.ToHeading();
                 Car.Velocity = direction * ARS.MphToMps(10f);
 
@@ -3488,8 +3530,6 @@ namespace ARS
             Control.ThrottleReason = ThrottleReason.StuckRecovery;
             Control.ThrottleReasonLevel = 0f;
 
-            if (_stuckReverseUntil == 0) _stuckReverseUntil = Game.GameTime + StuckReverseMs;
-
             // Back off straight first: reversing with the wheels turned swings the nose away from where the car is
             // going. Then drive out toward the route AHEAD, where the steering convention is unambiguous.
             if (Game.GameTime < _stuckReverseUntil)
@@ -3499,10 +3539,70 @@ namespace ARS
                 return;
             }
 
-            Control.Throttle = 0.5f;
+            if (gateHolding)
+            {
+                Control.Throttle = 0f;
+                Control.Brake = gateStopping ? 1f : JoinHoldBrakeLevel;
+                Control.BrakeReasonLevel = Control.Brake;
+            }
+            else
+            {
+                Control.Throttle = 0.5f;
+            }
+
             Vector3 toRoute = nearest.Position + nearest.Direction * StuckRouteAimMeters - Car.Position;
             toRoute.Z = 0f;
             Control.SteerDegrees = toRoute.LengthSquared() > 0.01f ? Vector3.SignedAngle(Car.ForwardVector, toRoute.Normalized, Vector3.WorldUp) : 0f;
+        }
+
+        // The realistic escape's merge gate. It never touches the steering: the car stays aimed at the route ahead
+        // while the pedals wait for a rival about to reach the merge point. The car's own surface state closes the
+        // gate, so a rival behind cannot hold a car that is already back on the line. A hold for a rival that is
+        // merely sitting there is a blockage rather than traffic, and time spent blocked still spends the budget.
+        bool IsJoinHeld(out bool firmStop, out bool blockage)
+        {
+            firmStop = false;
+            blockage = false;
+            if (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) <= CurrentTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f) return false;
+
+            bool held = false;
+            Vector3 mergeRight = Vector3.Cross(_stuckMergeDirection, Vector3.WorldUp);
+            foreach (Rival rival in Brain.Rivals)
+            {
+                if (rival.RivalRacer == null || !rival.RivalRacer.Car.Exists()) continue;
+
+                // Contact is the pair's own separation from this car, not the rival's offset from the rejoin
+                // point: the car is off-line here, so the two references differ by its lateral error.
+                Vector3 fromCar = rival.RivalRacer.Car.Position - Car.Position;
+                fromCar.Z = 0f;
+                if (Math.Abs(Vector3.Dot(fromCar, _stuckMergeDirection)) <= rival.CombinedSize.Y && Math.Abs(Vector3.Dot(fromCar, mergeRight)) <= rival.CombinedSize.X)
+                {
+                    held = true;
+                    firmStop = true;
+                    blockage = true;
+                    continue;
+                }
+
+                Vector3 toMerge = rival.RivalRacer.Car.Position - _stuckMergePosition;
+                toMerge.Z = 0f;
+                float behindMerge = -Vector3.Dot(toMerge, _stuckMergeDirection);
+                if (behindMerge <= 0f) continue;
+
+                Vector3 rivalVelocity = rival.RivalRacer.Car.Velocity;
+                if (Vector3.Dot(rivalVelocity, _stuckMergeDirection) <= 0f) continue;
+
+                float secondsToMerge = behindMerge / rivalVelocity.Length();
+                if (secondsToMerge <= JoinStopSeconds)
+                {
+                    held = true;
+                    firmStop = true;
+                }
+                else if (secondsToMerge <= JoinHoldSeconds)
+                {
+                    held = true;
+                }
+            }
+            return held;
         }
 
         void UpdatePerceivedGrip()

@@ -145,6 +145,9 @@ namespace ARS
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = true;
+        // A stuck car reverses, drives back out and yields to traffic before it rejoins, instead of the plain
+        // reverse-and-go. Off is the shipped behaviour.
+        public static bool RealisticRecovery = false;
         // Flat mph added to the corner braking plan; Route Offset is the same knob for the route term.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
@@ -1022,6 +1025,14 @@ namespace ARS
                 SaveRacerSetting("AbsEnabled", AbsEnabled.ToString());
             };
             aiMenu.Add(absItem);
+
+            NativeCheckboxItem recoveryItem = new NativeCheckboxItem("Realistic Recovery", "After getting stuck the AI car backs off, drives out, then waits off-line for a fast rival to pass before it rejoins. Off: reverse, then drive straight back out.", RealisticRecovery);
+            recoveryItem.CheckboxChanged += (sender, args) =>
+            {
+                RealisticRecovery = recoveryItem.Checked;
+                SaveRacerSetting("RealisticRecovery", RealisticRecovery.ToString());
+            };
+            aiMenu.Add(recoveryItem);
 
             string[] steerKDOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
             NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds against zero yaw. Lower is crisper; higher opposes rotation more strongly.", steerKDOptions);
@@ -3003,6 +3014,7 @@ namespace ARS
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
+            RealisticRecovery = SettingsMenuStore.GetBool("RealisticRecovery", RealisticRecovery);
             CrestEffect = SettingsMenuStore.GetInt("CrestEffect", 100) * 0.01f;
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 0);
