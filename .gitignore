@@ -21,6 +21,7 @@ build/build-number.txt
 .clineignore
 .context/
 .continue/
+.dsh/
 # GitHub Actions workflows are version-controlled
 .github/*
 !.github/workflows/
