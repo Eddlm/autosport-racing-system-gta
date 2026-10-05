@@ -359,11 +359,16 @@ namespace ARS
         const float BumpMaxRunMeters = 8f;
         const float BumpMinDepartureGrade = 0.03f;
         const float BumpMinLipDrop = 0.02f;
-        const float BumpSeamMaxGrade = 0.15f;
+        // A seam is distrusted as soon as it is steep enough to nominate a lip on its own.
+        const float BumpSeamMaxGrade = BumpMinDepartureGrade;
+        // Above the worst rounding error a two-decimal route can put on a two-metre rung, so the rise walk stops on
+        // the road rather than on a noise uptick.
+        const float BumpRiseGradeDrop = 0.01f;
 
-        // A bump is a short rise whose lip drops away, so a car at speed leaves the ground and can neither brake nor
-        // steer until it lands. Scanned on the route line only; the raycast that reads the real surface, and the
-        // lane-local case with it, come later.
+        // A bump is a short convex break in the route where a car at speed goes light: the road may drop away after it
+        // or only ease, and either way the curvature launches the car. The run lengths it reports are node-quantised,
+        // so a coarse track resolves them to half a node. Scanned on the route line only; the raycast that reads the
+        // real surface, and the lane-local case with it, come later.
         static void AssignBumpNodes(int count)
         {
             ARS.Bumps.Clear();
@@ -433,7 +438,7 @@ namespace ARS
                 int behind = NodeBehind(node, 1f, count);
                 if (behind == node) break;
                 float behindGrade = GradeAt(behind, BumpDepartureRungMeters, count);
-                if (behindGrade <= 0f || behindGrade > grade - 0.002f) break;
+                if (behindGrade <= 0f || behindGrade > grade - BumpRiseGradeDrop) break;
                 meters += HorizontalDistance(ARS.TrackPoints[behind].Position, ARS.TrackPoints[node].Position);
                 node = behind;
                 start = behind;
