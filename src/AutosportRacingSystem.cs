@@ -1559,9 +1559,10 @@ namespace ARS
         {
             return (float)Math.Round(mph * 0.44704f, 3);
         }
-        // No-collision mode: a racer passes through its nearest rival, world collision untouched. The engine stores
-        // one partner per entity (fwDynamicEntityComponent::m_pNoCollisionEntity), so a car can be ghosted against
-        // exactly one other at a time and pairing it with the closest is the most the native allows. Re-asserted
+        // No-collision mode: a racer passes through its rivals, world collision untouched. The engine stores one
+        // partner per entity (fwDynamicEntityComponent::m_pNoCollisionEntity), but a pair is rejected when either
+        // side stores the other, so a car that several rivals hold as their nearest passes through all of them —
+        // one outgoing slot each is the whole constraint. Every car spends its slot on its nearest, re-asserted
         // every tick because the nearest changes. The third argument is a mode: false is PERMENANT, true lets the
         // pair clear once it stops impacting (commands_entity.cpp:5839).
         void ApplyNoCollision(bool enable)

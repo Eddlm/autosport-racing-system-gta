@@ -125,13 +125,14 @@ m_pNoCollisionEntity`, a single `fwRegdRef`), and `PERMENANT` is never cleared b
 loop leaves each car holding only its last loop partner. **A whole grid cannot be ghosted pairwise with this
 native.** A car is instead paired with its **nearest rival**, one slot each, re-asserted every tick.
 
-**Driver-verified (`cbae845`):** the nearest-rival pairing works — a car passes through its stored partner. The
-slot is per **car**, not per field, so a grid of N carries up to N directed entries and several pairs can be
-ghosted at once; that is why it reads as more than one entity.
+**Driver-verified (`cbae845`):** the nearest-rival pairing works, and it ghosts more than one pair at once. Three
+abreast, the **middle car passes through both neighbours** — each neighbour stores it as its nearest, so both
+pairs are rejected even though the middle car itself has one slot. The constraint is one **outgoing** slot per
+car, not one ghosted pair per car.
 
-The residual to expect: one slot per car, so a car is covered against only a single rival — a second car in a
-tight pack can still land a touch. Judge the option on whether ordinary racing stays contact-free, not on the
-full matrix below being literally achievable.
+The residual: a pair is ghosted only when at least one of the two stored the other, so a car whose sole close
+rival points elsewhere can still be touched. Judge the option on whether ordinary racing stays contact-free, not
+on the full matrix below being literally achievable.
 
 The matrix below is a test of how far the nearest-rival pairing holds; a single contact is still the falsification.
 
