@@ -55,7 +55,9 @@ game folder carries the init banner and lap lines.
 
 11. In Drive, stop the car again (or wedge it).
     **Expect:** another 1 s Reverse (same A predicate, 2 s).
-12. A car that **cannot move at all** (no position change over 1 s) → **teleported** to the drivable bound.
+12. A car that **cannot move at all** (no position change over 1 s) is **teleported** to the drivable bound — but only
+    once the 6 s recovery budget is spent. Before that the 1 s Reverse and the Drive phase run uninterrupted; the
+    snap no longer fires on the first static second.
 13. A car re-stuck in **Reverse** after the 6 s recovery budget → teleported.
 14. A car that keeps **moving** is never teleported at the budget (by design).
 

@@ -3540,9 +3540,10 @@ namespace ARS
             if (now - _stuckMoveSampleTime >= StuckMoveSampleMs)
             {
                 bool couldNotMove = Car.Position.DistanceTo(_stuckMoveSamplePosition) < StuckMoveMeters;
+                bool escapeSpent = now - _stuckRecoveryStartTime >= StuckRecoveryTimeMs;
                 _stuckMoveSamplePosition = Car.Position;
                 _stuckMoveSampleTime = now;
-                if (couldNotMove)
+                if (couldNotMove && escapeSpent)
                 {
                     SnapToTrack();
                     return;
