@@ -1,13 +1,14 @@
-# ARS — test plan: build 448
+# ARS — test plan: build 449
 
-**Status: NOTHING here has been driven.** The working tree is clean and the deployed DLL is dev build **448**
-(HEAD `148db70`). The last game drive in `Log.log` predates `0623276`, so every code commit below is undriven;
+**Status: NOTHING here has been driven.** The working tree is clean and the deployed DLL is dev build **449**
+(HEAD `666c89b`). The last game drive in `Log.log` predates `0623276`, so every code commit below is undriven;
 a build + reload is enough (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
 | `0623276` | recovery redesign, DNF parking, No Collision one-shot, route-frame rival detection | §1–§13 |
 | `27ee097` | the corner entrance moves to the crest's entry | Crest entrance move |
+| `666c89b` | the recovery teleport now waits for the escape budget, so the reverse runs | §5 |
 | `f3f318f` → `148db70` | the bump/lip scan and its `Show Bumps` overlay, then the rise-walk fixes | Bump scan overlay |
 
 Start a race with several AI cars. `Show Inputs` on the Debug menu helps for the pedal bar, and `Log.log` in the
