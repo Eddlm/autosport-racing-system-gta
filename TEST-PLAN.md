@@ -1,11 +1,11 @@
-# ARS — test plan: build 455
+# ARS — test plan: build 457
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
 (`cbae845`); the flat slew is driven and read as less stable, which the blend re-cut addresses (`7297050`); the
-water-stall DNF is new and undriven (`70b8708`). Everything else below is undriven. The deployed DLL is dev build
-**455**; a build + reload is enough (SHVDN reloads the scripts live, no game restart).
+engine restart is new and undriven. Everything else below is undriven. The deployed DLL is dev build **457**; a
+build + reload is enough (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
@@ -82,10 +82,11 @@ game folder carries the init banner and lap lines.
 
 ## 7. DNF parking — option OFF (shoulder)
 
-**Driver-observed on the water case:** falling in the water did **not** DNF, and the car stayed immovable after the
-teleport. Water does not zero `EngineHealth`, it floods the engine, and nothing in ARS restarts it — so the old
-predicate (`EngineHealth <= 0`) never saw it. The check now also parks a car that has **stalled in water** —
-`IS_ENTITY_IN_WATER` and under 2 mph for 2.5 s (`Racer.cs`), so a car fording a stream is untouched.
+**Driver-observed:** falling in the water did **not** DNF, and the car stayed immovable even after the teleport.
+Water does not zero `EngineHealth` — it floods the engine, and nothing in ARS ever restarted one — so the
+`EngineHealth <= 0` predicate never saw it. The fix is a restart, not a DNF: an AI car whose engine is off with
+health left is started again (`EnsureEngineRunning`, `Racer.cs`), so the recovery's own teleport now rescues it.
+Watch a flooded car come back instead of sitting on the throttle.
 
 18. Kill an engine (water). **Expect:** the car is parked on the shoulder, slot 0 at the start/finish line, the next
     5 m further along, alternating sides, 1 m past the edge, heading along the route, handbrake held.
