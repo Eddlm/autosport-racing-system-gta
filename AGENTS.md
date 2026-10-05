@@ -65,19 +65,17 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 - **SHVDN build compatibility** — the asi and the API dll are a matched build pair with no version check, and `VerifyScriptBridge()` must run before any native call; the install matrix, the SHVDNE alternative and the live-install ini quirk are in `AGENTS-SHVDN.md`.
 
 ## Code map
-- `AutosportRacingSystem.cs` — orchestration: race flow, track/corner generation, grid, leaderboard, helpers (`Remap`/`Clamp`/`Circumradius`), native wrappers, and the static AI math (`CornerApexSpeed` `AutosportRacingSystem.cs:2611`, `MaxSpeedForBrakingDistance` `AutosportRacingSystem.cs:2853`). `class ARS` is **partial**, with the two files below split out byte-verbatim.
-- `AutosportRacingSystem.TrackCreator.cs` — the in-game track creator, **live**: the Track Creator submenu is wired into the root and the pool in `InitializeMenu` (`_arsMenu.AddSubMenu(creatorMenu)` `AutosportRacingSystem.cs:1204`, `_menuPool.Add(creatorMenu)` `AutosportRacingSystem.cs:1216`; the menu and its Start/Save/Exit items build at `AutosportRacingSystem.cs:836`). `StartTrackCreator` (`AutosportRacingSystem.TrackCreator.cs:25`) is the entry point and takes over the freecam, `HandleTrackCreator` (`AutosportRacingSystem.TrackCreator.cs:57`) records only while it is active, sections are **constant-radius circular arcs** (`GenerateArc` `AutosportRacingSystem.TrackCreator.cs:253`), tangent-continuous at the joints, replacing the quadratic Bézier whose radius was graded within a section and stepped at each joint.
-- `AutosportRacingSystem.TrackFile.cs` — the track XML writer. `SaveRoute` (`AutosportRacingSystem.TrackFile.cs:29`) is **LIVE** behind the creator's Save Track, so creating a track does write `Tracks\*.xml`; the rewriting path (`UpdateRoute` and its `Wide` off-by-one) was cut as dead code (`c2ad2de`) — there is no update path. `SaveRoute` rounds coordinates to 2 decimals, coarse enough to perturb the measured `PreciseCurveRadius` — see the open item below.
-- `Racer.cs` — per-car intelligence: the steering/speed pipeline, pressure, maneuvers, TCS, stuck recovery, debug drawing.
-- `DataStructures.cs` — `RacerBrain`, `Rival`, `TrackPoint`, `CornerPoint`/`Corner`, `VehicleControl`, `VehicleState`, `HandlingData`, `Maneuver`.
-- `VehicleMemory.cs` — **the single memory layer**: the control writes (`VehicleMemory.cs:19`), handling reads (`VehicleMemory.cs:31`) and the **memoized** AOB scanner they share (`VehicleMemory.cs:98`). A second copy of any of it is the defect the consolidation removed.
-- `SmartTuner.cs` — the auto-tuner (`SmartTuner.cs:241` `Enqueue`, `SmartTuner.cs:259` `Tick`); design in `AGENTS-SMARTTUNING.md`.
+Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
+- `AutosportRacingSystem.cs` — race flow, track/corner generation, grid, leaderboard, helpers, static AI math. `class ARS` is **partial**.
+- `AutosportRacingSystem.TrackCreator.cs` / `.TrackFile.cs` — the partial-class splits: in-game creator; track XML writer.
+- `Racer.cs` — per-car intelligence: steering/speed pipeline, pressure, maneuvers, TCS, stuck recovery.
+- `DataStructures.cs` — `RacerBrain`, `Rival`, `TrackPoint`/`Corner`, `VehicleControl`/`State`, `HandlingData`, `Maneuver`.
+- `VehicleMemory.cs` — the single memory layer.
+- `SmartTuner.cs` — the auto-tuner.
 - `SettingsRepair.cs` / `MenuSettings.cs` — the declared ini shape and its store.
-- `TrackLoader.cs` (`TrackLoader.cs:175` `GenerateRouteInfo`, `TrackLoader.cs:228` `BuildApexTable`, `TrackLoader.cs:588` `BuildGridSlots`) / `TrackRepository.cs` / `TrackVisuals.cs` / `GridBuilder.cs` / `VehicleCatalog.cs` / `VehicleSelector.cs` — track, grid and roster helpers.
-- `MenyooAppearance.cs` / `UpdateChecker.cs` / `FreeCamController.cs` — the focused one-purpose helpers.
-- `PersonalitySet.cs` / `SkillSet.cs` — leftover per-racer scaffolding.
-
-## Track, lane, speed and corner systems
+- `TrackLoader.cs` / `TrackRepository.cs` / `TrackVisuals.cs` / `GridBuilder.cs` / `VehicleCatalog.cs` / `VehicleSelector.cs` — track, grid and roster helpers.
+- `MenyooAppearance.cs` / `UpdateChecker.cs` / `Focused helpers` — one purpose each.
+- `PersonalitySet.cs` / `SkillSet.cs` — leftover per-racer scaffolding.## Track, lane, speed and corner systems
 
 **Moved whole to `AGENTS-STEERING.md`** — read it before touching the per-frame pipeline, the lane laws, the steering authority chain, the speed plan or the corner lifecycle. What the code owns is there; what stays here is the order and the gotchas.
 
@@ -104,24 +102,23 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 **Moved to `AGENTS-TECHNOTES.md`** → "Leaderboard - drawing and data detail": the freeze-on-crossing mechanism, the player's row and the finish block, plus the PI and best-lap columns. Triggers: leaderboard, results board, position freeze, PI column, best lap.
 
 ## Durable gotchas — do not "fix" these
-- **The pursuit's steer saturates at the bearing it clamps to, and there is no separate "recovery law" to preserve** — `PursuitSteerFromBearing` (`Racer.cs`) is the `atan` of the pursuit's own sine term, so past the clamp the command would fold back down instead of flattening, and any saturation or crossover angle is a derivation off that form rather than a value the code holds. The `ARS.Clamp` NaN trap is already the NaN discipline bullet below, and the line cited for the "recovery law" (`Racer.cs:727`) is a corner-logging loop, not a clamp.
-- **`if (1 == 2) return;` is an INVERTED gate — it disables nothing**, because the return only fires when the condition is true and it never is. Correct idioms are a bare `return;` or the block form; this bit the start-line flare disable (`bdd1b29`) for weeks.
-- **Remap with a descending output range + `clamp=true` is inverted** by `Clamp` when `min > max`, and NaN compares less-than-anything. Keep output clamps ascending and use a descending *input* range for a reversed map.
-- **NaN discipline**: `Clamp(NaN, -limit, +limit)` returns the min bound, i.e. instant full-lock — guard steering outputs and any clamp input that can be non-finite. Never hand a non-value sentinel to a *seeding* getter either, or it writes the sentinel into the ini.
-- **A null-check on a freshly `new`-ed object is dead code.** Two "cannot find file" popups lived behind `if (new XmlDocument() == null)` while the real failures *throw*, so those paths have **no** error handling.
-- Synchronous setup work can pause `OnTick` and temporarily suppress per-frame debug visuals; make it incremental if that matters.
-- **`Handling.Downforce` reads `0x0014` in `VehicleMemory.GetDownforce` (`VehicleMemory.cs:34`) and the code is right** — an earlier note claiming `0x0010` was a transcription slip off an off-by-one source line number. With the right field the principled grip divider matches the engine's own formula, so don't bring back the old curve-fit hack.
-- **Oversteer and sliding are different quantities, and what a steering law can see depends entirely on its reference vector** — never state a reference's consequences as general properties. The live pursuit bearing is velocity-referenced, which is the *blind* one: for a pure body rotation it reads as perfectly tracked **while the car is sideways**, and the slide authority is the blend instead.
-- **The aim-error PID / measured-yaw-rate steering law was tried, driven and ABANDONED — the pre-PID chain was restored in preference to it.** Do not resurrect it blind; the durable lesson is that **it had no cross-track term at all**, so its standing line error could only be fought with P. Full record in `AGENTS-STEERING.md`.
-- **Offroad gravity needs a baseline reset before the multiplier** — `Initialize` (`Racer.cs:323`) runs every race and on respawn, so setting gravity immediately before the offroad multiply is load-bearing or it stacks across restarts.
-- **Speed asymmetry is intentional** (see the Speed pipeline) — don't "fix" it. **`Intention.SteerLimitedSpeed` is live** (`Racer.cs:1420`, blended 70/30 into `followTrackSpd`), and it is fed the *clamped* steer of the previous pass — the older note here claiming it was write-only was wrong.
-- **`Options` enum values are positional**, so retiring a member renumbers the rest and one must never be persisted or exchanged as an int. Nothing does today, but re-check before any numeric consumer appears.
-- **`World.DrawMarker` has a per-frame render budget**: markers past it are **silently not drawn** and draw order decides who loses, so long debug geometry belongs in `DRAW_LINE` instead. The budget is shared with every other marker the script draws that frame, so a visual can break because something *else* got greedy.
-- **Two traps the flare rebuild exposed, both reusable**: a prop's own `RightVector` is perpendicular to *that prop's* forward, so an offset applied after its heading is turned 90° comes out parallel to the track — offset from the source direction instead; and a **named ptfx asset streams between frames**, so requesting it in a same-frame loop can never succeed — queue the entity and attach it from a tick (`TrackLoader.TickQueuedFlares`), logging a failed start rather than swallowing it.
-- **Do not go hunting for an old limiter that used the static TRlat — the ceiling never reads it.** `Handling.LateralTractionCurve` is only the *input* to the speed-scaled peak (`LateralPeakAtSpeed`, `Racer.cs:900`) plus the countersteer gate thresholds, the slide blend and the TCS spin map, and every limiter function (`AckermannCeilingDegrees`, `GeometrySteerCeiling`, `PeakSlipCeilingAt`, `ResolveSteerCeiling`, `ApplySteerLimits`) has a caller.
-- **A POSITIVE steer command steers LEFT — do not re-derive this.** `Racer.cs`'s own lane law gives it away (`laneSteerDeg = -laneErrorMeters * laneGain` against the `+ = right` **lane** convention, which is a different convention), the rival repulsion and corner-commit lane agree, and `TrackPoint.Angle` is already in the steer's convention (a left-hand corner is positive), so a reference built from it must be used as-is. `SteerLimitLeft` bounds positive commands and `SteerLimitRight` negative ones, which is what `Racer.cs`'s clamp now reads (`92d5867`), while the Show Inputs fan draws each limit on its true side — orange left, red right. A rename here is a *side* swap, not a symbol swap, so check every use by side rather than by name.
-
-## Open items — the decision-ready top
+Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pipeline"; `AGENTS-TECHNOTES.md` → "Durable gotchas — code, helpers, rendering, settings". One hazard per line.
+- Pursuit steer saturates at the clamp — there is no separate "recovery law".
+- `if (1 == 2) return;` is an INVERTED gate that disables nothing.
+- A descending-output `Remap` with `clamp` is inverted; NaN compares below everything.
+- NaN discipline: `Clamp(NaN)` returns the min bound = full lock; never seed a getter with a sentinel.
+- A null-check on a freshly `new`-ed object is dead code.
+- Synchronous setup pauses `OnTick` and can blank per-frame debug visuals.
+- `Handling.Downforce` reads `0x0014` — the code is right; don't restore the curve-fit.
+- Oversteer ≠ sliding; a reference's blindness is a property of the reference, not of steering.
+- The aim-error PID law was driven and ABANDONED — do not resurrect it blind.
+- Offroad gravity needs its baseline reset before the multiply, or it stacks across races.
+- Speed asymmetry is intentional; `SteerLimitedSpeed` is live and reads the clamped steer.
+- `Options` enum values are positional — never persist or exchange one as an int.
+- `World.DrawMarker` has a silent per-frame budget — long geometry belongs in `DRAW_LINE`.
+- Prop `RightVector` and streaming ptfx — offset from the source direction; queue the entity.
+- No old limiter reads the static TRlat; every limiter function has a caller.
+- A POSITIVE steer command steers LEFT — a rename is a side swap, not a symbol swap.## Open items — the decision-ready top
 
 Every open item carries a stable kebab-case slug and its description lives in the ladder at the top of `AGENTS-BACKLOG.md`; a slug cited here describes nothing, so read it there. This section names only what a session start owes. **State tags** (`live`, `untested (hash)`, `driver-verified (hash)`, `DECIDED`, `not built`, `parked`, `(idea)`, `closed (hash)`) and slug keys are fixed in `memory-note-style.md` §"The conventions, fixed" — decode there.
 
