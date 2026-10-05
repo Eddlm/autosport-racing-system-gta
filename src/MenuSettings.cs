@@ -80,6 +80,7 @@ namespace ARS
         public void Set(string key, string value)
         {
             if (!Declared(key, "write")) return;
+            if (File.GetValue<string>("MENU", key, null) == value) return;
             File.SetValue("MENU", key, value);
             File.Save();
         }

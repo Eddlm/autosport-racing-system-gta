@@ -472,10 +472,13 @@ namespace ARS
             float modelGrip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, Car.Model.Hash);
             float modelTopSpeedMph = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, Car.Model.Hash));
             float modelAccel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, Car.Model.Hash);
-            // Cache first so the spawn-time PI matches the metric the grid was selected on; live probe only for an unscored car.
             bool modelElectric;
             if (!ARS.ModelElectricCache.TryGetValue(Car.Model.Hash.ToString(), out modelElectric)) modelElectric = ARS.IsElectricModel(Car.Model.Hash);
-            VehicleData.PowerScale = ARS.ComputePaceIndex(modelTopSpeedMph, modelGrip, modelAccel, modelElectric);
+            // Deliberate: the three model natives are probed live rather than read from the cache the grid was ranked on, so
+            // the cache answers only for the electric flag and for a probe that came back non-finite.
+            float livePace = ARS.ComputePaceIndex(modelTopSpeedMph, modelGrip, modelAccel, modelElectric);
+            if (float.IsNaN(livePace) || float.IsInfinity(livePace)) ARS.ModelPaceIndexCache.TryGetValue(Car.Model.Hash.ToString(), out livePace);
+            VehicleData.PowerScale = livePace;
             VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.00");
             if (!ControlledByPlayer) Name = _baseName + " (" + VehicleData.PowerScale.ToString("0.00") + ")";
 

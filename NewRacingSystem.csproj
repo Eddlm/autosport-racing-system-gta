@@ -153,6 +153,10 @@
          sidecar copied beside the DLL can never disagree with the banner. -->
     <WriteLinesToFile File="$(BuildNumberFile)" Lines="$(BuildNumber)" Overwrite="true" />
   </Target>
+  <!-- The declared key set and the keys the code actually reads must agree; the checker fails the build when they do not. -->
+  <Target Name="CheckSettingsKeys" BeforeTargets="CoreCompile">
+    <Exec Command="python &quot;$(MSBuildProjectDirectory)\docs\check-settings-keys.py&quot;" />
+  </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

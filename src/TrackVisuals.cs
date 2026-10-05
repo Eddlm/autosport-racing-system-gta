@@ -145,47 +145,6 @@ namespace ARS
             }
         }
 
-        // Outside approach line: blue line from the racer's current node to the corner entrance.
-        public static void DrawOutsideApproachLine(Racer racer, List<TrackPoint> trackPoints)
-        {
-            if (racer.Brain.Corner == null || trackPoints.Count == 0) return;
-            CornerPoint cp = racer.Brain.Corner.Point;
-            int entranceNode = cp.StartNode >= 0 ? cp.StartNode : cp.Node;
-            if (entranceNode < 0 || entranceNode >= trackPoints.Count) return;
-
-            int fromNode = racer.CurrentTrackPoint.Node;
-            int steps = entranceNode - fromNode;
-            if (!ARS.IsPointToPoint && steps < 0) steps += trackPoints.Count;
-            steps = Math.Min(steps, 200);
-
-            // Same sign the AI uses: cornerDir * halfWidth (right for positive angle, left for negative).
-            float cornerDir = Math.Sign(cp.Angle);
-            if (cornerDir == 0f) return;
-
-            Color blue = Color.FromArgb(200, 0, 120, 255);
-            for (int n = 0; n < steps; n++)
-            {
-                int nodeA = fromNode + n;
-                int nodeB = fromNode + n + 1;
-                if (!ARS.IsPointToPoint)
-                {
-                    nodeA = nodeA % trackPoints.Count;
-                    nodeB = nodeB % trackPoints.Count;
-                }
-                if (nodeA >= trackPoints.Count || nodeB >= trackPoints.Count) break;
-                TrackPoint tpA = trackPoints[nodeA];
-                TrackPoint tpB = trackPoints[nodeB];
-                Vector3 dirA = tpA.Direction; dirA.Z = 0f;
-                Vector3 dirB = tpB.Direction; dirB.Z = 0f;
-                if (dirA.LengthSquared() < 0.0001f || dirB.LengthSquared() < 0.0001f) continue;
-                Vector3 rightA = Vector3.Cross(dirA.Normalized, Vector3.WorldUp);
-                Vector3 rightB = Vector3.Cross(dirB.Normalized, Vector3.WorldUp);
-                Vector3 posA = tpA.Position + rightA * (tpA.TrackHalfWidth * cornerDir) + new Vector3(0, 0, 0.5f);
-                Vector3 posB = tpB.Position + rightB * (tpB.TrackHalfWidth * cornerDir) + new Vector3(0, 0, 0.5f);
-                ARS.DrawLine(posA, posB, blue);
-            }
-        }
-
         static void DrawTrackCrossingLine(List<TrackPoint> trackPoints, int node, Color color)
         {
             TrackPoint tp = trackPoints[node];
