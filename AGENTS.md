@@ -126,13 +126,12 @@ Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pi
 
 Every open item carries a stable kebab-case slug and its description lives in the ladder at the top of `AGENTS-BACKLOG.md`; a slug cited here describes nothing, so read it there. This section names only what a session start owes. **State tags** (`live`, `untested (hash)`, `driver-verified (hash)`, `DECIDED`, `not built`, `parked`, `(idea)`, `closed (hash)`) and slug keys are fixed in `memory-note-style.md` §"The conventions, fixed" — decode there.
 
-- `dnf-final-death` — untested (`0623276`)
-- `rival-detection-route-frame` — untested (`0623276`)
+- `dnf-final-death` — driver-verified (`0623276`)
+- `rival-detection-route-frame` — driver-verified (`0623276`), residuals unobserved
 - `player-special-ability`, `ai-free-abs` — parked
 - `lane-repulsion-ceiling` — parked
-- `crest-gate` — untested (`27ee097`)
-- `recovery-drive-tweaks` — untested (`b50dfef`)
-- `card-decision-rate` — untested (`601313c`)
+- `crest-gate` — entry move driver-verified (`27ee097`), gating constants wait on the instrumented run
+- `rival-publish-core` — not built
 - `apex-radius` — not built
 - `slide-brake-rampdown` — parked
 - **Session artifacts**: `AUDIT-COMPUTE-ONCE.md` (the code-disagrees pile — fix it in the code, never annotate it), `PLAN-RATE-PRECISION.md` (rate and precision stages, the deferred perception manager, the route-frame ranking migration), `TEST-PLAN.md` (the outstanding drives); the flags reference's four unactioned items are in `AGENTS-FLAGS.md` and the corrections rule in `AGENTS-TECHNOTES.md`.

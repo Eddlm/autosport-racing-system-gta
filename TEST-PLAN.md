@@ -1,13 +1,12 @@
 # ARS — test plan: build 483
 
-**Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
-driver-verified on build 450 (`666c89b`), and the rest of the recovery has since been driver-verified too — trigger B, the exit back into normal racing, the start-line arm delay and the flooded-engine rescue — and the drive phase has since been rebuilt again and is **undriven** (coast instead of brake, nearest-edge aim, exit on any part of the car on track; `b50dfef`, section at the end). The maneuver cards now decide on the fast core pass and are undriven too (`601313c`, last section). No Collision's one-shot mode and its per-tick all-pairs form were both
+**Status: driven.** Everything this file listed as outstanding has since been driven and held in one session. The recovery's reverse phase and its teleport, gated on the escape budget, were driver-verified on build 450 (`666c89b`), and the rest of the recovery went with them — trigger B, the exit back into normal racing, the start-line arm delay and the flooded-engine rescue — after which the drive phase was rebuilt again (coast instead of brake, nearest-edge aim, exit on any part of the car on track; `b50dfef`, section at the end) and that rebuild has been driven too. The same drive covered the maneuver cards on the fast core pass with a clean restart (`601313c`, last section), the steer ceiling down to one governor, the slide blend after the slew, the crest entrance move, DNF parking in both options with a race ending on DNFs, the route-frame rival detection, and the bump scan overlay, whose cyan marker was confirmed in game. What the drive did not settle: the crest's gating constants still wait on an instrumented run, and the two residuals the ladder names for the route-frame detection were not provoked. No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
 (`cbae845`); the slew is driven — 45 read as less stable and **180 removed most of the stability problems**
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
-(`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the damper bypass and the maneuvering ramp are new and undriven, and **build 473 collapsed the steer governor
-to the slide**, which is a behaviour change nobody has driven: a car at turn-in now gets the full cornering law where
-the retired yaw cut allowed it about a fifth of that. Build 471's state was accepted on the drive — the simplification
+(`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the damper bypass and the maneuvering ramp are new; **build 473 collapsed the steer governor
+to the slide**, so a car at turn-in now gets the full cornering law where
+the retired yaw cut allowed it about a fifth of that — driven with the rest of the list, so that authority is in. Build 471's state was accepted on the drive — the simplification
 batch and the governor-key fix regressed nothing. The deployed DLL is dev build **483**; a build + reload is enough
 (SHVDN reloads the scripts live, no game restart).
 
@@ -215,10 +214,9 @@ R=50/25 m/s, but worth little until the rival refresh is lifted) and that 2 Hz `
 
 - **Etiquette exclusion**: a car held by the pack (Rival/ChillOut/Yield caps) can still reverse into the car behind.
 - **B on fast excursions**: any 2 s off-track enters Drive, though the off-track cap already limits it.
-- **AGENTS.md** still carries the failed intel-gather section and is unedited.
 ---
 
-## Crest entrance move (built `27ee097`, not yet driven)
+## Crest entrance move (built `27ee097`, driver-verified)
 
 The question is whether braking now starts where the track stops being flat, with the car still loaded when it does.
 
@@ -227,7 +225,7 @@ The question is whether braking now starts where the track stops being flat, wit
 3. **Log check** — generation now prints `entry=` beside `node=` per crest. Expect `entry` earlier in travel order than `node` (a lower index on a circuit), and the move distance on the `Crest` lines; a skip names its reason.
 4. **A track with no crest before its corners** — nothing should change.
 
-## Bump scan overlay (built `f3f318f`, rise walk revised through `148db70`, not yet driven)
+## Bump scan overlay (built `f3f318f`, rise walk revised through `148db70`, driver-verified — the cyan marker drew as expected)
 
 The question is whether the scan finds the lips a driver can feel, and whether the ones it finds are the ones that launch a car. It reads the **route line only** — the raycast over the real surface, and the lane-local case with it, are a later stage.
 
@@ -238,7 +236,7 @@ The question is whether the scan finds the lips a driver can feel, and whether t
 5. **The seam** - a circuit whose first/last node edge steps in height prints `Bumps: the route seam steps at grade …, so no lip is taken within 8.0m of it`; within that stretch no lip may be taken, while the rest of the circuit scans normally. A step-only seam is not a real lip.
 6. **Nothing drives on it** - behaviour and lap times must match the build before `f3f318f`: the `RequiresEarlyBrake` / `RampEndNode` hook the braking plan reads is still unset, so a marked lip must not move anyone's braking point.
 
-## Steering slew and slide blend (the slew is driven; the blend is not)
+## Steering slew and slide blend (both driven)
 
 The countersteer doubling was never validated and the base rate read as instant, so both became **one rate**
 (`SteerSlewRate`) applied at `TranslateSteerToInput`. **Driven at 45: the AI was clearly less stable than before**,
@@ -285,7 +283,7 @@ such a cap fell to zero with the slide and took the rate feedback off a straight
 action, and that cost has not shown up yet — watch a long straight for a weave or a limit cycle before calling it
 settled for good.
 
-## Steer ceiling — one governor (not driven)
+## Steer ceiling — one governor (driver-verified)
 
 The limiter has **one** governing quantity now: the slide. The yaw-usage governor, both Turn-In dials, the Steer Limit
 Mode item and the mode switch are **gone**, because the two governors were answering the same question — *is this car
@@ -330,7 +328,7 @@ Watch:
 
 The law is plotted in `docs/steer-ceiling.png`, drawn by `docs/steer-ceiling.py`.
 
-## Recovery drive — the coast, the edge aim and the exit (built `b50dfef`, dev build 478, not driven)
+## Recovery drive — the coast, the edge aim and the exit (built `b50dfef`, dev build 478, driver-verified)
 
 The Drive phase no longer forces its speed: the intention is the plan's, and a throttle cap lifts the pedal a band above the drive speed and opens it at or below, so the car coasts down rather than braking. Off track it aims at the nearest edge instead of the centre line. The exit test asks for any part of the car inside the bound, not the whole car.
 
@@ -340,7 +338,7 @@ The Drive phase no longer forces its speed: the intention is the plan's, and a t
 4. **Stuck on the surface (trigger A)** — reverse out of a wall while still on the track: the car must **not** steer at the edge (the edge aim is gated on being off track) and must return to the plan's speed rather than being held at the drive speed.
 5. **The cap's floor** — below the drive speed the pedal is unrestricted, so a car in a ditch can still climb back out under power.
 
-## Cards on the fast core pass (built `601313c`, dev build 483, not driven)
+## Cards on the fast core pass (built `601313c`, dev build 483, driver-verified)
 
 The four tactical cards — nitro, defend, divebomb, yield — and the maneuver cleanups used to be decided once a second. They now decide on the fast core pass, so a window that opens and closes between two slow beats is no longer missed. What they decide on: track state and perception from that same core tick, control state one core tick old, and rival records from the half-second publish — so the rival side is up to half a second old, which is the deliberate trade. DefendLane is the card where that can flip a live-versus-snapshot arrival comparison, and moving the publish itself onto the core pass is the next step. The crowd card and the rival scan kept their slow beats, and the card rate is not a fixed number: the pass serves six cars a frame, so a car's card rate falls as the grid grows.
 
