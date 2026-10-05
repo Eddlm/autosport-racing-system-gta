@@ -1,7 +1,7 @@
 # ARS — test plan: build 477
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
-driver-verified on build 450 (`666c89b`), and the rest of the recovery has since been driver-verified too — trigger B, the exit back into normal racing, the start-line arm delay and the flooded-engine rescue; No Collision's one-shot mode and its per-tick all-pairs form were both
+driver-verified on build 450 (`666c89b`), and the rest of the recovery has since been driver-verified too — trigger B, the exit back into normal racing, the start-line arm delay and the flooded-engine rescue — and the drive phase has since been rebuilt again and is **undriven** (coast instead of brake, nearest-edge aim, exit on any part of the car on track; `b50dfef`, section at the end); No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
 (`cbae845`); the slew is driven — 45 read as less stable and **180 removed most of the stability problems**
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
@@ -329,3 +329,13 @@ Watch:
    prune, which is the bug class the store now refuses and reports instead of tolerating.
 
 The law is plotted in `docs/steer-ceiling.png`, drawn by `docs/steer-ceiling.py`.
+
+## Recovery drive — the coast, the edge aim and the exit (built `b50dfef`, dev build 478, not driven)
+
+The Drive phase no longer forces its speed: the intention is the plan's, and a throttle cap lifts the pedal a band above the drive speed and opens it at or below, so the car coasts down rather than braking. Off track it aims at the nearest edge instead of the centre line. The exit test asks for any part of the car inside the bound, not the whole car.
+
+1. **The coast** — send a car off the track and let it enter Drive. Expect the pedal lifted, a cyan sphere on the bar tagged `StuckRecovery`, and the car slowing to about the drive speed with **no brake**: the red pedal sphere should not appear while it does.
+2. **The aim** — the car heads for the edge it left by, not across the track to the centre, and rejoins on that side.
+3. **The exit** — recovery ends as soon as any part of the car is back on the track and it has been rolling forward over 4 mph for 0.5 s, which can now happen while its centre is still outside the bound. Normal racing must resume at once.
+4. **Stuck on the surface (trigger A)** — reverse out of a wall while still on the track: the car must **not** steer at the edge (the edge aim is gated on being off track) and must return to the plan's speed rather than being held at the drive speed.
+5. **The cap's floor** — below the drive speed the pedal is unrestricted, so a car in a ditch can still climb back out under power.

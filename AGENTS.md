@@ -130,6 +130,7 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `player-special-ability`, `ai-free-abs` — parked
 - `lane-repulsion-ceiling` — parked
 - `crest-gate` — untested (`27ee097`)
+- `recovery-drive-tweaks` — untested (`b50dfef`)
 - `apex-radius` — not built
 - `slide-brake-rampdown` — parked
 - **Session artifacts**: `AUDIT-COMPUTE-ONCE.md` (the code-disagrees pile — fix it in the code, never annotate it), `PLAN-RATE-PRECISION.md` (rate and precision stages, the deferred perception manager, the route-frame ranking migration), `TEST-PLAN.md` (the outstanding drives); the flags reference's four unactioned items are in `AGENTS-FLAGS.md` and the corrections rule in `AGENTS-TECHNOTES.md`.
