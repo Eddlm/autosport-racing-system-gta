@@ -1054,11 +1054,9 @@ namespace ARS
         // Below the ramp's end speed the ceiling eases back to the car's full lock, so a slow car can steer in
         // fully; above it the ceiling is the law's own. The band is in mph because that is how it is judged.
         const float SteerLimitRampStartMph = 5f;
-        const float SteerLimitRampEndMph = 40f;
-        // Below this the car is placing itself rather than cornering, and both modes' ceilings are too small to turn
-        // it: the limit is opened to this angle whatever the mode and the yaw share decided. It is past most cars'
-        // lock, so the clamp to lock is what actually applies.
-        const float ManeuverLimitMph = 30f;
+        const float SteerLimitRampEndMph = 30f;
+        // The top of that ramp: a car at or below the start speed may place itself with this much steer. It is past
+        // most cars' lock, so the clamp to lock is what usually applies.
         const float ManeuverSteerDegrees = 50f;
 
         // Live ceiling coefficient: the useful steer angle at speed is ~ grip × g × wheelbase / v², so grip
@@ -1151,10 +1149,18 @@ namespace ARS
             float endSpeed = ARS.MphToMps(SteerLimitRampEndMph);
             float endPeak = LateralPeakAtSpeed(endSpeed);
             float endCeiling = endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) : GeometrySteerCeiling(endSpeed);
-            // Descending *input* with ascending output, because Remap's own clamp inverts a descending output.
-            float ramped = ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, endCeiling, VehicleData.SteeringLock, true);
             // max() keeps the ramp a raise only: the straight line sits a degree under the curved law near 25 mph.
-            return Math.Max(ceiling, ramped);
+            return Math.Max(ceiling, ManeuverRamp(speedMph, endCeiling));
+        }
+
+        // Between the ramp's start and end speeds the ceiling eases up to the maneuvering angle, so a slow car can
+        // place itself; at or above the end speed the law's own ceiling stands. A raise only, never a cut.
+        float ManeuverRamp(float speedMph, float ceiling)
+        {
+            if (speedMph >= SteerLimitRampEndMph) return ceiling;
+            float top = Math.Min(ManeuverSteerDegrees, VehicleData.SteeringLock);
+            // Descending *input* with ascending output, because Remap's own clamp inverts a descending output.
+            return ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, ceiling, top, true);
         }
 
 
@@ -1175,13 +1181,20 @@ namespace ARS
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
 
             // Two limits, one per side, closed by one clamp: the ceiling is granted and then raised on the answering
-            // side rather than the clamp being skipped — except for the stabiliser below. Under the geometry law a
-            // reversing car keeps the raw lock, since vanilla's 1 + k × v goes negative below −13 m/s and inverts it.
+            // side rather than the clamp being skipped — except for the stabiliser below. Reverse is always the full
+            // lock: backing up is placing the car, and the geometry law inverts below −13 m/s anyway.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             bool slideGoverned = ARS.SteerLimitMode == ARS.SteerLimitGovernor.Slide;
             float speedCeiling = VehicleData.SteeringLock;
-            if (slideGoverned) speedCeiling = Math.Min(Math.Abs(VehicleData.SlideAngle) + SlideLimitFreeplayDegrees, VehicleData.SteeringLock);
-            else if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
+            if (fwdSpeed > 0f)
+            {
+                if (slideGoverned)
+                {
+                    speedCeiling = Math.Min(Math.Abs(VehicleData.SlideAngle) + SlideLimitFreeplayDegrees, VehicleData.SteeringLock);
+                    speedCeiling = Math.Max(speedCeiling, ManeuverRamp(ARS.MpsToMph(fwdSpeed), speedCeiling));
+                }
+                else speedCeiling = ResolveSteerCeiling(fwdSpeed);
+            }
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;
 
@@ -1204,18 +1217,9 @@ namespace ARS
                 float turnInShare = ARS.Remap(yawUsage, 0f, maximumShare, minimumShare, maximumShare, true);
                 float turnInCeiling = Math.Min(speedCeiling * turnInShare, VehicleData.SteeringLock);
                 float speedMph = ARS.MpsToMph(fwdSpeed);
-                turnInCeiling = ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, turnInCeiling, VehicleData.SteeringLock, true);
+                turnInCeiling = ManeuverRamp(speedMph, turnInCeiling);
                 if (requestedSteer > 0f) SteerLimitLeft = Math.Min(SteerLimitLeft, turnInCeiling);
                 else if (requestedSteer < 0f) SteerLimitRight = Math.Min(SteerLimitRight, turnInCeiling);
-            }
-
-            // Below the manoeuvring speed the car is placing itself, not cornering, and it is the one job neither
-            // mode's ceiling can do: the limit is opened on both sides, after the mode and the yaw share have spoken.
-            if (ARS.MpsToMph(Math.Abs(fwdSpeed)) <= ManeuverLimitMph)
-            {
-                float maneuverCeiling = Math.Min(ManeuverSteerDegrees, VehicleData.SteeringLock);
-                SteerLimitLeft = Math.Max(SteerLimitLeft, maneuverCeiling);
-                SteerLimitRight = Math.Max(SteerLimitRight, maneuverCeiling);
             }
 
             // The damper is the car's stabiliser and the rotation leads the slide, so while its term pushes against
