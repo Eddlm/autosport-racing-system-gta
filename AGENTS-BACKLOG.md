@@ -118,6 +118,7 @@
 37. `immersive-join-points` — **Immersive join points** — a chevron marks the nearest start line and the join follows Pace Mode.
 38. `manual-apex-placement` — **Place apexes by hand (idea)** — sidesteps an apex that is arbitrary along a constant-radius arc.
 39. `creator-apex-preview` — **Preview the apex table inside the creator (idea)** — the merges and blips visible while laying a track out, not only after saving.
+40. `surface-stats-revival` — **Track surface composition (idea)** — the Road/Dirt/Other percentage notification died with the legacy track builder in `57468ae`, and in every revision that carried it the probe sampled a single node, so the percentages were degenerate; the raycast and the material-hash set survive. Revival recipe in the section below.
 
 ## Lane repulsion — unbounded on purpose, and that is the open question
 
@@ -256,6 +257,16 @@ Only location changed: `partial class` means no visibility plumbing and no call-
 **Prune status (`626cbb1`)** — done, conservatively and on purpose:
 - **Pruned**: the four half-migrated `TrackRepository` shims (`LoadXmlOrThrow`, `GetTrackTags`, `GetTrackStartPos`, `GetRacerModel` — each returned the migrated call on its first line with an unreachable body beneath, i.e. the migration's own leftovers), the unused `QuadraticBezier` helper, and the duplicated `src\TrackLoader.cs` csproj entry.
 - **Deliberately kept — this is the important part, none of it is cruft**: the creator's own dead mass and the embedded `if (_routeEditorActive)` branches below are the **revival material** (deleting them now means rewriting them in the refinement pass, which is the opposite of why the code was isolated); the flare pipeline is documented as kept-for-rebuild; `GetSurfaceHash` together with the `Angles`/`TerrainGripMultipliers` fields reads as a **parked surface-grip experiment**; the superseded AI route probe (`Racer.UpdateRouteTarget` + its probe fields) was cut outright in `c2ad2de` with the route-probe subsystem, and the creator's dead `Options` members (`SaveTrack`, `CreateTrack`, `ExitCreator`) are gone from the enum entirely (removed in `c3b2e57`). If a future session is tempted to "finish the prune", it should revive the feature first or ask — everything pruned or skipped is recoverable from git.
+
+### The track surface-stats feature — lost in `57468ae`, and what a revival needs
+
+`GetSurfaceHash` (`AutosportRacingSystem.cs:2291`, a shape-test raycast returning the map material hash) fed a "Track stats" notification that printed the length plus **Road / Dirt / Other percentages**; `57468ae` removed the legacy track builder and the notification with it. The classification is worth keeping: match the returned hash against a `TerrainTypes` member by int, then test the **member's name** — `tarmac` → road, `dirt`/`grass`/`gravel` → dirt, everything else other.
+
+**The honest catch**: in every revision that carried it, the probe was `RouteNodes[0]` **alone** — one node, five metres down — so the percentage maths divided a one-entry list and could only ever print 100% of a single class. The notification existed; the per-node survey did not. The early history is squashed into `48c3e94`, so a working version before `9350dd6` cannot be ruled out, but nothing in the record shows one.
+
+**What survived**: the `TerrainTypes` hash set (`AutosportRacingSystem.cs:291-297`), the raycast pair itself, and the grip half of the same experiment — `Angles` (`:271`, declared and cleared, never used) and `TerrainGripMultipliers` (`:272`, written per node for the leading two cars at `Racer.cs:3684` behind a duplicate guard, **read nowhere and never cleared**, so it accumulates one track's values into the next).
+
+**Revival costs no per-tick work**: probe every Nth node downward once at load, classify by name, tally and publish; clear the multiplier dictionary per track first or a future reader gets the previous track's numbers. The one question only a drive settles is whether the raycast returns a usable material on these custom tracks — the enum names imply the GTA material set is known, but nothing here proves the probe hits the racing surface.
 
 **What stayed behind (the original list, kept for that revival pass)**
 - Six `if (_routeEditorActive)` branches still sit inside *live* methods (`OnTick`'s freecam-update and `TrackVisuals.DrawRoute` calls, one more `OnTick` gate, and three inside draw helpers). Each is dead but embedded, so removing them is a real edit, not a move.
