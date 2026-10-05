@@ -163,8 +163,9 @@ The two-livery-spaces trap (mod slot 48 vs the livery list), the exact natives a
 
 ## Leaderboard - drawing and data detail, moved out of AGENTS.md
 
+- Drawing lives in `DrawLeaderboard`, gated by the Show Leaderboard toggle. **Positions freeze per racer**: crossing the line stamps `FinalPosition` (finish order via `LeaderboardFinish`, mirrored into `RacePosition`, reset in `Initialize`); the live progress sort only touches cars with `FinalPosition == 0`. On race end (all finished or timed) stragglers are classified by progress and appended.
 - **Draw**: finishers in locked order first, then still-racing cars numbered `finishedCount + rank` by live progress; the player's row is yellow. The finish/reward block awards `RaceReward` to the first finisher, sets `RaceStatus = Finished` and calls `CleanEverything()` (HUD/leaderboard only draw during Countdown/InProgress).
-- **Data**: `RacePosition`/`FinalPosition`/`Name`/`Lap`, `Pressure`, `_raceTimedFinishMs`, `RaceReward`, `ParseToTimeSpan`. `LapTimes` **is** read — `BestLap()` returns its minimum and the leaderboard's best-lap column draws it (`AutosportRacingSystem.cs:2004`); **`VehicleData.TextPerformanceIndex` is read too** — it is the leaderboard's PI column, written once per race and read only by that board (`AutosportRacingSystem.cs:2010`), so it is **not** write-only; the name prefix still comes from `PowerScale`.
+- **Data**: `RacePosition`/`FinalPosition`/`Name`/`Lap`, `Pressure`, `_raceTimedFinishMs`, `RaceReward`, `ParseToTimeSpan`. `LapTimes` **is** read — `BestLap` (`Racer.cs:1961`) returns its minimum and the leaderboard's best-lap column draws it via `DrawLapStats` (`AutosportRacingSystem.cs:2002`, `:2004`); **`VehicleData.TextPerformanceIndex` is read too** — it is the leaderboard's PI column, written once per race and read only by that board (`AutosportRacingSystem.cs:2010`), so it is **not** write-only; the name prefix still comes from `PowerScale`.
 
 ## Grid pace selection - pace score, electrics and PI ballpark, moved out of AGENTS.md
 
