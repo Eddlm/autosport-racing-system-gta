@@ -1055,9 +1055,6 @@ namespace ARS
         // fully; above it the ceiling is the law's own. The band is in mph because that is how it is judged.
         const float SteerLimitRampStartMph = 5f;
         const float SteerLimitRampEndMph = 30f;
-        // The top of that ramp: a car at or below the start speed may place itself with this much steer. It is past
-        // most cars' lock, so the clamp to lock is what usually applies.
-        const float ManeuverSteerDegrees = 50f;
 
         // Live ceiling coefficient: the useful steer angle at speed is ~ grip × g × wheelbase / v², so grip
         // belongs in that numerator and the cap loosens as √grip — the same √grip the speed maths uses.
@@ -1153,14 +1150,13 @@ namespace ARS
             return Math.Max(ceiling, ManeuverRamp(speedMph, endCeiling));
         }
 
-        // Between the ramp's start and end speeds the ceiling eases up to the maneuvering angle, so a slow car can
-        // place itself; at or above the end speed the law's own ceiling stands. A raise only, never a cut.
+        // Between the ramp's start and end speeds the ceiling eases up to the car's own lock, so a slow car can place
+        // itself; at or above the end speed the law's own ceiling stands. A raise only, never a cut.
         float ManeuverRamp(float speedMph, float ceiling)
         {
             if (speedMph >= SteerLimitRampEndMph) return ceiling;
-            float top = Math.Min(ManeuverSteerDegrees, VehicleData.SteeringLock);
             // Descending *input* with ascending output, because Remap's own clamp inverts a descending output.
-            return ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, ceiling, top, true);
+            return ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, ceiling, VehicleData.SteeringLock, true);
         }
 
 
