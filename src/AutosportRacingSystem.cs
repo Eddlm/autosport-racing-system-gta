@@ -154,6 +154,10 @@ namespace ARS
         public static float SteerDampingGain = 0.5f;
         public static int YawTurnInMinimumPercent = 20;
         public static int YawTurnInMaximumPercent = 100;
+        // Which quantity governs the steer ceiling: yaw usage scales the cornering ceiling, or the slide angle sets
+        // the limit to the neutral countersteer plus a degree of free play.
+        public enum SteerLimitGovernor { Yaw, Slide }
+        public static SteerLimitGovernor SteerLimitMode = SteerLimitGovernor.Yaw;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1062,6 +1066,17 @@ namespace ARS
             aiMenu.Add(steerKDItem);
             HookListTextPicker(steerKDItem);
 
+            string[] steerLimitModeOptions = { "Yaw-Governed", "Slide-Governed" };
+            NativeListItem<string> steerLimitModeItem = new NativeListItem<string>("Steer Limit Mode", "Which quantity governs the steer ceiling. Yaw-Governed scales the cornering ceiling by yaw usage, from Turn-In Minimum to Turn-In Maximum. Slide-Governed sets the limit to the slide angle plus a degree, which is the neutral countersteer plus one degree of free play.", steerLimitModeOptions);
+            steerLimitModeItem.ItemChanged += (sender, args) =>
+            {
+                SteerLimitMode = steerLimitModeItem.Items[args.Index] == "Slide-Governed" ? SteerLimitGovernor.Slide : SteerLimitGovernor.Yaw;
+                SaveRacerSetting("SteerLimitMode", steerLimitModeItem.Items[args.Index]);
+            };
+            steerLimitModeItem.SelectedIndex = Math.Max(0, steerLimitModeItem.Items.IndexOf(SettingsMenuStore.Get("SteerLimitMode", SteerLimitMode == SteerLimitGovernor.Slide ? "Slide-Governed" : "Yaw-Governed")));
+            aiMenu.Add(steerLimitModeItem);
+            HookListTextPicker(steerLimitModeItem);
+
             string[] yawTurnInOptions = { "0", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100" };
             NativeListItem<string> yawTurnInItem = new NativeListItem<string>("Turn-In Minimum (%)", "Steer authority allowed at zero yaw usage. It scales linearly from this amount to Turn-In Maximum.", yawTurnInOptions);
             yawTurnInItem.ItemChanged += (sender, args) =>
@@ -1074,7 +1089,7 @@ namespace ARS
             HookListTextPicker(yawTurnInItem);
 
             string[] yawTurnInMaximumOptions = { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" };
-            NativeListItem<string> yawTurnInMaximumItem = new NativeListItem<string>("Turn-In Maximum (%)", "Maximum authority and yaw-usage endpoint for the turn-in envelope. 100% commands the outer front wheel's modelled peak-slip angle; above 100% allows extra authority up to mechanical lock.", yawTurnInMaximumOptions);
+            NativeListItem<string> yawTurnInMaximumItem = new NativeListItem<string>("Turn-In Maximum (%)", "Maximum authority and the yaw-usage endpoint, in Yaw-Governed mode. 100% commands the outer front wheel's modelled peak-slip angle; above 100% allows extra authority up to mechanical lock.", yawTurnInMaximumOptions);
             yawTurnInMaximumItem.ItemChanged += (sender, args) =>
             {
                 YawTurnInMaximumPercent = int.Parse(yawTurnInMaximumItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -3085,6 +3100,7 @@ namespace ARS
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
             YawTurnInMinimumPercent = SettingsMenuStore.GetInt("YawTurnInMinimumPercent", YawTurnInMinimumPercent);
             YawTurnInMaximumPercent = SettingsMenuStore.GetInt("YawTurnInMaximumPercent", YawTurnInMaximumPercent);
+            SteerLimitMode = SettingsMenuStore.Get("SteerLimitMode", "Yaw-Governed") == "Slide-Governed" ? SteerLimitGovernor.Slide : SteerLimitGovernor.Yaw;
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

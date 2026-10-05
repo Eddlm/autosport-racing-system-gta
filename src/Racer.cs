@@ -172,10 +172,6 @@ namespace ARS
         float _debugYawTargetPerSecond = 0f;
         float _debugDamperGainSeconds = 0f;
         float _debugDamperSpeedScale = 0f;
-        // Slip-balance grant state: the demand's own size last evaluation, and whether the imbalance held.
-        float _lastSteerRequestDeg = 0f;
-        bool _demandSettledHeld = false;
-        bool _balanceGrantHeld = false;
         // How much of the sliding countersteer blend the current slide has earned, 0 to 1; read by the limiter
         // and the slew within the same frame.
         float _slidePriority = 0f;
@@ -1157,10 +1153,9 @@ namespace ARS
         }
 
 
-        // Below the steer ceiling the front/rear slip balance decides whether the car may have a degree more: the
-        // imbalance is the understeer angle, so a positive one means the front is leading and the rear is not the
-        // axle about to let go. It is a knee, not the cap - the peak-slip ceiling still bounds it.
-        const float BalanceSlackDegrees = 1f;
+        // The slide-governed limit is the neutral countersteer, the slide angle, plus this much free play: the wheel can
+        // always reach a degree past the velocity vector to try to catch the rotation.
+        const float SlideLimitFreeplayDegrees = 1f;
 
         void ApplySteerLimits()
         {
@@ -1178,14 +1173,17 @@ namespace ARS
             // is granted to a side rather than a check skipped. A reversing car keeps the raw lock — vanilla's
             // 1 + k × v goes negative below −13 m/s and would invert the ceiling.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
+            bool slideGoverned = ARS.SteerLimitMode == ARS.SteerLimitGovernor.Slide;
             float speedCeiling = VehicleData.SteeringLock;
-            if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
+            if (slideGoverned) speedCeiling = Math.Min(Math.Abs(VehicleData.SlideAngle) + SlideLimitFreeplayDegrees, VehicleData.SteeringLock);
+            else if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;
 
             // The one whitelisted allowance: the side answering a slide reaches past the ceiling towards the slide
             // angle itself, in proportion to how much of the blend that slide has earned — a raise, never a reduction.
-            if (countersteering && _slidePriority > 0f)
+            // The slide-governed ceiling is already the slide angle plus free play, so it needs no allowance.
+            if (!slideGoverned && countersteering && _slidePriority > 0f)
             {
                 float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle) * _slidePriority, VehicleData.SteeringLock);
                 if (requestedSteer > 0f) SteerLimitLeft = Math.Max(SteerLimitLeft, countersteerAllowance);
@@ -1193,7 +1191,7 @@ namespace ARS
             }
 
             float yawRate = VehicleData.YawRotationPerSecondDegrees;
-            if (fwdSpeed > 0f && requestedSteer * yawRate >= 0f)
+            if (!slideGoverned && fwdSpeed > 0f && requestedSteer * yawRate >= 0f)
             {
                 float yawUsage = YawUsagePercent() * 0.01f;
                 if (float.IsNaN(yawUsage) || float.IsInfinity(yawUsage)) yawUsage = 0f;
@@ -1206,26 +1204,6 @@ namespace ARS
                 if (requestedSteer > 0f) SteerLimitLeft = Math.Min(SteerLimitLeft, turnInCeiling);
                 else if (requestedSteer < 0f) SteerLimitRight = Math.Min(SteerLimitRight, turnInCeiling);
             }
-
-            // Slip-balance knee: in the bicycle model the front-minus-rear slip angle is the understeer angle,
-            // delta - atan(L * yawRate / speed), and it is positive whenever the front leads. While it holds, and the
-            // demand has settled into it, the commanded side is allowed a degree past the applied command - bounded
-            // by the same peak-slip cap. Walked off the applied angle, not the request, so the ceiling leads the
-            // wheel by a degree rather than handing over the whole demand. Each term holds for two evaluations,
-            // because the yaw rate is noisier than the tyres and the request jitters inside a degree.
-            float yawRateDegrees = VehicleData.YawRotationPerSecondDegrees;
-            float understeerDeg = UndersteerDegrees(fwdSpeed);
-            bool demandSettled = Math.Sign(requestedSteer) == Math.Sign(_lastSteerRequestDeg) && Math.Abs(requestedSteer) <= Math.Abs(_lastSteerRequestDeg);
-            bool balanceGrant = understeerDeg > 0f && !IsUnstable() && demandSettled && requestedSteer * yawRateDegrees >= 0f;
-            if (balanceGrant && _balanceGrantHeld && demandSettled && _demandSettledHeld)
-            {
-                float slackCeiling = Math.Min(Math.Abs(Control.LastAppliedSteerDegrees) + BalanceSlackDegrees, speedCeiling);
-                if (requestedSteer > 0f) SteerLimitLeft = Math.Max(SteerLimitLeft, slackCeiling);
-                else if (requestedSteer < 0f) SteerLimitRight = Math.Max(SteerLimitRight, slackCeiling);
-            }
-            _balanceGrantHeld = balanceGrant;
-            _demandSettledHeld = demandSettled;
-            _lastSteerRequestDeg = requestedSteer;
 
             Control.SteerDegrees = ARS.Clamp(requestedSteer, -SteerLimitRight, SteerLimitLeft);
         }
@@ -1299,9 +1277,6 @@ namespace ARS
             _stuckRecoveryCooldownEndTime = 0;
             _stuckMoveSampleTime = 0;
             Control.LastAppliedSteerDegrees = 0f;
-            _lastSteerRequestDeg = 0f;
-            _demandSettledHeld = false;
-            _balanceGrantHeld = false;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
         }

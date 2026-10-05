@@ -1,11 +1,11 @@
-# ARS — test plan: build 457
+# ARS — test plan: build 458
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
 (`cbae845`); the flat slew is driven and read as less stable, which the blend re-cut addresses (`7297050`); the
-engine restart is new and undriven. Everything else below is undriven. The deployed DLL is dev build **457**; a
-build + reload is enough (SHVDN reloads the scripts live, no game restart).
+engine restart and the steer limit governor are new and undriven. Everything else below is undriven. The deployed
+DLL is dev build **458**; a build + reload is enough (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
@@ -256,3 +256,28 @@ Watch:
    premature, re-anchor it to the share reaching full.
 4. **A straight** — a slower actuator can itself feed a limit cycle, so watch for weaving on the straight and in
    fast direction changes (the survey's 0.6 rad/s warning).
+
+## Steer limit governor — A/B (not driven)
+
+The limiter now takes its governing quantity from **Steer Limit Mode** in the Settings menu, a two-item list. The
+slip-balance knee (a degree past the applied command, capped by the ceiling) is **removed from both**: it was a
+misreading of the intended "slide angle plus one degree", which belongs in the slide-governed limit.
+
+- **Yaw-Governed** (default, the previous behaviour minus the knee): the cornering ceiling from the at-speed peak
+  slip, scaled by yaw usage from Turn-In Minimum to Turn-In Maximum, plus the countersteer allowance (slide angle
+  times blend weight) on the answering side.
+- **Slide-Governed**: the ceiling is the **slide angle plus one degree** on both sides, clamped to lock. No yaw
+  turn-in share, no countersteer allowance. At zero slide the limit is one degree, so a car steers by developing
+  slip rather than by steering into it.
+
+Watch:
+
+1. **Slide-Governed, corner entry** — a car with no slide is capped at one degree of steer, so it has to slide
+   before it can turn. Watch whether it can start a corner at all, and especially at low speed in a hairpin. If it
+   ploughs straight on and never builds a slide, the limit is the deadlock and not the driving.
+2. **Slide-Governed, catching a slide** — the answering side can reach a degree past the neutral countersteer, so
+   the counterbalancer must never be clipped.
+3. **Yaw-Governed, corner entry** — dropping the knee took away the one place that gave a degree back. Watch
+   whether cars now understeer where the knee used to help.
+4. **Either mode** — the switch persists in the menu settings, so confirm the mode you think you are driving is the
+   one the menu shows.
