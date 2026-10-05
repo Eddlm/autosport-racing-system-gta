@@ -114,14 +114,15 @@ game folder carries the init banner and lap lines.
 ## 12. No Collision option — test this one hardest
 
 **Known history:** the old ghosting was reported as *precarious* — contact sometimes happened with the mode on.
-The cause is now known from the engine source: the native's third argument is a **mode**, and the old code passed
-`true`, which selects `NO_COLLISION_RESET_WHEN_NO_IMPACTS` — the entry **clears itself** once the pair stops
-touching. The flag is now requested in the `PERMENANT` mode, so a single application should hold. If contact still
-appears, the cause is an entity swap (respawn, or the AI dummy-vehicle conversion past ~40 m), not the mode.
+The third argument is a **mode** (verified in the engine, `commands_entity.cpp:5839`): `false` is
+`NO_COLLISION_PERMENANT`, `true` is `NO_COLLISION_RESET_WHEN_NO_IMPACTS`, which lets the entry clear itself.
+**The one-shot `PERMENANT` application was driven and failed — the cars collide with the option on.** The engine
+resets the pair in its own per-frame path (`physics.cpp:2872`, `GameWorld.cpp:2968`), so a single application
+cannot hold. The build now re-asserts every pair every tick while the option is on, which is the older shape.
+If contact still appears, the remaining suspects are an entity swap (respawn, or the AI dummy-vehicle conversion
+past ~40 m) and the native's storage depth.
 
-**This is the ONE-SHOT build.** The mode is applied exactly once — at the green, and whenever the option is
-toggled on — for every pair regardless of spacing. Nothing re-asserts it per tick. The matrix below is therefore a
-genuine test of whether the entry holds, and a single contact is the falsification.
+The matrix below is a test of whether the per-tick re-assert holds; a single contact is still the falsification.
 
 35. Toggle **No Collision** in the AI menu.
 36. With it ON: racers must **not detect each other** — no avoidance, no repulsion, no rival walls, no

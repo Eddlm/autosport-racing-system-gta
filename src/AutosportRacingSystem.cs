@@ -1559,11 +1559,11 @@ namespace ARS
         {
             return (float)Math.Round(mph * 0.44704f, 3);
         }
-        // No-collision mode: every nearby racer pair passes through every other, world collision untouched. It is
-        // re-asserted every tick because the flag does not survive the engine's own vehicle state changes (an AI car
-        // becomes a dummy past 40 m). Pairs further apart than the range are skipped; they cannot touch anyway.
-        // The third argument is a mode: false keeps the pair non-colliding, true lets it clear once the pair stops
-        // impacting (commands_entity.cpp:5839). The removed ghosting passed true, which is why it kept slipping.
+        // No-collision mode: every racer pair passes through every other, world collision untouched. It is
+        // re-asserted every tick, because the engine resets the pair in its own per-frame path and the AI dummy
+        // conversion drops it as well (physics.cpp:2872, GameWorld.cpp:2968). The third argument is a mode: false
+        // keeps the pair non-colliding, true lets it clear once the pair stops impacting (commands_entity.cpp:5839).
+        // The removed ghosting passed true, which is why it kept slipping.
         void ApplyNoCollision(bool enable)
         {
             for (int i = 0; i < Racers.Count; i++)
@@ -1910,6 +1910,8 @@ namespace ARS
                             _gameTimeNextInLine = Game.GameTime + Math.Max(1, 10 / (Racers.Count / count));
                         }
                     }
+
+                    if (NoCollision) ApplyNoCollision(true);
                 }
 
                 
