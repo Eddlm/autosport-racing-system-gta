@@ -693,7 +693,7 @@ namespace ARS
             _raceMenu.Add(_trackListItem);
             HookListTextPicker(_trackListItem);
 
-            NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", new[] { "2", "4", "6", "8", "10" });
+            NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", SettingsRepair.OptionsFor("Laps"));
             lapsItem.ItemChanged += (sender, args) => RaceMenuStore.Set("Laps", lapsItem.Items[args.Index]);
             int laps = RaceMenuStore.GetInt("Laps", 6);
             lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(laps.ToString()));
@@ -931,13 +931,13 @@ namespace ARS
             };
             racersMenu.Add(forceFillItem);
 
-            NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", new[] { "15", "30", "45", "60" });
+            NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", SettingsRepair.OptionsFor("TimeoutSeconds"));
             timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
             timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(SettingsMenuStore.GetInt("TimeoutSeconds", 60).ToString()));
             racersMenu.Add(timeoutItem);
             HookListTextPicker(timeoutItem);
 
-            NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", new[] { "0", "1", "2" });
+            NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", SettingsRepair.OptionsFor("AIRacerAutofix"));
             autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
             autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(SettingsMenuStore.GetInt("AIRacerAutofix", 2).ToString()));
             racersMenu.Add(autofixItem);
@@ -987,8 +987,7 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            string[] speedOffsetOptions = { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" };
-            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Offset (mph)", "Flat mph added to the corner braking plan. Higher = racers carry more speed into corners.", speedOffsetOptions);
+            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Offset (mph)", "Flat mph added to the corner braking plan. Higher = racers carry more speed into corners.", SettingsRepair.OptionsFor("CornerOffset"));
             cornerOffsetItem.ItemChanged += (sender, args) =>
             {
                 CornerOffsetMph = int.Parse(cornerOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -998,7 +997,7 @@ namespace ARS
             aiMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
 
-            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Route Offset (mph)", "Flat mph added to the route curvature plan. Higher = racers carry more speed through sweeping corners.", speedOffsetOptions);
+            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Route Offset (mph)", "Flat mph added to the route curvature plan. Higher = racers carry more speed through sweeping corners.", SettingsRepair.OptionsFor("RouteOffset"));
             routeOffsetItem.ItemChanged += (sender, args) =>
             {
                 RouteOffsetMph = int.Parse(routeOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1049,8 +1048,7 @@ namespace ARS
             };
             aiMenu.Add(noCollisionItem);
 
-            string[] steerKDOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
-            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds, applied to the excess over the yaw the aim point requires. Lower is crisper; higher opposes rotation more strongly.", steerKDOptions);
+            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds, applied to the excess over the yaw the aim point requires. Lower is crisper; higher opposes rotation more strongly.", SettingsRepair.OptionsFor("SteerDampingGain"));
             steerKDItem.ItemChanged += (sender, args) =>
             {
                 SteerDampingGain = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1060,8 +1058,7 @@ namespace ARS
             aiMenu.Add(steerKDItem);
             HookListTextPicker(steerKDItem);
 
-            string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
-            NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
+            NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", SettingsRepair.OptionsFor("CrestEffect"));
             crestEffectItem.ItemChanged += (sender, args) =>
             {
                 CrestEffect = int.Parse(crestEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
@@ -1071,7 +1068,7 @@ namespace ARS
             aiMenu.Add(crestEffectItem);
             HookListTextPicker(crestEffectItem);
 
-            NativeListItem<string> hillEffectItem = new NativeListItem<string>("Hill Effect (%)", "How much a hill's pitch cuts a racer's intended speed. 0% ignores slopes, 100% is the tuned default (15 degrees halves grip).", terrainEffectOptions);
+            NativeListItem<string> hillEffectItem = new NativeListItem<string>("Hill Effect (%)", "How much a hill's pitch cuts a racer's intended speed. 0% ignores slopes, 100% is the tuned default (15 degrees halves grip).", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
             {
                 HillGripEffect = int.Parse(hillEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
@@ -1081,8 +1078,7 @@ namespace ARS
             aiMenu.Add(hillEffectItem);
             HookListTextPicker(hillEffectItem);
 
-            string[] rubberbandOptions = { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" };
-            NativeListItem<string> rubberbandItem = new NativeListItem<string>("Rubberbanding (%)", "Keeps the field packed: leaders are slowed and laggards are boosted, scaled by distance from the center position. 0 = off; 100 = max effect (0.66× for the leader, 1.33× for last place).", rubberbandOptions);
+            NativeListItem<string> rubberbandItem = new NativeListItem<string>("Rubberbanding (%)", "Keeps the field packed: leaders are slowed and laggards are boosted, scaled by distance from the center position. 0 = off; 100 = max effect (0.66× for the leader, 1.33× for last place).", SettingsRepair.OptionsFor("Rubberbanding"));
             rubberbandItem.ItemChanged += (sender, args) =>
             {
                 RubberbandingPct = int.Parse(rubberbandItem.Items[args.Index], CultureInfo.InvariantCulture);

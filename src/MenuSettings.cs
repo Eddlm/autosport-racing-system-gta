@@ -1,5 +1,6 @@
 using GTA;
 using System.Globalization;
+using System.IO;
 
 namespace ARS
 {
@@ -8,11 +9,13 @@ namespace ARS
     public class MenuSettings
     {
         readonly string _path;
+        readonly string _fileName;
         ScriptSettings _file;
 
         public MenuSettings(string path)
         {
             _path = path;
+            _fileName = Path.GetFileName(path);
         }
 
         ScriptSettings File
@@ -20,26 +23,39 @@ namespace ARS
             get { return _file ?? (_file = ScriptSettings.Load(_path)); }
         }
 
+        // The schema owns which keys exist. An undeclared one is dropped by the next prune, so a refused
+        // touch keeps the session behaving like the next load instead of pretending until then.
+        bool Declared(string key, string operation)
+        {
+            if (SettingsRepair.IsDeclared(_fileName, key)) return true;
+            SettingsRepair.ReportUndeclared(_fileName, key, operation);
+            return false;
+        }
+
         public string Get(string key, string fallback)
         {
+            if (!Declared(key, "read")) return fallback;
             SeedIfMissing(key, fallback);
             return File.GetValue<string>("MENU", key, fallback);
         }
 
         public bool GetBool(string key, bool fallback)
         {
+            if (!Declared(key, "read")) return fallback;
             SeedIfMissing(key, fallback.ToString());
             return File.GetValue<bool>("MENU", key, fallback);
         }
 
         public int GetInt(string key, int fallback)
         {
+            if (!Declared(key, "read")) return fallback;
             SeedIfMissing(key, fallback.ToString(CultureInfo.InvariantCulture));
             return File.GetValue<int>("MENU", key, fallback);
         }
 
         public float GetFloat(string key, float fallback)
         {
+            if (!Declared(key, "read")) return fallback;
             SeedIfMissing(key, fallback.ToString(CultureInfo.InvariantCulture));
             return File.GetValue<float>("MENU", key, fallback);
         }
@@ -63,6 +79,7 @@ namespace ARS
 
         public void Set(string key, string value)
         {
+            if (!Declared(key, "write")) return;
             File.SetValue("MENU", key, value);
             File.Save();
         }

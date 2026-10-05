@@ -20,6 +20,7 @@ namespace ARS
         {
             public readonly string Key;
             public readonly string Default;
+            public string[] Domain { get { return _domain; } }
             readonly Kind _kind;
             readonly string[] _domain;
             readonly float _min;
@@ -273,6 +274,50 @@ namespace ARS
                 return keys;
             }
             return new List<string>();
+        }
+
+        static Dictionary<string, HashSet<string>> _declaredKeys;
+
+        static Dictionary<string, HashSet<string>> DeclaredKeySets
+        {
+            get
+            {
+                if (_declaredKeys != null) return _declaredKeys;
+                _declaredKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+                foreach (FileSpec file in Schema)
+                {
+                    HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (KeySpec spec in file.Specs) keys.Add(spec.Key);
+                    _declaredKeys[file.Name] = keys;
+                }
+                return _declaredKeys;
+            }
+        }
+
+        // The schema owns which keys exist, so this is the one question a store asks before touching a file.
+        public static bool IsDeclared(string fileName, string key)
+        {
+            HashSet<string> keys;
+            return DeclaredKeySets.TryGetValue(fileName, out keys) && keys.Contains(key);
+        }
+
+        // So a menu offers exactly what the file will keep: the schema's own domain, never a second copy of it.
+        public static string[] OptionsFor(string key)
+        {
+            foreach (FileSpec file in Schema)
+                foreach (KeySpec spec in file.Specs)
+                    if (string.Equals(spec.Key, key, StringComparison.Ordinal) && spec.Domain != null) return spec.Domain;
+            return new string[0];
+        }
+
+        static readonly HashSet<string> ReportedUndeclared = new HashSet<string>(StringComparer.Ordinal);
+
+        // Once per key, not once per call: a key read inside the race loop would otherwise bury the log
+        // it is trying to be noticed in.
+        public static void ReportUndeclared(string fileName, string key, string operation)
+        {
+            if (!ReportedUndeclared.Add(fileName + "|" + key)) return;
+            ARS.Log(ARS.LogImportance.Error, "Settings: " + fileName + " declares no key '" + key + "', so the menu's " + operation + " was refused - an undeclared key is dropped on the next load, which would revert the setting silently.", true);
         }
 
         // Retired files are removed only after any values they still carry have been migrated to menu settings.
