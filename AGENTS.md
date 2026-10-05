@@ -56,9 +56,11 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 - **Build:** `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" NewRacingSystem.csproj /v:minimal /nologo /p:Configuration=Release`.
 - **A rebuild does NOT need a game restart: the SHVDN reload binding reloads the scripts live** (`Insert` alone on this install — a combo value in that ini is read as its first token and reloads on every sprint), even though the in-game console is unavailable — so a test cycle is build → reload → drive.
 **Moved to `AGENTS-TECHNOTES.md`** → "Build & deploy — toolchain, output, rollback": the dotnet form (never actually recorded anywhere — see the note there), the game output path and `ARS.dll`, the log truncation, the lag rule, the branch and rollback points, the dev build number. Triggers: deploy, dotnet, output, log, rollback, build number.
+
 ## Dependencies and UI
 
 **Moved whole to `AGENTS-TECHNOTES.md`** — the declared ini shape, the menu invariants, the ship mirror and the LemonUI/API-dll staging rules are there.
+
 ## SHVDN build compatibility (release-critical)
 - **SHVDN build compatibility** — the asi and the API dll are a matched build pair with no version check, and `VerifyScriptBridge()` must run before any native call; the install matrix, the SHVDNE alternative and the live-install ini quirk are in `AGENTS-SHVDN.md`.
 
@@ -93,12 +95,14 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 - **Rule of thumb: the player and the AI follow the same rules.** When adding a mechanic, default to one code path for both; diverge only when the game engine forces it (e.g. the player's special ability, the AI's free ABS).
 
 **Duel model (designed via Council, not implemented) — full design in `AGENTS-DUEL.md`.** Physics-aware card play on one shared time-to-apex primitive taken from each car's own live plan; **anything about rivals, overtaking or card play starts in `AGENTS-DUEL.md`.**
+
 ## Debug (LemonUI Debug submenu)
 
 **Moved whole to `AGENTS-TECHNOTES.md`** — the toggle keys, what each visual owns and where the lane lines are drawn are there. The rules that hold: retiring a toggle retires its key, new toggles append, and the lane lines are drawn from `AutosportRacingSystem.cs` off the debug-focus racer, never the player.
 
 ## Leaderboard (frozen results board)
 **Moved to `AGENTS-TECHNOTES.md`** → "Leaderboard - drawing and data detail": the freeze-on-crossing mechanism, the player's row and the finish block, plus the PI and best-lap columns. Triggers: leaderboard, results board, position freeze, PI column, best lap.
+
 ## Durable gotchas — do not "fix" these
 - **The pursuit's steer saturates at the bearing it clamps to, and there is no separate "recovery law" to preserve** — `PursuitSteerFromBearing` (`Racer.cs`) is the `atan` of the pursuit's own sine term, so past the clamp the command would fold back down instead of flattening, and any saturation or crossover angle is a derivation off that form rather than a value the code holds. The `ARS.Clamp` NaN trap is already the NaN discipline bullet below, and the line cited for the "recovery law" (`Racer.cs:727`) is a corner-logging loop, not a clamp.
 - **`if (1 == 2) return;` is an INVERTED gate — it disables nothing**, because the return only fires when the condition is true and it never is. Correct idioms are a bare `return;` or the block form; this bit the start-line flare disable (`bdd1b29`) for weeks.
