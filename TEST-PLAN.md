@@ -2,7 +2,8 @@
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
-driven and **failed** against the engine's one-slot limit (`cbae845`). Everything else below is undriven. The
+driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
+(`cbae845`). Everything else below is undriven. The
 deployed DLL is dev build **452**; a build + reload is enough (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
@@ -124,10 +125,13 @@ m_pNoCollisionEntity`, a single `fwRegdRef`), and `PERMENANT` is never cleared b
 loop leaves each car holding only its last loop partner. **A whole grid cannot be ghosted pairwise with this
 native.** A car is instead paired with its **nearest rival**, one slot each, re-asserted every tick.
 
-The residual to expect: a car only passes through its single closest rival, so a touch from a third car in a tight
-pack can still land. Judge the option on whether ordinary racing stays contact-free, not on the full matrix below
-being literally achievable — and if a contact appears, the first question is whether the two cars were each
-other's nearest at that tick.
+**Driver-verified (`cbae845`):** the nearest-rival pairing works — a car passes through its stored partner. The
+slot is per **car**, not per field, so a grid of N carries up to N directed entries and several pairs can be
+ghosted at once; that is why it reads as more than one entity.
+
+The residual to expect: one slot per car, so a car is covered against only a single rival — a second car in a
+tight pack can still land a touch. Judge the option on whether ordinary racing stays contact-free, not on the
+full matrix below being literally achievable.
 
 The matrix below is a test of how far the nearest-rival pairing holds; a single contact is still the falsification.
 
