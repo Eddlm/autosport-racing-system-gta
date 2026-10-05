@@ -189,3 +189,12 @@ The question is whether braking now starts where the track stops being flat, wit
 2. **The same corner twice** — once at pace, once deliberately slower. The move is a fixed node walk, so a slow approach spends the extra distance idling; if that looks like braking far too early, note the speed, because the gate should be braking-span-dependent rather than fixed.
 3. **Log check** — generation now prints `entry=` beside `node=` per crest. Expect `entry` earlier in travel order than `node` (a lower index on a circuit), and the move distance on the `Crest` lines; a skip names its reason.
 4. **A track with no crest before its corners** — nothing should change.
+## Bump scan overlay (built `f3f318f`, not yet driven)
+
+The question is whether the scan finds the lips a driver can feel, and whether the ones it finds are the ones that launch a car.
+
+1. **The overlay** - enable `Show Bumps` in the Debug submenu and drive the track. A cyan tick and a line across the road mark every lip within 400 m. Expect a marker where the rise ends and the road drops away, not in the middle of a slope and not on every undulation.
+2. **Log check** - generation prints one `Bump:` line per lip with `lip=`, `rise=`, `grade=` and `curvature=`, then a closing `Bumps: N lips` line. Expect a handful to a few dozen on a circuit; a count near the node count means the minimum grade is too low.
+3. **A known launcher** - a jump the cars already take must carry a marker, and its `grade` should be the steepest of the set.
+4. **A long climb** - a rise longer than eight metres must produce no marker at all. If it does, the run limit is not biting.
+5. **Nothing drives on it** - behaviour and lap times must match the build before `f3f318f`: the `RequiresEarlyBrake` / `RampEndNode` hook the braking plan reads is still unset, so a marked lip must not move anyone's braking point.
