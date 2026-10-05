@@ -54,21 +54,11 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 ## Build & deploy
 - **The project auto-copies on build** (`PostBuildEvent` + `CopyArsDll`): Debug and Release both fire it, so *whichever builds last wins* — run Release last.
 - **Build:** `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" NewRacingSystem.csproj /v:minimal /nologo /p:Configuration=Release`.
-- **Via dotnet** (errors only, hides the SHVDN2 deprecation wall): see the `NewRacingSystem.sln` form in `AGENTS-TECHNOTES.md`. The VS install is **localised**, so filter its output on `: error `, not on "Build succeeded".
-- Build output (game): `D:\SteamLibrary\steamapps\common\Grand Theft Auto V\Scripts\AutosportRacingSystem\`, and the artifact the game loads from there is **`ARS.dll`**; SHVDN's log is `ScriptHookVDotNet.log` in the game root.
-- **`Scripts\AutosportRacingSystem\Log.log` is truncated at script init**, so an earlier session's evidence is gone — copy it out live when debugging.
 - **A rebuild does NOT need a game restart: the SHVDN reload binding reloads the scripts live** (`Insert` alone on this install — a combo value in that ini is read as its first token and reloads on every sprint), even though the in-game console is unavailable — so a test cycle is build → reload → drive.
-- Sub-200 ms lags don't matter; don't restructure call order to kill one-frame quirks.
-- **Default branch is `master`** (the `2026` branch is redundant). Rollback points: **`54b33a7`** = last commit before the live corner-creation experiments; tag **`checkpoint-pre-gs-aware`** = before the Gs-aware preview steering experiment.
-- **A dev build number auto-increments per compiled build** (`GenerateBuildNumber` in `NewRacingSystem.csproj`) and the init banner prints it beside the DLL's write time. It is deliberately **not** the assembly version — that stays the release identity and only moves by hand — and its `Inputs`/`Outputs` make it skip exactly when `CoreCompile` does, so it can never tick ahead of the DLL it labels. The counter lives in a gitignored `build\` so a build never dirties the tree; CI supplies its own via `-p:BuildNumber`.
-
+**Moved to `AGENTS-TECHNOTES.md`** → "Build & deploy — toolchain, output, rollback": the dotnet form (never actually recorded anywhere — see the note there), the game output path and `ARS.dll`, the log truncation, the lag rule, the branch and rollback points, the dev build number. Triggers: deploy, dotnet, output, log, rollback, build number.
 ## Dependencies and UI
 
 **Moved whole to `AGENTS-TECHNOTES.md`** — the declared ini shape, the menu invariants, the ship mirror and the LemonUI/API-dll staging rules are there.
-
-- **Two folder constants drive every path** (`ARS.ScriptsFolder`, `ARS.SettingsFolder`), and the `.csproj` mirror of `ScriptsFolder` is kept in sync by hand.
-- **A setting read as a static applies only when assigned in its own `ItemChanged`**, and menu option lists come from their enum so only a renamed member needs a migration.
-
 ## SHVDN build compatibility (release-critical)
 - **SHVDN build compatibility** — the asi and the API dll are a matched build pair with no version check, and `VerifyScriptBridge()` must run before any native call; the install matrix, the SHVDNE alternative and the live-install ini quirk are in `AGENTS-SHVDN.md`.
 
@@ -99,25 +89,16 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 - **Sideloaded fleet handling** — ARS reads the live `CHandlingData` from memory, never the `Sideload\` resource files; the file of record and its flag-parsing path are in `AGENTS-TECHNOTES.md` and `AGENTS-FLAGS.md`.
 
 ## Per-racer state
-- **Aggression** (grid-assigned by position, first lowest to last highest; the player stays mid) scales only the avoidance buffer — the old note that it scaled allowed TCS wheelspin is retired: `TcsCapLevel` reads no aggression. **Pressure** is proximity × aggression, rising slowly and falling quickly, and it drives divebomb/defend/arming.
-- **Instability owns the throttle cut now, and it is a first cut (`Racer.cs:1809`)**: the 3 Hz `WheelsOnGround` latch, `AirborneThrottleLevel` and `MaxThrottleFromStability` are **removed**, and `IsUnstable` reads on every **timed core** pass, never per frame (`AutosportRacingSystem.cs:1888` paces the batch), firing when the chassis rides above the at-rest height captured in `Launch` or when its yaw rate demands more lateral acceleration than the known grip allows. `CurrentMechanicalGrip` still carries no stability factor, and nothing models roll, pitch, load or suspension.
-- **Maneuvers are cards** (`Maneuver` on the racer, no legacy arm blocks): a card **plays** into the slot and **folds** on its own condition, priority **ChillOut → DefendLane → DiveBomb → Yield**, with **Nitro slotless**. A played card is **never reconsidered mid-play** — unplaying causes thrash.
-- **ChillOut** halves throttle and holds station behind the closest rival ahead until the field thins, arming only above a minimum speed so a slow car cannot become a roadblock. **DiveBomb** targets the closest reachable rival with a deeper braking target while its card lives.
-- **DefendLane** covers the inside against a faster chaser, and **Yield** lets a faster overlapping rival by near the entrance. The corner-commit lane (`Racer.cs:727`) engages inside the outside-approach window and ignores the one-way hold latch and the per-corner positioning decision while the card lives.
-- **Nitro** has four situations (contested / defended / lonely / finish-spender) behind vetoes on braking, off-track, big steer angle and low gear on high-geared RWD cars. **AWD is exempt** via the handling struct's drive bias; full rationale in `AGENTS-TECHNOTES.md`. The player fires via key press (`TryFireNitrous` `Racer.cs`), the AI via `TryPlayNitrousCard`; both share one shot per lap, the same charge cycle, and the same `SetOverrideNitrousLevel` native path.
+**Moved to the companions**: the shipped cards, rivals and nitro are in `AGENTS-DUEL.md` → "Live per-racer state"; instability and the throttle cut in `AGENTS-STEERING.md` → "Instability"; the player-vs-AI engine divergence in `AGENTS-VANILLA-STEERING.md`. The rule of thumb stays.
 - **Rule of thumb: the player and the AI follow the same rules.** When adding a mechanic, default to one code path for both; diverge only when the game engine forces it (e.g. the player's special ability, the AI's free ABS).
-- **Passengerize** shifts AI drivers to the passenger seat while a rival overlaps, so they cannot swerve into contact, and is never applied to the player. **The ghosting removed in the avoidance cleanup is back as the No Collision option, untested (`0623276`)**: it clears rival detection outright and makes every racer pair pass through by calling the native in its permanent mode — the mode the removed ghosting got wrong.
-- **The player's car and the AI's get different engine systems** — the special ability writes a real per-wheel grip multiplier and a faster steering ramp while it slows the world clock, `Automobile.cpp`'s player-only block adds a sideslip auto-centre, and the AI side gets free ABS and time-sliced wheel collisions; ARS neither detects nor blocks any of it (`AGENTS-VANILLA-STEERING.md`).
 
 **Duel model (designed via Council, not implemented) — full design in `AGENTS-DUEL.md`.** Physics-aware card play on one shared time-to-apex primitive taken from each car's own live plan; **anything about rivals, overtaking or card play starts in `AGENTS-DUEL.md`.**
-
 ## Debug (LemonUI Debug submenu)
 
 **Moved whole to `AGENTS-TECHNOTES.md`** — the toggle keys, what each visual owns and where the lane lines are drawn are there. The rules that hold: retiring a toggle retires its key, new toggles append, and the lane lines are drawn from `AutosportRacingSystem.cs` off the debug-focus racer, never the player.
 
 ## Leaderboard (frozen results board)
-`DrawLeaderboard` (`AutosportRacingSystem.cs:1756`) is gated by its toggle, and **positions freeze per racer** on crossing the line via `LeaderboardFinish` (`AutosportRacingSystem.cs:201`) mirrored into `RacePosition`. Finishers draw in locked order, the player's row is yellow, and the finish block awards `RaceReward`, sets `RaceStatus = Finished` and calls `CleanEverything` (`AutosportRacingSystem.cs:1354`) — so the HUD only draws during Countdown/InProgress. Draw order is in `AGENTS-TECHNOTES.md`; the PI column **is** `VehicleData.TextPerformanceIndex`, written once per race and read only by that board (`AutosportRacingSystem.cs:2010`) — not a write-only field. `LapTimes` **is** read, as the best-lap column (`BestLap` `Racer.cs:1961`, drawn by `DrawLapStats` `AutosportRacingSystem.cs:2002`).
-
+**Moved to `AGENTS-TECHNOTES.md`** → "Leaderboard - drawing and data detail": the freeze-on-crossing mechanism, the player's row and the finish block, plus the PI and best-lap columns. Triggers: leaderboard, results board, position freeze, PI column, best lap.
 ## Durable gotchas — do not "fix" these
 - **The pursuit's steer saturates at the bearing it clamps to, and there is no separate "recovery law" to preserve** — `PursuitSteerFromBearing` (`Racer.cs`) is the `atan` of the pursuit's own sine term, so past the clamp the command would fold back down instead of flattening, and any saturation or crossover angle is a derivation off that form rather than a value the code holds. The `ARS.Clamp` NaN trap is already the NaN discipline bullet below, and the line cited for the "recovery law" (`Racer.cs:727`) is a corner-logging loop, not a clamp.
 - **`if (1 == 2) return;` is an INVERTED gate — it disables nothing**, because the return only fires when the condition is true and it never is. Correct idioms are a bare `return;` or the block form; this bit the start-line flare disable (`bdd1b29`) for weeks.

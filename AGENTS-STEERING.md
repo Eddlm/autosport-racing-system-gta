@@ -278,3 +278,6 @@ Resolved in `ComputeSteering`, later overriding earlier: **high-speed line** (`R
 
 Track facts: node counts are treated as metres; measured spacing on `Airport Quick 1` averaged 1.034 m/node over 1491 gaps (0.877–2.394 m), so the convention is count-as-metres, not exact spacing. Circuit lookaheads use modulo and point-to-point clamps.
 
+## Instability — the throttle cut's landing state (moved out of the project memory, verbatim)
+
+- **Instability owns the throttle cut now, and it is a first cut (`Racer.cs:1809`)**: the 3 Hz `WheelsOnGround` latch, `AirborneThrottleLevel` and `MaxThrottleFromStability` are **removed**, and `IsUnstable` reads on every **timed core** pass, never per frame (`AutosportRacingSystem.cs:1888` paces the batch), firing when the chassis rides above the at-rest height captured in `Launch` or when its yaw rate demands more lateral acceleration than the known grip allows. `CurrentMechanicalGrip` still carries no stability factor, and nothing models roll, pitch, load or suspension.
