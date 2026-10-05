@@ -27,6 +27,10 @@ speed work.
 | 8 | `UpdateApexLeapfrog` allocates two 3-element arrays and `Any` closures | `Racer.cs:2898-2901` | per car-core, every tick | ~2,500 objects/s, ~100-125 KB/s | two reused fields (both are recomputed wholesale anyway) plus a manual loop over the node→corner map |
 | 9 | `UpdatePressure` re-reads its own position once per candidate inside the loop | `Racer.cs:3397` | 2 Hz per car | ~3,480 natives/s at 30 cars, half of it redundant | one local above the loop — already recorded in `PLAN-RATE-PRECISION.md` |
 | 10 | `Rival.UpdateOffsets` reads the rival's position twice | `DataStructures.cs:190` then `:192` | up to 3 Hz per car | ~260 natives/s | the held `rivalPosition` with the overload at `AutosportRacingSystem.cs:555` |
+| 11 | The model top speed is re-read from a native every core tick | `AutosportRacingSystem.cs:3267` via `Racer.cs:3650` | per car-core | one native per downforce car per core tick, while `ModelTopSpeedMphCache` (`AutosportRacingSystem.cs:71`) holds the same value | read the cache — mind the mph→mps round trip |
+| 12 | `AverageAcceleration` re-sums its whole window on every read | `DataStructures.cs:33-42`, readers `Racer.cs:541`, `:931-932`, `:1388`, `:2942`, `:3675` | ~5 × per car-core | ~50 vector adds per car-core | publish once per tick — the samples only move every 20 ms (`Racer.cs:2238`) |
+| 13 | Debug drawing re-fetches model dimensions the constructor already cached | `Racer.cs:2271`, `:2439` against the cache at `:354` | per debug frame | one native per debug frame | read `VehicleData.ModelDimensions` |
+| 14 | `ProjectAhead` at the same preview time recomputed for each consumer | `Racer.cs:541`, `:931-932`, `:1388` | per car-core | small | publish once per tick |
 
 ## Tier B — small, or conditional
 
@@ -50,10 +54,55 @@ speed work.
   scan can miss a flag on approach, so the fix has to preserve the in-range test exactly.
 - **`VehicleData.SpeedVectorLocal.Y` is not a drop-in for `GetForwardSpeed`** — the local Y carries pitch while
   the helper projects horizontally, so substituting them changes behaviour on grades.
-- **The model top speed is read from a native per car-core** for a value fixed per vehicle model
-  (`AutosportRacingSystem.cs:3267`, reached from `UpdatePerceivedGrip`), and `UpdatePerceivedGrip` re-reads
-  `GET_ENTITY_ROTATION_VELOCITY` per car-core (`:3689`). Both belong to the native-read caching stage rather
-  than to a local fix.
+- **`UpdatePerceivedGrip` re-reads `GET_ENTITY_ROTATION_VELOCITY` per car-core** (`Racer.cs:3689`). Belongs to the native-read caching stage rather than a local fix.
+- **`Rival.RelativeOffset` and `LateralGap` are published, but the side-by-side correction re-derives them**
+  (`Racer.cs:657` against `DataStructures.cs:192-194`) — reuse would hand it a value up to 500 ms old, and a
+  rival that just pulled alongside would be missed.
+- **`CombinedSize` is not a clean merge with the repulsion gates or the passenger-seat length**
+  (`Racer.cs:564-565`, `:2544-2552`) — the buffers differ (1.0/0.25 against +3) and the repulsion loop's frame
+  is velocity, not the car's forward.
+- **One car's forward speed has three homes with three reference frames** — `VehicleData.SpeedVectorLocal.Y`
+  (`Racer.cs:1305`, `:2238`), the horizontal projection in `GetForwardSpeed` (`AutosportRacingSystem.cs:3311`),
+  and a raw 3D dot (`Racer.cs:1175`, `:1238`, `:3581`). Unifying them changes what the steer ceiling and the
+  pedal plan read on a slope.
+- **`TryPlayNitrousCard` re-derives a closure time the route frame already publishes** (`Racer.cs:2056`
+  against `Rival.TimeToReach`, `DataStructures.cs:283`) — world scalars against a route-frame gap with a lane
+  gate, so not equivalent.
+- **`UpdatePressure` rescans every racer while the three nearest already publish `Distance`**
+  (`Racer.cs:3394-3400` against `DataStructures.cs:201`) — a different set, so not equivalent.
+
+## Tier D — the codebase disagreeing with itself
+
+Not cost. These are cases where a value or a law exists twice, or where one of the copies is dead. The first
+is the highest-value item in the whole audit precisely because it is not about speed.
+
+- **`PowerScale` is re-derived at `Racer.Initialize`** (`Racer.cs:481-487`) from three live model natives, while
+  `ARS.ModelPaceIndexCache` (`AutosportRacingSystem.cs:84`, filled `:493`) already holds the value the grid was
+  selected on, and `TryComputePlayerCarPaceIndex` (`:3186`) already implements cache-first with a native
+  fallback. **The comment above the line states the intent — "Cache first so the spawn-time PI matches the metric
+  the grid was selected on; live probe only for an unscored car" — and the code does not do it**: the only cache
+  consulted there is `ModelElectricCache`, for the electric flag, so the pace index itself is always probed live.
+  The player and the AI can therefore derive the same number by different routes. **Highest-value item in the
+  audit, and it is a consistency bug rather than a speed one.**
+- **Two methods are byte-identical**: `RouteIdealSpeedForRadius` (`Racer.cs:3239`) and `ApexSpeedWithDownforce`
+  (`:3246`). A third copy, `ARS.CornerApexSpeed` (`AutosportRacingSystem.cs:2675`), carries different speed
+  clamps — merge the first pair, leave the third alone.
+- **An unreachable branch makes a whole method dead**: the `else if (Brain.Corner != null)` at `Racer.cs:1589`
+  cannot be taken, because `Brain.Corner` is only assigned non-null where `NextApexNode >= 0` (`:3097`, nulled
+  at `:3101` and `:1248`) — which makes `ARS.MaxSpeedForBrakingDistance` (`AutosportRacingSystem.cs:2917`) dead.
+  It also re-implements the solve `ApexBrakingSpeed` (`Racer.cs:3129`) already does with different terms, so
+  delete rather than repoint.
+- **`VehicleData.PerformanceIndex` is write-only** (`DataStructures.cs:96`), fed by two natives (`Racer.cs:478-480`)
+  and read nowhere.
+- **`Rival.LateralGap` is written every update and read nowhere** (`DataStructures.cs:158`, `:194`) while the
+  one consumer that wants it re-derives it (`Racer.cs:657-671`).
+- **`TrackProgress` is write-only** (`Racer.cs:61`, `:2701-2702`); `RaceProgress` is what every consumer reads.
+- **Four dead hill helpers** (`AutosportRacingSystem.cs:2562`, `:2591`, `:2614`, `:2644`) duplicate an `atan2`
+  climb angle that the live `Racer.GetFollowPointSlopeAngle` (`Racer.cs:1716`) computes.
+- **`GetPreciseRadius` has no callers** (`AutosportRacingSystem.cs:2499`) and re-derives `TrackPoint.PreciseCurveRadius`,
+  already stored per node (`TrackLoader.cs:213`).
+- `OccupiedLaneWidth = CombinedSize.X` (`DataStructures.cs:199`) is two fields for one number — noted only so
+  the pair is not mistaken for independent values.
 
 ## Already obeying the principle — do not "fix" these
 
@@ -64,9 +113,10 @@ and the closure its own `AlongTrackSpeed`; `Rival.Update` reads each entity vect
 
 ## Method notes
 
-Both the native-read and allocation passes **under**counted where they were checked: four corner-lookup sites
-where there are five, two `GetForwardSpeed` calls where there are six. The searches are sound; the counts need
-re-verification at implementation time, which is why every row above carries its `file:line`.
+Each of the three passes **under**counted where it was checked: four corner-lookup sites where there are five,
+two `GetForwardSpeed` calls where there are six. The searches are sound; the counts need re-verification at
+implementation time, which is why every row carries its `file:line`. The re-derivation pass worked from the
+current working tree, whose lines have drifted from `AGENTS.md`'s anchors, so expect the same drift here.
 
 Nothing here has been built or driven. Anything in Tier A that touches steering or rival data is a behaviour
 change by definition and needs its own drive, even when the arithmetic is identical.
