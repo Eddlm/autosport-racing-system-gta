@@ -179,3 +179,13 @@ R=50/25 m/s, but worth little until the rival refresh is lifted) and that 2 Hz `
 - **Etiquette exclusion**: a car held by the pack (Rival/ChillOut/Yield caps) can still reverse into the car behind.
 - **B on fast excursions**: any 2 s off-track enters Drive, though the off-track cap already limits it.
 - **AGENTS.md** still carries the failed intel-gather section and is unedited.
+---
+
+## Crest entrance move (built `27ee097`, not yet driven)
+
+The question is whether braking now starts where the track stops being flat, with the car still loaded when it does.
+
+1. **A crest before a braking corner** — pick one with a long obvious rise. The plan should begin earlier than the previous build, at the base of the crest rather than its top; the corner-entry speed should read lower because more braking distance is being spent before the unload.
+2. **The same corner twice** — once at pace, once deliberately slower. The move is a fixed node walk, so a slow approach spends the extra distance idling; if that looks like braking far too early, note the speed, because the gate should be braking-span-dependent rather than fixed.
+3. **Log check** — generation now prints `entry=` beside `node=` per crest. Expect `entry` earlier in travel order than `node` (a lower index on a circuit), and the move distance on the `Crest` lines; a skip names its reason.
+4. **A track with no crest before its corners** — nothing should change.
