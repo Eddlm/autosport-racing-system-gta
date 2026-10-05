@@ -146,6 +146,7 @@ One line each; **a simplest→most-complex ranking of the whole list sits at the
 - **The track creator is LIVE and driver-verified**; `SaveRoute` writes `Tracks\*.xml` and there is no update path — the rewrite path was cut in `c2ad2de`, so reviving it means restoring it from git (`AGENTS-BACKLOG.md`).
 - **`SaveRoute` rounds coordinates to 2 decimals**, which alone shifts a perfect arc's measured `PreciseCurveRadius` low; raising the precision rewrites every saved file, so decide it deliberately.
 - **Apex speed reads the biased radius** (`SupposedRadius`, the noise tail) while the steadier `DetectedRadius` feeds the positioning gate and merge survival; moving the speed onto the smoothed radius is a behaviour change wanting its own drive (`AGENTS-BACKLOG.md`).
+- **The crest gate's design is DECIDED, not built** — the entrance belongs at the crest's entry (where the track stops being flat and the vertical curvature begins), not the unload's peak, and the severity window wants a metre-based baseline; the two constants wait on an instrumented run (`AGENTS-BACKLOG.md`).
 - **A constant-radius generator has no radius to open**, so a creator-built corner's span comes from the detection gate or the next section, not from the corner — treat the gate as the lever (`AGENTS-BACKLOG.md`).
 - **Preview the apex table inside the creator (idea)** — the merges and blips visible while laying a track out, not only after saving.
 - **Place apexes by hand (idea)** — sidesteps an apex that is arbitrary along a constant-radius arc.
