@@ -1072,6 +1072,11 @@ namespace ARS
         // past the velocity vector to catch a rotation without the slide dictating the whole ceiling.
         const float SlideLimitSlideShare = 0.5f;
         const float SlideLimitFreeplayDegrees = 0.5f;
+        // Off for a drive that shows the ceiling without the slide's raise: with it on, half the slide angle plus the
+        // free play lifts the ceiling for every command, so a sliding car is never held to the cornering law alone.
+        // The countersteer allowance and the damper bypass are untouched by this switch. Deliberately not const, so
+        // the raise stays compiled while it is switched off.
+        static readonly bool SlideLimitRaise = false;
 
         void ApplySteerLimits()
         {
@@ -1095,7 +1100,7 @@ namespace ARS
                 speedCeiling = ResolveSteerCeiling(fwdSpeed);
                 // The slide adds authority, it does not replace the cornering law: the ceiling is the larger of the
                 // two, so a car can always steer in and rejoin, and a slide only ever opens more than it has.
-                speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) * SlideLimitSlideShare + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
+                if (SlideLimitRaise) speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) * SlideLimitSlideShare + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
             }
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;

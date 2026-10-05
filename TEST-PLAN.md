@@ -348,3 +348,13 @@ The four tactical cards — nitro, defend, divebomb, yield — and the maneuver 
 4. **The dive's braking is steady through a corner** — the bonus used to be redrawn at every evaluation on a circuit, so jittery dive braking was the symptom; it should now be one draw per dive.
 5. **The crowd card is unchanged** — ChillOut should still come and go on its slow beat rather than flicker.
 6. **A restart is clean** — arm a card or two, then Restart Race from the menu: nothing may carry over. A divebomb armed in the race just abandoned must not brake the new race's first corners, and the new race must not start with the pressure the last one built, whose symptom is cars refusing to yield through the opening laps.
+
+## The slide's ceiling raise switched off (dev build 487, not driven)
+
+One raise in the limiter is off behind a constant in `Racer.cs` (`SlideLimitRaise`): the ceiling no longer takes the larger of the cornering law and half the slide angle plus a half degree of free play, so a sliding car is held to the tyre's peak slip at its speed rather than having the ceiling loosened for every command. Everything else in the function is in force — the base ceiling with its geometry fallback and low-speed ramp, the countersteer allowance on the answering side, and the damper bypass to full lock. So the answering side still reaches past the ceiling; what is gone is the general loosening the slide used to grant both sides.
+
+1. **Steering into a slide** — the visible change. A car sliding while its command is *not* the answering one is now capped at the peak-slip ceiling instead of the raised one, so watch a car ask for more wheel than it gets: that is the raise's absence, and the question is whether it still holds the corner or runs wide.
+2. **The answering side** — must be unchanged. A countersteering car still reaches past the ceiling toward the slide angle, and the damper still lifts that side to full lock when its term opposes the rotation, so catching a rotation should read as it did on the driven build.
+3. **Turn-in at speed** — unchanged: the raises never applied going into a corner, and the base ceiling is the same number.
+4. **A slow car** — the maneuvering ramp is untouched.
+5. **Restoring** — the switch is one constant and nothing else in the function changed, so flipping it back must return the driven behaviour exactly.
