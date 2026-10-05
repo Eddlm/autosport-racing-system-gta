@@ -2,10 +2,10 @@
 
 Reproduces ApplySteerLimits with no slide and no damper term on the commanded side:
     Yaw-Governed   = min(ResolveSteerCeiling, maneuverRamp(min(base x yawShare, lock)))
-    Slide-Governed = max(min(|slide| + 1, lock), maneuverRamp(...))
+    Slide-Governed = max(ResolveSteerCeiling, min(|slide| + 1, lock))     # additive since 467
 
 Assumes the fleet-typical car: lock 40 deg, authored LateralTractionCurve 22 deg,
-Turn-In Minimum 20%, Turn-In Maximum 100%, no slide, no yaw, no damper bypass.
+Turn-In Minimum 20%, Turn-In Maximum 100%, no yaw, no damper bypass.
 
 Run: python docs/steer-limit-modes.py
 """
@@ -53,11 +53,17 @@ def yaw_governed(mph, yaw_usage):
         return LOCK
     base = resolve_steer_ceiling(v)
     share = TURN_IN_MIN + (TURN_IN_MAX - TURN_IN_MIN) * yaw_usage
-    turn_in = maneuver_ramp(mph, min(base * share, LOCK))
-    return min(base, turn_in)
+    return min(base, maneuver_ramp(mph, min(base * share, LOCK)))
 
 
 def slide_governed(mph, slide_deg=0.0):
+    v = mph * MPH
+    if v <= 0.0:
+        return LOCK
+    return max(resolve_steer_ceiling(v), min(abs(slide_deg) + FREE_PLAY, LOCK))
+
+
+def slide_replacement(mph, slide_deg=0.0):
     v = mph * MPH
     if v <= 0.0:
         return LOCK
@@ -65,11 +71,13 @@ def slide_governed(mph, slide_deg=0.0):
     return max(ceiling, maneuver_ramp(mph, ceiling))
 
 
+cornering = [resolve_steer_ceiling(s * MPH) for s in SPEEDS]
+
 curves = [
     ("Yaw-Governed, no yaw (share 20%)", [yaw_governed(s, 0.0) for s in SPEEDS], "#1f4e9c", "-", 2.4),
-    ("Yaw-Governed, yaw at maximum (share 100%)", [yaw_governed(s, 1.0) for s in SPEEDS], "#1f4e9c", "--", 1.6),
-    ("Slide-Governed, no slide", [slide_governed(s) for s in SPEEDS], "#c0392b", "-", 2.4),
-    ("Slide-Governed, 5 deg slide", [slide_governed(s, 5.0) for s in SPEEDS], "#c0392b", ":", 1.6),
+    ("Cornering law — Yaw at full share, Slide with no slide", cornering, "#1f4e9c", "--", 1.8),
+    ("Slide-Governed, 15 deg slide", [slide_governed(s, 15.0) for s in SPEEDS], "#c0392b", "-", 2.2),
+    ("Slide-Governed as a replacement (before 467)", [slide_replacement(s) for s in SPEEDS], "#888888", ":", 1.6),
 ]
 
 fig, ax = plt.subplots(figsize=(10.5, 6.2), dpi=150)
@@ -79,13 +87,12 @@ ax.text(17.5, 41.4, "maneuver ramp band (5-30 mph)", ha="center", va="bottom", f
 for label, ys, colour, style, width in curves:
     ax.plot(SPEEDS, ys, style, color=colour, linewidth=width, label=label)
 
-for s, colour in ((30.0, "#555555"),):
-    ax.axvline(s, color=colour, linewidth=0.8, alpha=0.6, zorder=0)
-ax.text(30.3, 0.9, "ramp ends:\n30 mph", fontsize=8.5, color="#555555", va="bottom")
+ax.axvline(RAMP_END, color="#555555", linewidth=0.8, alpha=0.6, zorder=0)
+ax.text(30.5, 21.0, "ramp ends:\n30 mph", fontsize=8.5, color="#555555", va="bottom")
 
-marks = [(15, yaw_governed(15, 0.0), "#1f4e9c", (7, 6)), (30, yaw_governed(30, 0.0), "#1f4e9c", (7, 7)),
-         (15, slide_governed(15), "#c0392b", (7, -14)), (30, slide_governed(30), "#c0392b", (7, -16))]
-for x, y, colour, offset in marks:
+marks = [(30, yaw_governed(30, 0.0), "#1f4e9c", (7, 7), "yaw cap"),
+         (30, slide_replacement(30), "#888888", (7, -16), "slide replaced")]
+for x, y, colour, offset, _ in marks:
     ax.plot([x], [y], "o", color=colour, markersize=5)
     ax.annotate(f"{y:.1f} deg", (x, y), textcoords="offset points", xytext=offset, fontsize=9, color=colour)
 
@@ -99,6 +106,6 @@ ax.legend(loc="upper right", fontsize=9, framealpha=0.95)
 fig.tight_layout()
 fig.savefig("docs/steer-limit-modes.png", facecolor="white")
 
-print(f"{'mph':>5} {'yaw 20%':>9} {'yaw 100%':>9} {'slide 0':>9} {'slide 5':>9}")
+print(f"{'mph':>5} {'yaw 20%':>9} {'cornering':>10} {'slide 0':>9} {'slide 15':>9}")
 for s in range(0, 51, 5):
-    print(f"{s:>5} {yaw_governed(s, 0.0):>9.2f} {yaw_governed(s, 1.0):>9.2f} {slide_governed(s):>9.2f} {slide_governed(s, 5.0):>9.2f}")
+    print(f"{s:>5} {yaw_governed(s, 0.0):>9.2f} {resolve_steer_ceiling(s * MPH):>10.2f} {slide_governed(s):>9.2f} {slide_governed(s, 15.0):>9.2f}")

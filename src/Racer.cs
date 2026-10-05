@@ -1184,12 +1184,10 @@ namespace ARS
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f)
             {
-                if (slideGoverned)
-                {
-                    speedCeiling = Math.Min(Math.Abs(VehicleData.SlideAngle) + SlideLimitFreeplayDegrees, VehicleData.SteeringLock);
-                    speedCeiling = Math.Max(speedCeiling, ManeuverRamp(ARS.MpsToMph(fwdSpeed), speedCeiling));
-                }
-                else speedCeiling = ResolveSteerCeiling(fwdSpeed);
+                speedCeiling = ResolveSteerCeiling(fwdSpeed);
+                // The slide adds authority, it does not replace the cornering law: the ceiling is the larger of the
+                // two, so a car can always steer in and rejoin, and a slide only ever opens more than it has.
+                if (slideGoverned) speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
             }
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;

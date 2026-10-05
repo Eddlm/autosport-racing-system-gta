@@ -1,4 +1,4 @@
-# ARS — test plan: build 466
+# ARS — test plan: build 467
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
@@ -6,7 +6,7 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 (`cbae845`); the slew is driven — 45 read as less stable and **180 removed most of the stability problems**
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
 (`5bb94bd`); the engine restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and
-undriven. Everything else below is undriven. The deployed DLL is dev build **466**; a build + reload is enough
+undriven. Everything else below is undriven. The deployed DLL is dev build **467**; a build + reload is enough
 (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
@@ -282,9 +282,13 @@ misreading of the intended "slide angle plus one degree", which belongs in the s
 - **Yaw-Governed** (default, the previous behaviour minus the knee): the cornering ceiling from the at-speed peak
   slip, scaled by yaw usage from Turn-In Minimum to Turn-In Maximum, plus the countersteer allowance (slide angle
   times blend weight) on the answering side.
-- **Slide-Governed**: the ceiling is the **slide angle plus one degree** on both sides, clamped to lock. No yaw
-  turn-in share, no countersteer allowance. At zero slide the limit is one degree, so a car steers by developing
-  slip rather than by steering into it.
+- **Slide-Governed**: the cornering law stands **and the slide adds to it** — the ceiling is the larger of the two,
+  the slide angle plus one degree clamped to lock. No yaw turn-in share. It was a *replacement* until `467`, which
+  put the ceiling at one degree above 30 mph and left cars unable to steer in or rejoin; as an addition a car keeps
+  the full cornering law and a slide only ever opens more.
+- The **addition versus replacement** distinction is the whole A/B: Yaw-Governed *caps* steer-in by yaw usage, while
+  Slide-Governed never caps it and adds as the slide grows. The curves are plotted in
+  `docs/steer-limit-modes.png`, drawn by `docs/steer-limit-modes.py`.
 
 The answering side is now **one shared path in both modes**: the countersteer allowance (slide angle times blend
 weight) **and a damper bypass**. When the damper's term pushes *against* the rotation **and** the command does too,
@@ -299,11 +303,10 @@ the car, not cornering.
 
 Watch:
 
-1. **Slide-Governed, corner entry** — a car with no slide is capped at one degree of steer, so it has to slide
-   before it can turn. Watch whether it can start a corner at all, and especially at low speed in a hairpin. If it
-   ploughs straight on and never builds a slide, the limit is the deadlock and not the driving.
-2. **Slide-Governed, catching a slide** — the answering side can reach a degree past the neutral countersteer, so
-   the counterbalancer must never be clipped.
+1. **Slide-Governed, corner entry** — the cornering law stands untouched, so the car should steer in exactly as
+   Yaw-Governed does at full yaw share. If it still ploughs straight on, the limit is not the reason.
+2. **Slide-Governed, catching a slide** — a slide past the cornering law opens extra authority, and the answering
+   side can reach the slide angle plus a degree, so the counterbalancer must never be clipped.
 3. **Yaw-Governed, corner entry** — dropping the knee took away the one place that gave a degree back. Watch
    whether cars now understeer where the knee used to help.
 4. **Either mode** — the switch persists in the menu settings, so confirm the mode you think you are driving is the
