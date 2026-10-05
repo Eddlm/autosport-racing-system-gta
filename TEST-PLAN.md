@@ -1,4 +1,4 @@
-# ARS — test plan: build 468
+# ARS — test plan: build 469
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
@@ -6,7 +6,7 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 (`cbae845`); the slew is driven — 45 read as less stable and **180 removed most of the stability problems**
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
 (`5bb94bd`); the engine restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and
-undriven. Everything else below is undriven. The deployed DLL is dev build **468**; a build + reload is enough
+undriven. Everything else below is undriven. The deployed DLL is dev build **469**; a build + reload is enough
 (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
@@ -272,6 +272,17 @@ improved the system.**
 
 Watch: a car stopped and pointing across the route should now steer toward lock and rotate onto it, where before it
 sat and would not turn; and low-speed cornering should stop fighting itself.
+
+**The damper's two subtraction rules (new, undriven).** It may only ever *subtract*: a term that would add steer in
+the sign the command already has is zeroed, so a left command never gets more left from it. And past neutral — the
+countersteer region, where the wheel points against the car's own rotation rather than merely less into it — it keeps
+half its authority. The axle gate that used to guard that halving (`understeerDeg < 0`, and `UndersteerDegrees` with
+it) is deleted. Deliberately **not** a cap tied to the slide: the code already records that such a cap fell to zero
+with the slide and took the rate feedback off a straight car, which set it oscillating.
+
+Watch: the no-add rule makes the damper's straight-line action intermittent, since it now acts only when it opposes
+the command's sign rather than roughly always. If a straight-line weave or a limit cycle appears, that rule is the
+cause and not the gain cap; if the cars feel *more* planted, the rule is doing what it was asked to.
 
 ## Steer limit governor — A/B (not driven)
 

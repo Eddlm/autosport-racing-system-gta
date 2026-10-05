@@ -583,7 +583,6 @@ namespace ARS
             // Damp the excess over the yaw the aim point requires, not over zero which taxes every steady corner; the
             // slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
             float fwdSpeed = ARS.GetForwardSpeed(Car);
-            float understeerDeg = UndersteerDegrees(fwdSpeed);
             // The blend's weight: the slide is answered from a quarter of the authored peak slip and at full weight by
             // half of it, so a slide is caught well before the tyres' limit is gone. Both bands read the car's own
             // tyres, not the speed-scaled peak, so the response is the same at every speed.
@@ -600,11 +599,13 @@ namespace ARS
             _debugDamperSpeedScale = damperSpeedScale;
             float nonDamperSteerDeg = (steerKP * sideBySideSteerDeg) + (steerKP * laneSteerDeg);
             float damperTermDeg = -damperGain * yawRateToDamp;
-            // Past neutral while the rear leads the damper keeps half its crossing. Not a cap tied to the blend: that
-            // fell to zero whenever no slide was granted, which removed the rate feedback from a car going straight
-            // and set it oscillating.
+            // The damper only ever subtracts: a left command never gets more left from it.
+            if (damperTermDeg * nonDamperSteerDeg > 0f) damperTermDeg = 0f;
+            // Past neutral it is countersteering — the wheel pointing against the car's own rotation rather than
+            // merely less into it — and there it keeps half its authority. Not a cap tied to the slide: that fell to
+            // zero with the slide and took the rate feedback off a car going straight, which set it oscillating.
             float damperOvershootDeg = Math.Abs(damperTermDeg) - Math.Abs(nonDamperSteerDeg);
-            if (understeerDeg < 0f && damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f) damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + damperOvershootDeg * DamperCrossingShare);
+            if (damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f) damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + damperOvershootDeg * DamperCrossingShare);
             _damperTermDeg = damperTermDeg;
             float nonLaneSteerDeg = (steerKP * sideBySideSteerDeg) + damperTermDeg;
             Control.SteerDegrees = nonLaneSteerDeg + (steerKP * laneSteerDeg);
@@ -1108,14 +1109,6 @@ namespace ARS
         float PeakSlipCeilingAt(float peakSlipDeg)
         {
             return ARS.Clamp(peakSlipDeg * PeakSlipOuterWheelCommandShare, 0f, VehicleData.SteeringLock);
-        }
-
-        // The bicycle model's front-minus-rear slip difference: positive while the front leads, negative while the
-        // rear does. It is the only signal here that names which axle is losing grip.
-        float UndersteerDegrees(float fwdSpeed)
-        {
-            if (fwdSpeed <= 0.1f) return 0f;
-            return Control.LastAppliedSteerDegrees - ARS.RadToDeg((float)Math.Atan(VehicleData.WheelBase * ARS.DegToRad(VehicleData.YawRotationPerSecondDegrees) / fwdSpeed));
         }
 
         // Maximum sustained yaw rate the car can hold at the current speed: the slip ceiling's radius from the
