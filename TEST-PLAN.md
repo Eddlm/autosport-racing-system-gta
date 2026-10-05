@@ -1,11 +1,11 @@
-# ARS — test plan: build 464
+# ARS — test plan: build 465
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
 (`cbae845`); the flat slew is driven and read as less stable, so it is back up to 180 and undriven; the engine
 restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and undriven. Everything else
-below is undriven. The deployed DLL is dev build **464**; a build + reload is enough (SHVDN reloads the scripts
+below is undriven. The deployed DLL is dev build **465**; a build + reload is enough (SHVDN reloads the scripts
 live, no game restart).
 
 | commit | what it is | section |
@@ -258,6 +258,17 @@ Watch:
    premature, re-anchor it to the share reaching full.
 4. **A straight** — the actuator is fast again, so any weaving on the straight is the damper's and not the slew's;
    watch the straight and fast direction changes (the survey's 0.6 rad/s warning).
+
+## The damper's low-speed gain (not driven)
+
+`SteerDampingFor` scaled the dial by 25 divided by forward speed, floored at 1 m/s, so the damper ran at **25× the
+dial** at a standstill, 11× at 5 mph, 3.7× at 15, and only reached 1× at 56 mph. It was born that way in `97cbc34`
+and never had a cap. Below roughly 10 mph the term therefore saturates past the lock, and since the aim reference is
+gated off at a standstill, a stopped car's damper opposes *all* rotation rather than the excess over what the corner
+needs. The scale is now capped at 1, so the dial is the gain at every speed below 25 m/s.
+
+Watch: a car stopped and pointing across the route should now steer toward lock and rotate onto it, where before it
+sat and would not turn; and low-speed cornering should stop fighting itself.
 
 ## Steer limit governor — A/B (not driven)
 

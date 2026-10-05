@@ -1032,14 +1032,14 @@ namespace ARS
         // reference stays one flip away for A/B — the drive that preferred it was confounded by the course error.
         const bool SteerDampingAimReference = true;
         // The dial is defined at this speed: the damper's steer per unit yaw error is the dial times the reference
-        // over speed, so the term follows the steer a yaw rate actually needs - weaker at speed, stronger below it.
-        // A term that is flat in degrees instead grows into the steer ceiling at speed and stops being proportional.
+        // over speed, so the term follows the steer a yaw rate actually needs - weaker at speed, and at most the dial
+        // below it. The cap is load-bearing: uncapped, a slow car ran twenty-five times the dial and the term vetoed
+        // the steering instead of damping it.
         const float SteerDampingReferenceMps = 25f;
         float SteerDampingFor(float forwardSpeed, out float speedScale)
         {
-            // Abs, not max: a car travelling backwards needs the same steer per yaw rate as one going forwards, and
-            // the schedule's floor would otherwise hand a spun car the largest gain instead of the smallest.
-            speedScale = SteerDampingReferenceMps / Math.Max(Math.Abs(forwardSpeed), 1f);
+            // Abs, not the raw speed: a car travelling backwards needs the same steer per yaw rate as one going forwards.
+            speedScale = Math.Min(1f, SteerDampingReferenceMps / Math.Max(Math.Abs(forwardSpeed), 1f));
             return SteerDampingEnabled ? ARS.SteerDampingGain * speedScale / Math.Max(VehicleData.BaseMechanicalGrip, 1f) : 0f;
         }
         // Vanilla's player steering limiter used as a ceiling (AGENTS.md pipeline step 4): vanilla divides by
