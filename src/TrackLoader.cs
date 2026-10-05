@@ -361,8 +361,8 @@ namespace ARS
         const float BumpMinLipDrop = 0.02f;
         // A seam is distrusted as soon as it is steep enough to nominate a lip on its own.
         const float BumpSeamMaxGrade = BumpMinDepartureGrade;
-        // Above the worst rounding error a two-decimal route can put on a two-metre rung, so the rise walk stops on
-        // the road rather than on a noise uptick.
+        // A compared grade on a three-metre rung carries about 0.007 of rounding error at worst, so this drop clears it,
+        // and a second sample that fails to fall ends the run so a lone noise uptick cannot.
         const float BumpRiseGradeDrop = 0.01f;
 
         // A bump is a short convex break in the route where a car at speed goes light: the road may drop away after it
@@ -424,21 +424,29 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Info, "Bumps: " + ARS.Bumps.Count + " lips, minimum departure grade " + BumpMinDepartureGrade.ToString("0.000") + ", run " + BumpMinRunMeters.ToString("0.0") + "-" + BumpMaxRunMeters.ToString("0.0") + "m");
         }
 
-        // Walks back from the lip while the surface is still climbing, so the run it returns is the rise itself: the
-        // base is where the grade stops falling, or where the road flattens or dips. A climb longer than the cap is a
-        // slope, not a bump, and reports -1.
+        // Walks back from the lip while the surface is still climbing, so the run it returns is the rise itself. The
+        // base is where the grade stops falling, read on the longer rung because a shorter one is too noisy to compare,
+        // and one sample that fails to fall is passed over as noise. A climb longer than the cap is a slope, not a
+        // bump, and reports -1.
         static int RiseStartNode(int lip, int count, out float meters)
         {
             meters = 0f;
             int node = lip;
             int start = lip;
-            float grade = GradeAt(lip, BumpDepartureRungMeters, count);
+            int flat = 0;
+            float grade = GradeAt(lip, BumpOnsetRungMeters, count);
             for (int step = 0; step < 60; step++)
             {
                 int behind = NodeBehind(node, 1f, count);
                 if (behind == node) break;
-                float behindGrade = GradeAt(behind, BumpDepartureRungMeters, count);
-                if (behindGrade <= 0f || behindGrade > grade - BumpRiseGradeDrop) break;
+                float behindGrade = GradeAt(behind, BumpOnsetRungMeters, count);
+                if (behindGrade <= 0f) break;
+                if (behindGrade > grade - BumpRiseGradeDrop)
+                {
+                    flat++;
+                    if (flat >= 2) break;
+                }
+                else flat = 0;
                 meters += HorizontalDistance(ARS.TrackPoints[behind].Position, ARS.TrackPoints[node].Position);
                 node = behind;
                 start = behind;
