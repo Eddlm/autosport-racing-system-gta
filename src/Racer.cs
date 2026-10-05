@@ -168,7 +168,7 @@ namespace ARS
         public float SteerLimitRight = 40f;
         public float SteerLimitLeft = 40f;
         // Yaw damper term in degrees: read by the steer sum below and by the parked yaw HUD when re-armed.
-        float _debugDamperTermDeg = 0f;
+        float _damperTermDeg = 0f;
         float _debugYawTargetPerSecond = 0f;
         float _debugDamperGainSeconds = 0f;
         float _debugDamperSpeedScale = 0f;
@@ -605,7 +605,7 @@ namespace ARS
             // and set it oscillating.
             float damperOvershootDeg = Math.Abs(damperTermDeg) - Math.Abs(nonDamperSteerDeg);
             if (understeerDeg < 0f && damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f) damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + damperOvershootDeg * DamperCrossingShare);
-            _debugDamperTermDeg = damperTermDeg;
+            _damperTermDeg = damperTermDeg;
             float nonLaneSteerDeg = (steerKP * sideBySideSteerDeg) + damperTermDeg;
             Control.SteerDegrees = nonLaneSteerDeg + (steerKP * laneSteerDeg);
 
@@ -1169,9 +1169,9 @@ namespace ARS
             float requestedSteer = Control.SteerDegrees;
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
 
-            // Two limits, one per side, closed by one clamp: nothing is exempt from being limited, so an allowance
-            // is granted to a side rather than a check skipped. A reversing car keeps the raw lock — vanilla's
-            // 1 + k × v goes negative below −13 m/s and would invert the ceiling.
+            // Two limits, one per side, closed by one clamp: the ceiling is granted and then raised on the answering
+            // side rather than the clamp being skipped — except for the stabiliser below. Under the geometry law a
+            // reversing car keeps the raw lock, since vanilla's 1 + k × v goes negative below −13 m/s and inverts it.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             bool slideGoverned = ARS.SteerLimitMode == ARS.SteerLimitGovernor.Slide;
             float speedCeiling = VehicleData.SteeringLock;
@@ -1180,10 +1180,9 @@ namespace ARS
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;
 
-            // The one whitelisted allowance: the side answering a slide reaches past the ceiling towards the slide
-            // angle itself, in proportion to how much of the blend that slide has earned — a raise, never a reduction.
-            // The slide-governed ceiling is already the slide angle plus free play, so it needs no allowance.
-            if (!slideGoverned && countersteering && _slidePriority > 0f)
+            // The one whitelisted allowance, shared by both modes: the side answering a slide reaches past the ceiling
+            // towards the slide angle itself, in proportion to how much of the blend that slide has earned.
+            if (countersteering && _slidePriority > 0f)
             {
                 float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle) * _slidePriority, VehicleData.SteeringLock);
                 if (requestedSteer > 0f) SteerLimitLeft = Math.Max(SteerLimitLeft, countersteerAllowance);
@@ -1203,6 +1202,15 @@ namespace ARS
                 turnInCeiling = ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, turnInCeiling, VehicleData.SteeringLock, true);
                 if (requestedSteer > 0f) SteerLimitLeft = Math.Min(SteerLimitLeft, turnInCeiling);
                 else if (requestedSteer < 0f) SteerLimitRight = Math.Min(SteerLimitRight, turnInCeiling);
+            }
+
+            // The damper is the car's stabiliser and the rotation leads the slide, so while its term pushes against
+            // the rotation it is answering a slide the ceiling cannot see yet: that side is not capped at all, after
+            // the envelope has had its say. The limit is the only thing the mode switch moves; this path is shared.
+            if (_damperTermDeg * yawRate < 0f)
+            {
+                if (requestedSteer > 0f) SteerLimitLeft = VehicleData.SteeringLock;
+                else if (requestedSteer < 0f) SteerLimitRight = VehicleData.SteeringLock;
             }
 
             Control.SteerDegrees = ARS.Clamp(requestedSteer, -SteerLimitRight, SteerLimitLeft);
@@ -2259,7 +2267,7 @@ namespace ARS
                 ARS.DrawLine(origin + new Vector3(0, 0, 0.05f), origin + new Vector3(0, 0, 0.05f) + RotateZ(fwd, _steerPursuitDeg) * lineLen, Color.Yellow);
 
                 // Red: pursuit angle + damper
-                ARS.DrawLine(origin + new Vector3(0, 0, 0.10f), origin + new Vector3(0, 0, 0.10f) + RotateZ(fwd, _steerPursuitDeg + _debugDamperTermDeg) * lineLen, Color.Red);
+                ARS.DrawLine(origin + new Vector3(0, 0, 0.10f), origin + new Vector3(0, 0, 0.10f) + RotateZ(fwd, _steerPursuitDeg + _damperTermDeg) * lineLen, Color.Red);
 
                 // White: final slewed steer (what the wheels actually request)
                 ARS.DrawLine(origin + new Vector3(0, 0, 0.15f), origin + new Vector3(0, 0, 0.15f) + RotateZ(fwd, Control.SteerDegrees) * lineLen, Color.White);
@@ -2490,7 +2498,7 @@ namespace ARS
             if (ARS.DebugFocusRacer != this) return;
             float yaw = VehicleData.YawRotationPerSecondDegrees;
             float yawError = yaw - _debugYawTargetPerSecond;
-            float damper = _debugDamperTermDeg;
+            float damper = _damperTermDeg;
             float usagePct = YawUsagePercent();
             Color red = Color.FromArgb(255, 230, 30, 30);
             ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " / TARGET " + _debugYawTargetPerSecond.ToString("0.0") + " deg/s", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
