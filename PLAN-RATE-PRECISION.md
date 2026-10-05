@@ -103,6 +103,9 @@ The estimator is also **not** what feeds the per-lap peaks — those take the ra
 
 ## Ranked inventory
 
+**The full audit of this principle — thirty-odd sites with cadence, cost and a safety verdict — is in
+`AUDIT-COMPUTE-ONCE.md`, and it supersedes this table where the two differ.**
+
 Cheapest / highest value first. All quantities refresh per core tick unless a timer says otherwise, so
 the batch rate multiplies through everything below it.
 
@@ -150,6 +153,8 @@ at script init (`AGENTS.md`).
 - Delete `_halfSecondTick`.
 
 ### Stage 2 — pay for stage 3 (cost-negative)
+
+Full worklist in `AUDIT-COMPUTE-ONCE.md`; the entries below are the shape of the change, not the list.
 - In `RunTimedCore` (`Racer.cs:2520-2530`), read `Car.Position`, `Car.Velocity` and `Car.ForwardVector`
   once per tick into locals and thread them through `ComputeSteering`, `UpdateTrackPosition` and
   `UpdatePerceivedGrip`, instead of re-reading the native at every use.
