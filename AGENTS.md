@@ -151,7 +151,6 @@ One line each; **a simplest→most-complex ranking of the whole list sits at the
 - **Place apexes by hand (idea)** — sidesteps an apex that is arbitrary along a constant-radius arc.
 - **A surviving merge does not reach its own first corner's entrance** — its span starts after the absorbed apex (Figureight's absorbed one is a 112 m bend), inert while that corner needs no braking but re-opening the slow-first-corner case if a braking-worthy one falls inside the window.
 - **The two corner-merge rules need a stress test** — the short geometry-blind window and the longer same-direction one sit close together, and the aligned window is validated on one track only, so a genuine kink at 3.5-4 s elsewhere is the case to watch: it splits, the safe direction, at the cost of the pair's absorbed lead-in (`AGENTS-BACKLOG.md`).
-- **Menu-only settings migration needs in-game verification**: a fresh install must create only the three `Menu-*.ini` files.
 - **Start-line flares are LIVE and driver-verified (`4779a31`)** — one pair per track, on the last node at the track edges, the effect burning in the colour the track's `Flares` attribute asks for (`false` = off); the creator's `Trackside` Model/Frecuency props still have no reader.
 - **Council review backlog**: what remains is MenuSettings save-per-scroll, per-tick store reads in `Racer.cs`, and the listed minors.
 - **Pace is model-theoretical, not instance-measured** — the player's tuned car is paced at its stock number; an upgrade-set multiplier table is the idea on file.
