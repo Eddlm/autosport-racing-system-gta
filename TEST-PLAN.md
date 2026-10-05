@@ -1,9 +1,9 @@
-# ARS — test plan: build 451
+# ARS — test plan: build 452
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
-driver-verified on build 450 (`666c89b`); No Collision's one-shot mode was driven and **failed**. Everything else
-below is undriven. The deployed DLL is dev build **451**; a build + reload is enough (SHVDN reloads the scripts
-live, no game restart).
+driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
+driven and **failed** against the engine's one-slot limit (`cbae845`). Everything else below is undriven. The
+deployed DLL is dev build **452**; a build + reload is enough (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
@@ -12,6 +12,7 @@ live, no game restart).
 | `666c89b` | the recovery teleport now waits for the escape budget, so the reverse runs | §5 |
 | `f84fe9a` | the steering slew is one rate for both directions | Steering slew flattened |
 | `d521d1d` | the no-collision pairs are re-asserted every tick (one-shot failed) | §12 |
+| `cbae845` | each car is ghosted against its nearest rival only (engine has one slot) | §12 |
 | `f3f318f` → `148db70` | the bump/lip scan and its `Show Bumps` overlay, then the rise-walk fixes | Bump scan overlay |
 
 Start a race with several AI cars. `Show Inputs` on the Debug menu helps for the pedal bar, and `Log.log` in the
