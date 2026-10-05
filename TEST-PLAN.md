@@ -1,11 +1,11 @@
-# ARS — test plan: build 454
+# ARS — test plan: build 455
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
-(`cbae845`); the flat slew is driven and read as less stable, which the blend re-cut addresses (`7297050`).
-Everything else below is undriven. The deployed DLL is dev build **454**; a build + reload is enough (SHVDN
-reloads the scripts live, no game restart).
+(`cbae845`); the flat slew is driven and read as less stable, which the blend re-cut addresses (`7297050`); the
+water-stall DNF is new and undriven (`70b8708`). Everything else below is undriven. The deployed DLL is dev build
+**455**; a build + reload is enough (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
