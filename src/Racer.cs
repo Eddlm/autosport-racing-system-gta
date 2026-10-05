@@ -1022,7 +1022,7 @@ namespace ARS
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
-        const float SteerSlewRate = 45f;
+        const float SteerSlewRate = 180f;
         // How much of the damper's overshoot past neutral survives, so it may cross the sign, but at half authority.
         const float DamperCrossingShare = 0.5f;
         // Kill switch for the yaw-rate damper. Driven with it off the cars cannot hold centre — the term is the

@@ -1,12 +1,12 @@
-# ARS — test plan: build 463
+# ARS — test plan: build 464
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
-(`cbae845`); the flat slew is driven and read as less stable, which the blend re-cut addresses (`7297050`); the
-engine restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and undriven.
-Everything else below is undriven. The deployed DLL is dev build **462**; a build + reload is enough (SHVDN reloads
-the scripts live, no game restart).
+(`cbae845`); the flat slew is driven and read as less stable, so it is back up to 180 and undriven; the engine
+restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and undriven. Everything else
+below is undriven. The deployed DLL is dev build **464**; a build + reload is enough (SHVDN reloads the scripts
+live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
@@ -237,9 +237,10 @@ The question is whether the scan finds the lips a driver can feel, and whether t
 
 ## Steering slew and slide blend (the slew is driven; the blend is not)
 
-The countersteer doubling was never validated and the base rate read as instant, so both are now one rate
-(`SteerSlewRate`, `Racer.cs:1028`) applied at `TranslateSteerToInput`. **Driven: the AI is clearly less stable
-than before**, which is the countersteer arriving slowly. The blend was then re-cut (`Racer.cs:594`):
+The countersteer doubling was never validated and the base rate read as instant, so both became **one rate**
+(`SteerSlewRate`) applied at `TranslateSteerToInput`. **Driven at 45: the AI was clearly less stable than before**,
+a correction arriving too slowly, so the single rate is now **180** — the countersteer figure the old doubling used,
+which is full lock in about two tenths of a second. The blend was re-cut (`Racer.cs:594`) at the same time:
 
 - the weight ramps from zero at **0.25 × the authored peak slip** to full at **0.5 ×** it — the static
   `LateralTractionCurve`, not the speed-scaled peak, so it no longer moves with speed;
@@ -249,14 +250,14 @@ than before**, which is the countersteer arriving slowly. The blend was then re-
 Watch:
 
 1. **A slide** — the countersteer should come in earlier and reach the whole slide. A car that still spins means
-   the blend is not the limit and the 45°/s slew is.
+   the blend is not the limit.
 2. **A deep understeer** — the rear-led gate was there because body slip alone cannot tell an oversteer from an
    understeer, and steering against the latter deepens it. Watch a front washing wide for exactly that.
 3. **Brake release** — the pedal override is still gated on `_slidePriority >= 1`, which now arrives at **0.5 ×**
    the peak instead of 2.5 × the speed-scaled peak, so the brake lets go earlier in a slide. If that reads
    premature, re-anchor it to the share reaching full.
-4. **A straight** — a slower actuator can itself feed a limit cycle, so watch for weaving on the straight and in
-   fast direction changes (the survey's 0.6 rad/s warning).
+4. **A straight** — the actuator is fast again, so any weaving on the straight is the damper's and not the slew's;
+   watch the straight and fast direction changes (the survey's 0.6 rad/s warning).
 
 ## Steer limit governor — A/B (not driven)
 
