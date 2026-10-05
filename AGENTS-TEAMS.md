@@ -19,7 +19,15 @@ A teammate's work starts as a shared task, never as a prompt alone.
 - **One writer per file.** Disjoint scopes are the only safe shape; a write-scope overlap warning is advisory, not a lock.
 - The Lead owns the merge and the final acceptance test, and arbitrates a named disagreement instead of silently picking a side — a teammate's assertion is a claim to check, not an authority.
 - A teammate may **compile** but may never call a change **verified**: the human drives, and a successful build is not evidence.
-- **Every commit goes to a teammate for review** (driver's standing instruction): after committing, put the range on the shared board as a review task and send it to the teammate with the hashes, what each commit claims, and the acceptance criteria — and a finding needs ile:line, evidence, and a note of what was verified against the code rather than inferred.
+- **Every commit goes to a teammate for review** — superseded as a *cadence* by "Audit cadence" below, which keeps the review-task mechanics but reserves the teammate pass for the circling signal, because the driver reloads about twice per five minutes and a reload is therefore not a review boundary. When a review does run: put the range on the shared board as a review task and send it to the teammate with the hashes, what each commit claims, and the acceptance criteria — and a finding needs `file:line`, evidence, and a note of what was verified against the code rather than inferred.
+
+## Audit cadence — the standing procedure
+
+Two tiers, because the failure classes are different. **Mechanical invariants get a checker, not an audit** — auditing is for judgement, and spending a teammate on a symmetry a command can verify is how a frequent audit turns into a rubber stamp.
+
+- **Tier A — every batch, the Lead, mechanical, before the batch is driven.** The symmetry sweep: every key the menu writes is declared in `SettingsRepair`'s schema (the governor key was written, undeclared, pruned on every load, and silently defaulted); every field written has a reader; every constant has a consumer; every method has a caller; every commit body's claim is supported by its own diff. No teammate and no judgement — it is greps and a diff read, and it is what would have caught the governor key the moment it was added. **Standing todo:** turn the first of these into a load-time self-check that logs a warning, so the class becomes a log line instead of a habit.
+- **Tier B — on the circling signal, a teammate.** Call one when the work shows any of: the same law or constant being re-tuned for a third time; a change reverting something added within the last few commits; a fix whose diagnosis supersedes the previous fix's own diagnosis; the driver reporting the same symptom twice in different words; batches shrinking toward one-line surgical edits with no end in view; or a drive requested to **distinguish** two hypotheses rather than confirm one. Scope it to the batch's blast radius with the Tier A checklist — a full-system inventory is for when the structure changed, not for every pass.
+- **Backstop** — if no signal fires, audit every six driver reloads anyway, so nothing goes unaudited forever. Six is a floor, not the trigger.
 
 ## Talking
 - `send_message` is durable — a running teammate takes it at its next step boundary, an inactive one is started or resumed by it.
