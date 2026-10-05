@@ -1160,9 +1160,10 @@ namespace ARS
         }
 
 
-        // The slide-governed limit is the neutral countersteer, the slide angle, plus this much free play: the wheel can
-        // always reach a degree past the velocity vector to try to catch the rotation.
-        const float SlideLimitFreeplayDegrees = 1f;
+        // The slide-governed addition is this share of the slide angle plus this much free play, so the wheel reaches
+        // past the velocity vector to catch a rotation without the slide dictating the whole ceiling.
+        const float SlideLimitSlideShare = 0.5f;
+        const float SlideLimitFreeplayDegrees = 0.5f;
 
         void ApplySteerLimits()
         {
@@ -1187,7 +1188,7 @@ namespace ARS
                 speedCeiling = ResolveSteerCeiling(fwdSpeed);
                 // The slide adds authority, it does not replace the cornering law: the ceiling is the larger of the
                 // two, so a car can always steer in and rejoin, and a slide only ever opens more than it has.
-                if (slideGoverned) speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
+                if (slideGoverned) speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) * SlideLimitSlideShare + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
             }
             SteerLimitRight = speedCeiling;
             SteerLimitLeft = speedCeiling;
