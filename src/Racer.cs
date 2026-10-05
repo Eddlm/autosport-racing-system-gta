@@ -41,6 +41,9 @@ namespace ARS
         public int NextApexNode3 = -1;
         public float NextApexRadius3 = 999f;
         public float NextApexSpeed3 = 999f;
+
+        // The corner NextApexNode names, published at the queue commit so the cards never rescan the table.
+        CornerPoint _nextApexCorner;
         const int HeldApexCount = 3;
 
 
@@ -1147,6 +1150,11 @@ namespace ARS
             if (ControlledByPlayer) ARS.PlayerLaunchTestActive = true;
 
             Brain.Corner = null;
+            _nextApexCorner = null;
+            ActiveManeuver.Type = ManeuverType.None;
+            ActiveManeuver.Target = null;
+            _divebombApexNode = -1;
+            _defendApexNode = -1;
             NextApexNode = -1;
             NextApexRadius = 999f;
             NextApexSpeed = 999f;
@@ -1163,6 +1171,7 @@ namespace ARS
             VehicleData.ResetLapPeaks();
             CanRegisterNewLap = false;
             _previousNode = -1;
+            Pressure = 0f;
             // The grid is the one moment the car is known to be at rest, so this is where the baseline comes from.
             float restHeight = Car.HeightAboveGround;
             if (restHeight > 0f) _restHeightAboveGround = restHeight;
@@ -1420,7 +1429,7 @@ namespace ARS
         bool HasPassedBrakingTarget()
         {
             if (NextApexNode < 0) return true;
-            CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode);
+            CornerPoint corner = _nextApexCorner;
             int targetNode = BrakeTargetBaseNode(corner, NextApexNode);
             if (targetNode < 0) return true;
             int targetDistance = ForwardNodeDistance(targetNode);
@@ -1815,9 +1824,24 @@ namespace ARS
             Control.BrakeReasonLevel = binding;
             return binding;
         }
+        Rival NearestRival()
+        {
+            Rival nearest = null;
+            float best = float.MaxValue;
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
+                if (r.Distance < best) { best = r.Distance; nearest = r; }
+            }
+            return nearest;
+        }
+
+        // The cards ride the fast core pass. Track state, perception and the car's own velocity were rebuilt earlier in
+        // this same core tick; the rival records are the half-second publish's, owned by the slower rival scan, and
+        // Yield's pressure belongs to the pressure beat. The crowd card keeps the slow beat because it counts the field.
         void ConsiderManeuvers()
         {
-            if (ControlledByPlayer) return;
+            if (ControlledByPlayer || BaseBehavior != RacerBaseBehavior.Race || ARS.Racers.Count < 1) return;
 
             // Force-disable maneuvers armed for more than 8s without firing.
             if (ActiveManeuver.Type != ManeuverType.None && Game.GameTime - ActiveManeuver.LastEnabled > 8000)
@@ -1827,52 +1851,30 @@ namespace ARS
             }
 
             // Divebomb cleanup: off once we pass the armed apex.
-            if (ActiveManeuver.Type == ManeuverType.DiveBomb && _divebombApexNode >= 0)
+            if (ActiveManeuver.Type == ManeuverType.DiveBomb && HasPassedApex(_divebombApexNode))
             {
-                int passed = CurrentTrackPoint.Node - _divebombApexNode;
-                if (!ARS.IsPointToPoint && passed < 0) passed += ARS.TrackPoints.Count;
-                if (passed >= 0)
-                {
-                    ActiveManeuver.Type = ManeuverType.None;
-                    ActiveManeuver.Target = null;
-                    _divebombApexNode = -1;
-                }
+                ActiveManeuver.Type = ManeuverType.None;
+                ActiveManeuver.Target = null;
+                _divebombApexNode = -1;
             }
 
             // DefendLane fold: off once we pass the defended apex or the target gets past us.
             if (ActiveManeuver.Type == ManeuverType.DefendLane)
             {
-                bool lostTarget = ActiveManeuver.Target == null
-                    || !ActiveManeuver.Target.Car.Exists()
-                    || !Brain.Rivals.Any(r => r.RivalRacer == ActiveManeuver.Target && r.RelativePosition != RelativePos.Ahead);
+                bool targetTrails = false;
+                foreach (Rival r in Brain.Rivals)
+                {
+                    if (r.RivalRacer != ActiveManeuver.Target) continue;
+                    targetTrails = r.RelativePosition != RelativePos.Ahead;
+                    break;
+                }
+                bool lostTarget = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || !targetTrails;
 
-                int passed = CurrentTrackPoint.Node - _defendApexNode;
-                if (!ARS.IsPointToPoint && passed < 0) passed += ARS.TrackPoints.Count;
-
-                if (lostTarget || (_defendApexNode >= 0 && passed >= 0))
+                if (lostTarget || HasPassedApex(_defendApexNode))
                 {
                     ActiveManeuver.Type = ManeuverType.None;
                     ActiveManeuver.Target = null;
                     _defendApexNode = -1;
-                }
-            }
-
-            // ChillOut cleanup: off once the pack around us thins out.
-            if (ActiveManeuver.Type == ManeuverType.ChillOut && RivalsWithinDistance(ChillRivalCrowdDistance) < ChillCrowdCount)
-            {
-                ActiveManeuver.Type = ManeuverType.None;
-                ActiveManeuver.Target = null;
-            }
-
-            // ChillOut: only when fast enough for bunching to matter, in a dense pack of better-placed cars.
-            if (ActiveManeuver.Type == ManeuverType.None && ARS.MpsToMph(Car.Velocity.Length()) >= ChillMinSpeedMph && RivalsWithinDistance(ChillRivalCrowdDistance) >= ChillCrowdCount)
-            {
-                Rival closestRival = Brain.Rivals.Where(r => r.RivalRacer != null).OrderBy(r => r.Distance).FirstOrDefault();
-                if (closestRival != null)
-                {
-                    ActiveManeuver.Type = ManeuverType.ChillOut;
-                    ActiveManeuver.Target = closestRival.RivalRacer;
-                    ActiveManeuver.LastEnabled = Game.GameTime;
                 }
             }
 
@@ -1885,6 +1887,31 @@ namespace ARS
             if (ActiveManeuver.Type == ManeuverType.None) TryPlayDivebombCard();
 
             if (ActiveManeuver.Type == ManeuverType.None) TryPlayYieldCard();
+        }
+
+        // The crowd card counts the whole field, so it keeps the slow beat.
+        void ConsiderCrowdCard()
+        {
+            if (ControlledByPlayer || BaseBehavior != RacerBaseBehavior.Race || ARS.Racers.Count < 1) return;
+
+            // ChillOut cleanup: off once the pack around us thins out.
+            if (ActiveManeuver.Type == ManeuverType.ChillOut && RivalsWithinDistance(ChillRivalCrowdDistance) < ChillCrowdCount)
+            {
+                ActiveManeuver.Type = ManeuverType.None;
+                ActiveManeuver.Target = null;
+            }
+
+            // ChillOut: only when fast enough for bunching to matter, in a dense pack of better-placed cars.
+            if (ActiveManeuver.Type == ManeuverType.None && ARS.MpsToMph(Car.Velocity.Length()) >= ChillMinSpeedMph && RivalsWithinDistance(ChillRivalCrowdDistance) >= ChillCrowdCount)
+            {
+                Rival closestRival = NearestRival();
+                if (closestRival != null)
+                {
+                    ActiveManeuver.Type = ManeuverType.ChillOut;
+                    ActiveManeuver.Target = closestRival.RivalRacer;
+                    ActiveManeuver.LastEnabled = Game.GameTime;
+                }
+            }
         }
 
         int ForwardNodeDistance(int targetNode)
@@ -1931,10 +1958,7 @@ namespace ARS
             if (NextApexNode < 0) return false;
 
             float speed = Car.Velocity.Length();
-            Rival closestRival = Brain.Rivals
-                .Where(r => r.RivalRacer != null)
-                .OrderBy(r => r.Distance)
-                .FirstOrDefault();
+            Rival closestRival = NearestRival();
 
             // Finish spender: with a rival nearby the burn near the line is always worth it,
             // so the 8s corner gate no longer applies.
@@ -1942,7 +1966,7 @@ namespace ARS
                 && RemainingRaceDistanceMeters() <= speed * (NitrousDurationMs / 1000f) + NitrousFinishExtraDistance;
             if (!finishSpender)
             {
-                CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode);
+                CornerPoint corner = _nextApexCorner;
                 // Circuit wrap makes a just-behind entrance read a lap away; veto in-corner shots.
                 if (corner != null && IsWithinCorner(corner)) return false;
                 int entranceNode = corner == null
@@ -1951,10 +1975,13 @@ namespace ARS
                 if (ForwardNodeDistance(entranceNode) / Math.Max(speed, 1f) < NitrousCornerLookaheadSeconds) return false;
             }
 
-            bool rivalNearbyFaster = closestRival != null && closestRival.RivalRacer.Car.Velocity.Length() > speed;
-            bool rivalBehindIncoming = Brain.Rivals.Any(r => r.RivalRacer != null && r.RelativePosition == RelativePos.Behind
-                && r.RivalRacer.Car.Velocity.Length() > speed
-                && r.Distance / (r.RivalRacer.Car.Velocity.Length() - speed) < NitrousDefenseReachSeconds);
+            bool rivalNearbyFaster = closestRival != null && closestRival.Speed > speed;
+            bool rivalBehindIncoming = false;
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || !r.RivalRacer.Car.Exists() || r.RelativePosition != RelativePos.Behind || r.Speed <= speed) continue;
+                if (r.Distance / (r.Speed - speed) < NitrousDefenseReachSeconds) { rivalBehindIncoming = true; break; }
+            }
             bool lonelyClear = closestRival == null
                 && speed < Handling.EstimatedTopSpeed * NitrousLonelySpeedFraction
                 && ForwardNodeDistance(NextApexNode) > NitrousLonelyMinApexDistance;
@@ -1982,13 +2009,15 @@ namespace ARS
             float timeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
             if (timeToEntrance > DivebombEntranceSeconds) return false;
 
-            Rival diveTarget = Brain.Rivals
-                .Where(r => r.RivalRacer != null
-                    && r.RivalRacer.Car.Exists()
-                    && (r.RelativePosition == RelativePos.Left || r.RelativePosition == RelativePos.Right
-                        || r.TimeToContact <= DivebombOverlapReachSeconds))
-                .OrderBy(r => r.Distance)
-                .FirstOrDefault();
+            Rival diveTarget = null;
+            float nearestDive = float.MaxValue;
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
+                bool overlaps = r.RelativePosition == RelativePos.Left || r.RelativePosition == RelativePos.Right || r.TimeToContact <= DivebombOverlapReachSeconds;
+                if (!overlaps) continue;
+                if (r.Distance < nearestDive) { nearestDive = r.Distance; diveTarget = r; }
+            }
             if (diveTarget == null) return false;
 
             ActiveManeuver.Type = ManeuverType.DiveBomb;
@@ -2011,17 +2040,17 @@ namespace ARS
             float myTimeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
             if (!ARS.IsBetween(myTimeToEntrance, 1f, 3f)) return false;
 
-            Rival defenderTarget = Brain.Rivals
-                .Where(r => r.RivalRacer != null
-                    && r.RivalRacer.Car.Exists()
-                    && r.RelativePosition == RelativePos.Behind
-                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DiveBomb
-                    && r.RivalRacer.ActiveManeuver.Type != ManeuverType.DefendLane
-                    && r.Distance <= 30f
-                    && r.ForwardSpeedGap < 0f
-                    && r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.RivalRacer.Car.Velocity.Length(), 1f) <= myTimeToEntrance)
-                .OrderBy(r => r.Distance)
-                .FirstOrDefault();
+            Rival defenderTarget = null;
+            float nearestDefender = float.MaxValue;
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
+                if (r.RivalRacer.ActiveManeuver.Type == ManeuverType.DiveBomb || r.RivalRacer.ActiveManeuver.Type == ManeuverType.DefendLane) continue;
+                bool closes = r.RelativePosition == RelativePos.Behind && r.Distance <= 30f && r.ForwardSpeedGap < 0f;
+                bool arrivesNoLater = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f) <= myTimeToEntrance;
+                if (!closes || !arrivesNoLater) continue;
+                if (r.Distance < nearestDefender) { nearestDefender = r.Distance; defenderTarget = r; }
+            }
             if (defenderTarget == null) return false;
 
             ActiveManeuver.Type = ManeuverType.DefendLane;
@@ -2036,10 +2065,7 @@ namespace ARS
         {
             if (Brain.Corner == null) return false;
 
-            Rival closestRival = Brain.Rivals
-                .Where(r => r.RivalRacer != null && r.RivalRacer.Car.Exists())
-                .OrderBy(r => r.Distance)
-                .FirstOrDefault();
+            Rival closestRival = NearestRival();
             if (closestRival == null) return false;
 
             float pressureDiff = closestRival.RivalRacer.Pressure - Pressure;
@@ -2048,7 +2074,7 @@ namespace ARS
             float timeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
             if (pressureDiff <= 30f || !inOverlap || !ARS.IsBetween(timeToEntrance, 0.5f, 2f)
                 || closestRival.Distance > 20f
-                || closestRival.RivalRacer.Car.Velocity.Length() <= Car.Velocity.Length()) return false;
+                || closestRival.Speed <= Car.Velocity.Length()) return false;
 
             ActiveManeuver.Type = ManeuverType.Yield;
             ActiveManeuver.Target = closestRival.RivalRacer;
@@ -2997,6 +3023,7 @@ namespace ARS
             {
                 // Instance Brain.Corner from the nearest apex.
                 CornerPoint original = ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode);
+                _nextApexCorner = original;
                 CornerPoint cp = original ?? new CornerPoint();
                 if (original == null)
                 {
@@ -3008,6 +3035,7 @@ namespace ARS
             }
             else
             {
+                _nextApexCorner = null;
                 Brain.Corner = null;
             }
         }
@@ -3210,8 +3238,7 @@ namespace ARS
                     if (BaseBehavior == RacerBaseBehavior.Race && ARS.Racers.Count >= 1)
                     {
                         UpdateRivals();
-                        UpdateRivalInfo();
-                        ConsiderManeuvers();
+                        ConsiderCrowdCard();
                     }
 
                     if (!Driver.IsSittingInVehicle(Car) && Car.IsStopped && Driver.IsStopped)
@@ -3266,6 +3293,7 @@ namespace ARS
                     _rivalInfoTick = now + 500;
                     UpdateRivalInfo();
                 }
+                ConsiderManeuvers();
                 ComputeTargetSpeed();
                 ComputeSteering();
 
@@ -3639,6 +3667,9 @@ namespace ARS
                 candidates.RemoveAt(nearest);
                 candidateDistances.RemoveAt(nearest);
             }
+
+            // A re-owned slot must not keep the last occupant's numbers: every consumer reads the record, not the car.
+            UpdateRivalInfo();
         }
 
         public void Delete()

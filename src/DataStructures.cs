@@ -157,6 +157,7 @@ namespace ARS
         public float LongitudinalGap = 99f;   // signed: + = rival ahead, - = rival behind
         public float LateralGap = 0f;          // signed: + = rival right, - = rival left
         public float ForwardSpeedGap = 0f;      // signed: + = me faster than rival (along me's forward axis)
+        public float Speed;                                   // the rival's own velocity magnitude, read once per publish
         public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals
         public float TimeToReach = float.PositiveInfinity;     // seconds to close the route gap while closing on it
         public float FrontGap = float.PositiveInfinity;        // front-to-rear distance along the route
@@ -176,6 +177,7 @@ namespace ARS
             // used to call the native again.
             Vector3 myVelocity = me.Car.Velocity;
             Vector3 rivalVelocity = RivalRacer.Car.Velocity;
+            Speed = rivalVelocity.Length();
 
             UpdateOffsets(me);
             UpdateSpeedGaps(me, myVelocity, rivalVelocity);
