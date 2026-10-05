@@ -535,8 +535,6 @@ namespace ARS
             aimLane = ARS.Clamp(aimLane, -drivableEdge, drivableEdge);
             _debugLaneAimPoint = steerRefPoint.Position + steerRight * aimLane;
 
-            LogCornerCrossings();
-
             // --- Lane steer: pure pursuit toward the target lane ---
 
             float laneSteerDeg = PursuitSteerDegrees(_debugLaneAimPoint, courseDir);
@@ -667,74 +665,6 @@ namespace ARS
                 correction += headingDifference * proximity;
             }
             return correction;
-        }
-
-        // TEMPORARY diagnostic: logs entrance, apex and exit per corner with the car's offset, so a corner that is
-        // consistently missed can be read off the log instead of the screen. Remove with its call in ComputeSteering.
-        const int CornerLogApexBandNodes = 2;
-        int _logCornerIndex = -1;
-        int _logCornerPhase = -1;
-
-        int ForwardNodes(int fromNode, int toNode)
-        {
-            int count = ARS.TrackPoints.Count;
-            int d = toNode - fromNode;
-            if (!ARS.IsPointToPoint) d = ((d % count) + count) % count;
-            return d;
-        }
-
-        void LogCornerPhase(int index, string phase)
-        {
-            CornerPoint c = ARS.Corners[index];
-            ARS.Log(ARS.LogImportance.Info, "[CORNER] " + (index + 1) + "/" + ARS.Corners.Count
-                + " apex=" + c.Node + " sign=" + Math.Sign(c.Angle)
-                + " R=" + c.SupposedRadius.ToString("0") + " Rdet=" + c.DetectedRadius.ToString("0")
-                + " " + phase + " off=" + Brain.CurrentPerception.DeviationFromCenter.ToString("0.00")
-                + " steer=" + Control.SteerDegrees.ToString("0.0"));
-        }
-
-        void LogCornerCrossings()
-        {
-            if (ARS.Corners.Count == 0 || ARS.TrackPoints.Count == 0) return;
-            int node = CurrentTrackPoint.Node;
-            int foundIndex = -1;
-            int foundPhase = -1;
-            for (int i = 0; i < ARS.Corners.Count; i++)
-            {
-                CornerPoint c = ARS.Corners[i];
-                if (c == null || c.Node < 0) continue;
-                int entrance = CornerEntranceNode(c, c.Node);
-                int exit = CornerExitNode(c);
-                if (entrance < 0 || exit < 0) continue;
-                int along = ForwardNodes(entrance, node);
-                if (along > ForwardNodes(entrance, exit)) continue;
-                int toApex = ForwardNodes(entrance, c.Node);
-                foundIndex = i;
-                foundPhase = along < toApex - CornerLogApexBandNodes ? 0 : (along <= toApex + CornerLogApexBandNodes ? 1 : 2);
-                break;
-            }
-            if (foundIndex < 0)
-            {
-                if (_logCornerIndex >= 0)
-                {
-                    LogCornerPhase(_logCornerIndex, "EXIT");
-                    _logCornerIndex = -1;
-                    _logCornerPhase = -1;
-                }
-                return;
-            }
-            if (foundIndex != _logCornerIndex)
-            {
-                _logCornerIndex = foundIndex;
-                _logCornerPhase = foundPhase;
-                LogCornerPhase(foundIndex, "ENTRANCE");
-                return;
-            }
-            if (foundPhase == 1 && _logCornerPhase != 1)
-            {
-                _logCornerPhase = foundPhase;
-                LogCornerPhase(foundIndex, "APEX");
-            }
         }
 
         // Lane Control System 2: positions the car on the inside edge of the track curvature.

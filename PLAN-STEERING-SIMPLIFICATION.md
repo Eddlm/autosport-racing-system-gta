@@ -83,9 +83,10 @@ candidates will be judged against.
 Writer findings are in `STEERING-SIMPLIFICATION-FINDINGS.md`; every claim below was checked against the tree by the
 Lead before it was ruled on, and the checks that mattered are named in the ruling.
 
-- **R1 — C1, the temporary corner diagnostic: deferred to the driver.** Log-only and its own comment declares it
-  temporary, so it is zero-risk; but it exists to diagnose corner misses, which is a live question, and removing it
-  removes the tool. Keep until the driver says that work is finished.
+- **R1 — C1, the temporary corner diagnostic: cut on the driver's word.** Log-only and zero-risk, which is what made
+  it a candidate; the Lead initially kept it because it exists to diagnose corner misses, but the driver does not read
+  its output, so the tool was dead weight rather than insurance. Removed with its call, `ForwardNodes` and both log
+  methods in build 472; the workstream that might want it again is told where to recover it, so nobody rewrites it.
 - **R2 — C2, C3, C4, C8: accepted and applied.** Grep confirmed no reader outside the spans named: `_rawCornerLane`
   was write-only, both steer-limit fields were read only inside `ApplySteerLimits`, `CountersteerFullSlideFraction`
   multiplied by exactly 1, and the `nonLaneSteerDeg` intermediate only re-ordered a sum. The sign note — LEFT bounds
