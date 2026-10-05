@@ -7,8 +7,9 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
 (`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the engine
 restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and undriven. Everything else
-below is undriven. The deployed DLL is dev build **471**; a build + reload is enough (SHVDN reloads the scripts
-live, no game restart).
+below is undriven. **Build 471's state is accepted on the drive** — the simplification batch and the governor-key fix
+regress nothing — but that is a verdict on the build, not on the governor A/B, which is still unjudged. The deployed
+DLL is dev build **471**; a build + reload is enough (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
