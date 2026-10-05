@@ -150,7 +150,6 @@ namespace ARS
         public RelativePos RelativePosition = RelativePos.Unreachable;
 
         public float Distance = 99;
-        public float SecondsToReach = 99f;
         public float DirectionDiff = 99f;
         public Vector3 RelativeOffset = Vector3.Zero;
 
@@ -159,13 +158,15 @@ namespace ARS
         public float LateralGap = 0f;          // signed: + = rival right, - = rival left
         public float ForwardSpeedGap = 0f;      // signed: + = me faster than rival (along me's forward axis)
         public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals
-        public float SecondsToHit = float.PositiveInfinity;    // physical swept bounding-box hit time
-        public float FrontGap = float.PositiveInfinity;        // front-to-rear distance to rival
-        public float RouteGapMeters = float.PositiveInfinity;  // nearest-node route distance, 1 node = 1 m
+        public float TimeToReach = float.PositiveInfinity;     // seconds to close the route gap while closing on it
+        public float FrontGap = float.PositiveInfinity;        // front-to-rear distance along the route
+        public float RouteGapAhead = 0f;                       // signed route arc in metres, + = rival ahead
 
         public Vector2 CombinedSize = Vector2.Zero;
         public float OccupiedLane=0f;
         public float OccupiedLaneWidth = 0f;
+        // A rival below this speed has no meaningful direction of travel; it is treated as facing this car's way.
+        const float SlowRivalMps = 1f;
         public void Update(Racer me)
         {
             RelativePosition = RelativePos.Unreachable;
@@ -201,34 +202,24 @@ namespace ARS
             UpdateRouteGap(me);
         }
 
-        // Near-zero only when the cars are neighbours along the route; physical closeness alone cannot separate a
-        // real side-by-side from the opposite leg of a U, whose nodes sit hundreds of metres of route apart.
+        // Signed arc to the rival along the route, shortest way round on a circuit. CumulativeDistance is metres and
+        // carries no lap, so a car a lap ahead but physically close still measures close.
         void UpdateRouteGap(Racer me)
         {
-            int nodeGap = Math.Abs(RivalRacer.CurrentTrackPoint.Node - me.CurrentTrackPoint.Node);
-            RouteGapMeters = ARS.IsPointToPoint ? nodeGap : Math.Min(nodeGap, ARS.TrackPoints.Count - nodeGap);
+            float gap = RivalRacer.CurrentTrackPoint.CumulativeDistance - me.CurrentTrackPoint.CumulativeDistance;
+            if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(gap) > ARS.RouteLengthMeters * 0.5f)
+                gap -= Math.Sign(gap) * ARS.RouteLengthMeters;
+            RouteGapAhead = gap;
         }
 
-        // Speed gaps and the times they imply. Two laws live here on purpose: ForwardSpeedGap projects the
-        // relative velocity onto my forward axis, while SecondsToReach and TimeToContact use the longitudinal gap.
+        // Speed gaps and the times they imply. ForwardSpeedGap projects the relative velocity onto my forward axis,
+        // while TimeToContact uses the longitudinal gap.
         void UpdateSpeedGaps(Racer me, Vector3 myVelocity, Vector3 rivalVelocity)
         {
             float mySpeedSquared = myVelocity.LengthSquared();
             Vector3 meForward = mySpeedSquared > 0.01f ? myVelocity.Normalized : me.Car.ForwardVector;
             Vector3 relativeVelocity = myVelocity - rivalVelocity;
             ForwardSpeedGap = Vector3.Dot(relativeVelocity, meForward);
-
-            // Legacy SecondsToReach kept for existing consumers (avoidance filter expects 0..3 range).
-            float longitudinalAbs = Math.Abs(LongitudinalGap);
-            float absoluteSpeedGap = (float)Math.Round(myVelocity.Length() - rivalVelocity.Length(), 4);
-            if (absoluteSpeedGap <= 0.001f)
-            {
-                SecondsToReach = float.PositiveInfinity;
-            }
-            else
-            {
-                SecondsToReach = longitudinalAbs / Math.Abs(absoluteSpeedGap);
-            }
 
             // TimeToContact: only meaningful for rivals ahead of me that I'm closing on.
             if (LongitudinalGap > 0f && ForwardSpeedGap > 0.001f)
@@ -259,16 +250,14 @@ namespace ARS
             }
         }
 
-        // Swept-box closing time, and the heading difference: the two velocity-derived quantities kept last,
-        // in the order they were computed before this was split.
         void UpdateClosingTime(Racer me, Vector3 myVelocity, Vector3 rivalVelocity)
         {
-            SecondsToHit = ComputeSecondsToHit(me);
+            TimeToReach = ComputeTimeToReach(me);
 
-            // DirectionDiff: angle between velocity vectors. Guard against zero velocity (NaN).
+            // DirectionDiff: angle between velocity vectors, so a car that is stopped or barely rolling has no
+            // direction of travel to read. Assume it points the way this car does, or the avoidance cannot see it.
             float mySpeedSquared = myVelocity.LengthSquared();
-            float rivalSpeed = rivalVelocity.LengthSquared();
-            if (mySpeedSquared < 0.01f || rivalSpeed < 0.01f)
+            if (mySpeedSquared < 0.01f || rivalVelocity.Length() < SlowRivalMps)
             {
                 DirectionDiff = 0f;
             }
@@ -278,29 +267,20 @@ namespace ARS
             }
         }
 
-        float ComputeSecondsToHit(Racer me)
+        // The gap and the closure both live in the route frame, so no straight axis can be laid across a corner to
+        // distort them: a rival on the racing line keeps its lane however the road bends under it.
+        float ComputeTimeToReach(Racer me)
         {
-            float mySpeed = me.Car.Velocity.Length();
-            if (mySpeed < 0.1f) return float.PositiveInfinity;
+            FrontGap = float.PositiveInfinity;
+            if (RouteGapAhead <= 0f) return float.PositiveInfinity;
+            if (Math.Abs(OccupiedLane - me.Brain.CurrentPerception.DeviationFromCenter) > CombinedSize.X) return float.PositiveInfinity;
 
-            Vector3 velDir = me.Car.Velocity.Normalized;
-            Vector3 toRival = RivalRacer.Car.Position - me.Car.Position;
-            if (RelativePosition != RelativePos.Ahead) return float.PositiveInfinity;
-
-            float longGap = Vector3.Dot(toRival, velDir);
-            float lateralOffset = (toRival - velDir * longGap).Length();
-            if (lateralOffset > 2f) return float.PositiveInfinity;
-
-            float rivalLongSpeed = Vector3.Dot(RivalRacer.Car.Velocity, velDir);
-            float closingLong = mySpeed - rivalLongSpeed;
-            if (closingLong <= 0.001f) return float.PositiveInfinity;
-
-            float myHalfLen = me.VehicleData.ModelDimensions.Y * 0.5f;
-            float rivalHalfLen = RivalRacer.VehicleData.ModelDimensions.Y * 0.5f;
-            FrontGap = longGap - (myHalfLen + rivalHalfLen);
+            FrontGap = RouteGapAhead - CombinedSize.Y;
+            float closingAlong = me.AlongTrackSpeed - RivalRacer.AlongTrackSpeed;
+            if (closingAlong <= 0.001f) return float.PositiveInfinity;
             if (FrontGap <= 2f) return 0f;
 
-            return FrontGap / closingLong;
+            return FrontGap / closingAlong;
         }
     }
 
@@ -337,6 +317,13 @@ namespace ARS
         StuckRecovery
     }
 
+    public enum StuckPhase
+    {
+        None,
+        Reverse,
+        Drive
+    }
+
     public class VehicleControl
     {
         public float SteerDegrees = 0f;
@@ -354,6 +341,7 @@ namespace ARS
         public float MaxThrottleFromChillOut = 1f;
         public float MaxThrottleFromYield = 1f;
         public float MaxThrottleFromInstability = 1f;
+        public float MaxThrottleFromOffTrack = 1f;
         public ThrottleReason ThrottleReason = ThrottleReason.Plan;
         public float ThrottleReasonLevel = 1f;
         public BrakeReason BrakeReason = BrakeReason.Plan;

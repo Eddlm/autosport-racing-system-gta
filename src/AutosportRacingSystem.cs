@@ -57,6 +57,7 @@ namespace ARS
         public static List<TrackStartInfo> TrackStartInfos = new List<TrackStartInfo>();
 
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
+        public static float RouteLengthMeters = 0f;
         // Pre-computed apex table. Built in BuildApexTable after track generation.
         public static List<CornerPoint> Corners = new List<CornerPoint>();
         // Bumped on every apex-table rebuild so each racer's corner contexts know to re-sync.
@@ -145,9 +146,6 @@ namespace ARS
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = true;
-        // A stuck car reverses, drives back out and yields to traffic before it rejoins, instead of the plain
-        // reverse-and-go. Off is the shipped behaviour.
-        public static bool RealisticRecovery = false;
         // Flat mph added to the corner braking plan; Route Offset is the same knob for the route term.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
@@ -212,6 +210,12 @@ namespace ARS
 
         public static RaceState RaceStatus = RaceState.None;
         public static int RaceStartTime = 0;
+        // Cars taken out of a race with a dead engine, parked along the shoulder in the order they died.
+        public static int ParkedDNFs = 0;
+        // DNF cars are dropped below the surface, frozen and invisible, and the AI ignores them entirely.
+        public static bool DNFUnderTrack = true;
+        // No-collision race: the racers do not detect each other and pass through each other.
+        public static bool NoCollision = false;
 
         // Phased race instancing: track which setup phases have been completed.
         // Reset by CleanRacers (_gridInstanced) and CleanEverything (both).
@@ -1026,13 +1030,22 @@ namespace ARS
             };
             aiMenu.Add(absItem);
 
-            NativeCheckboxItem recoveryItem = new NativeCheckboxItem("Realistic Recovery", "After getting stuck the AI car backs off, drives out, then waits off-line for a fast rival to pass before it rejoins. Off: reverse, then drive straight back out.", RealisticRecovery);
-            recoveryItem.CheckboxChanged += (sender, args) =>
+            NativeCheckboxItem dnfItem = new NativeCheckboxItem("Hide DNFs", "A car with a dead engine is dropped under the track, frozen and invisible, and ignored by the AI. Off: it is parked on the shoulder.", DNFUnderTrack);
+            dnfItem.CheckboxChanged += (sender, args) =>
             {
-                RealisticRecovery = recoveryItem.Checked;
-                SaveRacerSetting("RealisticRecovery", RealisticRecovery.ToString());
+                DNFUnderTrack = dnfItem.Checked;
+                SaveRacerSetting("DNFUnderTrack", DNFUnderTrack.ToString());
             };
-            aiMenu.Add(recoveryItem);
+            aiMenu.Add(dnfItem);
+
+            NativeCheckboxItem noCollisionItem = new NativeCheckboxItem("No Collision", "The racers do not detect each other and pass through each other. World collision is untouched.", NoCollision);
+            noCollisionItem.CheckboxChanged += (sender, args) =>
+            {
+                NoCollision = noCollisionItem.Checked;
+                SaveRacerSetting("NoCollision", NoCollision.ToString());
+                ApplyNoCollision(NoCollision);
+            };
+            aiMenu.Add(noCollisionItem);
 
             string[] steerKDOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
             NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds against zero yaw. Lower is crisper; higher opposes rotation more strongly.", steerKDOptions);
@@ -1542,6 +1555,27 @@ namespace ARS
         {
             return (float)Math.Round(mph * 0.44704f, 3);
         }
+        // No-collision mode: every nearby racer pair passes through every other, world collision untouched. It is
+        // re-asserted every tick because the flag does not survive the engine's own vehicle state changes (an AI car
+        // becomes a dummy past 40 m). Pairs further apart than the range are skipped; they cannot touch anyway.
+        // The third argument is a mode: false keeps the pair non-colliding, true lets it clear once the pair stops
+        // impacting (commands_entity.cpp:5839). The removed ghosting passed true, which is why it kept slipping.
+        void ApplyNoCollision(bool enable)
+        {
+            for (int i = 0; i < Racers.Count; i++)
+            {
+                Racer a = Racers[i];
+                if (!a.Car.Exists()) continue;
+                for (int j = i + 1; j < Racers.Count; j++)
+                {
+                    Racer b = Racers[j];
+                    if (!b.Car.Exists()) continue;
+                    Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, a.Car, b.Car, !enable);
+                    Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, b.Car, a.Car, !enable);
+                }
+            }
+        }
+
         void CleanEverything()
         {
             CleanRacers();
@@ -1551,7 +1585,9 @@ namespace ARS
 
             foreach (int fx in _flareFx) Function.Call(Hash.STOP_PARTICLE_FX_LOOPED, fx);
             _flareFx.Clear();
+            ApplyNoCollision(false);
             LeaderboardFinish.Clear();
+            ParkedDNFs = 0;
             _routeEditorActive = false;
             _raceTimedFinishMs = 0;
 
@@ -1831,6 +1867,7 @@ namespace ARS
                             _countdown = _maxCountdown;
                             RaceStatus = RaceState.InProgress;
                             RaceStartTime = Game.GameTime;
+                            if (NoCollision) ApplyNoCollision(true);
                         }
                     }
                 }
@@ -1900,11 +1937,12 @@ namespace ARS
                 }
 
                 
-                if (LeaderboardFinish.Count > 0 && (LeaderboardFinish.Count == Racers.Count || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs)))
+                bool allRacersParked = Racers.Count(r => !r.IsDNF) == 0;
+                if ((LeaderboardFinish.Count > 0 || allRacersParked) && (LeaderboardFinish.Count == Racers.Count(r => !r.IsDNF) || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs)))
                 {
                     foreach (Racer r in Racers.Where(r => r.FinalPosition == 0).OrderByDescending(r => r.RaceProgress))
                         r.FinalPosition = LeaderboardFinish.Count + 1;
-                    if (LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
+                    if (LeaderboardFinish.Count > 0 && LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
                     RaceStatus = RaceState.Finished;
                     CleanEverything();
                 }
@@ -3014,7 +3052,8 @@ namespace ARS
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
-            RealisticRecovery = SettingsMenuStore.GetBool("RealisticRecovery", RealisticRecovery);
+            DNFUnderTrack = SettingsMenuStore.GetBool("DNFUnderTrack", DNFUnderTrack);
+            NoCollision = SettingsMenuStore.GetBool("NoCollision", NoCollision);
             CrestEffect = SettingsMenuStore.GetInt("CrestEffect", 100) * 0.01f;
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 0);

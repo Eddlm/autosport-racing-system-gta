@@ -59,6 +59,7 @@ namespace ARS
         // Racer progress along the route.
         public TrackPoint CurrentTrackPoint = new TrackPoint();
         public float TrackProgress = 0f;
+        public float AlongTrackSpeed = 0f;
         public int RaceProgress = 0;
 
         // Time-based route references used by steering and speed calculations.
@@ -71,6 +72,8 @@ namespace ARS
         public int Lap = 0;
         public int NitroChargedLap = -1;
         public int RacePosition = 0;
+        // A car whose engine is dead cannot rejoin. It is parked on the shoulder and never races again this race.
+        public bool IsDNF = false;
         // Frozen finish rank, assigned once when the racer crosses the line; 0 = still racing.
         public int FinalPosition = 0;
         public bool CanRegisterNewLap = false;
@@ -88,42 +91,36 @@ namespace ARS
         int TimeSince_lastCoreTick => (int)ARS.Clamp(Game.GameTime - _lastCoreTick, 1, 9999);
 
 
-        int _lastStuckGameTime = 0;
         List<TrackPoint> _trackPositionScratch = new List<TrackPoint>(13);
-        public bool IsStuckByThrottle = false;
-        const int StuckCheckTimeMs = 800;
-        bool _isRecoveringFromStuck = false;
-        int _stuckRecoveryEndTime = 0;
         const int StuckRecoveryTimeMs = 6000;
-        int _stuckRecoveryCooldownEndTime = 0;
         const int StuckRecoveryCooldownMs = 2000;
-        int _stuckRecoveryAttempts = 0;
-        int _stuckReverseUntil = 0;
-        int _stuckEscapeSpentMs = 0;
-        bool _stuckMergeTaken = false;
-        bool _stuckJoinPaused = false;
-        Vector3 _stuckMergePosition = Vector3.Zero;
-        Vector3 _stuckMergeDirection = Vector3.WorldNorth;
-        int _regainedControlSince = 0;
-        // Backing off is a short, straight phase; the way out is the forward phase after it, which runs until the safe
-        // predicate holds rather than for a fixed time.
-        const int StuckReverseMs = 500;
-        const float StuckSnapMinSpeedMps = 5f;
-        // The recovery starts on a car that is slow and not pushing, and the snap ends it on the same state: a car
-        // accelerating out of the escape is under the snap speed for a while, and snapping it there undoes the escape.
-        const float StuckStillGs = 0.25f;
-        const int RegainedControlHoldMs = 500;
-        const float StuckRouteAimMeters = 10f;
-        const float RecoveredHeadingDeg = 25f;
-        public int StuckRecoveryAttemptsNow => _stuckRecoveryAttempts;
-        public bool IsRecoveringFromStuckNow => _isRecoveringFromStuck;
-        const float RecoveredMinSpeedMph = 20f;
-        const float RecoveredSlideFraction = 0.3f;
-        // Rival arrival windows at the merge point on the realistic escape: inside the hold window the car waits
-        // off-line, inside the stop window it brakes instead.
-        const float JoinHoldSeconds = 6f;
-        const float JoinStopSeconds = 1f;
-        const float JoinHoldBrakeLevel = 0.3f;
+        const int RecoveryArmDelayMs = 15000;
+        StuckPhase _stuckPhase = StuckPhase.None;
+        int _stuckPhaseEndTime = 0;
+        int _stuckRecoveryStartTime = 0;
+        int _stuckStationarySince = 0;
+        int _stuckOffTrackSince = 0;
+        int _stuckAgainSince = 0;
+        int _stuckExitSince = 0;
+        int _stuckArmAllowedTime = 0;
+        int _stuckRecoveryCooldownEndTime = 0;
+        Vector3 _stuckMoveSamplePosition = Vector3.Zero;
+        int _stuckMoveSampleTime = 0;
+        // Backing off is a short, straight phase. Drive is not a pedal override: it is a speed intention, so the plan,
+        // the off-track cap and the lane law all keep owning the car while it rejoins.
+        const int StuckReverseMs = 1000;
+        const int RecoveryTriggerMs = 2000;
+        const float RecoveryTriggerMph = 2f;
+        const float RecoveryPlanGapMph = 1f;
+        const float RecoveryDriveMph = 20f;
+        const float RecoveryExitMph = 4f;
+        const int RecoveryExitHoldMs = 500;
+        const int StuckMoveSampleMs = 1000;
+        const float StuckMoveMeters = 0.5f;
+        // DNF cars are parked on the shoulder, spaced along the route from the start line and alternating sides.
+        const int DNFSlotSpacingMeters = 5;
+        const float DNFSlotOffsetMeters = 1f;
+        const float DNFUnderTrackMeters = 5f;
 
 
         public float RouteLookAheadSeconds = 0.5f;
@@ -301,6 +298,7 @@ namespace ARS
         // Counts cars ahead on race progress only; cars behind don't crowd us.
         int RivalsWithinDistance(float distance)
         {
+            if (ARS.NoCollision) return 0;
             return ARS.Racers.Count(r => r.Car.Handle != Car.Handle && r.RacePosition < RacePosition && r.Car.Position.DistanceTo(Car.Position) <= distance);
         }
         const int NitrousDurationMs = 3000;
@@ -461,6 +459,8 @@ namespace ARS
             _nitrousLapUsed = -1;
             RacePosition = 0;
             FinalPosition = 0;
+            IsDNF = false;
+            Car.FreezePosition = false;
             CanRegisterNewLap = false;
             _previousNode = -1;
             _inputTrail.Clear();
@@ -905,9 +905,9 @@ namespace ARS
             {
                 if (r.RivalRacer == null || r == target) continue;
                 if (r.RelativePosition != RelativePos.Ahead) continue;
-                if (r.RouteGapMeters > SameSectionMaxGapMeters) continue;
+                if (!ARS.IsBetween(r.RouteGapAhead, 0f, SameSectionMaxGapMeters)) continue;
                 if (!ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, AvoidAngleGateDegrees)) continue;
-                if (!ARS.IsBetween(r.FrontGap, 0f, 3f) && !ARS.IsBetween(r.SecondsToHit, 0f, 5f)) continue;
+                if (!ARS.IsBetween(r.FrontGap, 0f, 3f) && !ARS.IsBetween(r.TimeToReach, 0f, 5f)) continue;
 
                 if (!TryPickAvoidanceSide(r, trackBound, aggroBuffer, carHalfWidth, currentLaneMeters, out float secondTarget, out bool secondGoLeft))
                     continue;
@@ -977,8 +977,8 @@ namespace ARS
             {
                 if (r.RivalRacer == null) continue;
 
-                bool overlaps = Math.Abs(r.LongitudinalGap) < r.CombinedSize.Y && r.RouteGapMeters <= SameSectionMaxGapMeters;
-                bool aheadAndClose = r.RelativePosition == RelativePos.Ahead && r.SecondsToReach < 3f && r.RouteGapMeters <= SameSectionMaxGapMeters && Math.Abs(r.DirectionDiff) <= AvoidAngleGateDegrees;
+                bool overlaps = Math.Abs(r.LongitudinalGap) < r.CombinedSize.Y && Math.Abs(r.RouteGapAhead) <= SameSectionMaxGapMeters;
+                bool aheadAndClose = r.RelativePosition == RelativePos.Ahead && r.TimeToReach < 3f && ARS.IsBetween(r.RouteGapAhead, 0f, SameSectionMaxGapMeters) && Math.Abs(r.DirectionDiff) <= AvoidAngleGateDegrees;
                 if (!overlaps && !aheadAndClose) continue;
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
@@ -1257,6 +1257,7 @@ namespace ARS
             NextApexSpeed3 = 999f;
             BaseBehavior = RacerBaseBehavior.Race;
             Lap = 1;
+            _stuckArmAllowedTime = Game.GameTime + RecoveryArmDelayMs;
             LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
             VehicleData.ResetLapPeaks();
             CanRegisterNewLap = false;
@@ -1274,19 +1275,20 @@ namespace ARS
             Control.MaxThrottleFromRival = 1f;
             Control.MaxThrottleFromChillOut = 1f;
             Control.MaxThrottleFromYield = 1f;
+            Control.MaxThrottleFromOffTrack = 1f;
             Control.ThrottleReason = ThrottleReason.Plan;
             Control.ThrottleReasonLevel = 1f;
             Control.BrakeReason = BrakeReason.Plan;
             Control.BrakeReasonLevel = 1f;
-            IsStuckByThrottle = false;
-            _lastStuckGameTime = 0;
-            _isRecoveringFromStuck = false;
-            _stuckRecoveryEndTime = 0;
-            _stuckEscapeSpentMs = 0;
-            _stuckMergeTaken = false;
-            _stuckJoinPaused = false;
+            _stuckPhase = StuckPhase.None;
+            _stuckPhaseEndTime = 0;
+            _stuckRecoveryStartTime = 0;
+            _stuckStationarySince = 0;
+            _stuckOffTrackSince = 0;
+            _stuckAgainSince = 0;
+            _stuckExitSince = 0;
             _stuckRecoveryCooldownEndTime = 0;
-            _stuckRecoveryAttempts = 0;
+            _stuckMoveSampleTime = 0;
             Control.LastAppliedSteerDegrees = 0f;
             _lastSteerRequestDeg = 0f;
             _demandSettledHeld = false;
@@ -1670,6 +1672,8 @@ namespace ARS
             bool rbFreeZone = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
             if (rbFactor < 1f && !rbFreeZone && !(ARS.CurrentRubberbandMode == RubberbandMode.Natural && rbNearbyRival))
                 Brain.CurrentIntention.Speed *= rbFactor;
+
+            if (_stuckPhase == StuckPhase.Drive) Brain.CurrentIntention.Speed = ARS.MphToMps(RecoveryDriveMph);
         }
 
         // Vertical-curvature grip factor over the three-node window centred on a node, as a speed multiplier.
@@ -1741,6 +1745,9 @@ namespace ARS
         // deeper slip earns a deeper cut.
         const float SlipCurveKnee = 2.5f;
         const float YieldThrottleLevel = 0.5f;
+        const float OffTrackThrottleLevel = 0f;
+        const float OffTrackSafeSpeedMph = 20f;
+        const float OffTrackFullThrottleMph = 15f;
 
         // Instability, the replacement's first cut: off-road the chassis is thrown around and the two consequences
         // are losing grip and losing control. The ride height is captured at Launch, where the car is known to be at
@@ -1783,13 +1790,17 @@ namespace ARS
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || r.RelativePosition != RelativePos.Ahead) continue;
-                if (ARS.IsBetween(r.SecondsToHit, 0f, 3f)) rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.SecondsToHit, 0f, 3f, 0f, 1f, true));
+                if (ARS.IsBetween(r.TimeToReach, 0f, 3f)) rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.TimeToReach, 0f, 3f, 0f, 1f, true));
                 if (ARS.IsBetween(r.FrontGap, 0f, 1f)) rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.FrontGap, 0f, 1f, 0f, 1f, true));
             }
             Control.MaxThrottleFromRival = GlideCap(Control.MaxThrottleFromRival, rivalLevel);
 
             Control.MaxThrottleFromChillOut = GlideCap(Control.MaxThrottleFromChillOut, ActiveManeuver.Type == ManeuverType.ChillOut ? ChillThrottleCap : 1f);
             Control.MaxThrottleFromYield = GlideCap(Control.MaxThrottleFromYield, ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null ? YieldThrottleLevel : 1f);
+
+            float offTrackThrottle = 1f;
+            if (OutOfTrackDistance() > 0f) offTrackThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), OffTrackSafeSpeedMph, OffTrackFullThrottleMph, OffTrackThrottleLevel, 1f, true);
+            Control.MaxThrottleFromOffTrack = GlideCap(Control.MaxThrottleFromOffTrack, offTrackThrottle);
         }
 
         // Both signals are read every tick: the old system latched them at 3 Hz and missed crests shorter than the
@@ -1864,6 +1875,7 @@ namespace ARS
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRival);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromChillOut);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromYield);
+            ceiling = Math.Min(ceiling, Control.MaxThrottleFromOffTrack);
             Control.MaxThrottle = ceiling;
 
             float binding = baseThrottle;
@@ -1874,6 +1886,7 @@ namespace ARS
             if (Control.MaxThrottleFromRival < binding) { binding = Control.MaxThrottleFromRival; reason = ThrottleReason.Rival; }
             if (Control.MaxThrottleFromChillOut < binding) { binding = Control.MaxThrottleFromChillOut; reason = ThrottleReason.ChillOut; }
             if (Control.MaxThrottleFromYield < binding) { binding = Control.MaxThrottleFromYield; reason = ThrottleReason.Yield; }
+            if (Control.MaxThrottleFromOffTrack < binding) { binding = Control.MaxThrottleFromOffTrack; reason = ThrottleReason.Offtrack; }
             if (offtrackLimited) reason = ThrottleReason.Offtrack;
             if (countersteering) reason = ThrottleReason.Countersteer;
             if (BaseBehavior == RacerBaseBehavior.GridWait) reason = ThrottleReason.GridWait;
@@ -2438,6 +2451,7 @@ namespace ARS
             AddPedalCap(fwd, Control.MaxThrottleFromRival, NonDangerousReasonColor, PedalBarReasonSize, ref count);
             AddPedalCap(fwd, Control.MaxThrottleFromChillOut, NonDangerousReasonColor, PedalBarReasonSize, ref count);
             AddPedalCap(fwd, Control.MaxThrottleFromYield, NonDangerousReasonColor, PedalBarReasonSize, ref count);
+            AddPedalCap(fwd, Control.MaxThrottleFromOffTrack, Color.White, PedalBarReasonSize, ref count);
             AddPedalCap(-fwd, Control.MaxBrakeFromABS, GripReasonColor, PedalBarReasonSize, ref count);
             AddPedalCap(-fwd, Control.MaxBrakeFromCountersteer, CountersteerReasonColor, PedalBarReasonSize, ref count);
             if (IsFullCountersteer()) AddPedalCap(fwd, CountersteerRollThrottle, Color.White, PedalBarCapSize, ref count);
@@ -2653,7 +2667,7 @@ namespace ARS
             foreach (Rival r in Brain.Rivals)
             {
                 r.Update(this);
-                bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead && r.RouteGapMeters <= SameSectionMaxGapMeters && (ARS.IsBetween(r.FrontGap, 0f, 3f) || ARS.IsBetween(r.SecondsToHit, 0f, 5f)) && ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, AvoidAngleGateDegrees);
+                bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead && ARS.IsBetween(r.RouteGapAhead, 0f, SameSectionMaxGapMeters) && (ARS.IsBetween(r.FrontGap, 0f, 3f) || ARS.IsBetween(r.TimeToReach, 0f, 5f)) && ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, AvoidAngleGateDegrees);
                 if (Brain.AvoidanceTarget == null && isAvoidanceCandidate)
                 {
                     Brain.AvoidanceTarget = r;
@@ -2748,7 +2762,9 @@ namespace ARS
             Brain.CurrentPerception.DeviationFromCenter = ARS.SignedLaneOffset(carPosition, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
 
             LookAheads.Clear();
-            float speed = Car.Velocity.Length();
+            Vector3 velocity = Car.Velocity;
+            float speed = velocity.Length();
+            AlongTrackSpeed = Vector3.Dot(velocity, CurrentTrackPoint.Direction);
 
             int steerRef = (int)ARS.Clamp(speed * SteerPreviewSeconds, SteerLookaheadMinMeters, SteerLookaheadMaxMeters);
             int quarterSec = (int)(speed * 0.25f);
@@ -3333,6 +3349,8 @@ namespace ARS
 
             if (!ControlledByPlayer)
             {
+                UpdateDNFCheck();
+
                 if (_rivalInfoTick + _phaseOffsetMs < now)
                 {
                     _rivalInfoTick = now + 500;
@@ -3360,11 +3378,10 @@ namespace ARS
             }
             else
             {
-                IsStuckByThrottle = false;
                 UpdateNitrous();
-                _lastStuckGameTime = 0;
-                _isRecoveringFromStuck = false;
-                _stuckRecoveryEndTime = 0;
+                _stuckPhase = StuckPhase.None;
+                _stuckStationarySince = 0;
+                _stuckOffTrackSince = 0;
                 _stuckRecoveryCooldownEndTime = 0;
             }
         }
@@ -3403,269 +3420,209 @@ namespace ARS
         }
  
  
-        // A car is out of the woods only when it is on the track, driving forward at a real pace, pointing along the
-        // route and not sliding - and has held all of that, because one good sample off a bounce is not recovery.
-        bool HasRegainedControl()
+        // A car whose engine is gone cannot rejoin whatever the recovery does, so it is taken out of the race and
+        // parked instead of being teleported at forever.
+        void UpdateDNFCheck()
         {
-            bool tracking = Math.Abs(Brain.CurrentPerception.DeviationFromCenter) <= CurrentTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f && ARS.MpsToMph(Vector3.Dot(Car.Velocity, Car.ForwardVector)) >= RecoveredMinSpeedMph && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * RecoveredSlideFraction && Math.Abs(Vector3.SignedAngle(Car.ForwardVector, CurrentTrackPoint.Direction, Vector3.WorldUp)) <= RecoveredHeadingDeg;
-
-            if (!tracking)
+            if (IsDNF)
             {
-                _regainedControlSince = 0;
-                return false;
+                Control.HandBrakeTime = Game.GameTime + 1000;
+                return;
             }
+            if (BaseBehavior != RacerBaseBehavior.Race || Car.EngineHealth > 0f) return;
+            ParkAtDNFSlot();
+        }
 
-            if (_regainedControlSince == 0) _regainedControlSince = Game.GameTime;
-            return Game.GameTime - _regainedControlSince >= RegainedControlHoldMs;
+        void ParkAtDNFSlot()
+        {
+            int slot = ARS.ParkedDNFs++;
+            int nodeCount = ARS.TrackPoints.Count;
+            int node = ARS.IsPointToPoint ? Math.Min(slot * DNFSlotSpacingMeters, nodeCount - 1) : (slot * DNFSlotSpacingMeters) % nodeCount;
+            TrackPoint point = ARS.TrackPoints[node];
+            Vector3 direction = new Vector3(point.Direction.X, point.Direction.Y, 0f);
+            if (direction == Vector3.Zero) direction = Vector3.WorldNorth;
+            direction.Normalize();
+            Vector3 right = Vector3.Cross(direction, Vector3.WorldUp);
+            float side = slot % 2 == 0 ? 1f : -1f;
+            Car.Position = point.Position + right * side * (point.TrackHalfWidth + DNFSlotOffsetMeters) + new Vector3(0f, 0f, 0.5f);
+            Car.Heading = direction.ToHeading();
+            Car.Velocity = Vector3.Zero;
+            if (ARS.DNFUnderTrack)
+            {
+                Car.Position = new Vector3(Car.Position.X, Car.Position.Y, Car.Position.Z - DNFUnderTrackMeters);
+                Car.FreezePosition = true;
+            }
+            IsDNF = true;
+            BaseBehavior = RacerBaseBehavior.FinishedStandStill;
+            FinishStuckRecovery();
         }
 
         void UpdateStuckCheck()
         {
-            if (HasRegainedControl()) _stuckRecoveryAttempts = 0;
-
-            if (_isRecoveringFromStuck)
+            if (_stuckPhase != StuckPhase.None)
             {
-                IsStuckByThrottle = false;
-                _lastStuckGameTime = 0;
+                ResetStuckArmTimers();
                 return;
             }
 
             int now = Game.GameTime;
 
-            // Cooldown after each recovery ends: the car must get a real chance to drive away.
-            if (now < _stuckRecoveryCooldownEndTime)
+            if (now < _stuckRecoveryCooldownEndTime || BaseBehavior != RacerBaseBehavior.Race || !Driver.IsSittingInVehicle(Car))
             {
-                IsStuckByThrottle = false;
-                _lastStuckGameTime = 0;
+                ResetStuckArmTimers();
                 return;
             }
 
-            if (BaseBehavior != RacerBaseBehavior.Race || !Driver.IsSittingInVehicle(Car))
+            // Not in the opening seconds of a race: a car still crawling off the line is launching, not stuck, and the
+            // pack around it is not a place to reverse into.
+            if (now < _stuckArmAllowedTime)
             {
-                IsStuckByThrottle = false;
-                _lastStuckGameTime = 0;
+                ResetStuckArmTimers();
                 return;
             }
 
-            bool lowLongitudinalGs = Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < StuckStillGs;
-            bool stuckCondition = lowLongitudinalGs && ARS.MpsToMph(Car.Velocity.Length()) < 5f;
-
-            if (!stuckCondition)
+            if (PlanWantsToMove())
             {
-                IsStuckByThrottle = false;
-                _lastStuckGameTime = 0;
-                return;
+                if (_stuckStationarySince == 0) _stuckStationarySince = now;
             }
+            else _stuckStationarySince = 0;
 
-            if (_lastStuckGameTime == 0)
+            if (OutOfTrackDistance() > 0f)
             {
-                _lastStuckGameTime = now;
+                if (_stuckOffTrackSince == 0) _stuckOffTrackSince = now;
             }
+            else _stuckOffTrackSince = 0;
 
-            bool stuckForLongEnough = (now - _lastStuckGameTime) >= StuckCheckTimeMs;
-            IsStuckByThrottle = stuckForLongEnough;
+            bool stationary = _stuckStationarySince != 0 && now - _stuckStationarySince >= RecoveryTriggerMs;
+            bool offTrack = _stuckOffTrackSince != 0 && now - _stuckOffTrackSince >= RecoveryTriggerMs;
 
-            if (stuckForLongEnough && !_isRecoveringFromStuck)
-            {
-                _isRecoveringFromStuck = true;
-                _stuckRecoveryAttempts++;
-                _stuckRecoveryEndTime = now + StuckRecoveryTimeMs;
-                _stuckEscapeSpentMs = 0;
-                _stuckMergeTaken = false;
-                _stuckJoinPaused = false;
-                IsStuckByThrottle = false;
-                _lastStuckGameTime = 0;
-            }
+            if (stationary) StartStuckRecovery(now, StuckPhase.Reverse);
+            else if (offTrack) StartStuckRecovery(now, StuckPhase.Drive);
+        }
+
+        // A car wants to be somewhere it is not: too slow, with its own plan asking for more. That is the stuck case,
+        // as opposed to being held still on purpose.
+        bool PlanWantsToMove()
+        {
+            return ARS.MpsToMph(Car.Velocity.Length()) < RecoveryTriggerMph && Brain.CurrentIntention.Speed - Car.Velocity.Length() > ARS.MphToMps(RecoveryPlanGapMph);
+        }
+
+        void ResetStuckArmTimers()
+        {
+            _stuckStationarySince = 0;
+            _stuckOffTrackSince = 0;
+        }
+
+        void StartStuckRecovery(int now, StuckPhase phase)
+        {
+            _stuckPhase = phase;
+            if (phase == StuckPhase.Reverse) _stuckPhaseEndTime = now + StuckReverseMs;
+            _stuckRecoveryStartTime = now;
+            _stuckAgainSince = 0;
+            _stuckExitSince = 0;
+            _stuckMoveSamplePosition = Car.Position;
+            _stuckMoveSampleTime = now;
+            ResetStuckArmTimers();
         }
 
         void UpdateStuckRecovery()
         {
             if (BaseBehavior != RacerBaseBehavior.Race || !Driver.IsSittingInVehicle(Car))
             {
-                _isRecoveringFromStuck = false;
-                _stuckRecoveryEndTime = 0;
-                _stuckEscapeSpentMs = 0;
-                _stuckMergeTaken = false;
-                _stuckJoinPaused = false;
+                if (_stuckPhase != StuckPhase.None) FinishStuckRecovery();
                 return;
             }
 
-            if (!_isRecoveringFromStuck) return;
+            if (_stuckPhase == StuckPhase.None) return;
 
-            if (HasRegainedControl())
+            int now = Game.GameTime;
+
+            if (now - _stuckMoveSampleTime >= StuckMoveSampleMs)
             {
-                FinishStuckRecovery();
+                bool couldNotMove = Car.Position.DistanceTo(_stuckMoveSamplePosition) < StuckMoveMeters;
+                _stuckMoveSamplePosition = Car.Position;
+                _stuckMoveSampleTime = now;
+                if (couldNotMove)
+                {
+                    SnapToTrack();
+                    return;
+                }
             }
+
+            if (_stuckPhase == StuckPhase.Reverse)
+            {
+                if (now - _stuckRecoveryStartTime >= StuckRecoveryTimeMs) SnapToTrack();
+                else if (now >= _stuckPhaseEndTime) _stuckPhase = StuckPhase.Drive;
+                return;
+            }
+
+            if (PlanWantsToMove())
+            {
+                if (_stuckAgainSince == 0) _stuckAgainSince = now;
+            }
+            else _stuckAgainSince = 0;
+
+            if (_stuckAgainSince != 0 && now - _stuckAgainSince >= RecoveryTriggerMs)
+            {
+                _stuckPhase = StuckPhase.Reverse;
+                _stuckPhaseEndTime = now + StuckReverseMs;
+                _stuckMoveSamplePosition = Car.Position;
+                _stuckMoveSampleTime = now;
+                return;
+            }
+
+            if (RecoveryExitHolds()) FinishStuckRecovery();
+        }
+
+        // On the drivable bound and moving forward, held: a reverse roll is not a recovered car.
+        bool RecoveryExitHolds()
+        {
+            bool onTrack = Math.Abs(Brain.CurrentPerception.DeviationFromCenter) <= CurrentTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+            bool movingForward = ARS.MpsToMph(Vector3.Dot(Car.Velocity, Car.ForwardVector)) > RecoveryExitMph;
+            if (!onTrack || !movingForward)
+            {
+                _stuckExitSince = 0;
+                return false;
+            }
+            if (_stuckExitSince == 0) _stuckExitSince = Game.GameTime;
+            return Game.GameTime - _stuckExitSince >= RecoveryExitHoldMs;
         }
 
         void FinishStuckRecovery()
         {
-            _isRecoveringFromStuck = false;
-            _stuckRecoveryEndTime = 0;
-            _stuckReverseUntil = 0;
-            _stuckEscapeSpentMs = 0;
-            _stuckMergeTaken = false;
-            _stuckJoinPaused = false;
-            _lastStuckGameTime = 0;
+            _stuckPhase = StuckPhase.None;
+            _stuckPhaseEndTime = 0;
+            _stuckRecoveryStartTime = 0;
+            _stuckAgainSince = 0;
+            _stuckExitSince = 0;
             _stuckRecoveryCooldownEndTime = Game.GameTime + StuckRecoveryCooldownMs;
         }
 
         void ApplyStuckRecoveryOverride()
         {
-            if (!_isRecoveringFromStuck) return;
-
-            // Find nearest track point (shared by teleport and steering-align).
-            Vector3 carPosition = Car.Position;
-            TrackPoint nearest = ARS.TrackPoints[0];
-            float best = float.MaxValue;
-            foreach (TrackPoint point in ARS.TrackPoints)
-            {
-                float distance = point.Position.DistanceTo(carPosition);
-                if (distance >= best) continue;
-                best = distance;
-                nearest = point;
-            }
-
-            if (_stuckReverseUntil == 0) _stuckReverseUntil = Game.GameTime + StuckReverseMs;
-
-            bool gateHolding = false;
-            bool gateStopping = false;
-            bool gateBlockage = false;
-            if (ARS.RealisticRecovery)
-            {
-                if (Game.GameTime >= _stuckReverseUntil)
-                {
-                    if (!_stuckMergeTaken)
-                    {
-                        _stuckMergeTaken = true;
-                        _stuckMergePosition = nearest.Position;
-                        _stuckMergeDirection = new Vector3(nearest.Direction.X, nearest.Direction.Y, 0f);
-                        if (_stuckMergeDirection == Vector3.Zero) _stuckMergeDirection = Vector3.WorldNorth;
-                        _stuckMergeDirection.Normalize();
-                    }
-                    gateHolding = IsJoinHeld(out gateStopping, out gateBlockage);
-                }
-                if (gateHolding && !gateBlockage)
-                {
-                    _stuckJoinPaused = true;
-                }
-                else if (_stuckJoinPaused)
-                {
-                    // The wait is over: it is forgiven, and the interval that just ended was spent waiting rather than
-                    // escaping, so it is not charged to the fresh window either.
-                    _stuckJoinPaused = false;
-                    _stuckEscapeSpentMs = 0;
-                }
-                else
-                {
-                    _stuckEscapeSpentMs += TimeSince_lastCoreTick;
-                }
-            }
-
-            // The budget runs from the moment the recovery engages: a car still moving is not interrupted, so the
-            // snap waits, and once the budget is spent the first time it comes to a stop it is snapped - the rejoin
-            // that met a wall, not a car that is still working its way out. The realistic escape counts only the
-            // time it spent not waiting for traffic, because being held is not a failure to get out.
-            bool budgetSpent = ARS.RealisticRecovery ? _stuckEscapeSpentMs >= StuckRecoveryTimeMs : Game.GameTime >= _stuckRecoveryEndTime;
-            if (Car.Velocity.Length() < StuckSnapMinSpeedMps && Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < StuckStillGs && budgetSpent)
-            {
-                Vector3 direction = new Vector3(nearest.Direction.X, nearest.Direction.Y, 0f);
-                if (direction == Vector3.Zero) direction = Vector3.WorldNorth;
-                direction.Normalize();
-                Vector3 right = Vector3.Cross(direction, Vector3.WorldUp);
-                float side = ARS.SignedLaneOffset(Car.Position, nearest.Position, nearest.Direction) >= 0f ? 1f : -1f;
-                float laneOffset = Math.Max(nearest.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f) * side;
-                Car.Position = nearest.Position + right * laneOffset + new Vector3(0f, 0f, 0.5f);
-                Car.Heading = direction.ToHeading();
-                Car.Velocity = direction * ARS.MphToMps(10f);
-
-                _stuckRecoveryAttempts = 0;
-                IsStuckByThrottle = false;
-                FinishStuckRecovery();
-                return;
-            }
+            if (_stuckPhase != StuckPhase.Reverse) return;
 
             Control.Brake = 0f;
             Control.BrakeReason = BrakeReason.StuckRecovery;
             Control.BrakeReasonLevel = 0f;
             Control.ThrottleReason = ThrottleReason.StuckRecovery;
             Control.ThrottleReasonLevel = 0f;
-
-            // Back off straight first: reversing with the wheels turned swings the nose away from where the car is
-            // going. Then drive out toward the route AHEAD, where the steering convention is unambiguous.
-            if (Game.GameTime < _stuckReverseUntil)
-            {
-                Control.Throttle = -0.5f;
-                Control.SteerDegrees = 0f;
-                return;
-            }
-
-            if (gateHolding)
-            {
-                Control.Throttle = 0f;
-                Control.Brake = gateStopping ? 1f : JoinHoldBrakeLevel;
-                Control.BrakeReasonLevel = Control.Brake;
-            }
-            else
-            {
-                Control.Throttle = 0.5f;
-            }
-
-            Vector3 toRoute = nearest.Position + nearest.Direction * StuckRouteAimMeters - Car.Position;
-            toRoute.Z = 0f;
-            Control.SteerDegrees = toRoute.LengthSquared() > 0.01f ? Vector3.SignedAngle(Car.ForwardVector, toRoute.Normalized, Vector3.WorldUp) : 0f;
+            Control.Throttle = -0.5f;
+            Control.SteerDegrees = 0f;
         }
 
-        // The realistic escape's merge gate. It never touches the steering: the car stays aimed at the route ahead
-        // while the pedals wait for a rival about to reach the merge point. The car's own surface state closes the
-        // gate, so a rival behind cannot hold a car that is already back on the line. A hold for a rival that is
-        // merely sitting there is a blockage rather than traffic, and time spent blocked still spends the budget.
-        bool IsJoinHeld(out bool firmStop, out bool blockage)
+        void SnapToTrack()
         {
-            firmStop = false;
-            blockage = false;
-            if (Math.Abs(Brain.CurrentPerception.DeviationFromCenter) <= CurrentTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f) return false;
-
-            bool held = false;
-            Vector3 mergeRight = Vector3.Cross(_stuckMergeDirection, Vector3.WorldUp);
-            foreach (Rival rival in Brain.Rivals)
-            {
-                if (rival.RivalRacer == null || !rival.RivalRacer.Car.Exists()) continue;
-
-                // Contact is the pair's own separation from this car, not the rival's offset from the rejoin
-                // point: the car is off-line here, so the two references differ by its lateral error.
-                Vector3 fromCar = rival.RivalRacer.Car.Position - Car.Position;
-                fromCar.Z = 0f;
-                if (Math.Abs(Vector3.Dot(fromCar, _stuckMergeDirection)) <= rival.CombinedSize.Y && Math.Abs(Vector3.Dot(fromCar, mergeRight)) <= rival.CombinedSize.X)
-                {
-                    held = true;
-                    firmStop = true;
-                    // Contact with a rival on the move is traffic and clears itself, so the wait is not a failure to
-                    // get out; contact with one going nowhere is a blockage and still spends the escape budget.
-                    if (Vector3.Dot(rival.RivalRacer.Car.Velocity, _stuckMergeDirection) <= 0f) blockage = true;
-                    continue;
-                }
-
-                Vector3 toMerge = rival.RivalRacer.Car.Position - _stuckMergePosition;
-                toMerge.Z = 0f;
-                float behindMerge = -Vector3.Dot(toMerge, _stuckMergeDirection);
-                if (behindMerge <= 0f) continue;
-
-                Vector3 rivalVelocity = rival.RivalRacer.Car.Velocity;
-                if (Vector3.Dot(rivalVelocity, _stuckMergeDirection) <= 0f) continue;
-
-                float secondsToMerge = behindMerge / rivalVelocity.Length();
-                if (secondsToMerge <= JoinStopSeconds)
-                {
-                    held = true;
-                    firmStop = true;
-                }
-                else if (secondsToMerge <= JoinHoldSeconds)
-                {
-                    held = true;
-                }
-            }
-            return held;
+            Vector3 direction = new Vector3(CurrentTrackPoint.Direction.X, CurrentTrackPoint.Direction.Y, 0f);
+            if (direction == Vector3.Zero) direction = Vector3.WorldNorth;
+            direction.Normalize();
+            Vector3 right = Vector3.Cross(direction, Vector3.WorldUp);
+            float side = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction) >= 0f ? 1f : -1f;
+            float laneOffset = Math.Max(CurrentTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f) * side;
+            Car.Position = CurrentTrackPoint.Position + right * laneOffset + new Vector3(0f, 0f, 0.5f);
+            Car.Heading = direction.ToHeading();
+            Car.Velocity = direction * ARS.MphToMps(10f);
+            FinishStuckRecovery();
         }
 
         void UpdatePerceivedGrip()
@@ -3733,6 +3690,12 @@ namespace ARS
         }
         public void UpdateRivals()
         {
+            if (ARS.NoCollision)
+            {
+                foreach (Rival r in Brain.Rivals) r.RivalRacer = null;
+                return;
+            }
+
             Vector3 myPosition = Car.Position;
             Vector3 hoodPosition = myPosition + Car.ForwardVector;
             List<Racer> candidates = new List<Racer>();
@@ -3740,6 +3703,7 @@ namespace ARS
             foreach (Racer r in ARS.Racers)
             {
                 if (r.Car.Handle == Car.Handle) continue;
+                if (ARS.DNFUnderTrack && r.IsDNF) continue;
                 Vector3 rivalPosition = r.Car.Position;
                 if (Vector3.Distance(rivalPosition, myPosition) >= RivalSearchRangeMeters) continue;
                 candidates.Add(r);

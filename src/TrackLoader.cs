@@ -189,6 +189,7 @@ namespace ARS
                 int next = (i + 1) % ARS.TrackPoints.Count;
                 cumulative += ARS.TrackPoints[i].Position.DistanceTo(ARS.TrackPoints[next].Position);
             }
+            ARS.RouteLengthMeters = cumulative;
 
             int nodeCount = ARS.RouteNodes.Count;
             foreach (TrackPoint point in ARS.TrackPoints)
