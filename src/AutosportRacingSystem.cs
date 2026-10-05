@@ -44,7 +44,7 @@ namespace ARS
     public enum Options
     {
         Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview
+        ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview, ShowBumps
     }
 
     public enum DebugDisplay
@@ -62,6 +62,8 @@ namespace ARS
         public static List<CornerPoint> Corners = new List<CornerPoint>();
         // Bumped on every apex-table rebuild so each racer's corner contexts know to re-sync.
         public static int CornersRevision = 0;
+        // Lifting lips found on the route. The debug view reads this; nothing drives on it yet.
+        public static List<Bump> Bumps = new List<Bump>();
 
         public static List<string> KnownTracks = new List<string>();
         // Raw grip (max traction, in G) per model, keyed by the XML <Model> hash text.
@@ -186,7 +188,8 @@ namespace ARS
         { Options.ShowLeaderboard, true },
         { Options.ShowAiLapTimes, false },
         { Options.LockLaneCentre, false },
-        { Options.GsAwarePreview, true }
+        { Options.GsAwarePreview, true },
+        { Options.ShowBumps, false }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -881,6 +884,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
             AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Lead the lane error with the lateral motion the car is already committing to, so the steering anticipates drift instead of reacting to it. Off measures the lane error at the car alone.");
+            AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Draw a cyan marker at every lip the route scan found: a vertical tick and a line across the road, so the scan can be judged by eye before anything drives on it.");
 
             // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
             NativeMenu racersMenu = new NativeMenu("General Settings", "General Settings", "Standing preferences: grid sorting, timeout, racer behaviour and tuning.")
@@ -1592,6 +1596,7 @@ namespace ARS
             _raceTimedFinishMs = 0;
 
             Angles.Clear();
+            Bumps.Clear();
             RouteNodes.Clear();
             NodeHalfWidths.Clear();
             EditNodeHalfWidths.Clear();
@@ -1697,6 +1702,20 @@ namespace ARS
                         TrackVisuals.DrawEdgeChevrons(PlayerRacer, ARS.TrackPoints);
                     else if (raceLive)
                         TrackVisuals.DrawEdgeChevrons(Game.Player.Character.Position, ARS.TrackPoints);
+                }
+                if (DebugToggles[Options.ShowBumps] && ARS.Bumps.Count > 0 && Game.Player.Character != null)
+                {
+                    Vector3 focus = Game.Player.Character.Position;
+                    foreach (Bump bump in ARS.Bumps)
+                    {
+                        Vector3 lip = ARS.TrackPoints[bump.LipNode].Position;
+                        if ((lip - focus).Length() > SpectateCheckpointRadiusMeters) continue;
+
+                        Vector3 dir = ARS.TrackPoints[bump.LipNode].Direction;
+                        Vector3 right = Vector3.Cross(dir, Vector3.WorldUp).Normalized;
+                        DrawLine(lip, lip + Vector3.WorldUp * 3f, Color.Cyan);
+                        DrawLine(lip - right * 4f, lip + right * 4f, Color.Cyan);
+                    }
                 }
                 if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
                 {

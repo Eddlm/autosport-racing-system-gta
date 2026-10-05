@@ -347,8 +347,119 @@ namespace ARS
             }
 
             AssignCrestNodes(nodeCount);
+            AssignBumpNodes(nodeCount);
 
             ARS.CornersRevision++;
+        }
+
+        const float BumpDepartureRungMeters = 2f;
+        const float BumpOnsetRungMeters = 3f;
+        const float BumpMinRunMeters = 2f;
+        const float BumpMaxRunMeters = 8f;
+        const float BumpMinDepartureGrade = 0.03f;
+        const float BumpMinLipDrop = 0.02f;
+
+        // A bump is a short rise whose lip drops away, so a car at speed leaves the ground and can neither brake nor
+        // steer until it lands. Scanned on the route line only; the raycast that reads the real surface, and the
+        // lane-local case with it, come later.
+        static void AssignBumpNodes(int count)
+        {
+            ARS.Bumps.Clear();
+            if (count < 8) return;
+
+            for (int node = 0; node < count; node++)
+            {
+                float grade = GradeAt(node, BumpDepartureRungMeters, count);
+                if (grade < BumpMinDepartureGrade) continue;
+
+                int after = NodeAhead(node, BumpOnsetRungMeters, count);
+                float drop = grade - GradeAt(after, BumpDepartureRungMeters, count);
+                if (drop < BumpMinLipDrop) continue;
+
+                int riseStart = RiseStartNode(node, count, out float riseMeters);
+                if (riseStart < 0 || riseMeters < BumpMinRunMeters) continue;
+
+                int before = NodeBehind(node, BumpDepartureRungMeters, count);
+                float run = HorizontalDistance(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position);
+                float departure = run > 0.01f ? (ARS.TrackPoints[node].Position.Z - ARS.TrackPoints[before].Position.Z) / run : 0f;
+
+                ARS.Bumps.Add(new Bump
+                {
+                    LipNode = node,
+                    RiseStartNode = riseStart,
+                    DepartureGrade = departure,
+                    LipCurvature = drop / BumpOnsetRungMeters,
+                });
+
+                if (after > node) node = after;
+            }
+
+            foreach (Bump bump in ARS.Bumps)
+                ARS.Log(ARS.LogImportance.Info, "Bump: lip=" + bump.LipNode + " rise=" + bump.RiseStartNode + " grade=" + bump.DepartureGrade.ToString("0.000") + " curvature=" + bump.LipCurvature.ToString("0.000"));
+
+            ARS.Log(ARS.LogImportance.Info, "Bumps: " + ARS.Bumps.Count + " lips, minimum departure grade " + BumpMinDepartureGrade.ToString("0.000") + ", run " + BumpMinRunMeters.ToString("0.0") + "-" + BumpMaxRunMeters.ToString("0.0") + "m");
+        }
+
+        static int RiseStartNode(int lip, int count, out float meters)
+        {
+            meters = 0f;
+            int node = lip;
+            int start = lip;
+            float lipGrade = GradeAt(lip, BumpDepartureRungMeters, count);
+            for (int step = 0; step < 60; step++)
+            {
+                int behind = NodeBehind(node, 1f, count);
+                if (behind == node) break;
+                if (GradeAt(behind, BumpDepartureRungMeters, count) > lipGrade + 0.005f) break;
+                meters += HorizontalDistance(ARS.TrackPoints[behind].Position, ARS.TrackPoints[node].Position);
+                node = behind;
+                start = behind;
+                if (meters >= BumpMaxRunMeters) break;
+            }
+            if (meters >= BumpMaxRunMeters) return -1;
+            return start;
+        }
+
+        static float GradeAt(int node, float rungMeters, int count)
+        {
+            int ahead = NodeAhead(node, rungMeters * 0.5f, count);
+            int behind = NodeBehind(node, rungMeters * 0.5f, count);
+            float run = HorizontalDistance(ARS.TrackPoints[behind].Position, ARS.TrackPoints[ahead].Position);
+            if (run <= 0.01f) return 0f;
+            return (ARS.TrackPoints[ahead].Position.Z - ARS.TrackPoints[behind].Position.Z) / run;
+        }
+
+        static int NodeAhead(int from, float meters, int count)
+        {
+            int node = from;
+            float walked = 0f;
+            for (int step = 0; step < 200 && walked < meters; step++)
+            {
+                if (!TryResolveNode(node + 1, count, out int next)) break;
+                walked += HorizontalDistance(ARS.TrackPoints[node].Position, ARS.TrackPoints[next].Position);
+                node = next;
+            }
+            return node;
+        }
+
+        static int NodeBehind(int from, float meters, int count)
+        {
+            int node = from;
+            float walked = 0f;
+            for (int step = 0; step < 200 && walked < meters; step++)
+            {
+                if (!TryResolveNode(node - 1, count, out int previous)) break;
+                walked += HorizontalDistance(ARS.TrackPoints[node].Position, ARS.TrackPoints[previous].Position);
+                node = previous;
+            }
+            return node;
+        }
+
+        static float HorizontalDistance(Vector3 a, Vector3 b)
+        {
+            float dx = a.X - b.X;
+            float dy = a.Y - b.Y;
+            return (float)Math.Sqrt(dx * dx + dy * dy);
         }
 
         // A crest before a corner unloads the tyres exactly where the car wants to brake, so the braking plan must know

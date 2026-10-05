@@ -397,6 +397,15 @@ namespace ARS
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }
+    // A lifting lip: the route rises over a short run and then drops away. Route geometry only for now -- nothing
+    // drives on it, and the lane-local case needs the raycast instrument that reads the real surface.
+    public class Bump
+    {
+        public int LipNode = -1;
+        public int RiseStartNode = -1;
+        public float DepartureGrade = 0f;
+        public float LipCurvature = 0f;
+    }
     public class Corner
     {
         public float Speed = 0f;
