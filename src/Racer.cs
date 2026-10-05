@@ -588,15 +588,13 @@ namespace ARS
             // slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
             float fwdSpeed = ARS.GetForwardSpeed(Car);
             float understeerDeg = UndersteerDegrees(fwdSpeed);
-            // The blend's weight: from where the live peak slip is used up to the skid gate's multiple of it, so the
-            // countersteer comes in with the slide and both scale with the car's own tyres. Only a rear-led slide is
-            // its business — the body slip alone cannot tell an oversteer from a deep understeer, and steering against
-            // an understeer would deepen it.
-            if (TRLateralAtSpeed > 0.01f && fwdSpeed >= 2f)
-            {
-                _slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), TRLateralAtSpeed, TRLateralAtSpeed * BrakeSkidPeakMultiple, 0f, 1f, true);
-                _slidePriority *= ARS.Remap(-understeerDeg, 0f, TRLateralAtSpeed, 0f, 1f, true);
-            }
+            // The blend's weight: the slide is answered from a quarter of the authored peak slip and at full weight by
+            // half of it, so a slide is caught well before the tyres' limit is gone. Both bands read the car's own
+            // tyres, not the speed-scaled peak, so the response is the same at every speed.
+            if (Handling.LateralTractionCurve > 0.01f && fwdSpeed >= 2f)
+                _slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * SlideBlendStartFraction, Handling.LateralTractionCurve * SlideBlendFullFraction, 0f, 1f, true);
+            else
+                _slidePriority = 0f;
             float yawTarget = 0f;
             if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * SlidingFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
@@ -617,9 +615,9 @@ namespace ARS
 
             if (_slidePriority > 0f)
             {
-                // The correction term only - not the slidePriority ramp - and only the share of the slide the
-                // countersteer is allowed to answer.
-                float countersteerTarget = (steerKP * sideBySideSteerDeg) - (VehicleData.SlideAngle * CountersteerSlideShare);
+                // The correction term only - not the slidePriority ramp - and the share of the slide the countersteer
+                // answers, which reaches all of it at the top of the band.
+                float countersteerTarget = (steerKP * sideBySideSteerDeg) - (VehicleData.SlideAngle * CountersteerShare());
                 Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * _slidePriority;
             }
 
@@ -1018,9 +1016,12 @@ namespace ARS
 
         // Above the authored peak slip × this the car counts as sliding, so the damper drops its aim reference.
         const float SlidingFraction = 0.3f;
-        // The countersteer aims at this share of the slide angle, not all of it: a neutral countersteer leaves no front
-        // slip at all, and the residual is what keeps the recovery from becoming its own over-correction.
+        // The blend ramps in across these multiples of the authored peak slip, then the countersteer answers this
+        // share of the slide, growing from half to all of it over the next band.
+        const float SlideBlendStartFraction = 0.25f;
+        const float SlideBlendFullFraction = 0.5f;
         const float CountersteerSlideShare = 0.5f;
+        const float CountersteerFullSlideFraction = 1f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
@@ -1230,7 +1231,16 @@ namespace ARS
         }
 
 
-        // True when the blend has reached full authority at the skid gate's multiple of the live peak.
+        // The share of the slide the countersteer answers: half once the blend is full, all of it by the top of the band.
+        float CountersteerShare()
+        {
+            float peak = Handling.LateralTractionCurve;
+            if (peak <= 0.01f) return CountersteerSlideShare;
+            return ARS.Remap(Math.Abs(VehicleData.SlideAngle), peak * SlideBlendFullFraction, peak * CountersteerFullSlideFraction, CountersteerSlideShare, 1f, true);
+        }
+
+
+        // True when the blend has reached full authority at half the authored peak slip.
         // Forward speed gates it: reversing reads as a ~180° slide, and a reversed car must never be starved.
         bool IsFullCountersteer()
         {

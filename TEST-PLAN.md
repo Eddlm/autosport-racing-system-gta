@@ -11,7 +11,7 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 | `0623276` | recovery redesign, DNF parking, No Collision one-shot, route-frame rival detection | §1–§13 |
 | `27ee097` | the corner entrance moves to the crest's entry | Crest entrance move |
 | `666c89b` | the recovery teleport now waits for the escape budget, so the reverse runs | §5 |
-| `f84fe9a` | the steering slew is one rate for both directions | Steering slew flattened |
+| `f84fe9a` | the steering slew is one rate for both directions | Steering slew and slide blend |
 | `d521d1d` | the no-collision pairs are re-asserted every tick (one-shot failed) | §12 |
 | `cbae845` | each car is ghosted against its nearest rival only (engine has one slot) | §12 |
 | `f3f318f` → `148db70` | the bump/lip scan and its `Show Bumps` overlay, then the rise-walk fixes | Bump scan overlay |
@@ -227,10 +227,25 @@ The question is whether the scan finds the lips a driver can feel, and whether t
 5. **The seam** - a circuit whose first/last node edge steps in height prints `Bumps: the route seam steps at grade …, so no lip is taken within 8.0m of it`; within that stretch no lip may be taken, while the rest of the circuit scans normally. A step-only seam is not a real lip.
 6. **Nothing drives on it** - behaviour and lap times must match the build before `f3f318f`: the `RequiresEarlyBrake` / `RampEndNode` hook the braking plan reads is still unset, so a marked lip must not move anyone's braking point.
 
-## Steering slew flattened to one rate (not yet driven)
+## Steering slew and slide blend (the slew is driven; the blend is not)
 
-The countersteer doubling was never validated and the base rate read as instant, so the two are now one rate (`SteerSlewRate`, `Racer.cs:1028`) applied at `TranslateSteerToInput`. Watch:
+The countersteer doubling was never validated and the base rate read as instant, so both are now one rate
+(`SteerSlewRate`, `Racer.cs:1028`) applied at `TranslateSteerToInput`. **Driven: the AI is clearly less stable
+than before**, which is the countersteer arriving slowly. The blend was then re-cut (`Racer.cs:594`):
 
-1. **Turn-in** — the steer should now build visibly slower to full lock; if it still reads instant, the rate is not the thing you are seeing.
-2. **A slide** — the countersteer now arrives no faster than any other steer. If a car that used to catch a slide spins instead, the flattened rate is the cause, not the blend or the damper.
-3. **A straight** — a slower actuator can itself feed a limit cycle, so watch for weaving on the straight and in fast direction changes (the survey's 0.6 rad/s warning).
+- the weight ramps from zero at **0.25 × the authored peak slip** to full at **0.5 ×** it — the static
+  `LateralTractionCurve`, not the speed-scaled peak, so it no longer moves with speed;
+- the rear-led sign gate is **gone**: a slide of either sign now gets countersteer;
+- the countersteer's share of the slide then ramps from **half to all of it** across **0.5 × to 1.0 ×** the peak.
+
+Watch:
+
+1. **A slide** — the countersteer should come in earlier and reach the whole slide. A car that still spins means
+   the blend is not the limit and the 45°/s slew is.
+2. **A deep understeer** — the rear-led gate was there because body slip alone cannot tell an oversteer from an
+   understeer, and steering against the latter deepens it. Watch a front washing wide for exactly that.
+3. **Brake release** — the pedal override is still gated on `_slidePriority >= 1`, which now arrives at **0.5 ×**
+   the peak instead of 2.5 × the speed-scaled peak, so the brake lets go earlier in a slide. If that reads
+   premature, re-anchor it to the share reaching full.
+4. **A straight** — a slower actuator can itself feed a limit cycle, so watch for weaving on the straight and in
+   fast direction changes (the survey's 0.6 rad/s warning).
