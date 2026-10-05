@@ -1,12 +1,11 @@
 # ARS — test plan: build 477
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
-driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
+driver-verified on build 450 (`666c89b`), and the rest of the recovery has since been driver-verified too — trigger B, the exit back into normal racing, the start-line arm delay and the flooded-engine rescue; No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
 (`cbae845`); the slew is driven — 45 read as less stable and **180 removed most of the stability problems**
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
-(`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the engine
-restart, the damper bypass and the maneuvering ramp are new and undriven, and **build 473 collapsed the steer governor
+(`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the damper bypass and the maneuvering ramp are new and undriven, and **build 473 collapsed the steer governor
 to the slide**, which is a behaviour change nobody has driven: a car at turn-in now gets the full cornering law where
 the retired yaw cut allowed it about a fifth of that. Build 471's state was accepted on the drive — the simplification
 batch and the governor-key fix regressed nothing. The deployed DLL is dev build **477**; a build + reload is enough
@@ -53,13 +52,13 @@ game folder carries the init banner and lap lines.
 5. Then **Drive**: forward at ≤20 mph, steering back toward the route.
 6. **Is 1 s of reverse enough to clear a tree?** It is ~4× the distance of 500 ms. Watch it does not back into the car behind.
 
-## 3. Recovery trigger B — off track
+## 3. Recovery trigger B — off track (driver-verified)
 
 7. Send a car off the track and keep it there 2 s.
    **Expect:** it enters **Drive directly** (no reverse), slows to ~20 mph, steers back and rejoins.
 8. Confirm a car off track but **moving** does not enter Reverse.
 
-## 4. Recovery exit
+## 4. Recovery exit (driver-verified)
 
 9. A car rejoining must end recovery only when **on the drivable bound AND signed forward > 4 mph**, held 0.5 s.
    **Expect:** a car still rolling backwards out of the reverse does NOT exit.
@@ -77,7 +76,7 @@ game folder carries the init banner and lap lines.
 13. A car re-stuck in **Reverse** after the 6 s recovery budget → teleported.
 14. A car that keeps **moving** is never teleported at the budget (by design).
 
-## 6. The 15 s arm delay (start line)
+## 6. The 15 s arm delay (start line) — no false entry seen after a launch
 
 15. At the green, a heavy / wheelspinning car still under 2 mph must **NOT** reverse — no recovery at all for the
     first 15 s of the race.
@@ -91,7 +90,7 @@ game folder carries the init banner and lap lines.
 Water does not zero `EngineHealth` — it floods the engine, and nothing in ARS ever restarted one — so the
 `EngineHealth <= 0` predicate never saw it. The fix is a restart, not a DNF: an AI car whose engine is off with
 health left is started again (`EnsureEngineRunning`, `Racer.cs`), so the recovery's own teleport now rescues it.
-Watch a flooded car come back instead of sitting on the throttle.
+Watch a flooded car come back instead of sitting on the throttle. **Driver-verified: it does.**
 
 18. Kill an engine (water). **Expect:** the car is parked on the shoulder, slot 0 at the start/finish line, the next
     5 m further along, alternating sides, 1 m past the edge, heading along the route, handbrake held.
