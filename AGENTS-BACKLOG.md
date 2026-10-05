@@ -32,7 +32,7 @@
 
 **Tier 0 — decisions, no code**
 
-0. `recovery-redesign` — **The recovery was rebuilt from scratch and the option is gone (untested, `0623276`)** — the merge gate, the join band and `RealisticRecovery` are deleted, one behaviour now covers both triggers, and the thresholds live in `Racer.cs`; the drive is the test plan. **The old design notes are retired with it.**
+0. `recovery-redesign` — **The recovery was rebuilt from scratch and the option is gone (reverse and the budget-gated teleport driver-verified on `666c89b`; the remaining triggers unconfirmed)** — the merge gate, the join band and `RealisticRecovery` are deleted, one behaviour now covers both triggers, and the thresholds live in `Racer.cs`; the drive is the test plan. **The old design notes are retired with it.**
 
 1. `dist-defaults` — ~~Dist shipped defaults~~ — **DONE (`7696db3`), then SUPERSEDED (`19611ec`)**: the decision committed deliberate first-run values under the renamed files; the WIP release now ships `Settings\` **empty** (an inert `.gitkeep` only) and lets the mod write its three `Menu-*.ini` on first run, so `Dist` tracks **no** settings file at all.
 2. `menu-persistence-verification` — ~~Menu-persistence verification~~ — **DONE**: both paths verified in game (fresh install + legacy upgrade).
@@ -64,7 +64,7 @@
 
 10c. `exit-profile-lifecycle` — ~~The exit profile outlives its corner~~ — **DONE (`d5a643f`), decided**: the exit half of the corner line and the passed/active-apex bookkeeping are deleted outright, so past the apex the lane comes from the next corner's entry profile or the high-speed line. The corner speed plan now releases at `HasPassedBrakingTarget()` alone rather than waiting to reach apex speed — the half with the behaviour risk, since a car arriving hot has no apex-speed demand left inside the corner and route speed owns it.
 
-10d. `negative-throttle-reverse` — **ANSWERED (leaked source): a negative throttle really does reverse** — the recovery's reverse phase writes `Control.Throttle = -0.5f` (`Racer.cs:3610`) and `ShapeLaunchThrottle` passes a negative through unshaped into `VehicleMemory.SetThrottle` (`VehicleMemory.cs:21`). The leaked engine settles the open question: `CVehControls::SetThrottle` asserts the field is `[-1, 1]` (`Vehicles\vehicle.h`), a negative throttle selects the reverse gear (`Transmission.cpp:354`, `:449`) and the drive force is signed by throttle (`:392`, `:1267`). So the phase is live — and the "cars never reverse" symptom was the could-not-move snap firing one second in and pre-empting it, now gated on the 6 s recovery budget (`Racer.cs`, compile-verified only).
+10d. `negative-throttle-reverse` — **ANSWERED (leaked source): a negative throttle really does reverse** — the recovery's reverse phase writes `Control.Throttle = -0.5f` (`Racer.cs:3610`) and `ShapeLaunchThrottle` passes a negative through unshaped into `VehicleMemory.SetThrottle` (`VehicleMemory.cs:21`). The leaked engine settles the open question: `CVehControls::SetThrottle` asserts the field is `[-1, 1]` (`Vehicles\vehicle.h`), a negative throttle selects the reverse gear (`Transmission.cpp:354`, `:449`) and the drive force is signed by throttle (`:392`, `:1267`). So the phase is live — and the "cars never reverse" symptom was the could-not-move snap firing one second in and pre-empting it, now gated on the 6 s recovery budget (`Racer.cs`). **Driver-verified: the reverse backs off, and the teleport fires later rather than mid-phase.**
 
 **Tier 3 — single-method changes**
 

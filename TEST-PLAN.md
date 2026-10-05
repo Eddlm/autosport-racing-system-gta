@@ -1,7 +1,7 @@
 # ARS — test plan: build 450
 
-**Status: NOTHING here has been driven.** The working tree is clean and the deployed DLL is dev build **450**
-(HEAD `f84fe9a`). The last game drive in `Log.log` predates `0623276`, so every code commit below is undriven;
+**Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
+driver-verified on build 450 (`666c89b`); everything else below is undriven. The deployed DLL is dev build **450**;
 a build + reload is enough (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
@@ -36,6 +36,8 @@ game folder carries the init banner and lap lines.
 
 ## 2. Recovery trigger A — stuck against something
 
+**Driver-verified on build 450:** the 1 s reverse backs off as designed instead of being teleported mid-phase.
+
 4. Wedge a car against a tree/wall and let it stop.
    **Expect:** after 2 s below 2 mph with the plan asking for more → **Reverse** (1 s, straight, backwards).
 5. Then **Drive**: forward at ≤20 mph, steering back toward the route.
@@ -54,6 +56,8 @@ game folder carries the init banner and lap lines.
 10. Confirm a car that crawls back onto the surface at ~3 mph stays in recovery, then exits as it speeds up.
 
 ## 5. Re-stuck loop + snap
+
+**Driver-verified on build 450:** the teleport fires, but only after the escape budget rather than one second in.
 
 11. In Drive, stop the car again (or wedge it).
     **Expect:** another 1 s Reverse (same A predicate, 2 s).

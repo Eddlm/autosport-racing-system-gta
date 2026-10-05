@@ -126,7 +126,7 @@ Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pi
 
 Every open item carries a stable kebab-case slug and its description lives in the ladder at the top of `AGENTS-BACKLOG.md`; a slug cited here describes nothing, so read it there. This section names only what a session start owes. **State tags** (`live`, `untested (hash)`, `driver-verified (hash)`, `DECIDED`, `not built`, `parked`, `(idea)`, `closed (hash)`) and slug keys are fixed in `memory-note-style.md` §"The conventions, fixed" — decode there.
 
-- `recovery-redesign` — untested (`0623276`)
+- `recovery-redesign` — driver-verified (`666c89b`; reverse and delayed teleport)
 - `dnf-final-death` — untested (`0623276`)
 - `rival-detection-route-frame` — untested (`0623276`)
 - `player-special-ability`, `ai-free-abs` — parked
