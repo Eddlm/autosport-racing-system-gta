@@ -1559,24 +1559,34 @@ namespace ARS
         {
             return (float)Math.Round(mph * 0.44704f, 3);
         }
-        // No-collision mode: every racer pair passes through every other, world collision untouched. It is
-        // re-asserted every tick, because the engine resets the pair in its own per-frame path and the AI dummy
-        // conversion drops it as well (physics.cpp:2872, GameWorld.cpp:2968). The third argument is a mode: false
-        // keeps the pair non-colliding, true lets it clear once the pair stops impacting (commands_entity.cpp:5839).
-        // The removed ghosting passed true, which is why it kept slipping.
+        // No-collision mode: a racer passes through its nearest rival, world collision untouched. The engine stores
+        // one partner per entity (fwDynamicEntityComponent::m_pNoCollisionEntity), so a car can be ghosted against
+        // exactly one other at a time and pairing it with the closest is the most the native allows. Re-asserted
+        // every tick because the nearest changes. The third argument is a mode: false is PERMENANT, true lets the
+        // pair clear once it stops impacting (commands_entity.cpp:5839).
         void ApplyNoCollision(bool enable)
         {
             for (int i = 0; i < Racers.Count; i++)
             {
                 Racer a = Racers[i];
                 if (!a.Car.Exists()) continue;
-                for (int j = i + 1; j < Racers.Count; j++)
+
+                Racer nearest = null;
+                float nearestDistance = float.MaxValue;
+                for (int j = 0; j < Racers.Count; j++)
                 {
+                    if (j == i) continue;
                     Racer b = Racers[j];
                     if (!b.Car.Exists()) continue;
-                    Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, a.Car, b.Car, !enable);
-                    Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, b.Car, a.Car, !enable);
+                    float distance = b.Car.Position.DistanceTo(a.Car.Position);
+                    if (distance < nearestDistance)
+                    {
+                        nearestDistance = distance;
+                        nearest = b;
+                    }
                 }
+
+                if (nearest != null) Function.Call(Hash.SET_ENTITY_NO_COLLISION_ENTITY, a.Car, nearest.Car, !enable);
             }
         }
 

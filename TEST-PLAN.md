@@ -115,16 +115,20 @@ game folder carries the init banner and lap lines.
 
 ## 12. No Collision option — test this one hardest
 
-**Known history:** the old ghosting was reported as *precarious* — contact sometimes happened with the mode on.
-The third argument is a **mode** (verified in the engine, `commands_entity.cpp:5839`): `false` is
-`NO_COLLISION_PERMENANT`, `true` is `NO_COLLISION_RESET_WHEN_NO_IMPACTS`, which lets the entry clear itself.
-**The one-shot `PERMENANT` application was driven and failed — the cars collide with the option on.** The engine
-resets the pair in its own per-frame path (`physics.cpp:2872`, `GameWorld.cpp:2968`), so a single application
-cannot hold. The build now re-asserts every pair every tick while the option is on, which is the older shape.
-If contact still appears, the remaining suspects are an entity swap (respawn, or the AI dummy-vehicle conversion
-past ~40 m) and the native's storage depth.
+**Known history, and the limit the engine imposes.** The third argument is a **mode** (verified in the engine,
+`commands_entity.cpp:5839`): `false` is `NO_COLLISION_PERMENANT`, `true` is `NO_COLLISION_RESET_WHEN_NO_IMPACTS`,
+which lets the entry clear itself. **The one-shot application was driven and failed, and so was the per-tick
+all-pairs re-assert — because the engine stores exactly one partner per entity** (`fwDynamicEntityComponent::
+m_pNoCollisionEntity`, a single `fwRegdRef`), and `PERMENANT` is never cleared by the reset path. So an all-pairs
+loop leaves each car holding only its last loop partner. **A whole grid cannot be ghosted pairwise with this
+native.** A car is instead paired with its **nearest rival**, one slot each, re-asserted every tick.
 
-The matrix below is a test of whether the per-tick re-assert holds; a single contact is still the falsification.
+The residual to expect: a car only passes through its single closest rival, so a touch from a third car in a tight
+pack can still land. Judge the option on whether ordinary racing stays contact-free, not on the full matrix below
+being literally achievable — and if a contact appears, the first question is whether the two cars were each
+other's nearest at that tick.
+
+The matrix below is a test of how far the nearest-rival pairing holds; a single contact is still the falsification.
 
 35. Toggle **No Collision** in the AI menu.
 36. With it ON: racers must **not detect each other** — no avoidance, no repulsion, no rival walls, no
