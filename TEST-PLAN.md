@@ -1,10 +1,10 @@
-# ARS — test plan: build 452
+# ARS — test plan: build 453
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
-(`cbae845`). Everything else below is undriven. The
-deployed DLL is dev build **452**; a build + reload is enough (SHVDN reloads the scripts live, no game restart).
+(`cbae845`). Everything else below is undriven. The deployed DLL is dev build **453**; a build + reload is enough
+(SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
