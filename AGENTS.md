@@ -114,7 +114,7 @@ Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pi
 - Oversteer ≠ sliding; a reference's blindness is a property of the reference, not of steering.
 - The aim-error PID law was driven and ABANDONED — do not resurrect it blind.
 - Offroad gravity needs its baseline reset before the multiply, or it stacks across races.
-- Speed asymmetry is intentional; `SteerLimitedSpeed` is live and reads the clamped steer.
+- Speed asymmetry is intentional; `SteerLimitedSpeed` is live and reads the post-slew applied steer, one core tick behind the limiter.
 - `Options` enum values are positional — never persist or exchange one as an int.
 - `World.DrawMarker` has a silent per-frame budget — long geometry belongs in `DRAW_LINE`.
 - Prop `RightVector` and streaming ptfx — offset from the source direction; queue the entity.

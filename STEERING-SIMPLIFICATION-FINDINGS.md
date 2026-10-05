@@ -31,7 +31,7 @@ steer limits → pedals → steer slew**. What the code does inside one core tic
 | 3 | steering | `ComputeSteering` `:3366` call, body `:494` | lane systems + pursuer + damper + blend | `Control.SteerDegrees` |
 | 4 | throttle/brake reason caps | `:3368-3369` | pedal reasons | `MaxThrottle*` / `MaxBrake*`; **reads `Control.SteerDegrees` at `:1780`** |
 | 5 | pedals | `ConvertSpeedToPedals` `:3370`, body `:1302` | intended speed | `Control.Throttle`/`Brake` |
-| 6 | stuck recovery | `:3372-3375` | stuck state | throttle/brake overrides; no steering write |
+| 6 | stuck recovery | `:3372-3375` | stuck state | throttle/brake overrides, **and `ApplyStuckRecoveryOverride` writes `Control.SteerDegrees = 0f`** |
 | 7 | steer limits | `ApplySteerLimits` `:3378`, body `:1161` | `Control.SteerDegrees` | clamps it in place |
 | 8 | steer slew | `TranslateSteerToInput` `:3379`, body `:1536` | `Control.SteerDegrees`, `TickScale` | `Control.SteerInput` → `ApplyInputs` `:2587` |
 

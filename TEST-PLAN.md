@@ -1,4 +1,4 @@
-# ARS — test plan: build 470
+# ARS — test plan: build 471
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
@@ -7,7 +7,7 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
 (`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the engine
 restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and undriven. Everything else
-below is undriven. The deployed DLL is dev build **470**; a build + reload is enough (SHVDN reloads the scripts
+below is undriven. The deployed DLL is dev build **471**; a build + reload is enough (SHVDN reloads the scripts
 live, no game restart).
 
 | commit | what it is | section |
@@ -325,9 +325,8 @@ Watch:
    side can reach the slide angle plus a degree, so the counterbalancer must never be clipped.
 3. **Yaw-Governed, corner entry** — dropping the knee took away the one place that gave a degree back. Watch
    whether cars now understeer where the knee used to help.
-4. **Either mode** — the switch is written to the menu settings but was **not declared in `SettingsRepair`, so it was
-   pruned on every load** and the mode silently fell back to Yaw-Governed across a script reload. Declared now; until
-   you have reloaded once with this build, keep each A/B run inside one session and check the menu before judging.
+4. **Either mode** — the switch is now declared in `SettingsRepair`, so it survives a reload; before this build it was
+   pruned on every load and the mode silently fell back to Yaw-Governed. Just confirm the menu shows the mode you mean.
 5. **The bypass is countersteer-only now** — it needs both the damper term and the command to oppose the rotation.
    So a limiter that reads as absent while countersteering is working as intended, and steer-in should be capped
    again. The sign test still flickers near zero yaw in a steady corner; if the limiter reads as intermittently

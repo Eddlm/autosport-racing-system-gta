@@ -1067,7 +1067,7 @@ namespace ARS
             HookListTextPicker(steerKDItem);
 
             string[] steerLimitModeOptions = { "Yaw-Governed", "Slide-Governed" };
-            NativeListItem<string> steerLimitModeItem = new NativeListItem<string>("Steer Limit Mode", "Which quantity governs the steer ceiling. Yaw-Governed scales the cornering ceiling by yaw usage, from Turn-In Minimum to Turn-In Maximum. Slide-Governed leaves the cornering ceiling uncapped and adds half the slide angle plus half a degree on top of it, so a slide opens authority past the law rather than replacing it.", steerLimitModeOptions);
+            NativeListItem<string> steerLimitModeItem = new NativeListItem<string>("Steer Limit Mode", "Which quantity governs the steer ceiling. Yaw-Governed scales the cornering ceiling by yaw usage, from Turn-In Minimum to Turn-In Maximum. Slide-Governed drops that yaw-usage cap and lets the slide open authority instead: the limit becomes the larger of the cornering ceiling and half the slide angle plus half a degree.", steerLimitModeOptions);
             steerLimitModeItem.ItemChanged += (sender, args) =>
             {
                 SteerLimitMode = steerLimitModeItem.Items[args.Index] == "Slide-Governed" ? SteerLimitGovernor.Slide : SteerLimitGovernor.Yaw;

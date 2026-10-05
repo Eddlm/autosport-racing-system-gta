@@ -40,34 +40,36 @@ the driver can feel and judge.
 
 ## Interaction map (the Lead's own slice)
 
-The chain in order, with anchors checked against `src/Racer.cs` rather than recalled.
+The chain in order. Anchors were rebased onto the file as the simplification commit leaves it; the first pass here
+was written against the pre-simplification revision and every line had shifted, which is worth remembering the next
+time this map is quoted.
 
 **Command — `ComputeSteering`**
 
-- **`_slidePriority`** (590) — the blend's weight: zero at a quarter of the authored peak slip, one at half of it.
-  Consumers: the blend (617), the limiter's countersteer allowance (1193), `IsFullCountersteer`.
-- **Aim reference** (594-595) — `yawTarget` from the aim point's curvature, gated off once the slide passes
+- **`_slidePriority`** (584) — the blend's weight: zero at a quarter of the authored peak slip, one at half of it.
+  Consumers: the blend (610), the limiter's countersteer allowance (1186), `IsFullCountersteer`.
+- **Aim reference** (587-589) — `yawTarget` from the aim point's curvature, gated off once the slide passes
   `SlidingFraction` of the peak slip.
-- **Damper** (595-607) — `-gain × (yaw − target)`; then a term that would **add** in the command's sign is zeroed;
+- **Damper** (589-600) — `-gain × (yaw − target)`; then a term that would **add** in the command's sign is zeroed;
   then the part past neutral, where it is countersteering, keeps **half** its authority.
-- **Assembly** (611) — side-by-side + damper + lane.
-- **Slide blend** (612-618) — a lerp of the **whole** command toward `side-by-side − slide × share`, weighted by
+- **Assembly** (604) — side-by-side + damper + lane.
+- **Slide blend** (606-611) — a lerp of the **whole** command toward `side-by-side − slide × share`, weighted by
   `_slidePriority`. It is a lerp, not an addition, so it can both raise and cut.
-- **Aligned-wheel deadband** (623) — the command is zeroed when the aim bearing is small and no slide is steering it.
+- **Aligned-wheel deadband** (616) — the command is zeroed when the aim bearing is small and no slide is steering it.
 
 **Limit — `ApplySteerLimits`**
 
-- **Ceiling** (1178-1190) — the cornering law from `ResolveSteerCeiling`: peak slip × 1.333, raised by the
+- **Ceiling** (1170-1180) — the cornering law from `ResolveSteerCeiling`: peak slip × 1.333, raised by the
   maneuvering ramp below 30 mph. In Slide-Governed, the larger of that and half the slide plus half a degree.
   Reverse and a standstill keep the raw lock.
-- **Countersteer allowance** (1191-1196) — a **raise** to `|slide| × weight` on the answering side.
-- **Yaw envelope** (1199-1213, Yaw-Governed only) — a **cut** of the commanded side to the yaw-usage share, which
+- **Countersteer allowance** (1184-1189) — a **raise** to `|slide| × weight` on the answering side.
+- **Yaw envelope** (1192-1204, Yaw-Governed only) — a **cut** of the commanded side to the yaw-usage share, which
   the ramp then raises part of the way back.
-- **Damper bypass** (1217-1221) — a **raise** to full lock when the damper term *and* the command both oppose the
+- **Damper bypass** (1210-1214) — a **raise** to full lock when the damper term *and* the command both oppose the
   rotation.
-- **One clamp** (1223) closes both sides.
+- **One clamp** (1216) closes both sides.
 
-**Actuator** — `TranslateSteerToInput` (1542): one rate for both directions.
+**Actuator** — `TranslateSteerToInput` (1535): one rate for both directions.
 
 **Who can only raise, who can only cut.** Raisers: the maneuvering ramp, the slide addition, the countersteer
 allowance, the damper bypass. Cutter: the yaw envelope alone. Both: the damper term, and the blend, which are the
@@ -100,7 +102,8 @@ Lead before it was ruled on, and the checks that mattered are named in the rulin
   the wheel may ask for, and the governor A/B is undriven. Not applied; it becomes a candidate once the A/B has a
   verdict.
 - **R7 — Q1: the contract was wrong and the code is right.** The limiter runs after the pedals on purpose — its own
-  comment at `Racer.cs:3377` says it closes the steering last so nothing escapes it. The pipeline list in `AGENTS.md`
+  comment at `Racer.cs:3370` says it closes the steering last so nothing escapes it — and stronger than the findings
+  file first put it, since the stuck-recovery override also writes `Control.SteerDegrees` above it. The pipeline list in `AGENTS.md`
   is corrected to the code's order, and the consequence is recorded there: the overspeed arm gate and
   `SteerLimitedSpeed` read the previous tick's post-slew steer.
 - **R8 — Q2: the key is declared, not the note amended.** `SteerLimitMode` was missing from
