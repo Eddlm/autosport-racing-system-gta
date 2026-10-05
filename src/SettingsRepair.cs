@@ -286,7 +286,9 @@ namespace ARS
                 _declaredKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
                 foreach (FileSpec file in Schema)
                 {
-                    HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+                    // Case-insensitive, matching the prune's own comparer: a hand-edited ini key in the
+                    // wrong case is kept by the prune, so the store has to keep reading it too.
+                    HashSet<string> keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (KeySpec spec in file.Specs) keys.Add(spec.Key);
                     _declaredKeys[file.Name] = keys;
                 }

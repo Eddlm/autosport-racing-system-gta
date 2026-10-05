@@ -44,3 +44,6 @@ Util/
 
 # Dist mirror: keep only the data (ini/xml/docs), not the built binaries
 Dist/**/*.dll
+
+# Imported python tooling leaves bytecode behind (docs/check-settings-keys.py is imported by its own self-test)
+__pycache__/

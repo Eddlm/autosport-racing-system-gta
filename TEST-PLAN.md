@@ -1,4 +1,4 @@
-# ARS — test plan: build 473
+# ARS — test plan: build 475
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
@@ -9,7 +9,7 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 restart, the damper bypass and the maneuvering ramp are new and undriven, and **build 473 collapsed the steer governor
 to the slide**, which is a behaviour change nobody has driven: a car at turn-in now gets the full cornering law where
 the retired yaw cut allowed it about a fifth of that. Build 471's state was accepted on the drive — the simplification
-batch and the governor-key fix regressed nothing. The deployed DLL is dev build **473**; a build + reload is enough
+batch and the governor-key fix regressed nothing. The deployed DLL is dev build **475**; a build + reload is enough
 (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
@@ -309,9 +309,10 @@ Reverse and standing still keep full lock, since the ramp is keyed to forward sp
 Watch:
 
 1. **Straight line — this is the point of the drive.** The weave that only Slide-Governed showed is now universal,
-   because nothing holds the command near zero any more. If it appears at the law's authority, the limit is
-   exonerated and the oscillation belongs to the loop under it — the pursuit and the damper — which is where the fix
-   would then go.
+   because the yaw cap that held a not-rotating car at about a fifth of the law is gone. One caveat before reading
+   anything into it: the aligned-wheel deadband still zeroes the command when the aim bearing is small and nothing is
+   sliding, so a weave can only be one whose bearing stays above that threshold. If it appears at the law's authority,
+   the limiter is exonerated and the oscillation belongs to the loop under it — the pursuit and the damper.
 2. **Corner entry — the behaviour change.** A not-yet-rotating car now gets the full cornering law at turn-in, where
    the yaw cut allowed it about a fifth of that. Watch for over-rotation on entry rather than understeer: this is what
    buying the authority costs, and it is the one thing to judge.
@@ -324,5 +325,8 @@ Watch:
    the bug it was when the governor key was undeclared.
 6. **Reverse** — a reversing car holds full lock. If a recovery reverse still reads as steering straight, the ramp is
    not the reason.
+7. **Settings — a load check with a falsifier.** Every key the menu touches is declared, so `Log.log` must hold **no
+   "declares no key" line** after a load. A line there means something wrote or read a key that `SettingsRepair` would
+   prune, which is the bug class the store now refuses and reports instead of tolerating.
 
 The law is plotted in `docs/steer-ceiling.png`, drawn by `docs/steer-ceiling.py`.
