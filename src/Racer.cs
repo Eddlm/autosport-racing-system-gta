@@ -113,6 +113,7 @@ namespace ARS
         const float RecoveryTriggerMph = 2f;
         const float RecoveryPlanGapMph = 1f;
         const float RecoveryDriveMph = 20f;
+        const float RecoveryCoastBandMph = 5f;
         const float RecoveryExitMph = 4f;
         const int RecoveryExitHoldMs = 500;
         const int StuckMoveSampleMs = 1000;
@@ -520,6 +521,7 @@ namespace ARS
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
             if (avoidAheadLane != 0f) defaultLane = avoidAheadLane;
             float carOffset = ARS.SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction);
+            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) defaultLane = NearestEdgeLane(carOffset, drivableEdge);
             float targetLane = ApplyRivalWalls(defaultLane, roadWide);
             if (ARS.DebugToggles[Options.LockLaneCentre]) targetLane = LaneLockTestOffsetMeters;
             _targetLane = targetLane;
@@ -1175,6 +1177,7 @@ namespace ARS
             Control.MaxThrottleFromChillOut = 1f;
             Control.MaxThrottleFromYield = 1f;
             Control.MaxThrottleFromOffTrack = 1f;
+            Control.MaxThrottleFromRecovery = 1f;
             Control.ThrottleReason = ThrottleReason.Plan;
             Control.ThrottleReasonLevel = 1f;
             Control.BrakeReason = BrakeReason.Plan;
@@ -1566,8 +1569,6 @@ namespace ARS
             bool rbFreeZone = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
             if (rbFactor < 1f && !rbFreeZone && !(ARS.CurrentRubberbandMode == RubberbandMode.Natural && rbNearbyRival))
                 Brain.CurrentIntention.Speed *= rbFactor;
-
-            if (_stuckPhase == StuckPhase.Drive) Brain.CurrentIntention.Speed = ARS.MphToMps(RecoveryDriveMph);
         }
 
         // Vertical-curvature grip factor over the three-node window centred on a node, as a speed multiplier.
@@ -1695,6 +1696,10 @@ namespace ARS
             float offTrackThrottle = 1f;
             if (OutOfTrackDistance() > 0f) offTrackThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), OffTrackSafeSpeedMph, OffTrackFullThrottleMph, OffTrackThrottleLevel, 1f, true);
             Control.MaxThrottleFromOffTrack = GlideCap(Control.MaxThrottleFromOffTrack, offTrackThrottle);
+
+            float recoveryThrottle = 1f;
+            if (_stuckPhase == StuckPhase.Drive) recoveryThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), RecoveryDriveMph + RecoveryCoastBandMph, RecoveryDriveMph, 0f, 1f, true);
+            Control.MaxThrottleFromRecovery = GlideCap(Control.MaxThrottleFromRecovery, recoveryThrottle);
         }
 
         // Both signals are read every tick: the old system latched them at 3 Hz and missed crests shorter than the
@@ -1770,6 +1775,7 @@ namespace ARS
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromChillOut);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromYield);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOffTrack);
+            ceiling = Math.Min(ceiling, Control.MaxThrottleFromRecovery);
             Control.MaxThrottle = ceiling;
 
             float binding = baseThrottle;
@@ -1781,6 +1787,7 @@ namespace ARS
             if (Control.MaxThrottleFromChillOut < binding) { binding = Control.MaxThrottleFromChillOut; reason = ThrottleReason.ChillOut; }
             if (Control.MaxThrottleFromYield < binding) { binding = Control.MaxThrottleFromYield; reason = ThrottleReason.Yield; }
             if (Control.MaxThrottleFromOffTrack < binding) { binding = Control.MaxThrottleFromOffTrack; reason = ThrottleReason.Offtrack; }
+            if (Control.MaxThrottleFromRecovery < binding) { binding = Control.MaxThrottleFromRecovery; reason = ThrottleReason.StuckRecovery; }
             if (offtrackLimited) reason = ThrottleReason.Offtrack;
             if (countersteering) reason = ThrottleReason.Countersteer;
             if (BaseBehavior == RacerBaseBehavior.GridWait) reason = ThrottleReason.GridWait;
@@ -2311,12 +2318,13 @@ namespace ARS
         const float PedalBarCapSize = 0.09f;
         const float PedalBarInputSize = 0.08f;
         // Etiquette limits (rival, chill-out, yield) are harmless, so they read cool; grip limits yellow; the
-        // overspeed cut black; countersteer orange; instability violet.
+        // overspeed cut black; countersteer orange; instability violet; the recovery coast cyan.
         static readonly Color NonDangerousReasonColor = Color.FromArgb(255, 120, 200, 255);
         static readonly Color GripReasonColor = Color.Yellow;
         static readonly Color OverspeedReasonColor = Color.Black;
         static readonly Color CountersteerReasonColor = Color.Orange;
         static readonly Color InstabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
+        static readonly Color RecoveryReasonColor = Color.Cyan;
 
         struct PedalCapSphere
         {
@@ -2346,6 +2354,7 @@ namespace ARS
             AddPedalCap(fwd, Control.MaxThrottleFromChillOut, NonDangerousReasonColor, PedalBarReasonSize, ref count);
             AddPedalCap(fwd, Control.MaxThrottleFromYield, NonDangerousReasonColor, PedalBarReasonSize, ref count);
             AddPedalCap(fwd, Control.MaxThrottleFromOffTrack, Color.White, PedalBarReasonSize, ref count);
+            AddPedalCap(fwd, Control.MaxThrottleFromRecovery, RecoveryReasonColor, PedalBarReasonSize, ref count);
             AddPedalCap(-fwd, Control.MaxBrakeFromABS, GripReasonColor, PedalBarReasonSize, ref count);
             AddPedalCap(-fwd, Control.MaxBrakeFromCountersteer, CountersteerReasonColor, PedalBarReasonSize, ref count);
             if (IsFullCountersteer()) AddPedalCap(fwd, CountersteerRollThrottle, Color.White, PedalBarCapSize, ref count);
@@ -3476,10 +3485,16 @@ namespace ARS
             if (RecoveryExitHolds()) FinishStuckRecovery();
         }
 
-        // On the drivable bound and moving forward, held: a reverse roll is not a recovered car.
+        // Off the track the nearest edge is the way back; the normal aim is the centre, which crosses the whole width.
+        float NearestEdgeLane(float carOffset, float drivableEdge)
+        {
+            return carOffset >= 0f ? drivableEdge : -drivableEdge;
+        }
+
+        // Any part of the car on the drivable bound and moving forward, held: a reverse roll is not a recovered car.
         bool RecoveryExitHolds()
         {
-            bool onTrack = Math.Abs(Brain.CurrentPerception.DeviationFromCenter) <= CurrentTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+            bool onTrack = Math.Abs(Brain.CurrentPerception.DeviationFromCenter) <= CurrentTrackPoint.TrackHalfWidth + VehicleData.BoundingBox * 0.5f;
             bool movingForward = ARS.MpsToMph(Vector3.Dot(Car.Velocity, Car.ForwardVector)) > RecoveryExitMph;
             if (!onTrack || !movingForward)
             {

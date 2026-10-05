@@ -342,6 +342,7 @@ namespace ARS
         public float MaxThrottleFromYield = 1f;
         public float MaxThrottleFromInstability = 1f;
         public float MaxThrottleFromOffTrack = 1f;
+        public float MaxThrottleFromRecovery = 1f;
         public ThrottleReason ThrottleReason = ThrottleReason.Plan;
         public float ThrottleReasonLevel = 1f;
         public BrakeReason BrakeReason = BrakeReason.Plan;
