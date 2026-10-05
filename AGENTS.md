@@ -74,8 +74,10 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 - `SmartTuner.cs` — the auto-tuner.
 - `SettingsRepair.cs` / `MenuSettings.cs` — the declared ini shape and its store.
 - `TrackLoader.cs` / `TrackRepository.cs` / `TrackVisuals.cs` / `GridBuilder.cs` / `VehicleCatalog.cs` / `VehicleSelector.cs` — track, grid and roster helpers.
-- `MenyooAppearance.cs` / `UpdateChecker.cs` / `Focused helpers` — one purpose each.
-- `PersonalitySet.cs` / `SkillSet.cs` — leftover per-racer scaffolding.## Track, lane, speed and corner systems
+- `MenyooAppearance.cs` / `UpdateChecker.cs` / `FreeCamController.cs` — the focused helpers.
+- `PersonalitySet.cs` / `SkillSet.cs` — leftover per-racer scaffolding.
+
+## Track, lane, speed and corner systems
 
 **Moved whole to `AGENTS-STEERING.md`** — read it before touching the per-frame pipeline, the lane laws, the steering authority chain, the speed plan or the corner lifecycle. What the code owns is there; what stays here is the order and the gotchas.
 
@@ -118,7 +120,9 @@ Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pi
 - `World.DrawMarker` has a silent per-frame budget — long geometry belongs in `DRAW_LINE`.
 - Prop `RightVector` and streaming ptfx — offset from the source direction; queue the entity.
 - No old limiter reads the static TRlat; every limiter function has a caller.
-- A POSITIVE steer command steers LEFT — a rename is a side swap, not a symbol swap.## Open items — the decision-ready top
+- A POSITIVE steer command steers LEFT — a rename is a side swap, not a symbol swap.
+
+## Open items — the decision-ready top
 
 Every open item carries a stable kebab-case slug and its description lives in the ladder at the top of `AGENTS-BACKLOG.md`; a slug cited here describes nothing, so read it there. This section names only what a session start owes. **State tags** (`live`, `untested (hash)`, `driver-verified (hash)`, `DECIDED`, `not built`, `parked`, `(idea)`, `closed (hash)`) and slug keys are fixed in `memory-note-style.md` §"The conventions, fixed" — decode there.
 
