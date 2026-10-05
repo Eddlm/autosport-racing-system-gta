@@ -1025,8 +1025,7 @@ namespace ARS
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
-        const float SteerSlewRate = 90f;
-        const float SteerSlewRateCountersteer = 180f;
+        const float SteerSlewRate = 45f;
         // How much of the damper's overshoot past neutral survives, so it may cross the sign, but at half authority.
         const float DamperCrossingShare = 0.5f;
         // Kill switch for the yaw-rate damper. Driven with it off the cars cannot hold centre — the term is the
@@ -1540,9 +1539,7 @@ namespace ARS
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees)) Control.SteerDegrees = 0f;
 
             float error = Control.SteerDegrees - Control.LastAppliedSteerDegrees;
-            bool countersteering = Math.Sign(Control.SteerDegrees) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
-            float rate = countersteering ? SteerSlewRateCountersteer : SteerSlewRate;
-            float maxDeltaPerTick = rate * TickScale;
+            float maxDeltaPerTick = SteerSlewRate * TickScale;
             float delta = ARS.Clamp(error, -maxDeltaPerTick, maxDeltaPerTick);
             Control.SteerDegrees = Control.LastAppliedSteerDegrees + delta;
             Control.LastAppliedSteerDegrees = Control.SteerDegrees;

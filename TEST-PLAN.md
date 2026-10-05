@@ -208,3 +208,11 @@ The question is whether the scan finds the lips a driver can feel, and whether t
 4. **A long climb** - a rise longer than eight metres must produce no marker at all. If it does, the run limit is not biting.
 5. **The seam** - a circuit whose first/last node edge steps in height prints `Bumps: the route seam steps at grade …, so no lip is taken within 8.0m of it`; within that stretch no lip may be taken, while the rest of the circuit scans normally. A step-only seam is not a real lip.
 6. **Nothing drives on it** - behaviour and lap times must match the build before `f3f318f`: the `RequiresEarlyBrake` / `RampEndNode` hook the braking plan reads is still unset, so a marked lip must not move anyone's braking point.
+
+## Steering slew flattened to one rate (not yet driven)
+
+The countersteer doubling was never validated and the base rate read as instant, so the two are now one rate (`SteerSlewRate`, `Racer.cs:1028`) applied at `TranslateSteerToInput`. Watch:
+
+1. **Turn-in** — the steer should now build visibly slower to full lock; if it still reads instant, the rate is not the thing you are seeing.
+2. **A slide** — the countersteer now arrives no faster than any other steer. If a car that used to catch a slide spins instead, the flattened rate is the cause, not the blend or the damper.
+3. **A straight** — a slower actuator can itself feed a limit cycle, so watch for weaving on the straight and in fast direction changes (the survey's 0.6 rad/s warning).
