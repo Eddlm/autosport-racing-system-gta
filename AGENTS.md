@@ -136,46 +136,18 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 - **Do not go hunting for an old limiter that used the static TRlat — the ceiling never reads it.** `Handling.LateralTractionCurve` is only the *input* to the speed-scaled peak (`LateralPeakAtSpeed`, `Racer.cs:900`) plus the countersteer gate thresholds, the slide blend and the TCS spin map, and every limiter function (`AckermannCeilingDegrees`, `GeometrySteerCeiling`, `PeakSlipCeilingAt`, `ResolveSteerCeiling`, `ApplySteerLimits`) has a caller.
 - **A POSITIVE steer command steers LEFT — do not re-derive this.** `Racer.cs`'s own lane law gives it away (`laneSteerDeg = -laneErrorMeters * laneGain` against the `+ = right` **lane** convention, which is a different convention), the rival repulsion and corner-commit lane agree, and `TrackPoint.Angle` is already in the steer's convention (a left-hand corner is positive), so a reference built from it must be used as-is. `SteerLimitLeft` bounds positive commands and `SteerLimitRight` negative ones, which is what `Racer.cs`'s clamp now reads (`92d5867`), while the Show Inputs fan draws each limit on its true side — orange left, red right. A rename here is a *side* swap, not a symbol swap, so check every use by side rather than by name.
 
-## Known TODOs / open items
-One line each; **a simplest→most-complex ranking of the whole list sits at the top of `AGENTS-BACKLOG.md`**, and the detail for each is in `AGENTS-BACKLOG.md` or `AGENTS-TECHNOTES.md`.
-- **Recovery redesign — landed untested (`0623276`)**: it reverses, drives out, and snaps; the drive is `TEST-PLAN.md` and the detail is `AGENTS-BACKLOG.md`.
-- **DNF is final death — untested (`0623276`)**: parks on the shoulder or drops under the track, hidden from detection behind its option, and the finish count, the rewards and recovery all subtract it (`Racer.cs`).
-- **Rival detection is route-frame — untested (`0623276`)**: arc gap, along-track closure, track-relative corridor (`Rival.ComputeTimeToReach`). **Residuals: a stopped car on a hairpin's opposite leg, and the off-track node rescan on a stacked deck.**
-- **The code-disagrees-with-itself pile is code work, not memory** — values that exist twice, unreachable branches and write-only fields are inventoried in `AUDIT-COMPUTE-ONCE.md`; fix them in the code rather than annotating them here.
-- **Rate and precision are planned, not built**: stages, the deferred perception manager and the route-frame ranking migration are in `PLAN-RATE-PRECISION.md`.
-- **The track creator is LIVE and driver-verified**; `SaveRoute` writes `Tracks\*.xml` and there is no update path — the rewrite path was cut in `c2ad2de`, so reviving it means restoring it from git (`AGENTS-BACKLOG.md`).
-- **`SaveRoute` rounds coordinates to 2 decimals**, which alone shifts a perfect arc's measured `PreciseCurveRadius` low; raising the precision rewrites every saved file, so decide it deliberately.
-- **Apex speed reads the biased radius** (`SupposedRadius`, the noise tail) while the steadier `DetectedRadius` feeds the positioning gate and merge survival; moving the speed onto the smoothed radius is a behaviour change wanting its own drive (`AGENTS-BACKLOG.md`).
-- **The crest gate's design is DECIDED, not built** — the entrance belongs at the crest's entry (where the track stops being flat and the vertical curvature begins), not the unload's peak, and the severity window wants a metre-based baseline; the two constants wait on an instrumented run (`AGENTS-BACKLOG.md`).
-- **A constant-radius generator has no radius to open**, so a creator-built corner's span comes from the detection gate or the next section, not from the corner — treat the gate as the lever (`AGENTS-BACKLOG.md`).
-- **Preview the apex table inside the creator (idea)** — the merges and blips visible while laying a track out, not only after saving.
-- **Place apexes by hand (idea)** — sidesteps an apex that is arbitrary along a constant-radius arc.
-- **A surviving merge does not reach its own first corner's entrance** — its span starts after the absorbed apex (Figureight's absorbed one is a 112 m bend), inert while that corner needs no braking but re-opening the slow-first-corner case if a braking-worthy one falls inside the window.
-- **The two corner-merge rules need a stress test** — the short geometry-blind window and the longer same-direction one sit close together, and the aligned window is validated on one track only, so a genuine kink at 3.5-4 s elsewhere is the case to watch: it splits, the safe direction, at the cost of the pair's absorbed lead-in (`AGENTS-BACKLOG.md`).
-- **Start-line flares are LIVE and driver-verified (`4779a31`)** — one pair per track, on the last node at the track edges, the effect burning in the colour the track's `Flares` attribute asks for (`false` = off); the creator's `Trackside` Model/Frecuency props still have no reader.
-- **Council review backlog**: what remains is MenuSettings save-per-scroll, per-tick store reads in `Racer.cs`, and the listed minors.
-- **Pace is model-theoretical, not instance-measured** — the player's tuned car is paced at its stock number; an upgrade-set multiplier table is the idea on file.
-- **Electric pace sits deliberately at the ramp's peak (`f3fc274`)** — the fastest electrics outscore every ICE model, so they cannot be selected against an ICE target; `96f5a72`'s midpoint is the one-line revert if that bites.
-- **Corner approach tied to the braking plan (idea)** — in tension with a shipped principle: the corner line deliberately keeps grip out of the lane (`ComputeCornerTargetLane` `Racer.cs:798`).
-- **Steering batch residuals** — the countersteer allowance is still twice the half-slide target, the slip-balance knee has never had a drive, and the damper's crossing is still a share of a grip-scaled excess (`AGENTS-BACKLOG.md`).
-- **The off-road gravity flag's fix is DECIDED** — gravity carries the multiplier and the effective grip stays the pure coefficient, both published for every consumer; the bake in `UpdatePerceivedGrip` goes and the hard-coded gravity sites read `Handling.Gravity`. Offroad cars end up slower through corners and braking later, so it wants its own drive (`AGENTS-BACKLOG.md`, `AGENTS-TECHNOTES.md`).
-- **The flags reference leaves four things unactioned** — rally tyres' opposite grip curve, the spoiler flag's downforce, unmodelled camber and off-throttle friction, and `m_AdvancedData` (`AGENTS-FLAGS.md`).
-- **Instability is tuned by driving, not derived** — the ride-height margin, yaw tolerance and min speed are guesses, roll and pitch rates are fetched then thrown away, and nothing models load transfer (`Racer.cs:1556`).
-- **The overspeed correction is due a re-look after its drive** — a coarse ladder with no proportional region, a 3 Hz refresh against a per-tick glide, and an uncompensated grade term, and `wheelGs` is a *reported* drive power rather than a traction-limited force (`Racer.cs:3174`).
-- **TCS is a reason cap, not a P-integrator (`1ebbd2c`)** — proportional under curve-anchored targets, and the steer-limiter tie-in was removed as a no-op.
-- **Low-grip gate SATISFIED (driver-verified)**; one unverified number sits under it — the grip native was never checked against measured lateral g.
-- **Snap-oversteer counter** — the damper has no spike detector, and a snap spikes faster than a proportional term can track.
-- **The yaw damper is referenced to the AIM POINT now**, and the earlier zero-reference drive was confounded; if it ever rings the lever is a scalar on the reference, **not** `SteerDampingGain` (`AGENTS-STEERING.md`).
-- **The low-speed ramp's end target reads a different peak than its ceiling** (`Racer.cs:949`) — a one-line fix if it ever matters.
-- **The player's special ability and the AI's free ABS are open decisions** — an advantage the AI cannot match, and anti-lock brakes the engine grants one side (`Automobile.cpp:3774`) with no native to query (`AGENTS-BACKLOG.md`, `AGENTS-VANILLA-STEERING.md`).
-- **Overrotation via the pedal (idea)** — the pedal is the lever on rear grip, and the sign flips between power and load-transfer oversteer (`AGENTS-BACKLOG.md`).
-- **The corrections rule** — never blend toward a correction value as if it were a target; it steers into the slide.
-- **Reverse throttle path** is removed by design, and nitro is charged at launch and per lap with no free-roam refill.
-- **Two-projection route speed (future idea)** — a ballistic plus a pessimistic projection.
-- **Off-track projection → reaction is closed (`67d8da7`)**, re-checked in game.
-- **Immersive join points** — a chevron marks the nearest start line and the join follows Pace Mode.
-- **Optional update checker as a separate DLL (idea)** and the rear-end prevention notes live in the companion.
-- **Slide brake rampdown** returns at v0.9+: re-derive it against the current steering ceiling, since its absence is the full throttle while sliding (`AGENTS-BACKLOG.md`).
+## Open items — the decision-ready top
 
+Every open item carries a stable kebab-case slug and its description lives in the ladder at the top of `AGENTS-BACKLOG.md`; a slug cited here describes nothing, so read it there. This section names only what a session start owes. **State tags** (`live`, `untested (hash)`, `driver-verified (hash)`, `DECIDED`, `not built`, `parked`, `(idea)`, `closed (hash)`) and slug keys are fixed in `memory-note-style.md` §"The conventions, fixed" — decode there.
+
+- `recovery-redesign` — untested (`0623276`)
+- `dnf-final-death` — untested (`0623276`)
+- `rival-detection-route-frame` — untested (`0623276`)
+- `player-special-ability`, `ai-free-abs` — parked
+- `lane-repulsion-ceiling` — parked
+- `crest-gate` — DECIDED
+- `apex-radius` — not built
+- `slide-brake-rampdown` — parked
+- **Session artifacts**: `AUDIT-COMPUTE-ONCE.md` (the code-disagrees pile — fix it in the code, never annotate it), `PLAN-RATE-PRECISION.md` (rate and precision stages, the deferred perception manager, the route-frame ranking migration), `TEST-PLAN.md` (the outstanding drives); the flags reference's four unactioned items are in `AGENTS-FLAGS.md` and the corrections rule in `AGENTS-TECHNOTES.md`.
 ## Cross-session hindsight notes
 - **Cross-session hindsight** — the culture leak, the crest behind-guard and the brake learner's threshold are in `AGENTS-TECHNOTES.md`.
