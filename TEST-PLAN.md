@@ -1,4 +1,4 @@
-# ARS — test plan: build 477
+# ARS — test plan: build 483
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`), and the rest of the recovery has since been driver-verified too — trigger B, the exit back into normal racing, the start-line arm delay and the flooded-engine rescue — and the drive phase has since been rebuilt again and is **undriven** (coast instead of brake, nearest-edge aim, exit on any part of the car on track; `b50dfef`, section at the end). The maneuver cards now decide on the fast core pass and are undriven too (`601313c`, last section). No Collision's one-shot mode and its per-tick all-pairs form were both
@@ -8,7 +8,7 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 (`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the damper bypass and the maneuvering ramp are new and undriven, and **build 473 collapsed the steer governor
 to the slide**, which is a behaviour change nobody has driven: a car at turn-in now gets the full cornering law where
 the retired yaw cut allowed it about a fifth of that. Build 471's state was accepted on the drive — the simplification
-batch and the governor-key fix regressed nothing. The deployed DLL is dev build **477**; a build + reload is enough
+batch and the governor-key fix regressed nothing. The deployed DLL is dev build **483**; a build + reload is enough
 (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
@@ -349,3 +349,4 @@ The four tactical cards — nitro, defend, divebomb, yield — and the maneuver 
 3. **No stutter** — a full grid must not cost frames. The moved work is a few loops over three rivals per car per core tick, so a hitch at the start or in a pack is the thing to suspect.
 4. **The dive's braking is steady through a corner** — the bonus used to be redrawn at every evaluation on a circuit, so jittery dive braking was the symptom; it should now be one draw per dive.
 5. **The crowd card is unchanged** — ChillOut should still come and go on its slow beat rather than flicker.
+6. **A restart is clean** — arm a card or two, then Restart Race from the menu: nothing may carry over. A divebomb armed in the race just abandoned must not brake the new race's first corners, and the new race must not start with the pressure the last one built, whose symptom is cars refusing to yield through the opening laps.
