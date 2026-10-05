@@ -140,7 +140,6 @@ namespace ARS
         float _targetLane = 0f;
         public float TargetLane { get { return _targetLane; } }
         Vector3 _debugLaneAimPoint = Vector3.Zero;
-        float _rawCornerLane = 0f;
 
         float _cornerSpd = 999f;
 
@@ -163,10 +162,6 @@ namespace ARS
         const int InputTrailMaxSamples = 40;
 
 
-        // Public so a rule can grant an allowance to one side and the debug view can draw them. LEFT bounds positive
-        // commands and RIGHT negative ones, because a positive command steers left (AGENTS.md's steer-sign gotcha).
-        public float SteerLimitRight = 40f;
-        public float SteerLimitLeft = 40f;
         // Yaw damper term in degrees: read by the steer sum below and by the parked yaw HUD when re-armed.
         float _damperTermDeg = 0f;
         float _debugYawTargetPerSecond = 0f;
@@ -519,7 +514,6 @@ namespace ARS
             float cornerLane = 0f;
             if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
             if (cornerLane != 0f) defaultLane = cornerLane;
-            _rawCornerLane = cornerLane;
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
             if (avoidAheadLane != 0f) defaultLane = avoidAheadLane;
             float carOffset = ARS.SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction);
@@ -607,8 +601,7 @@ namespace ARS
             float damperOvershootDeg = Math.Abs(damperTermDeg) - Math.Abs(nonDamperSteerDeg);
             if (damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f) damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + damperOvershootDeg * DamperCrossingShare);
             _damperTermDeg = damperTermDeg;
-            float nonLaneSteerDeg = (steerKP * sideBySideSteerDeg) + damperTermDeg;
-            Control.SteerDegrees = nonLaneSteerDeg + (steerKP * laneSteerDeg);
+            Control.SteerDegrees = nonDamperSteerDeg + damperTermDeg;
 
             if (_slidePriority > 0f)
             {
@@ -1018,7 +1011,6 @@ namespace ARS
         const float SlideBlendStartFraction = 0.25f;
         const float SlideBlendFullFraction = 0.5f;
         const float CountersteerSlideShare = 0.5f;
-        const float CountersteerFullSlideFraction = 1f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
@@ -1183,16 +1175,17 @@ namespace ARS
                 // two, so a car can always steer in and rejoin, and a slide only ever opens more than it has.
                 if (slideGoverned) speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) * SlideLimitSlideShare + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
             }
-            SteerLimitRight = speedCeiling;
-            SteerLimitLeft = speedCeiling;
+            // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
+            float steerLimitRight = speedCeiling;
+            float steerLimitLeft = speedCeiling;
 
             // The one whitelisted allowance, shared by both modes: the side answering a slide reaches past the ceiling
             // towards the slide angle itself, in proportion to how much of the blend that slide has earned.
             if (countersteering && _slidePriority > 0f)
             {
                 float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle) * _slidePriority, VehicleData.SteeringLock);
-                if (requestedSteer > 0f) SteerLimitLeft = Math.Max(SteerLimitLeft, countersteerAllowance);
-                else SteerLimitRight = Math.Max(SteerLimitRight, countersteerAllowance);
+                if (requestedSteer > 0f) steerLimitLeft = Math.Max(steerLimitLeft, countersteerAllowance);
+                else steerLimitRight = Math.Max(steerLimitRight, countersteerAllowance);
             }
 
             float yawRate = VehicleData.YawRotationPerSecondDegrees;
@@ -1206,8 +1199,8 @@ namespace ARS
                 float turnInCeiling = Math.Min(speedCeiling * turnInShare, VehicleData.SteeringLock);
                 float speedMph = ARS.MpsToMph(fwdSpeed);
                 turnInCeiling = ManeuverRamp(speedMph, turnInCeiling);
-                if (requestedSteer > 0f) SteerLimitLeft = Math.Min(SteerLimitLeft, turnInCeiling);
-                else if (requestedSteer < 0f) SteerLimitRight = Math.Min(SteerLimitRight, turnInCeiling);
+                if (requestedSteer > 0f) steerLimitLeft = Math.Min(steerLimitLeft, turnInCeiling);
+                else if (requestedSteer < 0f) steerLimitRight = Math.Min(steerLimitRight, turnInCeiling);
             }
 
             // The damper is the car's stabiliser and the rotation leads the slide, so while its term pushes against
@@ -1216,11 +1209,11 @@ namespace ARS
             // raise for a correction and never for steer-in, which shares the side.
             if (countersteering && _damperTermDeg * yawRate < 0f)
             {
-                if (requestedSteer > 0f) SteerLimitLeft = VehicleData.SteeringLock;
-                else if (requestedSteer < 0f) SteerLimitRight = VehicleData.SteeringLock;
+                if (requestedSteer > 0f) steerLimitLeft = VehicleData.SteeringLock;
+                else if (requestedSteer < 0f) steerLimitRight = VehicleData.SteeringLock;
             }
 
-            Control.SteerDegrees = ARS.Clamp(requestedSteer, -SteerLimitRight, SteerLimitLeft);
+            Control.SteerDegrees = ARS.Clamp(requestedSteer, -steerLimitRight, steerLimitLeft);
         }
 
 
@@ -1229,7 +1222,7 @@ namespace ARS
         {
             float peak = Handling.LateralTractionCurve;
             if (peak <= 0.01f) return CountersteerSlideShare;
-            return ARS.Remap(Math.Abs(VehicleData.SlideAngle), peak * SlideBlendFullFraction, peak * CountersteerFullSlideFraction, CountersteerSlideShare, 1f, true);
+            return ARS.Remap(Math.Abs(VehicleData.SlideAngle), peak * SlideBlendFullFraction, peak, CountersteerSlideShare, 1f, true);
         }
 
 

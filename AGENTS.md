@@ -81,7 +81,7 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 
 **Moved whole to `AGENTS-STEERING.md`** — read it before touching the per-frame pipeline, the lane laws, the steering authority chain, the speed plan or the corner lifecycle. What the code owns is there; what stays here is the order and the gotchas.
 
-- **Pipeline order** (`Racer.cs`): track position, then target speed, then steering, then the steer limits, then the pedals, then the steer slew.
+- **Pipeline order** (`Racer.cs`): track position, then target speed, then steering, then the pedal reason caps and the pedals, then the recovery, then the **steer limits**, then the slew — the limiter closes the steering last on purpose so no writer above it escapes. Two readers therefore see the previous core tick's post-slew steer: the overspeed arm gate (`UpdateThrottleReasonCaps`) and `SteerLimitedSpeed` inside `ComputeTargetSpeed`.
 - **Track convention**: node counts are treated as metres, circuit lookaheads use modulo and point-to-point clamps, and the test circuit measures about 1 m per node.
 
 ## Grid car selection (pace-matched)
@@ -106,7 +106,6 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 ## Durable gotchas — do not "fix" these
 Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pipeline"; `AGENTS-TECHNOTES.md` → "Durable gotchas — code, helpers, rendering, settings". One hazard per line.
 - Pursuit steer saturates at the clamp — there is no separate "recovery law".
-- `if (1 == 2) return;` is an INVERTED gate that disables nothing.
 - A descending-output `Remap` with `clamp` is inverted; NaN compares below everything.
 - NaN discipline: `Clamp(NaN)` returns the min bound = full lock; never seed a getter with a sentinel.
 - A null-check on a freshly `new`-ed object is dead code.

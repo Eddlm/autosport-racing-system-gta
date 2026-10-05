@@ -1,4 +1,4 @@
-# ARS — test plan: build 469
+# ARS — test plan: build 470
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
@@ -7,7 +7,7 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
 (`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the engine
 restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and undriven. Everything else
-below is undriven. The deployed DLL is dev build **469**; a build + reload is enough (SHVDN reloads the scripts
+below is undriven. The deployed DLL is dev build **470**; a build + reload is enough (SHVDN reloads the scripts
 live, no game restart).
 
 | commit | what it is | section |
@@ -325,8 +325,9 @@ Watch:
    side can reach the slide angle plus a degree, so the counterbalancer must never be clipped.
 3. **Yaw-Governed, corner entry** — dropping the knee took away the one place that gave a degree back. Watch
    whether cars now understeer where the knee used to help.
-4. **Either mode** — the switch persists in the menu settings, so confirm the mode you think you are driving is the
-   one the menu shows.
+4. **Either mode** — the switch is written to the menu settings but was **not declared in `SettingsRepair`, so it was
+   pruned on every load** and the mode silently fell back to Yaw-Governed across a script reload. Declared now; until
+   you have reloaded once with this build, keep each A/B run inside one session and check the menu before judging.
 5. **The bypass is countersteer-only now** — it needs both the damper term and the command to oppose the rotation.
    So a limiter that reads as absent while countersteering is working as intended, and steer-in should be capped
    again. The sign test still flickers near zero yaw in a steady corner; if the limiter reads as intermittently
@@ -334,7 +335,8 @@ Watch:
 6. **A snap in Slide-Governed** — the thing the bypass is meant to buy: the car should now catch an over-rotation
    whose body slip is still too small to open the slide-governed ceiling. If it still spins, the bypass is not the
    missing authority and the target, not the limit, is what is short.
-7. **Inside the band the modes do not differ** — from 5 to 30 mph the limit is the ramp's value whichever governor
-   is set, so the two only diverge above 30 mph. Judge the A/B there.
+7. **Inside the band the modes *do* differ** — the ramp is applied to a different input in each mode, so they part
+   company throughout it (about 18.8° against 23.5° at 20 mph, 10.9° against 18.0° at 25) and meet only at or below
+   5 mph. An earlier note here claimed they were identical; it was wrong.
 8. **Reverse** — a reversing car should hold full lock in both modes. If a recovery reverse still reads as steering
    straight, the ramp is not the reason.

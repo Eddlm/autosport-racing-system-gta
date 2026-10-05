@@ -1056,7 +1056,7 @@ namespace ARS
             aiMenu.Add(noCollisionItem);
 
             string[] steerKDOptions = { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" };
-            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds against zero yaw. Lower is crisper; higher opposes rotation more strongly.", steerKDOptions);
+            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds, applied to the excess over the yaw the aim point requires. Lower is crisper; higher opposes rotation more strongly.", steerKDOptions);
             steerKDItem.ItemChanged += (sender, args) =>
             {
                 SteerDampingGain = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1067,7 +1067,7 @@ namespace ARS
             HookListTextPicker(steerKDItem);
 
             string[] steerLimitModeOptions = { "Yaw-Governed", "Slide-Governed" };
-            NativeListItem<string> steerLimitModeItem = new NativeListItem<string>("Steer Limit Mode", "Which quantity governs the steer ceiling. Yaw-Governed scales the cornering ceiling by yaw usage, from Turn-In Minimum to Turn-In Maximum. Slide-Governed sets the limit to the slide angle plus a degree, which is the neutral countersteer plus one degree of free play.", steerLimitModeOptions);
+            NativeListItem<string> steerLimitModeItem = new NativeListItem<string>("Steer Limit Mode", "Which quantity governs the steer ceiling. Yaw-Governed scales the cornering ceiling by yaw usage, from Turn-In Minimum to Turn-In Maximum. Slide-Governed leaves the cornering ceiling uncapped and adds half the slide angle plus half a degree on top of it, so a slide opens authority past the law rather than replacing it.", steerLimitModeOptions);
             steerLimitModeItem.ItemChanged += (sender, args) =>
             {
                 SteerLimitMode = steerLimitModeItem.Items[args.Index] == "Slide-Governed" ? SteerLimitGovernor.Slide : SteerLimitGovernor.Yaw;

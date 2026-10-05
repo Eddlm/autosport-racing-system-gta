@@ -78,5 +78,43 @@ candidates will be judged against.
 
 ## Arbitration log
 
-Rulings land here as `R1`, `R2`, … — what was decided, on which writer finding, and what was rejected. The log is
-the record of *why* the chain looks as it does after this pass, so a later session does not re-litigate it.
+Writer findings are in `STEERING-SIMPLIFICATION-FINDINGS.md`; every claim below was checked against the tree by the
+Lead before it was ruled on, and the checks that mattered are named in the ruling.
+
+- **R1 — C1, the temporary corner diagnostic: deferred to the driver.** Log-only and its own comment declares it
+  temporary, so it is zero-risk; but it exists to diagnose corner misses, which is a live question, and removing it
+  removes the tool. Keep until the driver says that work is finished.
+- **R2 — C2, C3, C4, C8: accepted and applied.** Grep confirmed no reader outside the spans named: `_rawCornerLane`
+  was write-only, both steer-limit fields were read only inside `ApplySteerLimits`, `CountersteerFullSlideFraction`
+  multiplied by exactly 1, and the `nonLaneSteerDeg` intermediate only re-ordered a sum. The sign note — LEFT bounds
+  positive commands — moved onto the locals rather than dying with the fields, because that asymmetry is deliberate.
+- **R3 — C5: rejected.** `SteerDampingEnabled` and `SteerDampingAimReference` cost two constants and are the
+  documented A/B handles for the damper; retiring them retires the experiment. Keep.
+- **R4 — C6, the geometry ceiling fallback: accepted in principle, blocked on Q7.** It is unreachable for every
+  finite state, but it is the only thing holding a ceiling when the velocity length is NaN. Do not remove it until
+  that state is declared impossible at the source or replaced by a named guard; ~30 lines can wait for that.
+- **R5 — C7, the duplicate forward-speed expression: rejected for now.** It is not behaviour-preserving on a pitched
+  car and the reverse gate reads the same expression, so it is a cleanup with a small real handling cost and no drive
+  behind it. If the pitch difference is ever suspected, that is a test, not a cleanup.
+- **R6 — C9, dropping the yaw cut: the driver's call, not this pass's.** It is the only candidate that changes what
+  the wheel may ask for, and the governor A/B is undriven. Not applied; it becomes a candidate once the A/B has a
+  verdict.
+- **R7 — Q1: the contract was wrong and the code is right.** The limiter runs after the pedals on purpose — its own
+  comment at `Racer.cs:3377` says it closes the steering last so nothing escapes it. The pipeline list in `AGENTS.md`
+  is corrected to the code's order, and the consequence is recorded there: the overspeed arm gate and
+  `SteerLimitedSpeed` read the previous tick's post-slew steer.
+- **R8 — Q2: the key is declared, not the note amended.** `SteerLimitMode` was missing from
+  `SettingsRepair.BuildSchema`, so `PruneOwnedFiles` dropped it on every load and the governor silently returned to
+  Yaw-Governed across a reload — which would have invalidated the A/B the driver is running. Declared as `Kind.Text`
+  with its two menu strings.
+- **R9 — Q3: accepted, the test-plan note was wrong.** The ramp is applied to a different input per mode, so the two
+  differ throughout the band and meet only at or below 5 mph. Corrected.
+- **R10 — Q5: accepted; the two menu descriptions are corrected** (the damper one claimed a zero reference the live
+  code does not use, the mode one described the slide as a replacement after it became an addition). The `if (1 == 2)`
+  gotcha is removed from `AGENTS.md` — grep finds no such gate in any `.cs`. The remaining anchor-drift items are
+  filed for the next memory pass rather than applied blind.
+- **R11 — Q6 is closed by R3; Q8 stays open.** Unifying the limiter's countersteer allowance with the blend's share
+  would change the allowance's never-clip guarantee, which the test plan wants kept, so they remain two laws.
+- **Q4 — deferred, not ruled.** The writer's evidence that a straight-line offset *is* corrected contradicts the
+  steering survey in two places, but the correction touches the survey's ranked items and needs its own read of the
+  lane code. Filed, not patched.
