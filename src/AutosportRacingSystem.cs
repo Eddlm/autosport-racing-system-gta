@@ -152,12 +152,6 @@ namespace ARS
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
         public static float SteerDampingGain = 0.5f;
-        public static int YawTurnInMinimumPercent = 20;
-        public static int YawTurnInMaximumPercent = 100;
-        // Which quantity governs the steer ceiling: yaw usage scales the cornering ceiling, or the slide angle sets
-        // the limit to the neutral countersteer plus a degree of free play.
-        public enum SteerLimitGovernor { Yaw, Slide }
-        public static SteerLimitGovernor SteerLimitMode = SteerLimitGovernor.Yaw;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1065,39 +1059,6 @@ namespace ARS
             steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain).ToString("0.00", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerKDItem);
             HookListTextPicker(steerKDItem);
-
-            string[] steerLimitModeOptions = { "Yaw-Governed", "Slide-Governed" };
-            NativeListItem<string> steerLimitModeItem = new NativeListItem<string>("Steer Limit Mode", "Which quantity governs the steer ceiling. Yaw-Governed scales the cornering ceiling by yaw usage, from Turn-In Minimum to Turn-In Maximum. Slide-Governed drops that yaw-usage cap and lets the slide open authority instead: the limit becomes the larger of the cornering ceiling and half the slide angle plus half a degree.", steerLimitModeOptions);
-            steerLimitModeItem.ItemChanged += (sender, args) =>
-            {
-                SteerLimitMode = steerLimitModeItem.Items[args.Index] == "Slide-Governed" ? SteerLimitGovernor.Slide : SteerLimitGovernor.Yaw;
-                SaveRacerSetting("SteerLimitMode", steerLimitModeItem.Items[args.Index]);
-            };
-            steerLimitModeItem.SelectedIndex = Math.Max(0, steerLimitModeItem.Items.IndexOf(SettingsMenuStore.Get("SteerLimitMode", SteerLimitMode == SteerLimitGovernor.Slide ? "Slide-Governed" : "Yaw-Governed")));
-            aiMenu.Add(steerLimitModeItem);
-            HookListTextPicker(steerLimitModeItem);
-
-            string[] yawTurnInOptions = { "0", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100" };
-            NativeListItem<string> yawTurnInItem = new NativeListItem<string>("Turn-In Minimum (%)", "Steer authority allowed at zero yaw usage. It scales linearly from this amount to Turn-In Maximum.", yawTurnInOptions);
-            yawTurnInItem.ItemChanged += (sender, args) =>
-            {
-                YawTurnInMinimumPercent = int.Parse(yawTurnInItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("YawTurnInMinimumPercent", yawTurnInItem.Items[args.Index]);
-            };
-            yawTurnInItem.SelectedIndex = Math.Max(0, yawTurnInItem.Items.IndexOf(SettingsMenuStore.GetInt("YawTurnInMinimumPercent", YawTurnInMinimumPercent).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(yawTurnInItem);
-            HookListTextPicker(yawTurnInItem);
-
-            string[] yawTurnInMaximumOptions = { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" };
-            NativeListItem<string> yawTurnInMaximumItem = new NativeListItem<string>("Turn-In Maximum (%)", "Maximum authority and the yaw-usage endpoint, in Yaw-Governed mode. 100% commands the outer front wheel's modelled peak-slip angle; above 100% allows extra authority up to mechanical lock.", yawTurnInMaximumOptions);
-            yawTurnInMaximumItem.ItemChanged += (sender, args) =>
-            {
-                YawTurnInMaximumPercent = int.Parse(yawTurnInMaximumItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("YawTurnInMaximumPercent", yawTurnInMaximumItem.Items[args.Index]);
-            };
-            yawTurnInMaximumItem.SelectedIndex = Math.Max(0, yawTurnInMaximumItem.Items.IndexOf(SettingsMenuStore.GetInt("YawTurnInMaximumPercent", YawTurnInMaximumPercent).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(yawTurnInMaximumItem);
-            HookListTextPicker(yawTurnInMaximumItem);
 
             string[] terrainEffectOptions = { "0", "25", "50", "75", "100", "150", "200" };
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", terrainEffectOptions);
@@ -3098,9 +3059,6 @@ namespace ARS
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
-            YawTurnInMinimumPercent = SettingsMenuStore.GetInt("YawTurnInMinimumPercent", YawTurnInMinimumPercent);
-            YawTurnInMaximumPercent = SettingsMenuStore.GetInt("YawTurnInMaximumPercent", YawTurnInMaximumPercent);
-            SteerLimitMode = SettingsMenuStore.Get("SteerLimitMode", "Yaw-Governed") == "Slide-Governed" ? SteerLimitGovernor.Slide : SteerLimitGovernor.Yaw;
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

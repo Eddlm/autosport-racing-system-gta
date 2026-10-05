@@ -59,24 +59,23 @@ time this map is quoted.
 
 **Limit — `ApplySteerLimits`**
 
-- **Ceiling** (1170-1180) — the cornering law from `ResolveSteerCeiling`: peak slip × 1.333, raised by the
-  maneuvering ramp below 30 mph. In Slide-Governed, the larger of that and half the slide plus half a degree.
-  Reverse and a standstill keep the raw lock.
-- **Countersteer allowance** (1184-1189) — a **raise** to `|slide| × weight` on the answering side.
-- **Yaw envelope** (1192-1204, Yaw-Governed only) — a **cut** of the commanded side to the yaw-usage share, which
-  the ramp then raises part of the way back.
-- **Damper bypass** (1210-1214) — a **raise** to full lock when the damper term *and* the command both oppose the
+- **Ceiling** (1079-1089) — the cornering law from `ResolveSteerCeiling`: peak slip × 1.333, raised by the
+  maneuvering ramp below 30 mph, and the larger of that and half the slide plus half a degree. Reverse and a
+  standstill keep the raw lock.
+- **Countersteer allowance** (1092-1098) — a **raise** to `|slide| × weight` on the answering side.
+- **Damper bypass** (1104-1108) — a **raise** to full lock when the damper term *and* the command both oppose the
   rotation.
-- **One clamp** (1216) closes both sides.
+- **One clamp** (1110) closes both sides.
 
 **Actuator** — `TranslateSteerToInput` (1535): one rate for both directions.
 
 **Who can only raise, who can only cut.** Raisers: the maneuvering ramp, the slide addition, the countersteer
-allowance, the damper bypass. Cutter: the yaw envelope alone. Both: the damper term, and the blend, which are the
-two places where the wheel can end up on the far side of where the command started. The base is the cornering law.
+allowance, the damper bypass. Cutters: none — the chain's only cut, the yaw envelope, was retired with C9 below. Both:
+the damper term, and the blend, which are the two places where the wheel can end up on the far side of where the
+command started. The base is the cornering law.
 
-That asymmetry — four raisers and one cutter — is where the design questions live, and it is what the writer's
-candidates will be judged against.
+That asymmetry — four raisers and no cutter — is the shape the driver settled on: the ceiling is a law the car always
+keeps, and every other rule only ever opens more than the law allows.
 
 ## Arbitration log
 
@@ -99,9 +98,15 @@ Lead before it was ruled on, and the checks that mattered are named in the rulin
 - **R5 — C7, the duplicate forward-speed expression: rejected for now.** It is not behaviour-preserving on a pitched
   car and the reverse gate reads the same expression, so it is a cleanup with a small real handling cost and no drive
   behind it. If the pitch difference is ever suspected, that is a test, not a cleanup.
-- **R6 — C9, dropping the yaw cut: the driver's call, not this pass's.** It is the only candidate that changes what
-  the wheel may ask for, and the governor A/B is undriven. Not applied; it becomes a candidate once the A/B has a
-  verdict.
+- **R6 — C9, dropping the yaw cut: applied in build 473 on the driver's own reasoning.** The driver's objection was
+  physical and stronger than the Lead's: the cut assumes steer-in keeps raising yaw rate, so it grants authority for
+  yaw the car already has — and under understeer, where yaw is low *because* the steering is not working, it takes
+  steering away from the car that needs it. Yaw rate also cannot separate a clean turn-in from a stepped-out rear,
+  and the slide's sign can. The redundancy the driver spotted is the proof: a slide-based opening *is* the other
+  governor, so the two were one design measured two ways. Governor, both dials, the mode item, its three schema keys
+  and `YawUsagePercent` are all gone; the slide governs alone. **The known risk is recorded, not hidden:** the
+  straight-line weave only Slide-Governed showed is now universal, and if it appears at the law's authority the limit
+  is exonerated and the oscillation belongs to the loop under it.
 - **R7 — Q1: the contract was wrong and the code is right.** The limiter runs after the pedals on purpose — its own
   comment at `Racer.cs:3370` says it closes the steering last so nothing escapes it — and stronger than the findings
   file first put it, since the stuck-recovery override also writes `Control.SteerDegrees` above it. The pipeline list in `AGENTS.md`

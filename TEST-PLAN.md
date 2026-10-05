@@ -1,4 +1,4 @@
-# ARS — test plan: build 472
+# ARS — test plan: build 473
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
@@ -6,10 +6,11 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 (`cbae845`); the slew is driven — 45 read as less stable and **180 removed most of the stability problems**
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
 (`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the engine
-restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and undriven. Everything else
-below is undriven. **Build 471's state is accepted on the drive** — the simplification batch and the governor-key fix
-regress nothing — but that is a verdict on the build, not on the governor A/B, which is still unjudged. The deployed
-DLL is dev build **472**; a build + reload is enough (SHVDN reloads the scripts live, no game restart).
+restart, the damper bypass and the maneuvering ramp are new and undriven, and **build 473 collapsed the steer governor
+to the slide**, which is a behaviour change nobody has driven: a car at turn-in now gets the full cornering law where
+the retired yaw cut allowed it about a fifth of that. Build 471's state was accepted on the drive — the simplification
+batch and the governor-key fix regressed nothing. The deployed DLL is dev build **473**; a build + reload is enough
+(SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
@@ -285,58 +286,43 @@ such a cap fell to zero with the slide and took the rate feedback off a straight
 action, and that cost has not shown up yet — watch a long straight for a weave or a limit cycle before calling it
 settled for good.
 
-## Steer limit governor — A/B (not driven)
+## Steer ceiling — one governor (not driven)
 
-The limiter now takes its governing quantity from **Steer Limit Mode** in the Settings menu, a two-item list. The
-slip-balance knee (a degree past the applied command, capped by the ceiling) is **removed from both**: it was a
-misreading of the intended "slide angle plus one degree", which belongs in the slide-governed limit.
+The limiter has **one** governing quantity now: the slide. The yaw-usage governor, both Turn-In dials, the Steer Limit
+Mode item and the mode switch are **gone**, because the two governors were answering the same question — *is this car
+already committed to a rotation?* — one by proxying through yaw rate and the other by measuring the slide directly.
+The proxy lost on its own evidence: the yaw cut granted authority for yaw the car already had, so under understeer,
+where yaw is low *because* the steering is not working, it took steering away from the car that needed it most. Yaw
+rate also cannot tell "turning in nicely" from "the rear has stepped out", and slide angle with its sign can.
 
-- **Yaw-Governed** (default, the previous behaviour minus the knee): the cornering ceiling from the at-speed peak
-  slip, scaled by yaw usage from Turn-In Minimum to Turn-In Maximum, plus the countersteer allowance (slide angle
-  times blend weight) on the answering side.
-- **Slide-Governed**: the cornering law stands **and the slide adds to it** — the ceiling is the larger of the two.
-  No yaw turn-in share. It was a *replacement* until `467`, which put the ceiling at one degree above 30 mph and left
-  cars unable to steer in or rejoin; as an addition a car keeps the full cornering law and a slide only ever opens
-  more. The addition was **halved in `468`** to half the slide angle plus half a degree, which makes it bind only
-  past a **~20° slide above 30 mph** — a spin rather than a corner — so a test of its effect should expect little.
-- **Driven in Slide-Governed at `467`**: off-track rejoin at speed, corner entry above 35 mph and the
-  stopped-and-perpendicular rotation all pass; the slide addition in a corner reads as working but is hard to tell
-  apart from over-rotation countersteer; and there is **mild straight-line weaving that Yaw-Governed does not show**,
-  which the halving cannot address because the addition never binds on a straight.
-- The **addition versus replacement** distinction is the whole A/B: Yaw-Governed *caps* steer-in by yaw usage, while
-  Slide-Governed never caps it and adds as the slide grows. The curves are plotted in
-  `docs/steer-limit-modes.png`, drawn by `docs/steer-limit-modes.py`.
+The parts, unchanged:
 
-The answering side is now **one shared path in both modes**: the countersteer allowance (slide angle times blend
-weight) **and a damper bypass**. When the damper's term pushes *against* the rotation **and** the command does too,
-that side is raised to full lock — the rotation leads the body slip, so a snap is answered before the slide-governed
-ceiling can see it. The command half of that test is load-bearing: without it the raise landed on steer-in, which
-shares the side with the correction. The mode switch therefore moves only steer-in authority.
+- the **cornering ceiling** from the at-speed peak slip, with the geometry fallback when the live peak reads unusable;
+- the **maneuvering ramp** under it — a raise only, easing up to the car's own lock at 5 mph and below;
+- the **slide adds** to the cornering law rather than replacing it, so a car always keeps the full cornering law and a
+  slide only ever opens more than it has;
+- the **countersteer allowance** on the answering side, in proportion to the blend weight the slide has earned;
+- the **damper bypass** — raised to full lock when the damper term *and* the command both oppose the rotation.
 
-A **maneuvering ramp** sits under both modes: the limit eases from whatever the mode computed at 30 mph up to the
-car's own lock at 5 mph and below, and it is a raise only, so neither the mode nor the yaw share can cut it back.
-**Reverse is full lock**, and so is standing still, since the ramp is keyed to forward speed — backing up is placing
-the car, not cornering.
+Reverse and standing still keep full lock, since the ramp is keyed to forward speed.
 
 Watch:
 
-1. **Slide-Governed, corner entry** — the cornering law stands untouched, so the car should steer in exactly as
-   Yaw-Governed does at full yaw share. If it still ploughs straight on, the limit is not the reason.
-2. **Slide-Governed, catching a slide** — a slide past the cornering law opens extra authority, and the answering
-   side can reach the slide angle plus a degree, so the counterbalancer must never be clipped.
-3. **Yaw-Governed, corner entry** — dropping the knee took away the one place that gave a degree back. Watch
-   whether cars now understeer where the knee used to help.
-4. **Either mode** — the switch is now declared in `SettingsRepair`, so it survives a reload; before this build it was
-   pruned on every load and the mode silently fell back to Yaw-Governed. Just confirm the menu shows the mode you mean.
-5. **The bypass is countersteer-only now** — it needs both the damper term and the command to oppose the rotation.
-   So a limiter that reads as absent while countersteering is working as intended, and steer-in should be capped
-   again. The sign test still flickers near zero yaw in a steady corner; if the limiter reads as intermittently
-   absent there, the tightenings are the allowance's own slide gate or a magnitude floor on the damper term.
-6. **A snap in Slide-Governed** — the thing the bypass is meant to buy: the car should now catch an over-rotation
-   whose body slip is still too small to open the slide-governed ceiling. If it still spins, the bypass is not the
-   missing authority and the target, not the limit, is what is short.
-7. **Inside the band the modes *do* differ** — the ramp is applied to a different input in each mode, so they part
-   company throughout it (about 18.8° against 23.5° at 20 mph, 10.9° against 18.0° at 25) and meet only at or below
-   5 mph. An earlier note here claimed they were identical; it was wrong.
-8. **Reverse** — a reversing car should hold full lock in both modes. If a recovery reverse still reads as steering
-   straight, the ramp is not the reason.
+1. **Straight line — this is the point of the drive.** The weave that only Slide-Governed showed is now universal,
+   because nothing holds the command near zero any more. If it appears at the law's authority, the limit is
+   exonerated and the oscillation belongs to the loop under it — the pursuit and the damper — which is where the fix
+   would then go.
+2. **Corner entry — the behaviour change.** A not-yet-rotating car now gets the full cornering law at turn-in, where
+   the yaw cut allowed it about a fifth of that. Watch for over-rotation on entry rather than understeer: this is what
+   buying the authority costs, and it is the one thing to judge.
+3. **Catching a slide** — a slide past the cornering law opens extra authority, and the answering side can reach the
+   slide angle itself, so the counterbalancer must never be clipped.
+4. **The bypass** — it needs both the damper term and the command to oppose the rotation, so a limiter that reads as
+   absent while countersteering is working as intended.
+5. **The retired settings** — Steer Limit Mode, Turn-In Minimum and Turn-In Maximum are gone from the menu, and
+   `SettingsRepair` prunes them from the ini on the next load. That pruning is the intended behaviour this time, not
+   the bug it was when the governor key was undeclared.
+6. **Reverse** — a reversing car holds full lock. If a recovery reverse still reads as steering straight, the ramp is
+   not the reason.
+
+The law is plotted in `docs/steer-ceiling.png`, drawn by `docs/steer-ceiling.py`.

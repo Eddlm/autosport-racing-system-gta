@@ -1033,22 +1033,6 @@ namespace ARS
             return ARS.Clamp(peakSlipDeg * PeakSlipOuterWheelCommandShare, 0f, VehicleData.SteeringLock);
         }
 
-        // Maximum sustained yaw rate the car can hold at the current speed: the slip ceiling's radius from the
-        // Ackermann relation, then v / R. Above ~100% the car is over-rotating — the slide blend or the limiter
-        // owns what happens next. Returns 0 when no grip data is available yet (early init).
-        float YawUsagePercent()
-        {
-            if (TRLateralAtSpeed <= 0.01f) return 0f;
-            float fwdSpeed = ARS.GetForwardSpeed(Car);
-            if (fwdSpeed <= 0.1f) return 0f;
-            float steerLockRad = PeakSlipCeilingAt(TRLateralAtSpeed) * (float)Math.PI / 180f;
-            if (steerLockRad <= 0.001f) return 0f;
-            float turnRadius = VehicleData.WheelBase / (float)Math.Tan(steerLockRad);
-            float maxYawRadPerSec = fwdSpeed / Math.Max(turnRadius, 1f);
-            float maxYawDegPerSec = maxYawRadPerSec * 180f / (float)Math.PI;
-            return Math.Abs(VehicleData.YawRotationPerSecondDegrees) / maxYawDegPerSec * 100f;
-        }
-
         // The ceiling in force at this speed: the peak-slip cap, with the corner geometry as a fallback only when the
         // live peak reads unusable. Eased back towards full lock below the ramp's end speed, where it meets what
         // the car gets at that end speed anyway.
@@ -1096,21 +1080,20 @@ namespace ARS
             // side rather than the clamp being skipped — except for the stabiliser below. Reverse is always the full
             // lock: backing up is placing the car, and the geometry law inverts below −13 m/s anyway.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
-            bool slideGoverned = ARS.SteerLimitMode == ARS.SteerLimitGovernor.Slide;
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f)
             {
                 speedCeiling = ResolveSteerCeiling(fwdSpeed);
                 // The slide adds authority, it does not replace the cornering law: the ceiling is the larger of the
                 // two, so a car can always steer in and rejoin, and a slide only ever opens more than it has.
-                if (slideGoverned) speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) * SlideLimitSlideShare + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
+                speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) * SlideLimitSlideShare + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
             }
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
 
-            // The one whitelisted allowance, shared by both modes: the side answering a slide reaches past the ceiling
-            // towards the slide angle itself, in proportion to how much of the blend that slide has earned.
+            // The one whitelisted allowance: the side answering a slide reaches past the ceiling towards the slide
+            // angle itself, in proportion to how much of the blend that slide has earned.
             if (countersteering && _slidePriority > 0f)
             {
                 float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle) * _slidePriority, VehicleData.SteeringLock);
@@ -1119,19 +1102,6 @@ namespace ARS
             }
 
             float yawRate = VehicleData.YawRotationPerSecondDegrees;
-            if (!slideGoverned && fwdSpeed > 0f && requestedSteer * yawRate >= 0f)
-            {
-                float yawUsage = YawUsagePercent() * 0.01f;
-                if (float.IsNaN(yawUsage) || float.IsInfinity(yawUsage)) yawUsage = 0f;
-                float maximumShare = ARS.YawTurnInMaximumPercent * 0.01f;
-                float minimumShare = Math.Min(ARS.YawTurnInMinimumPercent * 0.01f, maximumShare);
-                float turnInShare = ARS.Remap(yawUsage, 0f, maximumShare, minimumShare, maximumShare, true);
-                float turnInCeiling = Math.Min(speedCeiling * turnInShare, VehicleData.SteeringLock);
-                float speedMph = ARS.MpsToMph(fwdSpeed);
-                turnInCeiling = ManeuverRamp(speedMph, turnInCeiling);
-                if (requestedSteer > 0f) steerLimitLeft = Math.Min(steerLimitLeft, turnInCeiling);
-                else if (requestedSteer < 0f) steerLimitRight = Math.Min(steerLimitRight, turnInCeiling);
-            }
 
             // The damper is the car's stabiliser and the rotation leads the slide, so while its term pushes against
             // the rotation it is answering a slide the ceiling cannot see yet: that side is not capped at all, after
@@ -2429,12 +2399,10 @@ namespace ARS
             float yaw = VehicleData.YawRotationPerSecondDegrees;
             float yawError = yaw - _debugYawTargetPerSecond;
             float damper = _damperTermDeg;
-            float usagePct = YawUsagePercent();
             Color red = Color.FromArgb(255, 230, 30, 30);
             ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " / TARGET " + _debugYawTargetPerSecond.ToString("0.0") + " deg/s", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
             ARS.DrawText(new Vector2(0.5f, 0.110f), "ERROR " + yawError.ToString("0.0") + " x GAIN " + _debugDamperGainSeconds.ToString("0.00") + " s = STEER " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-            ARS.DrawText(new Vector2(0.5f, 0.135f), "YAW USAGE " + usagePct.ToString("0") + "%", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-            ARS.DrawText(new Vector2(0.5f, 0.160f), "DAMPER SCALE x" + _debugDamperSpeedScale.ToString("0.00"), red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
+            ARS.DrawText(new Vector2(0.5f, 0.135f), "DAMPER SCALE x" + _debugDamperSpeedScale.ToString("0.00"), red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
         }
 
         public void RunTimedCore()
