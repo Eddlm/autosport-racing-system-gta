@@ -82,6 +82,11 @@ game folder carries the init banner and lap lines.
 
 ## 7. DNF parking — option OFF (shoulder)
 
+**Driver-observed on the water case:** falling in the water did **not** DNF, and the car stayed immovable after the
+teleport. Water does not zero `EngineHealth`, it floods the engine, and nothing in ARS restarts it — so the old
+predicate (`EngineHealth <= 0`) never saw it. The check now also parks a car that has **stalled in water** —
+`IS_ENTITY_IN_WATER` and under 2 mph for 2.5 s (`Racer.cs`), so a car fording a stream is untouched.
+
 18. Kill an engine (water). **Expect:** the car is parked on the shoulder, slot 0 at the start/finish line, the next
     5 m further along, alternating sides, 1 m past the edge, heading along the route, handbrake held.
 19. Confirm it never arms recovery again and does not move.

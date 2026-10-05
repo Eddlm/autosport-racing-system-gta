@@ -106,6 +106,7 @@ namespace ARS
         int _stuckRecoveryCooldownEndTime = 0;
         Vector3 _stuckMoveSamplePosition = Vector3.Zero;
         int _stuckMoveSampleTime = 0;
+        int _stalledInWaterSince = 0;
         // Backing off is a short, straight phase. Drive is not a pedal override: it is a speed intention, so the plan,
         // the off-track cap and the lane law all keep owning the car while it rejoins.
         const int StuckReverseMs = 1000;
@@ -121,6 +122,10 @@ namespace ARS
         const int DNFSlotSpacingMeters = 5;
         const float DNFSlotOffsetMeters = 1f;
         const float DNFUnderTrackMeters = 5f;
+        // A car stalled in water cannot rejoin — the engine is flooded and a teleport does not restart it — so it is
+        // parked like a dead engine. Only the stalled car counts: one fording a stream is still moving.
+        const int StalledInWaterDNFMs = 2500;
+        const float StalledInWaterMaxMph = 2f;
 
 
         public float RouteLookAheadSeconds = 0.5f;
@@ -1298,6 +1303,7 @@ namespace ARS
             _stuckExitSince = 0;
             _stuckRecoveryCooldownEndTime = 0;
             _stuckMoveSampleTime = 0;
+            _stalledInWaterSince = 0;
             Control.LastAppliedSteerDegrees = 0f;
             _lastSteerRequestDeg = 0f;
             _demandSettledHeld = false;
@@ -3428,7 +3434,8 @@ namespace ARS
  
  
         // A car whose engine is gone cannot rejoin whatever the recovery does, so it is taken out of the race and
-        // parked instead of being teleported at forever.
+        // parked instead of being teleported at forever. Water does not kill the engine, it floods it, so a car that
+        // has stalled in it is added to the same treatment.
         void UpdateDNFCheck()
         {
             if (IsDNF)
@@ -3436,8 +3443,20 @@ namespace ARS
                 Control.HandBrakeTime = Game.GameTime + 1000;
                 return;
             }
-            if (BaseBehavior != RacerBaseBehavior.Race || Car.EngineHealth > 0f) return;
-            ParkAtDNFSlot();
+            if (BaseBehavior != RacerBaseBehavior.Race) return;
+
+            if (Car.EngineHealth <= 0f)
+            {
+                ParkAtDNFSlot();
+                return;
+            }
+
+            if (Function.Call<bool>(Hash.IS_ENTITY_IN_WATER, Car) && ARS.MpsToMph(Car.Velocity.Length()) < StalledInWaterMaxMph)
+            {
+                if (_stalledInWaterSince == 0) _stalledInWaterSince = Game.GameTime;
+                else if (Game.GameTime - _stalledInWaterSince >= StalledInWaterDNFMs) ParkAtDNFSlot();
+            }
+            else _stalledInWaterSince = 0;
         }
 
         void ParkAtDNFSlot()
