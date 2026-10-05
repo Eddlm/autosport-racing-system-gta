@@ -1220,8 +1220,9 @@ namespace ARS
 
             // The damper is the car's stabiliser and the rotation leads the slide, so while its term pushes against
             // the rotation it is answering a slide the ceiling cannot see yet: that side is not capped at all, after
-            // the envelope has had its say. The limit is the only thing the mode switch moves; this path is shared.
-            if (_damperTermDeg * yawRate < 0f)
+            // the envelope has had its say. Both the term and the command must be against the rotation, so this is a
+            // raise for a correction and never for steer-in, which shares the side.
+            if (countersteering && _damperTermDeg * yawRate < 0f)
             {
                 if (requestedSteer > 0f) SteerLimitLeft = VehicleData.SteeringLock;
                 else if (requestedSteer < 0f) SteerLimitRight = VehicleData.SteeringLock;
