@@ -1,7 +1,7 @@
 # ARS — test plan: build 477
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
-driver-verified on build 450 (`666c89b`), and the rest of the recovery has since been driver-verified too — trigger B, the exit back into normal racing, the start-line arm delay and the flooded-engine rescue — and the drive phase has since been rebuilt again and is **undriven** (coast instead of brake, nearest-edge aim, exit on any part of the car on track; `b50dfef`, section at the end); No Collision's one-shot mode and its per-tick all-pairs form were both
+driver-verified on build 450 (`666c89b`), and the rest of the recovery has since been driver-verified too — trigger B, the exit back into normal racing, the start-line arm delay and the flooded-engine rescue — and the drive phase has since been rebuilt again and is **undriven** (coast instead of brake, nearest-edge aim, exit on any part of the car on track; `b50dfef`, section at the end). The maneuver cards now decide on the fast core pass and are undriven too (`601313c`, last section). No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
 (`cbae845`); the slew is driven — 45 read as less stable and **180 removed most of the stability problems**
 (`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
@@ -339,3 +339,13 @@ The Drive phase no longer forces its speed: the intention is the plan's, and a t
 3. **The exit** — recovery ends as soon as any part of the car is back on the track and it has been rolling forward over 4 mph for 0.5 s, which can now happen while its centre is still outside the bound. Normal racing must resume at once.
 4. **Stuck on the surface (trigger A)** — reverse out of a wall while still on the track: the car must **not** steer at the edge (the edge aim is gated on being off track) and must return to the plan's speed rather than being held at the drive speed.
 5. **The cap's floor** — below the drive speed the pedal is unrestricted, so a car in a ditch can still climb back out under power.
+
+## Cards on the fast core pass (built `601313c`, dev build 483, not driven)
+
+The four tactical cards — nitro, defend, divebomb, yield — and the maneuver cleanups used to be decided once a second. They now decide on the fast core pass, so a window that opens and closes between two slow beats is no longer missed. What they decide on: track state and perception from that same core tick, control state one core tick old, and rival records from the half-second publish — so the rival side is up to half a second old, which is the deliberate trade. DefendLane is the card where that can flip a live-versus-snapshot arrival comparison, and moving the publish itself onto the core pass is the next step. The crowd card and the rival scan kept their slow beats, and the card rate is not a fixed number: the pass serves six cars a frame, so a car's card rate falls as the grid grows.
+
+1. **Something gets played** — with a full grid in a competitive pack, at least one AI should take a card it would previously have missed: a defend or a dive at an entrance it used to arrive at passively. Watch the debug focus car, not the player's.
+2. **Nothing doubles** — nitro is still once per lap per car; a car must not burn twice inside one lap.
+3. **No stutter** — a full grid must not cost frames. The moved work is a few loops over three rivals per car per core tick, so a hitch at the start or in a pack is the thing to suspect.
+4. **The dive's braking is steady through a corner** — the bonus used to be redrawn at every evaluation on a circuit, so jittery dive braking was the symptom; it should now be one draw per dive.
+5. **The crowd card is unchanged** — ChillOut should still come and go on its slow beat rather than flicker.
