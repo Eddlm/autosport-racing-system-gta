@@ -1596,6 +1596,7 @@ namespace ARS
             _raceTimedFinishMs = 0;
 
             Angles.Clear();
+            TerrainGripMultipliers.Clear();
             Bumps.Clear();
             RouteNodes.Clear();
             NodeHalfWidths.Clear();
@@ -2307,24 +2308,27 @@ namespace ARS
             _countdown = _maxCountdown;
 
         }
-        public static int GetSurfaceHash(Vector3 start, Vector3 end)
+        // A shape test resolves in two steps, and only `didhit` says whether the ray found anything: the status is zero
+        // while the test is still unresolved, and the material hash of a miss is junk.
+        public static bool TryGetSurfaceHash(Vector3 start, Vector3 end, Entity ignore, out int materialId, out Vector3 normal)
         {
-            Vector3 pos = start;
-            Vector3 endpos = end;
+            materialId = 0;
+            normal = Vector3.Zero;
 
-            int shape = Function.Call<int>(Hash._0x28579D1B8F8AAC80, pos.X, pos.Y, pos.Z, endpos.X, endpos.Y, endpos.Z, 0.3f, (int)IntersectOptions.Map, Game.Player.Character, 7);
+            int shape = Function.Call<int>(Hash._0x28579D1B8F8AAC80, start.X, start.Y, start.Z, end.X, end.Y, end.Z, 0.3f, (int)IntersectOptions.Map, ignore.Handle, 7);
 
             OutputArgument didhit = new OutputArgument();
             OutputArgument hitpos = new OutputArgument();
             OutputArgument snormal = new OutputArgument();
             OutputArgument materialhash = new OutputArgument();
-
             OutputArgument entity = new OutputArgument();
 
-            Function.Call(Hash._0x65287525D951F6BE, shape, didhit, hitpos, snormal, materialhash, entity);
+            int status = Function.Call<int>(Hash._0x65287525D951F6BE, shape, didhit, hitpos, snormal, materialhash, entity);
+            if (status == 0 || !didhit.GetResult<bool>()) return false;
 
-
-            return materialhash.GetResult<int>();
+            materialId = materialhash.GetResult<int>();
+            normal = snormal.GetResult<Vector3>();
+            return materialId != 0;
         }
         
 
