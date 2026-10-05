@@ -312,6 +312,15 @@ On a constant-radius section that premise weakens. The apex is still the region'
 
 The likely mitigating factor: `SaveRoute` rounds coordinates to two decimals and that hits a short chord hard, so the noise floor on a created track may be what keeps the walk honest. **Unverified either way** — nobody has driven a creator-made track under the span rule, so watch created tracks specifically. If a span ever collapses there, the lever is the stability tolerance and the window beside it (`TrackLoader.cs:435-436`), not the shape of the rule.
 
+## Route read baselines — one ladder, and it belongs in metres
+
+**The proposal (driver's): fix a smoothing standard — three nodes, four nodes — instead of letting each read choose its own.** The instinct is right: the reads carry an unstated ladder today (`Direction` ±2, `Elevation` ±3, `ExactRadius` ±2, `PreciseCurveRadius` ±4, `GeneralCurveRadius` ±10, the crest scan ±6, and the live crest grip geometry-scaled) with no convention saying which rung a new read should take.
+
+**A single number would be wrong, and the reason is the tension already recorded for the crest**: localisation wants a short baseline, because a long one shifts where a feature starts, while amplitude and severity want a long one, because on rounded coordinates a short read is mostly noise. The standard is therefore **two named rungs with a stated purpose** — a short one for location, a long one for strength — plus the rule that a new read reuses a rung and says which, rather than inventing a third.
+
+**And the rungs cannot be counted in nodes**, because a node is not a metre: measured spacing runs 0.88–2.39 m/node, so ±3 nodes is about 2.6 m on one track and 7.2 m on another, and the same standard would be a different filter per track. The rungs belong in metres, converted with the track's own spacing — the same conclusion the crest window reached.
+
+**Where it lives**: per the code-first filter the convention belongs in the code — a small named set of baselines and the converter, so a read cannot silently invent one — while memory keeps only the why (two rungs, in metres, and which purpose takes which). Awaiting the driver's call on the metre-based form.
 ## Crest move gating — the objective is set, the constants wait on a measurement
 
 **The objective (driver's words): the corner must account for the crest so the cars know to brake earlier, because on arrival they may be in the air.** That is what the gate has to serve, and it says what the move is for: the braking plan starts up on the crest top so the car spends its loaded distance braking before the unload takes the wheels — an airborne car has no brake to apply.
