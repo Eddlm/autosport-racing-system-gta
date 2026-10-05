@@ -28,6 +28,7 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 - **C# 7.3 ceiling** (no `LangVersion` override): no switch expressions, records, init-only properties, top-level statements or `??=`.
 - **Comments are a failure signal**: if a line needs one, the code is not clear enough — rename, extract or restructure instead, and aim for none. The only comments that earn their place are an engine or leaked-source citation, a deliberate asymmetry or floor a reader would otherwise "fix", and a unit or sentinel that the name cannot carry. **Never restate the next line.**
 - **Corrections require sources** — correct the user only when confident and after checking the code; if uncertain, say so.
+- **Compute once, publish, consume under an explicit staleness budget** — a car reads the value another car or subsystem published rather than re-deriving it from that car's raw pose, and a consumer that cannot tolerate the published freshness states its own deadline instead of assuming. The route-frame hit test is the shape (`DataStructures.cs:200`); where the codebase still violates this is audited in `PLAN-RATE-PRECISION.md`.
 - **FiveM reference tree hazard** (`S:\FiveM\server-data\resources\`): `[gameplay]\chat\` hides a huge `node_modules`, so any `-Recurse` walk from `resources\` times out. Target `[eddlm]\[ars-fivem]` directly.
 
 ## Workflow

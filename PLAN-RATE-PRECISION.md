@@ -255,6 +255,78 @@ leg, a bridge from the road beneath — which is correct for racing and a real l
 removes the known route-frame residual by construction, since that residual is a world-space scan putting
 the car in the list. And it changes which rival each maneuver targets, so it needs its own drive.
 
+## Noted, not scheduled — a central perception manager
+
+**Deferred, its own session, and it needs the measurement first**: its per-frame cost scales with the
+grid, so stage 0 gates it. It **contains** the ranking migration above, which stays filed as the cheap
+precursor.
+
+The split is by **time constant**, not by convenience:
+
+- **The assignment is shared and slow.** Which three rivals are nearest a car changes over seconds, not
+  ticks. One manager owns it: read every racer's position **once per frame** into a snapshot, then give
+  each car its three nearest, ordered by route distance.
+- **The details stay per car and fast.** `RouteGapAhead`, `TimeToReach`, the corridor and relative position
+  are referenced to that car's own frame and heading and change every tick, so they stay in the car's own
+  core tick, computed over the three chosen rivals only.
+
+**The snapshot is the load-bearing part.** Assigning one car needs every other car's position, so
+round-robining the *reads* would cost N per car and be worse than today. Take the snapshot once and spread
+the *work* — the assignment is cheap managed arithmetic over a shared snapshot, and the round-robin still
+bounds it.
+
+What the seam buys:
+
+- Every car's view comes from **one instant**, so the index-dependent perception skew disappears — no car
+  is systematically the better-informed one in a fight.
+- Selection falls from a native position read per candidate per scan to **one read per car per frame**.
+- A's route gap to B and B's to A are one signed number rather than two computations.
+- The three persistent reused `Rival` instances per car — the stale-field bug class met earlier — go away,
+  because neighbour state is rebuilt from the snapshot instead of carried.
+- The ordering becomes central, so the ranking migration falls out of it rather than being a separate
+  per-car change.
+
+What it does **not** dodge: perception at frame rate means per-frame work that scales with the grid, which
+is the thing the round-robin was built to avoid. It usually lowers total work, because it removes the O(N²)
+native reads, but it raises the per-frame floor — which is why the number comes first.
+
+**Much of the self-state reuse this implies already exists**, and it is worth knowing how much: `OccupiedLane`
+is the rival's own `DeviationFromCenter` (`DataStructures.cs:200`), `CombinedSize` is built from both cars'
+own cached dimensions (`:197-198`), the route gap is the rival's own `CumulativeDistance` and the closure is
+its own `AlongTrackSpeed`. What is *not* reused is the raw pose — the relative-offset helper takes both cars
+(`:192`) and the rival's position and velocity are read directly (`:190`, `:178`). Those are relations no car
+can self-report, but they can come from the shared snapshot instead of a per-pair call, which makes this the
+same work as the assignment above.
+
+**The principle all of it converges on**: compute a value once, publish it, and let consumers take it under an
+explicit staleness budget — rather than each consumer re-deriving it from raw inputs whose freshness nobody
+tracks. The in-file practice already exists within one `Rival.Update` (`DataStructures.cs:175-176`); the
+extension is across cars.
+
+### A cheap precursor, implementable now — tiered rival details
+
+The detail refresh is uniform today: one 500 ms timer per car updates all three rivals (`Racer.cs:3354`).
+It should be tiered by relevance, because the entries do not have the same tolerance.
+
+- **The nearest rival is decision-critical** — it is the avoidance target and the thing the car steers
+  against. It wants the freshest data.
+- **The farthest is not** — it tolerates a second or two. The safety condition is quantifiable rather than
+  a feeling: a far rival is safe to leave for `T` while `gap > closure · T`. In racing, closure is a few
+  m/s, so a rival tens of metres away tolerates seconds.
+
+The reallocation is free rather than expensive. Today all three get 2 Hz — six rival updates per car per
+second. Holding that budget, the nearest goes to ~4 Hz while the two far ones drop to 1 Hz; pushing the far
+ones to a 2 s interval instead *lowers* the total below today's while the nearest is still twice as fresh.
+
+The clean form is not a fixed ladder: **derive each rival's interval from its gap** — it is due when it
+could reach the near zone, `(gap − nearThreshold) / maxClosure`, clamped. Then no rival can cross from far
+to near without a fresh update, the staleness hazard is removed by construction, and there is nothing to
+tune.
+
+This needs neither the manager, nor the measurement, nor the ranking migration: it re-cuts `UpdateRivalInfo`
+alone. It does need the consumers that read all three checked for what they assume about freshness —
+`ApplyRivalWalls` and the maneuver picks.
+
 ## Open questions — to settle before building
 
 1. **Adapt at all, or stay deterministic?** The two-batch cap is a fixed rule, so behaviour is identical
