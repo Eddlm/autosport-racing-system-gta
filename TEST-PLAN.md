@@ -1,4 +1,4 @@
-# ARS — test plan: build 475
+# ARS — test plan: build 476
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
@@ -9,7 +9,7 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 restart, the damper bypass and the maneuvering ramp are new and undriven, and **build 473 collapsed the steer governor
 to the slide**, which is a behaviour change nobody has driven: a car at turn-in now gets the full cornering law where
 the retired yaw cut allowed it about a fifth of that. Build 471's state was accepted on the drive — the simplification
-batch and the governor-key fix regressed nothing. The deployed DLL is dev build **475**; a build + reload is enough
+batch and the governor-key fix regressed nothing. The deployed DLL is dev build **476**; a build + reload is enough
 (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |

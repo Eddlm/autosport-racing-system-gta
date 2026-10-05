@@ -669,6 +669,7 @@ namespace ARS
 
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
         const float HighSpeedLaneRadiusMeters = 500f;
+        const float HighSpeedLaneChordSeconds = 1.01f;
 
         // Debug lock for the centring test: a near-centre aim offset, pinned for every racer.
         const float LaneLockTestOffsetMeters = 0.1f;
@@ -715,7 +716,7 @@ namespace ARS
         {
             int count = ARS.TrackPoints.Count;
             int fwdNode;
-            int fwdOffset = (int)(speedMps * 1.01f);
+            int fwdOffset = (int)(speedMps * HighSpeedLaneChordSeconds);
             if (ARS.IsPointToPoint)
                 fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + fwdOffset, 0, count - 1);
             else
