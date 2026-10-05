@@ -3,10 +3,11 @@
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
-(`cbae845`); the flat slew is driven and read as less stable, so it is back up to 180 and undriven; the damper's
-speed scale is capped at 1 and **driver-verified as an improvement** (`5bb94bd`); the engine restart, the steer limit
-governor, its damper bypass and the maneuvering ramp are new and undriven. Everything else below is undriven. The
-deployed DLL is dev build **465**; a build + reload is enough (SHVDN reloads the scripts live, no game restart).
+(`cbae845`); the slew is driven — 45 read as less stable and **180 removed most of the stability problems**
+(`393bfdd`, driver-verified); the damper's speed scale is capped at 1 and **driver-verified as an improvement**
+(`5bb94bd`); the engine restart, the steer limit governor, its damper bypass and the maneuvering ramp are new and
+undriven. Everything else below is undriven. The deployed DLL is dev build **465**; a build + reload is enough
+(SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
@@ -239,8 +240,9 @@ The question is whether the scan finds the lips a driver can feel, and whether t
 
 The countersteer doubling was never validated and the base rate read as instant, so both became **one rate**
 (`SteerSlewRate`) applied at `TranslateSteerToInput`. **Driven at 45: the AI was clearly less stable than before**,
-a correction arriving too slowly, so the single rate is now **180** — the countersteer figure the old doubling used,
-which is full lock in about two tenths of a second. The blend was re-cut (`Racer.cs:594`) at the same time:
+a correction arriving too slowly, and **driven at 180: most of the stability problems went away** — so the
+flattening was the defect, and the single rate is the 180 the old countersteer doubling used, full lock in about two
+tenths of a second. The blend was re-cut (`Racer.cs:594`) at the same time:
 
 - the weight ramps from zero at **0.25 × the authored peak slip** to full at **0.5 ×** it — the static
   `LateralTractionCurve`, not the speed-scaled peak, so it no longer moves with speed;
