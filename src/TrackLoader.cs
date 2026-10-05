@@ -368,6 +368,7 @@ namespace ARS
             {
                 corner.CrestNode = -1;
                 corner.CrestGs = 0f;
+                corner.CrestEntryNode = -1;
                 corner.CrestSpanNodes = 0;
 
                 int entrance = corner.StartNode;
@@ -392,6 +393,8 @@ namespace ARS
                 corner.CrestNode = run.peakNode;
                 corner.CrestGs = run.peakGs;
                 corner.CrestSpanNodes = CrestBaseWidth(run.peakNode, run.length, count);
+                int entryWalk = NodesToInflection(run.peakNode, -1, run.length, count);
+                if (TryResolveNode(run.peakNode - entryWalk, count, out int entryNode)) corner.CrestEntryNode = entryNode;
             }
 
             int crests = 0;
@@ -399,7 +402,7 @@ namespace ARS
             {
                 if (corner.CrestNode < 0) continue;
                 crests++;
-                ARS.Log(ARS.LogImportance.Info, "Crest " + crests + ": node=" + corner.CrestNode + " gs=" + corner.CrestGs.ToString("0.000") + " extent=" + corner.CrestSpanNodes + " from=" + corner.StartNode + " apex=" + corner.Node);
+                ARS.Log(ARS.LogImportance.Info, "Crest " + crests + ": node=" + corner.CrestNode + " entry=" + corner.CrestEntryNode + " gs=" + corner.CrestGs.ToString("0.000") + " extent=" + corner.CrestSpanNodes + " from=" + corner.StartNode + " apex=" + corner.Node);
             }
 
             MoveEntrancesToCrests(count);
@@ -407,7 +410,8 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Info, "Crests: " + crests + " of " + ARS.Corners.Count + " corners carry one, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s");
         }
 
-        // The entrance walks back to the crest top, bounded so it never lands inside the previous corner. The EXIT binds
+        // The entrance walks back to the crest's entry -- where the track stops being flat -- not to the unload's
+        // peak, bounded so it never lands inside the previous corner. The EXIT binds
         // rather than the apex: the previous corner's region runs to its exit, and anchoring this corner's braking plan
         // inside that region demands this apex speed while the car is still at the previous corner's curvature, which
         // over-slows that exit and samples this plan across it. ExitStep walks forward, so the exit is past the apex.
@@ -420,23 +424,24 @@ namespace ARS
             {
                 CornerPoint corner = ARS.Corners[i];
                 if (corner.CrestNode < 0) continue;
-                int move = ARS.IsPointToPoint ? corner.StartNode - corner.CrestNode : Wrap(corner.StartNode - corner.CrestNode, count);
+                int target = corner.CrestEntryNode >= 0 ? corner.CrestEntryNode : corner.CrestNode;
+                int move = ARS.IsPointToPoint ? corner.StartNode - target : Wrap(corner.StartNode - target, count);
                 CornerPoint previous = null;
                 if (i > 0) previous = ARS.Corners[i - 1];
                 else if (!ARS.IsPointToPoint) previous = ARS.Corners[ARS.Corners.Count - 1];
 
-                if (!CanMoveEntrance(corner, previous, move, count, out string skipReason))
+                if (!CanMoveEntrance(corner, previous, target, move, count, out string skipReason))
                 {
-                    ARS.Log(ARS.LogImportance.Info, "Crest move skipped: node=" + corner.CrestNode + " move=" + move + "m (" + skipReason + ")");
+                    ARS.Log(ARS.LogImportance.Info, "Crest move skipped: node=" + target + " move=" + move + "m (" + skipReason + ")");
                     continue;
                 }
 
-                corner.StartNode = corner.CrestNode;
-                corner.LengthStart = ARS.IsPointToPoint ? corner.Node - corner.CrestNode : Wrap(corner.Node - corner.CrestNode, count);
+                corner.StartNode = target;
+                corner.LengthStart = ARS.IsPointToPoint ? corner.Node - target : Wrap(corner.Node - target, count);
             }
         }
 
-        static bool CanMoveEntrance(CornerPoint corner, CornerPoint previous, int move, int count, out string skipReason)
+        static bool CanMoveEntrance(CornerPoint corner, CornerPoint previous, int targetNode, int move, int count, out string skipReason)
         {
             if (move < 1)
             {
@@ -451,7 +456,7 @@ namespace ARS
             if (previous != null)
             {
                 int toApex = ARS.IsPointToPoint ? corner.Node - previous.EndNode : Wrap(corner.Node - previous.EndNode, count);
-                int toCrest = ARS.IsPointToPoint ? corner.CrestNode - previous.EndNode : Wrap(corner.CrestNode - previous.EndNode, count);
+                int toCrest = ARS.IsPointToPoint ? targetNode - previous.EndNode : Wrap(targetNode - previous.EndNode, count);
                 if (toCrest < CrestMoveMarginNodes)
                 {
                     skipReason = "inside previous margin";

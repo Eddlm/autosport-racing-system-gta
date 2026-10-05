@@ -381,9 +381,11 @@ namespace ARS
         public bool RequiresEarlyBrake = false;
         public int RampEndNode = -1;
         // Vertical curvature Gs at the crest before this corner (negative = crest, positive = dip), measured at
-        // generation at a fixed probe speed and rescaled by (v/probe)² at read. CrestNode is -1 when there is none.
+        // generation at a fixed probe speed and rescaled by (v/probe)² at read. CrestNode is the unload's peak and
+        // CrestEntryNode the onset the car meets first; both are -1 when there is no crest.
         public float CrestGs = 0f;
         public int CrestNode = -1;
+        public int CrestEntryNode = -1;
         public int CrestSpanNodes = 0;
         // Part of a chicane: two close corners with opposite curvature signs.
         public bool IsChicane = false;
