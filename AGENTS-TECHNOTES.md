@@ -318,11 +318,12 @@ Toggles live in `Menu-Debug.ini` and the load loop walks `DebugToggles.Keys` (`A
 
 ## Durable gotchas — code, helpers, rendering, settings (moved out of the project memory, verbatim)
 
-**Trigger**: inverted gate, Remap, NaN, dead null-check, OnTick pause, positional Options enum, `DrawMarker` budget, prop `RightVector`, streaming ptfx.
+**Trigger**: inverted gate, De Morgan, negated filter, early continue, Remap, NaN, dead null-check, OnTick pause, positional Options enum, `DrawMarker` budget, prop `RightVector`, streaming ptfx.
 
 - **`if (1 == 2) return;` is an INVERTED gate — it disables nothing**, because the return only fires when the condition is true and it never is. Correct idioms are a bare `return;` or the block form; this bit the start-line flare disable (`bdd1b29`) for weeks.
 - **Remap with a descending output range + `clamp=true` is inverted** by `Clamp` when `min > max`, and NaN compares less-than-anything. Keep output clamps ascending and use a descending *input* range for a reversed map.
 - **NaN discipline**: `Clamp(NaN, -limit, +limit)` returns the min bound, i.e. instant full-lock — guard steering outputs and any clamp input that can be non-finite. Never hand a non-value sentinel to a *seeding* getter either, or it writes the sentinel into the ini.
+- **An early-continue guard is the accept filter negated, so De Morgan inverts its NaN case**: `!(A && B)` is `!A || !B`, and a NaN makes every comparison false — the filter `Distance <= 30f && Gap < 0f` drops a NaN rival, while its rewritten guard `Distance > 30f || Gap >= 0f` does not fire and passes it. Rewriting a `Where` into a loop keeps the positive accept form (`bool closes = ...; if (!closes) continue;`), which a NaN fails exactly as before and which reads better besides (`Racer.cs` card scans, `601313c`).
 - **A null-check on a freshly `new`-ed object is dead code.** Two "cannot find file" popups lived behind `if (new XmlDocument() == null)` while the real failures *throw*, so those paths have **no** error handling.
 - Synchronous setup work can pause `OnTick` and temporarily suppress per-frame debug visuals; make it incremental if that matters.
 - **`Options` enum values are positional**, so retiring a member renumbers the rest and one must never be persisted or exchanged as an int. Nothing does today, but re-check before any numeric consumer appears.

@@ -108,6 +108,7 @@ Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pi
 - Pursuit steer saturates at the clamp — there is no separate "recovery law".
 - A descending-output `Remap` with `clamp` is inverted; NaN compares below everything.
 - NaN discipline: `Clamp(NaN)` returns the min bound = full lock; never seed a getter with a sentinel.
+- An early-continue guard is the accept filter negated — De Morgan turns its NaN case into a pass; keep the positive accept form.
 - A null-check on a freshly `new`-ed object is dead code.
 - Synchronous setup pauses `OnTick` and can blank per-frame debug visuals.
 - `Handling.Downforce` reads `0x0014` — the code is right; don't restore the curve-fit.
