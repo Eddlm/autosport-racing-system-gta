@@ -141,6 +141,7 @@ One line each; **a simplest→most-complex ranking of the whole list sits at the
 - **Recovery redesign — landed untested (`0623276`)**: it reverses, drives out, and snaps; the drive is `TEST-PLAN.md` and the detail is `AGENTS-BACKLOG.md`.
 - **DNF is final death — untested (`0623276`)**: parks on the shoulder or drops under the track, hidden from detection behind its option (`Racer.cs`).
 - **Rival detection is route-frame — untested (`0623276`)**: arc gap, along-track closure, track-relative corridor (`Rival.ComputeTimeToReach`). **Residuals: a stopped car on a hairpin's opposite leg, and the off-track node rescan on a stacked deck.**
+- **The code-disagrees-with-itself pile is code work, not memory** — values that exist twice, unreachable branches and write-only fields are inventoried in `AUDIT-COMPUTE-ONCE.md`; fix them in the code rather than annotating them here.
 - **Rate and precision are planned, not built**: stages, the deferred perception manager and the route-frame ranking migration are in `PLAN-RATE-PRECISION.md`.
 - **The track creator is LIVE and driver-verified**; `SaveRoute` writes `Tracks\*.xml` and there is no update path — the rewrite path was cut in `c2ad2de`, so reviving it means restoring it from git (`AGENTS-BACKLOG.md`).
 - **`SaveRoute` rounds coordinates to 2 decimals**, which alone shifts a perfect arc's measured `PreciseCurveRadius` low; raising the precision rewrites every saved file, so decide it deliberately.
