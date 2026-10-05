@@ -19,6 +19,7 @@ A teammate's work starts as a shared task, never as a prompt alone.
 - **One writer per file.** Disjoint scopes are the only safe shape; a write-scope overlap warning is advisory, not a lock.
 - The Lead owns the merge and the final acceptance test, and arbitrates a named disagreement instead of silently picking a side — a teammate's assertion is a claim to check, not an authority.
 - A teammate may **compile** but may never call a change **verified**: the human drives, and a successful build is not evidence.
+- **Every commit goes to a teammate for review** (driver's standing instruction): after committing, put the range on the shared board as a review task and send it to the teammate with the hashes, what each commit claims, and the acceptance criteria — and a finding needs ile:line, evidence, and a note of what was verified against the code rather than inferred.
 
 ## Talking
 - `send_message` is durable — a running teammate takes it at its next step boundary, an inactive one is started or resumed by it.
