@@ -24,6 +24,7 @@ A teammate's work starts as a shared task, never as a prompt alone.
 - `send_message` is durable — a running teammate takes it at its next step boundary, an inactive one is started or resumed by it.
 - `interrupt_agent` stops a turn and keeps the pending inbox; never reach for process termination, because a teammate runs on this same harness.
 - `wait_agent` observes only changes that happen *after* the call and returns `noProgress` when nobody else is running; re-list agents and tasks after every wakeup instead of assuming.
+- **Only a teammate's closing message reaches the Lead** — its intermediate steps do not — so a design touching several questions must be restated whole in the final message, or the Lead reopens the task and asks for it; an answer split across the work arrives as one section of itself.
 
 ## Non-negotiable on this repo
 - **A teammate never commits.** The Lead stages explicit paths and writes the commit body, which carries no attribution of any kind; `Dist\` mirrors the live install, so a blanket add sweeps session data into an unrelated commit.
