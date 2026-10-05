@@ -296,8 +296,7 @@ The parts, unchanged:
 
 - the **cornering ceiling** from the at-speed peak slip, with the geometry fallback when the live peak reads unusable;
 - the **maneuvering ramp** under it — a raise only, easing up to the car's own lock at 5 mph and below;
-- the **slide adds** to the cornering law rather than replacing it, so a car always keeps the full cornering law and a
-  slide only ever opens more than it has;
+- the slide **no longer adds** to the cornering law: that raise is retired by decision after the drive that showed the base law alone reads better (`SlideLimitRaise`, section at the end), so a sliding car is held to the peak-slip ceiling unless its command is the answering one;
 - the **countersteer allowance** on the answering side, in proportion to the blend weight the slide has earned;
 - the **damper bypass** — raised to full lock when the damper term *and* the command both oppose the rotation.
 
@@ -349,12 +348,14 @@ The four tactical cards — nitro, defend, divebomb, yield — and the maneuver 
 5. **The crowd card is unchanged** — ChillOut should still come and go on its slow beat rather than flicker.
 6. **A restart is clean** — arm a card or two, then Restart Race from the menu: nothing may carry over. A divebomb armed in the race just abandoned must not brake the new race's first corners, and the new race must not start with the pressure the last one built, whose symptom is cars refusing to yield through the opening laps.
 
-## The slide's ceiling raise switched off (dev build 487, not driven)
+## The slide's ceiling raise — retired by decision (dev build 487, driver-verified)
 
-One raise in the limiter is off behind a constant in `Racer.cs` (`SlideLimitRaise`): the ceiling no longer takes the larger of the cornering law and half the slide angle plus a half degree of free play, so a sliding car is held to the tyre's peak slip at its speed rather than having the ceiling loosened for every command. Everything else in the function is in force — the base ceiling with its geometry fallback and low-speed ramp, the countersteer allowance on the answering side, and the damper bypass to full lock. So the answering side still reaches past the ceiling; what is gone is the general loosening the slide used to grant both sides.
+The limiter used to keep the larger of the cornering law and half the slide angle plus a half degree of free play as its ceiling. That raise was driven with the answering side left on, and the base law alone read better, so it stays off behind `SlideLimitRaise` in `Racer.cs` and the decision is a keeper rather than an experiment. Everything else in the function is in force — the base ceiling with its geometry fallback and low-speed ramp, the countersteer allowance on the answering side, and the damper bypass to full lock — so a driver answering a rotation still reaches past the ceiling; what is gone is the general loosening the slide granted both sides. The raise, its two constants and the switch are a deletion for a later session if nothing misses them, and that is filed in the ladder.
 
-1. **Steering into a slide** — the visible change. A car sliding while its command is *not* the answering one is now capped at the peak-slip ceiling instead of the raised one, so watch a car ask for more wheel than it gets: that is the raise's absence, and the question is whether it still holds the corner or runs wide.
-2. **The answering side** — must be unchanged. A countersteering car still reaches past the ceiling toward the slide angle, and the damper still lifts that side to full lock when its term opposes the rotation, so catching a rotation should read as it did on the driven build.
-3. **Turn-in at speed** — unchanged: the raises never applied going into a corner, and the base ceiling is the same number.
+The checks that produced the decision, kept as the record:
+
+1. **Steering into a slide** — a car sliding while its command is *not* the answering one is capped at the peak-slip ceiling instead of the raised one, so it asks for more wheel than it gets. Driven: the base reads better than the raise.
+2. **The answering side** — unchanged, as intended: a countersteering car still reaches past the ceiling toward the slide angle, and the damper still lifts that side to full lock when its term opposes the rotation.
+3. **Turn-in at speed** — unchanged: the raise never applied going into a corner, and the base ceiling is the same number.
 4. **A slow car** — the maneuvering ramp is untouched.
-5. **Restoring** — the switch is one constant and nothing else in the function changed, so flipping it back must return the driven behaviour exactly.
+5. **Restoring** — one flip, and nothing else in the function changed.

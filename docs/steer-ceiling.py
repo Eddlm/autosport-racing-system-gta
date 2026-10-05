@@ -1,11 +1,14 @@
 """Steer-in ceiling by speed, one governor, mirroring Racer.cs.
 
 Reproduces ApplySteerLimits with no damper term on the commanded side:
-    ceiling = max(ResolveSteerCeiling, min(|slide| x SlideLimitSlideShare + SlideLimitFreeplayDegrees, lock))
+    ceiling = ResolveSteerCeiling
     ResolveSteerCeiling = max(peakSlipCeiling, ManeuverRamp(endSpeed, peakSlipCeilingAt(endSpeed)))
 
+The yaw-usage governor and its Turn-In dials were removed earlier, and the slide's raise is retired by decision and
+off behind `SlideLimitRaise`, so the peak-slip cap is the only governor left. The raise is still drawn, dashed and
+greyed, as the reference the drive rejected: it used to take max(that ceiling, min(|slide| x share + freeplay, lock)).
+
 Assumes the fleet-typical car: lock 40 deg, authored LateralTractionCurve 22 deg, no damper bypass.
-The yaw-usage governor and its Turn-In dials were removed: the slide is the only quantity that opens authority.
 
 Run: python docs/steer-ceiling.py
 """
@@ -46,14 +49,16 @@ def resolve_steer_ceiling(speed_mph):
     return max(ceiling, maneuver_ramp(speed_mph, peak_ceiling(RAMP_END * MPH)))
 
 
-def ceiling(slide_deg):
+def retired_raise(slide_deg):
+    """The raise as it stood while it was live: the ceiling loosened by half the slide angle plus free play."""
     return [max(resolve_steer_ceiling(s), min(abs(slide_deg) * SLIDE_SHARE + FREE_PLAY, LOCK)) for s in SPEEDS]
 
 
+live = [resolve_steer_ceiling(s) for s in SPEEDS]
 curves = [
-    ("cornering law alone (no slide)", ceiling(0.0), "#1f4e9c", "-", 2.4),
-    ("20 deg slide", ceiling(20.0), "#2e8b57", "--", 1.8),
-    ("30 deg slide", ceiling(30.0), "#c0392b", "-", 2.2),
+    ("live ceiling: the cornering law alone", live, "#1f4e9c", "-", 2.4),
+    ("retired raise, 20 deg slide", retired_raise(20.0), "#2e8b57", "--", 1.6),
+    ("retired raise, 30 deg slide", retired_raise(30.0), "#c0392b", "--", 1.6),
 ]
 
 fig, ax = plt.subplots(figsize=(10.5, 6.2), dpi=150)
@@ -65,13 +70,13 @@ for label, ys, colour, style, width in curves:
 
 ax.axvline(RAMP_END, color="#555555", linewidth=0.8, alpha=0.6, zorder=0)
 ax.text(30.5, 21.0, "ramp ends:\n30 mph", fontsize=8.5, color="#555555", va="bottom")
-ax.text(31.0, 25.5, "a slide opens authority above the law:\n~24 deg of slide passes it at 30 mph,\n~20 deg at 40 mph", fontsize=8.5, color="#c0392b", va="bottom")
+ax.text(31.0, 25.5, "dashed: the raise, retired by decision\n(a slide used to open authority above the law)", fontsize=8.5, color="#777777", va="bottom")
 
-marks = [(40, ceiling(30.0)[80], "#c0392b", (7, -4)),
-         (40, ceiling(0.0)[80], "#1f4e9c", (7, -16))]
-for x, y, colour, offset in marks:
+marks = [(40, retired_raise(30.0)[80], "#c0392b", "raise, retired", (7, 8)),
+         (40, live[80], "#1f4e9c", "live", (7, -18))]
+for x, y, colour, tag, offset in marks:
     ax.plot([x], [y], "o", color=colour, markersize=5)
-    ax.annotate(f"{y:.1f} deg", (x, y), textcoords="offset points", xytext=offset, fontsize=9, color=colour)
+    ax.annotate(f"{tag}: {y:.1f} deg", (x, y), textcoords="offset points", xytext=offset, fontsize=9, color=colour)
 
 ax.set_xlim(0, 50)
 ax.set_ylim(0, 46)
@@ -83,6 +88,6 @@ ax.legend(loc="upper right", fontsize=9, framealpha=0.95)
 fig.tight_layout()
 fig.savefig("docs/steer-ceiling.png", facecolor="white")
 
-print(f"{'mph':>5} {'law':>9} {'slide 20':>9} {'slide 30':>9}")
+print(f"{'mph':>5} {'live':>9} {'raise 20':>9} {'raise 30':>9}")
 for s in range(0, 51, 5):
-    print(f"{s:>5} {ceiling(0.0)[s * 2]:>9.2f} {ceiling(20.0)[s * 2]:>9.2f} {ceiling(30.0)[s * 2]:>9.2f}")
+    print(f"{s:>5} {live[s * 2]:>9.2f} {retired_raise(20.0)[s * 2]:>9.2f} {retired_raise(30.0)[s * 2]:>9.2f}")
