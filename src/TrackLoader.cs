@@ -359,6 +359,7 @@ namespace ARS
         const float BumpMaxRunMeters = 8f;
         const float BumpMinDepartureGrade = 0.03f;
         const float BumpMinLipDrop = 0.02f;
+        const float BumpSeamMaxGrade = 0.15f;
 
         // A bump is a short rise whose lip drops away, so a car at speed leaves the ground and can neither brake nor
         // steer until it lands. Scanned on the route line only; the raycast that reads the real surface, and the
@@ -368,8 +369,24 @@ namespace ARS
             ARS.Bumps.Clear();
             if (count < 8) return;
 
+            // The route's first and last nodes are one edge apart, and where that edge steps in height the difference
+            // reads as grade. A broken seam therefore takes no lip within a run's length of it.
+            bool seamOk = true;
+            float seamGrade = 0f;
+            if (!ARS.IsPointToPoint)
+            {
+                int across = NodeAhead(count - 1, 1f, count);
+                float seamRun = HorizontalDistance(ARS.TrackPoints[count - 1].Position, ARS.TrackPoints[across].Position);
+                seamGrade = seamRun > 0.01f ? Math.Abs(ARS.TrackPoints[across].Position.Z - ARS.TrackPoints[count - 1].Position.Z) / seamRun : 0f;
+                seamOk = seamGrade <= BumpSeamMaxGrade;
+            }
+            int seamEnd = seamOk ? -1 : NodeAhead(0, BumpMaxRunMeters, count);
+            int seamStart = seamOk ? count : NodeBehind(count - 1, BumpMaxRunMeters, count);
+
             for (int node = 0; node < count; node++)
             {
+                if (!seamOk && (node <= seamEnd || node >= seamStart)) continue;
+
                 float grade = GradeAt(node, BumpDepartureRungMeters, count);
                 if (grade < BumpMinDepartureGrade) continue;
 
@@ -398,23 +415,29 @@ namespace ARS
             foreach (Bump bump in ARS.Bumps)
                 ARS.Log(ARS.LogImportance.Info, "Bump: lip=" + bump.LipNode + " rise=" + bump.RiseStartNode + " grade=" + bump.DepartureGrade.ToString("0.000") + " curvature=" + bump.LipCurvature.ToString("0.000"));
 
+            if (!seamOk) ARS.Log(ARS.LogImportance.Info, "Bumps: the route seam steps at grade " + seamGrade.ToString("0.000") + ", so no lip is taken within " + BumpMaxRunMeters.ToString("0.0") + "m of it");
             ARS.Log(ARS.LogImportance.Info, "Bumps: " + ARS.Bumps.Count + " lips, minimum departure grade " + BumpMinDepartureGrade.ToString("0.000") + ", run " + BumpMinRunMeters.ToString("0.0") + "-" + BumpMaxRunMeters.ToString("0.0") + "m");
         }
 
+        // Walks back from the lip while the surface is still climbing, so the run it returns is the rise itself: the
+        // base is where the grade stops falling, or where the road flattens or dips. A climb longer than the cap is a
+        // slope, not a bump, and reports -1.
         static int RiseStartNode(int lip, int count, out float meters)
         {
             meters = 0f;
             int node = lip;
             int start = lip;
-            float lipGrade = GradeAt(lip, BumpDepartureRungMeters, count);
+            float grade = GradeAt(lip, BumpDepartureRungMeters, count);
             for (int step = 0; step < 60; step++)
             {
                 int behind = NodeBehind(node, 1f, count);
                 if (behind == node) break;
-                if (GradeAt(behind, BumpDepartureRungMeters, count) > lipGrade + 0.005f) break;
+                float behindGrade = GradeAt(behind, BumpDepartureRungMeters, count);
+                if (behindGrade <= 0f || behindGrade > grade - 0.002f) break;
                 meters += HorizontalDistance(ARS.TrackPoints[behind].Position, ARS.TrackPoints[node].Position);
                 node = behind;
                 start = behind;
+                grade = behindGrade;
                 if (meters >= BumpMaxRunMeters) break;
             }
             if (meters >= BumpMaxRunMeters) return -1;

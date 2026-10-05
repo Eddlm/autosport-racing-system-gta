@@ -2308,12 +2308,14 @@ namespace ARS
             _countdown = _maxCountdown;
 
         }
-        // A shape test resolves in two steps, and only `didhit` says whether the ray found anything: the status is zero
-        // while the test is still unresolved, and the material hash of a miss is junk.
+        // A miss reads as `didhit` false, and a test that has not resolved leaves the outputs unwritten so it fails the
+        // same way; the status only rejects a handle the shape test refused. Material id zero is the default material,
+        // not a miss, so `didhit` alone decides.
         public static bool TryGetSurfaceHash(Vector3 start, Vector3 end, Entity ignore, out int materialId, out Vector3 normal)
         {
             materialId = 0;
             normal = Vector3.Zero;
+            if (ignore == null) return false;
 
             int shape = Function.Call<int>(Hash._0x28579D1B8F8AAC80, start.X, start.Y, start.Z, end.X, end.Y, end.Z, 0.3f, (int)IntersectOptions.Map, ignore.Handle, 7);
 
@@ -2328,7 +2330,7 @@ namespace ARS
 
             materialId = materialhash.GetResult<int>();
             normal = snormal.GetResult<Vector3>();
-            return materialId != 0;
+            return true;
         }
         
 
