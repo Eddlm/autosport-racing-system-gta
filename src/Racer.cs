@@ -1055,6 +1055,11 @@ namespace ARS
         // fully; above it the ceiling is the law's own. The band is in mph because that is how it is judged.
         const float SteerLimitRampStartMph = 5f;
         const float SteerLimitRampEndMph = 40f;
+        // Below this the car is placing itself rather than cornering, and both modes' ceilings are too small to turn
+        // it: the limit is opened to this angle whatever the mode and the yaw share decided. It is past most cars'
+        // lock, so the clamp to lock is what actually applies.
+        const float ManeuverLimitMph = 30f;
+        const float ManeuverSteerDegrees = 50f;
 
         // Live ceiling coefficient: the useful steer angle at speed is ~ grip × g × wheelbase / v², so grip
         // belongs in that numerator and the cap loosens as √grip — the same √grip the speed maths uses.
@@ -1202,6 +1207,15 @@ namespace ARS
                 turnInCeiling = ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, turnInCeiling, VehicleData.SteeringLock, true);
                 if (requestedSteer > 0f) SteerLimitLeft = Math.Min(SteerLimitLeft, turnInCeiling);
                 else if (requestedSteer < 0f) SteerLimitRight = Math.Min(SteerLimitRight, turnInCeiling);
+            }
+
+            // Below the manoeuvring speed the car is placing itself, not cornering, and it is the one job neither
+            // mode's ceiling can do: the limit is opened on both sides, after the mode and the yaw share have spoken.
+            if (ARS.MpsToMph(Math.Abs(fwdSpeed)) <= ManeuverLimitMph)
+            {
+                float maneuverCeiling = Math.Min(ManeuverSteerDegrees, VehicleData.SteeringLock);
+                SteerLimitLeft = Math.Max(SteerLimitLeft, maneuverCeiling);
+                SteerLimitRight = Math.Max(SteerLimitRight, maneuverCeiling);
             }
 
             // The damper is the car's stabiliser and the rotation leads the slide, so while its term pushes against

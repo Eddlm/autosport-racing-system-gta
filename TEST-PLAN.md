@@ -1,12 +1,12 @@
-# ARS — test plan: build 459
+# ARS — test plan: build 460
 
 **Status: partially driven.** The recovery's reverse phase and its teleport, now gated on the escape budget, are
 driver-verified on build 450 (`666c89b`); No Collision's one-shot mode and its per-tick all-pairs form were both
 driven and **failed** against the engine's one-slot limit, and its nearest-rival form is now **driver-verified**
 (`cbae845`); the flat slew is driven and read as less stable, which the blend re-cut addresses (`7297050`); the
-engine restart, the steer limit governor and its damper bypass are new and undriven. Everything else below is
-undriven. The deployed DLL is dev build **459**; a build + reload is enough (SHVDN reloads the scripts live, no
-game restart).
+engine restart, the steer limit governor, its damper bypass and the maneuvering floor are new and undriven.
+Everything else below is undriven. The deployed DLL is dev build **460**; a build + reload is enough (SHVDN reloads
+the scripts live, no game restart).
 
 | commit | what it is | section |
 |---|---|---|
@@ -276,6 +276,10 @@ weight) **and a damper bypass**. While the damper's term pushes *against* the ro
 lock, on the argument that the rotation leads the body slip, so a snap is answered before the slide-governed ceiling
 can see it. The mode switch therefore moves only steer-in authority.
 
+A **maneuvering floor** sits under both modes: at or below 30 mph the limit is opened to 50° on both sides, clamped
+to the car's lock. Since 50° is past most cars' lock, this is full steering lock in practice — the limiter stops
+limiting in that band. It is applied after the mode and the yaw share, so neither can cut it back.
+
 Watch:
 
 1. **Slide-Governed, corner entry** — a car with no slide is capped at one degree of steer, so it has to slide
@@ -294,3 +298,6 @@ Watch:
 6. **A snap in Slide-Governed** — the thing the bypass is meant to buy: the car should now catch an over-rotation
    whose body slip is still too small to open the slide-governed ceiling. If it still spins, the bypass is not the
    missing authority and the target, not the limit, is what is short.
+7. **The 30 mph edge** — the floor is a band rather than a ramp, so the limit steps down by roughly twenty degrees
+   as a car crosses 30 mph. If that reads as a twitch at that speed, the fix is to fold it into the ramp that is
+   already there: hold full lock to 30 mph and fade to the mode's ceiling by 40.
