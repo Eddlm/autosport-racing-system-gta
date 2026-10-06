@@ -1022,7 +1022,7 @@ namespace ARS
             };
             aiMenu.Add(tcsItem);
 
-            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Slip Threshold", "The wheelspin the AI throttles to, on the same per-wheel slip ratio the traction curve is: nothing is cut below it and the taper starts there. Higher lets the AI spin the wheels more before it intervenes.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
+            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Slip Threshold", "The wheelspin the AI throttles to, on the per-wheel slip ratio the traction curve is measured on: the curve peaks at 1.0 and is flat by 2.5, so 0.5 holds half the peak. Nothing is cut below it and the taper starts there. Higher lets the AI spin the wheels more before it intervenes, and the setting holds on every surface.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
             tcsThresholdItem.ItemChanged += (sender, args) =>
             {
                 TcsSlipThreshold = float.Parse(tcsThresholdItem.Items[args.Index], CultureInfo.InvariantCulture);

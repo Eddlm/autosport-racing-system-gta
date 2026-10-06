@@ -1660,7 +1660,6 @@ namespace ARS
         // wheel.cpp:94-97) and is flat past it. More negative = more spin. Scale confirmed by the driver against
         // live values: the lock ratio runs to ~15 at a stopped wheel, mingrip onset at 2.5.
         const float IdealWheelspinOffTrackRatio = 0.5f;  // off-track: half the peak coefficient
-        const float SlipTargetGripFloor = 0.3f;
 
         // One home for the throttle reason caps: each reason states the level it wants, its field glides toward
         // that level at the shared rate both ways, and ConvertSpeedToPedals takes the minimum against the plan's
@@ -1770,18 +1769,7 @@ namespace ARS
             if (!ARS.TcsEnabled) return 1f;
             float wheelspin = ARS.MaxWheelSlip(Car);
 
-            float slipTarget;
-            if (OutOfTrackDistance() > 0f)
-            {
-                // The half-peak point is a deliberate policy, not a grip-scaled setpoint: off-track halves the target itself.
-                slipTarget = -ARS.TcsSlipThreshold * IdealWheelspinOffTrackRatio;
-            }
-            else
-            {
-                float gripScale = ARS.Clamp(GroundGripMultiplier, SlipTargetGripFloor, 1f);
-                slipTarget = -ARS.TcsSlipThreshold * gripScale;
-            }
-
+            float slipTarget = -ARS.TcsSlipThreshold * (OutOfTrackDistance() > 0f ? IdealWheelspinOffTrackRatio : 1f);
             float spinDepth = Math.Max(0f, slipTarget - wheelspin);
             float depthShare = TaperShare(spinDepth, ARS.TcsTaperSpan);
             return 1f - depthShare * (1f - TcsCapFloor);
