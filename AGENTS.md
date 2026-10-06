@@ -81,7 +81,7 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 
 **Moved whole to `AGENTS-STEERING.md`** — read it before touching the per-frame pipeline, the lane laws, the steering authority chain, the speed plan or the corner lifecycle. What the code owns is there; what stays here is the order and the gotchas.
 
-- **Pipeline order** (`Racer.cs`): track position, then target speed, then steering, then the pedal reason caps and the pedals, then the recovery, then the **steer limits**, then the slew — the limiter closes the steering last on purpose so no writer above it escapes. Two readers therefore see the previous core tick's post-slew steer: the overspeed arm gate (`UpdateThrottleReasonCaps`) and `SteerLimitedSpeed` inside `ComputeTargetSpeed`.
+- **Pipeline order** (`Racer.cs`): track position, then target speed, then steering, then the pedal reason caps and the pedals, then the recovery, then the **steer limits**, then the slew — the limiter closes the steering last on purpose so no writer above it escapes. `SteerLimitedSpeed` inside `ComputeTargetSpeed` therefore sees the previous core tick's post-slew steer; the overspeed arm gate inside `UpdateThrottleReasonCaps` sees instead the command `ComputeSteering` has just written — this tick's, pre-limiter and pre-slew — because the caps run after the steering and before the limiter.
 - **Track convention**: node counts are treated as metres, circuit lookaheads use modulo and point-to-point clamps, and the test circuit measures about 1 m per node.
 
 ## Grid car selection (pace-matched)
@@ -137,6 +137,7 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `apex-radius` — not built
 - `slide-brake-rampdown` — parked
 - **Pushed (`ac5514b..c084b96`)**: everything held from the sessions before — the debug-visual train since `dc8ab14`, the slide-raise retirement, the ramp/damper batch, the overspeed ramp (`2dcbbcc`) and the lane base (`dd484d3`) — plus two adversarial-review fix commits. **Undriven in that run**: the ramp band and its ceiling factor, the overspeed ramp and the lane base; the drives owed are the last section of `TEST-PLAN.md`.
+- **Held unpushed**: the second adversarial pass's fixes (`57b3ac5` — the overspeed NaN accept, the lane-aimed flag the Offshoot cap reads, three leftovers) and three doc/memory commits, riding the next push.
 - **Session artifacts**: `AUDIT-COMPUTE-ONCE.md` (the code-disagrees pile — fix it in the code, never annotate it), `PLAN-RATE-PRECISION.md` (rate and precision stages, the deferred perception manager, the route-frame ranking migration), `TEST-PLAN.md` (the outstanding drives); the flags reference's four unactioned items are in `AGENTS-FLAGS.md` and the corrections rule in `AGENTS-TECHNOTES.md`.
 
 ## Cross-session hindsight notes
