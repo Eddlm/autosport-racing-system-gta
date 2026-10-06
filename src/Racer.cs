@@ -165,9 +165,12 @@ namespace ARS
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
         const float InputTrailSampleSpacing = 0.5f;
         const int InputTrailMaxSamples = 160;
-        // The engine drops markers past its per-frame budget in draw order, so the trail draws only every fourth
-        // sample: 40 spheres across the full 80 m, anchored at the newest so the gap behind the car never opens.
-        const int InputTrailDrawStride = 4;
+        // The trail draws as rods that pitch with the pedal — nose down for throttle, nose up for brake, 45° at
+        // full — so a rod's own angle is the gauge. Rods join only in XY: a Z chained from one rod into the next
+        // would integrate the input and sink the trail a whole trail-length over a long full-throttle run, and
+        // carrying the previous end Z as the next start Z would quietly make the slope the change in input.
+        const float InputTrailLift = 1.2f;
+        const int InputTrailDrawStride = 2;
 
 
         // Yaw damper term in degrees: read by the steer sum below.
@@ -2278,9 +2281,20 @@ namespace ARS
         void DrawInputTrail()
         {
             if (_inputTrail.Count == 0) return;
-            for (int i = _inputTrail.Count - 1; i >= 0; i -= InputTrailDrawStride)
-                World.DrawMarker(MarkerType.DebugSphere, _inputTrail[i].Position, Vector3.Zero, Vector3.Zero, new Vector3(0.105f, 0.105f, 0.105f), InputColour(_inputTrail[i].Input));
-            ARS.DrawLine(Car.Position, _inputTrail[_inputTrail.Count - 1].Position, Color.White);
+
+            for (int i = _inputTrail.Count - 1; i - InputTrailDrawStride >= 0; i -= InputTrailDrawStride)
+            {
+                InputTrailSample nearSample = _inputTrail[i];
+                InputTrailSample farSample = _inputTrail[i - InputTrailDrawStride];
+                float run = farSample.Position.DistanceTo2D(nearSample.Position);
+                float anchorZ = nearSample.Position.Z + InputTrailLift;
+                Vector3 nearEnd = new Vector3(nearSample.Position.X, nearSample.Position.Y, anchorZ);
+                Vector3 farEnd = new Vector3(farSample.Position.X, farSample.Position.Y, anchorZ + nearSample.Input * run);
+                ARS.DrawLine(farEnd, nearEnd, InputColour(nearSample.Input));
+            }
+
+            InputTrailSample newest = _inputTrail[_inputTrail.Count - 1];
+            ARS.DrawLine(Car.Position, new Vector3(newest.Position.X, newest.Position.Y, newest.Position.Z + InputTrailLift), Color.White);
         }
 
         const float SteerLinePedalSize = 0.08f;
