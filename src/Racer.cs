@@ -526,16 +526,20 @@ namespace ARS
 
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float drivableEdge = Math.Max(roadWide - carHalfWidth, 0f);
-            float defaultLane = ComputeHighSpeedLane(roadWide, speedMps);
+            float carOffset = ARS.SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction);
+            // A lane nobody defines holds the one the car is already in. Zero is the centre lane, not the absence of
+            // an answer, so seeding the chain with it would steer every car back to the middle of the road on a
+            // straight, where neither the high-speed line nor a corner line has an opinion.
+            float targetLane = carOffset;
+            if (TryComputeHighSpeedLane(roadWide, speedMps, out float highSpeedLane)) targetLane = highSpeedLane;
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
             if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
-            if (cornerLane != 0f) defaultLane = cornerLane;
+            if (cornerLane != 0f) targetLane = cornerLane;
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
-            if (avoidAheadLane != 0f) defaultLane = avoidAheadLane;
-            float carOffset = ARS.SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction);
-            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) defaultLane = NearestEdgeLane(carOffset, drivableEdge);
-            float targetLane = ApplyRivalWalls(defaultLane, roadWide);
+            if (avoidAheadLane != 0f) targetLane = avoidAheadLane;
+            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) targetLane = NearestEdgeLane(carOffset, drivableEdge);
+            targetLane = ApplyRivalWalls(targetLane, roadWide);
             if (ARS.DebugToggles[Options.LockLaneCentre]) targetLane = LaneLockTestOffsetMeters;
             _targetLane = targetLane;
 
@@ -727,8 +731,9 @@ namespace ARS
             return PursuitSteerFromBearing(bearing, distance);
         }
 
-        float ComputeHighSpeedLane(float roadWide, float speedMps)
+        bool TryComputeHighSpeedLane(float roadWide, float speedMps, out float lane)
         {
+            lane = 0f;
             int count = ARS.TrackPoints.Count;
             int fwdNode;
             int fwdOffset = (int)(speedMps * HighSpeedLaneChordSeconds);
@@ -738,15 +743,16 @@ namespace ARS
                 fwdNode = ((CurrentTrackPoint.Node + fwdOffset) % count + count) % count;
 
             TrackPoint ahead = ARS.TrackPoints[fwdNode];
-            if (!(ahead.PreciseCurveRadius < HighSpeedLaneRadiusMeters)) return 0f;
+            if (!(ahead.PreciseCurveRadius < HighSpeedLaneRadiusMeters)) return false;
 
             float cornerDir = Math.Sign(ahead.Angle);
-            if (cornerDir == 0f) return 0f;
+            if (cornerDir == 0f) return false;
 
             // The edge, absolute: a target that steps from wherever the car is holds a constant error and so never
             // converges on the line. The gentleness belongs in the bearing, which grows as the car falls short.
             float insideBound = Math.Max(roadWide - VehicleData.BoundingBox * 0.5f, 0f);
-            return -cornerDir * insideBound;
+            lane = -cornerDir * insideBound;
+            return true;
         }
 
         // How far ahead of a corner the car decides whether it wants to position or brake for it.
