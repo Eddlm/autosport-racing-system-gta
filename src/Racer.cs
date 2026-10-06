@@ -170,7 +170,7 @@ namespace ARS
         // chosen as its sample is taken, never by a stride over the list: a list-anchored stride re-forms every
         // time a sample arrives or the oldest drops, and the trail strobes at frame rate.
         const float InputTrailChevronSpacing = 1f;
-        const float InputTrailChevronHeightGain = 1f;
+        const float InputTrailChevronHeightGain = 0.5f;
         const float InputTrailChevronSize = 2f;
         const float InputTrailChevronPitch = 45f;
         const int InputTrailFadeCount = 5;
