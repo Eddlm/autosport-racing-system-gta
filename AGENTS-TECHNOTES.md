@@ -37,7 +37,7 @@ Split from `AGENTS.md` (`8447d75`). Holds the size-trimmed depth and long-form r
 
 - The slide-response envelope is parameterized by `Handling.LateralTractionCurve` alone.
 - The two **steering-limit rungs are RETIRED** (allowance base ×0.33, ceiling ×0.5) — replaced by the two-sided corner-geometry ceiling (AGENTS.md pipeline step 4).
-- Still live: the two **slide-handling rungs** (countersteer priority-blend start ×0.3, and ×0.6 saturation + full-countersteer pedal gate).
+- Still live: the two **slide-handling rungs** — `SlideBlendStartFraction` and `SlideBlendFullFraction`, both fractions of `Handling.LateralTractionCurve` — plus the `IsFullCountersteer()` pedal gate (`Racer.cs`). The fractions this note once quoted have moved since; read them there, not here.
 - Do not confuse either with the removed MaxBrake rampdown threshold (`2 + TRlat × 0.2`) — a different use of the same fraction.
 - **Corrected**: `_slideCountersteerDegrees` (once cited as the stored countersteer) **no longer exists** — the live value is the local `countersteerTarget`.
 - The blend lerps the final steer toward "damped course steer − countersteer correction"; the correction itself is at **1 × slip**; lane steer is live again.
