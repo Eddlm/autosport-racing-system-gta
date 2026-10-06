@@ -41,15 +41,11 @@ namespace ARS
         Natural, Artificial,
     }
 
+    // Debug toggle keys. Position carries no meaning: the name is the key and the DebugToggles dictionary is the
+    // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
     {
-        Race, RaceOptions, Brakepower, RestartRace, StartRace, Start, GridSize, Laps, LeaveRace, StopRace, Freecam, LoadTrack, DebugLevel, SaveTrack, UpdateTrackFile, CreateTrack, ExitCreator, TrackNameFilter, TrackList,
-        ShowInputs, ReloadSettings, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowProjection, ShowInputTrail, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview, ShowBumps
-    }
-
-    public enum DebugDisplay
-    {
-        None, Inputs, Speed, Positioning, PropEdit
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview, ShowBumps
     }
     public partial class ARS : Script
     {
@@ -172,7 +168,7 @@ namespace ARS
         public static readonly string[] MenuHotkeyValues = MenuHotkeyKeys.Select(key => ((int)key).ToString(CultureInfo.InvariantCulture)).ToArray();
         public static LogImportance LogLevel = LogImportance.None;
 
-        // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs/ShowProjection/ShowInputTrail visuals.
+        // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs and ShowTrackAnalysis visuals.
         public static Racer DebugFocusRacer;
         // The player's racer on the current grid; re-resolved only when it is missing from the list.
         public static Racer PlayerRacer;
@@ -278,7 +274,6 @@ namespace ARS
 
         public static List<Prop> StartLineFlares = new List<Prop>(); 
         public static XmlDocument CurrentFile = null;
-        public static int DebugVisual = 0;
 
 
         int _raceTimedFinishMs = 0;
@@ -875,8 +870,8 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail (coloured by pedal input) and pedal bar (white line above the car: centre no input, front full throttle, back full brake; a sphere is drawn for the applied pedal, the composed cap and every reason limit that is actually biting).");
-            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's lane aim line and wall limits at the steering reference node.");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail: one sphere per half metre of travel, green at full throttle through yellow at neutral to red at full brake, holding the last 80 m.");
+            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's steer-angle fan - pursuit, pursuit plus damper, the final steer line carrying the applied pedals and every limit that bites along it, and the limiter's ceiling - plus the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
             AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
@@ -1783,7 +1778,6 @@ namespace ARS
                     PlayerRacer.TryFireNitrous();
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
                 if (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) DrawRaceHud();
-                if (DebugVisual == (int)DebugDisplay.PropEdit) foreach (Prop p in CustomProps) if (CanWeUse(p) && p.IsInRangeOf(Game.Player.Character.Position, 100f)) World.DrawMarker(MarkerType.ReplayIcon, p.Position + new Vector3(0, 0, p.Model.GetDimensions().Z + 2f), Vector3.Zero, p.Rotation, new Vector3(2, 2, 2), Color.Green);
 
                 if (RaceStatus == RaceState.None || RaceStatus == RaceState.NotInitiated)
                 {
@@ -1810,7 +1804,6 @@ namespace ARS
                 if (CountdownScaleform.IsLoaded && _countdown != _maxCountdown) CountdownScaleform.Render2D();
 
                 
-                if (DebugVisual == (int)DebugDisplay.PropEdit) DisplayHelpTextThisFrame("Add or remove any ~g~prop~w~ with the tool of your preference. They must be ~y~persistent~w~.");
 
 
 

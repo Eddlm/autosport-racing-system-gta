@@ -161,16 +161,14 @@ namespace ARS
         // Braking is the softer side: it takes this many times the speed error to command full brake.
         const float BrakeErrorMultiplier = 2f;
 
-        // Applied pedal input sampled every metre of travel, for the debug trail.
+        // Applied pedal input sampled every half metre of travel, for the debug trail: the cap holds 80 m.
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
-        const int InputTrailMaxSamples = 40;
+        const float InputTrailSampleSpacing = 0.5f;
+        const int InputTrailMaxSamples = 160;
 
 
-        // Yaw damper term in degrees: read by the steer sum below and by the parked yaw HUD when re-armed.
+        // Yaw damper term in degrees: read by the steer sum below.
         float _damperTermDeg = 0f;
-        float _debugYawTargetPerSecond = 0f;
-        float _debugDamperGainSeconds = 0f;
-        float _debugDamperSpeedScale = 0f;
         // How much of the sliding countersteer blend the current slide has earned, 0 to 1; read by the limiter
         // and the slew within the same frame.
         float _slidePriority = 0f;
@@ -593,10 +591,7 @@ namespace ARS
             float yawTarget = 0f;
             if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * SlidingFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
-            float damperGain = SteerDampingFor(fwdSpeed, out float damperSpeedScale);
-            _debugYawTargetPerSecond = yawTarget;
-            _debugDamperGainSeconds = damperGain;
-            _debugDamperSpeedScale = damperSpeedScale;
+            float damperGain = SteerDampingFor(fwdSpeed, out _);
             float nonDamperSteerDeg = (steerKP * sideBySideSteerDeg) + (steerKP * laneSteerDeg);
             float damperTermDeg = -damperGain * yawRateToDamp;
             // The damper only ever subtracts: a left command never gets more left from it.
@@ -2188,56 +2183,58 @@ namespace ARS
 
 
 
+        // Every debug visual of the focus car, behind one gate: these blocks used to sit in ProcessTick with the
+        // same focus test written out twice.
+        void DrawDebug()
+        {
+            if (ControlledByPlayer || ARS.DebugFocusRacer != this) return;
+
+            if (ARS.DebugToggles[Options.ShowInputs]) DrawInputTrail();
+            if (ARS.DebugToggles[Options.ShowTrackAnalysis]) DrawSteerAngles();
+        }
+
+        const float FanLineLength = 5f;
+        const float FanPursuitHeight = 0.05f;
+        const float FanDamperHeight = 0.10f;
+        const float FanSteerHeight = 0.15f;
+        const float FanCeilingHeight = 0.20f;
+
+        // The steer-angle fan over the roof. The model origin sits near the ground, so the roof is at the full
+        // model height, not half of it — half-height floats at mid-body and the relative height varies per car.
+        void DrawSteerAngles()
+        {
+            Vector3 origin = Car.Position + new Vector3(0, 0, VehicleData.ModelDimensions.Z + 0.2f);
+            Vector3 fwd = Car.ForwardVector;
+
+            // Yellow: pursuit angle (what the lane tracking wants)
+            ARS.DrawLine(origin + new Vector3(0, 0, FanPursuitHeight), origin + new Vector3(0, 0, FanPursuitHeight) + RotateZ(fwd, _steerPursuitDeg) * FanLineLength, Color.Yellow);
+
+            // Red: pursuit angle + damper
+            ARS.DrawLine(origin + new Vector3(0, 0, FanDamperHeight), origin + new Vector3(0, 0, FanDamperHeight) + RotateZ(fwd, _steerPursuitDeg + _damperTermDeg) * FanLineLength, Color.Red);
+
+            // White: the final slewed steer (what the wheels actually request), carrying the pedals and their limits.
+            Vector3 steerBase = origin + new Vector3(0, 0, FanSteerHeight);
+            Vector3 steerDir = RotateZ(fwd, Control.SteerDegrees);
+            ARS.DrawLine(steerBase, steerBase + steerDir * FanLineLength, Color.White);
+
+            // Green throttle (reverse included) and red brake: both run back-to-front as their input rises, so the
+            // two spheres read against each other on one axis.
+            DrawSteerLineSphere(steerBase, steerDir, FanLineLength, Math.Abs(Control.Throttle), SteerLinePedalSize, Color.Green);
+            DrawSteerLineSphere(steerBase, steerDir, FanLineLength, Control.Brake, SteerLinePedalSize, Color.Red);
+            DrawPedalLimits(steerBase, steerDir, FanLineLength);
+
+            // Cyan: the limiter's ceiling in either direction, the walls the steer lines are constrained against.
+            float ceilingDeg = ResolveSteerCeiling(ARS.GetForwardSpeed(Car));
+            ARS.DrawLine(origin + new Vector3(0, 0, FanCeilingHeight), origin + new Vector3(0, 0, FanCeilingHeight) + RotateZ(fwd, ceilingDeg) * FanLineLength, Color.Cyan);
+            ARS.DrawLine(origin + new Vector3(0, 0, FanCeilingHeight), origin + new Vector3(0, 0, FanCeilingHeight) + RotateZ(fwd, -ceilingDeg) * FanLineLength, Color.Cyan);
+        }
+
         public void ProcessTick()
         {
             UpdateTickData();
 
             if (ARS.DebugToggles[Options.ShowInputs] && !ControlledByPlayer) SampleInputTrail();
-
-            // Corner rings + the steer-angle fan (track analysis).
-            if (ARS.DebugToggles[Options.ShowTrackAnalysis] && !ControlledByPlayer && ARS.DebugFocusRacer == this)
-            {
-                DrawCornerTable();
-                DrawCornerCircle();
-
-                // Steer angle visualization: three lines from the roof of the car.
-                // The model origin sits near the ground, so the roof is at the full model height (the pedal bar
-                // uses the same convention), not half of it — half-height floats at mid-body and the relative
-                // height then varies per car.
-                Vector3 origin = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z + 0.2f);
-                Vector3 fwd = Car.ForwardVector;
-                float lineLen = 5f;
-
-                // Yellow: pursuit angle (what the lane tracking wants)
-                ARS.DrawLine(origin + new Vector3(0, 0, 0.05f), origin + new Vector3(0, 0, 0.05f) + RotateZ(fwd, _steerPursuitDeg) * lineLen, Color.Yellow);
-
-                // Red: pursuit angle + damper
-                ARS.DrawLine(origin + new Vector3(0, 0, 0.10f), origin + new Vector3(0, 0, 0.10f) + RotateZ(fwd, _steerPursuitDeg + _damperTermDeg) * lineLen, Color.Red);
-
-                // White: final slewed steer (what the wheels actually request)
-                Vector3 steerBase = origin + new Vector3(0, 0, 0.15f);
-                Vector3 steerDir = RotateZ(fwd, Control.SteerDegrees);
-                ARS.DrawLine(steerBase, steerBase + steerDir * lineLen, Color.White);
-
-                // The applied pedals ride that line — green throttle (reverse included), red brake — both
-                // travelling back-to-front as their input rises, so the two spheres read against each other.
-                DrawSteerLinePedalSphere(steerBase, steerDir, lineLen, Math.Abs(Control.Throttle), Color.Green);
-                DrawSteerLinePedalSphere(steerBase, steerDir, lineLen, Control.Brake, Color.Red);
-
-                // Cyan: the limiter's ceiling in either direction, the walls the steer lines are constrained against.
-                float fwdSpeedLimit = ARS.GetForwardSpeed(Car);
-                float ceilingDeg = ResolveSteerCeiling(fwdSpeedLimit);
-                ARS.DrawLine(origin + new Vector3(0, 0, 0.20f), origin + new Vector3(0, 0, 0.20f) + RotateZ(fwd, ceilingDeg) * lineLen, Color.Cyan);
-                ARS.DrawLine(origin + new Vector3(0, 0, 0.20f), origin + new Vector3(0, 0, 0.20f) + RotateZ(fwd, -ceilingDeg) * lineLen, Color.Cyan);
-            }
-
-            // Input trail + pedal bar (inputs).
-            if (ARS.DebugToggles[Options.ShowInputs] && !ControlledByPlayer && ARS.DebugFocusRacer == this)
-            {
-                DrawInputTrail();
-
-                DrawPedalBar();
-            }
+            DrawDebug();
 
             _appliedThrottleLastFrame = VehicleMemory.GetThrottle(Car);
 
@@ -2270,7 +2267,7 @@ namespace ARS
         void SampleInputTrail()
         {
             Vector3 position = Car.Position;
-            if (_inputTrail.Count > 0 && position.DistanceTo2D(_inputTrail[_inputTrail.Count - 1].Position) < 0.5f) return;
+            if (_inputTrail.Count > 0 && position.DistanceTo2D(_inputTrail[_inputTrail.Count - 1].Position) < InputTrailSampleSpacing) return;
             _inputTrail.Add(new InputTrailSample { Position = position, Input = Control.Throttle - Control.Brake });
             if (_inputTrail.Count > InputTrailMaxSamples) _inputTrail.RemoveAt(0);
         }
@@ -2285,88 +2282,19 @@ namespace ARS
 
         const float SteerLinePedalSize = 0.08f;
 
-        void DrawSteerLinePedalSphere(Vector3 basePt, Vector3 dir, float length, float level, Color color)
+        // One sphere at a level on the steer line: the base is no input, the tip is full, so a level reads as its
+        // distance along the line whatever the sphere marks.
+        void DrawSteerLineSphere(Vector3 basePt, Vector3 dir, float length, float level, float size, Color color)
         {
-            World.DrawMarker(MarkerType.DebugSphere, basePt + dir * length * ARS.Clamp(level, 0f, 1f), Vector3.Zero, Vector3.Zero, new Vector3(SteerLinePedalSize, SteerLinePedalSize, SteerLinePedalSize), color);
+            World.DrawMarker(MarkerType.DebugSphere, basePt + dir * length * ARS.Clamp(level, 0f, 1f), Vector3.Zero, Vector3.Zero, new Vector3(size, size, size), color);
         }
 
-        // Every noted corner, dimmed, so a close pair can be read off the road; eight segments places a ring well
-        // enough. The held corner gets the full twenty plus its label.
-        void DrawCornerTable()
-        {
-            foreach (CornerPoint corner in ARS.Corners)
-            {
-                if (Brain.Corner != null && corner.Node == Brain.Corner.Point.Node) continue;
-                if (!TryCornerCircle(corner, out Vector3 centre, out float radius, out float z)) continue;
-                DrawCornerRing(centre, radius, z, 8, Color.FromArgb(150, 150, 150));
-            }
-        }
-
-        // The active corner's own circle, so its fitted radius can be measured against the road: 20 plan-view
-        // segments plus the diameter through the apex. DRAW_LINE, not markers, so it spends no marker budget.
-        void DrawCornerCircle()
-        {
-            if (Brain.Corner == null) return;
-            CornerPoint corner = Brain.Corner.Point;
-            if (!TryCornerCircle(corner, out Vector3 centre, out float radius, out float z)) return;
-
-            DrawCornerRing(centre, radius, z, 20, Color.Magenta);
-
-            string carContext = TryGetCornerContext(corner.Node, out CornerContext context)
-                ? (context.RequiresBraking ? " B+" : " B-") + (context.RequiresPositioning ? " P+" : " P-") + "  BF " + context.BrakeFactor.ToString("0.00")
-                : "";
-            int crestStart = CornerEntranceNode(corner, corner.Node);
-            int crestEnd = CornerExitNode(corner);
-            float crestFactor = CrestGripSpeedFactor(crestStart, corner.Node, crestEnd, NextApexRadius, _cornerSpd, out float crestDeltaGs);
-            int crestSpan = crestEnd - crestStart;
-            if (!ARS.IsPointToPoint && crestSpan < 0) crestSpan += ARS.TrackPoints.Count;
-            string crestContext = "  crest " + crestDeltaGs.ToString("0.00") + "G x" + crestFactor.ToString("0.00") + " / " + crestSpan + "m";
-            ARS.DrawText(new Vector3(centre.X, centre.Y, z + 1f), "R " + radius.ToString("0.0") + "/" + corner.DetectedRadius.ToString("0.0") + " m" + carContext + crestContext, Color.Magenta, 0.45f);
-
-            Vector3 apexPosition = ARS.TrackPoints[corner.Node].Position;
-            Vector3 toApex = new Vector3(apexPosition.X - centre.X, apexPosition.Y - centre.Y, 0f);
-            if (toApex.LengthSquared() < 0.0001f) return;
-            toApex.Normalize();
-            Vector3 from = centre - toApex * radius;
-            Vector3 to = centre + toApex * radius;
-            ARS.DrawLine(new Vector3(from.X, from.Y, z), new Vector3(to.X, to.Y, z), Color.Magenta);
-        }
-
-        // The centre sits a radius to the inside: a positive angle is a left-hand corner, whose inside is -right.
-        bool TryCornerCircle(CornerPoint corner, out Vector3 centre, out float radius, out float z)
-        {
-            radius = corner.SupposedRadius;
-            z = 0f;
-            centre = Vector3.Zero;
-            if (!(radius > 0.1f) || radius > 500f) return false;
-
-            Vector3 apexPosition = ARS.TrackPoints[corner.Node].Position;
-            Vector3 heading = ARS.TrackPoints[corner.Node].Direction;
-            Vector3 right = Vector3.Cross(heading, Vector3.WorldUp).Normalized;
-            centre = apexPosition - right * (radius * Math.Sign(corner.Angle));
-            z = apexPosition.Z + 0.5f;
-            return true;
-        }
-
-        void DrawCornerRing(Vector3 centre, float radius, float z, int segments, Color colour)
-        {
-            Vector3 previous = Vector3.Zero;
-            for (int i = 0; i <= segments; i++)
-            {
-                float step = i * 2f * (float)Math.PI / segments;
-                Vector3 point = new Vector3(centre.X + (float)Math.Cos(step) * radius, centre.Y + (float)Math.Sin(step) * radius, z);
-                if (i > 0) ARS.DrawLine(previous, point, colour);
-                previous = point;
-            }
-        }
-
-        // The reason limits over the car along its forward axis: centre neutral, front end full throttle, back end
-        // full brake, reverse throttle placed ahead by magnitude. A white sphere is an override command; a coloured
-        // sphere is a per-reason limit, drawn only where it bites. Every cap goes down from highest to lowest, so
-        // the binding cap paints last.
-        const float PedalBarHalfLength = 1.25f;
-        const float PedalBarReasonSize = 0.1f;
-        const float PedalBarCapSize = 0.09f;
+        // The reason limits ride the white steer line with the applied pedals, so every sphere on the line shares
+        // one scale: the base is no input and the tip is full. A white sphere is an override command; a coloured
+        // sphere is a per-reason limit, drawn only where it bites. Highest level goes down first, so the binding
+        // cap paints last.
+        const float PedalLimitReasonSize = 0.1f;
+        const float PedalLimitCapSize = 0.09f;
         // Etiquette limits (rival, chill-out, yield) are harmless, so they read cool; grip limits yellow; the
         // overspeed cut black; countersteer orange; instability violet; the recovery coast cyan.
         static readonly Color NonDangerousReasonColor = Color.FromArgb(255, 120, 200, 255);
@@ -2376,71 +2304,60 @@ namespace ARS
         static readonly Color InstabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
         static readonly Color RecoveryReasonColor = Color.Cyan;
 
-        struct PedalCapSphere
+        struct PedalLimitSphere
         {
-            public Vector3 Axis;
             public float Level;
             public Color Color;
             public float Size;
         }
 
-        readonly PedalCapSphere[] _pedalCaps = new PedalCapSphere[12];
+        readonly PedalLimitSphere[] _pedalLimits = new PedalLimitSphere[12];
 
-        void DrawPedalBar()
+        void DrawPedalLimits(Vector3 basePt, Vector3 dir, float length)
         {
-            Vector3 center = Car.Position + new Vector3(0f, 0f, Car.Model.GetDimensions().Z + 0.375f);
-            Vector3 fwd = Car.ForwardVector;
-
             int count = 0;
-            AddPedalCap(fwd, Control.MaxThrottleFromTCS, GripReasonColor, PedalBarReasonSize, ref count);
-            AddPedalCap(fwd, Control.MaxThrottleFromInstability, InstabilityReasonColor, PedalBarReasonSize, ref count);
-            AddPedalCap(fwd, Control.MaxThrottleFromOverspeed, OverspeedReasonColor, PedalBarReasonSize, ref count);
-            AddPedalCap(fwd, Control.MaxThrottleFromRival, NonDangerousReasonColor, PedalBarReasonSize, ref count);
-            AddPedalCap(fwd, Control.MaxThrottleFromChillOut, NonDangerousReasonColor, PedalBarReasonSize, ref count);
-            AddPedalCap(fwd, Control.MaxThrottleFromYield, NonDangerousReasonColor, PedalBarReasonSize, ref count);
-            AddPedalCap(fwd, Control.MaxThrottleFromOffTrack, Color.White, PedalBarReasonSize, ref count);
-            AddPedalCap(fwd, Control.MaxThrottleFromRecovery, RecoveryReasonColor, PedalBarReasonSize, ref count);
-            AddPedalCap(-fwd, Control.MaxBrakeFromABS, GripReasonColor, PedalBarReasonSize, ref count);
-            AddPedalCap(-fwd, Control.MaxBrakeFromCountersteer, CountersteerReasonColor, PedalBarReasonSize, ref count);
-            if (IsFullCountersteer()) AddPedalCap(fwd, CountersteerRollThrottle, Color.White, PedalBarCapSize, ref count);
-            if (_offtrackInputCap < 0f) AddPedalCap(-fwd, -_offtrackInputCap, Color.White, PedalBarCapSize, ref count);
-            else if (_offtrackInputCap < 1f) AddPedalCap(fwd, _offtrackInputCap, Color.White, PedalBarCapSize, ref count);
+            AddPedalLimit(Control.MaxThrottleFromTCS, GripReasonColor, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxThrottleFromInstability, InstabilityReasonColor, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxThrottleFromOverspeed, OverspeedReasonColor, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxThrottleFromRival, NonDangerousReasonColor, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxThrottleFromChillOut, NonDangerousReasonColor, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxThrottleFromYield, NonDangerousReasonColor, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxThrottleFromOffTrack, Color.White, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxThrottleFromRecovery, RecoveryReasonColor, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxBrakeFromABS, GripReasonColor, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxBrakeFromCountersteer, CountersteerReasonColor, PedalLimitReasonSize, ref count);
+            if (IsFullCountersteer()) AddPedalLimit(CountersteerRollThrottle, Color.White, PedalLimitCapSize, ref count);
+            if (_offtrackInputCap < 0f) AddPedalLimit(-_offtrackInputCap, Color.White, PedalLimitCapSize, ref count);
+            else if (_offtrackInputCap < 1f) AddPedalLimit(_offtrackInputCap, Color.White, PedalLimitCapSize, ref count);
 
-            DrawPedalCaps(center, count);
+            SortPedalLimits(count);
+            for (int i = 0; i < count; i++)
+                DrawSteerLineSphere(basePt, dir, length, _pedalLimits[i].Level, _pedalLimits[i].Size, _pedalLimits[i].Color);
         }
 
         // A limit at full authority is not limiting anything, so it is not queued.
-        void AddPedalCap(Vector3 axis, float level, Color color, float size, ref int count)
+        void AddPedalLimit(float level, Color color, float size, ref int count)
         {
-            if (level >= 1f || count >= _pedalCaps.Length) return;
-            _pedalCaps[count].Axis = axis;
-            _pedalCaps[count].Level = level;
-            _pedalCaps[count].Color = color;
-            _pedalCaps[count].Size = size;
+            if (level >= 1f || count >= _pedalLimits.Length) return;
+            _pedalLimits[count].Level = level;
+            _pedalLimits[count].Color = color;
+            _pedalLimits[count].Size = size;
             count++;
         }
 
-        void DrawPedalCaps(Vector3 center, int count)
+        void SortPedalLimits(int count)
         {
             for (int i = 1; i < count; i++)
             {
-                PedalCapSphere cap = _pedalCaps[i];
+                PedalLimitSphere cap = _pedalLimits[i];
                 int j = i - 1;
-                while (j >= 0 && _pedalCaps[j].Level < cap.Level)
+                while (j >= 0 && _pedalLimits[j].Level < cap.Level)
                 {
-                    _pedalCaps[j + 1] = _pedalCaps[j];
+                    _pedalLimits[j + 1] = _pedalLimits[j];
                     j--;
                 }
-                _pedalCaps[j + 1] = cap;
+                _pedalLimits[j + 1] = cap;
             }
-
-            for (int i = 0; i < count; i++)
-                DrawPedalBarSphere(center, _pedalCaps[i].Axis, _pedalCaps[i].Level, _pedalCaps[i].Color, _pedalCaps[i].Size);
-        }
-
-        void DrawPedalBarSphere(Vector3 center, Vector3 axis, float fraction, Color color, float size)
-        {
-            World.DrawMarker(MarkerType.DebugSphere, center + axis * ARS.Clamp(fraction, 0f, 1f) * PedalBarHalfLength, Vector3.Zero, Vector3.Zero, new Vector3(size, size, size), color);
         }
 
         // Full throttle green, neutral yellow, full brake red.
