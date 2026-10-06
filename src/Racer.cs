@@ -2318,7 +2318,7 @@ namespace ARS
                 // the rotation stays at the flat, pointing configuration every marker site shares.
                 float pitchRad = input * InputTrailChevronPitch * ((float)Math.PI / 180f);
                 Vector3 direction = heading * (float)Math.Cos(pitchRad) - Vector3.WorldUp * (float)Math.Sin(pitchRad);
-                Vector3 position = new Vector3(sample.Position.X, sample.Position.Y, sample.Position.Z + input * InputTrailChevronHeightGain);
+                Vector3 position = new Vector3(sample.Position.X, sample.Position.Y, sample.Position.Z - input * InputTrailChevronHeightGain);
 
                 // Both ends fade over the first and last few sites, so a site arriving and the oldest leaving do not pop.
                 Color colour = fade < InputTrailFadeCount ? Color.FromArgb(255 * (fade + 1) / (InputTrailFadeCount + 1), InputColour(input)) : InputColour(input);
