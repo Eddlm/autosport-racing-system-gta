@@ -3,9 +3,12 @@
 Source: `F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem` · Target: C# / .NET Framework 4.8 / ScriptHookVDotNet 2
 
 ## This file is the agent's long-term memory
-No memory survives between sessions, so this is the durable record: quirks, non-obvious decisions and their *why*, invariants, override order. **Aggressively save durable memories here**, but **do not explain systems — give the gist and a `file:line` pointer**; the code owns every value, so never record a constant, threshold or knob name, and never date a claim (anchor it to a commit hash or the code).
+No memory survives between sessions; this is the durable record, so save to it aggressively. Each entry is a note — problem, constraint, anchor, stop — never a retelling. Record the **WHAT** — quirks, non-obvious decisions, invariants, override order — and the **WHY** only where it changes what a reader would do. Never the **HOW**: the code documents itself.
 
-**Two sentences per concept, maximum.** DSH auto-loads this file and **truncates it at ~65 KB — the tail is what gets silently dropped**, so an addition must earn its bytes: pointers here, depth in a companion, and a block that outgrows a few lines moves out whole. **Every pointer carries its filename** (`Racer.cs:391`) so it can be jumped to and machine-checked; lines are anchors, not contracts, so grep the symbol if one misses.
+- **No constant, threshold or knob name** — the code owns every value. No dates either: anchor a claim to a commit hash or to the code.
+- **Two sentences per concept, maximum.**
+- **Every pointer carries its filename** (`Racer.cs:391`), so it can be jumped to and machine-checked. Lines are anchors, not contracts — grep the symbol if one misses.
+- **Size**: DSH truncates this file at ~65 KB and drops the tail. Pointers here, depth in a companion; a block that outgrows a few lines moves out whole.
 
 ## Companion memory files (NOT auto-loaded — read when the topic matches)
 **Convention**: this file orients; a companion carries the depth. Each line leads with its **trigger vocabulary** — when a request, the code or the bug touches those words, open that file *before* answering.
@@ -55,7 +58,7 @@ No memory survives between sessions, so this is the durable record: quirks, non-
 - **The project auto-copies on build** (`PostBuildEvent` + `CopyArsDll`): Debug and Release both fire it, so *whichever builds last wins* — run Release last.
 - **Build:** `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" NewRacingSystem.csproj /v:minimal /nologo /p:Configuration=Release`.
 - **A rebuild does NOT need a game restart: the SHVDN reload binding reloads the scripts live** (`Insert` alone on this install — a combo value in that ini is read as its first token and reloads on every sprint), even though the in-game console is unavailable — so a test cycle is build → reload → drive.
-**Moved to `AGENTS-TECHNOTES.md`** → "Build & deploy — toolchain, output, rollback": the dotnet form (never actually recorded anywhere — see the note there), the game output path and `ARS.dll`, the log truncation, the lag rule, the branch and rollback points, the dev build number. Triggers: deploy, dotnet, output, log, rollback, build number.
+**Moved to `AGENTS-TECHNOTES.md`** → "Build & deploy — toolchain, output, rollback": the dotnet form (never actually recorded anywhere — see the note there), the game output path and `ARS.dll`, the log truncation, the lag rule, the branch and rollback points, the dev build number.
 
 ## Dependencies and UI
 
@@ -81,7 +84,7 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 
 **Moved whole to `AGENTS-STEERING.md`** — read it before touching the per-frame pipeline, the lane laws, the steering authority chain, the speed plan or the corner lifecycle. What the code owns is there; what stays here is the order and the gotchas.
 
-- **Pipeline order** (`Racer.cs`): track position, then target speed, then steering, then the pedal reason caps and the pedals, then the recovery, then the **steer limits**, then the slew — the limiter closes the steering last on purpose so no writer above it escapes. `SteerLimitedSpeed` inside `ComputeTargetSpeed` therefore sees the previous core tick's post-slew steer; the overspeed arm gate inside `UpdateThrottleReasonCaps` sees instead the command `ComputeSteering` has just written — this tick's, pre-limiter and pre-slew — because the caps run after the steering and before the limiter.
+- **Pipeline order** (`Racer.cs`): track position, then target speed, then steering, then the pedal reason caps and the pedals, then the recovery, then the **steer limits**, then the slew — the limiter closes the steering last on purpose so no writer above it escapes. `SteerLimitedSpeed` inside `ComputeTargetSpeed` therefore sees the previous core tick's post-slew steer; the overspeed arm gate inside `UpdateThrottleReasonCaps` sees instead the command `ComputeSteering` has just written — this tick's, pre-limiter and pre-slew.
 - **Track convention**: node counts are treated as metres, circuit lookaheads use modulo and point-to-point clamps, and the test circuit measures about 1 m per node.
 
 ## Grid car selection (pace-matched)
@@ -101,7 +104,7 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 **Moved whole to `AGENTS-TECHNOTES.md`** — the toggle keys, what each visual owns and where the lane lines are drawn are there. The rules that hold: retiring a toggle retires its key, new toggles append, and the lane lines are drawn from `AutosportRacingSystem.cs` off the debug-focus racer, never the player.
 
 ## Leaderboard (frozen results board)
-**Moved to `AGENTS-TECHNOTES.md`** → "Leaderboard - drawing and data detail": the freeze-on-crossing mechanism, the player's row and the finish block, plus the PI and best-lap columns. Triggers: leaderboard, results board, position freeze, PI column, best lap.
+**Moved to `AGENTS-TECHNOTES.md`** → "Leaderboard - drawing and data detail": the freeze-on-crossing mechanism, the player's row and the finish block, plus the PI and best-lap columns.
 
 ## Durable gotchas — do not "fix" these
 Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pipeline"; `AGENTS-TECHNOTES.md` → "Durable gotchas — code, helpers, rendering, settings". One hazard per line.
