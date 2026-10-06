@@ -134,6 +134,7 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `steer-ramp-band` — untested (`e59e0a9`, the band, the damper speed and the ceiling factor riding one drive)
 - `ceiling-factor-review` — untested (`e59e0a9`); the owner owes the ceiling law a personal read, asked for
 - `ceiling-factor-range`, `tcs-cap-floor-setting`, `overspeed-thresholds-setting` — three ranges the settings-extremes audit found constrained: widen the steer ceiling past 1.00, and expose the TCS floor and the overspeed thresholds
+- `launch-slip-allowance` — (idea) more slip off the line, as a setting or a per-racer personality; the removed launch ramp last existed in `a6fcf7d`
 - `rival-publish-core` — not built
 - `apex-radius` — not built
 - `slide-brake-rampdown` — parked

@@ -117,6 +117,8 @@
 46. `tcs-cap-floor-setting` — **The TCS cap's floor has no menu item** — how far the throttle may be cut at full slip is a preference with two meaningful extremes (cut everything, or barely cut), and it is the one part of the TCS policy the user cannot reach. ABS keeps its decision: shape, but no settings.
 47. `overspeed-thresholds-setting` — **The overspeed correction has no knobs** — its two thresholds are constants, which is why they had to be tuned by hand (`2dcbbcc`); the extremes worth reaching are a correction that barely bites and one that intervenes early.
 
+48. `launch-slip-allowance` — **Allow more slip off the line, as a setting or a per-racer personality** (asked for, future). The launch ramp is gone so the TCS threshold now holds at every speed, and the way back is an *allowance* at low speed rather than a schedule: a global setting, a personality trait, or both. The mechanism it replaces — a launch multiple of the threshold below a taper end speed — last existed in `a6fcf7d`.
+
 ## Lane repulsion — unbounded on purpose, and that is the open question
 
 **What it does**: for rivals inside a lateral and longitudinal gate box that are **actually closing laterally**, it *adds* a steer-away term to the lane steer — the code owns the curve; closing speed sets the magnitude and distance scales it, and a hard close at close range can dwarf the lane P. It sits **after** the P, so nothing the P does bounds it, and it is inside the lane component rather than a separate term.
