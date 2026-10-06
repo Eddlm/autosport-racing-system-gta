@@ -2215,7 +2215,14 @@ namespace ARS
                 ARS.DrawLine(origin + new Vector3(0, 0, 0.10f), origin + new Vector3(0, 0, 0.10f) + RotateZ(fwd, _steerPursuitDeg + _damperTermDeg) * lineLen, Color.Red);
 
                 // White: final slewed steer (what the wheels actually request)
-                ARS.DrawLine(origin + new Vector3(0, 0, 0.15f), origin + new Vector3(0, 0, 0.15f) + RotateZ(fwd, Control.SteerDegrees) * lineLen, Color.White);
+                Vector3 steerBase = origin + new Vector3(0, 0, 0.15f);
+                Vector3 steerDir = RotateZ(fwd, Control.SteerDegrees);
+                ARS.DrawLine(steerBase, steerBase + steerDir * lineLen, Color.White);
+
+                // The applied pedals ride that line — green throttle (reverse included), red brake — both
+                // travelling back-to-front as their input rises, so the two spheres read against each other.
+                DrawSteerLinePedalSphere(steerBase, steerDir, lineLen, Math.Abs(Control.Throttle), Color.Green);
+                DrawSteerLinePedalSphere(steerBase, steerDir, lineLen, Control.Brake, Color.Red);
 
                 // Cyan: the limiter's ceiling in either direction, the walls the steer lines are constrained against.
                 float fwdSpeedLimit = ARS.GetForwardSpeed(Car);
@@ -2274,6 +2281,13 @@ namespace ARS
             foreach (InputTrailSample sample in _inputTrail)
                 World.DrawMarker(MarkerType.DebugSphere, sample.Position, Vector3.Zero, Vector3.Zero, new Vector3(0.105f, 0.105f, 0.105f), InputColour(sample.Input));
             ARS.DrawLine(Car.Position, _inputTrail[_inputTrail.Count - 1].Position, Color.White);
+        }
+
+        const float SteerLinePedalSize = 0.08f;
+
+        void DrawSteerLinePedalSphere(Vector3 basePt, Vector3 dir, float length, float level, Color color)
+        {
+            World.DrawMarker(MarkerType.DebugSphere, basePt + dir * length * ARS.Clamp(level, 0f, 1f), Vector3.Zero, Vector3.Zero, new Vector3(SteerLinePedalSize, SteerLinePedalSize, SteerLinePedalSize), color);
         }
 
         // Every noted corner, dimmed, so a close pair can be read off the road; eight segments places a ring well
