@@ -152,7 +152,8 @@ namespace ARS
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
         public static float SteerDampingGain = 0.5f;
-        public static int SteerDampingSpeedMph = 60;
+        public static int SteerDampingSpeedMph = 70;
+        public static float SteerCeilingFactor = 1f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1068,6 +1069,16 @@ namespace ARS
             steerKDSpeedItem.SelectedIndex = Math.Max(0, steerKDSpeedItem.Items.IndexOf(SettingsMenuStore.GetInt("SteerDampingSpeed", SteerDampingSpeedMph).ToString(CultureInfo.InvariantCulture)));
             aiMenu.Add(steerKDSpeedItem);
             HookListTextPicker(steerKDSpeedItem);
+
+            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Ceiling Factor", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 is the law as computed; lower holds the wheel tighter at speed. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
+            steerCeilingFactorItem.ItemChanged += (sender, args) =>
+            {
+                SteerCeilingFactor = float.Parse(steerCeilingFactorItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerCeilingFactor", steerCeilingFactorItem.Items[args.Index]);
+            };
+            steerCeilingFactorItem.SelectedIndex = Math.Max(0, steerCeilingFactorItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor).ToString("0.00", CultureInfo.InvariantCulture)));
+            aiMenu.Add(steerCeilingFactorItem);
+            HookListTextPicker(steerCeilingFactorItem);
 
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", SettingsRepair.OptionsFor("CrestEffect"));
             crestEffectItem.ItemChanged += (sender, args) =>
@@ -3067,6 +3078,7 @@ namespace ARS
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
             SteerDampingSpeedMph = SettingsMenuStore.GetInt("SteerDampingSpeed", SteerDampingSpeedMph);
+            SteerCeilingFactor = SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);

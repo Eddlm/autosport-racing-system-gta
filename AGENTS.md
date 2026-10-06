@@ -131,11 +131,11 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `player-special-ability`, `ai-free-abs` — parked
 - `lane-repulsion-ceiling` — parked
 - `crest-gate` — entry move driver-verified (`27ee097`), gating constants wait on the instrumented run
-- `steer-ramp-band` — untested (`488`)
+- `steer-ramp-band` — untested (`489`)
 - `rival-publish-core` — not built
 - `apex-radius` — not built
 - `slide-brake-rampdown` — parked
-- **Held unpushed**: the slide-raise retirement (`8e56778`) and the ramp/damper batch (`21e23de`) ride the next push once `steer-ramp-band` is driven — the deployed build is 488 and the drives owed are at the end of `TEST-PLAN.md`.
+- **Held unpushed**: the slide-raise retirement (`8e56778`) and the ramp/damper batch (`21e23de`) ride the next push once `steer-ramp-band` is driven — the deployed build is 489 and the drives owed are at the end of `TEST-PLAN.md`.
 - **Session artifacts**: `AUDIT-COMPUTE-ONCE.md` (the code-disagrees pile — fix it in the code, never annotate it), `PLAN-RATE-PRECISION.md` (rate and precision stages, the deferred perception manager, the route-frame ranking migration), `TEST-PLAN.md` (the outstanding drives); the flags reference's four unactioned items are in `AGENTS-FLAGS.md` and the corrections rule in `AGENTS-TECHNOTES.md`.
 
 ## Cross-session hindsight notes
