@@ -113,6 +113,10 @@
 
 44. `ceiling-factor-review` — **The owner owes the ceiling law a personal read** (asked for, and it is a read, not a drive). The section is `ResolveSteerCeiling` with `ManeuverRamp` and the menu's Steer Ceiling Factor: the factor is a flat scale on the at-speed peak-slip compute, read twice — the cap in force and the ramp's end anchor — while the geometry fallback and the ramp's full-lock end stay unscaled, and the result is `max(cap, ramp)` so the ramp only ever raises (`e59e0a9`, `Racer.cs`). The adversarial review and the fix both turned on this section, which is why it wants the author's eyes.
 
+45. `ceiling-factor-range` — **The Steer Ceiling Factor stops at 1.00**, so the menu cannot express wanting *more* wheel than the tyre's peak slip — a real preference for a driver who wants the AI to slide. Widen it past 1.00 the way the TCS knobs were widened (`3fc42ae`), and take the settings-ranges philosophy in `AGENTS-TECHNOTES.md` as the standard for every future knob.
+46. `tcs-cap-floor-setting` — **The TCS cap's floor has no menu item** — how far the throttle may be cut at full slip is a preference with two meaningful extremes (cut everything, or barely cut), and it is the one part of the TCS policy the user cannot reach. ABS keeps its decision: shape, but no settings.
+47. `overspeed-thresholds-setting` — **The overspeed correction has no knobs** — its two thresholds are constants, which is why they had to be tuned by hand (`2dcbbcc`); the extremes worth reaching are a correction that barely bites and one that intervenes early.
+
 ## Lane repulsion — unbounded on purpose, and that is the open question
 
 **What it does**: for rivals inside a lateral and longitudinal gate box that are **actually closing laterally**, it *adds* a steer-away term to the lane steer — the code owns the curve; closing speed sets the magnitude and distance scales it, and a hard close at close range can dwarf the lane P. It sits **after** the P, so nothing the P does bounds it, and it is inside the lane component rather than a separate term.
