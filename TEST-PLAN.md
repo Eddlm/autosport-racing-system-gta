@@ -359,3 +359,14 @@ The checks that produced the decision, kept as the record:
 3. **Turn-in at speed** — unchanged: the raise never applied going into a corner, and the base ceiling is the same number.
 4. **A slow car** — the maneuvering ramp is untouched.
 5. **Restoring** — one flip, and nothing else in the function changed.
+
+## The ramp band narrowed, and the damper's speed is now a setting (dev build 488, not driven)
+
+Two changes to the same speed axis. The limiter's maneuvering ramp still rises from the car's full lock at its start speed to the law's ceiling at its end speed, but the end speed moved down, so the band it governs is short and above it the ceiling is the tyre's peak-slip law alone where the old chord held it several degrees higher. The damper's gain was defined at a hard-coded speed; that speed is now the **Steer Damping Speed (mph)** item in AI Settings (tens of mph, 10 to 90), the speed at which the gain is the dial and above which it falls as that speed over the car's. The default is 60 mph, the nearest offer to the old constant, so the damper is a touch stronger at speed than it was by default.
+
+1. **Corner entry in the narrowed band** — the case the ramp change bites: the wheel is capped tighter than the old chord allowed, so watch a slow corner for a car that cannot place itself, or one that turns in more lazily than it did. Above the old end speed nothing moved.
+2. **Below the ramp's start** — placement is still near full lock: a car nosing out of a ditch or off the line must still steer.
+3. **The knob at its lowest** — drive fast: the damper should visibly give up above that speed, with a livelier, less damped car. At its highest it should feel damped all the way up.
+4. **The menu and the file** — the item sits under Steer Damping, its value survives a reload, and `Log.log` holds no "declares no key" line after a load.
+
+The ceiling law is plotted in `docs/steer-ceiling.png`, regenerated with the narrower band.

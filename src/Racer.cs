@@ -963,15 +963,14 @@ namespace ARS
         // The damper's reference: the yaw the aim point requires removes the standing-offset toll, and the zero
         // reference stays one flip away for A/B — the drive that preferred it was confounded by the course error.
         const bool SteerDampingAimReference = true;
-        // The dial is defined at this speed: the damper's steer per unit yaw error is the dial times the reference
-        // over speed, so the term follows the steer a yaw rate actually needs - weaker at speed, and at most the dial
-        // below it. The cap is load-bearing: uncapped, a slow car ran twenty-five times the dial and the term vetoed
-        // the steering instead of damping it.
-        const float SteerDampingReferenceMps = 25f;
+        // The dial is defined at the damping speed the AI setting names: the damper's steer per unit yaw error is the
+        // dial times that speed over the car's, so the term follows the steer a yaw rate actually needs - weaker above
+        // it, and at most the dial below it. The cap is load-bearing: uncapped, a slow car ran many times the dial and
+        // the term vetoed the steering instead of damping it.
         float SteerDampingFor(float forwardSpeed, out float speedScale)
         {
             // Abs, not the raw speed: a car travelling backwards needs the same steer per yaw rate as one going forwards.
-            speedScale = Math.Min(1f, SteerDampingReferenceMps / Math.Max(Math.Abs(forwardSpeed), 1f));
+            speedScale = Math.Min(1f, ARS.MphToMps(ARS.SteerDampingSpeedMph) / Math.Max(Math.Abs(forwardSpeed), 1f));
             return SteerDampingEnabled ? ARS.SteerDampingGain * speedScale / Math.Max(VehicleData.BaseMechanicalGrip, 1f) : 0f;
         }
         // Vanilla's player steering limiter used as a ceiling (AGENTS.md pipeline step 4): vanilla divides by
@@ -986,7 +985,7 @@ namespace ARS
         // Below the ramp's end speed the ceiling eases back to the car's full lock, so a slow car can steer in
         // fully; above it the ceiling is the law's own. The band is in mph because that is how it is judged.
         const float SteerLimitRampStartMph = 5f;
-        const float SteerLimitRampEndMph = 30f;
+        const float SteerLimitRampEndMph = 15f;
 
         // Live ceiling coefficient: the useful steer angle at speed is ~ grip × g × wheelbase / v², so grip
         // belongs in that numerator and the cap loosens as √grip — the same √grip the speed maths uses.

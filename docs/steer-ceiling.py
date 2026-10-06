@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 LOCK = 40.0
 TRLAT = 22.0
 PEAK_SHARE = 1.0 / 0.75
-RAMP_START, RAMP_END = 5.0, 30.0
+RAMP_START, RAMP_END = 5.0, 15.0
 SLIDE_SHARE = 0.5
 FREE_PLAY = 0.5
 MPH = 0.44704
@@ -63,13 +63,13 @@ curves = [
 
 fig, ax = plt.subplots(figsize=(10.5, 6.2), dpi=150)
 ax.axvspan(RAMP_START, RAMP_END, color="#000000", alpha=0.05, zorder=0)
-ax.text(17.5, 41.4, "maneuver ramp band (5-30 mph)", ha="center", va="bottom", fontsize=8.5, color="#555555")
+ax.text((RAMP_START + RAMP_END) / 2, 41.4, f"maneuver ramp band ({RAMP_START:.0f}-{RAMP_END:.0f} mph)", ha="center", va="bottom", fontsize=8.5, color="#555555")
 
 for label, ys, colour, style, width in curves:
     ax.plot(SPEEDS, ys, style, color=colour, linewidth=width, label=label)
 
 ax.axvline(RAMP_END, color="#555555", linewidth=0.8, alpha=0.6, zorder=0)
-ax.text(30.5, 21.0, "ramp ends:\n30 mph", fontsize=8.5, color="#555555", va="bottom")
+ax.text(RAMP_END + 0.5, 21.0, f"ramp ends:\n{RAMP_END:.0f} mph", fontsize=8.5, color="#555555", va="bottom")
 ax.text(31.0, 25.5, "dashed: the raise, retired by decision\n(a slide used to open authority above the law)", fontsize=8.5, color="#777777", va="bottom")
 
 marks = [(40, retired_raise(30.0)[80], "#c0392b", "raise, retired", (7, 8)),

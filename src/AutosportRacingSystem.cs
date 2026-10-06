@@ -152,6 +152,7 @@ namespace ARS
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
         public static float SteerDampingGain = 0.5f;
+        public static int SteerDampingSpeedMph = 60;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1057,6 +1058,16 @@ namespace ARS
             steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain).ToString("0.00", CultureInfo.InvariantCulture)));
             aiMenu.Add(steerKDItem);
             HookListTextPicker(steerKDItem);
+
+            NativeListItem<string> steerKDSpeedItem = new NativeListItem<string>("Steer Damping Speed (mph)", "The forward speed the damping gain is defined at. The damper runs at the Steer Damping value up to this speed, then falls as this speed over the car's, so twice this speed damps at half.", SettingsRepair.OptionsFor("SteerDampingSpeed"));
+            steerKDSpeedItem.ItemChanged += (sender, args) =>
+            {
+                SteerDampingSpeedMph = int.Parse(steerKDSpeedItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerDampingSpeed", steerKDSpeedItem.Items[args.Index]);
+            };
+            steerKDSpeedItem.SelectedIndex = Math.Max(0, steerKDSpeedItem.Items.IndexOf(SettingsMenuStore.GetInt("SteerDampingSpeed", SteerDampingSpeedMph).ToString(CultureInfo.InvariantCulture)));
+            aiMenu.Add(steerKDSpeedItem);
+            HookListTextPicker(steerKDSpeedItem);
 
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", SettingsRepair.OptionsFor("CrestEffect"));
             crestEffectItem.ItemChanged += (sender, args) =>
@@ -3055,6 +3066,7 @@ namespace ARS
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
+            SteerDampingSpeedMph = SettingsMenuStore.GetInt("SteerDampingSpeed", SteerDampingSpeedMph);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
