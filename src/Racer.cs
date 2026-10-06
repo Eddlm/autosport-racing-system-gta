@@ -2200,9 +2200,11 @@ namespace ARS
                 DrawCornerTable();
                 DrawCornerCircle();
 
-                // Steer angle visualization: three lines from the top of the car.
-                float halfZ = Car.Model.GetDimensions().Z * 0.5f;
-                Vector3 origin = Car.Position + new Vector3(0, 0, halfZ);
+                // Steer angle visualization: three lines from the roof of the car.
+                // The model origin sits near the ground, so the roof is at the full model height (the pedal bar
+                // uses the same convention), not half of it — half-height floats at mid-body and the relative
+                // height then varies per car.
+                Vector3 origin = Car.Position + new Vector3(0, 0, Car.Model.GetDimensions().Z + 0.2f);
                 Vector3 fwd = Car.ForwardVector;
                 float lineLen = 5f;
 
