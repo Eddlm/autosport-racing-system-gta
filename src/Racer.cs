@@ -171,7 +171,7 @@ namespace ARS
         // time a sample arrives or the oldest drops, and the trail strobes at frame rate.
         const float InputTrailChevronSpacing = 1f;
         const float InputTrailChevronGroundClearance = 0.25f;
-        const float InputTrailChevronSize = 1f;
+        const float InputTrailChevronSize = 2f;
         const float InputTrailChevronPitch = 45f;
         const int InputTrailFadeCount = 5;
         float _inputTrailChevronDistance = 0f;
