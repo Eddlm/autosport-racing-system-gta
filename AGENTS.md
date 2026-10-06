@@ -132,6 +132,7 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `lane-repulsion-ceiling` — parked
 - `crest-gate` — entry move driver-verified (`27ee097`), gating constants wait on the instrumented run
 - `steer-ramp-band` — untested (`e59e0a9`, the band, the damper speed and the ceiling factor riding one drive)
+- `ceiling-factor-review` — untested (`e59e0a9`); the owner owes the ceiling law a personal read, asked for
 - `rival-publish-core` — not built
 - `apex-radius` — not built
 - `slide-brake-rampdown` — parked
