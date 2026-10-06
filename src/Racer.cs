@@ -142,8 +142,8 @@ namespace ARS
         int _activeRivalWallCount = 0;
         bool _avoidWallsInitialized = false;
         float _targetLane = 0f;
+        bool _targetLaneAimed = false;
         public float TargetLane { get { return _targetLane; } }
-        Vector3 _debugLaneAimPoint = Vector3.Zero;
 
         float _cornerSpd = 999f;
 
@@ -531,17 +531,19 @@ namespace ARS
             // an answer, so seeding the chain with it would steer every car back to the middle of the road on a
             // straight, where neither the high-speed line nor a corner line has an opinion.
             float targetLane = carOffset;
-            if (TryComputeHighSpeedLane(roadWide, speedMps, out float highSpeedLane)) targetLane = highSpeedLane;
+            bool laneAimed = false;
+            if (TryComputeHighSpeedLane(roadWide, speedMps, out float highSpeedLane)) { targetLane = highSpeedLane; laneAimed = true; }
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
             if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
-            if (cornerLane != 0f) targetLane = cornerLane;
+            if (cornerLane != 0f) { targetLane = cornerLane; laneAimed = true; }
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
-            if (avoidAheadLane != 0f) targetLane = avoidAheadLane;
-            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) targetLane = NearestEdgeLane(carOffset, drivableEdge);
+            if (avoidAheadLane != 0f) { targetLane = avoidAheadLane; laneAimed = true; }
+            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { targetLane = NearestEdgeLane(carOffset, drivableEdge); laneAimed = true; }
             targetLane = ApplyRivalWalls(targetLane, roadWide);
-            if (ARS.DebugToggles[Options.LockLaneCentre]) targetLane = LaneLockTestOffsetMeters;
+            if (ARS.DebugToggles[Options.LockLaneCentre]) { targetLane = LaneLockTestOffsetMeters; laneAimed = true; }
             _targetLane = targetLane;
+            _targetLaneAimed = laneAimed;
 
             // Aim at the lookahead distance, offset by the target lane. The Gs-aware preview shifts
             // that offset by the lateral motion the car is already committing to, so the correction leads the drift
@@ -555,11 +557,11 @@ namespace ARS
             }
             // The aim targets the car's centre, so it locks to the drivable edge; the rival walls bound to the raw edge.
             aimLane = ARS.Clamp(aimLane, -drivableEdge, drivableEdge);
-            _debugLaneAimPoint = steerRefPoint.Position + steerRight * aimLane;
+            Vector3 laneAimPoint = steerRefPoint.Position + steerRight * aimLane;
 
             // --- Lane steer: pure pursuit toward the target lane ---
 
-            float laneSteerDeg = PursuitSteerDegrees(_debugLaneAimPoint, courseDir);
+            float laneSteerDeg = PursuitSteerDegrees(laneAimPoint, courseDir);
             _steerPursuitDeg = laneSteerDeg;
             // Physical repulsion: inside the "no touching" box, steer away from rivals
             // actually closing laterally; parallel traffic must not kill the lane steer.
@@ -1310,9 +1312,9 @@ namespace ARS
         // the projection lands — full throttle on the centre line, none at the track edge, light brake beyond.
         float OffshootInputCap(float seconds)
         {
-            // Only meaningful when the car is aiming at a lane; with no target lane there is no
+            // Only meaningful when an override has aimed the car at a lane; a car holding its own line has no
             // hug-inside expectation to enforce, so the outside sanity check must not fire.
-            if (_targetLane == 0f) return 1f;
+            if (!_targetLaneAimed) return 1f;
 
             if (ARS.MpsToMph(Car.Velocity.Length()) < OffshootMinSpeedMph) return 1f;
 
@@ -1713,7 +1715,9 @@ namespace ARS
 
             bool overspeedArmed = Math.Abs(Control.SteerDegrees) < OverspeedArmMaxSteerDegrees && Math.Abs(VehicleData.SlideAngle) < OverspeedArmMaxSlideDegrees && Car.Velocity.Length() > ARS.MphToMps(OverspeedArmMinSpeedMph);
             float overspeedLevel = 1f;
-            if (ARS.OverspeedEnabled && overspeedArmed)
+            // A positive accept, not an absence test: Clamp returns its min bound for a NaN, so a non-finite excess
+            // would otherwise command a full throttle cut instead of no cut at all.
+            if (ARS.OverspeedEnabled && overspeedArmed && VehicleData.OverspeedExcessGs > 0f)
             {
                 float overspeedCut = (VehicleData.OverspeedExcessGs - OverspeedCutStartGs) / (OverspeedCutFullGs - OverspeedCutStartGs);
                 overspeedLevel = ARS.Clamp(1f - overspeedCut, 0f, 1f);
@@ -3610,8 +3614,6 @@ namespace ARS
                     foreach (float p in wheelPowers) wheelGs += p;
                     float measuredGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
                     float excess = measuredGs - wheelGs - 0.1f;
-                    VehicleData.OverspeedMeasuredGs = measuredGs;
-                    VehicleData.OverspeedWheelGs = wheelGs;
                     VehicleData.OverspeedExcessGs = excess;
                 }
             }

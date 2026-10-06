@@ -25,9 +25,7 @@ namespace ARS
         public float DownforceGripBonus = 0f;
         public float CurrentMechanicalGrip = 1f;
 
-        // Overspeed debug — filled by the overspeed detector, read by the debug panel.
-        public float OverspeedMeasuredGs;
-        public float OverspeedWheelGs;
+        // The overspeed detector's excess, read by the throttle cap that answers it.
         public float OverspeedExcessGs;
 
         public Vector3 AverageAcceleration
