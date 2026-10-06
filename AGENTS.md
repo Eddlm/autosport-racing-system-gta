@@ -104,7 +104,7 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 **Moved whole to `AGENTS-TECHNOTES.md`** — the toggle keys, what each visual owns and where the lane lines are drawn are there. The rules that hold: retiring a toggle retires its key, new toggles append, and the lane lines are drawn from `AutosportRacingSystem.cs` off the debug-focus racer, never the player.
 
 ## Leaderboard (frozen results board)
-**Moved to `AGENTS-TECHNOTES.md`** → "Leaderboard - drawing and data detail": the freeze-on-crossing mechanism, the player's row and the finish block, plus the PI and best-lap columns.
+**Moved to `AGENTS-TECHNOTES.md`** → "Leaderboard — drawing and data detail": the freeze-on-crossing mechanism, the player's row and the finish block, plus the PI and best-lap columns.
 
 ## Durable gotchas — do not "fix" these
 Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pipeline"; `AGENTS-TECHNOTES.md` → "Durable gotchas — code, helpers, rendering, settings". One hazard per line.

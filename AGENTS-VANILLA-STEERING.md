@@ -61,7 +61,7 @@ The slip-based `CalculateMaximumThrottleBasedOnTraction` (`:10811`) sits in the 
 **The player gets none of it**: `TaskVehiclePlayer.cpp` builds throttle straight from the buttons, and its only traction limiter (`:826–845`) is inside `#if __DEV` behind `USE_THROTTLE_LIMITING_FOR_PLAYER = false`.
 
 **The AI has no countersteer exemption** — the clamp is symmetric and the slip term is inside it; ARS only approaches it by raising that side's limit to the slide angle rather than exempting it.
-**This `Min` ceiling is the shape a revived ARS tie-in must use** (landing item `tcs-controller` in `AGENTS-BACKLOG.md`).
+**This `Min` ceiling is the shape a revived ARS tie-in must use** (landing item `tcs-controller` in `AGENTS-BACKLOG.md`). ARS's removed version was a *decaying decrement*, which the recovery erased — do not rebuild that shape, and do not go looking for its code.
 
 ## The AI's speed-based steering cap
 
@@ -100,7 +100,7 @@ Distinct from both: `CVehicle::m_fSteeringBias` (`Automobile.h:406`) is a life-d
 `ApplySteerLimits` uses it as one of the AI's two steer *ceilings*, not as the player's attenuation, and takes only the reduction (vanilla's auto-centre is not applied).
 Three departures, each deliberate and each driven:
 - the `− 5` shift is **removed** (with it the ceiling held full lock to ~11 mph, read as the AI steering far too much at low speed)
-- the rate is **grip-scaled** (`k = 0.075 / √grip`), so the cap *loosens* as grip rises; the inverted direction was never driven
+- the rate is **grip-scaled** (`k = 0.075 / √grip`) because the useful steer angle at speed is about `μgL/v²` — grip belongs in the *numerator*, so the cap must **loosen** as grip rises, and dividing by grip inverts that. The inverted direction was never driven, and the driver confirmed it, so do not "normalise" the formula that way
 - it shares the job with **Ackermann** (`atan(wheelbase × grip × g / v²)`), which takes over above their ~17 mph crossover and is what removed the low-speed front slip
 
 The attenuation form was driven and felt stable, but it removes gain at every speed.

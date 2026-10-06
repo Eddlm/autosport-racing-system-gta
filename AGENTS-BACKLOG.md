@@ -387,7 +387,7 @@ Start at a corner entrance with the car at a multiple of its intended speed and 
 
 Settled shape: read-time, because grip and the offroad gravity multiplier belong to the car rather than the table; walk **backward** from the entrance to find candidate launch nodes and **forward** from each to fly it; the parabola in closed form, sampled per node; pure point mass with no damping, since the fleet's suspension is unmodelled and any damping constant would be invented. Gate on **both** distance (car length as the opener) and **time**, because a fixed distance is speed-dependent. Two tiers: at the car's real speed, floor the braking decel across a predicted airborne stretch, as an airborne car cannot brake at all; at a doubled speed, treat the launch as a severity flag and a veto on moving an entrance onto it.
 
-**Why it is parked**: on the smoothest road track nothing launches at 1x or 1.5x, and only two corners launch at 2x — because the crest work already walks the entrance back and hands the car its braking distance. Revisit only if a car is seen genuinely airborne into a corner.
+**Why it is parked**: on the smoothest road track nothing launches at 1x or 1.5x, and only two corners launch at 2x — because the crest work already walks the entrance back and hands the car its braking distance. **The `2x` probe is not a severity filter on its own**: at twice the corner speed the test reduces to `vertical radius < 4 × corner radius`, which flags the smoothest track in the game. Revisit only if a car is seen genuinely airborne into a corner.
 
 ## Bumps and ramps - the airborne window (item 42)
 
