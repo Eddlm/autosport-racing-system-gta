@@ -1022,7 +1022,7 @@ namespace ARS
             };
             aiMenu.Add(tcsItem);
 
-            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Slip Threshold", "The wheelspin the AI throttles to, on the per-wheel slip ratio the traction curve is measured on: the curve peaks at 1.0 and is flat by 2.5, so 0.5 holds half the peak. Nothing is cut below it and the taper starts there. Higher lets the AI spin the wheels more before it intervenes, and the setting holds on every surface.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
+            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Slip Threshold", "The wheelspin the AI throttles to, on the slip ratio the traction curve is measured on: the curve peaks at 1.0 and is flat by 2.5, so 0.5 is half the peak. Nothing is cut below the threshold, and it holds on every surface and at every speed.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
             tcsThresholdItem.ItemChanged += (sender, args) =>
             {
                 TcsSlipThreshold = float.Parse(tcsThresholdItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1032,7 +1032,7 @@ namespace ARS
             aiMenu.Add(tcsThresholdItem);
             HookListTextPicker(tcsThresholdItem);
 
-            NativeListItem<string> tcsTaperSpanItem = new NativeListItem<string>("TCS Taper Span", "How much extra wheelspin the cut spans, in the same slip ratio: the throttle reaches its floor once the wheelspin passes the threshold by this much, easing there on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpan"));
+            NativeListItem<string> tcsTaperSpanItem = new NativeListItem<string>("TCS Taper Span", "How much wheelspin past the threshold the cut spans before the throttle reaches its floor, in the same slip ratio. The ceiling is the threshold plus this, and the cut eases in on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpan"));
             tcsTaperSpanItem.ItemChanged += (sender, args) =>
             {
                 TcsTaperSpan = float.Parse(tcsTaperSpanItem.Items[args.Index], CultureInfo.InvariantCulture);

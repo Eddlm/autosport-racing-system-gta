@@ -1655,11 +1655,10 @@ namespace ARS
             return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
         }
 
-        // TCS slip-ratio targets, on the game's per-wheel rotation-slip ratio at wheel+0x174: 0 free rolling, the
-        // curve peaks at 1.0, degrades linearly to CurveMin at 2.5 (sfTractionPeakAngle / sfTractionMinAngle, leaked
-        // wheel.cpp:94-97) and is flat past it. More negative = more spin. Scale confirmed by the driver against
-        // live values: the lock ratio runs to ~15 at a stopped wheel, mingrip onset at 2.5.
-        const float IdealWheelspinOffTrackRatio = 0.5f;  // off-track: half the peak coefficient
+        // TCS is measured on the game's per-wheel slip ratio (wheel+0x174): 0 free rolling, the traction curve peaking
+        // at 1.0 and flat from 2.5 (sfTractionPeakAngle / sfTractionMinAngle, leaked wheel.cpp:94-97), spin negative.
+        // Driver-confirmed against live values: a stopped wheel reads ~15.
+        const float OffTrackSlipRatio = 0.5f;
 
         // One home for the throttle reason caps: each reason states the level it wants, its field glides toward
         // that level at the shared rate both ways, and ConvertSpeedToPedals takes the minimum against the plan's
@@ -1769,7 +1768,7 @@ namespace ARS
             if (!ARS.TcsEnabled) return 1f;
             float wheelspin = ARS.MaxWheelSlip(Car);
 
-            float slipTarget = -ARS.TcsSlipThreshold * (OutOfTrackDistance() > 0f ? IdealWheelspinOffTrackRatio : 1f);
+            float slipTarget = -ARS.TcsSlipThreshold * (OutOfTrackDistance() > 0f ? OffTrackSlipRatio : 1f);
             float spinDepth = Math.Max(0f, slipTarget - wheelspin);
             float depthShare = TaperShare(spinDepth, ARS.TcsTaperSpan);
             return 1f - depthShare * (1f - TcsCapFloor);
