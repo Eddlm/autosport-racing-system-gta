@@ -287,11 +287,13 @@ namespace ARS
     }
 
 
-    // One sample of the applied pedal input every half metre of travel, for the debug trail.
+    // One sample of the applied pedal input every half metre of travel, for the debug trail. Chevron marks the
+    // samples that carry a trail chevron, decided when the sample is taken so the marker sites never re-form.
     public struct InputTrailSample
     {
         public Vector3 Position;
         public float Input;
+        public bool Chevron;
     }
 
     public enum ThrottleReason

@@ -165,13 +165,15 @@ namespace ARS
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
         const float InputTrailSampleSpacing = 0.5f;
         const int InputTrailMaxSamples = 160;
-        // The trail draws as rods that pitch with the pedal — nose down for throttle, nose up for brake, 45° at
-        // full — so a rod's own angle is the gauge. Rods join only in XY: a Z chained from one rod into the next
-        // would integrate the input and sink the trail a whole trail-length over a long full-throttle run, and
-        // carrying the previous end Z as the next start Z would quietly make the slope the change in input.
-        // A rod spans one sampling step and never a stride: a wider pairing is anchored to the list's end, so it
-        // re-pairs every time a sample arrives or the oldest drops, and the comb strobes at frame rate.
-        const float InputTrailLift = 1.2f;
+        // The trail draws chevrons pitched by the pedal — nose down for throttle, nose up for brake, 45° at full —
+        // so the pitch is the gauge and the marker's bulk keeps it visible where a hairline was not. A site is
+        // chosen as its sample is taken, never by a stride over the list: a list-anchored stride re-forms every
+        // time a sample arrives or the oldest drops, and the trail strobes at frame rate.
+        const float InputTrailChevronSpacing = 2f;
+        const float InputTrailChevronLift = 0.6f;
+        const float InputTrailChevronSize = 1f;
+        const float InputTrailChevronPitch = 45f;
+        float _inputTrailChevronDistance = 0f;
 
 
         // Yaw damper term in degrees: read by the steer sum below.
@@ -464,6 +466,7 @@ namespace ARS
             CanRegisterNewLap = false;
             _previousNode = -1;
             _inputTrail.Clear();
+            _inputTrailChevronDistance = 0f;
             _restHeightAboveGround = -1f;
 
             string flags = VehicleMemory.GetHandlingFlags(Car).ToString("X");
@@ -2275,24 +2278,34 @@ namespace ARS
         {
             Vector3 position = Car.Position;
             if (_inputTrail.Count > 0 && position.DistanceTo2D(_inputTrail[_inputTrail.Count - 1].Position) < InputTrailSampleSpacing) return;
-            _inputTrail.Add(new InputTrailSample { Position = position, Input = Control.Throttle - Control.Brake });
+
+            bool chevron = _inputTrail.Count == 0;
+            if (!chevron)
+            {
+                _inputTrailChevronDistance += position.DistanceTo2D(_inputTrail[_inputTrail.Count - 1].Position);
+                chevron = _inputTrailChevronDistance >= InputTrailChevronSpacing;
+            }
+            if (chevron) _inputTrailChevronDistance = 0f;
+
+            _inputTrail.Add(new InputTrailSample { Position = position, Input = Control.Throttle - Control.Brake, Chevron = chevron });
             if (_inputTrail.Count > InputTrailMaxSamples) _inputTrail.RemoveAt(0);
         }
 
         void DrawInputTrail()
         {
-            if (_inputTrail.Count == 0) return;
-
-            for (int i = _inputTrail.Count - 1; i > 0; i--)
+            for (int i = 1; i < _inputTrail.Count; i++)
             {
-                InputTrailSample nearSample = _inputTrail[i];
-                InputTrailSample farSample = _inputTrail[i - 1];
-                float run = farSample.Position.DistanceTo2D(nearSample.Position);
-                float anchorZ = farSample.Position.Z + InputTrailLift;
-                Vector3 farEnd = new Vector3(farSample.Position.X, farSample.Position.Y, anchorZ);
-                Vector3 nearEnd = new Vector3(nearSample.Position.X, nearSample.Position.Y, anchorZ - nearSample.Input * run);
-                ARS.DrawLine(farEnd, nearEnd, InputColour(nearSample.Input));
-                if (i == _inputTrail.Count - 1) ARS.DrawLine(Car.Position, nearEnd, Color.White);
+                InputTrailSample sample = _inputTrail[i];
+                if (!sample.Chevron) continue;
+
+                Vector3 heading = sample.Position - _inputTrail[i - 1].Position;
+                heading.Z = 0f;
+                if (heading.LengthSquared() < 0.0001f) continue;
+                heading.Normalize();
+
+                Vector3 position = new Vector3(sample.Position.X, sample.Position.Y, sample.Position.Z + InputTrailChevronLift);
+                Vector3 rotation = new Vector3(89f + sample.Input * InputTrailChevronPitch, 0f, -90f);
+                World.DrawMarker(MarkerType.ChevronUpx1, position, heading, rotation, new Vector3(InputTrailChevronSize, InputTrailChevronSize, InputTrailChevronSize), InputColour(sample.Input), false, false, 2, false, "", "", false);
             }
         }
 
