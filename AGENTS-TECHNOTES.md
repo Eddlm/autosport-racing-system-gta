@@ -189,7 +189,7 @@ The two-livery-spaces trap (mod slot 48 vs the livery list), the exact natives a
 - **The current-speed divisor makes it release early under braking, never late.** The real remaining time exceeds `d / v_now`, so the car always has slightly *more* than the nominal time left — the safe direction — but the error grows with the nominal time (~0.3 s early in a hard stop from 100 mph, versus tens of ms at 0.5 s). Dividing by a predicted entrance speed is the fix if it ever reads short.
 - **A separate hard kill at `fwdToEntrance <= 2` clears the latch**, so a released hold cannot re-engage mid-corner. It beats the time gate only below `v ≈ 2 / OutsideReleaseSeconds` (~1.9 m/s at 1.05 s), i.e. it is a crawl-speed backstop rather than the normal release.
 - **`OutsideReleaseSeconds` is a `static float` with no writer** — effectively a constant, left mutable; it is not a menu item and not a save key.
-- The entrance is the corner's own: `c.StartNode` when the track file supplies it, else `apexNode - c.LengthStart`. Returning `0f` means *no override* — the caller keeps `ComputeHighSpeedLane` — so the release hands the car to the inside line, not to the centre (`Racer.cs:413-417`).
+- The entrance is the corner's own: `c.StartNode` when the track file supplies it, else `apexNode - c.LengthStart`. Returning `0f` means *no override* — the caller keeps the high-speed line's answer, and the car's own lane when that has none — so the release hands the car to the inside line, not to the centre (`Racer.cs:413-417`).
 
 ## Steer-In Bias — the deliberate skew on the steer ceiling
 
