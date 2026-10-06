@@ -1,18 +1,36 @@
 # Vanilla GTA V steering — what the reference source actually does
 
-**Read this when** a question or a change touches *how the game itself* steers a car: "how does vanilla do it", GTA's AI steering, `CCarAI` / `FindMaxSteerAngle` / `CVehicleIntelligence`, `CVehControls` / `m_steerAngle` / `m_fSteerInput` / `m_fSteerInputBias`, `HumaniseCarControlInput`, `SET_VEHICLE_STEER_BIAS`, driving-style flags, stick curves, auto-centre, steer-to-throttle coupling, or **any claim that "the real GTA V code" does X**. It also owns the correction several ARS notes need: the `/= 1 + 0.075 × (fwdSpeed − 5)` speed reduction is **player-assist only** — it is *not* the AI's steering model.
+**Read this when** a question or change touches *how the game itself* steers a car:
+- "how does vanilla do it", GTA's AI steering
+- `CCarAI` / `FindMaxSteerAngle` / `CVehicleIntelligence`
+- `CVehControls` / `m_steerAngle` / `m_fSteerInput` / `m_fSteerInputBias`
+- `HumaniseCarControlInput`, `SET_VEHICLE_STEER_BIAS`
+- driving-style flags, stick curves, auto-centre, steer-to-throttle coupling
+- **any claim that "the real GTA V code" does X**
 
-**Trees — read-only reference, always cited as `file:line` + symbol.** Line numbers drift between copies, so re-grep the symbol rather than trusting a line here:
+It also owns the correction several ARS notes need:
+the `/= 1 + 0.075 × (fwdSpeed − 5)` speed reduction is **player-assist only** — it is *not* the AI's steering model.
+
+**Trees — read-only reference, always cited as `file:line` + symbol.**
+Line numbers drift between copies; re-grep the symbol rather than trusting a line here:
 - **engine** (all implementations live here): `E:\GTA\GTAVSP\GTAV Source\src\dev_ng\game` — `Vehicles`, `vehicleAi`, `task`, and `script\` (`commands_task.cpp`, `commands_vehicle.cpp`)
-- **script declarations only**: `G:\P1\P1\gta5\script\dev_ng` is the RAGE *script* project — it carries the `.sch` native declarations (`core\common\native\commands_vehicle.sch`, `commands_task.sch`) and **no implementations**. Do not go looking for `commands_vehicle.cpp` there.
+- **script declarations only**: `G:\P1\P1\gta5\script\dev_ng` is the RAGE *script* project — `.sch` native declarations (`core\common\native\commands_vehicle.sch`, `commands_task.sch`), **no implementations**. Do not go looking for `commands_vehicle.cpp` there.
 
-**NEVER take a native hash from either tree — they are outdated, and a wrong hash fails silently.** Proof: the source's `SCR_REGISTER_SECURE` hash for `SET_VEHICLE_CHEAT_POWER_INCREASE` is `0x8f7d5ed5832ac0aa`, while the hash that actually works in ARS is `0xB59E4BD37AE292DB` — same native, different numbers. Use a hash already proven in `src\`, a SHVDN enum name, or verify in game. The **behaviour, symbol names and `file:line` structure** are what this tree is good for; the hashes are not — treat every hash below as source-declared only.
+**NEVER take a native hash from either tree — they are outdated, and a wrong hash fails silently.**
+Proof: the source's `SCR_REGISTER_SECURE` hash for `SET_VEHICLE_CHEAT_POWER_INCREASE` is `0x8f7d5ed5832ac0aa`, while the hash that actually works in ARS is `0xB59E4BD37AE292DB` — same native, different numbers.
+Use a hash already proven in `src\`, a SHVDN enum name, or verify in game.
+The **behaviour, symbol names and `file:line` structure** are what this tree is good for; the hashes are not — treat every hash below as source-declared only.
 
 ## One control struct, two writers
 
-`CVehControls` (`Vehicles\vehicle.h:97–155`) = `m_steerAngle`, `m_secondSteerAngle`, `m_throttle`, `m_brake`, `m_handBrake`, `m_nitrous`, `m_KERS`. Wheels consume it in `Automobile.cpp` (`float fApplySteerAngle = GetSteerAngle();`, ~`:3488`/`:3692`). Player and AI are only two *writers* of that struct; everything that differs between them is upstream.
+`CVehControls` (`Vehicles\vehicle.h:97–155`) = `m_steerAngle`, `m_secondSteerAngle`, `m_throttle`, `m_brake`, `m_handBrake`, `m_nitrous`, `m_KERS`.
+Wheels consume it in `Automobile.cpp` (`float fApplySteerAngle = GetSteerAngle();`, ~`:3488`/`:3692`).
+Player and AI are only two *writers* of that struct; everything that differs between them is upstream.
 
-**Units: radians, not degrees.** `Vehicles\handlingMgr.cpp:1751` converts on load — `m_fSteeringLock = DtoR * m_fSteeringLock` — so the runtime handling struct, `CVehControls::m_steerAngle` and every AI steering constant are radians (a meta lock of 40° becomes ~0.7 rad). Corroborating: `FindMaxSteerAngle` returns 0.2–0.7, `GetTurnRadiusAtCurrentSpeed` computes `fWheelBase / sin(maxSteerAngle)`, and the automobile task asserts its angles inside ±HALF_PI. **ARS is unaffected** — it converts back at read time (`Racer.cs:317` lock, `:308` lateral traction, both `RadToDeg`), so its degrees stay self-consistent; treat any vanilla number copied into ARS as radians until converted.
+**Units: radians, not degrees.**
+`Vehicles\handlingMgr.cpp:1751` converts on load — `m_fSteeringLock = DtoR * m_fSteeringLock` — so the runtime handling struct, `CVehControls::m_steerAngle` and every AI steering constant are radians (a meta lock of 40° becomes ~0.7 rad).
+Corroborating: `FindMaxSteerAngle` returns 0.2–0.7, `GetTurnRadiusAtCurrentSpeed` computes `fWheelBase / sin(maxSteerAngle)`, and the automobile task asserts its angles inside ±HALF_PI.
+**ARS converts back at read time** (`Racer.cs` `SteeringLock` / `LateralTractionCurve`, both `RadToDeg`), so its degrees stay self-consistent; treat any vanilla number copied into ARS as radians until converted.
 
 ## The AI/NPC path — a plain bearing law
 
@@ -22,15 +40,28 @@
 - `dirToTargetOrientation = atan2(targetPos − carPos)`
 - `desiredSteerAngle = SubtractAngleShorterFast(dirToTarget, driveOri)` — a **relative bearing to the target point**, sign-flipped under `DF_DriveInReverse`
 
-So vanilla's AI is a heading-error law with **no cross-track term and no distance/lookahead scaling at the steering level.** The comment claims it aims ahead a little; the code aims at `GetTargetPosition()`. The lookahead lives in whoever produced the target (route / junction / pathfind), never in the steering law.
+So vanilla's AI is a heading-error law with **no cross-track term and no distance/lookahead scaling at the steering level.**
+The comment claims it aims ahead a little; the code aims at `GetTargetPosition()`.
+The lookahead lives in whoever produced the target (route / junction / pathfind), never in the steering law.
 
-**It is not entirely slip-blind, but the slip term is chase-only** (`:10525–10544`): when the driver is in a vehicle chase or carries `CPED_RESET_FLAG_SteerIntoSkids` (and is not handbrake-turning), vanilla adds `fSideSlip × sfSideSlipSteerInfluence` to the desired angle — `fSideSlip` is lateral velocity normalised by `|forward speed| + 1`, and the tunable's default is **negative (−0.4)**, i.e. steer *against* the slide. Two details ARS should note: it is added **before** the clamp, so vanilla's countersteer is **not exempt** from the steering cap (ARS bounds it too now — by *raising that side's limit* to the slide angle rather than removing the clamp), and its gain is an order of magnitude smaller than ARS's `1 × SlideAngle` blend. Normal cruising gets no slip term at all.
+**The slip term is chase-only, added before the clamp** (`:10525–10544`): when the driver is in a vehicle chase or carries `CPED_RESET_FLAG_SteerIntoSkids` (and is not handbrake-turning), vanilla adds `fSideSlip × sfSideSlipSteerInfluence` to the desired angle.
+`fSideSlip` is lateral velocity normalised by `|forward speed| + 1`, and the tunable's default is **negative (−0.4)**, i.e. steer *against* the slide.
+Because it is added **before** the clamp, vanilla's countersteer is **not exempt** from the steering cap.
+Normal cruising gets no slip term at all.
 
-`AdjustControls` (`:10630–10856`) then, in order: clamp to `±FindMaxSteerAngle()`; a throttle **ceiling** from steering usage; `gasDownMult`, a second speed-gated throttle cut; a slip-based traction ceiling (`CalculateMaximumThrottleBasedOnTraction`); apply, flipping the steer sign when momentum opposes the desired direction. Two things ARS should take from it:
+`AdjustControls` (`:10630–10856`), in order: clamp to `±FindMaxSteerAngle()`; a throttle **ceiling** from steering usage; `gasDownMult`, a second speed-gated throttle cut; a slip-based traction ceiling; apply, flipping the steer sign when momentum opposes the desired direction.
 
-- **Vanilla couples steering to throttle through a `Min`-style ceiling that is re-applied every tick** (~30% gas at full steering angle above 10 m/s, 50% below). That is precisely the shape a revived ARS tie-in must use (the landing item is `tcs-controller` in `AGENTS-BACKLOG.md`) — ARS's removed version was a *decaying decrement*, which the recovery erased.
-- **The AI has no countersteer exemption** — the clamp is symmetric, and the slip term above is inside it. That is the stronger form, and ARS only approaches it: its limiter still bounds countersteer, but by granting that side a raised limit (the slide angle) rather than by exempting it.
-- **The AI's steering-to-throttle coupling is real, speed-gated *upward*, and AI-only** (`TaskVehicleGoToAutomobile.cpp:10654–10828`). Two reductions live in the go-to task. `maxGasAllowed = 1 − fInverseMaxGasAllowed × portionOfSteerMaxAngle`, applied as a **`Min` on the task's signed throttle** (so it never touches braking), where `fInverseMaxGasAllowed` is **0.7 above 10 m/s of XY speed and 0.5 below** — the "only 30% gas at full steering angle" comment describes the fast case only — and it does not start until `|steer| > MinSteerAngleToAdjustThrottle` (0.05 rad ≈ 2.9°). The second is multiplicative: `gasDownMult = portionOfSteerMaxAngle × clamp((fwdSpeed − 8)/8, 0, 1)`, **exactly zero below 8 m/s**. Together they take full-lock throttle to ~0 at speed, while at low speed the car keeps ~half throttle — so this is a **corner-exit power-down device, not a low-speed understeer cure**, and copying it would not have fixed the low-speed front slip. The slip-based `CalculateMaximumThrottleBasedOnTraction` (`:10811`) sits in the same task and also fades any `CheatPowerIncrease` toward 1. **The player gets none of it**: `TaskVehiclePlayer.cpp` builds throttle straight from the buttons, and its only traction limiter (`:826–845`) is inside `#if __DEV` behind `USE_THROTTLE_LIMITING_FOR_PLAYER = false`.
+**Vanilla couples steering to throttle through a `Min`-style ceiling re-applied every tick, and it is AI-only** (`TaskVehicleGoToAutomobile.cpp:10654–10828`).
+Two reductions live in the go-to task:
+- `maxGasAllowed = 1 − fInverseMaxGasAllowed × portionOfSteerMaxAngle`, applied as a **`Min` on the task's signed throttle** (never touches braking). `fInverseMaxGasAllowed` is **0.7 above 10 m/s of XY speed and 0.5 below** (~30% gas at full steering angle is the fast case only); it starts only past `|steer| > MinSteerAngleToAdjustThrottle` (0.05 rad ≈ 2.9°).
+- `gasDownMult = portionOfSteerMaxAngle × clamp((fwdSpeed − 8)/8, 0, 1)`, **exactly zero below 8 m/s**.
+
+Together they take full-lock throttle to ~0 at speed, ~half at low speed — a **corner-exit power-down device, not a low-speed understeer cure** (copying it would not have fixed the low-speed front slip).
+The slip-based `CalculateMaximumThrottleBasedOnTraction` (`:10811`) sits in the same task and fades any `CheatPowerIncrease` toward 1.
+**The player gets none of it**: `TaskVehiclePlayer.cpp` builds throttle straight from the buttons, and its only traction limiter (`:826–845`) is inside `#if __DEV` behind `USE_THROTTLE_LIMITING_FOR_PLAYER = false`.
+
+**The AI has no countersteer exemption** — the clamp is symmetric and the slip term is inside it; ARS only approaches it by raising that side's limit to the slide angle rather than exempting it.
+**This `Min` ceiling is the shape a revived ARS tie-in must use** (landing item `tcs-controller` in `AGENTS-BACKLOG.md`).
 
 ## The AI's speed-based steering cap
 
@@ -40,13 +71,17 @@ So vanilla's AI is a heading-error law with **no cross-track term and no distanc
 
 It is **speed-only** — no driving flag, no grip, no TRlat, no downforce, no personality input (the comment only muses that bigger vehicles may want a larger value).
 
-**Caveat — a second, older limiter exists but is not in this drop.** The comment that points here says "carai.cpp"; `CCarAI` appears in this tree only as call sites (`Automobile.cpp:5173,5181`, `Bike.cpp:716`, `train.cpp:6262`) and as a **link-order symbol list** (`VS_Project\LinkOrder\BankRelease_LinkOrder.txt`, e.g. `?FindMaxSteerAngle@CCarAI@@SAMPAVCVehicle@@@Z` and `?ClipSteerAngleToMaxSteerAngle@CCarAI@@...`) — its implementation file is absent. That symbol takes a `CVehicle*` and so is **not** the no-argument `CVehicleIntelligence::FindMaxSteerAngle()` traced above. The cap we can prove is applied in the task path is the `CVehicleIntelligence` one; whether a legacy `CCarAI` path still runs is **unverifiable from this tree** — don't assert it either way.
+**Caveat — a second, older limiter exists but is not in this drop.**
+The comment that points here says "carai.cpp"; `CCarAI` appears in this tree only as call sites (`Automobile.cpp:5173,5181`, `Bike.cpp:716`, `train.cpp:6262`) and as a **link-order symbol list** (`VS_Project\LinkOrder\BankRelease_LinkOrder.txt`, e.g. `?FindMaxSteerAngle@CCarAI@@SAMPAVCVehicle@@@Z` and `?ClipSteerAngleToMaxSteerAngle@CCarAI@@...`) — its implementation file is absent.
+That symbol takes a `CVehicle*` and so is **not** the no-argument `CVehicleIntelligence::FindMaxSteerAngle()` traced above.
+The cap we can prove is applied in the task path is the `CVehicleIntelligence` one; whether a legacy `CCarAI` path still runs is **unverifiable from this tree** — don't assert it either way.
 
 ## The player path
 
 `vehicleAi\task\TaskVehiclePlayer.cpp`:
 
-- pad axis → `fDesiredSteerInput`, shaped by a **stick curve** `Sign(x)·|x|^1.5` (`ms_fCAR_STEERING_CURVE_POW`, `:71`); mouse-steering has its own deadzone/multiplier/auto-centre branch (`:696–722`), while a real wheel device bypasses the curve entirely because it is already time-based (`:742–749`)
+- pad axis → `fDesiredSteerInput`, shaped by a **stick curve** `Sign(x)·|x|^1.5` (`ms_fCAR_STEERING_CURVE_POW`, `:71`)
+- mouse-steering has its own deadzone/multiplier/auto-centre branch (`:696–722`); a real wheel device bypasses the curve entirely (already time-based, `:742–749`)
 - a **speed-blended first-order lag** into `m_fSteerInput`: `current += (desired − current) × fSmoothFrac × dt`, 12/s stopped → 6/s at ≥30 m/s on one platform and 10/5 on the other (`:56–60`, `:70`), **×0.2 for rear-wheel-steer cars** (`:629–633`)
 - `m_fSteerInput += m_fSteerInputBias`, then clamped to ±1 (`:799–800`)
 - `fSteerAngle = m_fSteerInput × m_fSteeringLock` (`:801`), plus a stationary auto-centre capped at 10° (`:72`, `:854`)
@@ -58,13 +93,24 @@ It is **speed-only** — no driving flag, no grip, no TRlat, no downforce, no pe
 - the speed reduction `fApplySteerAngle /= 1 + 0.075 × (fwdSpeed − 5)`, gated on `!(sideSpeed × steer < −0.1 × |fwdSpeed|)` (`:3715–3718`; constants at `:2962–2964`) — a countersteer carve-out, but **only for the player's car**
 - a **velocity-referenced auto-centre**, `atan2(−sideSpeed, fwdSpeed)` clamped to ±15° (`:2966`, `:3720–3725`) — vanilla's yaw/slip correction for the player
 
-**So: never cite the 0.075 formula as "what GTA V's AI does".** The AI's authority limit is `FindMaxSteerAngle` above. Distinct from both: `CVehicle::m_fSteeringBias` (`Automobile.h:406`) is a life-decayed PIT/side-hit bias applied and clamped to ±`m_fSteeringLock` (`Automobile.cpp:3491`, `:3750`) — **not** the script bias below.
+**So: never cite the 0.075 formula as "what GTA V's AI does".** The AI's authority limit is `FindMaxSteerAngle` above.
+Distinct from both: `CVehicle::m_fSteeringBias` (`Automobile.h:406`) is a life-decayed PIT/side-hit bias applied and clamped to ±`m_fSteeringLock` (`Automobile.cpp:3491`, `:3750`) — **not** the script bias below.
 
-**ARS borrows this curve anyway, deliberately — but no longer as-is.** `ApplySteerLimits` uses it as one of the AI's two steer *ceilings*, not as the player's attenuation, and takes only the reduction (vanilla's auto-centre is not applied). Three departures, each deliberate and each driven: the `− 5` shift is **removed** (with it, the ceiling held full lock to ~11 mph, which the driver read as the AI steering far too much at low speed); the rate is **grip-scaled** (`k = 0.075 / √grip`, because the useful steer angle at speed is `~ μgL/v²`, so grip belongs in the numerator and the cap must *loosen* as grip rises — dividing by grip inverts that, and the driver confirmed the inverted direction was never driven); and it shares the job with **Ackermann** (`atan(wheelbase × grip × g / v²)`), which takes over above their ~17 mph crossover and is what actually removed the low-speed front slip. The attenuation form was driven too and felt stable, but it removes gain at every speed. Two properties carried over and one didn't: the countersteer carve-out survives — but as a **raised limit on that side**, not an exemption, so countersteer is bounded by the slide angle rather than by vanilla's side-speed gate; the curve's knee is no longer at 41 mph (the shape is the pair now); and the ceiling is **no longer grip-blind**, which was the one thing the TRlat limiter it replaced had and vanilla's curve does not (`AGENTS.md` pipeline step 4).
+**ARS borrows this curve, deliberately — but no longer as-is.**
+`ApplySteerLimits` uses it as one of the AI's two steer *ceilings*, not as the player's attenuation, and takes only the reduction (vanilla's auto-centre is not applied).
+Three departures, each deliberate and each driven:
+- the `− 5` shift is **removed** (with it the ceiling held full lock to ~11 mph, read as the AI steering far too much at low speed)
+- the rate is **grip-scaled** (`k = 0.075 / √grip`), so the cap *loosens* as grip rises; the inverted direction was never driven
+- it shares the job with **Ackermann** (`atan(wheelbase × grip × g / v²)`), which takes over above their ~17 mph crossover and is what removed the low-speed front slip
+
+The attenuation form was driven and felt stable, but it removes gain at every speed.
+Properties carried over: the countersteer carve-out survives as a **raised limit on that side** (bounded by the slide angle, not vanilla's side-speed gate); the ceiling is **no longer grip-blind** (the one thing the TRlat limiter it replaced had and vanilla's curve does not, `AGENTS.md` pipeline step 4).
 
 ## Rate limiting is a traffic behaviour, not a racing one
 
-`HumaniseCarControlInput` (`vehicleAi\task\TaskVehicleMissionBase.cpp:251–329`; automobile variant `TaskVehicleGoToAutomobile.cpp:10864–10921`) **passes the AI's decided controls straight through when it is neither conservative-driving nor going slowly** — normal driving has *no* steer rate limit at all. The smoothed branch clamps the change to ~2.0 rad/s (0.5 when stopped), and `bConservativeDriving` comes from `GetIntelligence()->GetHumaniseControls()`, set while cruising. ARS's fixed 180°/s slew on the angle is ARS's own construct; the nearest vanilla analogue is the player-side exponential lag on the *input*, not a constant-rate slew on the angle.
+`HumaniseCarControlInput` (`vehicleAi\task\TaskVehicleMissionBase.cpp:251–329`; automobile variant `TaskVehicleGoToAutomobile.cpp:10864–10921`) **passes the AI's decided controls straight through when it is neither conservative-driving nor going slowly** — normal driving has *no* steer rate limit at all.
+The smoothed branch clamps the change to ~2.0 rad/s (0.5 when stopped), and `bConservativeDriving` comes from `GetIntelligence()->GetHumaniseControls()`, set while cruising.
+The nearest vanilla analogue to ARS's angle slew is the player-side exponential lag on the *input*, not a constant-rate slew on the angle.
 
 ## The script layer — and the traps in it
 
@@ -80,11 +126,16 @@ native → `sVehicleMissionParams` (`TaskVehicleMissionBase.h:28`; flags field `
 - **`TASK_VEHICLE_MISSION` / `_PED_TARGET` / `_COORS_TARGET`** build flags from booleans in `CVehicleIntelligence::GetTaskFromMissionIdentifier` (`VehicleIntelligence.cpp:3305+`), where `MISSION_GOTO` and `MISSION_GOTO_RACING` both land on `GetGotoTaskForVehicle` — so the "racing" mission variant is not a distinct driving law.
 - **`CDriverPersonality` reaches throttle, not steering** — its only public entry is `FindMaxAcceleratorInput` (`driverpersonality.h:24`), used at `TaskVehicleMissionBase.cpp:319` and `TaskVehicleGoToAutomobile.cpp:10903`.
 
-**Steering-relevant driving flags** (`enum DrivingFlags`, `vehicleAi\VehMission.h:93`, `BIT(n)`): `DF_SwerveAroundAllCars` BIT(2), `DF_SteerAroundStationaryCars` BIT(3), `DF_SteerAroundPeds` BIT(4), `DF_SteerAroundObjects` BIT(5), `DF_DontSteerAroundPlayerPed` BIT(6), `DF_GoOffRoadWhenAvoiding` BIT(8) (avoidance may leave the road), `DF_DriveIntoOncomingTraffic` BIT(9), `DF_DriveInReverse` BIT(10) (negates the steering angle and flips the bonnet/drive reference), `DF_ForceStraightLine` BIT(24), `DF_AdjustCruiseSpeedBasedOnRoadSpeed` BIT(14), `DF_UseShortCutLinks` BIT(18) (this single bit *is* `DRIVINGMODE_PLOUGHTHROUGH`), `DF_ChangeLanesAroundObstructions` BIT(19), `DF_AvoidTurns` BIT(27), `DF_ForceJoinInRoadDirection` BIT(30). Composites with intent comments: `VehMission.h:143–150`; **"ignore road speed" is the *absence* of BIT(14) — there is no positive ignore bit.**
+**Steering-relevant driving flags** (`enum DrivingFlags`, `vehicleAi\VehMission.h:93`, `BIT(n)`):
+`DF_SwerveAroundAllCars` BIT(2), `DF_SteerAroundStationaryCars` BIT(3), `DF_SteerAroundPeds` BIT(4), `DF_SteerAroundObjects` BIT(5), `DF_DontSteerAroundPlayerPed` BIT(6), `DF_GoOffRoadWhenAvoiding` BIT(8) (avoidance may leave the road), `DF_DriveIntoOncomingTraffic` BIT(9), `DF_DriveInReverse` BIT(10) (negates the steering angle and flips the bonnet/drive reference), `DF_ForceStraightLine` BIT(24), `DF_AdjustCruiseSpeedBasedOnRoadSpeed` BIT(14), `DF_UseShortCutLinks` BIT(18) (this single bit *is* `DRIVINGMODE_PLOUGHTHROUGH`), `DF_ChangeLanesAroundObstructions` BIT(19), `DF_AvoidTurns` BIT(27), `DF_ForceJoinInRoadDirection` BIT(30).
+Composites with intent comments: `VehMission.h:143–150`; **"ignore road speed" is the *absence* of BIT(14) — there is no positive ignore bit.**
 
 ## What the player gets that the AI never does
 
-**Franklin's ability (`SAT_CAR_SLOWDOWN`) is a real grip boost, and tracing it wrong is easy** — the tyre force multiplies a wheel grip mult (`wheel.cpp:4323` `fTractionBias *= GetGripMult()`), so a search for the ability's *name* inside the wheel/tyre files finds nothing and "it is only slow motion" looks proven; the ability is a **writer**, and the writers of `m_fGripMult` are what to trace. `Automobile.cpp:4223–4224` calls it under the devs' own comment — *"Make sure the wheels are setup for Franklin's special ability"* — and `ProcessSlowMotionVehiclePrePhysics` (`Vehicle.cpp:31247–31281`) sets each wheel to `grip + grip × Lerp(speedFrac, 1.15, 1.45) × fxStrength` above `vel² > 2.0`, i.e. **a big per-wheel multiplier at speed**, plus wheel-integrator gravity ×`(1 + 2.25…3.0 × fx)` and solver inverse yaw inertia ×`0.0001` so the extra grip cannot flip the car. It is reset to 1.0 post-physics (`Vehicle.cpp:31338`) and gated on the type *and* `IsActive()`/`ShouldApplyFx()`, so **nothing of it survives the ability**. **Public documentation only ever describes the time dilation** (the manual: "slows down time while driving any road vehicle"), which is why the community calls the other half "more traction" with no mechanism — and **widely reported but mechanism-unverified**: toggling the ability rapidly is said to build speed, for which these per-frame grip/gravity writes are the plausible cause. If it holds in game, that is an exploit in a race.
+**Franklin's ability (`SAT_CAR_SLOWDOWN`) is a real grip boost, and tracing it wrong is easy** — the tyre force multiplies a wheel grip mult (`wheel.cpp:4323` `fTractionBias *= GetGripMult()`), so a search for the ability's *name* inside the wheel/tyre files finds nothing and "it is only slow motion" looks proven; the ability is a **writer**, and the writers of `m_fGripMult` are what to trace.
+`Automobile.cpp:4223–4224` calls it under the devs' own comment — *"Make sure the wheels are setup for Franklin's special ability"* — and `ProcessSlowMotionVehiclePrePhysics` (`Vehicle.cpp:31247–31281`) sets each wheel to `grip + grip × Lerp(speedFrac, 1.15, 1.45) × fxStrength` above `vel² > 2.0`, i.e. **a big per-wheel multiplier at speed**, plus wheel-integrator gravity ×`(1 + 2.25…3.0 × fx)` and solver inverse yaw inertia ×`0.0001` so the extra grip cannot flip the car.
+It is reset to 1.0 post-physics (`Vehicle.cpp:31338`) and gated on the type *and* `IsActive()`/`ShouldApplyFx()`, so **nothing of it survives the ability**.
+**Public documentation only ever describes the time dilation** (the manual: "slows down time while driving any road vehicle"), which is why the community calls the other half "more traction" with no mechanism — and **widely reported but mechanism-unverified**: toggling the ability rapidly is said to build speed, for which these per-frame grip/gravity writes are the plausible cause. If it holds in game, that is an exploit in a race.
 - **The steering changes with it, and that part reads as damping**: the player drive task lerps its input ramp to the `..._ATSPEED_SPECIAL` / `..._STOPPED_SPECIAL` rates (`TaskVehiclePlayer.cpp:610–620` — 3× and 2× the normal ones, per the constants at `:59–67`) and integrates on the **non-pausable camera timestep**, so the wheel answers in real time while the world runs slowed. `GetSteeringMultiplier()` is **not** Franklin's: its only reader is the Cops & Crooks *nitro* slot, inside `IsInCopsAndCrooks()` (`:635–648`), and it is schema-limited to 1.5 (`Peds\PlayerSpecialAbility.psc`).
 - **The player's car has assists the AI's does not, and they are not scriptable**: `Automobile.cpp:3692–3746`, inside `if (bDriverIsPlayer)` — a speed-based steer reduction with a countersteer carve-out, a **velocity-referenced sideslip auto-centre** (`atan2(−fSideSpeed, fFwdSpeed)`, clamped, skipped for rear-wheel-steer cars) and a quadbike braking rudder torque. The comment there says the AI's equivalent is in `carai.cpp` (absent from the tree), and **ARS's AI cars bypass both by writing the control struct directly**, which is why `ApplySteerLimits` is their only ceiling.
 - **No character stat touches car grip or damping, and the per-character table proves it**: `CPlayerInfo::sPlayerStatInfo` (`PlayerInfo.h:354–383`) holds stamina, hold-breath, **wheelie ability**, **plane control ability**, **plane/heli damping**, fall/dive heights — and no car grip, traction or steering field. Cars get `STAT_WHEELIE_ABILITY` only, and that is **in-air** rotation authority, `IsLocalPlayer()`-gated (`Automobile.cpp:1096–1103`, bicycle lean at `:10078–10092`), with its multiplier computed only while `nNumContactWheels == 0` — so it can never explain a ground-grip difference. **The pause-menu Driving bar *is* that stat** (`NetworkTelemetry.cpp:1633`, `m_Driving = STAT_WHEELIE_ABILITY`), which is why "the character's driving skill" and "wheelie ability" are one and the same thing — and **the manual's own wording agrees with the code**: it improves "vehicle handling **when airborne**" and makes wheelies easier, never ground grip. The stat→control-authority system in its proper form is **aircraft-only** (`ModifyControlsBasedOnFlyingStats`, `Heli.cpp:2314`, with the damping min/max deliberately swapped so a better pilot gets *less* damping). **`SET_DRIVER_ABILITY` is an AI personality scalar** — "how brave is this driver", `driverpersonality.cpp:30` — feeding stop-sign rolling, parking speed and warning thresholds, never tyre physics, and **`SET_DRIVER_RACING_MODIFIER`** is the same family: scriptable, but its only consumer is the AI task's braking-search distance (`TaskHelpers.cpp:7301`, `:7531`), so it is an AI lookahead too, and unreachable by ARS, which runs no drive tasks at all.
@@ -105,7 +156,10 @@ native → `sVehicleMissionParams` (`TaskVehicleMissionBase.h:28`; flags field `
 | throttle tie-in | two `Min` ceilings (steer usage, slip) | none (removed as a no-op) |
 | script steering lever | `m_fSteerInputBias`, player-only | ARS writes its own input |
 
-**Take-aways.** ARS's steering allowance is 3–4× tighter at speed than vanilla's AI — deliberate, a different law, and driver-verified, but it means vanilla is not the authority for that number. Vanilla's steer→throttle coupling is the reference implementation for the tie-in ARS removed. Vanilla keeps its AI nearly slip-blind (chase-only term) and buys stability from the speed cap plus the throttle ceilings; ARS's split — slip handling inside the AI's steering law, throttle tie-in removed — is the inverse, and it was a choice, not an accident.
+**Take-aways.**
+Vanilla is not the authority for ARS's steering allowance (ARS's is 3–4× tighter at speed — deliberate, a different law, driver-verified).
+Vanilla's steer→throttle coupling is the reference implementation for the tie-in ARS removed.
+Vanilla keeps its AI nearly slip-blind (chase-only term) and buys stability from the speed cap plus the throttle ceilings; ARS's split — slip handling inside the AI's steering law, throttle tie-in removed — is the inverse, and it was a choice, not an accident.
 
 ## Not in this drop (do not guess)
 
@@ -113,7 +167,8 @@ native → `sVehicleMissionParams` (`TaskVehicleMissionBase.h:28`; flags field `
 
 ## The gearbox reacts to the brake — `CTransmission::ProcessGears`
 
-**Read this when** a question touches engine braking, down-shifts, the handbrake, or "why does the car decelerate harder than the plan expects". `CTransmission::ProcessGears` (`Transmission.cpp:618`, called from `CTransmission::Process` `:267`) is the only shift decision for cars, and it reads the brake **live from the control struct** (`:624` `fBrakeAbs`; `CVehicle::GetBrake` passes through to `m_brake`, `vehicle.h:728`).
+**Read this when** a question touches engine braking, down-shifts, the handbrake, or "why does the car decelerate harder than the plan expects".
+`CTransmission::ProcessGears` (`Transmission.cpp:618`, called from `CTransmission::Process` `:267`) is the only shift decision for cars, and it reads the brake **live from the control struct** (`:624` `fBrakeAbs`; `CVehicle::GetBrake` passes through to `m_brake`, `vehicle.h:728`).
 
 - **Heavy braking down-shifts.** `Transmission.cpp:751-752`: `m_nGear > 1 && fBrakeAbs > 0.8f && fThrottleAbs == 0.0f`, then a multi-gear skip on `sfTransChangeHeavyBrakingChangeDownRatio` (`:556-569` — deliberately above the up-shift ratios, so it always wants a lower gear), 2000 ms cooldown (`:576`). It uses `fSpeedFromVehicle`, **not** wheel speed, so locked wheels cannot suppress it (`:751`).
 - **Any brake level biases the ordinary shifts.** `fThrottleChangeMult` folds in `sfTransChangeBrakeContrib * fBrakeAbs` (`:635-636`, `0.9f` at `:571`) and feeds both the up-shift (`:796`) and the normal down-shift (`:876`) tests — brake behaves like partial throttle for gearing. There is **no kickdown rule** anywhere (grep is empty).
