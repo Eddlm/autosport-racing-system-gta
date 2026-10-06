@@ -161,15 +161,15 @@ namespace ARS
         // Braking is the softer side: it takes this many times the speed error to command full brake.
         const float BrakeErrorMultiplier = 2f;
 
-        // Applied pedal input sampled every half metre of travel, for the debug trail: the cap holds 80 m.
+        // Applied pedal input sampled every half metre of travel, for the debug trail: the cap holds 40 m.
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
         const float InputTrailSampleSpacing = 0.5f;
-        const int InputTrailMaxSamples = 160;
+        const int InputTrailMaxSamples = 80;
         // The trail draws chevrons pitched by the pedal — nose down for throttle, nose up for brake, 45° at full —
         // so the pitch is the gauge and the marker's bulk keeps it visible where a hairline was not. A site is
         // chosen as its sample is taken, never by a stride over the list: a list-anchored stride re-forms every
         // time a sample arrives or the oldest drops, and the trail strobes at frame rate.
-        const float InputTrailChevronSpacing = 2f;
+        const float InputTrailChevronSpacing = 1f;
         const float InputTrailChevronLift = 0.6f;
         const float InputTrailChevronSize = 1f;
         const float InputTrailChevronPitch = 45f;
