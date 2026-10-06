@@ -2213,6 +2213,12 @@ namespace ARS
 
                 // White: final slewed steer (what the wheels actually request)
                 ARS.DrawLine(origin + new Vector3(0, 0, 0.15f), origin + new Vector3(0, 0, 0.15f) + RotateZ(fwd, Control.SteerDegrees) * lineLen, Color.White);
+
+                // Cyan: the limiter's ceiling in either direction, the walls the steer lines are constrained against.
+                float fwdSpeedLimit = ARS.GetForwardSpeed(Car);
+                float ceilingDeg = ResolveSteerCeiling(fwdSpeedLimit);
+                ARS.DrawLine(origin + new Vector3(0, 0, 0.20f), origin + new Vector3(0, 0, 0.20f) + RotateZ(fwd, ceilingDeg) * lineLen, Color.Cyan);
+                ARS.DrawLine(origin + new Vector3(0, 0, 0.20f), origin + new Vector3(0, 0, 0.20f) + RotateZ(fwd, -ceilingDeg) * lineLen, Color.Cyan);
             }
 
             // Input trail + pedal bar (inputs).
@@ -2221,8 +2227,6 @@ namespace ARS
                 DrawInputTrail();
 
                 DrawPedalBar();
-
-                DrawYawDamperHud();
             }
 
             _appliedThrottleLastFrame = VehicleMemory.GetThrottle(Car);
@@ -2434,19 +2438,6 @@ namespace ARS
         {
             float v = ARS.Clamp(input, -1f, 1f);
             return Color.FromArgb((int)(255f * (1f - Math.Max(v, 0f))), (int)(255f * (1f + Math.Min(v, 0f))), 0);
-        }
-
-        void DrawYawDamperHud()
-        {
-            if (ControlledByPlayer) return;
-            if (ARS.DebugFocusRacer != this) return;
-            float yaw = VehicleData.YawRotationPerSecondDegrees;
-            float yawError = yaw - _debugYawTargetPerSecond;
-            float damper = _damperTermDeg;
-            Color red = Color.FromArgb(255, 230, 30, 30);
-            ARS.DrawText(new Vector2(0.5f, 0.085f), "YAW " + yaw.ToString("0.0") + " / TARGET " + _debugYawTargetPerSecond.ToString("0.0") + " deg/s", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-            ARS.DrawText(new Vector2(0.5f, 0.110f), "ERROR " + yawError.ToString("0.0") + " x GAIN " + _debugDamperGainSeconds.ToString("0.00") + " s = STEER " + damper.ToString("0.0") + " deg", red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
-            ARS.DrawText(new Vector2(0.5f, 0.135f), "DAMPER SCALE x" + _debugDamperSpeedScale.ToString("0.00"), red, ARS.DrawTextFont.Standard, ARS.DrawTextAlign.Center, 0.45f);
         }
 
         public void RunTimedCore()
