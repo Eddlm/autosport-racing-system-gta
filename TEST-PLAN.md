@@ -371,3 +371,10 @@ Three changes on the speed axis. The limiter's maneuvering ramp still rises from
 5. **The menu and the file** — both items sit under Steer Damping in AI Settings, their values survive a reload, and `Log.log` holds no "declares no key" line after a load.
 
 The ceiling law is plotted in `docs/steer-ceiling.png`, regenerated with the narrower band (the factor is a flat scale on top of it).
+
+## The debug streamline, the overspeed ramp and the lane base (dev build 521, one drive owed)
+
+1. **The lane base** (`dd484d3`) — with no corner line, no avoidance and no high-speed answer, the target lane is now the lane the car is already in rather than the centre. On a straight a car that arrives off-line should keep its offset instead of drifting to the middle, and it must still take the inside line the moment a corner's window opens. The failure to watch for is the opposite of the old bug: a car left at the edge of the track with nothing pulling it back — the rival walls and the off-track recovery still bound it, but nothing else does.
+2. **The overspeed ramp** (`2dcbbcc`) — the throttle cap falls linearly between the two constants beside the arm gate instead of stepping in half-throttle rungs, so a closed throttle now needs a far larger surplus than the ladder demanded. If the correction has become too weak to matter, the tell is a car on a long climb gaining speed its wheels cannot explain; the levers are those two thresholds.
+3. **The ceiling band's continuity** — `e59e0a9` gives the ramp's end anchor the same factor the cap in force takes, which is what the section above already claims. At Steer Ceiling Factor 1.00 nothing should change; at 0.50 watch for the ceiling no longer stepping down as a car accelerates through the ramp's end (it did step, by the factor's shortfall).
+4. **The debug visuals the streamline changed** — the reason limits riding the white steer line, the corner rings and their label gone, and the trail's chevrons. Only the trail has been reported on in game; the limit spheres have not.

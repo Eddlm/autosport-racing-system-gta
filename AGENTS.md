@@ -131,11 +131,11 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `player-special-ability`, `ai-free-abs` — parked
 - `lane-repulsion-ceiling` — parked
 - `crest-gate` — entry move driver-verified (`27ee097`), gating constants wait on the instrumented run
-- `steer-ramp-band` — untested (`489`)
+- `steer-ramp-band` — untested (`e59e0a9`, the band, the damper speed and the ceiling factor riding one drive)
 - `rival-publish-core` — not built
 - `apex-radius` — not built
 - `slide-brake-rampdown` — parked
-- **Held unpushed**: the debug-visual train since `dc8ab14` — the rail drop, the applied-pair removal, the steer-line pedal spheres, the streamlined debug visuals and the pitched-chevron input trail (driver-verified, `6111f6c`) — plus the slide-raise retirement (`8e56778`), the ramp/damper batch (`21e23de`) and the overspeed ramp (`2dcbbcc`, undriven). The run rides the next push once `steer-ramp-band` and the overspeed ramp have been driven; the deployed build is 519 and the drives owed are at the end of `TEST-PLAN.md`.
+- **Pushed (`ac5514b..c084b96`)**: everything held from the sessions before — the debug-visual train since `dc8ab14`, the slide-raise retirement, the ramp/damper batch, the overspeed ramp (`2dcbbcc`) and the lane base (`dd484d3`) — plus two adversarial-review fix commits. **Undriven in that run**: the ramp band and its ceiling factor, the overspeed ramp and the lane base; the drives owed are the last section of `TEST-PLAN.md`.
 - **Session artifacts**: `AUDIT-COMPUTE-ONCE.md` (the code-disagrees pile — fix it in the code, never annotate it), `PLAN-RATE-PRECISION.md` (rate and precision stages, the deferred perception manager, the route-frame ranking migration), `TEST-PLAN.md` (the outstanding drives); the flags reference's four unactioned items are in `AGENTS-FLAGS.md` and the corrections rule in `AGENTS-TECHNOTES.md`.
 
 ## Cross-session hindsight notes
