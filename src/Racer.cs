@@ -607,7 +607,7 @@ namespace ARS
             float yawTarget = 0f;
             if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * SlidingFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
-            float damperGain = SteerDampingFor(fwdSpeed, out _);
+            float damperGain = SteerDampingFor(fwdSpeed);
             float nonDamperSteerDeg = (steerKP * sideBySideSteerDeg) + (steerKP * laneSteerDeg);
             float damperTermDeg = -damperGain * yawRateToDamp;
             // The damper only ever subtracts: a left command never gets more left from it.
@@ -980,10 +980,10 @@ namespace ARS
         // dial times that speed over the car's, so the term follows the steer a yaw rate actually needs - weaker above
         // it, and at most the dial below it. The cap is load-bearing: uncapped, a slow car ran many times the dial and
         // the term vetoed the steering instead of damping it.
-        float SteerDampingFor(float forwardSpeed, out float speedScale)
+        float SteerDampingFor(float forwardSpeed)
         {
             // Abs, not the raw speed: a car travelling backwards needs the same steer per yaw rate as one going forwards.
-            speedScale = Math.Min(1f, ARS.MphToMps(ARS.SteerDampingSpeedMph) / Math.Max(Math.Abs(forwardSpeed), 1f));
+            float speedScale = Math.Min(1f, ARS.MphToMps(ARS.SteerDampingSpeedMph) / Math.Max(Math.Abs(forwardSpeed), 1f));
             return SteerDampingEnabled ? ARS.SteerDampingGain * speedScale / Math.Max(VehicleData.BaseMechanicalGrip, 1f) : 0f;
         }
         // Vanilla's player steering limiter used as a ceiling (AGENTS.md pipeline step 4): vanilla divides by
@@ -1057,8 +1057,9 @@ namespace ARS
         // The ceiling in force at this speed: the peak-slip cap, with the corner geometry as a fallback only when the
         // live peak reads unusable. Eased back towards full lock below the ramp's end speed, where it meets what
         // the car gets at that end speed anyway. The menu's SteerCeilingFactor scales the at-speed peak-slip cap
-        // only - never the geometry fallback and never the ramp's low-speed end, so placement authority below the
-        // ramp end is untouched; the factor bites only at and above it.
+        // wherever it is read - the cap in force and the ramp's end anchor alike, so the band stays continuous as
+        // the car crosses the ramp end - and it never scales the geometry fallback nor the ramp's low-speed end,
+        // which is full lock.
         float ResolveSteerCeiling(float fwdSpeed)
         {
             float ceiling = TRLateralAtSpeed > 0.01f ? PeakSlipCeilingAt(TRLateralAtSpeed) * ARS.SteerCeilingFactor : GeometrySteerCeiling(fwdSpeed);
@@ -1067,7 +1068,7 @@ namespace ARS
 
             float endSpeed = ARS.MphToMps(SteerLimitRampEndMph);
             float endPeak = LateralPeakAtSpeed(endSpeed);
-            float endCeiling = endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) : GeometrySteerCeiling(endSpeed);
+            float endCeiling = endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) * ARS.SteerCeilingFactor : GeometrySteerCeiling(endSpeed);
             // max() keeps the ramp a raise only: the straight line sits a degree under the curved law near 25 mph.
             return Math.Max(ceiling, ManeuverRamp(speedMph, endCeiling));
         }
@@ -1112,9 +1113,12 @@ namespace ARS
             if (fwdSpeed > 0f)
             {
                 speedCeiling = ResolveSteerCeiling(fwdSpeed);
-                // The slide adds authority, it does not replace the cornering law: the ceiling is the larger of the
-                // two, so a car can always steer in and rejoin, and a slide only ever opens more than it has.
-                if (SlideLimitRaise) speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) * SlideLimitSlideShare + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
+                if (SlideLimitRaise)
+                {
+                    // The slide adds authority, it does not replace the cornering law: the ceiling is the larger of
+                    // the two, so a car can always steer in and rejoin, and a slide only ever opens more than it has.
+                    speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) * SlideLimitSlideShare + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
+                }
             }
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
