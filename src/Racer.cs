@@ -165,6 +165,9 @@ namespace ARS
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
         const float InputTrailSampleSpacing = 0.5f;
         const int InputTrailMaxSamples = 160;
+        // The engine drops markers past its per-frame budget in draw order, so the trail draws only every fourth
+        // sample: 40 spheres across the full 80 m, anchored at the newest so the gap behind the car never opens.
+        const int InputTrailDrawStride = 4;
 
 
         // Yaw damper term in degrees: read by the steer sum below.
@@ -2275,8 +2278,8 @@ namespace ARS
         void DrawInputTrail()
         {
             if (_inputTrail.Count == 0) return;
-            foreach (InputTrailSample sample in _inputTrail)
-                World.DrawMarker(MarkerType.DebugSphere, sample.Position, Vector3.Zero, Vector3.Zero, new Vector3(0.105f, 0.105f, 0.105f), InputColour(sample.Input));
+            for (int i = _inputTrail.Count - 1; i >= 0; i -= InputTrailDrawStride)
+                World.DrawMarker(MarkerType.DebugSphere, _inputTrail[i].Position, Vector3.Zero, Vector3.Zero, new Vector3(0.105f, 0.105f, 0.105f), InputColour(_inputTrail[i].Input));
             ARS.DrawLine(Car.Position, _inputTrail[_inputTrail.Count - 1].Position, Color.White);
         }
 
