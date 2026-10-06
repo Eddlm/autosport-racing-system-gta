@@ -1043,8 +1043,9 @@ namespace ARS
 
         // The ceiling in force at this speed: the peak-slip cap, with the corner geometry as a fallback only when the
         // live peak reads unusable. Eased back towards full lock below the ramp's end speed, where it meets what
-        // the car gets at that end speed anyway. The menu's SteerCeilingFactor scales the peak-slip cap only -
-        // never the geometry fallback - and the ramp's end anchor with it, so the band stays continuous.
+        // the car gets at that end speed anyway. The menu's SteerCeilingFactor scales the at-speed peak-slip cap
+        // only - never the geometry fallback and never the ramp's low-speed end, so placement authority below the
+        // ramp end is untouched; the factor bites only at and above it.
         float ResolveSteerCeiling(float fwdSpeed)
         {
             float ceiling = TRLateralAtSpeed > 0.01f ? PeakSlipCeilingAt(TRLateralAtSpeed) * ARS.SteerCeilingFactor : GeometrySteerCeiling(fwdSpeed);
@@ -1053,7 +1054,7 @@ namespace ARS
 
             float endSpeed = ARS.MphToMps(SteerLimitRampEndMph);
             float endPeak = LateralPeakAtSpeed(endSpeed);
-            float endCeiling = endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) * ARS.SteerCeilingFactor : GeometrySteerCeiling(endSpeed);
+            float endCeiling = endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) : GeometrySteerCeiling(endSpeed);
             // max() keeps the ramp a raise only: the straight line sits a degree under the curved law near 25 mph.
             return Math.Max(ceiling, ManeuverRamp(speedMph, endCeiling));
         }
