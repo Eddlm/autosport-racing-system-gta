@@ -57,7 +57,7 @@ No memory survives between sessions; this is the durable record, so save to it a
 ## Build & deploy
 - **The project auto-copies on build** (`PostBuildEvent` + `CopyArsDll`): Debug and Release both fire it, so *whichever builds last wins* — run Release last.
 - **Build:** `& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" NewRacingSystem.csproj /v:minimal /nologo /p:Configuration=Release`.
-- **A rebuild does NOT need a game restart: the SHVDN reload binding reloads the scripts live** (`Insert` alone on this install — a combo value in that ini is read as its first token and reloads on every sprint), even though the in-game console is unavailable — so a test cycle is build → reload → drive.
+- **A rebuild does NOT need a game restart: the SHVDN reload binding reloads the scripts live**, even though the in-game console is unavailable — so a test cycle is build → reload → drive. On this install the reload key is `Insert` alone, because that ini reads a combo binding as its first token only, so a `ShiftKey + Insert` value would reload on every sprint. The mechanism is in `AGENTS-SHVDN.md`.
 **Moved to `AGENTS-TECHNOTES.md`** → "Build & deploy — toolchain, output, rollback": the dotnet form (never actually recorded anywhere — see the note there), the game output path and `ARS.dll`, the log truncation, the lag rule, the branch and rollback points, the dev build number.
 
 ## Dependencies and UI

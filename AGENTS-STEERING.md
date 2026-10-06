@@ -60,7 +60,7 @@ To first order the pursuit acts on *where the car is*, not on where it points, a
    `LookAhead.SteerRef` is `speed × SteerPreviewSeconds` clamped to a floor and a cap in metres (`Racer.cs:2670`, `:129-131`): below the floor the time stretches, above the cap it shortens, and inside the band the same lateral error asks for less steer the faster the car goes — the loop's gain falls with speed without a gain schedule being written anywhere.
    Nothing in the steer reference or the aim reads grip, so no part of the live lane law is grip-scheduled.
 
-**The straight-line regime, and why an offset on it still converges.**
+**The straight-line regime, and why an offset on it is held rather than converged away.**
 With no corner line and no avoidance, the aim is the lane the car is already in (the Lane systems base rule), so the lane steer is the pursuit bearing to that point: **zero only when the car is already on the aim**, and a real correction for a car holding a lateral offset — the pursuit acts on position.
 The pursuit is not gated either (see the ungated-pursuit section), so a straight is lane work, not a regime where the lane law is switched off.
 
@@ -339,7 +339,7 @@ Two unusual choices: the bearing is measured from the **velocity** vector (the l
 
 Ranked by expected payoff:
 
-1. **The yaw damper's *reference* and *gain* were both repaired, then both reverted (`a9603c4`) — two open defects again.**
+1. **The yaw damper's reference and gain are both settled and live** — repaired and reverted twice (`a9603c4`), and the gain's cap now driver-verified (`5bb94bd`). The lever stays here if the standing-offset toll ever returns.
    The signal half stays done: the live damper reads measured yaw rate directly, with no numerical differentiation and no aim-point swing, as `(yaw − target) × gain`.
    The reference is **settled, and no longer zero**: it targets the yaw the **aim point** requires (`SteerDampingAimReference`), the track form deleted with its switch (see the rejected-design note above), centring driver-confirmed with it.
    Damping against **zero** charged a standing lane offset in every corner (the zero-reference toll above); the drive that preferred zero predates the course error's deletion, so it was confounded.

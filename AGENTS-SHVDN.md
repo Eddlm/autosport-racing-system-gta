@@ -22,7 +22,7 @@ Both the 2022 bundle's v2 dll and the nightly's report **assembly version `2.11.
 
 ## Verified matrix (game build `VER_1_0_3889_0`)
 
-**The "nightly" in every cell is `v3.7.0-nightly.188`** — commit `0d61afa8d46f5a80297a716cfb2ed04f186c57cd`, whose `ScriptHookVDotNet2.dll` reports `ProductVersion 2.11.6+0d61afa8…`, which is how the installed pair was identified. **"bundle 2022" is the widely mirrored stable v3.6.0 zip.** Naming the nightly matters: the matrix said only "nightly" for a year, and that is not reproducible — a later nightly is a different bridge. **The live install is the first row below**: the nightly asi with its own v2 dll and no v3 dll.
+**The "nightly" in every cell is `v3.7.0-nightly.188`** — commit `0d61afa8d46f5a80297a716cfb2ed04f186c57cd`, whose `ScriptHookVDotNet2.dll` reports `ProductVersion 2.11.6+0d61afa8…`, which is how the installed pair was identified. **"bundle 2022" is the widely mirrored stable v3.6.0 zip.** Naming the nightly matters: the matrix said only "nightly" for a year, and that is not reproducible — a later nightly is a different bridge. **The live install is the first row below**: the nightly asi with its own v2 dll and no v3 dll — a supported pairing, but the console is dead and SHVDN's own log says so. (`v3.6` in older notes meant this asi's *bridge assembly* version `3.6.0.0`, which every SHVDN build reports; it was never the 2022 bundle.) **Its v3 ini takes a single `Keys` name per binding**, so a `ShiftKey + Insert` value is read as `Shift` alone — which is why the reload key here is `Insert` alone, and why a combo value reads as "any key reloads the mod".
 
 | asi | `ScriptHookVDotNet2.dll` | `ScriptHookVDotNet3.dll` | Result |
 |---|---|---|---|
