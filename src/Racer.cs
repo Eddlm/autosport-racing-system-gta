@@ -2360,10 +2360,11 @@ namespace ARS
             }
         }
 
-        // Pedal bar over the car along its forward axis: centre neutral, front end full throttle, back end full
-        // brake, reverse throttle placed ahead by magnitude. The applied pedal is green (throttle) or red (brake);
-        // a white sphere is an override command; a coloured sphere is a per-reason limit, drawn only where it bites.
-        // The inputs go down first and then every cap from highest to lowest, so the binding cap paints last.
+        // The applied pedal and the reason limits over the car along its forward axis: centre neutral, front end
+        // full throttle, back end full brake, reverse throttle placed ahead by magnitude. Green is throttle, red
+        // is brake; a white sphere is an override command; a coloured sphere is a per-reason limit, drawn only
+        // where it bites. The inputs go down first and then every cap from highest to lowest, so the binding cap
+        // paints last.
         const float PedalBarHalfLength = 1.25f;
         // The applied pedal sits a hair under both cap classes, so a cap that coincides with it still rings it.
         const float PedalBarReasonSize = 0.1f;
@@ -2392,7 +2393,6 @@ namespace ARS
         {
             Vector3 center = Car.Position + new Vector3(0f, 0f, Car.Model.GetDimensions().Z + 0.375f);
             Vector3 fwd = Car.ForwardVector;
-            ARS.DrawLine(center + fwd * PedalBarHalfLength, center - fwd * PedalBarHalfLength, Color.White);
 
             float throttle = Math.Abs(Control.Throttle);
             if (throttle > 0f) DrawPedalBarSphere(center, fwd, throttle, Color.Green, PedalBarInputSize);
