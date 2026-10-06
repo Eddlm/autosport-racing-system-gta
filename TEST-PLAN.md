@@ -20,7 +20,7 @@ batch and the governor-key fix regressed nothing. The deployed DLL is dev build 
 | `cbae845` | each car is ghosted against its nearest rival only (engine has one slot) | §12 |
 | `f3f318f` → `148db70` | the bump/lip scan and its `Show Bumps` overlay, then the rise-walk fixes | Bump scan overlay |
 
-Start a race with several AI cars. `Show Inputs` on the Debug menu helps for the pedal bar, and `Log.log` in the
+Start a race with several AI cars. `Show Inputs` on the Debug menu helps for the input trail, and `Log.log` in the
 game folder carries the init banner and lap lines.
 
 ---
@@ -39,7 +39,7 @@ game folder carries the init banner and lap lines.
 
 1. Take a car well off the track at speed (past the raw edge).
    **Expect:** pedal lifted (throttle 0) above 20 mph, ramping back to full at 15 mph — it sits slow but firm.
-2. Watch the **white sphere** on the pedal bar while off track (Show Inputs).
+2. Watch the **white override sphere** on the white steer line while off track (Show Track Analysis).
 3. Put the car half-off (centre still on the track). **Expect: no cap** — the rule is centre-past-edge.
 
 ## 2. Recovery trigger A — stuck against something
@@ -192,7 +192,7 @@ difference of the two cars' track-relative offsets — so no corner geometry can
 44. On a straight, rear-end prevention must still work: close on a slower car and confirm the lift/avoidance.
 45. Rival walls must not appear from a rival more than 30 m of route ahead.
 46. **The discriminator**: follow an AI into a ~50 m corner at ~90 km/h holding ~20 m of arc, and have it brake at
-    the apex. The blue Rival sphere on the pedal bar must appear and the throttle glide down. On the old model this
+    the apex. The blue Rival sphere on the white steer line must appear and the throttle glide down. On the old model this
     was invisible — 3.99 m of lateral offset, bail-out, `FrontGap` 14.5 m — and the follower closed to contact.
 47. **Negative control for 46**: the same 20 m of arc at matched speed → no sphere. Without this, "it lifted" does
     not distinguish the model from "always reacts to a car ahead".
