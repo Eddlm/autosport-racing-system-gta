@@ -136,8 +136,7 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `rival-publish-core` — not built
 - `apex-radius` — not built
 - `slide-brake-rampdown` — parked
-- **Pushed (`ac5514b..c084b96`)**: everything held from the sessions before — the debug-visual train since `dc8ab14`, the slide-raise retirement, the ramp/damper batch, the overspeed ramp (`2dcbbcc`) and the lane base (`dd484d3`) — plus two adversarial-review fix commits. **Undriven in that run**: the ramp band and its ceiling factor, the overspeed ramp and the lane base; the drives owed are the last section of `TEST-PLAN.md`.
-- **Held unpushed**: the second adversarial pass's fixes (`57b3ac5` — the overspeed NaN accept, the lane-aimed flag the Offshoot cap reads, three leftovers) and three doc/memory commits, riding the next push.
+- **Pushed (`ac5514b..c2e7e6b`)**: everything held from the sessions before — the debug-visual train since `dc8ab14`, the slide-raise retirement, the ramp/damper batch, the overspeed ramp (`2dcbbcc`) and the lane base (`dd484d3`) — plus the four fix commits the two Council passes earned (`e59e0a9`, `57b3ac5` and their two doc commits). **Undriven in that run**: the ramp band and its ceiling factor, the overspeed ramp, the lane base and the Offshoot gate it inverted; the drives owed are the last section of `TEST-PLAN.md`.
 - **Session artifacts**: `AUDIT-COMPUTE-ONCE.md` (the code-disagrees pile — fix it in the code, never annotate it), `PLAN-RATE-PRECISION.md` (rate and precision stages, the deferred perception manager, the route-frame ranking migration), `TEST-PLAN.md` (the outstanding drives); the flags reference's four unactioned items are in `AGENTS-FLAGS.md` and the corrections rule in `AGENTS-TECHNOTES.md`.
 
 ## Cross-session hindsight notes
