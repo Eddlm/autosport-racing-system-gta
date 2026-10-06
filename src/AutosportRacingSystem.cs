@@ -870,7 +870,7 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail: one sphere per half metre of travel, green at full throttle through yellow at neutral to red at full brake, holding the last 80 m.");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail: one chevron every two metres of travel, lying flat and pointing along the car's path, pitching its nose down on throttle and up on braking, green through yellow to red by pedal input, holding the last 80 m.");
             AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's steer-angle fan - pursuit, pursuit plus damper, the final steer line carrying the applied pedals and every limit that bites along it, and the limiter's ceiling - plus the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
             AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
