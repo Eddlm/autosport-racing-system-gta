@@ -150,7 +150,7 @@ namespace ARS
         public static float SteerDampingGain = 0.5f;
         public static int SteerDampingSpeedMph = 70;
         public static float SteerCeilingFactor = 1f;
-        public static float TcsSlipThreshold = 1f;
+        public static float TcsSlipThreshold = 0.5f;
         public static float TcsTaperSpan = 0.5f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
