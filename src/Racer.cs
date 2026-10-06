@@ -1682,6 +1682,10 @@ namespace ARS
         const float OverspeedArmMaxSlideDegrees = 2f;
         const float OverspeedArmMinSpeedMph = 30f;
 
+        // The correction ramps: no cut at the bottom of the range, a closed throttle at the top, linear between.
+        const float OverspeedCutStartGs = 0.2f;
+        const float OverspeedCutFullGs = 1.2f;
+
         // Cutting is fast, recovering is deliberate: the shared rate going down, half of it coming back.
         const float ReasonCapRecoveryScale = 0.5f;
 
@@ -1699,8 +1703,11 @@ namespace ARS
 
             bool overspeedArmed = Math.Abs(Control.SteerDegrees) < OverspeedArmMaxSteerDegrees && Math.Abs(VehicleData.SlideAngle) < OverspeedArmMaxSlideDegrees && Car.Velocity.Length() > ARS.MphToMps(OverspeedArmMinSpeedMph);
             float overspeedLevel = 1f;
-            if (ARS.OverspeedEnabled && overspeedArmed && VehicleData.OverspeedExcessGs > 0f)
-                overspeedLevel = ARS.Clamp(1f - (float)Math.Floor(VehicleData.OverspeedExcessGs / 0.1f) * 0.5f, 0f, 1f);
+            if (ARS.OverspeedEnabled && overspeedArmed)
+            {
+                float overspeedCut = (VehicleData.OverspeedExcessGs - OverspeedCutStartGs) / (OverspeedCutFullGs - OverspeedCutStartGs);
+                overspeedLevel = ARS.Clamp(1f - overspeedCut, 0f, 1f);
+            }
             Control.MaxThrottleFromOverspeed = GlideCap(Control.MaxThrottleFromOverspeed, overspeedLevel);
 
             float rivalLevel = 1f;
