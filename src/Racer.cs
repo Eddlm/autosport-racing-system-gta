@@ -2293,6 +2293,7 @@ namespace ARS
 
         void DrawInputTrail()
         {
+            int site = 0;
             for (int i = 1; i < _inputTrail.Count; i++)
             {
                 InputTrailSample sample = _inputTrail[i];
@@ -2302,10 +2303,21 @@ namespace ARS
                 heading.Z = 0f;
                 if (heading.LengthSquared() < 0.0001f) continue;
                 heading.Normalize();
+                site++;
 
                 Vector3 position = new Vector3(sample.Position.X, sample.Position.Y, sample.Position.Z + InputTrailChevronLift);
-                Vector3 rotation = new Vector3(89f, 90f, -90f + sample.Input * InputTrailChevronPitch);
-                World.DrawMarker(MarkerType.ChevronUpx1, position, heading, rotation, new Vector3(InputTrailChevronSize, InputTrailChevronSize, InputTrailChevronSize), InputColour(sample.Input), false, false, 2, false, "", "", false);
+                Vector3 scale = new Vector3(InputTrailChevronSize, InputTrailChevronSize, InputTrailChevronSize);
+
+                // Measurement build: one slot per probe so a single drive can name the axis that pitches the chevron
+                // rather than guessing it again. The pedal-coloured chevron on the path carries the input on the
+                // last axis, magenta one edge over carries it on the first, cyan on the other edge on the middle.
+                // The two probes go when the answer is in.
+                World.DrawMarker(MarkerType.ChevronUpx1, position, heading, new Vector3(89f, 90f, -90f + sample.Input * InputTrailChevronPitch), scale, InputColour(sample.Input), false, false, 2, false, "", "", false);
+                if (site % 2 != 0) continue;
+
+                Vector3 edgeRight = Vector3.Cross(heading, Vector3.WorldUp).Normalized;
+                World.DrawMarker(MarkerType.ChevronUpx1, position + edgeRight * 1.5f, heading, new Vector3(89f + sample.Input * InputTrailChevronPitch, 90f, -90f), scale, Color.Magenta, false, false, 2, false, "", "", false);
+                World.DrawMarker(MarkerType.ChevronUpx1, position - edgeRight * 1.5f, heading, new Vector3(89f, 90f + sample.Input * InputTrailChevronPitch, -90f), scale, Color.Cyan, false, false, 2, false, "", "", false);
             }
         }
 
