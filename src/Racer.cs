@@ -1660,7 +1660,6 @@ namespace ARS
         // wheel.cpp:94-97) and is flat past it. More negative = more spin. Scale confirmed by the driver against
         // live values: the lock ratio runs to ~15 at a stopped wheel, mingrip onset at 2.5.
         const float IdealWheelspinLaunchRatio = 1.75f;   // standstill: mid-traction, the CurveMax-CurveMin midpoint
-        const float IdealWheelspinPeakRatio = 1.0f;      // normal driving: the traction peak
         const float IdealWheelspinOffTrackRatio = 0.5f;  // off-track: half the peak coefficient
         const float IdealWheelspinLaunchTaperEndMph = 30f;
         const float SlipTargetGripFloor = 0.3f;
@@ -1670,9 +1669,19 @@ namespace ARS
         // own throttle and tags the winner. The level is the logic half, the shared rate the clock half.
         const float ReasonCapSlewRate = 3.5f;
         const float TcsCapFloor = 0.25f;
-        // The curve is flat from here (CurveMin at 2.5): both cap levels bottom exactly at the knee — past it no
-        // deeper slip earns a deeper cut.
+        // The curve is flat from here (CurveMin at 2.5): the brake cap's taper bottoms exactly at the knee — past it
+        // no deeper slip earns a deeper cut.
         const float SlipCurveKnee = 2.5f;
+
+        // The taper both reason caps cut on: nothing at the threshold, the cap's floor one span of slip past it, tanh
+        // between so the onset has no slope step, normalised so the floor lands where the span says it does. A tanh
+        // runs above its own chord, so the cut leads a straight ramp through the middle of the span.
+        static readonly float TaperNormaliser = (float)(1.0 / Math.Tanh(1.0));
+
+        static float TaperShare(float depth, float span)
+        {
+            return ARS.Clamp((float)Math.Tanh(depth / span) * TaperNormaliser, 0f, 1f);
+        }
         const float YieldThrottleLevel = 0.5f;
         const float OffTrackThrottleLevel = 0f;
         const float OffTrackSafeSpeedMph = 20f;
@@ -1763,22 +1772,21 @@ namespace ARS
             if (!ARS.TcsEnabled) return 1f;
             float wheelspin = ARS.MaxWheelSlip(Car);
 
-            float IdealWheelspin;
+            float slipTarget;
             if (OutOfTrackDistance() > 0f)
             {
                 // The half-peak point is a deliberate policy, not a grip-scaled setpoint: off-track halves the target itself.
-                IdealWheelspin = -IdealWheelspinOffTrackRatio;
+                slipTarget = -ARS.TcsSlipThreshold * IdealWheelspinOffTrackRatio;
             }
             else
             {
                 float gripScale = ARS.Clamp(GroundGripMultiplier, SlipTargetGripFloor, 1f);
-                IdealWheelspin = -ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()),
-                    IdealWheelspinLaunchTaperEndMph, 0f, IdealWheelspinPeakRatio * gripScale, IdealWheelspinLaunchRatio * gripScale, true);
+                slipTarget = -ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()),
+                    IdealWheelspinLaunchTaperEndMph, 0f, ARS.TcsSlipThreshold * gripScale, ARS.TcsSlipThreshold * IdealWheelspinLaunchRatio * gripScale, true);
             }
 
-            float absTarget = -IdealWheelspin;
-            float spinDepth = Math.Max(0f, IdealWheelspin - wheelspin);
-            float depthShare = ARS.Clamp(spinDepth / (SlipCurveKnee - absTarget), 0f, 1f);
+            float spinDepth = Math.Max(0f, slipTarget - wheelspin);
+            float depthShare = TaperShare(spinDepth, ARS.TcsTaperSpan);
             return 1f - depthShare * (1f - TcsCapFloor);
         }
 
@@ -1803,7 +1811,7 @@ namespace ARS
             float lockSlip = ARS.MaxWheelLockSlip(Car);
 
             float lockDepth = Math.Max(0f, lockSlip - SlipCurveKnee);
-            float depthShare = ARS.Clamp(lockDepth / (AbsFloorSlip - SlipCurveKnee), 0f, 1f);
+            float depthShare = TaperShare(lockDepth, AbsFloorSlip - SlipCurveKnee);
             return 1f - depthShare * (1f - AbsBrakeFloor);
         }
 

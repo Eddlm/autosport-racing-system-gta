@@ -147,6 +147,8 @@ namespace ARS
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TcsEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("AbsEnabled", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("TcsSlipThreshold", "1.0", Kind.Number, new[] { "0.2", "0.4", "0.6", "0.8", "1.0", "1.2", "1.4", "1.6", "1.8", "2.0" }));
+            settings.Specs.Add(new KeySpec("TcsTaperSpan", "1.4", Kind.Number, new[] { "0.2", "0.4", "0.6", "0.8", "1.0", "1.2", "1.4", "1.6", "1.8", "2.0" }));
             settings.Specs.Add(new KeySpec("DNFUnderTrack", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("NoCollision", "False", Kind.Bool));
             settings.Specs.Add(new KeySpec("SteerDampingGain", "0.50", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));

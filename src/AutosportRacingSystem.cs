@@ -150,6 +150,8 @@ namespace ARS
         public static float SteerDampingGain = 0.5f;
         public static int SteerDampingSpeedMph = 70;
         public static float SteerCeilingFactor = 1f;
+        public static float TcsSlipThreshold = 1f;
+        public static float TcsTaperSpan = 1.4f;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1019,6 +1021,26 @@ namespace ARS
                 SaveRacerSetting("TcsEnabled", TcsEnabled.ToString());
             };
             aiMenu.Add(tcsItem);
+
+            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Slip Threshold", "The wheelspin the AI throttles to, on the same per-wheel slip ratio the traction curve is: nothing is cut below it and the taper starts there. Higher lets the AI spin the wheels more before it intervenes.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
+            tcsThresholdItem.ItemChanged += (sender, args) =>
+            {
+                TcsSlipThreshold = float.Parse(tcsThresholdItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("TcsSlipThreshold", tcsThresholdItem.Items[args.Index]);
+            };
+            tcsThresholdItem.SelectedIndex = Math.Max(0, tcsThresholdItem.Items.IndexOf(SettingsMenuStore.GetFloat("TcsSlipThreshold", TcsSlipThreshold).ToString("0.0", CultureInfo.InvariantCulture)));
+            aiMenu.Add(tcsThresholdItem);
+            HookListTextPicker(tcsThresholdItem);
+
+            NativeListItem<string> tcsTaperSpanItem = new NativeListItem<string>("TCS Taper Span", "How much extra wheelspin the cut spans, in the same slip ratio: the throttle reaches its floor once the wheelspin passes the threshold by this much, easing there on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpan"));
+            tcsTaperSpanItem.ItemChanged += (sender, args) =>
+            {
+                TcsTaperSpan = float.Parse(tcsTaperSpanItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("TcsTaperSpan", tcsTaperSpanItem.Items[args.Index]);
+            };
+            tcsTaperSpanItem.SelectedIndex = Math.Max(0, tcsTaperSpanItem.Items.IndexOf(SettingsMenuStore.GetFloat("TcsTaperSpan", TcsTaperSpan).ToString("0.0", CultureInfo.InvariantCulture)));
+            aiMenu.Add(tcsTaperSpanItem);
+            HookListTextPicker(tcsTaperSpanItem);
 
             NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "Cap AI brake against a wheel-lock target, the TCS mirror on the brake side. Off lets AI brake go unlimited - plain brake force, engine-side ABS only.", AbsEnabled);
             absItem.CheckboxChanged += (sender, args) =>
@@ -3077,6 +3099,8 @@ namespace ARS
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
+            TcsSlipThreshold = SettingsMenuStore.GetFloat("TcsSlipThreshold", TcsSlipThreshold);
+            TcsTaperSpan = SettingsMenuStore.GetFloat("TcsTaperSpan", TcsTaperSpan);
             DNFUnderTrack = SettingsMenuStore.GetBool("DNFUnderTrack", DNFUnderTrack);
             NoCollision = SettingsMenuStore.GetBool("NoCollision", NoCollision);
             CrestEffect = SettingsMenuStore.GetInt("CrestEffect", 100) * 0.01f;
