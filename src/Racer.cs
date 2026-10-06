@@ -170,9 +170,10 @@ namespace ARS
         // chosen as its sample is taken, never by a stride over the list: a list-anchored stride re-forms every
         // time a sample arrives or the oldest drops, and the trail strobes at frame rate.
         const float InputTrailChevronSpacing = 1f;
-        const float InputTrailChevronLift = 0.6f;
+        const float InputTrailChevronGroundClearance = 0.25f;
         const float InputTrailChevronSize = 1f;
         const float InputTrailChevronPitch = 45f;
+        const int InputTrailFadeCount = 5;
         float _inputTrailChevronDistance = 0f;
 
 
@@ -2293,23 +2294,36 @@ namespace ARS
 
         void DrawInputTrail()
         {
+            int sites = 0;
+            for (int i = 1; i < _inputTrail.Count; i++) if (_inputTrail[i].Chevron) sites++;
+            if (sites == 0) return;
+
+            float restHeight = _restHeightAboveGround > 0f ? _restHeightAboveGround : 0f;
+            int site = 0;
             for (int i = 1; i < _inputTrail.Count; i++)
             {
                 InputTrailSample sample = _inputTrail[i];
                 if (!sample.Chevron) continue;
+
+                int fade = Math.Min(site, sites - 1 - site);
+                site++;
 
                 Vector3 heading = sample.Position - _inputTrail[i - 1].Position;
                 heading.Z = 0f;
                 if (heading.LengthSquared() < 0.0001f) continue;
                 heading.Normalize();
 
-                Vector3 position = new Vector3(sample.Position.X, sample.Position.Y, sample.Position.Z + InputTrailChevronLift);
+                // A sample carries the car's origin, so the road under it is the cached rest height away.
+                Vector3 position = new Vector3(sample.Position.X, sample.Position.Y, sample.Position.Z - restHeight + InputTrailChevronGroundClearance);
                 // The rotation's middle slot sits at 90 to lie the chevron flat, which leaves the first slot a yaw and
                 // the last a roll - no slot left to pitch with. So the pedal tilts the direction vector instead, and
                 // the rotation stays at the flat, pointing configuration every marker site shares.
                 float pitchRad = sample.Input * InputTrailChevronPitch * ((float)Math.PI / 180f);
                 Vector3 direction = heading * (float)Math.Cos(pitchRad) - Vector3.WorldUp * (float)Math.Sin(pitchRad);
-                World.DrawMarker(MarkerType.ChevronUpx1, position, direction, new Vector3(89f, 90f, -90f), new Vector3(InputTrailChevronSize, InputTrailChevronSize, InputTrailChevronSize), InputColour(sample.Input), false, false, 2, false, "", "", false);
+
+                // Both ends fade over the first and last few sites, so a site arriving and the oldest leaving do not pop.
+                Color colour = fade < InputTrailFadeCount ? Color.FromArgb(255 * (fade + 1) / (InputTrailFadeCount + 1), InputColour(sample.Input)) : InputColour(sample.Input);
+                World.DrawMarker(MarkerType.ChevronUpx1, position, direction, new Vector3(89f, 90f, -90f), new Vector3(InputTrailChevronSize, InputTrailChevronSize, InputTrailChevronSize), colour, false, false, 2, false, "", "", false);
             }
         }
 
