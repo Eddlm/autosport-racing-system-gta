@@ -1659,9 +1659,7 @@ namespace ARS
         // curve peaks at 1.0, degrades linearly to CurveMin at 2.5 (sfTractionPeakAngle / sfTractionMinAngle, leaked
         // wheel.cpp:94-97) and is flat past it. More negative = more spin. Scale confirmed by the driver against
         // live values: the lock ratio runs to ~15 at a stopped wheel, mingrip onset at 2.5.
-        const float IdealWheelspinLaunchRatio = 1.75f;   // standstill: mid-traction, the CurveMax-CurveMin midpoint
         const float IdealWheelspinOffTrackRatio = 0.5f;  // off-track: half the peak coefficient
-        const float IdealWheelspinLaunchTaperEndMph = 30f;
         const float SlipTargetGripFloor = 0.3f;
 
         // One home for the throttle reason caps: each reason states the level it wants, its field glides toward
@@ -1781,8 +1779,7 @@ namespace ARS
             else
             {
                 float gripScale = ARS.Clamp(GroundGripMultiplier, SlipTargetGripFloor, 1f);
-                slipTarget = -ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()),
-                    IdealWheelspinLaunchTaperEndMph, 0f, ARS.TcsSlipThreshold * gripScale, ARS.TcsSlipThreshold * IdealWheelspinLaunchRatio * gripScale, true);
+                slipTarget = -ARS.TcsSlipThreshold * gripScale;
             }
 
             float spinDepth = Math.Max(0f, slipTarget - wheelspin);
