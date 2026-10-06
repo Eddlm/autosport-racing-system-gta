@@ -169,8 +169,9 @@ namespace ARS
         // full — so a rod's own angle is the gauge. Rods join only in XY: a Z chained from one rod into the next
         // would integrate the input and sink the trail a whole trail-length over a long full-throttle run, and
         // carrying the previous end Z as the next start Z would quietly make the slope the change in input.
+        // A rod spans one sampling step and never a stride: a wider pairing is anchored to the list's end, so it
+        // re-pairs every time a sample arrives or the oldest drops, and the comb strobes at frame rate.
         const float InputTrailLift = 1.2f;
-        const int InputTrailDrawStride = 2;
 
 
         // Yaw damper term in degrees: read by the steer sum below.
@@ -2282,10 +2283,10 @@ namespace ARS
         {
             if (_inputTrail.Count == 0) return;
 
-            for (int i = _inputTrail.Count - 1; i - InputTrailDrawStride >= 0; i -= InputTrailDrawStride)
+            for (int i = _inputTrail.Count - 1; i > 0; i--)
             {
                 InputTrailSample nearSample = _inputTrail[i];
-                InputTrailSample farSample = _inputTrail[i - InputTrailDrawStride];
+                InputTrailSample farSample = _inputTrail[i - 1];
                 float run = farSample.Position.DistanceTo2D(nearSample.Position);
                 float anchorZ = farSample.Position.Z + InputTrailLift;
                 Vector3 farEnd = new Vector3(farSample.Position.X, farSample.Position.Y, anchorZ);
