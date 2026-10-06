@@ -2287,14 +2287,12 @@ namespace ARS
                 InputTrailSample nearSample = _inputTrail[i];
                 InputTrailSample farSample = _inputTrail[i - InputTrailDrawStride];
                 float run = farSample.Position.DistanceTo2D(nearSample.Position);
-                float anchorZ = nearSample.Position.Z + InputTrailLift;
-                Vector3 nearEnd = new Vector3(nearSample.Position.X, nearSample.Position.Y, anchorZ);
-                Vector3 farEnd = new Vector3(farSample.Position.X, farSample.Position.Y, anchorZ + nearSample.Input * run);
+                float anchorZ = farSample.Position.Z + InputTrailLift;
+                Vector3 farEnd = new Vector3(farSample.Position.X, farSample.Position.Y, anchorZ);
+                Vector3 nearEnd = new Vector3(nearSample.Position.X, nearSample.Position.Y, anchorZ - nearSample.Input * run);
                 ARS.DrawLine(farEnd, nearEnd, InputColour(nearSample.Input));
+                if (i == _inputTrail.Count - 1) ARS.DrawLine(Car.Position, nearEnd, Color.White);
             }
-
-            InputTrailSample newest = _inputTrail[_inputTrail.Count - 1];
-            ARS.DrawLine(Car.Position, new Vector3(newest.Position.X, newest.Position.Y, newest.Position.Z + InputTrailLift), Color.White);
         }
 
         const float SteerLinePedalSize = 0.08f;
