@@ -2304,7 +2304,7 @@ namespace ARS
                 heading.Normalize();
 
                 Vector3 position = new Vector3(sample.Position.X, sample.Position.Y, sample.Position.Z + InputTrailChevronLift);
-                Vector3 rotation = new Vector3(89f + sample.Input * InputTrailChevronPitch, 0f, -90f);
+                Vector3 rotation = new Vector3(89f + sample.Input * InputTrailChevronPitch, 90f, -90f);
                 World.DrawMarker(MarkerType.ChevronUpx1, position, heading, rotation, new Vector3(InputTrailChevronSize, InputTrailChevronSize, InputTrailChevronSize), InputColour(sample.Input), false, false, 2, false, "", "", false);
             }
         }
