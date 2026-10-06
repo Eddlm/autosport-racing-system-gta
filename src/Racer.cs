@@ -2360,16 +2360,13 @@ namespace ARS
             }
         }
 
-        // The applied pedal and the reason limits over the car along its forward axis: centre neutral, front end
-        // full throttle, back end full brake, reverse throttle placed ahead by magnitude. Green is throttle, red
-        // is brake; a white sphere is an override command; a coloured sphere is a per-reason limit, drawn only
-        // where it bites. The inputs go down first and then every cap from highest to lowest, so the binding cap
-        // paints last.
+        // The reason limits over the car along its forward axis: centre neutral, front end full throttle, back end
+        // full brake, reverse throttle placed ahead by magnitude. A white sphere is an override command; a coloured
+        // sphere is a per-reason limit, drawn only where it bites. Every cap goes down from highest to lowest, so
+        // the binding cap paints last.
         const float PedalBarHalfLength = 1.25f;
-        // The applied pedal sits a hair under both cap classes, so a cap that coincides with it still rings it.
         const float PedalBarReasonSize = 0.1f;
         const float PedalBarCapSize = 0.09f;
-        const float PedalBarInputSize = 0.08f;
         // Etiquette limits (rival, chill-out, yield) are harmless, so they read cool; grip limits yellow; the
         // overspeed cut black; countersteer orange; instability violet; the recovery coast cyan.
         static readonly Color NonDangerousReasonColor = Color.FromArgb(255, 120, 200, 255);
@@ -2393,10 +2390,6 @@ namespace ARS
         {
             Vector3 center = Car.Position + new Vector3(0f, 0f, Car.Model.GetDimensions().Z + 0.375f);
             Vector3 fwd = Car.ForwardVector;
-
-            float throttle = Math.Abs(Control.Throttle);
-            if (throttle > 0f) DrawPedalBarSphere(center, fwd, throttle, Color.Green, PedalBarInputSize);
-            if (Control.Brake > 0f) DrawPedalBarSphere(center, -fwd, Control.Brake, Color.Red, PedalBarInputSize);
 
             int count = 0;
             AddPedalCap(fwd, Control.MaxThrottleFromTCS, GripReasonColor, PedalBarReasonSize, ref count);
