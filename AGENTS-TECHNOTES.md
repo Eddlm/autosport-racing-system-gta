@@ -144,6 +144,12 @@ Axes are *rotation* axes, per the engine's own comments (`Automobile.cpp:1176` p
 
 **Omitting the element is not the same as writing `1.0`.** The constructor seeds `(0,0,0)` (`handlingMgr.cpp:1251`) and the schema declares no default, so an omitted tag takes the override branch asking for zero inertia — which is why the dev-only assert at `:6888` reports a target it could not reach.
 
+## Mods, neons and the centre of mass — what a fitted mod can actually change
+
+**Neons have no physics path at all**: the system is a colour plus four on/off flags (`VehicleVariationInstance`, script natives `commands_vehicle.cpp:13027-13212`, replayed in vehicle packets), and the only reference inside `Vehicles\` is an ambient-occlusion/audio offset for the `MID_NEON` bone (`Automobile.cpp:314-315`, applied `:5633-5635`). **No fitted mod anywhere writes mass, centre of mass or inertia** — the sole runtime CoM writer in the whole game tree is the hard-coded trailer hack (`m_vecCentreOfMassOffset.SetZf(-1.0f)`, `VehicleModelInfo.cpp:1448`), and everything else consumes the handling value at model load. So the recurring community claim that neons, skirts or bumpers lower the CoM and reduce lean is false as stated.
+
+The slots that do carry physics are all in `VehicleModelInfoVariation.cpp`: front bumper sets *front* downforce and spoiler sets *rear* downforce, and only when the car has `CF_USE_DOWNFORCE_BIAS` (`:1039-1058`, `:974-1037`). Suspension is the one that answers the lean question — it sets a fake lowering amount (`:945-953`) that the wheel's roll-centre height bias adds **only** under `CF_REDUCE_BODY_ROLL_WITH_SUSPENSION_MODS` (`wheel.cpp:3621-3624`, `:4044-4046`), which is why a slammed car leans less while its CoM never moves. Hydraulics set bounds and rate (`:955-972`), and engine / ICE / gearbox / brakes change power, top speed, gear count and plane handling; side skirts, chassis and the rest have no branch at all. The belief almost certainly rides the mod-shop confound: neons and skirts get fitted in the same visit as the suspension, and the suspension mod is doing the work.
+
 ## Per-menu ini persistence — full details
 
 - `Menu-Race.ini` (Race submenu: Track, Laps, GridSize, PaceTarget — later extended with `PaceMode` + `PaceOffset`), `Menu-Settings.ini` (Settings submenu: GridSorting, TimeoutSeconds, AIRacerAutofix, AiNitro, UseMenyooSkins), `Menu-Debug.ini` (all Debug-submenu toggle keys, named after the `Options` enum). One `[MENU]` section per file, one key per persistable item (buttons never persist).
