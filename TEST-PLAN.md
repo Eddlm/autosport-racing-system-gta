@@ -389,7 +389,7 @@ The ceiling law is plotted in `docs/steer-ceiling.png`, regenerated with the nar
 
 ## The ceiling's reference is the wheel midpoint (driven: 1.00 squeals, 0.75 mostly clean)
 
-**Driven:** at 1.00 the tyres squeal through a corner; at 0.75 the squeal is mostly gone, which is the crossing this change was for — the cap sits just under the peak. The tight-slow-corner check below is the one still owed.
+**Driven:** at 1.00 the tyres squeal through a corner; at 0.75 the squeal is mostly gone, which is the crossing this change was for — the cap sits just under the peak. The wheel-slip spheres agree, and put a number on it: with them on, the tyres read near full green — the top of the traction curve — at 1.00, and below the peak at 0.75. The tight-slow-corner check below is the one still owed.
 
 The peak-slip ceiling was stated at the *outer* front wheel. The engine scales one front wheel to `TEMP_STEER_WHEEL_MULT` (`wheel.cpp:6445`, `CWheel::SetSteerAngle`) and leaves the other at the command, and the ceiling divided the peak slip by that 0.75 so the outer wheel landed on it. A two-wheel model wants the *axle* angle, which is the midpoint of the two — `2 / (1 + 0.75)` — so the ceiling is that now (`PeakSlipMidpointCommandShare`, `Racer.cs`), and the menu says what 1.00 means.
 
