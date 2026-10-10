@@ -204,6 +204,7 @@ namespace ARS
         const int BrakeFactorSeedJitterHundredths = 5;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
+        int _promotedApexNode = -1;
         float _brakeSampleSeconds = 0f;      // sampled braking time: the denominator of the full-pedal share
         float _brakeSampleFullSeconds = 0f;  // of which, the time at full pedal: the numerator
         float _brakeSampleMaxSlideDeg = 0f;  // largest slip seen between this apex's entrance and the apex itself
@@ -498,6 +499,7 @@ namespace ARS
 
             _cornerContexts.Clear();
             _cornersRevisionSeeded = -1;
+            _promotedApexNode = -1;
             _brakeCommitApexNode = -1;
 
             Car.Repair();
@@ -2940,6 +2942,18 @@ namespace ARS
             float forwardGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
             bool flipped = false;
 
+            // A corner promoted while it is already inside the arming window has no approach left to drive, so it is
+            // skipped: the approach is judged once, here, and the outside line is never re-asked for that approach.
+            if (NextApexNode != _promotedApexNode)
+            {
+                _promotedApexNode = NextApexNode;
+                if (NextApexNode >= 0 && TryGetCornerContext(NextApexNode, out CornerContext promoted))
+                {
+                    int promotedEntrance = CornerEntranceNode(_nextApexCorner, NextApexNode);
+                    promoted.ApproachStarted = ForwardNodeDistance(promotedEntrance) / speed > RequirementLookaheadSeconds;
+                }
+            }
+
             foreach (CornerPoint corner in ARS.Corners)
             {
                 int entranceNode = corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(corner.Node, -corner.LengthStart);
@@ -2948,7 +2962,11 @@ namespace ARS
 
                 // Positioning is armed per approach and clears once the apex is behind; braking is not cleared,
                 // because its range is measured to the entrance and the flag must outlive it to hold the plan.
-                if (context.RequiresPositioning && HasPassedApex(corner.Node)) context.RequiresPositioning = false;
+                if (HasPassedApex(corner.Node))
+                {
+                    context.RequiresPositioning = false;
+                    context.ApproachStarted = false;
+                }
 
                 if (distance <= 0) continue;
 
@@ -2973,7 +2991,7 @@ namespace ARS
                     context.RequiresBraking = true;
                     flipped = true;
                 }
-                if (!context.RequiresPositioning && inPositionRange && excess > ARS.MphToMps(PositionExcessMph))
+                if (!context.RequiresPositioning && context.ApproachStarted && inPositionRange && excess > ARS.MphToMps(PositionExcessMph))
                 {
                     context.RequiresPositioning = true;
                     flipped = true;

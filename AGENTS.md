@@ -136,7 +136,7 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `rival-detection-route-frame` — driver-verified (`0623276`), residuals unobserved
 - `player-special-ability`, `ai-free-abs` — parked
 - `lane-repulsion-ceiling` — parked
-- `outside-approach-window` — the latch that carried the outside line across laps is fixed (`UpdateCornerRequirements`, compile-verified, drive owed); the half still open is the profile's far end, a clamp with no distance gate, so once in force the line is already at the outer edge
+- `outside-approach-window` — both latch halves fixed (`Racer.cs:2945`, `:2965`, compile-verified, drive owed): the positioning flag arms per approach, and a corner promoted while already inside the arming window is skipped for that approach, which is also the successive-corner rule because promotion is the previous apex; the blend's far end stays a clamp, now bounded in time by the window
 - `crest-gate` — entry move driver-verified (`27ee097`), gating constants wait on the instrumented run
 - `steer-ramp-band` — untested (`e59e0a9`, the band, the damper speed and the ceiling factor riding one drive)
 - `ceiling-factor-review` — untested (`e59e0a9`); the owner owes the ceiling law a personal read, asked for
