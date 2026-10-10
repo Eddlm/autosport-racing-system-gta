@@ -18,7 +18,10 @@ import matplotlib.pyplot as plt
 
 LOCK = 40.0
 TRLAT = 22.0
-PEAK_SHARE = 1.0 / 0.75
+# The engine scales one front wheel to this share of the steer command (TEMP_STEER_WHEEL_MULT, CWheel::SetSteerAngle,
+# wheel.cpp:6445), so the ceiling is stated at the midpoint of the two front wheels, as Racer.cs does.
+WHEEL_OUTER_SHARE = 0.75
+PEAK_SHARE = 2.0 / (1.0 + WHEEL_OUTER_SHARE)
 RAMP_START, RAMP_END = 5.0, 15.0
 SLIDE_SHARE = 0.5
 FREE_PLAY = 0.5

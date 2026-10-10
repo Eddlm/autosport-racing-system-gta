@@ -386,3 +386,11 @@ The ceiling law is plotted in `docs/steer-ceiling.png`, regenerated with the nar
 3. **Off-track halves it, and nothing else moves it** — the threshold is the setting on every surface and at every speed now: the surface-grip scaling is gone (it tightened the regulation where grip was scarce, tracking the lower peak slip a loose surface has, and it went for simplicity) and so is the launch ramp. The off-track half is the only modulation left, and the surface no longer reads into the value at all. Expect the cars to be a shade more permissive than before wherever grip is scarce and off the line — 0.5 everywhere, where the old law gave more slip at launch and less on dirt. A launch allowance, as a setting or a per-racer personality, is filed as `launch-slip-allowance`.
 4. **ABS** — the same shape with no knobs: the cut still starts at the knee and floors at mingrip, which are the traction curve's own numbers.
 5. **The menu and the file** — both items sit under TCS in AI Settings, and their keys appear in `Menu-Settings.ini` on the first load after this build; `Log.log` must hold no "declares no key" line, and both values must survive a reload.
+
+## The ceiling's reference is the wheel midpoint (not driven)
+
+The peak-slip ceiling was stated at the *outer* front wheel. The engine scales one front wheel to `TEMP_STEER_WHEEL_MULT` (`wheel.cpp:6445`, `CWheel::SetSteerAngle`) and leaves the other at the command, and the ceiling divided the peak slip by that 0.75 so the outer wheel landed on it. A two-wheel model wants the *axle* angle, which is the midpoint of the two — `2 / (1 + 0.75)` — so the ceiling is that now (`PeakSlipMidpointCommandShare`, `Racer.cs`), and the menu says what 1.00 means.
+
+1. **The size of the change.** The cap is a flat 14% tighter at every speed and every factor, so the new 1.00 sits between the old 1.00 and the old 0.75. Judge the drive against that bracketing, not against a setting that reproduces 488 exactly.
+2. **The tight stuff.** The tightened cap bites hardest above the ramp's end speed, where the ramp no longer reaches: watch a slow corner for a car that cannot place itself, or that turns in more lazily than it did.
+3. **The item and the file.** The description now names what 1.00 means; confirm it shows, the value survives a reload, and `Log.log` holds no "declares no key" line after a load.

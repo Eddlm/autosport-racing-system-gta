@@ -1087,7 +1087,7 @@ namespace ARS
             aiMenu.Add(steerKDSpeedItem);
             HookListTextPicker(steerKDSpeedItem);
 
-            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Ceiling Factor", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 is the law as computed; lower holds the wheel tighter at speed. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
+            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Ceiling Factor", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 puts the midpoint of the two front wheels on that peak slip angle; lower holds the wheel tighter at speed. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
             steerCeilingFactorItem.ItemChanged += (sender, args) =>
             {
                 SteerCeilingFactor = float.Parse(steerCeilingFactorItem.Items[args.Index], CultureInfo.InvariantCulture);
