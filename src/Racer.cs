@@ -1086,8 +1086,8 @@ namespace ARS
         const float SteerSlipAllowanceBase = 0.10f;
         const float SteerSlipClimbSeconds = 1f;
         const float SteerSlipClimbPerSecond = (1f - SteerSlipAllowanceBase) / SteerSlipClimbSeconds;
-        // Deliberately not const, so the law stays compiled while the switch is off.
-        static readonly bool SlipPeakCeiling = true;
+        // Parked off by decision: the law stays compiled, so reviving it is this one flag.
+        static readonly bool SlipPeakCeiling = false;
         float _slipPeakAllowance = SteerSlipAllowanceBase;
 
         float SlipAllowanceCeilingAt(float peakSlipDeg)
@@ -1099,6 +1099,7 @@ namespace ARS
         // advance the allowance. A slide sends it to the whole peak, which is the model ceiling the code had before.
         void UpdateSlipPeakAllowance(float requestedSteer, float allowanceCeiling)
         {
+            if (!SlipPeakCeiling) return;
             bool sliding = Handling.LateralTractionCurve > 0.01f && Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * SlidingFraction;
             float slip = sliding ? 1f : ARS.MaxWheelSideSlip(Car) + SteerSlipLeadShare;
             float target = Math.Abs(requestedSteer) > allowanceCeiling ? 1f : Math.Min(1f, slip);

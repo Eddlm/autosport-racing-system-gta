@@ -397,7 +397,9 @@ The peak-slip ceiling was stated at the *outer* front wheel. The engine scales o
 2. **The tight stuff.** The tightened cap bites hardest above the ramp's end speed, where the ramp no longer reaches: watch a slow corner for a car that cannot place itself, or that turns in more lazily than it did.
 3. **The item and the file.** The description now names what 1.00 means; confirm it shows, the value survives a reload, and `Log.log` holds no "declares no key" line after a load.
 
-## The measured-slip allowance under the ceiling (built, driven once: swerves are slower, then the climb time was doubled)
+## The measured-slip allowance under the ceiling (PARKED — built, driven once, switched off; do not drive)
+
+**Parked** by decision after the first drive: the swerves read slower, but what the allowance should *be* — a rate limit on authority or an amplitude reference — is a design call, filed as `steer-slip-allowance`. `SlipPeakCeiling` is off, so the list below is what a future session resumes from rather than what is owed now.
 
 The ceiling in force is now the lower of the model law and an allowance read from the tyre: the wheel may lead the side slip it already carries by `SteerSlipLeadShare`, and the allowance climbs to the whole peak over `SteerSlipClimbSeconds` while the command keeps asking for more than it grants, falling at the same rate once it stops. The climb is timed to the peak, so a lower Steer Ceiling Factor cuts the plateau without changing when it arrives.
 
