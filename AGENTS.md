@@ -124,7 +124,7 @@ Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pi
 - Prop `RightVector` and streaming ptfx — offset from the source direction; queue the entity.
 - No old limiter reads the static TRlat; every limiter function has a caller.
 - A POSITIVE steer command steers LEFT — a rename is a side swap, not a symbol swap.
-- **Steer damping is real on the loose cars, dead on the others.** The dial closes a loop resonance (visible by raising oscillation as you lower `SteerDamping` on the Comet/Comet2 through a 130 mph swerve); the `SteerDampingSpeed` axis is **its own decision**: on `tests.txt` the difference between 40 mph and 250 mph matters, but on fleets whose top speed is below the setting the axis is cosmetic. Keep both axes — a user with a 240 mph roadster wants the slider to mean something.
+- **Steer damping is real on the loose cars, dead on the others.** The dial closes a loop resonance (visible by raising oscillation as you lower `SteerDamping` on the Comet/Comet2 through a 130 mph swerve); the `SteerDampingSpeed` axis is **its own decision**: on `tests.txt` the difference between 40 mph and 250 mph matters, but on fleets whose top speed is below the setting the axis is cosmetic. Keep both axes — a user with a 240 mph roadster wants the slider to mean something. The grip divisor in `SteerDampingFor` is `max(BaseMechanicalGrip, 1)` as a denominator, so the term is **weaker on high-grip cars** and equal to the dial on cars with `grip ≤ 1` — never amplified. The two comments on lines 983-984 ("the term vetoed the steering at low speeds") describe a past failure mode where uncapped scaling interacted with low forward speed; the cap at `Math.Max(|fwd|, 1) m/s` prevents it now.
 
 ## Open items — the decision-ready top
 
