@@ -396,3 +396,12 @@ The peak-slip ceiling was stated at the *outer* front wheel. The engine scales o
 1. **The size of the change.** The cap is a flat 14% tighter at every speed and every factor, so the new 1.00 sits between the old 1.00 and the old 0.75. Judge the drive against that bracketing, not against a setting that reproduces 488 exactly.
 2. **The tight stuff.** The tightened cap bites hardest above the ramp's end speed, where the ramp no longer reaches: watch a slow corner for a car that cannot place itself, or that turns in more lazily than it did.
 3. **The item and the file.** The description now names what 1.00 means; confirm it shows, the value survives a reload, and `Log.log` holds no "declares no key" line after a load.
+
+## The measured-slip allowance under the ceiling (built, driven once: swerves are slower, then the climb time was doubled)
+
+The ceiling in force is now the lower of the model law and an allowance read from the tyre: the wheel may lead the side slip it already carries by `SteerSlipLeadShare`, and the allowance climbs to the whole peak over `SteerSlipClimbSeconds` while the command keeps asking for more than it grants, falling at the same rate once it stops. The climb is timed to the peak, so a lower Steer Ceiling Factor cuts the plateau without changing when it arrives.
+
+1. **The cyan walls are the instrument.** `ResolveSteerCeiling` draws them, so the ceiling in force is visible: it should widen over about a second from a turn-in off a straight, then hold. Snapping wide instantly means the climb is not scaling with the core-tick time; never widening means the demand test is not firing.
+2. **The timing** — the first drive read the swerves as slower, which is the effect the law exists for, but the climb as a bit fast; judge whether a second is now too slow rather than too fast.
+3. **The hunt** — the cap chases the ask, so when the ask sits near the cap the allowance can oscillate at the climb rate. The tell is the walls breathing on a straight, or a weave there. The fix is asymmetric rates: climb in a second, fall over two or three.
+4. **A slide** — the allowance reaches the whole peak at the climb rate rather than instantly, so the model ceiling returns over that same second while the countersteer allowance and the damper bypass keep raising on top throughout.

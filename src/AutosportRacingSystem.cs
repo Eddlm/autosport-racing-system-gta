@@ -2906,6 +2906,20 @@ namespace ARS
             return w;
         }
 
+        // Largest per-wheel side-slip angle on the traction curve's own axis, where 1.0 is the peak. Reads every
+        // wheel rather than the front pair: the wheel array's order is not something a driving law should depend on.
+        static public unsafe float MaxWheelSideSlip(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            float w = 0f;
+            foreach (var wheel in wheelPtrs)
+            {
+                float slip = Math.Abs(*((float*)(wheel + 0x1C4)));
+                if (slip > w) w = slip;
+            }
+            return w;
+        }
+
         // Per-wheel side-slip angle on the traction curve's own axis (peaks at 1.0, flat from 2.5). The offset is
         // derived from the leaked CWheel member order and pinned by the neighbours already known on this build:
         // rot slip 0x174, material grip 0x198, steer angle 0x1CC, drive force 0x1D4.

@@ -1067,15 +1067,43 @@ namespace ARS
         // which is full lock.
         float ResolveSteerCeiling(float fwdSpeed)
         {
-            float ceiling = TRLateralAtSpeed > 0.01f ? PeakSlipCeilingAt(TRLateralAtSpeed) * ARS.SteerCeilingFactor : GeometrySteerCeiling(fwdSpeed);
+            float ceiling = TRLateralAtSpeed > 0.01f ? Math.Min(PeakSlipCeilingAt(TRLateralAtSpeed) * ARS.SteerCeilingFactor, SlipAllowanceCeilingAt(TRLateralAtSpeed)) : GeometrySteerCeiling(fwdSpeed);
             float speedMph = ARS.MpsToMph(fwdSpeed);
             if (speedMph >= SteerLimitRampEndMph) return ceiling;
 
             float endSpeed = ARS.MphToMps(SteerLimitRampEndMph);
             float endPeak = LateralPeakAtSpeed(endSpeed);
-            float endCeiling = endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) * ARS.SteerCeilingFactor : GeometrySteerCeiling(endSpeed);
+            float endCeiling = endPeak > 0.01f ? Math.Min(PeakSlipCeilingAt(endPeak) * ARS.SteerCeilingFactor, SlipAllowanceCeilingAt(endPeak)) : GeometrySteerCeiling(endSpeed);
             // max() keeps the ramp a raise only: the straight line sits a degree under the curved law near 25 mph.
             return Math.Max(ceiling, ManeuverRamp(speedMph, endCeiling));
+        }
+
+        // The measured-slip allowance, in fractions of the tyre's peak: the wheel may lead the slip it is already
+        // carrying by this share, and the allowance climbs to the whole peak over the climb time while the command
+        // keeps asking for more than it grants, falling at the same rate once it stops. A lower SteerCeilingFactor
+        // truncates what the allowance buys without changing when it arrives; at the whole peak the two are equal.
+        const float SteerSlipLeadShare = 0.10f;
+        const float SteerSlipAllowanceBase = 0.10f;
+        const float SteerSlipClimbSeconds = 1f;
+        const float SteerSlipClimbPerSecond = (1f - SteerSlipAllowanceBase) / SteerSlipClimbSeconds;
+        // Deliberately not const, so the law stays compiled while the switch is off.
+        static readonly bool SlipPeakCeiling = true;
+        float _slipPeakAllowance = SteerSlipAllowanceBase;
+
+        float SlipAllowanceCeilingAt(float peakSlipDeg)
+        {
+            return SlipPeakCeiling ? PeakSlipCeilingAt(peakSlipDeg * _slipPeakAllowance) : VehicleData.SteeringLock;
+        }
+
+        // One update per core tick, from the limiter alone: the debug draw reads ResolveSteerCeiling and must not
+        // advance the allowance. A slide sends it to the whole peak, which is the model ceiling the code had before.
+        void UpdateSlipPeakAllowance(float requestedSteer, float allowanceCeiling)
+        {
+            bool sliding = Handling.LateralTractionCurve > 0.01f && Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * SlidingFraction;
+            float slip = sliding ? 1f : ARS.MaxWheelSideSlip(Car) + SteerSlipLeadShare;
+            float target = Math.Abs(requestedSteer) > allowanceCeiling ? 1f : Math.Min(1f, slip);
+            float step = SteerSlipClimbPerSecond * TickScale;
+            _slipPeakAllowance = ARS.Clamp(_slipPeakAllowance + ARS.Clamp(target - _slipPeakAllowance, -step, step), SteerSlipAllowanceBase, 1f);
         }
 
         // Between the ramp's start and end speeds the ceiling eases up to the car's own lock, so a slow car can place
@@ -1109,6 +1137,7 @@ namespace ARS
 
             float requestedSteer = Control.SteerDegrees;
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
+            UpdateSlipPeakAllowance(requestedSteer, SlipAllowanceCeilingAt(TRLateralAtSpeed));
 
             // Two limits, one per side, closed by one clamp: the ceiling is granted and then raised on the answering
             // side rather than the clamp being skipped — except for the stabiliser below. Reverse is always the full
