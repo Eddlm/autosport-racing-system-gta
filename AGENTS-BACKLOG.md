@@ -130,6 +130,8 @@
 
 48. `launch-slip-allowance` — **Allow more slip off the line, as a setting or a per-racer personality** (asked for, future). The launch ramp is gone so the TCS threshold now holds at every speed, and the way back is an *allowance* at low speed rather than a schedule: a global setting, a personality trait, or both. The mechanism it replaces last existed in `a6fcf7d`.
 
+49. `outside-approach-window` — **The outside line is in force from far too far back** — its profile's far end is a clamp with no distance gate, and the positioning flag that arms it is latched for the rest of the race, so from the second approach on a car holds the outer edge from the previous corner's exit onward. Detail below.
+
 ## Lane repulsion — unbounded on purpose, and that is the open question
 
 **What it does**: for rivals inside a lateral and longitudinal gate box that are **actually closing laterally**, it *adds* a steer-away term to the lane steer — the code owns the curve; closing speed sets the magnitude and distance scales it, and a hard close at close range can dwarf the lane P. It sits **after** the P, so nothing the P does bounds it, and it is inside the lane component rather than a separate term.
@@ -137,6 +139,16 @@
 **Why it was left alone**: it is the contact-avoidance term, and the lane P is now deliberately uncapped, so clamping the *sum* would weaken exactly the case that must not be weakened. It has always observed one rule — parallel traffic must not kill the lane steer — which is why it fires only on closing rivals and **adds** instead of overwriting.
 
 **Open**: whether anything should bound it, and what: the whole lane component, the repulsion alone, or nothing, leaving the limiter as its only ceiling. Driving has not called it broken, so this is a decision rather than a defect — but if a car ever reads as swerving at nothing, this is the first term to look at.
+
+## Outside approach — the line is in force from far too far back
+
+**The chain, in order** (`ComputeSteering` `Racer.cs:536-543`): a held apex exists and the race has started (`Brain.Corner != null && Lap > 0`; slot 0 is the nearest upcoming corner and is never filtered by the braking gate, `Racer.cs:3002`); the corner's angle is non-zero; no corner-commit maneuver is active; then inside `ComputeCornerTargetLane` the car must have **asked to position** (`RequiresPositioning`, `Racer.cs:817`) and still be **above its apex speed less 20 mph** (`:818`). A non-zero result then overrides both the high-speed line and the lane base, with only avoidance (`:540`) and the rival walls (`:543`) above it.
+
+**Arming** (`UpdateCornerRequirements` `Racer.cs:2937`): the corner must be **tight** — the *smoothed* `DetectedRadius` under `CornerTightRadius` 50 m (`:195`, `:2950`) — and the car must be inside `RequirementLookaheadSeconds` **3.95 s of the corner's entrance** (`:761`, `:2958`) while its extrapolated arrival exceeds the intended apex speed by `PositionExcessMph` **10 mph** (`:199`, `:2971`).
+
+**Why it reads as "from very afar" — two independent causes.** First, the profile's far end is a **clamp, not a gate**: `IdealLineOffset` (`:773`) runs from the inside edge at the apex to the outer edge at `DetectedRadius × acos((R − s)/(R + s)) × IdealLineLeadMultiple`, and every greater distance gets that same outer edge — for the `R < 50 m` the line applies to, roughly 34-55 m on the default 5 m half-width road. Second, `RequiresPositioning` is **latched**: it is set true and never cleared (`:2973`; the only clears are a car reset at `:499` and an apex-table rebuild, `TrackLoader.cs:353`), so the 3.95 s window bounds only the **first** approach, and from the second lap the outside line is in force the moment the corner becomes queue slot 0 — the previous corner's exit — for the whole straight that follows.
+
+**Levers**: bound the profile by the corner's own span (`LengthStart` / `StartNode`, which the entry-only `d5a643f` already treats as the entry); make the flag per-approach so it is armed inside the same window it was decided in; or leave the geometry and rate-limit `targetLane` (the TORCS preview guard already listed in `AGENTS-STEERING.md`), which treats the step and not the distance.
 
 ## GitHub issue triage
 
