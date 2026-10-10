@@ -136,7 +136,7 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `rival-detection-route-frame` — driver-verified (`0623276`), residuals unobserved
 - `player-special-ability`, `ai-free-abs` — parked
 - `lane-repulsion-ceiling` — parked
-- `outside-approach-window` — the outside line hugs the outer edge from very afar: the profile's far end is a clamp with no distance gate and the flag arming it is latched for the race, so only the first approach is honest
+- `outside-approach-window` — the latch that carried the outside line across laps is fixed (`UpdateCornerRequirements`, compile-verified, drive owed); the half still open is the profile's far end, a clamp with no distance gate, so once in force the line is already at the outer edge
 - `crest-gate` — entry move driver-verified (`27ee097`), gating constants wait on the instrumented run
 - `steer-ramp-band` — untested (`e59e0a9`, the band, the damper speed and the ceiling factor riding one drive)
 - `ceiling-factor-review` — untested (`e59e0a9`); the owner owes the ceiling law a personal read, asked for

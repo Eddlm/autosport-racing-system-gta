@@ -2944,8 +2944,13 @@ namespace ARS
             {
                 int entranceNode = corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(corner.Node, -corner.LengthStart);
                 int distance = ForwardNodeDistance(entranceNode);
-                if (distance <= 0) continue;
                 if (!TryGetCornerContext(corner.Node, out CornerContext context)) continue;
+
+                // Positioning is armed per approach and clears once the apex is behind; braking is not cleared,
+                // because its range is measured to the entrance and the flag must outlive it to hold the plan.
+                if (context.RequiresPositioning && HasPassedApex(corner.Node)) context.RequiresPositioning = false;
+
+                if (distance <= 0) continue;
 
                 bool tight = corner.DetectedRadius < CornerTightRadius;
                 // The intended speed must be the one the plan itself will target, or the flag reads a wider corner
