@@ -2219,6 +2219,7 @@ namespace ARS
 
             if (ARS.DebugToggles[Options.ShowInputs]) DrawInputTrail();
             if (ARS.DebugToggles[Options.ShowTrackAnalysis]) DrawSteerAngles();
+            if (ARS.DebugToggles[Options.ShowWheelSlip]) DrawWheelSlip();
         }
 
         const float FanLineLength = 5f;
@@ -2354,6 +2355,47 @@ namespace ARS
         void DrawSteerLineSphere(Vector3 basePt, Vector3 dir, float length, float level, float size, Color color)
         {
             World.DrawMarker(MarkerType.DebugSphere, basePt + dir * length * ARS.Clamp(level, 0f, 1f), Vector3.Zero, Vector3.Zero, new Vector3(size, size, size), color);
+        }
+
+        // A sphere over each wheel, coloured by the tyre's side slip on the axis in AGENTS-TECHNOTES.md: white at
+        // rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.
+        static readonly Color SlipRestColor = Color.White;
+        static readonly Color SlipPeakColor = Color.Lime;
+        static readonly Color SlipSkidColor = Color.Yellow;
+        static readonly Color SlipFloorColor = Color.Red;
+        const float SlipSkidLevel = 2f;
+        const float SlipFloorLevel = 2.5f;
+        const float WheelSlipSphereHeight = 1f;
+        const float WheelSlipSphereSize = 0.35f;
+
+        void DrawWheelSlip()
+        {
+            List<float> slips = ARS.WheelSideSlipAngles(Car);
+            if (slips.Count < 4) return;
+
+            float halfWidth = VehicleData.ModelDimensions.X * 0.5f;
+            float halfBase = VehicleData.WheelBase * 0.5f;
+            for (int i = 0; i < 4; i++)
+            {
+                float lateral = i % 2 == 0 ? -halfWidth : halfWidth;
+                float longitudinal = i < 2 ? halfBase : -halfBase;
+                Vector3 position = Car.Position + Car.ForwardVector * longitudinal + Car.RightVector * lateral + Vector3.WorldUp * WheelSlipSphereHeight;
+                World.DrawMarker(MarkerType.DebugSphere, position, Vector3.Zero, Vector3.Zero, new Vector3(WheelSlipSphereSize, WheelSlipSphereSize, WheelSlipSphereSize), SlipColor(slips[i]));
+            }
+        }
+
+        static Color SlipColor(float slip)
+        {
+            slip = Math.Abs(slip);
+            if (slip <= 1f) return BlendColor(SlipRestColor, SlipPeakColor, slip);
+            if (slip <= SlipSkidLevel) return BlendColor(SlipPeakColor, SlipSkidColor, slip - 1f);
+            return BlendColor(SlipSkidColor, SlipFloorColor, (slip - SlipSkidLevel) / (SlipFloorLevel - SlipSkidLevel));
+        }
+
+        static Color BlendColor(Color from, Color to, float t)
+        {
+            t = ARS.Clamp(t, 0f, 1f);
+            return Color.FromArgb((int)(from.A + (to.A - from.A) * t), (int)(from.R + (to.R - from.R) * t), (int)(from.G + (to.G - from.G) * t), (int)(from.B + (to.B - from.B) * t));
         }
 
         // The reason limits ride the white steer line with the applied pedals, so every sphere on the line shares

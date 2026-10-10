@@ -45,7 +45,7 @@ namespace ARS
     // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview, ShowBumps
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview, ShowBumps, ShowWheelSlip
     }
     public partial class ARS : Script
     {
@@ -187,7 +187,8 @@ namespace ARS
         { Options.ShowAiLapTimes, false },
         { Options.LockLaneCentre, false },
         { Options.GsAwarePreview, true },
-        { Options.ShowBumps, false }
+        { Options.ShowBumps, false },
+        { Options.ShowWheelSlip, false }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -882,6 +883,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
             AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Lead the lane error with the lateral motion the car is already committing to, so the steering anticipates drift instead of reacting to it. Off measures the lane error at the car alone.");
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Draw a cyan marker at every lip the route scan found: a vertical tick and a line across the road, so the scan can be judged by eye before anything drives on it.");
+            AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere a metre over each wheel of the closest AI car, coloured by that tyre's side-slip angle: white at rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.");
 
             // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
             NativeMenu racersMenu = new NativeMenu("General Settings", "General Settings", "Standing preferences: grid sorting, timeout, racer behaviour and tuning.")
@@ -2902,6 +2904,20 @@ namespace ARS
                 if (pos > w) w = pos;
             }
             return w;
+        }
+
+        // Per-wheel side-slip angle on the traction curve's own axis (peaks at 1.0, flat from 2.5). The offset is
+        // derived from the leaked CWheel member order and pinned by the neighbours already known on this build:
+        // rot slip 0x174, material grip 0x198, steer angle 0x1CC, drive force 0x1D4.
+        static public unsafe List<float> WheelSideSlipAngles(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            List<float> slips = new List<float>();
+            foreach (var wheel in wheelPtrs)
+            {
+                slips.Add(*((float*)(wheel + 0x1C4)));
+            }
+            return slips;
         }
 
         // Per-wheel slip ratio (offset 0x174, same data TCS uses) - a dimensionless rotational slip ratio, not a
