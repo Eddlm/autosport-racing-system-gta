@@ -6,7 +6,7 @@
 
 ## WIP scope
 
-The WIP ships the playable race loop, bundled `Tracks\`, the flat `Vehicles\cars.txt` roster, ARS menu settings, Auto Styling, optional Menyoo appearance, and LemonUI.SHVDN2.
+The WIP ships the playable race loop, bundled `Tracks\`, the flat `Vehicles\cars.txt` roster, ARS menu settings, Auto Styling, optional Menyoo appearance, and LemonUI.SHVDN2. **Bikes are out of scope**: every bike line is dropped by the loader's `IsCar` gate and the Motorcycles/Cycles/OffRoad blacklist, so no bikes pool ships and the work is parked post-0.9.0 (`raceable-bikes` in `AGENTS-BACKLOG.md`).
 
 The track creator is live — a root Track Creator submenu records a route and Save Track writes `Tracks\*.xml` (revived and driver-verified, per `AGENTS-BACKLOG.md`). There is no track-update path: the dead `UpdateRoute` was cut (`c2ad2de`). Retired per-vehicle XML, saved-driver, personality and discipline systems are outside this WIP.
 
