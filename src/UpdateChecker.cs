@@ -38,9 +38,13 @@ namespace ARS
                     using (StreamReader reader = new StreamReader(stream))
                     {
                         string json = reader.ReadToEnd();
-                        Match match = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"([^\"]*)\"");
+                        // The release's own title when it has one, so the notice can carry the build number the
+                        // banner already shows and a player can compare the two. An untitled release falls back
+                        // to the tag, which is what every release before the titles did.
+                        Match match = Regex.Match(json, "\"name\"\\s*:\\s*\"([^\"]+)\"");
+                        if (!match.Success) match = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
                         if (match.Success) _latestTag = match.Groups[1].Value;
-                        else ARS.Log(ARS.LogImportance.Info, "UpdateChecker: tag_name not found in GitHub response.");
+                        else ARS.Log(ARS.LogImportance.Info, "UpdateChecker: no release title or tag in the GitHub response.");
                     }
                 }
                 catch (Exception ex)
