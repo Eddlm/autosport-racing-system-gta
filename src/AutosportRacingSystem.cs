@@ -820,21 +820,6 @@ namespace ARS
                 CleanEverything();
             };
 
-            // ── Other submenu (root) ──
-            NativeMenu cameraMenu = new NativeMenu("Other", "Other", "Miscellaneous controls.")
-            {
-                UseMouse = false,
-                DisableControls = true,
-                Alignment = Alignment.Right
-            };
-            NativeItem freecamItem = new NativeItem("Freecam", "Toggle the ARS free camera.");
-            freecamItem.Activated += (sender, args) =>
-            {
-                cameraMenu.Visible = false;
-                _freeCam.Toggle();
-            };
-            cameraMenu.Add(freecamItem);
-
             // ── Track Creator submenu (root) — the route editor's only entry point ──
             NativeMenu creatorMenu = new NativeMenu("Track Creator", "Track Creator", "Record a new race route with the free camera.")
             {
@@ -866,36 +851,18 @@ namespace ARS
             };
             creatorMenu.Add(exitCreatorItem);
 
-            // ── Settings submenu (root) — standing preferences, set once ──
-            NativeMenu debugMenu = new NativeMenu("Debug", "Debug", "Configure ARS debug and race setup options.")
+            // ── Rivals (root) — who races against you, and how they drive ──
+            NativeMenu rivalsMenu = new NativeMenu("Rivals", "Rivals", "Who races against you, and how they drive.")
             {
                 UseMouse = false,
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail: one chevron per metre of travel, lying flat and pointing along the car's path, pitching its nose down on throttle and up on braking, green through yellow to red by pedal input, holding the last 40 m.");
-            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's steer-angle fan - pursuit, pursuit plus damper, the final steer line carrying the applied pedals and every limit that bites along it, and the limiter's ceiling - plus the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
-            AddDebugCheckbox(debugMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
-            AddDebugCheckbox(debugMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
-            AddDebugCheckbox(debugMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
-            AddDebugCheckbox(debugMenu, Options.ShowAiLapTimes, "Show AI Lap Times", "Announce each AI racer's lap time as they cross the line, the same way your own is. One notification per racer per lap, so a full grid is a lot of them.");
-            AddDebugCheckbox(debugMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
-            AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
-            AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Lead the lane error with the lateral motion the car is already committing to, so the steering anticipates drift instead of reacting to it. Off measures the lane error at the car alone.");
-            AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Draw a cyan marker at every lip the route scan found: a vertical tick and a line across the road, so the scan can be judged by eye before anything drives on it.");
-            AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere a metre over each wheel of the closest AI car, coloured by that tyre's side-slip angle: white at rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.");
 
-            // ── General Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
-            NativeMenu racersMenu = new NativeMenu("General Settings", "General Settings", "Standing preferences: grid sorting, timeout, racer behaviour and tuning.")
-            {
-                UseMouse = false,
-                DisableControls = true,
-                Alignment = Alignment.Right
-            };
             NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "How the grid is ordered.", EnumLabels<GridSort>());
             gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", ((GridSort)args.Index).ToString());
             gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(EnumLabel(ParseEnum(SettingsMenuStore.Get("GridSorting", "Random"), GridSort.Random))));
-            racersMenu.Add(gridSortItem);
+            rivalsMenu.Add(gridSortItem);
             HookListTextPicker(gridSortItem);
 
             // ── Car pool: which Vehicles\*.txt roster the grid draws from ──
@@ -920,9 +887,9 @@ namespace ARS
             string currentPool = VehicleCatalog.PoolLabel(VehicleCatalog.SelectedRosterFile);
             carPoolItem.SelectedIndex = Math.Max(0, carPoolItem.Items.FindIndex(i => string.Equals(i, currentPool, StringComparison.OrdinalIgnoreCase)));
             _carPoolRefreshing = false;
-            racersMenu.Add(carPoolItem);
+            rivalsMenu.Add(carPoolItem);
             HookListTextPicker(carPoolItem);
-            racersMenu.Shown += (sender, args) => RefreshCarPoolItem(carPoolItem);
+            rivalsMenu.Shown += (sender, args) => RefreshCarPoolItem(carPoolItem);
 
             NativeCheckboxItem forceFillItem = new NativeCheckboxItem("Force-Fill Grid", "Repeat the pool's car models until the grid reaches Target Grid Size, so a short pool still fields a full grid. Off leaves the grid as short as the pool.", ForceFillGrid);
             forceFillItem.CheckboxChanged += (sender, args) =>
@@ -930,19 +897,7 @@ namespace ARS
                 ForceFillGrid = forceFillItem.Checked;
                 SaveRacerSetting("ForceFillGrid", ForceFillGrid.ToString());
             };
-            racersMenu.Add(forceFillItem);
-
-            NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", SettingsRepair.OptionsFor("TimeoutSeconds"));
-            timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
-            timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(SettingsMenuStore.GetInt("TimeoutSeconds", 60).ToString()));
-            racersMenu.Add(timeoutItem);
-            HookListTextPicker(timeoutItem);
-
-            NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", SettingsRepair.OptionsFor("AIRacerAutofix"));
-            autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
-            autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(SettingsMenuStore.GetInt("AIRacerAutofix", 2).ToString()));
-            racersMenu.Add(autofixItem);
-            HookListTextPicker(autofixItem);
+            rivalsMenu.Add(forceFillItem);
 
             NativeCheckboxItem tuningItem = new NativeCheckboxItem("Smart Tuning", "Pick the livery that fits a style, then the body parts that go with it, then paint to suit. Runs during the countdown so it adds no load time.", SmartTuning);
             tuningItem.CheckboxChanged += (sender, args) =>
@@ -950,16 +905,7 @@ namespace ARS
                 SmartTuning = tuningItem.Checked;
                 SaveRacerSetting("SmartTuning", SmartTuning.ToString());
             };
-            racersMenu.Add(tuningItem);
-
-            // ── Nitrous ──
-            NativeCheckboxItem nitroItem = new NativeCheckboxItem("Nitrous", "Give every racer a fresh nitrous bottle each lap. Racers fire theirs automatically on straights; the player fires manually.", NitrousEnabled);
-            nitroItem.CheckboxChanged += (sender, args) =>
-            {
-                NitrousEnabled = nitroItem.Checked;
-                SaveRacerSetting("NitrousEnabled", NitrousEnabled.ToString());
-            };
-            racersMenu.Add(nitroItem);
+            rivalsMenu.Add(tuningItem);
 
             // ── Menyoo vehicle skins on grid cars ──
             NativeCheckboxItem menyooItem = new NativeCheckboxItem("Use Menyoo Skins", "Apply Menyoo vehicle-appearance files (menyooStuff\\Vehicle) to grid cars that have a matching skin.", UseMenyooSkins);
@@ -968,26 +914,31 @@ namespace ARS
                 UseMenyooSkins = menyooItem.Checked;
                 SaveRacerSetting("UseMenyooSkins", UseMenyooSkins.ToString());
             };
-            racersMenu.Add(menyooItem);
+            rivalsMenu.Add(menyooItem);
 
-            // ── Racing tips, shown through the help box after an apex ──
-            NativeListItem<string> tipRateItem = new NativeListItem<string>("Racing Tips", "How often a tip is shown when you pass an apex. The tips themselves are in tips.txt, next to sillynames.txt.", EnumLabels<TipFrequency>());
-            tipRateItem.ItemChanged += (sender, args) =>
-            {
-                TipRate = (TipFrequency)args.Index;
-                SaveRacerSetting("TipRate", TipRate.ToString());
-            };
-            tipRateItem.SelectedIndex = Math.Max(0, tipRateItem.Items.IndexOf(EnumLabel(TipRate)));
-            racersMenu.Add(tipRateItem);
-            HookListTextPicker(tipRateItem);
-
-            // ── AI Settings submenu (under Settings) — how the AI racers drive; shares Settings\Menu-Settings.ini ──
-            NativeMenu aiMenu = new NativeMenu("AI Settings", "AI Settings", "How the AI racers behave on track.")
+            // ── Rival behaviour submenus: pace, traction, steering ──
+            NativeMenu rivalPaceMenu = new NativeMenu("Rival Pace", "Rival Pace", "How fast the rivals want to go: corner and route speed, terrain effects and brake learning.")
             {
                 UseMouse = false,
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
+            NativeMenu rivalTractionMenu = new NativeMenu("Rival Traction", "Rival Traction", "How the rivals put power down and brake: the wheelspin and wheel-lock caps.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+            NativeMenu rivalSteeringMenu = new NativeMenu("Rival Steering", "Rival Steering", "How the rivals turn: the steering damper and the steering limit.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+            rivalsMenu.AddSubMenu(rivalPaceMenu);
+            rivalsMenu.AddSubMenu(rivalTractionMenu);
+            rivalsMenu.AddSubMenu(rivalSteeringMenu);
+
             NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Offset (mph)", "Flat mph added to the corner braking plan. Higher = racers carry more speed into corners.", SettingsRepair.OptionsFor("CornerOffset"));
             cornerOffsetItem.ItemChanged += (sender, args) =>
             {
@@ -995,7 +946,7 @@ namespace ARS
                 SaveRacerSetting("CornerOffset", cornerOffsetItem.Items[args.Index]);
             };
             cornerOffsetItem.SelectedIndex = Math.Max(0, cornerOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(cornerOffsetItem);
+            rivalPaceMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
 
             NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Route Offset (mph)", "Flat mph added to the route curvature plan. Higher = racers carry more speed through sweeping corners.", SettingsRepair.OptionsFor("RouteOffset"));
@@ -1005,7 +956,7 @@ namespace ARS
                 SaveRacerSetting("RouteOffset", routeOffsetItem.Items[args.Index]);
             };
             routeOffsetItem.SelectedIndex = Math.Max(0, routeOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(routeOffsetItem);
+            rivalPaceMenu.Add(routeOffsetItem);
             HookListTextPicker(routeOffsetItem);
 
             NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the braking decel that keeps the car at full pedal (90%+) for a fifth of each braking phase. A corner it slides through takes a flat 0.1 cut instead. Announces each change while Show Track Analysis is on.", BrakeLearning);
@@ -1014,90 +965,7 @@ namespace ARS
                 BrakeLearning = brakeLearningItem.Checked;
                 SaveRacerSetting("BrakeLearning", BrakeLearning.ToString());
             };
-            aiMenu.Add(brakeLearningItem);
-
-            NativeCheckboxItem tcsItem = new NativeCheckboxItem("TCS", "Cap AI throttle against a wheelspin target. Off lets AI throttle go unlimited - no traction control at all.", TcsEnabled);
-            tcsItem.CheckboxChanged += (sender, args) =>
-            {
-                TcsEnabled = tcsItem.Checked;
-                SaveRacerSetting("TcsEnabled", TcsEnabled.ToString());
-            };
-            aiMenu.Add(tcsItem);
-
-            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Slip Threshold", "The wheelspin the AI throttles to, on the slip ratio the traction curve is measured on: the curve peaks at 1.0 and is flat by 2.5, so 0.5 is half the peak. Nothing is cut below the threshold, and it holds on every surface and at every speed.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
-            tcsThresholdItem.ItemChanged += (sender, args) =>
-            {
-                TcsSlipThreshold = float.Parse(tcsThresholdItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("TcsSlipThreshold", tcsThresholdItem.Items[args.Index]);
-            };
-            tcsThresholdItem.SelectedIndex = Math.Max(0, tcsThresholdItem.Items.IndexOf(SettingsMenuStore.GetFloat("TcsSlipThreshold", TcsSlipThreshold).ToString("0.0", CultureInfo.InvariantCulture)));
-            aiMenu.Add(tcsThresholdItem);
-            HookListTextPicker(tcsThresholdItem);
-
-            NativeListItem<string> tcsTaperSpanItem = new NativeListItem<string>("TCS Taper Span", "How much wheelspin past the threshold the cut spans before the throttle reaches its floor, in the same slip ratio. The ceiling is the threshold plus this, and the cut eases in on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpan"));
-            tcsTaperSpanItem.ItemChanged += (sender, args) =>
-            {
-                TcsTaperSpan = float.Parse(tcsTaperSpanItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("TcsTaperSpan", tcsTaperSpanItem.Items[args.Index]);
-            };
-            tcsTaperSpanItem.SelectedIndex = Math.Max(0, tcsTaperSpanItem.Items.IndexOf(SettingsMenuStore.GetFloat("TcsTaperSpan", TcsTaperSpan).ToString("0.0", CultureInfo.InvariantCulture)));
-            aiMenu.Add(tcsTaperSpanItem);
-            HookListTextPicker(tcsTaperSpanItem);
-
-            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "Cap AI brake against a wheel-lock target, the TCS mirror on the brake side. Off lets AI brake go unlimited - plain brake force, engine-side ABS only.", AbsEnabled);
-            absItem.CheckboxChanged += (sender, args) =>
-            {
-                AbsEnabled = absItem.Checked;
-                SaveRacerSetting("AbsEnabled", AbsEnabled.ToString());
-            };
-            aiMenu.Add(absItem);
-
-            NativeCheckboxItem dnfItem = new NativeCheckboxItem("Hide DNFs", "A car with a dead engine is dropped under the track, frozen and invisible, and ignored by the AI. Off: it is parked on the shoulder.", DNFUnderTrack);
-            dnfItem.CheckboxChanged += (sender, args) =>
-            {
-                DNFUnderTrack = dnfItem.Checked;
-                SaveRacerSetting("DNFUnderTrack", DNFUnderTrack.ToString());
-            };
-            aiMenu.Add(dnfItem);
-
-            NativeCheckboxItem noCollisionItem = new NativeCheckboxItem("No Collision", "The racers do not detect each other and pass through each other. World collision is untouched.", NoCollision);
-            noCollisionItem.CheckboxChanged += (sender, args) =>
-            {
-                NoCollision = noCollisionItem.Checked;
-                SaveRacerSetting("NoCollision", NoCollision.ToString());
-                ApplyNoCollision(NoCollision);
-            };
-            aiMenu.Add(noCollisionItem);
-
-            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds, applied to the excess over the yaw the aim point requires. Lower is crisper; higher opposes rotation more strongly.", SettingsRepair.OptionsFor("SteerDampingGain"));
-            steerKDItem.ItemChanged += (sender, args) =>
-            {
-                SteerDampingGain = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerDampingGain", steerKDItem.Items[args.Index]);
-            };
-            steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain).ToString("0.00", CultureInfo.InvariantCulture)));
-            aiMenu.Add(steerKDItem);
-            HookListTextPicker(steerKDItem);
-
-            NativeListItem<string> steerKDSpeedItem = new NativeListItem<string>("Steer Damping Speed (mph)", "The forward speed the damping gain is defined at. The damper runs at the Steer Damping value up to this speed, then falls as this speed over the car's, so twice this speed damps at half.", SettingsRepair.OptionsFor("SteerDampingSpeed"));
-            steerKDSpeedItem.ItemChanged += (sender, args) =>
-            {
-                SteerDampingSpeedMph = int.Parse(steerKDSpeedItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerDampingSpeed", steerKDSpeedItem.Items[args.Index]);
-            };
-            steerKDSpeedItem.SelectedIndex = Math.Max(0, steerKDSpeedItem.Items.IndexOf(SettingsMenuStore.GetInt("SteerDampingSpeed", SteerDampingSpeedMph).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(steerKDSpeedItem);
-            HookListTextPicker(steerKDSpeedItem);
-
-            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Ceiling Factor", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 puts the midpoint of the two front wheels on that peak slip angle; lower holds the wheel tighter at speed. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
-            steerCeilingFactorItem.ItemChanged += (sender, args) =>
-            {
-                SteerCeilingFactor = float.Parse(steerCeilingFactorItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerCeilingFactor", steerCeilingFactorItem.Items[args.Index]);
-            };
-            steerCeilingFactorItem.SelectedIndex = Math.Max(0, steerCeilingFactorItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor).ToString("0.00", CultureInfo.InvariantCulture)));
-            aiMenu.Add(steerCeilingFactorItem);
-            HookListTextPicker(steerCeilingFactorItem);
+            rivalPaceMenu.Add(brakeLearningItem);
 
             NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", SettingsRepair.OptionsFor("CrestEffect"));
             crestEffectItem.ItemChanged += (sender, args) =>
@@ -1106,7 +974,7 @@ namespace ARS
                 SaveRacerSetting("CrestEffect", crestEffectItem.Items[args.Index]);
             };
             crestEffectItem.SelectedIndex = Math.Max(0, crestEffectItem.Items.IndexOf(SettingsMenuStore.GetInt("CrestEffect", 100).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(crestEffectItem);
+            rivalPaceMenu.Add(crestEffectItem);
             HookListTextPicker(crestEffectItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Hill Effect (%)", "How much a hill's pitch cuts a racer's intended speed. 0% ignores slopes, 100% is the tuned default (15 degrees halves grip).", SettingsRepair.OptionsFor("HillGripEffect"));
@@ -1116,8 +984,110 @@ namespace ARS
                 SaveRacerSetting("HillGripEffect", hillEffectItem.Items[args.Index]);
             };
             hillEffectItem.SelectedIndex = Math.Max(0, hillEffectItem.Items.IndexOf(SettingsMenuStore.GetInt("HillGripEffect", 100).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(hillEffectItem);
+            rivalPaceMenu.Add(hillEffectItem);
             HookListTextPicker(hillEffectItem);
+
+            NativeCheckboxItem overspeedItem = new NativeCheckboxItem("Overspeed Correction", "Clamp AI throttle when measured Gs exceed wheel-pushed Gs (GTA uphill acceleration bug).", OverspeedEnabled);
+            overspeedItem.CheckboxChanged += (sender, args) =>
+            {
+                OverspeedEnabled = overspeedItem.Checked;
+                SaveRacerSetting("OverspeedEnabled", OverspeedEnabled.ToString());
+            };
+            rivalPaceMenu.Add(overspeedItem);
+
+            NativeCheckboxItem tcsItem = new NativeCheckboxItem("TCS", "Cap AI throttle against a wheelspin target. Off lets AI throttle go unlimited - no traction control at all.", TcsEnabled);
+            tcsItem.CheckboxChanged += (sender, args) =>
+            {
+                TcsEnabled = tcsItem.Checked;
+                SaveRacerSetting("TcsEnabled", TcsEnabled.ToString());
+            };
+            rivalTractionMenu.Add(tcsItem);
+
+            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Slip Threshold", "The wheelspin the AI throttles to, on the slip ratio the traction curve is measured on: the curve peaks at 1.0 and is flat by 2.5, so 0.5 is half the peak. Nothing is cut below the threshold, and it holds on every surface and at every speed.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
+            tcsThresholdItem.ItemChanged += (sender, args) =>
+            {
+                TcsSlipThreshold = float.Parse(tcsThresholdItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("TcsSlipThreshold", tcsThresholdItem.Items[args.Index]);
+            };
+            tcsThresholdItem.SelectedIndex = Math.Max(0, tcsThresholdItem.Items.IndexOf(SettingsMenuStore.GetFloat("TcsSlipThreshold", TcsSlipThreshold).ToString("0.0", CultureInfo.InvariantCulture)));
+            rivalTractionMenu.Add(tcsThresholdItem);
+            HookListTextPicker(tcsThresholdItem);
+
+            NativeListItem<string> tcsTaperSpanItem = new NativeListItem<string>("TCS Taper Span", "How much wheelspin past the threshold the cut spans before the throttle reaches its floor, in the same slip ratio. The ceiling is the threshold plus this, and the cut eases in on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpan"));
+            tcsTaperSpanItem.ItemChanged += (sender, args) =>
+            {
+                TcsTaperSpan = float.Parse(tcsTaperSpanItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("TcsTaperSpan", tcsTaperSpanItem.Items[args.Index]);
+            };
+            tcsTaperSpanItem.SelectedIndex = Math.Max(0, tcsTaperSpanItem.Items.IndexOf(SettingsMenuStore.GetFloat("TcsTaperSpan", TcsTaperSpan).ToString("0.0", CultureInfo.InvariantCulture)));
+            rivalTractionMenu.Add(tcsTaperSpanItem);
+            HookListTextPicker(tcsTaperSpanItem);
+
+            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "Cap AI brake against a wheel-lock target, the TCS mirror on the brake side. Off lets AI brake go unlimited - plain brake force, engine-side ABS only.", AbsEnabled);
+            absItem.CheckboxChanged += (sender, args) =>
+            {
+                AbsEnabled = absItem.Checked;
+                SaveRacerSetting("AbsEnabled", AbsEnabled.ToString());
+            };
+            rivalTractionMenu.Add(absItem);
+
+            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds, applied to the excess over the yaw the aim point requires. Lower is crisper; higher opposes rotation more strongly.", SettingsRepair.OptionsFor("SteerDampingGain"));
+            steerKDItem.ItemChanged += (sender, args) =>
+            {
+                SteerDampingGain = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerDampingGain", steerKDItem.Items[args.Index]);
+            };
+            steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain).ToString("0.00", CultureInfo.InvariantCulture)));
+            rivalSteeringMenu.Add(steerKDItem);
+            HookListTextPicker(steerKDItem);
+
+            NativeListItem<string> steerKDSpeedItem = new NativeListItem<string>("Steer Damping Speed (mph)", "The forward speed the damping gain is defined at. The damper runs at the Steer Damping value up to this speed, then falls as this speed over the car's, so twice this speed damps at half.", SettingsRepair.OptionsFor("SteerDampingSpeed"));
+            steerKDSpeedItem.ItemChanged += (sender, args) =>
+            {
+                SteerDampingSpeedMph = int.Parse(steerKDSpeedItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerDampingSpeed", steerKDSpeedItem.Items[args.Index]);
+            };
+            steerKDSpeedItem.SelectedIndex = Math.Max(0, steerKDSpeedItem.Items.IndexOf(SettingsMenuStore.GetInt("SteerDampingSpeed", SteerDampingSpeedMph).ToString(CultureInfo.InvariantCulture)));
+            rivalSteeringMenu.Add(steerKDSpeedItem);
+            HookListTextPicker(steerKDSpeedItem);
+
+            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Ceiling Factor", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 puts the midpoint of the two front wheels on that peak slip angle; lower holds the wheel tighter at speed. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
+            steerCeilingFactorItem.ItemChanged += (sender, args) =>
+            {
+                SteerCeilingFactor = float.Parse(steerCeilingFactorItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerCeilingFactor", steerCeilingFactorItem.Items[args.Index]);
+            };
+            steerCeilingFactorItem.SelectedIndex = Math.Max(0, steerCeilingFactorItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor).ToString("0.00", CultureInfo.InvariantCulture)));
+            rivalSteeringMenu.Add(steerCeilingFactorItem);
+            HookListTextPicker(steerCeilingFactorItem);
+
+            // ── Race Rules (root) — rules that apply to every race ──
+            NativeMenu rulesMenu = new NativeMenu("Race Rules", "Race Rules", "Rules that apply to every race: timing, damaged and dead cars, field pace, collision, nitrous and downforce.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+
+            NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", SettingsRepair.OptionsFor("TimeoutSeconds"));
+            timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
+            timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(SettingsMenuStore.GetInt("TimeoutSeconds", 60).ToString()));
+            rulesMenu.Add(timeoutItem);
+            HookListTextPicker(timeoutItem);
+
+            NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", SettingsRepair.OptionsFor("AIRacerAutofix"));
+            autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
+            autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(SettingsMenuStore.GetInt("AIRacerAutofix", 2).ToString()));
+            rulesMenu.Add(autofixItem);
+            HookListTextPicker(autofixItem);
+
+            NativeCheckboxItem dnfItem = new NativeCheckboxItem("Hide DNFs", "A car with a dead engine is dropped under the track, frozen and invisible, and ignored by the AI. Off: it is parked on the shoulder.", DNFUnderTrack);
+            dnfItem.CheckboxChanged += (sender, args) =>
+            {
+                DNFUnderTrack = dnfItem.Checked;
+                SaveRacerSetting("DNFUnderTrack", DNFUnderTrack.ToString());
+            };
+            rulesMenu.Add(dnfItem);
 
             NativeListItem<string> rubberbandItem = new NativeListItem<string>("Rubberbanding (%)", "Keeps the field packed: leaders are slowed and laggards are boosted, scaled by distance from the center position. 0 = off; 100 = max effect (0.66× for the leader, 1.33× for last place).", SettingsRepair.OptionsFor("Rubberbanding"));
             rubberbandItem.ItemChanged += (sender, args) =>
@@ -1126,7 +1096,7 @@ namespace ARS
                 SaveRacerSetting("Rubberbanding", rubberbandItem.Items[args.Index]);
             };
             rubberbandItem.SelectedIndex = Math.Max(0, rubberbandItem.Items.IndexOf(SettingsMenuStore.GetInt("Rubberbanding", 0).ToString(CultureInfo.InvariantCulture)));
-            aiMenu.Add(rubberbandItem);
+            rulesMenu.Add(rubberbandItem);
             HookListTextPicker(rubberbandItem);
 
             NativeListItem<string> rubberModeItem = new NativeListItem<string>("Rubberband Mode", "Natural = leaders are slowed only. Artificial = leaders are slowed and laggards get a torque boost.", Enum.GetNames(typeof(RubberbandMode)));
@@ -1136,23 +1106,52 @@ namespace ARS
                 SaveRacerSetting("RubberbandMode", CurrentRubberbandMode.ToString());
             };
             rubberModeItem.SelectedIndex = Math.Max(0, rubberModeItem.Items.IndexOf(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString())));
-            aiMenu.Add(rubberModeItem);
+            rulesMenu.Add(rubberModeItem);
             HookListTextPicker(rubberModeItem);
 
-            // ── Advanced Settings submenu (under Settings) — reads/writes Settings\Menu-Settings.ini ──
-            NativeMenu advancedMenu = new NativeMenu("Advanced Settings", "Advanced Settings", "Low-level physics overrides and AI corrections.")
+            NativeCheckboxItem noCollisionItem = new NativeCheckboxItem("No Collision", "The racers do not detect each other and pass through each other. World collision is untouched.", NoCollision);
+            noCollisionItem.CheckboxChanged += (sender, args) =>
+            {
+                NoCollision = noCollisionItem.Checked;
+                SaveRacerSetting("NoCollision", NoCollision.ToString());
+                ApplyNoCollision(NoCollision);
+            };
+            rulesMenu.Add(noCollisionItem);
+
+            // ── Nitrous ──
+            NativeCheckboxItem nitroItem = new NativeCheckboxItem("Nitrous", "Give every racer a fresh nitrous bottle each lap. Racers fire theirs automatically on straights; the player fires manually.", NitrousEnabled);
+            nitroItem.CheckboxChanged += (sender, args) =>
+            {
+                NitrousEnabled = nitroItem.Checked;
+                SaveRacerSetting("NitrousEnabled", NitrousEnabled.ToString());
+            };
+            rulesMenu.Add(nitroItem);
+
+            AddDebugCheckbox(rulesMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
+
+            // ── Interface (root) — what the mod shows you, and the free camera ──
+            NativeMenu interfaceMenu = new NativeMenu("Interface", "Interface", "What the mod shows you, and the free camera.")
             {
                 UseMouse = false,
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            NativeCheckboxItem overspeedItem = new NativeCheckboxItem("Overspeed Correction", "Clamp AI throttle when measured Gs exceed wheel-pushed Gs (GTA uphill acceleration bug).", OverspeedEnabled);
-            overspeedItem.CheckboxChanged += (sender, args) =>
+
+            // ── Racing tips, shown through the help box after an apex ──
+            NativeListItem<string> tipRateItem = new NativeListItem<string>("Racing Tips", "How often a tip is shown when you pass an apex. The tips themselves are in tips.txt, next to sillynames.txt.", EnumLabels<TipFrequency>());
+            tipRateItem.ItemChanged += (sender, args) =>
             {
-                OverspeedEnabled = overspeedItem.Checked;
-                SaveRacerSetting("OverspeedEnabled", OverspeedEnabled.ToString());
+                TipRate = (TipFrequency)args.Index;
+                SaveRacerSetting("TipRate", TipRate.ToString());
             };
-            advancedMenu.Add(overspeedItem);
+            tipRateItem.SelectedIndex = Math.Max(0, tipRateItem.Items.IndexOf(EnumLabel(TipRate)));
+            interfaceMenu.Add(tipRateItem);
+            HookListTextPicker(tipRateItem);
+
+            AddDebugCheckbox(interfaceMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
+            AddDebugCheckbox(interfaceMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
+            AddDebugCheckbox(interfaceMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
+            AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show AI Lap Times", "Announce each AI racer's lap time as they cross the line, the same way your own is. One notification per racer per lap, so a full grid is a lot of them.");
 
             NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", StagedSpawns);
             stagedSpawnsItem.CheckboxChanged += (sender, args) =>
@@ -1170,7 +1169,23 @@ namespace ARS
                     if (_raceMenu.Items.Contains(instanceGridItem)) _raceMenu.Remove(instanceGridItem);
                 }
             };
-            advancedMenu.Add(stagedSpawnsItem);
+            interfaceMenu.Add(stagedSpawnsItem);
+
+            NativeItem freecamItem = new NativeItem("Freecam", "Toggle the ARS free camera.");
+            freecamItem.Activated += (sender, args) =>
+            {
+                interfaceMenu.Visible = false;
+                _freeCam.Toggle();
+            };
+            interfaceMenu.Add(freecamItem);
+
+            // ── Controls (root) — the keys that open the ARS menu ──
+            NativeMenu controlsMenu = new NativeMenu("Controls", "Controls", "The keys that open the ARS menu.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
 
             NativeCheckboxItem hotkeysItem = new NativeCheckboxItem("Hotkeys", "Allow the configured virtual-key chord to open the ARS menu. The arsmenu cheat remains available.", HotkeysEnabled);
             hotkeysItem.CheckboxChanged += (sender, args) =>
@@ -1178,7 +1193,7 @@ namespace ARS
                 HotkeysEnabled = hotkeysItem.Checked;
                 SaveRacerSetting("Hotkeys", HotkeysEnabled.ToString());
             };
-            advancedMenu.Add(hotkeysItem);
+            controlsMenu.Add(hotkeysItem);
 
             NativeListItem<string> menuModifierItem = new NativeListItem<string>("Menu Modifier", "First key of the ARS menu chord (Windows virtual-key code).", MenuHotkeyKeys.Select(MenuHotkeyLabel).ToArray());
             menuModifierItem.ItemChanged += (sender, args) =>
@@ -1188,7 +1203,7 @@ namespace ARS
                 SettingsMenuStore.Set("MenuModifierKey", (int)MenuModifierKey);
             };
             menuModifierItem.SelectedIndex = Math.Max(0, Array.IndexOf(MenuHotkeyKeys, MenuModifierKey));
-            advancedMenu.Add(menuModifierItem);
+            controlsMenu.Add(menuModifierItem);
             HookListTextPicker(menuModifierItem);
 
             NativeListItem<string> menuKeyItem = new NativeListItem<string>("Menu Key", "Second key of the ARS menu chord (Windows virtual-key code).", MenuHotkeyKeys.Select(MenuHotkeyLabel).ToArray());
@@ -1199,8 +1214,22 @@ namespace ARS
                 SettingsMenuStore.Set("MenuKey", (int)MenuKey);
             };
             menuKeyItem.SelectedIndex = Math.Max(0, Array.IndexOf(MenuHotkeyKeys, MenuKey));
-            advancedMenu.Add(menuKeyItem);
+            controlsMenu.Add(menuKeyItem);
             HookListTextPicker(menuKeyItem);
+
+            // ── Debug (root) — developer visuals, lane experiments and logging ──
+            NativeMenu debugMenu = new NativeMenu("Debug", "Debug", "Developer visuals, lane experiments and logging.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail: one chevron per metre of travel, lying flat and pointing along the car's path, pitching its nose down on throttle and up on braking, green through yellow to red by pedal input, holding the last 40 m.");
+            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's steer-angle fan - pursuit, pursuit plus damper, the final steer line carrying the applied pedals and every limit that bites along it, and the limiter's ceiling - plus the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
+            AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Draw a cyan marker at every lip the route scan found: a vertical tick and a line across the road, so the scan can be judged by eye before anything drives on it.");
+            AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere a metre over each wheel of the closest AI car, coloured by that tyre's side-slip angle: white at rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.");
+            AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
+            AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Lead the lane error with the lateral motion the car is already committing to, so the steering anticipates drift instead of reacting to it. Off measures the lane error at the car alone.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
@@ -1209,7 +1238,7 @@ namespace ARS
                 SaveRacerSetting("LogLevel", LogLevel.ToString());
             };
             logLevelItem.SelectedIndex = Math.Max(0, logLevelItem.Items.IndexOf(EnumLabel(LogLevel)));
-            advancedMenu.Add(logLevelItem);
+            debugMenu.Add(logLevelItem);
             HookListTextPicker(logLevelItem);
 
             if (!StagedSpawns)
@@ -1218,37 +1247,30 @@ namespace ARS
                 _raceMenu.Remove(instanceGridItem);
             }
 
-            // ── Settings submenu (root) — hosts General, AI, Advanced and Debug ──
-            NativeMenu settingsMenu = new NativeMenu("Settings", "Settings", "Racer behaviour and debug options.")
-            {
-                UseMouse = false,
-                DisableControls = true,
-                Alignment = Alignment.Right
-            };
-            settingsMenu.AddSubMenu(racersMenu);
-            settingsMenu.AddSubMenu(advancedMenu);
-            settingsMenu.AddSubMenu(aiMenu);
-            settingsMenu.AddSubMenu(debugMenu);
-
             // End Race goes at the tail of the Race menu
             _raceMenu.Add(endItem);
 
-            // Link Race, Settings and Other as submenus of root
+            // Link Race, Rivals, Race Rules, Interface, Controls, Debug and Track Creator as submenus of root
             _arsMenu.AddSubMenu(_raceMenu);
-            _arsMenu.AddSubMenu(settingsMenu);
-            _arsMenu.AddSubMenu(cameraMenu);
+            _arsMenu.AddSubMenu(rivalsMenu);
+            _arsMenu.AddSubMenu(rulesMenu);
+            _arsMenu.AddSubMenu(interfaceMenu);
+            _arsMenu.AddSubMenu(controlsMenu);
+            _arsMenu.AddSubMenu(debugMenu);
             _arsMenu.AddSubMenu(creatorMenu);
             _arsMenu.Add(resetItem);
 
             // Register all menus in the pool
             _menuPool.Add(_arsMenu);
             _menuPool.Add(_raceMenu);
-            _menuPool.Add(settingsMenu);
-            _menuPool.Add(aiMenu);
+            _menuPool.Add(rivalsMenu);
+            _menuPool.Add(rivalPaceMenu);
+            _menuPool.Add(rivalTractionMenu);
+            _menuPool.Add(rivalSteeringMenu);
+            _menuPool.Add(rulesMenu);
+            _menuPool.Add(interfaceMenu);
+            _menuPool.Add(controlsMenu);
             _menuPool.Add(debugMenu);
-            _menuPool.Add(racersMenu);
-            _menuPool.Add(advancedMenu);
-            _menuPool.Add(cameraMenu);
             _menuPool.Add(creatorMenu);
         }
         void SaveRacerSetting(string key, string value)

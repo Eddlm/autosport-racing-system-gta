@@ -158,7 +158,7 @@
 
 **#3 "Some cars utilizing new downforce mechanics are not braking and are driving jank"** (@Pizzahut20, the oldest open report) — **the reporter has confirmed the fix works**, so this is now a waiting game: **close it once a week passes with no further reports.** Do not write a date here — the commit that records this decision is the anchor.
 
-The fix is the **High Downforce: Online** toggle: a **Debug** checkbox (`AutosportRacingSystem.cs:798`, default **off**, key in `Menu-Debug.ini`) consumed in the downforce-scale branch (`AutosportRacingSystem.cs:3174`). Above downforce 100 it swaps the flat singleplayer scale for the speed-scaled online curve, and it arrived in `a8a1caa` with the default **on** — and it lives in the **Debug** menu, not the Advanced Settings the issue comment named.
+The fix is the **High Downforce: Online** toggle: a **Debug** checkbox (`AutosportRacingSystem.cs:798`, default **off**, key in `Menu-Debug.ini`) consumed in the downforce-scale branch (`AutosportRacingSystem.cs:3174`). Above downforce 100 it swaps the flat singleplayer scale for the speed-scaled online curve, and it arrived in `a8a1caa` with the default **on** — and it lives in the **Race Rules** menu, not the Advanced Settings the issue comment named.
 
 Other reports still open, all predating the current code and unverified against it: **#1** game-breaking bug (@Cimmanom), **#7** game saving stops functioning (@shifuguru), **#8** not working for update 3095 (@rayvenz3). **#2/#4/#6/#9 are closed.**
 

@@ -30,7 +30,7 @@ The track creator is live — a root Track Creator submenu records a route and S
 
 ## Settings and diagnostics gate
 
-- [ ] Race, General Settings, AI Settings, Advanced Settings and Debug menu changes persist across a script reload.
+- [ ] Race, Rivals (and its three behaviour submenus), Race Rules, Interface, Controls and Debug menu changes persist across a script reload.
 - [ ] A fresh settings folder creates usable defaults, and a second load does not rewrite it.
 - [ ] A legacy install migrates old per-menu files without losing user-facing values.
 - [ ] Show Inputs, Track Analysis, Corner Checkpoints, Edge Chevrons and Leaderboard match the closest AI car or race state they describe.

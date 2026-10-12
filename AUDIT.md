@@ -191,7 +191,7 @@ actually doing:
 
 | Lines | Method | Jobs |
 |---|---|---|
-| **536** | `AutosportRacingSystem.cs:678 InitializeMenu` | Builds **every** menu in one body: Race (track/laps/reverse/spawn/PI trio/grid/start/restart/end), root actions, Other, Track Creator, Settings, General Settings, car pool, nitrous, Menyoo, tips, AI Settings, Advanced, the staged-spawn slot restore, and the final `MenuPool` wiring. |
+| **536** | `AutosportRacingSystem.cs:678 InitializeMenu` | Builds **every** menu in one body: Race (track/laps/reverse/spawn/PI trio/grid/start/restart/end), root actions, Track Creator, the Rivals family (roster, looks and three behaviour submenus), Race Rules, Interface, Controls, Debug, the staged-spawn slot restore, and the final `MenuPool` wiring. |
 | **313** | `AutosportRacingSystem.cs:1575 OnTick` | 66 branch points: update check, load task, freecam prop, freecam tick, 4 debug draw groups, nitro probe, nitro top-up, HUD, join marker, countdown, the time-sliced racer batch, per-racer `ProcessTick` + finish handling, position sorting, race end, help queue, cheats. |
 | **211** | `TrackFile.cs:204 SaveRoute` | Filename resolve/sanitise/collision; XML scaffolding; UI prompts + input; route writing; prop discovery inline; prop writing; save; list refresh. The `Math.Round(...).ToString().Replace(",", ".")` idiom appears **22×**. |
 | **193** | `AutosportRacingSystem.cs:3466 LoadGrid` | Already split into 5 local functions (`LoadVehicleModel`, `RandomizeCarColour`, `CreateDriverPed`, `AddRacer`, `SpawnRacer`) — good names, but nested, so the outer method is still a 193-line scroll. |
@@ -220,8 +220,8 @@ Structural notes:
   project already has (`Menu-Race.ini`, `Menu-Settings.ini`, `Menu-Debug.ini`): Race `:689-812`, root/Other
   `:821-845`, Creator `:846-876`, Settings/General `:877-903`, pool `:904-954`, nitrous `:955-964`, Menyoo
   `:965-973`, tips `:974-983`, AI `:984-1104`, Advanced `:1105-1126`, staged-spawn restore `:1127-1180`,
-  wiring `:1181-1212`. **Constraint:** `settingsMenu`, `aiMenu`, `debugMenu`, `racersMenu`, `advancedMenu`,
-  `cameraMenu`, `creatorMenu` are **locals** captured by the handlers, so a split must promote them to
+  wiring `:1181-1212`. **Constraint:** `rivalsMenu`, `rivalPaceMenu`, `rivalTractionMenu`, `rivalSteeringMenu`,
+  `rulesMenu`, `interfaceMenu`, `controlsMenu`, `debugMenu`, `creatorMenu` are **locals** captured by the handlers, so a split must promote them to
   fields or pass them through — and the two load-bearing invariants at `:778` (assigning `SelectedIndex`
   fires `ItemChanged`) and `:1127-1128` (the staged-spawn slots) must survive the move.
 - **`LoadGrid`/`ComputeSteering`/`UpdateTrackPosition` all use nested local functions** instead of private
