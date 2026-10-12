@@ -39,7 +39,7 @@ The track creator is live — a root Track Creator submenu records a route and S
 
 ## Versioning and releases — the convention
 
-**Minors are not consumed per release** (user-stated): releases ride the patch digit (`0.8.7`, `0.8.8`, …) and `1.0` is a declaration rather than a countdown. That is a project convention and **not** SemVer, whose own FAQ for `0.y.z` says to increment the *minor* for each initial-development release — so the README must not claim compliance while the digits mean something else.
+**SemVer as written, in the `0.y.z` reading the spec itself gives** (user-accepted): the minor is the release dial while major is zero — the FAQ says to increment it for each initial-development release — and `1.0.0` is declared when the formats and the menu are settled, never counted towards. The minor digit is unbounded: §2's own example runs `1.9.0 -> 1.10.0 -> 1.11.0`, so no `0.9 -> 1.0` step is waiting to be tripped, and the ecosystem treats a `0.y` minor as breaking-capable (npm's caret widens only from 1.0) — which is what "anything MAY change" means in practice.
 
 - **The syntax still holds**: three numeric fields, no leading zeroes, compared numerically — so `0.8.10` correctly follows `0.8.9` (`semver.org` §2 and §11), and the mod never compares versions anyway: `UpdateChecker` only prints the latest `tag_name`.
 - **The release identity is hand-moved.** `src\Properties\AssemblyInfo.cs`'s `AssemblyVersion`/`AssemblyFileVersion` are bumped at the cut so they match the tag; nothing derives either from the other, the zip is named by short SHA (`deploy.yml:65`), and the build number beside the dll is the "which binary" axis.
