@@ -200,8 +200,11 @@ namespace ARS
         const float BrakeExcessMph = 25f;
         // Braking is judged from the distance it actually needs, plus this much road for the plan to take hold.
         const float BrakeHorizonMargin = 40f;
-        // Each corner's initial factor is the seed plus a draw of +/- this many hundredths.
+        // Each corner's initial factor is the seed plus the racer's own bias plus a draw of +/- this many hundredths.
         const int BrakeFactorSeedJitterHundredths = 5;
+        // The racer's own bias is a draw of +/- this many hundredths, taken once in the constructor.
+        const int BrakeConfidenceJitterHundredths = 5;
+        float _brakeConfidenceBias;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
         int _promotedApexNode = -1;
@@ -266,9 +269,10 @@ namespace ARS
             foreach (int node in stale) _cornerContexts.Remove(node);
         }
 
-        // One independent draw per corner, so a fresh grid does not brake every corner on one assumption.
-        // The +1 makes the draw symmetric: GetRandomInt's max is exclusive.
-        static float SeededBrakeFactor() => BrakeFactorSeed + ARS.GetRandomInt(-BrakeFactorSeedJitterHundredths, BrakeFactorSeedJitterHundredths + 1) / 100f;
+        // The racer's own bias plus one independent draw per corner. The bias repeats across all of that racer's
+        // corners where the per-corner draw averages out, so the bias is the half that moves a lap. The +1 makes
+        // each draw symmetric: GetRandomInt's max is exclusive.
+        float SeededBrakeFactor() => BrakeFactorSeed + _brakeConfidenceBias + ARS.GetRandomInt(-BrakeFactorSeedJitterHundredths, BrakeFactorSeedJitterHundredths + 1) / 100f;
 
         // While diving, a temp bonus is appended to the learned factor; the stored factor itself never changes.
         public float EffectiveBrakeFactor(int apexNode)
@@ -355,6 +359,8 @@ namespace ARS
             if (Driver.IsPlayer) ControlledByPlayer = true;
             _halfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));
             _phaseOffsetMs = ARS.GetRandomInt(0, 500);
+            _brakeConfidenceBias = ARS.GetRandomInt(-BrakeConfidenceJitterHundredths, BrakeConfidenceJitterHundredths + 1) / 100f;
+            ARS.Log(ARS.LogImportance.Info, "Brake confidence bias " + Name + ": " + _brakeConfidenceBias.ToString("0.00"));
             _pressureTick = Game.GameTime;
             VehicleData.ModelDimensions = Car.Model.GetDimensions();
 
