@@ -942,7 +942,7 @@ namespace ARS
             rivalsMenu.AddSubMenu(rivalTractionMenu);
             rivalsMenu.AddSubMenu(rivalSteeringMenu);
 
-            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Offset (mph)", "Flat mph added to the corner braking plan. Higher = racers carry more speed into corners.", SettingsRepair.OptionsFor("CornerOffset"));
+            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Offset (mph)", "Mph added to the speed the next corner allows - the target it brakes for. Only the slower of this and Route Offset is ever used.", SettingsRepair.OptionsFor("CornerOffset"));
             cornerOffsetItem.ItemChanged += (sender, args) =>
             {
                 CornerOffsetMph = int.Parse(cornerOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -952,7 +952,7 @@ namespace ARS
             rivalPaceMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
 
-            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Route Offset (mph)", "Flat mph added to the route curvature plan. Higher = racers carry more speed through sweeping corners.", SettingsRepair.OptionsFor("RouteOffset"));
+            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Route Offset (mph)", "Mph added to the speed the road's own curvature allows between corners. Only the slower of this and Corner Offset is ever used.", SettingsRepair.OptionsFor("RouteOffset"));
             routeOffsetItem.ItemChanged += (sender, args) =>
             {
                 RouteOffsetMph = int.Parse(routeOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -962,7 +962,7 @@ namespace ARS
             rivalPaceMenu.Add(routeOffsetItem);
             HookListTextPicker(routeOffsetItem);
 
-            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Learn the braking decel that keeps the car at full pedal (90%+) for a fifth of each braking phase. A corner it slides through takes a flat 0.1 cut instead. Announces each change while Show Track Analysis is on.", BrakeLearning);
+            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Each corner learns how hard the rivals dare to brake: miss the 90%-pedal fifth of a braking phase and it brakes harder next lap, slide through it and it loses a flat 0.1. Off, every corner starts from the same guess. Changes are announced while Show Track Analysis is on.", BrakeLearning);
             brakeLearningItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearning = brakeLearningItem.Checked;
@@ -970,7 +970,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Effect (%)", "How much a crest's vertical curvature cuts a racer's intended speed. 0% ignores crests, 100% is the tuned default.", SettingsRepair.OptionsFor("CrestEffect"));
+            NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Loss (%)", "Scales the speed a crest takes off a rival, as a share of the tuned amount: 0% ignores crests, 100% is the tuned cut, 200% doubles it. It scales losses only, so a dip's grip bonus is never amplified.", SettingsRepair.OptionsFor("CrestEffect"));
             crestEffectItem.ItemChanged += (sender, args) =>
             {
                 CrestEffect = int.Parse(crestEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
@@ -980,7 +980,7 @@ namespace ARS
             rivalPaceMenu.Add(crestEffectItem);
             HookListTextPicker(crestEffectItem);
 
-            NativeListItem<string> hillEffectItem = new NativeListItem<string>("Hill Effect (%)", "How much a hill's pitch cuts a racer's intended speed. 0% ignores slopes, 100% is the tuned default (15 degrees halves grip).", SettingsRepair.OptionsFor("HillGripEffect"));
+            NativeListItem<string> hillEffectItem = new NativeListItem<string>("Hill Loss (%)", "Scales the speed a slope takes off a rival, as a share of the tuned amount: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. The pitch is taken either way, so a descent costs speed as well as a climb; at 100%, 15 degrees halves grip.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
             {
                 HillGripEffect = int.Parse(hillEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
@@ -990,7 +990,7 @@ namespace ARS
             rivalPaceMenu.Add(hillEffectItem);
             HookListTextPicker(hillEffectItem);
 
-            NativeCheckboxItem overspeedItem = new NativeCheckboxItem("Overspeed Correction", "Clamp AI throttle when measured Gs exceed wheel-pushed Gs (GTA uphill acceleration bug).", OverspeedEnabled);
+            NativeCheckboxItem overspeedItem = new NativeCheckboxItem("Overspeed Correction", "Cuts a rival's throttle when the car pulls harder than its wheels can explain - GTA accelerates a car up a hill on its own. It arms only on a straight, settled car above 30 mph; off, that climb speed stands.", OverspeedEnabled);
             overspeedItem.CheckboxChanged += (sender, args) =>
             {
                 OverspeedEnabled = overspeedItem.Checked;
