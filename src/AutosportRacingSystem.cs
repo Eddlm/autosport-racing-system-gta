@@ -161,7 +161,7 @@ namespace ARS
         public const float CrestProbeSpeed = 40f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
-        // Show or hide the staged Spawn Track / Spawn Grid items in the Race menu.
+        // Show or hide the staged Load Track / Build Grid items in the Race menu.
         public static bool StagedSpawns = false;
         public static bool HotkeysEnabled = true;
         public static Keys MenuModifierKey = Keys.LShiftKey;
@@ -514,7 +514,7 @@ namespace ARS
             RefreshPowerControls();
         }
 
-        // The Vehicles folder is scanned once at init, so the Car Pool item re-checks it every time its menu opens.
+        // The Vehicles folder is scanned once at init, so the Car Roster item re-checks it every time its menu opens.
         void RefreshCarPoolItem(NativeListItem<string> item)
         {
             List<string> files = VehicleCatalog.ListRosterFiles().Select(VehicleCatalog.PoolLabel).ToList();
@@ -640,7 +640,7 @@ namespace ARS
 
         // The vehicle pool: the selected roster's model keys, discovered by RefreshCatalogs on the load thread.
         List<string> _vehiclePool = new List<string>();
-        // The Car Pool item's current listing, and the guard that hides its own rebuild from its ItemChanged.
+        // The Car Roster item's current listing, and the guard that hides its own rebuild from its ItemChanged.
         List<string> _carPoolFiles = new List<string>();
         bool _carPoolRefreshing;
         public static int TrackListPos = 0;
@@ -705,7 +705,7 @@ namespace ARS
             // Reverse Route: player-facing race option, persisted in Menu-Race.ini.
             AddDebugCheckbox(_raceMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.", null, RaceMenuStore);
 
-            NativeItem instanceTrackItem = new NativeItem("Spawn Track", "Load the selected track and teleport to it.");
+            NativeItem instanceTrackItem = new NativeItem("Load Track", "Load the selected track and teleport to it.");
             instanceTrackItem.Activated += (sender, args) =>
             {
                 _raceMenu.Visible = false;
@@ -772,7 +772,7 @@ namespace ARS
             // Set last: assigning SelectedIndex fires ItemChanged, and the mode's handler rewrites both PI items.
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
 
-            NativeItem instanceGridItem = new NativeItem("Spawn Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing PI/size.");
+            NativeItem instanceGridItem = new NativeItem("Build Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing PI/size.");
             instanceGridItem.Activated += (sender, args) =>
             {
                 _raceMenu.Visible = false;
@@ -781,7 +781,7 @@ namespace ARS
             };
             _raceMenu.Add(instanceGridItem);
 
-            // Slots to restore into when Staged Spawns is re-enabled: Add() alone appends past LemonUI's 10-row window.
+            // Slots to restore into when StagedSpawns is re-enabled: Add() alone appends past LemonUI's 10-row window.
             int spawnTrackSlot = _raceMenu.Items.IndexOf(instanceTrackItem);
             int spawnGridSlot = _raceMenu.Items.IndexOf(instanceGridItem);
 
@@ -875,7 +875,7 @@ namespace ARS
             if (!poolFiles.Contains(storedPool, StringComparer.OrdinalIgnoreCase)) { storedPool = "cars.txt"; SaveRacerSetting("VehiclePool", storedPool); }
             VehicleCatalog.SelectRosterFile(storedPool);
             _carPoolFiles = poolFiles.Select(VehicleCatalog.PoolLabel).ToList();
-            NativeListItem<string> carPoolItem = new NativeListItem<string>("Car Pool", "Vehicles is re-read each time this menu opens, so a roster added there appears without a reload.", _carPoolFiles.ToArray());
+            NativeListItem<string> carPoolItem = new NativeListItem<string>("Car Roster", "Vehicles is re-read each time this menu opens, so a roster added there appears without a reload.", _carPoolFiles.ToArray());
             carPoolItem.ItemChanged += (sender, args) =>
             {
                 if (_carPoolRefreshing) return;
@@ -894,7 +894,7 @@ namespace ARS
             HookListTextPicker(carPoolItem);
             rivalsMenu.Shown += (sender, args) => RefreshCarPoolItem(carPoolItem);
 
-            NativeCheckboxItem forceFillItem = new NativeCheckboxItem("Force-Fill Grid", "Off, the grid is only as long as the pool allows.", ForceFillGrid);
+            NativeCheckboxItem forceFillItem = new NativeCheckboxItem("Repeat Cars To Fill Grid", "Off, the grid is only as long as the pool allows.", ForceFillGrid);
             forceFillItem.CheckboxChanged += (sender, args) =>
             {
                 ForceFillGrid = forceFillItem.Checked;
@@ -902,7 +902,7 @@ namespace ARS
             };
             rivalsMenu.Add(forceFillItem);
 
-            NativeCheckboxItem tuningItem = new NativeCheckboxItem("Smart Tuning", "Your own car is never restyled, and cars that already have a mod kit are skipped. The work runs during the countdown, so it costs no load time.", SmartTuning);
+            NativeCheckboxItem tuningItem = new NativeCheckboxItem("Auto Styling", "Your own car is never restyled, and cars that already have a mod kit are skipped. The work runs during the countdown, so it costs no load time.", SmartTuning);
             tuningItem.CheckboxChanged += (sender, args) =>
             {
                 SmartTuning = tuningItem.Checked;
@@ -911,7 +911,7 @@ namespace ARS
             rivalsMenu.Add(tuningItem);
 
             // ── Menyoo vehicle skins on grid cars ──
-            NativeCheckboxItem menyooItem = new NativeCheckboxItem("Use Menyoo Skins", "Cosmetic only, and only on the cars ARS spawns: your own car is never touched.", UseMenyooSkins);
+            NativeCheckboxItem menyooItem = new NativeCheckboxItem("Menyoo Skins", "Cosmetic only, and only on the cars ARS spawns: your own car is never touched.", UseMenyooSkins);
             menyooItem.CheckboxChanged += (sender, args) =>
             {
                 UseMenyooSkins = menyooItem.Checked;
@@ -1006,7 +1006,7 @@ namespace ARS
             };
             rivalTractionMenu.Add(tcsItem);
 
-            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Slip Threshold", "The wheelspin the AI throttles to, on the slip ratio the traction curve is measured on: the curve peaks at 1.0 and is flat by 2.5, so 0.5 is half the peak. Nothing is cut below the threshold, and it holds on every surface and at every speed.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
+            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Wheelspin Limit", "The wheelspin the AI throttles to, on the slip ratio the traction curve is measured on: the curve peaks at 1.0 and is flat by 2.5, so 0.5 is half the peak. Nothing is cut below the threshold, and it holds on every surface and at every speed.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
             tcsThresholdItem.ItemChanged += (sender, args) =>
             {
                 TcsSlipThreshold = float.Parse(tcsThresholdItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1016,7 +1016,7 @@ namespace ARS
             rivalTractionMenu.Add(tcsThresholdItem);
             HookListTextPicker(tcsThresholdItem);
 
-            NativeListItem<string> tcsTaperSpanItem = new NativeListItem<string>("TCS Taper Span", "How much wheelspin past the threshold the cut spans before the throttle reaches its floor, in the same slip ratio. The ceiling is the threshold plus this, and the cut eases in on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpan"));
+            NativeListItem<string> tcsTaperSpanItem = new NativeListItem<string>("TCS Cut Softness", "How much wheelspin past the threshold the cut spans before the throttle reaches its floor, in the same slip ratio. The ceiling is the threshold plus this, and the cut eases in on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpan"));
             tcsTaperSpanItem.ItemChanged += (sender, args) =>
             {
                 TcsTaperSpan = float.Parse(tcsTaperSpanItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1054,7 +1054,7 @@ namespace ARS
             rivalSteeringMenu.Add(steerKDSpeedItem);
             HookListTextPicker(steerKDSpeedItem);
 
-            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Ceiling Factor", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 puts the midpoint of the two front wheels on that peak slip angle; lower holds the wheel tighter at speed. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
+            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Limit At Speed", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 puts the midpoint of the two front wheels on that peak slip angle; lower holds the wheel tighter at speed. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
             steerCeilingFactorItem.ItemChanged += (sender, args) =>
             {
                 SteerCeilingFactor = float.Parse(steerCeilingFactorItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1130,7 +1130,7 @@ namespace ARS
             };
             rulesMenu.Add(nitroItem);
 
-            AddDebugCheckbox(rulesMenu, Options.HighDownforceOnline, "High Downforce: Online", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
+            AddDebugCheckbox(rulesMenu, Options.HighDownforceOnline, "Online Downforce Curve", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
 
             // ── Interface (root) — what the mod shows you, and the free camera ──
             NativeMenu interfaceMenu = new NativeMenu("Interface", "Interface", "What the mod shows you, and the free camera.")
@@ -1154,9 +1154,9 @@ namespace ARS
             AddDebugCheckbox(interfaceMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(interfaceMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(interfaceMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
-            AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show AI Lap Times", "Announce each AI racer's lap time as they cross the line, the same way your own is. One notification per racer per lap, so a full grid is a lot of them.");
+            AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show Rival Lap Times", "Announce each AI racer's lap time as they cross the line, the same way your own is. One notification per racer per lap, so a full grid is a lot of them.");
 
-            NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Staged Spawns", "Show or hide Spawn Track and Spawn Grid in the Race menu.", StagedSpawns);
+            NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Show Track & Grid Rows", "Show or hide Load Track and Build Grid in the Race menu.", StagedSpawns);
             stagedSpawnsItem.CheckboxChanged += (sender, args) =>
             {
                 StagedSpawns = stagedSpawnsItem.Checked;
@@ -1227,7 +1227,7 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Inputs", "Draw the closest AI car's input trail: one chevron per metre of travel, lying flat and pointing along the car's path, pitching its nose down on throttle and up on braking, green through yellow to red by pedal input, holding the last 40 m.");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Pedal Trail", "Draw the closest AI car's input trail: one chevron per metre of travel, lying flat and pointing along the car's path, pitching its nose down on throttle and up on braking, green through yellow to red by pedal input, holding the last 40 m.");
             AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's steer-angle fan - pursuit, pursuit plus damper, the final steer line carrying the applied pedals and every limit that bites along it, and the limiter's ceiling - plus the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Draw a cyan marker at every lip the route scan found: a vertical tick and a line across the road, so the scan can be judged by eye before anything drives on it.");
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere a metre over each wheel of the closest AI car, coloured by that tyre's side-slip angle: white at rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.");
@@ -3234,7 +3234,7 @@ namespace ARS
                 if (i > 0 && char.IsUpper(name[i]) && !char.IsUpper(name[i - 1])) label += " ";
                 label += name[i];
             }
-            return label;
+            return label.Replace("Descendent", "Descending");
         }
 
         // One menu option per member, in declaration order.

@@ -24,9 +24,9 @@ namespace ARS
             "The grid is pace-matched to your car. Grid PI Mode > Relative uses your PI plus the offset.",
             "When the winner crosses the line, the Timeout grace period starts - finish before it runs out.",
             "Best laps are read out when the race ends.",
-            "Rivals > Car Pool swaps which Vehicles roster the grid is drawn from.",
+            "Rivals > Car Roster swaps which Vehicles roster the grid is drawn from.",
             "You can record your own route: ARS > Track Creator, then Save Track.",
-            "[tuning-off] Smart Tuning picks liveries, body kits and paint for the grid before a race.",
+            "[tuning-off] Auto Styling picks liveries, body kits and paint for the grid before a race.",
             "Every racer gets its own aggression from its grid slot, so the field never drives as one."
         };
 

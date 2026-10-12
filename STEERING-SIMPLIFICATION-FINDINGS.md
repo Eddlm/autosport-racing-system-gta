@@ -405,7 +405,7 @@ Decision: which statement is the record, and whether ranked item 5's premise nee
   `_countdown--`. The batch is `AutosportRacingSystem.cs:1922-1938`.
 - `AGENTS-STEERING.md:126` says "ARS already has `_steerLimitedThisFrame` for the saturation gate" — no such symbol
   exists in the tree.
-- `AGENTS-STEERING.md:292` says the Show Inputs fan draws each limit on its true side; nothing outside
+- `AGENTS-STEERING.md:292` says the Show Pedal Trail fan draws each limit on its true side; nothing outside
   `ApplySteerLimits` reads either limit field (C3).
 - `AGENTS.md`'s durable-gotcha line "`if (1 == 2) return;` is an INVERTED gate that disables nothing" — no
   `1 == 2` (spaced or not) exists in any `.cs` file.
