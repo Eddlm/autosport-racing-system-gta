@@ -417,7 +417,7 @@ Its lead is the geometric one stretched by a constant multiple.
 Adjacent profiles still merge by taking the further-in of the two, and an opposite-direction pair is still excluded as a chicane.
   The entry profile's far end is a **clamp, not a gate** — the outer edge is its value at every distance past the blend — so the window, not the profile, is what bounds it in time. Two time gates arm it, both in `UpdateCornerRequirements`: `RequiresPositioning` clears once the corner's apex is behind, so every approach re-arms in its own window (`Racer.cs:2965`); and the approach has to have **started**, judged once at promotion — a corner promoted to slot 0 while already inside the window is skipped for that approach (`Racer.cs:2945`), which is also the successive-corner rule, because promotion *is* the previous corner's apex. `RequiresBraking` is deliberately **not** cleared, because its range is measured to the entrance and it must outlive that to hold a plan through the apex. Filed as `outside-approach-window`, gate chain in `AGENTS-BACKLOG.md`.
 - **A sweeping corner suppresses its own corner line through the positioning decision**: the flag requires a tight corner (`Racer.cs:2853`) and route speed governs a sweeper's speed either way.
-That regime is no longer switchable (the Route Speed Limit toggle removal is the speed pipeline's `70e177c` note); the lever that shifts it is **Route Offset (mph)**.
+That regime is no longer switchable (the Route Speed Limit toggle removal is the speed pipeline's `70e177c` note); the lever that shifts it is **Road Curvature Offset (mph)**.
 - **Corner-commit maneuvers** replace the corner line with a lane beside the target rival on the corner's inside, and clean up when their apex is passed.
 - **The lane pursuit's gate is REMOVED** — the pursuit runs ungated (see the ungated-pursuit section), driving from the car's live position.
 - **A lane becomes a steer by pure pursuit off its aim point** — the bearing from the car's travel direction to `steerRefPoint.Position + steerRight * targetLane`, turned into an angle by the wheelbase (`PursuitSteerDegrees` `Racer.cs`); **no radius produces a steer**, and every lane source feeds it.
@@ -434,8 +434,8 @@ That regime is no longer switchable (the Route Speed Limit toggle removal is the
   **Recover `CompressBearingAngle` from `879585e`** if extreme bearings ever need a lever — the candidate being an off-track recovery that proves too violent — and put it on the bearing *before* the pursuit law, never on the assembled steer.
 
 ## Speed pipeline — how fast the car goes
-`Intention.Speed` is `min(cornerSpd + Corner Offset, followTrackSpd + Route Offset)`, then clamped by `MaxSpeed` and the off-track projection cap.
-**The offsets are split, one per authority, and each is applied inside the `min`** — so Corner Offset also lifts apex-limited speed while apex speed itself stays pure physics (`Racer.cs:1544`).
+`Intention.Speed` is `min(cornerSpd + ARS.CornerOffsetMph, followTrackSpd + ARS.RouteOffsetMph)`, then clamped by `MaxSpeed` and the off-track projection cap.
+**The offsets are split, one per authority, and each is applied inside the `min`** — so `CornerOffsetMph` also lifts apex-limited speed while apex speed itself stays pure physics (`Racer.cs:1544`).
 `Brain.CurrentIntention.CorneringSpeedLimit` is computed alongside the offsets and **read nowhere**, not even by the HUD (`Racer.cs`) — a known write-only field, so a plan that expects it to bite is wrong.
 
 - **`cornerSpd`** — the kinematic braking plan toward the apex speed over the distance to the apex node (`Racer.cs:3030`).
@@ -448,7 +448,7 @@ Its decel (`Racer.cs:3072`) is a grip-limited base **plus the gravity component 
 - **Never smooth on top of smoothing, and state baselines in metres.**
   `TrackPoint.Elevation` is already a central difference of the route (`TrackLoader.cs:208`) and `Direction` a nearer one, while the crest curvature reads the raw positions — two vertical reads of the same road through different filters, so building curvature by differencing `Elevation` would compound the filter and shift the onset it is meant to find.
   The reads carry an unstated ladder (`ExactRadius`, `PreciseCurveRadius`, `GeneralCurveRadius`, crest): it wants one convention with two named rungs — short to locate a feature, long to measure its strength — counted in metres, because a node count is a different filter on every track (`AGENTS-BACKLOG.md`; spacing per track is in the Track facts below).
-- **`followTrackSpd`** — route curvature from a time-based lookahead window (`Racer.cs:2760` sampled, `Racer.cs:3140` the law), the authority for sweeping corners, and **always in the `min`**: the Route Speed Limit toggle was removed in `70e177c`, replaced by the additive Route Offset (see the sweeper bullet above).
+- **`followTrackSpd`** — route curvature from a time-based lookahead window (`Racer.cs:2760` sampled, `Racer.cs:3140` the law), the authority for sweeping corners, and **always in the `min`**: the Route Speed Limit toggle was removed in `70e177c`, replaced by the additive `RouteOffsetMph` (see the sweeper bullet above).
 Its one live modifier is the **`SteerLimitedSpeed` blend** (`Racer.cs:1522`), a steer-implied/route-speed mix fed the *clamped* steer of the previous pass — so a tighter steer ceiling **raises** route speed.
 - **Slope grip loss is LIVE** (exponential pitch model on corner + route speed) — ignore any older note claiming otherwise.
 The hill/crest grip floors are tuned as one knob; read the code for current values, and note the known issue that the model reads an upcoming hill and brakes before the car reaches it.

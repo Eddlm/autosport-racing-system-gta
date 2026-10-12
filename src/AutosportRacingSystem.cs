@@ -144,7 +144,7 @@ namespace ARS
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = true;
-        // Flat mph added to the corner braking plan; Route Offset is the same knob for the route term.
+        // Flat mph added to the corner plan; Road Curvature Offset is the same knob for the route term.
         public static int CornerOffsetMph = 6;
         public static int RouteOffsetMph = 6;
         public static float SteerDampingGain = 0.5f;
@@ -942,7 +942,7 @@ namespace ARS
             rivalsMenu.AddSubMenu(rivalTractionMenu);
             rivalsMenu.AddSubMenu(rivalSteeringMenu);
 
-            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Offset (mph)", "Mph added to the speed the next corner allows - the target it brakes for. Only the slower of this and Route Offset is ever used.", SettingsRepair.OptionsFor("CornerOffset"));
+            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Speed Offset (mph)", "Raises the target the rivals brake for at the next corner. Only the slower of this and Road Curvature Offset is ever used.", SettingsRepair.OptionsFor("CornerOffset"));
             cornerOffsetItem.ItemChanged += (sender, args) =>
             {
                 CornerOffsetMph = int.Parse(cornerOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -952,7 +952,7 @@ namespace ARS
             rivalPaceMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
 
-            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Route Offset (mph)", "Mph added to the speed the road's own curvature allows between corners. Only the slower of this and Corner Offset is ever used.", SettingsRepair.OptionsFor("RouteOffset"));
+            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Road Curvature Offset (mph)", "Raises the speed the road's curvature allows ahead of the car. Only the slower of this and Corner Speed Offset is ever used.", SettingsRepair.OptionsFor("RouteOffset"));
             routeOffsetItem.ItemChanged += (sender, args) =>
             {
                 RouteOffsetMph = int.Parse(routeOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -970,7 +970,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Loss (%)", "Scales the speed a crest takes off a rival, as a share of the tuned amount: 0% ignores crests, 100% is the tuned cut, 200% doubles it. It scales losses only, so a dip's grip bonus is never amplified.", SettingsRepair.OptionsFor("CrestEffect"));
+            NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Loss (%)", "A share of the tuned speed cut over a crest: 0% ignores them, 100% is the tuned cut, 200% doubles it. Losses only, so a dip's grip bonus is never amplified.", SettingsRepair.OptionsFor("CrestEffect"));
             crestEffectItem.ItemChanged += (sender, args) =>
             {
                 CrestEffect = int.Parse(crestEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
@@ -980,7 +980,7 @@ namespace ARS
             rivalPaceMenu.Add(crestEffectItem);
             HookListTextPicker(crestEffectItem);
 
-            NativeListItem<string> hillEffectItem = new NativeListItem<string>("Hill Loss (%)", "Scales the speed a slope takes off a rival, as a share of the tuned amount: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. The pitch is taken either way, so a descent costs speed as well as a climb; at 100%, 15 degrees halves grip.", SettingsRepair.OptionsFor("HillGripEffect"));
+            NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "A share of the tuned speed cut for slopes: 0% ignores them, 100% is the tuned cut, 200% doubles it. The pitch counts either way, so a descent costs speed like a climb; at 100%, 15 degrees halves grip.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
             {
                 HillGripEffect = int.Parse(hillEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
