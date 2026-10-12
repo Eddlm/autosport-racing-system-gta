@@ -431,3 +431,12 @@ The whole session's UI work shipped without a game session: the menu tree, the t
 6. **Start Race reads right and spectates.** In a car the race starts with you in it; on foot it must run with you watching from the sideline; an empty grid must notify instead of returning silently.
 7. **The copy reads correctly in place** — the Rivals family, the two renamed PI offsets, the traction and steering rows, the renamed options and the Racer Autofix list. Every line was written so the name stands alone and the tooltip carries only what the name cannot.
 8. **One item cannot be driven at all**: the update notice now prefers the release title, so it only fires against a newer release — it waits for the first cut after this one.
+
+## Contact avoidance is its own term, added after the damper and the blend (NOT DRIVEN)
+
+The steer-away correction used to be folded into the lane steer, so the lane system's own stages acted on it: the yaw damper modulated it, the slide handover replaced the command with a countersteer target that deliberately omits the lane term, and the on-aim rule zeroed the wheel. It is now its own `contactSteerDeg` (`Racer.cs:578-598`), added at `:644` after all three; only the steer limiter and the final slew bound it.
+
+1. **A slide alongside a rival** — the case the change exists for. A car sliding with someone closing on its flank must now steer away instead of handing the wheel entirely to the countersteer. The tell of the old behaviour is the wheel going quiet exactly as the slide peaked.
+2. **On its line with a rival closing** — a car sitting on its aim with a rival closing laterally used to have its command zeroed. It must now step away. Too little and nothing changes; too much reads as a twitch on a straight.
+3. **The margin** — a rival closing at the remap's floor (0.3 m/s) gives a fraction of a degree with nothing suppressing it any more, so watch for a small wheel jitter in side-by-side traffic that the old on-aim zeroing hid. The floor is the knob if it shows.
+4. **What must not change** — the limiter and the slew still close the steering last, so the push cannot exceed the tyre's allowance within one tick; and with no rival closing the term is zero, so every other behaviour should be identical.

@@ -566,8 +566,16 @@ namespace ARS
 
             float laneSteerDeg = PursuitSteerDegrees(laneAimPoint, courseDir);
             _steerPursuitDeg = laneSteerDeg;
-            // Physical repulsion: inside the "no touching" box, steer away from rivals
-            // actually closing laterally; parallel traffic must not kill the lane steer.
+            // --- Heading assist: match a side-by-side rival's heading ---
+
+            float sideBySideSteerDeg = ComputeSideBySideSteerCorrection(courseDir);
+
+            // --- Contact avoidance: a direct steer-away, not a lane intent ---
+            // Inside the "no touching" box, steer away from rivals actually closing laterally; it never moves the
+            // target lane, and parallel traffic must not kill the lane steer. It is added in the assembly after the
+            // damper, the slide blend and the on-aim zeroing, so none of them can fade the one term that must not
+            // fade — only the steer limiter bounds it, and that closes the steering last.
+            float contactSteerDeg = 0f;
             Vector3 velDir = speedMps > 0.5f ? Car.Velocity / speedMps : courseDir;
             Vector3 velRight = Vector3.Cross(velDir, Vector3.WorldUp);
             foreach (Rival r in Brain.Rivals)
@@ -587,13 +595,8 @@ namespace ARS
                 float dist = delta.Length();
                 float distScale = ARS.Remap(dist, 6f, 2f, 0.5f, 2f, true);
                 float strength = ARS.Remap(Math.Abs(latRelVel), 0.3f, 3f, 0f, 15f, true) * distScale;
-                laneSteerDeg += Math.Sign(latSide) * strength;
+                contactSteerDeg += Math.Sign(latSide) * strength;
             }
-
-
-            // --- Heading assist: match a side-by-side rival's heading ---
-
-            float sideBySideSteerDeg = ComputeSideBySideSteerCorrection(courseDir);
 
 
             // --- Assembly: lane pursuit + corrections + damper + slide blend ---
@@ -634,8 +637,11 @@ namespace ARS
             }
 
             // On its aim to within the noise the command has nothing to correct and only flips sign from tick to
-            // tick, so the wheel is left still — unless a slide is steering it, which must not be zeroed.
+            // tick, so the wheel is left still — unless a slide is steering it, which must not be zeroed. Contact
+            // avoidance is not an aiming correction, so it is added after this and after everything above it: a
+            // rival closing alongside still moves the wheel while the car is on its line, or sliding.
             if (Math.Abs(_steerAimBearingDegrees) < SmallAimBearingDegrees && _slidePriority <= 0f) Control.SteerDegrees = 0f;
+            Control.SteerDegrees += steerKP * contactSteerDeg;
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
                 Control.SteerDegrees = 0f;
