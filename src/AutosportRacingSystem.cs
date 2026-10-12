@@ -211,6 +211,8 @@ namespace ARS
 
 
         public static RaceState RaceStatus = RaceState.None;
+        // The one gate for "a race is under way": the HUD, the nitrous top-ups and the Reset To Track item all read it.
+        public static bool RaceIsRunning { get { return RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress; } }
         public static int RaceStartTime = 0;
         // Cars taken out of a race with a dead engine, parked along the shoulder in the order they died.
         public static int ParkedDNFs = 0;
@@ -804,12 +806,13 @@ namespace ARS
             _raceMenu.Add(restartItem);
 
             // Reset: teleport the player's car to the side of the closest track node, moving forward at low speed.
-            NativeItem resetItem = new NativeItem("Reset To Track", "Teleport your car to the side of the closest track node, facing the route at 10 mph.");
+            NativeItem resetItem = new NativeItem("Reset To Track", "Teleport your car to the side of the closest track node, facing the route at 10 mph. Only while a race is running.");
             resetItem.Activated += (sender, args) =>
             {
-                _raceMenu.Visible = false;
+                _arsMenu.Visible = false;
                 ResetToTrack();
             };
+            _arsMenu.Shown += (sender, args) => resetItem.Enabled = RaceIsRunning;
             // ── Root-level actions ──
 
             // End Race: tear down race, clean everything. Listed last in the root.
@@ -1403,6 +1406,7 @@ namespace ARS
 
         public void ResetToTrack()
         {
+            if (!RaceIsRunning) { UI.Notify("~r~Reset to track:~w~ only while a race is running."); return; }
             Vehicle car = Game.Player.Character.CurrentVehicle;
             if (car == null || !car.Exists()) { UI.Notify("~r~Reset to track:~w~ you must be in a vehicle."); return; }
             if (TrackPoints.Count == 0) { UI.Notify("~r~Reset to track:~w~ no track loaded."); return; }
@@ -1734,7 +1738,7 @@ namespace ARS
                 
                 if (_routeEditorActive) TrackVisuals.DrawRoute(RouteNodes, NodeHalfWidths, _routeEditorActive);
                 if (PlayerRacer == null || !Racers.Contains(PlayerRacer)) PlayerRacer = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
-                bool raceLive = RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress;
+                bool raceLive = RaceIsRunning;
 
                 if (DebugToggles[Options.ShowCheckpoints] && ARS.Corners.Count > 0)
                 {
@@ -1810,7 +1814,7 @@ namespace ARS
                 }
 
                 // Nitro: one charge at launch, then a fresh bottle each lap.
-                if (NitrousEnabled && (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) && Game.GameTime - _nitroTopUpAt > 1000)
+                if (NitrousEnabled && RaceIsRunning && Game.GameTime - _nitroTopUpAt > 1000)
                 {
                     _nitroTopUpAt = Game.GameTime;
                     foreach (Racer racer in Racers)
@@ -1823,7 +1827,7 @@ namespace ARS
                 if (NitrousEnabled && PlayerRacer != null && Game.IsKeyPressed(Keys.X))
                     PlayerRacer.TryFireNitrous();
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
-                if (RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress) DrawRaceHud();
+                if (RaceIsRunning) DrawRaceHud();
 
                 if (RaceStatus == RaceState.None || RaceStatus == RaceState.NotInitiated)
                 {
