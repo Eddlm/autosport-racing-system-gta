@@ -852,14 +852,14 @@ namespace ARS
             creatorMenu.Add(exitCreatorItem);
 
             // ── Rivals (root) — who races against you, and how they drive ──
-            NativeMenu rivalsMenu = new NativeMenu("Rivals", "Rivals", "Who races against you, and how they drive.")
+            NativeMenu rivalsMenu = new NativeMenu("Rivals", "Rivals", "Who races against you: the cars they drive, how they look, and how they drive.")
             {
                 UseMouse = false,
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
 
-            NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "How the grid is ordered.", EnumLabels<GridSort>());
+            NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "How the rivals are lined up before the race: by acceleration or top speed, each ascending or descending, or shuffled at random.", EnumLabels<GridSort>());
             gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", ((GridSort)args.Index).ToString());
             gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(EnumLabel(ParseEnum(SettingsMenuStore.Get("GridSorting", "Random"), GridSort.Random))));
             rivalsMenu.Add(gridSortItem);
@@ -872,7 +872,7 @@ namespace ARS
             if (!poolFiles.Contains(storedPool, StringComparer.OrdinalIgnoreCase)) { storedPool = "cars.txt"; SaveRacerSetting("VehiclePool", storedPool); }
             VehicleCatalog.SelectRosterFile(storedPool);
             _carPoolFiles = poolFiles.Select(VehicleCatalog.PoolLabel).ToList();
-            NativeListItem<string> carPoolItem = new NativeListItem<string>("Car Pool", "Which Vehicles\\*.txt roster the grid draws from. This list is re-checked every time the menu opens and reports anything that changed. Switching it rebuilds the pool immediately.", _carPoolFiles.ToArray());
+            NativeListItem<string> carPoolItem = new NativeListItem<string>("Car Pool", "Which file in Vehicles supplies the cars your rivals will drive. Switching it rebuilds the pool at once.", _carPoolFiles.ToArray());
             carPoolItem.ItemChanged += (sender, args) =>
             {
                 if (_carPoolRefreshing) return;
@@ -891,7 +891,7 @@ namespace ARS
             HookListTextPicker(carPoolItem);
             rivalsMenu.Shown += (sender, args) => RefreshCarPoolItem(carPoolItem);
 
-            NativeCheckboxItem forceFillItem = new NativeCheckboxItem("Force-Fill Grid", "Repeat the pool's car models until the grid reaches Target Grid Size, so a short pool still fields a full grid. Off leaves the grid as short as the pool.", ForceFillGrid);
+            NativeCheckboxItem forceFillItem = new NativeCheckboxItem("Force-Fill Grid", "Reuse the pool's cars until the grid reaches Target Grid Size. Off, the grid is only as long as the pool allows.", ForceFillGrid);
             forceFillItem.CheckboxChanged += (sender, args) =>
             {
                 ForceFillGrid = forceFillItem.Checked;
@@ -899,7 +899,7 @@ namespace ARS
             };
             rivalsMenu.Add(forceFillItem);
 
-            NativeCheckboxItem tuningItem = new NativeCheckboxItem("Smart Tuning", "Pick the livery that fits a style, then the body parts that go with it, then paint to suit. Runs during the countdown so it adds no load time.", SmartTuning);
+            NativeCheckboxItem tuningItem = new NativeCheckboxItem("Smart Tuning", "Restyle the rivals' cars: a livery chosen to suit each one, the body parts that go with that style, and paint to match. Your own car and any car that already has a mod kit are left alone; the work runs during the countdown.", SmartTuning);
             tuningItem.CheckboxChanged += (sender, args) =>
             {
                 SmartTuning = tuningItem.Checked;
@@ -908,7 +908,7 @@ namespace ARS
             rivalsMenu.Add(tuningItem);
 
             // ── Menyoo vehicle skins on grid cars ──
-            NativeCheckboxItem menyooItem = new NativeCheckboxItem("Use Menyoo Skins", "Apply Menyoo vehicle-appearance files (menyooStuff\\Vehicle) to grid cars that have a matching skin.", UseMenyooSkins);
+            NativeCheckboxItem menyooItem = new NativeCheckboxItem("Use Menyoo Skins", "Apply Menyoo appearance files from menyooStuff\\Vehicle to rival cars that have one. Cars without a matching file are left alone.", UseMenyooSkins);
             menyooItem.CheckboxChanged += (sender, args) =>
             {
                 UseMenyooSkins = menyooItem.Checked;
@@ -917,19 +917,19 @@ namespace ARS
             rivalsMenu.Add(menyooItem);
 
             // ── Rival behaviour submenus: pace, traction, steering ──
-            NativeMenu rivalPaceMenu = new NativeMenu("Rival Pace", "Rival Pace", "How fast the rivals want to go: corner and route speed, terrain effects and brake learning.")
+            NativeMenu rivalPaceMenu = new NativeMenu("Rival Pace", "Rival Pace", "How fast the rivals aim to go: corner and route speed, terrain effects, and what each car has learned about braking.")
             {
                 UseMouse = false,
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            NativeMenu rivalTractionMenu = new NativeMenu("Rival Traction", "Rival Traction", "How the rivals put power down and brake: the wheelspin and wheel-lock caps.")
+            NativeMenu rivalTractionMenu = new NativeMenu("Rival Traction", "Rival Traction", "How much wheelspin and brake lock the rivals are allowed before their pedals are cut back.")
             {
                 UseMouse = false,
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            NativeMenu rivalSteeringMenu = new NativeMenu("Rival Steering", "Rival Steering", "How the rivals turn: the steering damper and the steering limit.")
+            NativeMenu rivalSteeringMenu = new NativeMenu("Rival Steering", "Rival Steering", "How the rivals turn in: how firmly their rotation is damped, and how far the wheel may go at speed.")
             {
                 UseMouse = false,
                 DisableControls = true,
