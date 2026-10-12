@@ -810,7 +810,7 @@ namespace ARS
             int spawnGridSlot = _raceMenu.Items.IndexOf(instanceGridItem);
 
             // Start: add player to grid, place cars, tune, countdown. Lives at the end of Race.
-            NativeItem startItem = new NativeItem("Start Race", "Add yourself to the grid and start the race.");
+            NativeItem startItem = new NativeItem("Start Race", "Starts the race, loading the track and building the grid first if they are not up yet. You race it when you are in a car, and watch it from the sideline when you are not.");
             startItem.Activated += (sender, args) =>
             {
                 _raceMenu.Visible = false;
@@ -2251,6 +2251,7 @@ namespace ARS
             AddPlayerToGrid();
             if (Racers.Count == 0)
             {
+                UI.Notify("~r~[ARS]:~w~ no racers to start - check the car roster and Max PI Deviation.");
                 if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
                 return;
             }
