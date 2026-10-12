@@ -135,7 +135,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("GridSorting", GridSort.Random.ToString(), Kind.Text, Enum.GetNames(typeof(GridSort))));
             settings.Specs.Add(new KeySpec("VehiclePool", "cars.txt"));   // any Vehicles\*.txt; free text by design (the file list is dynamic)
             settings.Specs.Add(new KeySpec("TimeoutSeconds", "60", Kind.Number, new[] { "15", "30", "45", "60" }));
-            settings.Specs.Add(new KeySpec("AIRacerAutofix", "2", Kind.Number, new[] { "0", "1", "2" }));
+            settings.Specs.Add(new KeySpec("AIRacerAutofix", AutofixMode.Invincible.ToString(), Kind.Text, Enum.GetNames(typeof(AutofixMode))));
             settings.Specs.Add(new KeySpec("CornerOffset", "6", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
             settings.Specs.Add(new KeySpec("RouteOffset", "6", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
             settings.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));

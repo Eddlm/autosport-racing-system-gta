@@ -41,6 +41,11 @@ namespace ARS
         Natural, Artificial,
     }
 
+    public enum AutofixMode
+    {
+        Off, DamageResistant, Invincible,
+    }
+
     // Debug toggle keys. Position carries no meaning: the name is the key and the DebugToggles dictionary is the
     // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
@@ -1078,9 +1083,9 @@ namespace ARS
             rulesMenu.Add(timeoutItem);
             HookListTextPicker(timeoutItem);
 
-            NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "0 = disabled, 1 = fixed when damaged, 2 = invincible.", SettingsRepair.OptionsFor("AIRacerAutofix"));
-            autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", autofixItem.Items[args.Index]);
-            autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(SettingsMenuStore.GetInt("AIRacerAutofix", 2).ToString()));
+            NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "Damage handling for the rivals' cars.", EnumLabels<AutofixMode>());
+            autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", ((AutofixMode)args.Index).ToString());
+            autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(EnumLabel(Autofix)));
             rulesMenu.Add(autofixItem);
             HookListTextPicker(autofixItem);
 
@@ -3137,6 +3142,11 @@ namespace ARS
             SettingsMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", "Random"));
             SettingsMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<int>("RACERS", "TimeoutSeconds", 60).ToString());
             SettingsMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 2).ToString());
+            // The option was a number before it was named; rewrite it so the repair pass cannot reset a stored choice.
+            string storedAutofix = SettingsMenuStore.Get("AIRacerAutofix", null);
+            if (storedAutofix == "0") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Off.ToString());
+            else if (storedAutofix == "1") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.DamageResistant.ToString());
+            else if (storedAutofix == "2") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Invincible.ToString());
             SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
             UseMenyooSkins = SettingsMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
             string legacyAiNitro = legacyRacers.GetValue<string>("RACERS", "AiNitro", null);
@@ -3195,6 +3205,9 @@ namespace ARS
         // None sits last on purpose: Log() returns when `LogLevel > i`, so the highest value silences every level
         // without a second test. Forced calls still write — a silent install failure is worse than a log line.
         public enum LogImportance { Info, Error, Fatal, None }
+
+        // The rivals' damage handling, read live like the timeout so a menu change applies without a restart.
+        public static AutofixMode Autofix { get { return ParseEnum(SettingsMenuStore.Get("AIRacerAutofix", AutofixMode.Invincible.ToString()), AutofixMode.Invincible); } }
 
         // Stored text -> enum value; unknown or undefined text falls back.
         static T ParseEnum<T>(string value, T fallback) where T : struct
