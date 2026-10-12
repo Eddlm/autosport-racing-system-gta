@@ -334,6 +334,7 @@ The two-livery-spaces trap (mod slot 48 vs the livery list), the exact natives a
 - **Grid slots are built to order and the count must include the player.** `BuildGridSlots` (`TrackLoader.cs:588`) runs again for `Racers.Count` right before `GridBuilder.Place` (`GridBuilder.cs:17`) because `Place` reads **two slots past each car**, and `AddPlayerToGrid` (`AutosportRacingSystem.cs:1920`) adds the player *after* the grid was sized — `470a1a1` shipped exactly that crash.
 - **Pace Mode is the sole authority on the anchor (`759a36a`)**: Relative resolves from the player's pace, Absolute from the persisted target, and **every** start path resolves from the mode with no override of its own. `PowerTargetScale` has exactly two writers — its own menu item and `RefreshPowerControls` (`AutosportRacingSystem.cs:1236`).
 - **Menu vocabulary**: the items are `Grid PI Mode` / `PI Offset` / `PI Target` while keys and code keep the name pace. **`PaceTarget` is a seed, not a preference** — `RefreshPowerControls` clamps it to the live fleet span on every menu build and saves the result, so do not reconcile a live-vs-Dist difference in it.
+- **A menu description carries only what the name and the visible options cannot** (user-stated): a hidden rule, an exclusion, the unit, or which way to turn the dial. Never restate the label or enumerate the options — the player can already read both in front of them.
 
 ## Dependencies and UI
 
