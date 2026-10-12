@@ -45,6 +45,7 @@ The track creator is live — a root Track Creator submenu records a route and S
 - **The release identity is hand-moved.** `src\Properties\AssemblyInfo.cs`'s `AssemblyVersion`/`AssemblyFileVersion` are bumped at the cut so they match the tag; nothing derives either from the other, the zip is named by short SHA (`deploy.yml:65`), and the build number beside the dll is the "which binary" axis.
 - **Only a `v*` tag attaches a release** (`deploy.yml:7,76,80`), which is why the older `0.8` and `0.8.5` — no `v` — were uploaded by hand. Keep the prefix consistent, and fix the dead changelog link in `v0.8.6`'s body, which compares against `v0.8.5DONTRY`, a tag that does not exist on the remote.
 - **A CI release starts as a prerelease on purpose** — a guard, flipped off by hand once the build is blessed. While it is on, GitHub's `releases/latest` **skips it**, so the in-game update notice stays quiet: the flip is what announces the release, and forgetting it is how a release goes unannounced.
+- **OPEN — the double-digit minor.** A reader can take `0.10` for `0.1.0` and read it as older than `0.9`, and skipping one number does not fix it because `0.11` carries the same two digits. The only schemes that never show one are a bumped major (which claims a stability the project is not ready to claim and reaches `1.10` in the end) or a date-shaped version (`2026.10.1`), which tells a player when rather than what — decision owed before the first double-digit release.
 
 ## Package gate
 
