@@ -10,17 +10,23 @@ namespace ARS
         // **No script yield in this loop, deliberately.** A yield parks the whole race-start stack (track load ->
         // grid build -> ranking) inside SHVDN's per-script handshake across frames, the one window in ARS that can
         // strand a tick; the pass itself is pure C# over a few hundred entries and never needs one.
-        public static List<string> SelectClosestByPace(List<string> pool, Dictionary<string, float> paceIndex, int maxCars, Func<int, int, int> random, Action<string> log, float powerTarget)
+        public static List<string> SelectClosestByPace(List<string> pool, Dictionary<string, float> paceIndex, int maxCars, Func<int, int, int> random, Action<string> log, float powerTarget, int maxDeviation)
         {
             List<KeyValuePair<float, string>> ranked = new List<KeyValuePair<float, string>>();
             int inspected = 0;
+            int outsideLimit = 0;
             foreach (string key in pool)
             {
                 float pace;
                 if (paceIndex.TryGetValue(key, out pace))
-                    ranked.Add(new KeyValuePair<float, string>(Math.Abs(pace - powerTarget), key));
+                {
+                    // The window is measured on the whole PI a player reads, so it can be checked by eye.
+                    if (maxDeviation > 0 && Math.Abs(Math.Round(pace) - Math.Round(powerTarget)) > maxDeviation) outsideLimit++;
+                    else ranked.Add(new KeyValuePair<float, string>(Math.Abs(pace - powerTarget), key));
+                }
                 if (++inspected % 10 == 0) log("Ranking progress: " + inspected + "/" + pool.Count);
             }
+            if (maxDeviation > 0) log("PI limit " + maxDeviation + " around " + Math.Round(powerTarget) + ": " + ranked.Count + " of " + (ranked.Count + outsideLimit) + " paced models are inside it");
 
             Shuffle(ranked, random);
             List<KeyValuePair<float, string>> ordered = ranked.OrderBy(pair => pair.Key).ToList();

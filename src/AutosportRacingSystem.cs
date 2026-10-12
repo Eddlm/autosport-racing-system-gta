@@ -633,6 +633,8 @@ namespace ARS
         // fixed target. Neither writes back here.
         public static PaceMode CurrentPaceMode = PaceMode.RelativeToMine;
         public static float PaceOffsetScale = 0f;
+        // 0 = no limit: the grid takes the closest PIs in the pool however far they sit from the target.
+        public static int PaceDeviationLimit = 0;
         // Default script folder under GTA's `scripts\` (Tracks/, Vehicles/cars.txt, sillynames.txt,
         // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
@@ -732,7 +734,13 @@ namespace ARS
             _raceMenu.Add(_gridSizeItem);
             HookListTextPicker(_gridSizeItem);
 
-            // ── Grid PI Mode — the anchor the two PI controls below obey (Race owns all three keys) ──
+            // ── PI Settings submenu — the performance index the grid is drawn from (Race owns its keys) ──
+            NativeMenu piSettingsMenu = new NativeMenu("PI Settings", "PI Settings", "The performance index the grid is drawn from, and how close to it a rival may sit.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
             _paceModeItem = new NativeListItem<string>("Grid PI Mode", "How the grid's performance index (PI - the score the leaderboard shows) is chosen. Absolute = every grid uses the fixed PI Target. Relative To Mine = your car's own PI + PI Offset. Governs menu starts and E-joins alike.", EnumLabels<PaceMode>());
             _paceModeItem.ItemChanged += (sender, args) =>
             {
@@ -740,7 +748,7 @@ namespace ARS
                 RaceMenuStore.Set("PaceMode", CurrentPaceMode.ToString());
                 ApplyPaceModeUI();
             };
-            _raceMenu.Add(_paceModeItem);
+            piSettingsMenu.Add(_paceModeItem);
             HookListTextPicker(_paceModeItem);
 
             // ── PI offset / target (merged Council design; the mode above decides which one governs) ──
@@ -759,7 +767,7 @@ namespace ARS
                     ApplyPaceModeUI();
                 }
             };
-            _raceMenu.Add(_paceOffsetItem);
+            piSettingsMenu.Add(_paceOffsetItem);
             HookListTextPicker(_paceOffsetItem);
 
             _powerTargetItem = new NativeListItem<string>("PI Target", "Fixed performance index the grid is selected around.", Array.Empty<string>());
@@ -772,8 +780,19 @@ namespace ARS
                     ApplyPaceModeUI();
                 }
             };
-            _raceMenu.Add(_powerTargetItem);
+            piSettingsMenu.Add(_powerTargetItem);
             HookListTextPicker(_powerTargetItem);
+            NativeListItem<string> paceDeviationItem = new NativeListItem<string>("Max PI Deviation", "Hard limit on how far a rival's PI may sit from the grid's target. Off keeps taking the closest cars in the pool, however far that reaches.", SettingsRepair.OptionsFor("PaceDeviation"));
+            paceDeviationItem.ItemChanged += (sender, args) =>
+            {
+                PaceDeviationLimit = ParseDeviationLimit(paceDeviationItem.Items[args.Index]);
+                RaceMenuStore.Set("PaceDeviation", paceDeviationItem.Items[args.Index]);
+            };
+            paceDeviationItem.SelectedIndex = Math.Max(0, paceDeviationItem.Items.IndexOf(PaceDeviationLimit > 0 ? PaceDeviationLimit.ToString(CultureInfo.InvariantCulture) : "Off"));
+            piSettingsMenu.Add(paceDeviationItem);
+            HookListTextPicker(paceDeviationItem);
+            _raceMenu.AddSubMenu(piSettingsMenu);
+
             // Set last: assigning SelectedIndex fires ItemChanged, and the mode's handler rewrites both PI items.
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
 
@@ -1271,6 +1290,7 @@ namespace ARS
             // Register all menus in the pool
             _menuPool.Add(_arsMenu);
             _menuPool.Add(_raceMenu);
+            _menuPool.Add(piSettingsMenu);
             _menuPool.Add(rivalsMenu);
             _menuPool.Add(rivalPaceMenu);
             _menuPool.Add(rivalTractionMenu);
@@ -3182,6 +3202,7 @@ namespace ARS
             if (string.Equals(storedMode, "Relative", StringComparison.OrdinalIgnoreCase) || string.Equals(storedMode, "Relative To Mine", StringComparison.OrdinalIgnoreCase)) RaceMenuStore.Set("PaceMode", PaceMode.RelativeToMine.ToString());
             CurrentPaceMode = ParseEnum(RaceMenuStore.Get("PaceMode", CurrentPaceMode.ToString()), CurrentPaceMode);
             PaceOffsetScale = RaceMenuStore.GetFloat("PaceOffset", PaceOffsetScale);
+            PaceDeviationLimit = ParseDeviationLimit(RaceMenuStore.Get("PaceDeviation", "Off"));
             Log(LogImportance.Info, "Loaded per-menu settings.");
 
             ScriptSettings legacyDevConfig = ScriptSettings.Load(SettingsFolder + @"\DevConfig.ini");
@@ -3208,6 +3229,13 @@ namespace ARS
 
         // The rivals' damage handling, read live like the timeout so a menu change applies without a restart.
         public static AutofixMode Autofix { get { return ParseEnum(SettingsMenuStore.Get("AIRacerAutofix", AutofixMode.Invincible.ToString()), AutofixMode.Invincible); } }
+
+        // Off is the off state and everything else is PI units; an unknown spelling falls back to off.
+        static int ParseDeviationLimit(string value)
+        {
+            int limit;
+            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out limit) && limit > 0 ? limit : 0;
+        }
 
         // Stored text -> enum value; unknown or undefined text falls back.
         static T ParseEnum<T>(string value, T fallback) where T : struct
@@ -3472,9 +3500,9 @@ namespace ARS
                 if (ModelPaceIndexCache.Count > 0 && !ARS.IsBetween(_resolvedPaceTarget, paceMin, paceMax))
                     Log(LogImportance.Info, "Pace target " + _resolvedPaceTarget + " outside fleet span " + paceMin + ".." + paceMax + " - ranking from the closest end");
                 DateTime rankingStarted = DateTime.UtcNow;
-                _cachedCandidates = VehicleSelector.SelectClosestByPace(_vehiclePool, ModelPaceIndexCache, maxcars, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget);
+                _cachedCandidates = VehicleSelector.SelectClosestByPace(_vehiclePool, ModelPaceIndexCache, maxcars, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget, PaceDeviationLimit);
                 Log(LogImportance.Info, "Ranking took " + (int)(DateTime.UtcNow - rankingStarted).TotalMilliseconds + " ms for " + _vehiclePool.Count + " pool files");
-                if (_cachedCandidates.Count == 0) Log(LogImportance.Error, "No vehicles in the pool with a pace index.");
+                if (_cachedCandidates.Count == 0) Log(LogImportance.Error, PaceDeviationLimit > 0 ? "No vehicles within " + PaceDeviationLimit + " PI of the target - widen Max PI Deviation or the pool." : "No vehicles in the pool with a pace index.");
             }
         }
 
