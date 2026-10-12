@@ -37,6 +37,15 @@ The track creator is live — a root Track Creator submenu records a route and S
 - [ ] `Log.log` records the session banner and actionable load failures. With **Log Level `None`** (the shipped default) that is *all* it records: the banner plus forced error lines — one of which is the bridge probe's, which is why the release README's "the log names the reason" still holds.
 - [ ] Every retired settings file is removed on load (`Settings.ini`, `Options.ini`, `DevSettings.ini`, `DevConfig.ini`, `MemoryOffsets.ini`, `Menu-Racers.ini`, `Menu-DevSettings.ini`). **`Options.ini` has no reader at all** — nothing left in it to verify.
 
+## Versioning and releases — the convention
+
+**Minors are not consumed per release** (user-stated): releases ride the patch digit (`0.8.7`, `0.8.8`, …) and `1.0` is a declaration rather than a countdown. That is a project convention and **not** SemVer, whose own FAQ for `0.y.z` says to increment the *minor* for each initial-development release — so the README must not claim compliance while the digits mean something else.
+
+- **The syntax still holds**: three numeric fields, no leading zeroes, compared numerically — so `0.8.10` correctly follows `0.8.9` (`semver.org` §2 and §11), and the mod never compares versions anyway: `UpdateChecker` only prints the latest `tag_name`.
+- **The release identity is hand-moved.** `src\Properties\AssemblyInfo.cs`'s `AssemblyVersion`/`AssemblyFileVersion` are bumped at the cut so they match the tag; nothing derives either from the other, the zip is named by short SHA (`deploy.yml:65`), and the build number beside the dll is the "which binary" axis.
+- **Only a `v*` tag attaches a release** (`deploy.yml:7,76,80`), which is why the older `0.8` and `0.8.5` — no `v` — were uploaded by hand. Keep the prefix consistent, and fix the dead changelog link in `v0.8.6`'s body, which compares against `v0.8.5DONTRY`, a tag that does not exist on the remote.
+- **A CI release starts as a prerelease on purpose** — a guard, flipped off by hand once the build is blessed. While it is on, GitHub's `releases/latest` **skips it**, so the in-game update notice stays quiet: the flip is what announces the release, and forgetting it is how a release goes unannounced.
+
 ## Package gate
 
 - [ ] Build Release, and confirm `ARS.dll` and `LemonUI.SHVDN2.dll` deploy to the game Scripts folder.
