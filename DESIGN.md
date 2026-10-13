@@ -133,10 +133,11 @@ for, rather than the fastest it might get away with — so the plan keeps a prom
 pedals answer the moment.
 
 **Two answers, and the plan takes the lower.** The corner term is worked backwards from the apex: the
-braking map, for the downforce and the learned braking factor this car has. The route term is the grip
-circle read from the curvature under and ahead of the car. The plan is the smaller of the two, each with an
-error margin of its own as a menu offset — which is how a driver buys caution or commitment without touching
-either law.
+braking map, for the downforce and the learned braking factor this car has. The route term starts as the grip
+circle read from the curvature under and ahead, then gives most of itself to the speed the wheel is already
+committed to — deliberately, so a car running wide of the arc may carry more than the road's own radius would
+allow. The plan is the smaller of the two, each with an error margin of its own as a menu offset — which is
+how a driver buys caution or commitment without touching either law.
 
 **Only the corners this car decided it needs braking for enter the corner term.** Every other bend is the
 route law's business, which is the same division the apex queue already makes: the reserved queue slots feed
@@ -146,16 +147,20 @@ this term alone, and the rest of the track is handled as geometry.
 the approach and nothing else — once the car is inside, the radius under it is the better authority on what
 the tyres will take.
 
-**The road's own shape corrects both terms.** A hill takes grip from both. Vertical curvature takes it too,
-applied at each term's own centre — the follow point for the route, the apex for the corner — which is how a
-crest that unloads the car is felt before it is met. A chicane is the one deliberate relaxation: both terms
-get a boost, because a flick is not a corner in the sense the geometry takes it for.
+**The road's own shape corrects both terms.** A hill takes grip from both, and both read their hill at the
+follow point — the corner's own grade enters separately, inside its braking map. Vertical curvature takes
+grip too, applied at each term's own centre, the follow point for the route and the apex for the corner,
+which is how a crest that unloads the car is felt before it is met; the route side's share of that shrinks
+while the car is steering, because the part of it derived from the wheel carries no vertical term at all. A
+chicane is the one automatic relaxation: both terms get a boost, because a flick is not a corner in the sense
+the geometry takes it for.
 
 **Where the plan meets the moment.** The pedals are not the plan's number. They map the speed error through
-one linear law, and then every reason cap — traction, instability, overspeed, traffic, the track edge, the
-recovery — can only ever take authority away from it. That ordering is what lets the plan be conservative by
-construction without making the car slow: the plan promises what it can keep, and the caps are what answer
-when the promise turns out to have been wrong.
+one linear law — with a single deliberate exception below a walking pace, where a sub-split throttle is
+rounded up to full so the car can get off the line — and then every reason cap, traction, instability,
+overspeed, traffic, the track edge and the recovery, can only ever take authority away from it. That ordering
+is what lets the plan be conservative by construction without making the car slow: the plan promises what it
+can keep, and the caps are what answer when the promise turns out to have been wrong.
 
 ## The lane law
 

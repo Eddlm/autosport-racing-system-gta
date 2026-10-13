@@ -1610,12 +1610,12 @@ namespace ARS
                 followTrackSpd *= slopeSpeedFactor;
             }
 
-            // Crest/dip vertical curvature grip effect (route speed only).
+            // Crest/dip vertical curvature grip effect on the route speed; the corner term gets the same check below, at the apex.
             int count = ARS.TrackPoints.Count;
             int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteLookAheadSeconds), 0, count - 1);
             followTrackSpd *= CrestGripSpeedFactor(OffsetCornerNode(followNode, -3), followNode, OffsetCornerNode(followNode, 3), Brain.CurrentPerception.CurveRadiusToFollowPoint, Car.Velocity.Length(), out _);
 
-            // Pure apex speed for the corner-approach gate.
+            // The apex speed before vertical grip, and the only input the corner's crest call takes as its entry speed.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
             float cornerApexSpeedWithVerticalGrip = _cornerSpd;
 
