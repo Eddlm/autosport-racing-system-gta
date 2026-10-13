@@ -247,11 +247,15 @@ untouched.
 
 **Why the target sits below the peak.** The tyre's maximum is a peak, not a set point: there is more
 force just under it than just over it, so a controller that aims at the maximum spends half its time on
-the wrong side of it. TCS holds a chosen operating point *under* the peak, which is a deliberate trade
-of a slice of force at this instant for the tyre's potential over the whole corner — and the goal is the
-corner, not the instant. Nothing below the target is touched, so part-throttle, balancing and a lift stay
-entirely the plan's business, and the cut has a floor because a car that lifts completely gives up the
-balance it needs to drive out of the problem.
+the wrong side of it. TCS holds a chosen operating point *under* the peak — that is the intent, and the
+number that delivers it is in dispute: the raw slip field the car reads and the argument the engine's
+traction curve is evaluated at differ by the curve's own scale constant, so the shipped target may sit a
+quarter past the peak rather than under it. Filed as `slip-axis-scale` with a one-line in-game test that
+settles it, which is also why nothing has been re-tuned on the strength of a reading. The trade it makes
+is still the trade: a slice of force at this instant for the tyre's potential over the whole corner, and
+the goal is the corner, not the instant. Nothing below the target is touched, so part-throttle, balancing
+and a lift stay entirely the plan's business, and the cut has a floor because a car that lifts completely
+gives up the balance it needs to drive out of the problem.
 
 **One axis each.** What TCS attacks is longitudinal slip on the driven wheels; lateral slip belongs to
 the steering side, and TCS never reads it. The lateral benefit is real but it is a consequence rather
