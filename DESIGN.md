@@ -136,17 +136,25 @@ reads nervous is a damper or a ceiling complaint far more often than a gain one.
 
 ## Traction control — the AI's throttle against the tyre's own verdict
 
-**Goal:** let the speed plan ask for the throttle it believes the corner allows, while the tyre keeps
-the final say. The plan is a model — grip, gravity, radius — and a model can be optimistic about a cold
-tyre, a crest, or a surface it read a moment ago; TCS reads the wheels instead and trims the *authority
-to execute* rather than the plan's number, so being wrong about grip costs some wheelspin instead of
-the whole corner.
+**Goal:** get the driven wheels working at the slip the tyre actually wants, so the throttle the plan
+asks for can be *delivered* — the plan keeps its number, the tyre keeps the veto. The plan is a model of
+grip, gravity and radius, and a model can be optimistic about a cold tyre, a crest, or a surface it read
+a moment ago; the wheels are the ground truth, so TCS reads them and trims the *authority to execute*
+rather than the plan's number. What that buys is not only less spinning: past the peak a tyre produces
+*less* force, so the wheelspin a hopeful throttle creates is drive thrown away.
 
-**Why the target sits below the peak.** TCS holds the tyre at a chosen point on the curve *under* its
-traction peak, deliberately, because the peak is the most sensitive point on it: the goal is not "no
-wheelspin" but "the spin that still pulls". Nothing below the target is touched, so part-throttle,
-balancing and a lift stay entirely the plan's business, and the cut has a floor because a car that lifts
-completely gives up the balance it needs to drive out of the problem.
+**Why the target sits below the peak.** The tyre's maximum is a peak, not a set point: there is more
+force just under it than just over it, so a controller that aims at the maximum spends half its time on
+the wrong side of it. TCS holds a chosen operating point *under* the peak, which is a deliberate trade
+of a slice of force at this instant for the tyre's potential over the whole corner — and the goal is the
+corner, not the instant. Nothing below the target is touched, so part-throttle, balancing and a lift stay
+entirely the plan's business, and the cut has a floor because a car that lifts completely gives up the
+balance it needs to drive out of the problem.
+
+**One axis each.** What TCS attacks is longitudinal slip on the driven wheels; lateral slip belongs to
+the steering side, and TCS never reads it. The lateral benefit is real but it is a consequence rather
+than a target: a tyre spends one friction budget across both axes, so slip kept out of the longitudinal
+one is grip left over for the corner.
 
 **It reads the tyre, not the torque.** The wheels are read directly, and the sign matters: a wheel
 locking under braking reads on the same axis with the opposite sign, so it can never trigger a throttle
