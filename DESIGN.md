@@ -143,6 +143,13 @@ a moment ago; the wheels are the ground truth, so TCS reads them and trims the *
 rather than the plan's number. What that buys is not only less spinning: past the peak a tyre produces
 *less* force, so the wheelspin a hopeful throttle creates is drive thrown away.
 
+**Why the AI needs this at all.** A driver feels the wheel let go and lifts; the AI has no feel of its
+own — its throttle is the plan's number, and the engine's own traction aids are coarse and not ARS's to
+read. Reading the wheel is what stands in for that feeling. The throttle cap is this goal's
+*implementation*, not the goal itself: anything else that holds the wheel at the slip it wants — a
+better grip model, a different pedal law — serves the same end and would leave this system's goal
+untouched.
+
 **Why the target sits below the peak.** The tyre's maximum is a peak, not a set point: there is more
 force just under it than just over it, so a controller that aims at the maximum spends half its time on
 the wrong side of it. TCS holds a chosen operating point *under* the peak, which is a deliberate trade
