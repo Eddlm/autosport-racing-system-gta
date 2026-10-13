@@ -306,16 +306,21 @@ learned one in that car's own memory, and a read one in the per-tick path, where
 all. It is why the corner table is common to the whole field while the braking factor is per car, and why
 slip is read fresh on every tick.
 
-**What a learner can and cannot settle.** Theory and measurement meet in two ways, and only one of them
-is a marriage. A momentary meeting is an **arbitration**: take the lower of the model law and the measured
-one, or let the reading veto what the plan asked for, and the disagreement is resolved now and forgotten —
-which means the next lap meets it again from the same place. A durable meeting is a **reconciliation**: a
-coefficient that makes the theory agree with reality, kept per car and per corner, which is the braking
-factor. And a reconciliation has a ceiling worth knowing: it settles *magnitude*, not *form*. A learner can
-discover that this corner takes more braking than the model believed; it cannot discover that the
-braking-distance law has the wrong shape, because the only thing it may move is the single number that law
-multiplies. When a learner keeps landing against its own limit, the shape is what wants re-deriving, not
-the factor.
+**The four responses to an unknown.** Reading is the moment's answer, used once and gone: slip, the
+crossing, the slide. Arbitrating is when two sources disagree and one wins for now — take the lower of the
+model law and the measured one, or let the reading veto what the plan asked for — so the disagreement is
+settled and forgotten, and the next lap meets it again from the same place. Adapting is state kept inside
+the loop while a condition lasts and released when it ends: an integrator rather than a memory, which is
+what the parked slip allowance is and what the older throttle control was. Learning is the durable meeting
+— state kept against an object rather than a moment, per car, per corner or per track, corrected on clean
+evidence and used to change the model next time. The test between the middle two is whether the state
+outlives the condition that created it, and whether it is attached to something the car will meet again.
+
+**What a learner can and cannot settle.** A reconciliation has a ceiling worth knowing: it settles
+*magnitude*, not *form*. A learner can discover that this corner takes more braking than the model
+believed, but it cannot discover that the braking-distance law has the wrong shape, because the only thing
+it may move is the single number that law multiplies. When a learner keeps landing against its own limit,
+the shape is what wants re-deriving, not the factor.
 
 **What actually learns, and for how long.** Exactly one behavioural learner exists: the braking factor, per
 car and per corner. It does not survive the race — the reset that prepares a car clears it — so the field
