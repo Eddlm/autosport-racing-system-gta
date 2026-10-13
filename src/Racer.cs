@@ -571,9 +571,11 @@ namespace ARS
             // --- Lane steer: pure pursuit toward the target lane ---
 
             float laneSteerDeg = PursuitSteerDegrees(laneAimPoint, courseDir);
-            // Damping the ask that unwinds a crossing would be the damper's one-way mistake in reverse.
+            // Corner entry crosses the track on purpose — the car has to point into the turn — so this is for the
+            // crossing a corner is not asking for. Damping the ask that unwinds a crossing would be the damper's
+            // one-way mistake in reverse.
             float crossingDeg = Vector3.SignedAngle(CurrentTrackPoint.Direction, Car.ForwardVector, Vector3.WorldUp);
-            if (laneSteerDeg * crossingDeg > 0f)
+            if (cornerLane == 0f && laneSteerDeg * crossingDeg > 0f)
                 laneSteerDeg *= LaneCrossingTaperShare(Math.Abs(crossingDeg), LaneCrossingThresholdDegrees(speedMps));
             _steerPursuitDeg = laneSteerDeg;
             // --- Heading assist: match a side-by-side rival's heading ---
