@@ -85,12 +85,23 @@ The queue is what lets the plan see past the imminent bend, and the successive-c
 promoted while the car is already inside the previous approach's window is skipped for that approach —
 falls out of the same advance rather than being a mechanism of its own.
 
-**It is also the clock.** Besides the two preparations — a speed and a line — the corner is what tells
-every other system *where the car is in the corner*: the entry exemption for the crossing scale, the
-brake learner's sample window, the permission to start a maneuver, and the ban on nitro mid-corner all
-key on the same span. Without one shared answer to "before the braking point, in the entry, past the
-apex", each of those would invent its own, and they would disagree at the edges — which is exactly how a
-car ends up doing two things at once.
+**It is also the clock.** Besides the two preparations — a speed and a line — the record is the shared
+answer to *where the car is in the corner*: the entry exemption for the crossing scale, the brake
+learner's sample window, the permission to start a maneuver, and the ban on nitro mid-corner all key on
+the same span. Without one shared answer to "before the braking point, in the entry, past the apex", each
+of those would invent its own, and they would disagree at the edges — which is exactly how a car ends up
+doing two things at once.
+
+**The corner is a reference, not an agent.** Nothing here acts: the car is what coordinates, and it
+coordinates *from* this record — which every car in the field shares, while each keeps its own context
+about it: what this car knows of the corner's braking, its positioning and whether its approach has
+started. That split is the design, and it is why the AI cars behave consistently instead of each
+inventing its own corner out of the road under it.
+
+**Where the reference stops.** The tyre's authority, the other cars, the ramp and surface scans and the
+recovery all sit outside it: the limiter is its own ladder, the walls and the cards read other cars, ramps
+come from a sweep of their own, and a stuck car belongs to no corner. Covering one of those is a boundary
+change, not a new field on the record.
 
 ## The lane law
 
