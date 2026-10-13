@@ -432,6 +432,15 @@ The whole session's UI work shipped without a game session: the menu tree, the t
 7. **The copy reads correctly in place** — the Rivals family, the two renamed PI offsets, the traction and steering rows, the renamed options and the Racer Autofix list. Every line was written so the name stands alone and the tooltip carries only what the name cannot.
 8. **One item cannot be driven at all**: the update notice now prefers the release title, so it only fires against a newer release — it waits for the first cut after this one.
 
+## Apex speed reads the smoothed radius (NOT DRIVEN)
+
+Corner speed is `√(grip · g · R)` and `R` was `SupposedRadius`, the region's **minimum precise** radius — a short-chord measurement, so a minimum over many samples sat on the low tail of the noise and held every corner speed down. The speed path now reads `DetectedRadius`, the smoothed region radius the rest of the system already used: the tight flag (`Racer.cs:2986`), the entrance and exit spans and the merge survivor (`TrackLoader.cs:698-699`, `:737`). Six sites moved: `CornerApexSpeed` (`AutosportRacingSystem.cs:2779`), the outside-line entry gate (`Racer.cs:833`), the braking-requirement flag's intended speed (`Racer.cs:2989`) and the three held-apex radii (`Racer.cs:3039`, `:3055`, `:3069`).
+
+1. **Cars brake later everywhere.** This raises every corner speed, so the first thing to expect is later, deeper braking into slow corners. The steering pipeline did not change at all; a car that turns in lazily *at the same speed* is not this.
+2. **The failure to watch is over-confidence.** A smoothed radius is also a larger one, so a car that was conservative now carries more speed to the apex — the tell is a car washing wide or sliding on entry in a tight corner, especially one whose apex sits on a noise spike. The tight stuff is where this holds or does not.
+3. **Judge it against the offsets at 0.** Both offsets ship at **+6 mph** (`AutosportRacingSystem.cs:153`) and the plan takes the lower of the two terms (`Racer.cs:1629`), so the +6 has been masking this bias. At 0 the plan's own number is on show; at the default the fudge absorbs part of the change.
+4. **The radius pair is no longer visible in game** — the circle label that printed `R plan/detected` is gone, so the per-corner gap cannot be read off the screen and behaviour is the evidence.
+
 ## Contact avoidance is its own term, added after the damper and the blend (NOT DRIVEN)
 
 The steer-away correction used to be folded into the lane steer, so the lane system's own stages acted on it: the yaw damper modulated it, the slide handover replaced the command with a countersteer target that deliberately omits the lane term, and the on-aim rule zeroed the wheel. It is now its own `contactSteerDeg` (`Racer.cs:578-598`), added at `:644` after all three; only the steer limiter and the final slew bound it.
