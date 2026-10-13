@@ -317,6 +317,17 @@ braking-distance law has the wrong shape, because the only thing it may move is 
 multiplies. When a learner keeps landing against its own limit, the shape is what wants re-deriving, not
 the factor.
 
+**What actually learns, and for how long.** Exactly one behavioural learner exists: the braking factor, per
+car and per corner. It does not survive the race — the reset that prepares a car clears it — so the field
+arrives at every race on the seed and earns its braking again over the laps that follow, and nothing carries
+between sessions. Two other mechanisms are often mistaken for learning and are not: the memory layer
+*discovers* the game's own offsets once and caches them, and the stability check *calibrates* a car's
+at-rest ride height while the car is standing still, both of which are one-shot measurements rather than
+accumulating corrections. The pedal-side glides and the parked slip allowance are not learners either: they
+adapt within a tick or within a corner and forget immediately. Persisting the braking factor per car and per
+track is therefore a real and separable feature — and it would need an invalidation rule first, because a
+lesson is only worth keeping while the car and the track are still the same.
+
 **Theory, reality, practice.** The three read as a slogan — what reasoning settles, what the moment
 settles, and what experience settles — but the axis behind them is staleness and not truth: the theory is
 exact about the track and only approximate about the tyre, and a live reading is true only for as long as
