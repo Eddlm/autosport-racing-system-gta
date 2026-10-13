@@ -306,6 +306,13 @@ learned one in that car's own memory, and a read one in the per-tick path, where
 all. It is why the corner table is common to the whole field while the braking factor is per car, and why
 slip is read fresh on every tick.
 
+**Theory, reality, practice.** The three read as a slogan — what reasoning settles, what the moment
+settles, and what experience settles — but the axis behind them is staleness and not truth: the theory is
+exact about the track and only approximate about the tyre, and a live reading is true only for as long as
+the tyre takes to change. Practice carries the same caveat from the other side: it counts only when the
+attempt was honest, which is why a braking sample taken while the car was already sliding is thrown away
+rather than learned from.
+
 **Why it is worth stating.** "Can we compute this ahead of time?" has a third answer besides yes and no:
 *precompute the shape and let the car apply its own factor* — an apex speed for the downforce the car is
 actually making, a crest severity rescaled by speed squared, a braking factor corrected by the car's own
