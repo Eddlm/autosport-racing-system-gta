@@ -44,6 +44,46 @@ get there.
    writer above can escape them. That ordering is the reason a new term cannot quietly exceed the
    tyre: it has to be above the limiters, and everything above them is bounded.
 
+## Corners — the future the car plans against
+
+**Goal:** give every car a precomputed list of the bends ahead — where each one is, how tight it is, and
+where its turn-in starts — so the car brakes and places itself for a corner it already knows about,
+instead of reacting to the curvature under its wheels.
+
+**The table is built from the route at load, not perceived.** A corner is cut out of the track when the
+track is loaded: a stretch whose tightest radius is tight enough to be a corner rather than a bend becomes
+one record — an apex node, an entrance and an exit walked out from it by geometry, with the region's own
+measurements attached. Nothing in it is a sensor reading, and that is the point: a car cannot brake for
+what it has not seen, and a bend arrives faster than it can be measured, so the knowledge has to exist
+before the race does. The price is that the model can simply be wrong, and every wrong-number complaint
+about cornering lives in that price.
+
+**A corner is a region with an apex, not a point.** The span either side is what makes an *approach* a
+real thing: the stretch where the car positions itself for the entry, the braking window in front of it,
+and its own length each way. Two apexes close enough in *time* — or two that aim the same way — are one
+bend, and the survivor is the tighter of the pair; keeping them apart would put two entries where the
+driver sees one.
+
+**Two radius readings, and only one of them is trusted.** The region yields the tightest radius any node
+in it reads and the smoothest one; the tight figure is the noisy tail of a short-chord measurement, so it
+is the *smoothed* radius the systems key on, and the tight one survives as the record's own reference
+speed rather than as a number anything drives to. Reading the wrong rung is the kind of defect this file
+exists to catch, and the audit of that whole family is filed rather than settled.
+
+**What hangs off one record.** The speed plan takes the apex speed, computed with the car's own downforce,
+and brakes for it from a target node a fixed lead before the turn-in — moved earlier when the corner
+carries a lifting lip. The lane takes the corner's line, and it *outranks* the ordinary lane while the
+corner owns the stretch. The crossing rule's entry exemption reads the same corner, standing down from
+the braking target to the apex. The shape warnings ride along as data — a chicane, a crest that unloads
+the car — so several systems consume one description instead of each holding its own idea of where the
+corner is.
+
+**Per car, three ahead.** A car holds a queue rather than a single corner: the next three apexes with
+their radii and their speeds, and *the next corner* advances once the apex before it is behind the car.
+The queue is what lets the plan see past the imminent bend, and the successive-corner rule — a corner
+promoted while the car is already inside the previous approach's window is skipped for that approach —
+falls out of the same advance rather than being a mechanism of its own.
+
 ## The lane law
 
 **Goal:** put the car on the lane it was told to be on — as directly as the geometry allows and no
