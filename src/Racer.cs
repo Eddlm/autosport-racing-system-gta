@@ -570,7 +570,8 @@ namespace ARS
 
             // --- Lane steer: pure pursuit toward the target lane ---
 
-            float laneSteerDeg = PursuitSteerDegrees(laneAimPoint, courseDir);
+            float laneSteerLimit = LaneSteerLimitDegrees(speedMps);
+            float laneSteerDeg = ARS.Clamp(PursuitSteerDegrees(laneAimPoint, courseDir), -laneSteerLimit, laneSteerLimit);
             _steerPursuitDeg = laneSteerDeg;
             // --- Heading assist: match a side-by-side rival's heading ---
 
@@ -718,6 +719,18 @@ namespace ARS
         // Inside this bearing the car is on its aim to within the noise, so the command only flips sign from tick to
         // tick. The aim bearing carries the lateral error, so a car merely parallel to the road is not inside it.
         const float SmallAimBearingDegrees = 1f;
+        // The lane term's ceiling, tighter as speed rises. A car well off its lane at speed is better left off it than
+        // asked for a large angle, and the pursuit angle grows as the aim distance falls: on the lookahead's floor it
+        // can reach most of the wheel mid-straight, which is the car angling itself across its own direction to reach
+        // a lane it will reach anyway. The slow end is deliberately loose — placing a crawling car is real work.
+        const float LaneSteerLimitFastDegrees = 2f;
+        const float LaneSteerLimitSlowDegrees = 80f;
+        const float LaneSteerLimitSpeedMph = 40f;
+
+        static float LaneSteerLimitDegrees(float speedMps)
+        {
+            return ARS.Remap(speedMps, 0f, ARS.MphToMps(LaneSteerLimitSpeedMph), LaneSteerLimitSlowDegrees, LaneSteerLimitFastDegrees, true);
+        }
 
         // Pure pursuit's curvature law: the bearing to an aim point is the chord of the circle through the car, so the
         // path's curvature is 2 sin(bearing) over the distance and the steer it demands is that curvature times the
