@@ -71,12 +71,13 @@ speed rather than as a number anything drives to. Reading the wrong rung is the 
 exists to catch, and the audit of that whole family is filed rather than settled.
 
 **What hangs off one record.** The speed plan takes the apex speed, computed with the car's own downforce,
-and brakes for it from a target node a fixed lead before the turn-in — moved earlier when the corner
-carries a lifting lip. The lane takes the corner's line, and it *outranks* the ordinary lane while the
-corner owns the stretch. The crossing rule's entry exemption reads the same corner, standing down from
-the braking target to the apex. The shape warnings ride along as data — a chicane, a crest that unloads
-the car — so several systems consume one description instead of each holding its own idea of where the
-corner is.
+and brakes for it from a target node a fixed lead before the turn-in. The lane takes the corner's line,
+and it *outranks* the ordinary lane while the corner owns the stretch. The crossing rule's entry
+exemption reads the same corner, standing down from the braking target to the apex. The shape warnings
+ride along as data — a chicane, a crest that unloads the car — so several systems consume one description
+instead of each holding its own idea of where the corner is. The record also reserves a field for a
+lifting lip before the apex, which *should* pull that braking point earlier and which nothing arms today:
+a designed behaviour the code does not implement, filed as a gap rather than described as live.
 
 **Per car, three ahead.** A car holds a queue rather than a single corner: the next three apexes with
 their radii and their speeds, and *the next corner* advances once the apex before it is behind the car.
