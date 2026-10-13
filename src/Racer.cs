@@ -576,8 +576,8 @@ namespace ARS
             // crossing would be the damper's one-way mistake in reverse.
             float crossingDeg = Vector3.SignedAngle(CurrentTrackPoint.Direction, Car.ForwardVector, Vector3.WorldUp);
             bool turningIn = _nextApexCorner != null && HasPassedBrakingTarget() && !HasPassedApex(_nextApexCorner.Node);
-            if (!turningIn && laneSteerDeg * crossingDeg > 0f)
-                laneSteerDeg *= LaneCrossingTaperShare(Math.Abs(crossingDeg), LaneCrossingThresholdDegrees(speedMps));
+            if (!turningIn && Math.Abs(crossingDeg) > LaneCrossingThresholdDegrees(speedMps) && laneSteerDeg * crossingDeg > 0f)
+                laneSteerDeg = 0f;
             _steerPursuitDeg = laneSteerDeg;
             // --- Heading assist: match a side-by-side rival's heading ---
 
@@ -726,25 +726,15 @@ namespace ARS
         // tick. The aim bearing carries the lateral error, so a car merely parallel to the road is not inside it.
         const float SmallAimBearingDegrees = 1f;
         // The crossing-angle allowance: the heading that carries the car sideways at LaneCrossingLateralSpeedMps, so
-        // the threshold follows 1/speed and at speed it falls away to almost nothing. What keeps the wheel usable
-        // there is the taper, whose width is fixed rather than tied to the threshold. A car crossed past the
-        // threshold loses lane authority smoothly rather than at a stroke — a hard ceiling flattens the law into a
-        // constant-command phase that builds lateral velocity the short tail cannot shed.
-        const float LaneCrossingLateralSpeedMps = 0.35f;
-        const float LaneCrossingTaperSpanDegrees = 2f;
+        // the threshold follows 1/speed and at speed it falls away to almost nothing. Past the threshold the lane ask
+        // that would cross the car further is dropped outright: a step rather than a taper, legible at the cost of a
+        // discontinuity, and a narrow taper is the fix if the step is ever seen to chatter.
+        const float LaneCrossingLateralSpeedMps = 1f;
 
         static float LaneCrossingThresholdDegrees(float speedMps)
         {
             float sine = ARS.Clamp(LaneCrossingLateralSpeedMps / Math.Max(speedMps, 0.1f), 0f, 1f);
             return ARS.RadToDeg((float)Math.Asin(sine));
-        }
-
-        // All of the lane ask survives up to the threshold, then it falls smoothly across the fixed span and is all
-        // but spent at its far end, so a threshold collapsed by speed still leaves the car room to cross.
-        static float LaneCrossingTaperShare(float crossingDegrees, float thresholdDegrees)
-        {
-            float halfSpan = LaneCrossingTaperSpanDegrees * 0.5f;
-            return 0.5f * (1f - (float)Math.Tanh((crossingDegrees - thresholdDegrees - halfSpan) / halfSpan));
         }
 
         // Pure pursuit's curvature law: the bearing to an aim point is the chord of the circle through the car, so the
