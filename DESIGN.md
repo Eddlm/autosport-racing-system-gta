@@ -282,12 +282,13 @@ because identical guesses would produce identical braking errors. The same shape
 model is the weak part: TCS reads the wheels rather than believing the plan, and the steering ceiling
 takes the lower of the model law and a measured allowance.
 
-**Three buckets, sorted by staleness.** Everything the car acts on sorts by how fast the truth goes stale.
-The slow ones are *known* and precomputed — where the corners are, how they bend, where each span starts —
-and are acted on with nothing read at all. The ones that change over laps are *learned*: read once,
-corrected, and kept per car and per corner, which is what the braking factor is. The ones that change per
-tick are *read*: the tyre's answer to the throttle, the slide, the crossing, the slip a wheel is already
-carrying.
+**Three buckets, sorted by staleness.** Everything the car acts on sorts by whether the truth goes stale,
+and by how fast. An unknown that never changes is *known* and precomputed — where the corners are, how they
+bend, where each span starts — so nothing about it is ever measured; a car reads its own state every tick,
+but state is not an unknown and needs no discovering. An unknown that changes over laps is *learned*: read
+once, corrected, and kept per car and per corner, which is what the braking factor is. An unknown that
+changes per tick is *read*: the tyre's answer to the throttle, the slide, the crossing, the slip a wheel is
+already carrying.
 
 The appropriate throttle shows why the fast bucket cannot be avoided, and it is not a number that exists
 to be known: it depends on what the tyre does in response to it — the surface, the load, the slip already
@@ -299,6 +300,11 @@ carrying yesterday's answer, and a live reading pointed at a repeating one throw
 evidence. Put the way the codebase puts it, the slower a truth changes the further it may live from the
 pedal: compute once and publish under a staleness budget, read here as a property of the world rather than
 of the code.
+
+**Where each kind may live.** The sort decides that too: a known number belongs in the shared table, a
+learned one in that car's own memory, and a read one in the per-tick path, where it must not be cached at
+all. It is why the corner table is common to the whole field while the braking factor is per car, and why
+slip is read fresh on every tick.
 
 **Why it is worth stating.** "Can we compute this ahead of time?" has a third answer besides yes and no:
 *precompute the shape and let the car apply its own factor* — an apex speed for the downforce the car is
