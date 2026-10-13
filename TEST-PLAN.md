@@ -432,7 +432,9 @@ The whole session's UI work shipped without a game session: the menu tree, the t
 7. **The copy reads correctly in place** — the Rivals family, the two renamed PI offsets, the traction and steering rows, the renamed options and the Racer Autofix list. Every line was written so the name stands alone and the tooltip carries only what the name cannot.
 8. **One item cannot be driven at all**: the update notice now prefers the release title, so it only fires against a newer release — it waits for the first cut after this one.
 
-## The lane ask is scaled down as the car crosses (NOT DRIVEN)
+## The lane ask is scaled down as the car crosses (DRIVEN — softer, still confident)
+
+**Driven:** the reads are softer than either rejected shape — the hard cap on the wheel and the step on the crossing — while the cars still steer with confidence, which is the scale doing its job with the allowance left where it was. What that drive did not cover: the fleet-wide read, since the car in hand was high grip, and the corner-line delivery at speed, which is item 3 below.
 
 The lane steer is pure pursuit on the bearing to its aim point, and the first answer to an over-large ask was a ceiling on the wheel angle — the wrong quantity and the wrong shape. What is bounded now is the **crossing angle**: the car's heading against the track direction at the car. `LaneCrossingLateralSpeedMps` sets the crossing that costs half the ask, and because it is defined as a sideways rate it follows `1/speed`; `LaneCrossingShare` (`Racer.cs`) is `allowance / (allowance + crossing)`, a scale that fades with the crossing and never reaches nothing. Two shapes were tried and rejected on the way here — a hard cap on the wheel, and a step on the crossing — which is why this one is soft by construction and has no width to tune. **Corner entry is exempt, and only the entry** — from the braking target to the apex, because turn-in is a crossing on purpose: the car has to point into the turn to rotate, so a bound on the crossing fights turn-in whatever its shape or schedule. Everything before the braking target is still lane work and is scaled, which is the point: the first cut of this gate keyed on the corner owning the lane at all, and the positioning window opens seconds early, so on a twisty track it was off for most of a lap.
 
@@ -442,7 +444,7 @@ The lane steer is pure pursuit on the bearing to its aim point, and the first an
 4. **Fast corners** — a car at the limit genuinely carries a few degrees of crossing, so the scale bites there too; the tell is a car that cannot hold its inside line through a quick bend. **The fade is what to judge here**: there is no width to tune and no cliff, so chatter around the allowance is not expected — if the cars still cross too hard, the allowance is the knob rather than a new shape.
 5. **Low speed must be unchanged** — the threshold grows as speed falls, so placing a crawling car, an off-line start or a recovery must still turn as it did.
 
-## Apex speed reads the smoothed radius (NOT DRIVEN)
+## Apex speed reads the smoothed radius (driven on high-grip cars: faster and more consistent — the fleet-wide read is still owed)
 
 Corner speed is `√(grip · g · R)` and `R` was `SupposedRadius`, the region's **minimum precise** radius — a short-chord measurement, so a minimum over many samples sat on the low tail of the noise and held every corner speed down. The speed path now reads `DetectedRadius`, the smoothed region radius the rest of the system already used: the tight flag (`Racer.cs:2986`), the entrance and exit spans and the merge survivor (`TrackLoader.cs:698-699`, `:737`). Six sites moved: `CornerApexSpeed` (`AutosportRacingSystem.cs:2779`), the outside-line entry gate (`Racer.cs:833`), the braking-requirement flag's intended speed (`Racer.cs:2989`) and the three held-apex radii (`Racer.cs:3039`, `:3055`, `:3069`).
 
