@@ -729,8 +729,8 @@ namespace ARS
         // there is the taper, whose width is fixed rather than tied to the threshold. A car crossed past the
         // threshold loses lane authority smoothly rather than at a stroke — a hard ceiling flattens the law into a
         // constant-command phase that builds lateral velocity the short tail cannot shed.
-        const float LaneCrossingLateralSpeedMps = 1f;
-        const float LaneCrossingTaperSpanDegrees = 5f;
+        const float LaneCrossingLateralSpeedMps = 2f;
+        const float LaneCrossingTaperSpanDegrees = 2f;
 
         static float LaneCrossingThresholdDegrees(float speedMps)
         {
