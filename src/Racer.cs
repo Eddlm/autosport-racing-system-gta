@@ -570,8 +570,11 @@ namespace ARS
 
             // --- Lane steer: pure pursuit toward the target lane ---
 
-            float laneSteerLimit = LaneSteerLimitDegrees(speedMps);
-            float laneSteerDeg = ARS.Clamp(PursuitSteerDegrees(laneAimPoint, courseDir), -laneSteerLimit, laneSteerLimit);
+            float laneSteerDeg = PursuitSteerDegrees(laneAimPoint, courseDir);
+            // Damping the ask that unwinds a crossing would be the damper's one-way mistake in reverse.
+            float crossingDeg = Vector3.SignedAngle(CurrentTrackPoint.Direction, Car.ForwardVector, Vector3.WorldUp);
+            if (laneSteerDeg * crossingDeg > 0f)
+                laneSteerDeg *= LaneCrossingTaperShare(Math.Abs(crossingDeg), LaneCrossingThresholdDegrees(speedMps));
             _steerPursuitDeg = laneSteerDeg;
             // --- Heading assist: match a side-by-side rival's heading ---
 
@@ -719,19 +722,25 @@ namespace ARS
         // Inside this bearing the car is on its aim to within the noise, so the command only flips sign from tick to
         // tick. The aim bearing carries the lateral error, so a car merely parallel to the road is not inside it.
         const float SmallAimBearingDegrees = 1f;
-        // The lane term's ceiling, tighter as speed rises. A car well off its lane at speed is better left off it than
-        // asked for a large angle, and the pursuit angle grows as the aim distance falls: on the lookahead's floor it
-        // can reach most of the wheel mid-straight, which is the car angling itself across its own direction to reach
-        // a lane it will reach anyway. The slow end is deliberately loose — placing a crawling car is real work.
-        const float LaneSteerLimitFastDegrees = 2f;
-        const float LaneSteerLimitSlowDegrees = 80f;
-        const float LaneSteerLimitSpeedMph = 40f;
+        // The crossing-angle allowance: the heading that carries the car sideways at LaneCrossingLateralSpeedMps, so
+        // the threshold follows 1/speed and a car at walking pace may point anywhere. A car crossed past it loses lane
+        // authority smoothly rather than at a stroke — a hard ceiling flattens the law into a constant-command phase
+        // that builds lateral velocity the short tail cannot shed, which is the overshoot the taper exists to avoid.
+        const float LaneCrossingLateralSpeedMps = 1f;
+        const float LaneCrossingFloorDegrees = 0.5f;
 
-        // The input bounds run high to low so the output runs low to high: Remap clamps against out_min..out_max, and
-        // only an ascending output clamps correctly.
-        static float LaneSteerLimitDegrees(float speedMps)
+        static float LaneCrossingThresholdDegrees(float speedMps)
         {
-            return ARS.Remap(speedMps, ARS.MphToMps(LaneSteerLimitSpeedMph), 0f, LaneSteerLimitFastDegrees, LaneSteerLimitSlowDegrees, true);
+            float sine = ARS.Clamp(LaneCrossingLateralSpeedMps / Math.Max(speedMps, 0.1f), 0f, 1f);
+            return Math.Max(LaneCrossingFloorDegrees, ARS.RadToDeg((float)Math.Asin(sine)));
+        }
+
+        // All of the lane ask survives up to the threshold, then it falls smoothly and is all but spent one threshold
+        // further on — two of the same number, never a cut.
+        static float LaneCrossingTaperShare(float crossingDegrees, float thresholdDegrees)
+        {
+            float halfSpan = thresholdDegrees * 0.5f;
+            return 0.5f * (1f - (float)Math.Tanh((crossingDegrees - thresholdDegrees - halfSpan) / halfSpan));
         }
 
         // Pure pursuit's curvature law: the bearing to an aim point is the chord of the circle through the car, so the
