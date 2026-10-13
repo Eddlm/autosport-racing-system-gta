@@ -78,10 +78,11 @@ Related durable lesson (also in AGENTS.md): **corrections are corrections — ne
 - **The match is one-way**: it applies only while the overlapping rival is moving toward this car's side (the rival's *own* velocity against the separating axis). A rival drifting away is leaving room; this car's own closure stays the rival-walls' business.
 - **The side convention, verified**: `+ = right` — `SignedLaneOffset` (`AutosportRacingSystem.cs:550`) and `RelativeOffset.X` / `LateralGap` (`DataStructures.cs:163`) are the same `Cross(dir, WorldUp)` dot; `Cross(forward, up)` really is world-right. `TryPickAvoidanceSide`'s `passLeft` names the side it *passes on*, not the rival's side.
 
-## Lane steer — one flat P, deliberately no ceiling
+## Lane steer — pure pursuit on the aim, with a speed-shaped ceiling
 
-- The lane term is a single proportional law on lane error, and it must stay **uncapped**. A ceiling flattens the top of the P, so most of a big lane move runs at a constant command that builds lateral velocity the short tail cannot shed — bang-then-taper, the exact overshoot it was added to cure. Driven both ways; uncapped won.
-- Two levers: the gain (halved for the move to the outside — `LaneGainDegPerMeter` / `LaneSteerOutsidePercent`), and the low-speed ramp on the ceiling that lets the P's taper reach the tyres at lane-move speeds. The damped approach survives only because the yaw damper opposes the rotation the P just started.
+- **The flat degrees-per-metre P this section described is gone from the code.** The live lane term is pure pursuit on the bearing to its aim point (`PursuitSteerFromBearing`, `Racer.cs`), turned into an angle by the wheelbase, and `LaneGainDegPerMeter` / `LaneSteerOutsidePercent` no longer exist — only the unread `LaneGainExponent` survives.
+- **The ask is capped by speed** (`LaneSteerLimitDegrees`, `Racer.cs`): flat at the fast end above `LaneSteerLimitSpeedMph`, opening to `LaneSteerLimitSlowDegrees` at rest, because the pursuit angle grows as the aim distance falls and the lookahead's floor can put most of the wheel into a mid-straight correction. The old "must stay uncapped" verdict was driven against the flat P; what it protects — that a big lane move is not flattened into a constant-command phase — is why the ceiling is a function of speed rather than a constant.
+- **What stays uncapped**: the side-by-side heading match, the yaw damper and the contact term. Only the lane ask is bounded.
 
 ## Steering damping (`SteerDamping`)
 

@@ -145,6 +145,7 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `rival-publish-core` — not built
 - `apex-radius` — **untested (`aa302e1`, compile-verified, drive owed)**: the speed path reads `DetectedRadius` everywhere the plan does, so the corner is described and driven with one number
 - `radius-variants` — the audit of the radius family (which rung each consumer reads, the load-time `Speed` that looks dead, the law written twice), asked for later
+- `lane-steer-ceiling` — **untested (`3bda34b`, drive owed)**: the lane term's ask is capped by speed (tight at the fast end, loose at rest), because the pursuit angle grows as the aim distance falls; the old "no ceiling" verdict belongs to the retired flat-gain law, and the risk is that lane moves at speed are now slower
 - `slide-brake-rampdown` — parked
 - `steer-slip-allowance` — parked after one drive: the measured-slip allowance under the ceiling reads slower swerves, and what it should be still needs settling
 - `pi-controls-merge` — **DECIDED, not built; wanted at the forefront of the next version** (one typed-number row replacing PI Offset and PI Target; detail in `AGENTS-BACKLOG.md`)

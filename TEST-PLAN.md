@@ -432,6 +432,15 @@ The whole session's UI work shipped without a game session: the menu tree, the t
 7. **The copy reads correctly in place** — the Rivals family, the two renamed PI offsets, the traction and steering rows, the renamed options and the Racer Autofix list. Every line was written so the name stands alone and the tooltip carries only what the name cannot.
 8. **One item cannot be driven at all**: the update notice now prefers the release title, so it only fires against a newer release — it waits for the first cut after this one.
 
+## The lane term's ask is capped by speed (NOT DRIVEN)
+
+The lane steer is pure pursuit on the bearing to its aim point (`PursuitSteerDegrees` `Racer.cs`), and the angle grows as the aim distance falls — the lookahead is `clamp(speed × SteerPreviewSeconds, SteerLookaheadMinMeters, SteerLookaheadMaxMeters)`, so on its floor a car well off its lane could be asked for most of the wheel mid-straight. The ask is now capped by `LaneSteerLimitDegrees` (`Racer.cs`): flat at the fast end above `LaneSteerLimitSpeedMph`, opening to `LaneSteerLimitSlowDegrees` at rest. Only the lane term moved — the lane *targets*, the side-by-side match, the damper and the contact term are untouched.
+
+1. **Mid-straight, a car well off its lane** — the case the cap exists for. At speed the wheel must no longer swing hard to bring the car back; it should keep a small steady ask and arrive later. The yellow pursuit line in Show Track Analysis is the capped value.
+2. **The cost, and it is the risk** — at speed every lane move is slower, and the same term delivers the corner's inside line, the outside approach and the avoid-ahead pass, so watch a car reaching its line late into a corner, or a pass that no longer completes before the corner. The fast-end ceiling is the knob if that shows.
+3. **Low speed must be unchanged** — below the ramp the ceiling never binds in normal work, so a car crawling out of a spin, off the line at the start, or being placed after a recovery must still turn as it did.
+4. **Nothing else about the lane** — a difference in *which* lane a car aims for is not this change.
+
 ## Apex speed reads the smoothed radius (NOT DRIVEN)
 
 Corner speed is `√(grip · g · R)` and `R` was `SupposedRadius`, the region's **minimum precise** radius — a short-chord measurement, so a minimum over many samples sat on the low tail of the noise and held every corner speed down. The speed path now reads `DetectedRadius`, the smoothed region radius the rest of the system already used: the tight flag (`Racer.cs:2986`), the entrance and exit spans and the merge survivor (`TrackLoader.cs:698-699`, `:737`). Six sites moved: `CornerApexSpeed` (`AutosportRacingSystem.cs:2779`), the outside-line entry gate (`Racer.cs:833`), the braking-requirement flag's intended speed (`Racer.cs:2989`) and the three held-apex radii (`Racer.cs:3039`, `:3055`, `:3069`).
