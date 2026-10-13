@@ -282,17 +282,23 @@ because identical guesses would produce identical braking errors. The same shape
 model is the weak part: TCS reads the wheels rather than believing the plan, and the steering ceiling
 takes the lower of the model law and a measured allowance.
 
-**Two ways of living with the limit.** The appropriate throttle is not a number that exists to be known:
-it depends on what the tyre does in response to it — on the surface, the load, the slip already there — so
-the answer is only defined inside the loop, and it is a measurement question even though the *policy*
-behind it (hold the tyre just under its peak) is a decision. An unknown that repeats, like what this
-corner costs this car in braking, is worth **learning**: the car keeps a factor per corner and sharpens it
-every lap, which is why the same corner is driven better on lap three than on lap one. An unknown that
-changes moment to moment, like what the tyre will take from the throttle right now, is not worth learning
-at all, because the answer is stale before it can be stored; it is worth **reading**, which is what TCS
-does. So the choice is not a preference but a property of the unknown — learn the ones that repeat, read
-the ones that do not. A learner pointed at a fluctuating quantity is a filter carrying yesterday's
-answer, and a live reading pointed at a repeating one throws away every lap's worth of evidence.
+**Three buckets, sorted by staleness.** Everything the car acts on sorts by how fast the truth goes stale.
+The slow ones are *known* and precomputed — where the corners are, how they bend, where each span starts —
+and are acted on with nothing read at all. The ones that change over laps are *learned*: read once,
+corrected, and kept per car and per corner, which is what the braking factor is. The ones that change per
+tick are *read*: the tyre's answer to the throttle, the slide, the crossing, the slip a wheel is already
+carrying.
+
+The appropriate throttle shows why the fast bucket cannot be avoided, and it is not a number that exists
+to be known: it depends on what the tyre does in response to it — the surface, the load, the slip already
+there — so the answer is only defined inside the loop, and it is a measurement question even though the
+*policy* behind it, holding the tyre just under its peak, is a decision. The rule that follows is a
+property of the unknown rather than a preference: learn the ones that repeat, read the ones that do not.
+Getting the sort wrong costs in both directions — a learner pointed at a fluctuating quantity is a filter
+carrying yesterday's answer, and a live reading pointed at a repeating one throws away every lap's worth of
+evidence. Put the way the codebase puts it, the slower a truth changes the further it may live from the
+pedal: compute once and publish under a staleness budget, read here as a property of the world rather than
+of the code.
 
 **Why it is worth stating.** "Can we compute this ahead of time?" has a third answer besides yes and no:
 *precompute the shape and let the car apply its own factor* — an apex speed for the downforce the car is
