@@ -306,15 +306,20 @@ learned one in that car's own memory, and a read one in the per-tick path, where
 all. It is why the corner table is common to the whole field while the braking factor is per car, and why
 slip is read fresh on every tick.
 
-**The four responses to an unknown.** Reading is the moment's answer, used once and gone: slip, the
-crossing, the slide. Arbitrating is when two sources disagree and one wins for now — take the lower of the
-model law and the measured one, or let the reading veto what the plan asked for — so the disagreement is
-settled and forgotten, and the next lap meets it again from the same place. Adapting is state kept inside
-the loop while a condition lasts and released when it ends: an integrator rather than a memory, which is
-what the parked slip allowance is and what the older throttle control was. Learning is the durable meeting
-— state kept against an object rather than a moment, per car, per corner or per track, corrected on clean
-evidence and used to change the model next time. The test between the middle two is whether the state
-outlives the condition that created it, and whether it is attached to something the car will meet again.
+**Five responses to an unknown.** Reading is the moment's answer, used once and gone: slip, the crossing,
+the slide. Predicting is that answer carried forward — position, velocity and recent acceleration
+extrapolated a short way, `pos + v·t + ½·a·t²`, which is how the lane preview leads the lane error with the
+motion the car is already committing to, so the steering anticipates drift instead of chasing it; the
+horizon is short and the law crude, so a prediction belongs only where a false alarm is cheap, and a
+spurious wheel correction is far cheaper than a spurious lift. Arbitrating is when two sources disagree and
+one wins for now: take the lower of the model law and the measured one, or let the reading veto what the
+plan asked for — settled and forgotten, so the next lap meets it again from the same place. Adapting is
+state kept inside the loop while a condition lasts and released when it ends: an integrator rather than a
+memory, which is what the parked slip allowance is and what the older throttle control was. Learning is the
+durable meeting — state kept against an object rather than a moment, per car, per corner or per track,
+corrected on clean evidence and used to change the model next time. The test between the last two is
+whether the state outlives the condition that created it, and whether it is attached to something the car
+will meet again.
 
 **What a learner can and cannot settle.** A reconciliation has a ceiling worth knowing: it settles
 *magnitude*, not *form*. A learner can discover that this corner takes more braking than the model
