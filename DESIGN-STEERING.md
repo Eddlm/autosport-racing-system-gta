@@ -86,6 +86,45 @@ driven; the scale was the one that read softer without going lazy.
   cut and it was wrong: the corner's positioning window opens seconds before the corner, so on any
   corner-dense track the rule was off for most of a lap.
 
+## The levels of the balance
+
+The same tension — take the line properly without upsetting the car — is balanced at more than one
+level, and the levels are not interchangeable: a fix at one does nothing for a complaint that
+belongs to another.
+
+**The lane level: how urgently the car takes a lane.** The law is proportional and acts every tick,
+with no integral and no memory, so a car that is off its lane is always asking for a correction and
+never waiting to be told twice. What bounds the ask is its own geometry rather than a softness dial:
+the bearing to the aim point is capped at a right angle, so the ask saturates instead of running away,
+and an aim the car is already on — inside the noise of that bearing — is dropped rather than flipped
+tick to tick. The knobs are the aim distance, which is a slice of travel time, and the car's
+wheelbase. Too shy here reads as late, imprecise positioning; too eager reads as a car fighting
+itself. **Triage warning:** a lane complaint is usually the *target* arriving late — the lane stack's
+window, the walls — and from the driver's seat the two failures look identical.
+
+**The crossing scale is not part of that balance.** It does not exist to keep the car stable; it
+exists so that a lane change does not read as a car angling itself across its own direction. It is
+asymmetric and it stands down for the entry, so treating it as a stability knob misreads it.
+
+**The steering level: never ask for more than the car can do at this speed.** The ask is clamped
+after everything above it has had its say, so no lane correction, damper or maneuver can escape it.
+The ceiling is a ladder rather than one number: the tyre's live peak slip at this speed, with the
+grip-circle law — grip and gravity over speed squared, through the wheelbase — as the fallback, and a
+slow-speed ramp that can only *raise* the ceiling so a crawling car can still place itself. Two
+deliberate escapes exist, both on the answering side only: a countersteer earns authority towards the
+slide it is correcting, and a damper term that is fighting the rotation is not capped.
+
+**The speed level: the same law read the other way.** The grip-circle ceiling also exists as a speed
+— the fastest a car could take a radius with the wheel it is allowed — and that speed is blended into
+the plan, so a car that cannot steer a corner slows down for it. This is what keeps the steering level
+and the speed plan one law instead of two that disagree, and it is the level that is easiest to
+forget, because the symptom of over-asking appears on the pedals.
+
+**The damper is where stability actually lives.** Instability is a yaw problem: it is answered by the
+damping term, whose gain falls with speed and is weaker on high-grip cars, with the ceiling as the
+hard backstop beneath it. The lane law is not where oscillation gets solved, so a lane change that
+reads nervous is a damper or a ceiling complaint far more often than a gain one.
+
 ## What this file does not cover yet
 
 The damper's law, the slide blend and its countersteer, the steer limiter's ceiling, the recovery
