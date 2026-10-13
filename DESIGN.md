@@ -198,8 +198,9 @@ with no integral and no memory, so a car that is off its lane is always asking f
 never waiting to be told twice. What bounds the ask is its own geometry rather than a softness dial:
 the bearing to the aim point is capped at a right angle, so the ask saturates instead of running away,
 and an aim the car is already on — inside the noise of that bearing — is dropped rather than flipped
-tick to tick. The knobs are the aim distance, which is a slice of travel time, and the car's
-wheelbase. Too shy here reads as late, imprecise positioning; too eager reads as a car fighting
+tick to tick. The two things that set the size of the ask are the aim distance, which is a slice of travel
+time and therefore a choice, and the car's own wheelbase, which is geometry rather than a dial. Too shy here
+reads as late, imprecise positioning; too eager reads as a car fighting
 itself. **Triage warning:** a lane complaint is usually the *target* arriving late — the lane stack's
 window, the walls — and from the driver's seat the two failures look identical.
 
