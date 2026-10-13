@@ -306,6 +306,17 @@ learned one in that car's own memory, and a read one in the per-tick path, where
 all. It is why the corner table is common to the whole field while the braking factor is per car, and why
 slip is read fresh on every tick.
 
+**What a learner can and cannot settle.** Theory and measurement meet in two ways, and only one of them
+is a marriage. A momentary meeting is an **arbitration**: take the lower of the model law and the measured
+one, or let the reading veto what the plan asked for, and the disagreement is resolved now and forgotten —
+which means the next lap meets it again from the same place. A durable meeting is a **reconciliation**: a
+coefficient that makes the theory agree with reality, kept per car and per corner, which is the braking
+factor. And a reconciliation has a ceiling worth knowing: it settles *magnitude*, not *form*. A learner can
+discover that this corner takes more braking than the model believed; it cannot discover that the
+braking-distance law has the wrong shape, because the only thing it may move is the single number that law
+multiplies. When a learner keeps landing against its own limit, the shape is what wants re-deriving, not
+the factor.
+
 **Theory, reality, practice.** The three read as a slogan — what reasoning settles, what the moment
 settles, and what experience settles — but the axis behind them is staleness and not truth: the theory is
 exact about the track and only approximate about the tyre, and a live reading is true only for as long as
