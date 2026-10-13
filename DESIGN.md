@@ -325,7 +325,9 @@ allowance and the older live-adjusting throttle control were the same shape. Lea
 durable meeting — state kept against an object rather than a moment, per car, per corner or per track,
 corrected on clean evidence and used to change the model next time. The test between the last two is
 whether the state outlives the condition that created it, and whether it is attached to something the car
-will meet again.
+will meet again. The three also work together more often than alone: a prediction decides *whether* to bound
+something and is recomputed fresh each tick, a glide decides *how abruptly* that bound arrives, and the
+arbitration decides which of the two — the plan's request or the bound — the car actually gets.
 
 **What a learner can and cannot settle.** A reconciliation has a ceiling worth knowing: it settles
 *magnitude*, not *form*. A learner can discover that this corner takes more braking than the model
