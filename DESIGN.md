@@ -103,6 +103,16 @@ recovery all sit outside it: the limiter is its own ladder, the walls and the ca
 come from a sweep of their own, and a stuck car belongs to no corner. Covering one of those is a boundary
 change, not a new field on the record.
 
+**What is the table's and what is the car's.** The table answers *what and where*: which bends exist, where
+each one starts and ends, how tight it is, and what shape or surface warnings it carries. Each car answers
+*when and how hard*: which corner is next for it, what apex speed its own downforce allows, where its
+braking point falls, whether the approach has started, whether it needs to brake or to position, and
+whether it is inside the entry yet. Those are recomputed per tick or per approach from the car's own speed
+and place, and they are what "the approach" means — the table has no opinion about a car that has not
+arrived. Between the two sits a third kind: data precomputed in a shape that scales, like a crest's
+severity recorded at a probe speed and rescaled by the car's own speed squared, so the expensive part is
+done once and the car only applies its own factor.
+
 ## The lane law
 
 **Goal:** put the car on the lane it was told to be on — as directly as the geometry allows and no
