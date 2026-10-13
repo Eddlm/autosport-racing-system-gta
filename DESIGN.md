@@ -21,7 +21,9 @@ A system gets its own section, and the section opens with its **goal in one blun
 system exists to do, phrased as the reason someone would build it — and only then argues: the trade it
 makes, where its goal stops, and the shapes already rejected. The goal line stays short and unhedged
 because its job is to be quotable in an argument, and the meandering belongs underneath it. A section
-with elaboration but no goal line is a description, and descriptions are the code's job.
+with elaboration but no goal line is a description, and descriptions are the code's job. A **standing
+limit** gets a section of the same shape but states the limit in its first line instead of a goal,
+because what the design cannot know is a decision input just as much as what it is for.
 
 ## What the system is for
 
@@ -261,6 +263,32 @@ does not sit on the curve at all but in the flat region past it. Same instrument
 target, and it is not there to be fast on its own — it is there so the lap the plan promised is actually
 delivered on a tyre that is not behaving. A change that makes TCS alter the plan's speed has moved to the
 speed level and left this system's goal behind.
+
+## The standing limit — theory reaches a guess, not the truth
+
+**The limit:** how hard this car can brake for this corner, today, is not derivable from the track. Every
+number the plan can compute ahead of time — the grip circle, the radius, the geometry of the braking zone
+— is a *model* of the tyre, and a model of a tyre is a good first approximation and nothing more: it
+cannot know what the surface under the wheels is really offering at that moment, and the moment is the
+only thing that decides the stop. So the design cannot answer "how hard do I brake here" from theory, and
+it does not pretend to.
+
+**What it does instead.** It seeds a per-car, per-corner braking factor from a guess and lets the car earn
+the rest: it measures how much of the braking phase was spent at full pedal, and once past the apex it
+corrects the factor by how far that share missed the target. The evidence has to be clean — a car that
+slid on the way in was already on a tyre that had let go, so that sample is discarded, and a slide on its
+own is a verdict that cuts the factor without waiting for the numbers. The seed carries a per-car draw,
+because identical guesses would produce identical braking errors. The same shape recurs wherever the
+model is the weak part: TCS reads the wheels rather than believing the plan, and the steering ceiling
+takes the lower of the model law and a measured allowance.
+
+**Why it is worth stating.** "Can we compute this ahead of time?" has a third answer besides yes and no:
+*precompute the shape and let the car apply its own factor* — an apex speed for the downforce the car is
+actually making, a crest severity rescaled by speed squared, a braking factor corrected by the car's own
+last attempt. That is the pattern to reach for, and the cost is paid in laps: on a corner this car has
+never braked for, the plan is running on the seed, which is a guess. It is why the first lap of a corner
+is not the one to judge the AI on, and why a learner that corrects on bad evidence is worse than no
+learner at all.
 
 ## What this file does not cover yet
 
