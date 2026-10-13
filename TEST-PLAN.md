@@ -432,14 +432,15 @@ The whole session's UI work shipped without a game session: the menu tree, the t
 7. **The copy reads correctly in place** — the Rivals family, the two renamed PI offsets, the traction and steering rows, the renamed options and the Racer Autofix list. Every line was written so the name stands alone and the tooltip carries only what the name cannot.
 8. **One item cannot be driven at all**: the update notice now prefers the release title, so it only fires against a newer release — it waits for the first cut after this one.
 
-## The lane term's ask is capped by speed (NOT DRIVEN)
+## The lane ask tapers off as the car crosses the track (NOT DRIVEN)
 
-The lane steer is pure pursuit on the bearing to its aim point (`PursuitSteerDegrees` `Racer.cs`), and the angle grows as the aim distance falls — the lookahead is `clamp(speed × SteerPreviewSeconds, SteerLookaheadMinMeters, SteerLookaheadMaxMeters)`, so on its floor a car well off its lane could be asked for most of the wheel mid-straight. The ask is now capped by `LaneSteerLimitDegrees` (`Racer.cs`): flat at the fast end above `LaneSteerLimitSpeedMph`, opening to `LaneSteerLimitSlowDegrees` at rest. Only the lane term moved — the lane *targets*, the side-by-side match, the damper and the contact term are untouched.
+The lane steer is pure pursuit on the bearing to its aim point, and the first answer to an over-large ask was a ceiling on the wheel angle — the wrong quantity and the wrong shape. What is bounded now is the **crossing angle**: the car's heading against the track direction at the car. The threshold is the heading that carries the car sideways at `LaneCrossingLateralSpeedMps`, so it follows `1/speed` — about 2° at 40 mph on the shipped value — floored at `LaneCrossingFloorDegrees`; past it the ask falls on a tanh over one further threshold (`LaneCrossingThresholdDegrees`, `LaneCrossingTaperShare`, `Racer.cs`). Only the ask that crosses the car further is damped, and no lane target changed.
 
-1. **Mid-straight, a car well off its lane** — the case the cap exists for. At speed the wheel must no longer swing hard to bring the car back; it should keep a small steady ask and arrive later. The yellow pursuit line in Show Track Analysis is the capped value.
-2. **The cost, and it is the risk** — at speed every lane move is slower, and the same term delivers the corner's inside line, the outside approach and the avoid-ahead pass, so watch a car reaching its line late into a corner, or a pass that no longer completes before the corner. The fast-end ceiling is the knob if that shows.
-3. **Low speed must be unchanged** — below the ramp the ceiling never binds in normal work, so a car crawling out of a spin, off the line at the start, or being placed after a recovery must still turn as it did.
-4. **Nothing else about the lane** — a difference in *which* lane a car aims for is not this change.
+1. **Mid-straight, a car well off its lane** — the case it exists for. The car should stop angling itself across its own direction to reach a lane it would reach anyway: the yellow pursuit line in Show Track Analysis should hold full authority until the crossing reaches the threshold, then fall away smoothly rather than snap.
+2. **The unwind must not be damped** — the deliberate asymmetry. A car already crossed and steering back keeps its whole ask; if it struggles to straighten, that gate is the first thing to check.
+3. **The cost** — at speed the same term delivers the corner's inside line, the outside approach and the avoid-ahead pass, so lane moves slow once the crossing passes the threshold. A car reaching its line late into a corner, or a pass that no longer completes before it, is this one. `LaneCrossingLateralSpeedMps` is the knob, and scaling speed up or down in the threshold is the intended fiddle.
+4. **Fast corners** — a car at the limit genuinely carries a few degrees of crossing, so the taper bites there too; the tell is a car that cannot hold its inside line through a quick bend.
+5. **Low speed must be unchanged** — the threshold grows as speed falls, so placing a crawling car, an off-line start or a recovery must still turn as it did.
 
 ## Apex speed reads the smoothed radius (NOT DRIVEN)
 

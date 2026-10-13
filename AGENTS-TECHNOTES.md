@@ -78,11 +78,11 @@ Related durable lesson (also in AGENTS.md): **corrections are corrections — ne
 - **The match is one-way**: it applies only while the overlapping rival is moving toward this car's side (the rival's *own* velocity against the separating axis). A rival drifting away is leaving room; this car's own closure stays the rival-walls' business.
 - **The side convention, verified**: `+ = right` — `SignedLaneOffset` (`AutosportRacingSystem.cs:550`) and `RelativeOffset.X` / `LateralGap` (`DataStructures.cs:163`) are the same `Cross(dir, WorldUp)` dot; `Cross(forward, up)` really is world-right. `TryPickAvoidanceSide`'s `passLeft` names the side it *passes on*, not the rival's side.
 
-## Lane steer — pure pursuit on the aim, with a speed-shaped ceiling
+## Lane steer — pure pursuit on the aim, tapered by how far the car is crossed
 
 - **The flat degrees-per-metre P this section described is gone from the code.** The live lane term is pure pursuit on the bearing to its aim point (`PursuitSteerFromBearing`, `Racer.cs`), turned into an angle by the wheelbase, and `LaneGainDegPerMeter` / `LaneSteerOutsidePercent` no longer exist — only the unread `LaneGainExponent` survives.
-- **The ask is capped by speed** (`LaneSteerLimitDegrees`, `Racer.cs`): flat at the fast end above `LaneSteerLimitSpeedMph`, opening to `LaneSteerLimitSlowDegrees` at rest, because the pursuit angle grows as the aim distance falls and the lookahead's floor can put most of the wheel into a mid-straight correction. The old "must stay uncapped" verdict was driven against the flat P; what it protects — that a big lane move is not flattened into a constant-command phase — is why the ceiling is a function of speed rather than a constant.
-- **What stays uncapped**: the side-by-side heading match, the yaw damper and the contact term. Only the lane ask is bounded.
+- **What bounds the lane ask is the crossing angle, not the wheel** (`LaneCrossingThresholdDegrees` / `LaneCrossingTaperShare`, `Racer.cs`): the car's heading against the track direction at the car, thresholded at whatever heading moves it sideways at `LaneCrossingLateralSpeedMps` — so the allowance follows `1/speed` — and tapered on a tanh over one further threshold. The wheel angle was the wrong quantity: a couple of degrees of wheel at speed is plenty to cross the track, while a couple of degrees of crossing needs a fraction of one. A **hard** ceiling stays wrong for the reason this section has always given, which is why the taper is smooth; only the ask that crosses the car further is damped, since the ask that unwinds a crossing is the way back.
+- **What stays unbounded**: the side-by-side heading match, the yaw damper and the contact term.
 
 ## Steering damping (`SteerDamping`)
 
