@@ -63,8 +63,9 @@ about cornering lives in that price.
 
 **A corner is a region with an apex, not a point.** The span either side is what makes an *approach* a
 real thing: the stretch where the car positions itself for the entry, the braking window in front of it,
-and its own length each way. Two apexes close enough in *time* — or two that aim the same way — are one
-bend, and the survivor is the tighter of the pair; keeping them apart would put two entries where the
+and its own length each way. Two apexes close enough in *time* are one bend, and aiming the same way widens
+that time window rather than standing as a trigger of its own — an aligned pair far apart in time stays two
+corners. The survivor is the tighter of the pair, and keeping them apart would put two entries where the
 driver sees one.
 
 **Two radius readings, and only one of them is trusted.** The region yields the tightest radius any node
@@ -83,19 +84,23 @@ instead of each holding its own idea of where the corner is. The record also res
 lifting lip before the apex, which *should* pull that braking point earlier and which nothing arms today:
 a designed behaviour the code does not implement, filed as a gap rather than described as live.
 
-**Per car, three ahead.** A car holds a queue rather than a single corner: the next three apexes with
-their radii and their speeds, and *the next corner* advances once the apex before it is behind the car.
-The queue is what lets the plan see past the imminent bend. The successive-corner rule is a step of its
-own rather than a consequence of that advance: the approach is judged once, at the moment a corner is
-promoted, and if the car is already inside the lookahead window then there is no approach left to drive —
-that corner's approach never starts and its outside line is never asked for.
+**Per car, three ahead.** A car holds a queue rather than a single corner, and the slots are not
+interchangeable. Slot one is always the nearest corner ahead, re-derived at every refill, because the line,
+the commit lane and the chevron all aim at it. The remaining slots are not the next two by distance but the
+most restrictive braking-worthy corners ahead — the ones that make the car brake earliest — since only the
+braking plan reads them. *The next corner* advances once the apex before it is behind the car, and the queue
+is what lets the plan see past the imminent bend. The successive-corner rule is a step of its own rather
+than a consequence of that advance: the approach is judged once, at the moment a corner is promoted, and if
+the car is already inside the lookahead window then there is no approach left to drive — that corner's
+approach never starts and its outside line is never asked for.
 
 **It is also the clock.** Besides the two preparations — a speed and a line — the record is the shared
-answer to *where the car is in the corner*: the entry exemption for the crossing scale, the brake
-learner's sample window, the permission to start a maneuver, and the ban on nitro mid-corner all key on
-the same span. Without one shared answer to "before the braking point, in the entry, past the apex", each
-of those would invent its own, and they would disagree at the edges — which is exactly how a car ends up
-doing two things at once.
+answer to *where the car is in the corner*, and it is read through three different windows: the crossing
+scale's exemption and the brake learner's sample both run from the braking target to the apex, the
+permission to start a maneuver counts the time remaining to the entrance, and the ban on nitro mid-corner
+covers the entrance through to the exit. What they share is the record, not one identical span — which is
+the point, because otherwise each would keep its own idea of where the corner is and they would disagree at
+the edges, exactly where a car ends up doing two things at once.
 
 **The corner is a reference, not an agent.** Nothing here acts: the car is what coordinates, and it
 coordinates *from* this record — which every car in the field shares, while each keeps its own context

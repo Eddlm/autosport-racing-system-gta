@@ -115,7 +115,8 @@ The literature's first fix is the feedforward; the integrator is the fallback.
 
 Pure pursuit is **itself a proportional controller**: the [Sensors 2025 pure-pursuit paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC11820862/) gives the gain as `2/l_d²` on lateral error (so `2L/l_d²` in steering-angle terms), equivalently `(2L/l_d)·α` on the aim angle. The [autonomous-driving-book](https://github.com/YangyangFu/autonomous-driving-book/blob/main/book/3-trajectory-tracking/lateral-control/pure-pursuit.md) notes it "can be tuned at different speeds by creating a relationship between the speed and the lookahead distance."
 
-**ARS tried the geometry form — `atan(2 × wheelbase × sin(error) / aimDistance)`, trimmed by `SteerTrim` — in the abandoned PID law, and does not use it now.**
+**ARS's live lane law *is* the geometry form — `atan(2 × wheelbase × sin(bearing) / aimDistance)` — and no `SteerTrim` survives to trim it.**
+What was tried and abandoned was the **PID applied to the aim error**, together with the trim and differentiator machinery around it; the geometry itself was never the casualty and is the live pursuit.
 The live chain (see the STATUS banner) pursues the lane with pure pursuit on the aim point's bearing, plus a side-by-side heading correction, a damper referenced to that aim's curvature and the slide blend.
 **The pure-pursuit gain lesson still holds**: `sin` rather than the raw angle saturates the demand as the aim point swings abeam instead of asking for full lock, and the gain self-schedules only because the aim distance moves with speed.
 **Two repair-policy lessons from that era, still load-bearing:**
