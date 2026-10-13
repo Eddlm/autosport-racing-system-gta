@@ -352,6 +352,18 @@ a filter that decides when a sample was *honest*, which is the same requirement 
 meets by discarding a sample taken while the car was sliding. Asking for a flat, solitary corner would be
 asking for a laboratory this game cannot provide; ask instead for events that can be recognised.
 
+**Except in the braking zone, where the car is at the limit by choice.** The stop is the one manoeuvre the
+AI makes at the tyre's edge deliberately: a straight, no lateral work competing for the budget, and full
+pedal as the normal command. And the engine's tyre model gives both slip axes **one** friction ceiling —
+`GetTractionCoefficientFromRatio` (`wheel.cpp`) returns the same curve for either axis, with the lateral
+angle merely mapped into the same normalised domain through `fTractionCurveLateral`, so that value sets
+*where* the peak falls and not how high it is, and a combined clamp then makes the two axes share one
+budget. So the limit measured under full pedal is the coefficient the corners are planned with, which makes
+a braking zone an instrument where a corner is not. The sample still needs tagging — speed, because
+downforce adds normal load; grade; and the surface class — plus a cleanliness test, and the plausibility
+filter has to become a bracket rather than a discard, since a reading above the model is the evidence
+rather than the error.
+
 **Why it is worth stating.** "Can we compute this ahead of time?" has a third answer besides yes and no:
 *precompute the shape and let the car apply its own factor* — an apex speed for the downforce the car is
 actually making, a crest severity rescaled by speed squared, a braking factor corrected by the car's own
