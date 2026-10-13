@@ -725,23 +725,24 @@ namespace ARS
         // tick. The aim bearing carries the lateral error, so a car merely parallel to the road is not inside it.
         const float SmallAimBearingDegrees = 1f;
         // The crossing-angle allowance: the heading that carries the car sideways at LaneCrossingLateralSpeedMps, so
-        // the threshold follows 1/speed and a car at walking pace may point anywhere. A car crossed past it loses lane
-        // authority smoothly rather than at a stroke — a hard ceiling flattens the law into a constant-command phase
-        // that builds lateral velocity the short tail cannot shed, which is the overshoot the taper exists to avoid.
+        // the threshold follows 1/speed and at speed it falls away to almost nothing. What keeps the wheel usable
+        // there is the taper, whose width is fixed rather than tied to the threshold. A car crossed past the
+        // threshold loses lane authority smoothly rather than at a stroke — a hard ceiling flattens the law into a
+        // constant-command phase that builds lateral velocity the short tail cannot shed.
         const float LaneCrossingLateralSpeedMps = 1f;
-        const float LaneCrossingFloorDegrees = 0.5f;
+        const float LaneCrossingTaperSpanDegrees = 5f;
 
         static float LaneCrossingThresholdDegrees(float speedMps)
         {
             float sine = ARS.Clamp(LaneCrossingLateralSpeedMps / Math.Max(speedMps, 0.1f), 0f, 1f);
-            return Math.Max(LaneCrossingFloorDegrees, ARS.RadToDeg((float)Math.Asin(sine)));
+            return ARS.RadToDeg((float)Math.Asin(sine));
         }
 
-        // All of the lane ask survives up to the threshold, then it falls smoothly and is all but spent one threshold
-        // further on — two of the same number, never a cut.
+        // All of the lane ask survives up to the threshold, then it falls smoothly across the fixed span and is all
+        // but spent at its far end, so a threshold collapsed by speed still leaves the car room to cross.
         static float LaneCrossingTaperShare(float crossingDegrees, float thresholdDegrees)
         {
-            float halfSpan = thresholdDegrees * 0.5f;
+            float halfSpan = LaneCrossingTaperSpanDegrees * 0.5f;
             return 0.5f * (1f - (float)Math.Tanh((crossingDegrees - thresholdDegrees - halfSpan) / halfSpan));
         }
 
