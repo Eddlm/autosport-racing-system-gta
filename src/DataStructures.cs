@@ -392,10 +392,12 @@ namespace ARS
         public int CrestSpanNodes = 0;
         // Part of a chicane: two close corners with opposite curvature signs.
         public bool IsChicane = false;
-        // The corner radius from its region limits. Used for apex-speed calculation.
+        // The corner radius from its region limits: the region's minimum *precise* radius, i.e. the noisy tail
+        // of a short-chord measurement. Nothing on the speed path reads it; the audit of the radius family is
+        // filed in AGENTS-BACKLOG.md as `radius-variants`.
         public float SupposedRadius = 999f;
-        // The region's tightest smoothed radius: what registration compares, and a far less noisy read than the
-        // min-precise SupposedRadius.
+        // The region's tightest *smoothed* radius: what the speed path and registration both read, and a far less
+        // noisy number than the min-precise SupposedRadius.
         public float DetectedRadius = 999f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;

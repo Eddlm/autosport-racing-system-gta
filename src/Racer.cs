@@ -830,7 +830,7 @@ namespace ARS
             // The car decides: a corner it has not asked to position for keeps the inside line, and so does one it
             // arrives at far below its own apex speed.
             bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
-            bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.SupposedRadius) - ARS.MphToMps(20f);
+            bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.DetectedRadius) - ARS.MphToMps(20f);
             bool entryActive = wantsPosition && aboveApexSpeed;
             float offset = entryActive ? IdealLineOffset(fwdToApex, c.DetectedRadius, safeBound) : 0f;
 
@@ -2985,8 +2985,9 @@ namespace ARS
 
                 bool tight = corner.DetectedRadius < CornerTightRadius;
                 // The intended speed must be the one the plan itself will target, or the flag reads a wider corner
-                // than the car is actually asked to take and never fires. That is SupposedRadius, not the smoothed one.
-                float intended = ApexSpeedWithDownforce(corner.SupposedRadius);
+                // than the car is actually asked to take and never fires. That is the smoothed radius, which is the
+                // one the speed path reads.
+                float intended = ApexSpeedWithDownforce(corner.DetectedRadius);
                 float timeToEntrance = distance / speed;
                 float decel = Math.Max(BrakingDecelBase(corner.Node), 0.1f);
                 float brakingDistance = (speed * speed - intended * intended) / (2f * decel);
@@ -3036,7 +3037,7 @@ namespace ARS
             if (upcoming.Count > 0)
             {
                 selectedNodes.Add(ARS.Corners[upcoming[0]].Node);
-                selectedRadii.Add(ARS.Corners[upcoming[0]].SupposedRadius);
+                selectedRadii.Add(ARS.Corners[upcoming[0]].DetectedRadius);
             }
 
             // The remaining slots only feed the braking plan, so they go to the most restrictive corners this car
@@ -3052,7 +3053,7 @@ namespace ARS
                     if (selectedNodes.Contains(node)) continue;
                     if (!CornerRequiresBraking(node)) continue;
 
-                    float radius = ARS.Corners[upcoming[i]].SupposedRadius;
+                    float radius = ARS.Corners[upcoming[i]].DetectedRadius;
                     float apexSpeed = ApexSpeedWithDownforce(radius);
                     if (apexSpeed >= speed) continue;
                     if (!CornerWorthHolding(node, radius, selectedNodes, selectedRadii)) continue;
@@ -3066,7 +3067,7 @@ namespace ARS
                 }
                 if (best < 0) break;
                 selectedNodes.Add(ARS.Corners[upcoming[best]].Node);
-                selectedRadii.Add(ARS.Corners[upcoming[best]].SupposedRadius);
+                selectedRadii.Add(ARS.Corners[upcoming[best]].DetectedRadius);
             }
 
             CommitApexQueue(
@@ -3127,7 +3128,7 @@ namespace ARS
                 {
                     cp.Node = NextApexNode;
                     cp.Angle = ARS.TrackPoints[NextApexNode].Angle;
-                    cp.SupposedRadius = NextApexRadius;
+                    cp.DetectedRadius = NextApexRadius;
                 }
                 Brain.Corner = new Corner(NextApexSpeed, cp);
             }

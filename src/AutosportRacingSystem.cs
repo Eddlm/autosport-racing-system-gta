@@ -2776,7 +2776,7 @@ namespace ARS
         public static float CornerApexSpeed(CornerPoint c, Racer r)
         {
             
-            float radius = c.SupposedRadius;
+            float radius = c.DetectedRadius;
             if (radius <= 0f) radius = c.GetPreciseRadius();
 
             
