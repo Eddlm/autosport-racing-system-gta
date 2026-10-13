@@ -35,9 +35,10 @@ get there.
 
 ## The authority chain, and why the order is load-bearing
 
-1. The **lane** decides a lateral target in metres: the high-speed line, the corner's line, an
-   avoidance lane, the recovery's edge, or — when nothing has an opinion — the lane the car is
-   already in.
+1. The **lane** decides a lateral target in metres, each later member of the chain overriding the ones
+   before it: the lane the car is already in when nothing has an opinion, then the high-speed line, the
+   corner's line, an avoidance lane, the recovery's edge while a stuck car is off the track, and finally
+   the rival walls bounding whatever came out of it.
 2. The **aim point** is that lane offset applied to a lookahead point ahead of the car.
 3. The **pursuit** turns the bearing to that point into a wheel angle.
 4. The **assembly** adds what the pursuit cannot express: the yaw damper, the side-by-side heading
@@ -74,7 +75,8 @@ exists to catch, and the audit of that whole family is filed rather than settled
 
 **What hangs off one record.** The speed plan takes the apex speed, computed with the car's own downforce,
 and brakes for it from a target node a fixed lead before the turn-in. The lane takes the corner's line,
-and it *outranks* the ordinary lane while the corner owns the stretch. The crossing rule's entry
+and it *outranks* the ordinary lane while the corner owns the stretch — though not an avoidance lane or a
+rival wall, which come later in that chain. The crossing rule's entry
 exemption reads the same corner, standing down from the braking target to the apex. The shape warnings
 ride along as data — a chicane, a crest that unloads the car — so several systems consume one description
 instead of each holding its own idea of where the corner is. The record also reserves a field for a
@@ -83,9 +85,10 @@ a designed behaviour the code does not implement, filed as a gap rather than des
 
 **Per car, three ahead.** A car holds a queue rather than a single corner: the next three apexes with
 their radii and their speeds, and *the next corner* advances once the apex before it is behind the car.
-The queue is what lets the plan see past the imminent bend, and the successive-corner rule — a corner
-promoted while the car is already inside the previous approach's window is skipped for that approach —
-falls out of the same advance rather than being a mechanism of its own.
+The queue is what lets the plan see past the imminent bend. The successive-corner rule is a step of its
+own rather than a consequence of that advance: the approach is judged once, at the moment a corner is
+promoted, and if the car is already inside the lookahead window then there is no approach left to drive —
+that corner's approach never starts and its outside line is never asked for.
 
 **It is also the clock.** Besides the two preparations — a speed and a line — the record is the shared
 answer to *where the car is in the corner*: the entry exemption for the crossing scale, the brake
@@ -131,10 +134,9 @@ both ends:
 
 - **down with speed**: while the lookahead tracks speed, the gain falls as one over speed squared.
   This is not a fudge; a preview proportional to time is what stops a fast car overshooting its aim.
-- **the floor** (a handful of metres) is what keeps a crawling car steerable: below it the gain stops
-  falling, because a preview shorter than that reads noise rather than geometry.
-- **the cap** exists because past a certain speed the preview would be so long that the car aims at
-  the wrong corner.
+- **the floor** and **the cap** are the two ends where a preview proportional to time stops being useful,
+  and both are chosen rather than derived: below the floor the aim point would sit inside the car's own
+  noise, and above the cap it would be far enough ahead to belong to a different bend.
 
 **The lever.** The gain itself, and the lookahead's time. Both change how fast a lane is taken, and
 neither changes what "on the lane" means.
@@ -225,7 +227,7 @@ reads nervous is a damper or a ceiling complaint far more often than a gain one.
 still produces force, so the drive is delivered and the corner keeps some grip.
 
 **The tyre keeps the veto.** The plan keeps its number and the tyre keeps the veto: the plan is a model of
-grip, gravity and radius, and a model can be optimistic about a cold tyre, a crest, or a surface it read a
+grip, gravity and radius, and a model can be optimistic about a wet road, a crest, or a surface it read a
 moment ago, so TCS reads the wheels — the ground truth — and trims the *authority to execute* rather than
 the plan's number. That is worth more than a tidy number, because past the peak a tyre produces *less*
 force: the wheelspin a hopeful throttle creates is drive thrown away.
@@ -279,8 +281,10 @@ corrects the factor by how far that share missed the target. The evidence has to
 slid on the way in was already on a tyre that had let go, so that sample is discarded, and a slide on its
 own is a verdict that cuts the factor without waiting for the numbers. The seed carries a per-car draw,
 because identical guesses would produce identical braking errors. The same shape recurs wherever the
-model is the weak part: TCS reads the wheels rather than believing the plan, and the steering ceiling
-takes the lower of the model law and a measured allowance.
+model is the weak part: TCS reads the wheels rather than believing the plan. It was tried on the steering
+ceiling too — taking the lower of the model law and a measured slip allowance — and that one read slower
+swerves and was parked, which is why the ceiling today is the model law with a geometry fallback and the
+parked law is cited here as a shape rather than as a live consumer.
 
 **Three buckets, sorted by staleness.** Everything the car acts on sorts by whether the truth goes stale,
 and by how fast. An unknown that never changes is *known* and precomputed — where the corners are, how they
@@ -314,8 +318,11 @@ chasing it; the side to pass a rival on is picked from the predicted heading ove
 the projection lands on a corner's outside it caps the combined input — full throttle on the centre line,
 none at the track edge, a light brake beyond it. That last one shows how a prediction usually ends: as a
 *bound* rather than a command, because the plan keeps asking for what it wants and the projection takes the
-lower. The horizon is short and the law crude, so a prediction belongs only where a false alarm is cheap,
-and a spurious wheel correction is far cheaper than a spurious lift. Arbitrating is when two sources disagree and
+lower. A fourth prediction is built the same way without the projected point: whether a corner needs braking
+at all is decided by carrying the car's current longitudinal acceleration forward to the entrance and
+comparing the arrival speed it implies against the apex speed. The horizon is short and the law crude, so a
+prediction belongs only where a false alarm is cheap, and a spurious wheel correction is far cheaper than a
+spurious lift. Arbitrating is when two sources disagree and
 one wins for now: take the lower of the model law and the measured one, or let the reading veto what the
 plan asked for — settled and forgotten, so the next lap meets it again from the same place. Adapting is
 state kept inside the loop while a condition lasts and released when it ends: an integrator rather than a
