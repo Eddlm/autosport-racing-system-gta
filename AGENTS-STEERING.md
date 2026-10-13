@@ -6,7 +6,7 @@
 36 implementations, 10 documented disagreements, every claim carrying its source URL, inaccessible sources listed rather than papered over.
 This file is the distillation; the survey is the evidence.
 ARS comparisons here are the agent's analysis and go stale — **the code wins**.
-**The intent behind a system — the idea, the shape it takes and the shapes already rejected, with no line numbers — is `DESIGN-STEERING.md`.** That file says what a system is *for* and this one says what is *live*; read it before reshaping anything here.
+**The goal behind a system — the idea, the shape it takes and the shapes already rejected, with no line numbers — is `DESIGN.md`.** That file says what a system is *for* and this one says what is *live*; read it before reshaping anything here.
 
 ## ⚠️ STATUS — the PID / measured-yaw-rate law in this file was tried and ABANDONED
 

@@ -1,10 +1,19 @@
-# Steering and lane work — the design intent
+# The design — what each system is for
 
-This file states **what each part is for and what shape it has**, so the idea survives a refactor. The
-code owns every value, and `AGENTS-STEERING.md` owns the live wiring, the anchors and the measured
-numbers. Where the three disagree, the code wins and this file is the intent to argue against.
+This file states **the goal of each system and the shape that serves it**, so the idea survives a
+refactor and a decision has a yardstick. Every section opens with what the thing is *for*, because a
+question about a system is usually a question about its goal, and the goal is what settles a fork:
+between two implementations that both look reasonable the one closer to the stated intent wins, and
+when neither does, the intent is the thing that has to change.
+
+The code owns every value, and `AGENTS-STEERING.md` owns the live wiring, the anchors and the measured
+numbers. Where the three disagree, the code wins and this file is the intent to argue against — but a
+system the code no longer serves the goal of is a **defect to file**, not a paragraph to reword.
 
 Nothing here is a line number on purpose. If a claim needs one, it belongs in `AGENTS-STEERING.md`.
+
+Coverage began on the steering side and now states the goal of each system in the control chain, the
+pedals included.
 
 ## What the system is for
 
@@ -125,10 +134,38 @@ damping term, whose gain falls with speed and is weaker on high-grip cars, with 
 hard backstop beneath it. The lane law is not where oscillation gets solved, so a lane change that
 reads nervous is a damper or a ceiling complaint far more often than a gain one.
 
+## Traction control — the AI's throttle against the tyre's own verdict
+
+**Goal:** let the speed plan ask for the throttle it believes the corner allows, while the tyre keeps
+the final say. The plan is a model — grip, gravity, radius — and a model can be optimistic about a cold
+tyre, a crest, or a surface it read a moment ago; TCS reads the wheels instead and trims the *authority
+to execute* rather than the plan's number, so being wrong about grip costs some wheelspin instead of
+the whole corner.
+
+**Why the target sits below the peak.** TCS holds the tyre at a chosen point on the curve *under* its
+traction peak, deliberately, because the peak is the most sensitive point on it: the goal is not "no
+wheelspin" but "the spin that still pulls". Nothing below the target is touched, so part-throttle,
+balancing and a lift stay entirely the plan's business, and the cut has a floor because a car that lifts
+completely gives up the balance it needs to drive out of the problem.
+
+**It reads the tyre, not the torque.** The wheels are read directly, and the sign matters: a wheel
+locking under braking reads on the same axis with the opposite sign, so it can never trigger a throttle
+cut. Off track the target scales with the surface, which is the same idea applied where the whole curve
+is lower.
+
+**The twin on the other pedal.** The brake side shares the mechanism but not the goal: throttle-side
+control *regulates* — it holds a curve point — while brake-side control *contains*, because full lock
+does not sit on the curve at all but in the flat region past it. Same instrument, different question.
+
+**What TCS is not.** It adds no grip and models no differential, it never lowers the plan's speed
+target, and it is not there to be fast on its own — it is there so the lap the plan promised is actually
+delivered on a tyre that is not behaving. A change that makes TCS alter the plan's speed has moved to the
+speed level and left this system's goal behind.
+
 ## What this file does not cover yet
 
-The damper's law, the slide blend and its countersteer, the steer limiter's ceiling, the recovery
-state machine, and the speed plan's own radius handling all have design intent worth writing down —
-they live in `AGENTS-STEERING.md` and `AGENTS-TECHNOTES.md` today only as live description. Naming
-them here is deliberate: this file is expected to grow, one system at a time, and nothing in it should
-be read as a claim about a part that is not written up yet.
+The damper's law, the slide blend and its countersteer, the steer limiter's ceiling, the brake side's
+own caps, the recovery state machine and the speed plan's own radius handling all have design intent
+worth writing down — they live in `AGENTS-STEERING.md` and `AGENTS-TECHNOTES.md` today only as live
+description. Naming them here is deliberate: this file is expected to grow, one system at a time, and
+nothing in it should be read as a claim about a part that is not written up yet.
