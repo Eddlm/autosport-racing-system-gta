@@ -727,9 +727,11 @@ namespace ARS
         const float LaneSteerLimitSlowDegrees = 80f;
         const float LaneSteerLimitSpeedMph = 40f;
 
+        // The input bounds run high to low so the output runs low to high: Remap clamps against out_min..out_max, and
+        // only an ascending output clamps correctly.
         static float LaneSteerLimitDegrees(float speedMps)
         {
-            return ARS.Remap(speedMps, 0f, ARS.MphToMps(LaneSteerLimitSpeedMph), LaneSteerLimitSlowDegrees, LaneSteerLimitFastDegrees, true);
+            return ARS.Remap(speedMps, ARS.MphToMps(LaneSteerLimitSpeedMph), 0f, LaneSteerLimitFastDegrees, LaneSteerLimitSlowDegrees, true);
         }
 
         // Pure pursuit's curvature law: the bearing to an aim point is the chord of the circle through the car, so the
