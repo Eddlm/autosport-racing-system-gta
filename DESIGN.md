@@ -238,10 +238,11 @@ reads nervous is a damper or a ceiling complaint far more often than a gain one.
 still produces force, so the drive is delivered and the corner keeps some grip.
 
 **The tyre keeps the veto.** The plan keeps its number and the tyre keeps the veto: the plan holds a grip
-figure, a radius and a gravity — with the wheels' own grip multiplier already folded in — and none of those
-says what the tyre is doing with that grip at this instant, so TCS reads the slip itself and trims the
-*authority to execute* rather than the plan's number. That is worth more than a tidy number, because past
-the peak a tyre produces *less* force: the wheelspin a hopeful throttle creates is drive thrown away.
+figure, a radius and a gravity — the grip being a whole-car average of the per-wheel figure the engine
+applies, so a car split across two surfaces reads as neither of them — and none of those says what the tyre
+is doing with that grip at this instant, so TCS reads the slip itself and trims the *authority to execute*
+rather than the plan's number. That is worth more than a tidy number, because past the peak a tyre produces
+*less* force: the wheelspin a hopeful throttle creates is drive thrown away.
 
 **Why the AI needs this at all.** A driver feels the wheel let go and lifts; the AI has no feel of its
 own — its throttle is the plan's number, and the engine's own traction aids are coarse and not ARS's to
