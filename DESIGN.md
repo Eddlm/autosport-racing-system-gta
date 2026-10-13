@@ -126,6 +126,37 @@ arrived. Between the two sits a third kind: data precomputed in a shape that sca
 severity recorded at a probe speed and rescaled by the car's own speed squared, so the expensive part is
 done once and the car only applies its own factor.
 
+## The speed plan — a commitment, not an envelope
+
+**Goal:** hold the fastest speed the car can be *sure* of still making the corner it has decided to brake
+for, rather than the fastest it might get away with — so the plan keeps a promise about the corner while the
+pedals answer the moment.
+
+**Two answers, and the plan takes the lower.** The corner term is worked backwards from the apex: the
+braking map, for the downforce and the learned braking factor this car has. The route term is the grip
+circle read from the curvature under and ahead of the car. The plan is the smaller of the two, each with an
+error margin of its own as a menu offset — which is how a driver buys caution or commitment without touching
+either law.
+
+**Only the corners this car decided it needs braking for enter the corner term.** Every other bend is the
+route law's business, which is the same division the apex queue already makes: the reserved queue slots feed
+this term alone, and the rest of the track is handled as geometry.
+
+**Past the braking target the corner term is dropped and the route owns the corner.** The commitment covers
+the approach and nothing else — once the car is inside, the radius under it is the better authority on what
+the tyres will take.
+
+**The road's own shape corrects both terms.** A hill takes grip from both. Vertical curvature takes it too,
+applied at each term's own centre — the follow point for the route, the apex for the corner — which is how a
+crest that unloads the car is felt before it is met. A chicane is the one deliberate relaxation: both terms
+get a boost, because a flick is not a corner in the sense the geometry takes it for.
+
+**Where the plan meets the moment.** The pedals are not the plan's number. They map the speed error through
+one linear law, and then every reason cap — traction, instability, overspeed, traffic, the track edge, the
+recovery — can only ever take authority away from it. That ordering is what lets the plan be conservative by
+construction without making the car slow: the plan promises what it can keep, and the caps are what answer
+when the promise turns out to have been wrong.
+
 ## The lane law
 
 **Goal:** put the car on the lane it was told to be on — as directly as the geometry allows and no
@@ -420,8 +451,8 @@ learner at all.
 
 ## What this file does not cover yet
 
-The damper's law, the slide blend and its countersteer, the steer limiter's ceiling, the brake side's
-own caps, the recovery state machine and the speed plan's own radius handling all have design intent
-worth writing down — they live in `AGENTS-STEERING.md` and `AGENTS-TECHNOTES.md` today only as live
-description. Naming them here is deliberate: this file is expected to grow, one system at a time, and
-nothing in it should be read as a claim about a part that is not written up yet.
+The damper's law, the slide blend and its countersteer, the steer limiter's ceiling and the brake side's own
+caps, the recovery state machine and the route law's own choice of radius all have design intent worth
+writing down — they live in `AGENTS-STEERING.md` and `AGENTS-TECHNOTES.md` today only as live description.
+Naming them here is deliberate: this file is expected to grow, one system at a time, and nothing in it
+should be read as a claim about a part that is not written up yet.
