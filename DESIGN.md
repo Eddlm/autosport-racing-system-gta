@@ -15,6 +15,14 @@ Nothing here is a line number on purpose. If a claim needs one, it belongs in `A
 Coverage began on the steering side and now states the goal of each system in the control chain, the
 pedals included.
 
+## The shape of a section
+
+A system gets its own section, and the section opens with its **goal in one blunt sentence** — what the
+system exists to do, phrased as the reason someone would build it — and only then argues: the trade it
+makes, where its goal stops, and the shapes already rejected. The goal line stays short and unhedged
+because its job is to be quotable in an argument, and the meandering belongs underneath it. A section
+with elaboration but no goal line is a description, and descriptions are the code's job.
+
 ## What the system is for
 
 The AI should drive a racing line at the limit of grip without looking like it is fighting the car.
@@ -37,6 +45,9 @@ get there.
    tyre: it has to be above the limiters, and everything above them is bounded.
 
 ## The lane law
+
+**Goal:** put the car on the lane it was told to be on — as directly as the geometry allows and no
+harder, so the correction is always present and never a fight.
 
 **The idea.** A lane is a position, so the steering that serves it is pure pursuit: proportional to
 the error, with no integral, and no standing error because it acts on position rather than on a
@@ -63,6 +74,9 @@ the car falls short. Any rewrite that turns the target into "wherever I am plus 
 standing offset.
 
 ## The crossing rule — the second speed term
+
+**Goal:** keep a lane change from reading as a car crossed up against its own direction — fade the ask
+that would cross the car further, and never touch the ask that unwinds a crossing.
 
 **The idea.** What makes a lane move look violent is not the wheel angle but the **heading the car
 carries relative to the road**. A couple of degrees of wheel at speed is plenty to put a car across
@@ -136,12 +150,14 @@ reads nervous is a damper or a ceiling complaint far more often than a gain one.
 
 ## Traction control — the AI's throttle against the tyre's own verdict
 
-**Goal:** get the driven wheels working at the slip the tyre actually wants, so the throttle the plan
-asks for can be *delivered* — the plan keeps its number, the tyre keeps the veto. The plan is a model of
-grip, gravity and radius, and a model can be optimistic about a cold tyre, a crest, or a surface it read
-a moment ago; the wheels are the ground truth, so TCS reads them and trims the *authority to execute*
-rather than the plan's number. What that buys is not only less spinning: past the peak a tyre produces
-*less* force, so the wheelspin a hopeful throttle creates is drive thrown away.
+**Goal:** get the most out of the driven wheels — hold longitudinal slip inside the band where the tyre
+still produces force, so the drive is delivered and the corner keeps some grip.
+
+**The tyre keeps the veto.** The plan keeps its number and the tyre keeps the veto: the plan is a model of
+grip, gravity and radius, and a model can be optimistic about a cold tyre, a crest, or a surface it read a
+moment ago, so TCS reads the wheels — the ground truth — and trims the *authority to execute* rather than
+the plan's number. That is worth more than a tidy number, because past the peak a tyre produces *less*
+force: the wheelspin a hopeful throttle creates is drive thrown away.
 
 **Why the AI needs this at all.** A driver feels the wheel let go and lifts; the AI has no feel of its
 own — its throttle is the plan's number, and the engine's own traction aids are coarse and not ARS's to
