@@ -12,8 +12,9 @@ system the code no longer serves the goal of is a **defect to file**, not a para
 
 Nothing here is a line number on purpose. If a claim needs one, it belongs in `AGENTS-STEERING.md`.
 
-Coverage began on the steering side and now states the goal of each system in the control chain, the
-pedals included.
+Coverage began on the steering side and now includes the lane, the corner table, the traction control on the
+pedals, the levels the chain is balanced at, and the standing limit beneath all of it; the sections not yet
+written are named at the end.
 
 ## The shape of a section
 
@@ -95,8 +96,9 @@ the car is already inside the lookahead window then there is no approach left to
 approach never starts and its outside line is never asked for.
 
 **It is also the clock.** Besides the two preparations — a speed and a line — the record is the shared
-answer to *where the car is in the corner*, and it is read through three different windows: the crossing
-scale's exemption and the brake learner's sample both run from the braking target to the apex, the
+answer to *where the car is in the corner*, and it is read through three windows that do not coincide: the
+crossing scale's exemption runs from the braking target to the apex, the brake learner watches that same
+stretch for a slide but measures its pedal share on the approach and stops at the braking target, the
 permission to start a maneuver counts the time remaining to the entrance, and the ban on nitro mid-corner
 covers the entrance through to the exit. What they share is the record, not one identical span — which is
 the point, because otherwise each would keep its own idea of where the corner is and they would disagree at
@@ -108,10 +110,11 @@ about it: what this car knows of the corner's braking, its positioning and wheth
 started. That split is the design, and it is why the AI cars behave consistently instead of each
 inventing its own corner out of the road under it.
 
-**Where the reference stops.** The tyre's authority, the other cars, the ramp and surface scans and the
-recovery all sit outside it: the limiter is its own ladder, the walls and the cards read other cars, ramps
-come from a sweep of their own, and a stuck car belongs to no corner. Covering one of those is a boundary
-change, not a new field on the record.
+**Where the reference stops.** The tyre's authority, the other cars, the bump sweep and the grip the wheels
+are actually getting all sit outside it: the limiter is its own ladder, the walls and the cards read other
+cars, the bumps come from a sweep of their own that nothing but a debug draw reads, and the live grip comes
+straight from the wheels rather than from the record. Covering one of those is a boundary change, not a new
+field on the record.
 
 **What is the table's and what is the car's.** The table answers *what and where*: which bends exist, where
 each one starts and ends, how tight it is, and what shape or surface warnings it carries. Each car answers
@@ -216,11 +219,13 @@ slow-speed ramp that can only *raise* the ceiling so a crawling car can still pl
 deliberate escapes exist, both on the answering side only: a countersteer earns authority towards the
 slide it is correcting, and a damper term that is fighting the rotation is not capped.
 
-**The speed level: the same law read the other way.** The grip-circle ceiling also exists as a speed
-— the fastest a car could take a radius with the wheel it is allowed — and that speed is blended into
-the plan, so a car that cannot steer a corner slows down for it. This is what keeps the steering level
-and the speed plan one law instead of two that disagree, and it is the level that is easiest to
-forget, because the symptom of over-asking appears on the pedals.
+**The speed level: the same law read the other way.** The grip circle also exists as a speed — the fastest
+a car could take a radius with the wheel it is allowed — and that speed is blended into the plan, so a car
+that cannot steer a corner slows down for it. What the two sides share is the grip and the geometry, not the
+same rung of the ladder: the ceiling in force is the tyre's peak slip at this speed, and the grip-circle form
+survives as its fallback for the case where that peak cannot be computed at all, while the speed side is
+built from the grip circle outright. Reading them as one number is right in spirit and wrong in detail, and
+this is the level easiest to forget, because the symptom of over-asking appears on the pedals.
 
 **The damper is where stability actually lives.** Instability is a yaw problem: it is answered by the
 damping term, whose gain falls with speed and is weaker on high-grip cars, with the ceiling as the
@@ -232,11 +237,11 @@ reads nervous is a damper or a ceiling complaint far more often than a gain one.
 **Goal:** get the most out of the driven wheels — hold longitudinal slip inside the band where the tyre
 still produces force, so the drive is delivered and the corner keeps some grip.
 
-**The tyre keeps the veto.** The plan keeps its number and the tyre keeps the veto: the plan is a model of
-grip, gravity and radius, and a model can be optimistic about a wet road, a crest, or a surface it read a
-moment ago, so TCS reads the wheels — the ground truth — and trims the *authority to execute* rather than
-the plan's number. That is worth more than a tidy number, because past the peak a tyre produces *less*
-force: the wheelspin a hopeful throttle creates is drive thrown away.
+**The tyre keeps the veto.** The plan keeps its number and the tyre keeps the veto: the plan holds a grip
+figure, a radius and a gravity — with the wheels' own grip multiplier already folded in — and none of those
+says what the tyre is doing with that grip at this instant, so TCS reads the slip itself and trims the
+*authority to execute* rather than the plan's number. That is worth more than a tidy number, because past
+the peak a tyre produces *less* force: the wheelspin a hopeful throttle creates is drive thrown away.
 
 **Why the AI needs this at all.** A driver feels the wheel let go and lifts; the AI has no feel of its
 own — its throttle is the plan's number, and the engine's own traction aids are coarse and not ARS's to
@@ -264,8 +269,8 @@ one is grip left over for the corner.
 
 **It reads the tyre, not the torque.** The wheels are read directly, and the sign matters: a wheel
 locking under braking reads on the same axis with the opposite sign, so it can never trigger a throttle
-cut. Off track the target scales with the surface, which is the same idea applied where the whole curve
-is lower.
+cut. Off track the target is halved by a fixed ratio rather than by any surface reading — one binary state,
+the same on every material — which is the same idea applied where the whole curve is lower.
 
 **The twin on the other pedal.** The brake side shares the mechanism but not the goal: throttle-side
 control *regulates* — it holds a curve point — while brake-side control *contains*, because full lock
