@@ -85,6 +85,13 @@ The queue is what lets the plan see past the imminent bend, and the successive-c
 promoted while the car is already inside the previous approach's window is skipped for that approach —
 falls out of the same advance rather than being a mechanism of its own.
 
+**It is also the clock.** Besides the two preparations — a speed and a line — the corner is what tells
+every other system *where the car is in the corner*: the entry exemption for the crossing scale, the
+brake learner's sample window, the permission to start a maneuver, and the ban on nitro mid-corner all
+key on the same span. Without one shared answer to "before the braking point, in the entry, past the
+apex", each of those would invent its own, and they would disagree at the edges — which is exactly how a
+car ends up doing two things at once.
+
 ## The lane law
 
 **Goal:** put the car on the lane it was told to be on — as directly as the geometry allows and no
