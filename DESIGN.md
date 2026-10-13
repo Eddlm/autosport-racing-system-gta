@@ -340,6 +340,18 @@ the tyre takes to change. Practice carries the same caveat from the other side: 
 attempt was honest, which is why a braking sample taken while the car was already sliding is thrown away
 rather than learned from.
 
+**A limit can be bounded, not measured, unless it is exceeded.** A car driving well never reveals how much
+grip it has: at the apex of a corner taken inside the limit, the lateral g it produces is the *demand*, not
+the tyre's maximum, so the peaks a well-behaved car records are a floor on its grip and nothing more —
+learned from those alone, the model would only ever be confirmed in its own timidity. The maximum shows
+itself exactly once, when the car steps over it, and the sample is contaminated by the slide that produced
+it. So the usable evidence is two-sided and comes from events that happen anyway: sustaining a lateral g
+without breaking away proves the model is not too high by at least that much, and breaking away at a demand
+below the model's promise proves it is too high. Bracketing needs no test track and no clean room — it needs
+a filter that decides when a sample was *honest*, which is the same requirement the brake learner already
+meets by discarding a sample taken while the car was sliding. Asking for a flat, solitary corner would be
+asking for a laboratory this game cannot provide; ask instead for events that can be recognised.
+
 **Why it is worth stating.** "Can we compute this ahead of time?" has a third answer besides yes and no:
 *precompute the shape and let the car apply its own factor* — an apex speed for the downforce the car is
 actually making, a crest severity rescaled by speed squared, a braking factor corrected by the car's own
