@@ -377,6 +377,16 @@ downforce adds normal load; grade; and the surface class — plus a cleanliness 
 filter has to become a bracket rather than a discard, since a reading above the model is the evidence
 rather than the error.
 
+**The baseline, and what may change it.** The plan's answer is always the baseline everything starts from,
+and the baseline is itself two kinds of thing: facts measured once about the *track* — where the corners
+are, how they bend, how wide they are — because a track cannot change on us, and a *model* of the car,
+because a car's truth varies with the surface, the downforce and the moment. Truth then arrives on top in
+four modes, and what distinguishes them is whether they move the command or the baseline: predicting shapes
+the next second, adapting holds a level while a condition lasts, and arbitrating bounds the request — all
+three modify the command and are released — while learning rewrites the baseline itself. That asymmetry is
+the vocabulary in one line: the measurement is what it costs to be right, and learning is the only thing
+that moves the floor.
+
 **Why it is worth stating.** "Can we compute this ahead of time?" has a third answer besides yes and no:
 *precompute the shape and let the car apply its own factor* — an apex speed for the downforce the car is
 actually making, a crest severity rescaled by speed squared, a braking factor corrected by the car's own
