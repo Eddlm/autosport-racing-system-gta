@@ -282,6 +282,18 @@ because identical guesses would produce identical braking errors. The same shape
 model is the weak part: TCS reads the wheels rather than believing the plan, and the steering ceiling
 takes the lower of the model law and a measured allowance.
 
+**Two ways of living with the limit.** The appropriate throttle is not a number that exists to be known:
+it depends on what the tyre does in response to it — on the surface, the load, the slip already there — so
+the answer is only defined inside the loop, and it is a measurement question even though the *policy*
+behind it (hold the tyre just under its peak) is a decision. An unknown that repeats, like what this
+corner costs this car in braking, is worth **learning**: the car keeps a factor per corner and sharpens it
+every lap, which is why the same corner is driven better on lap three than on lap one. An unknown that
+changes moment to moment, like what the tyre will take from the throttle right now, is not worth learning
+at all, because the answer is stale before it can be stored; it is worth **reading**, which is what TCS
+does. So the choice is not a preference but a property of the unknown — learn the ones that repeat, read
+the ones that do not. A learner pointed at a fluctuating quantity is a filter carrying yesterday's
+answer, and a live reading pointed at a repeating one throws away every lap's worth of evidence.
+
 **Why it is worth stating.** "Can we compute this ahead of time?" has a third answer besides yes and no:
 *precompute the shape and let the car apply its own factor* — an apex speed for the downforce the car is
 actually making, a crest severity rescaled by speed squared, a braking factor corrected by the car's own
