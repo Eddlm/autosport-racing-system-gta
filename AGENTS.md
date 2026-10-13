@@ -109,7 +109,7 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 ## Durable gotchas — do not "fix" these
 Full explanations: `AGENTS-STEERING.md` → "Durable gotchas — steering and pipeline"; `AGENTS-TECHNOTES.md` → "Durable gotchas — code, helpers, rendering, settings". One hazard per line.
 - Pursuit steer saturates at the clamp — there is no separate "recovery law".
-- A descending-output `Remap` with `clamp` is inverted; NaN compares below everything.
+- A descending-output `Remap` with `clamp` is a **silent constant**: `Clamp(r, out_min, out_max)` with `out_min > out_max` pins every input to `out_min`, so the map reads like a schedule and behaves like a switch — give the bounds descending on the *input* side instead. NaN compares below everything.
 - NaN discipline: `Clamp(NaN)` returns the min bound = full lock; never seed a getter with a sentinel.
 - An early-continue guard is the accept filter negated — De Morgan turns its NaN case into a pass; keep the positive accept form.
 - A null-check on a freshly `new`-ed object is dead code.
@@ -145,7 +145,7 @@ Every open item carries a stable kebab-case slug and its description lives in th
 - `rival-publish-core` — not built
 - `apex-radius` — **untested (`aa302e1`, compile-verified, drive owed)**: the speed path reads `DetectedRadius` everywhere the plan does, so the corner is described and driven with one number
 - `radius-variants` — the audit of the radius family (which rung each consumer reads, the load-time `Speed` that looks dead, the law written twice), asked for later
-- `lane-steer-ceiling` — **untested (`3bda34b`, drive owed)**: the lane term's ask is capped by speed (tight at the fast end, loose at rest), because the pursuit angle grows as the aim distance falls; the old "no ceiling" verdict belongs to the retired flat-gain law, and the risk is that lane moves at speed are now slower
+- `lane-steer-ceiling` — **untested (`2109bf1`, drive owed)**: the lane term's ask is capped by speed (tight at the fast end, loose at rest), because the pursuit angle grows as the aim distance falls; the old "no ceiling" verdict belongs to the retired flat-gain law, and the risk is that lane moves at speed are now slower. The first build of it capped nothing — a descending-output `Remap` with `clamp` reads back its slow end at every speed — so the drive of this item is the first one that has the cap in force
 - `slide-brake-rampdown` — parked
 - `steer-slip-allowance` — parked after one drive: the measured-slip allowance under the ceiling reads slower swerves, and what it should be still needs settling
 - `pi-controls-merge` — **DECIDED, not built; wanted at the forefront of the next version** (one typed-number row replacing PI Offset and PI Target; detail in `AGENTS-BACKLOG.md`)
