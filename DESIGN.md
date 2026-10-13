@@ -308,10 +308,14 @@ slip is read fresh on every tick.
 
 **Five responses to an unknown.** Reading is the moment's answer, used once and gone: slip, the crossing,
 the slide. Predicting is that answer carried forward — position, velocity and recent acceleration
-extrapolated a short way, `pos + v·t + ½·a·t²`, which is how the lane preview leads the lane error with the
-motion the car is already committing to, so the steering anticipates drift instead of chasing it; the
-horizon is short and the law crude, so a prediction belongs only where a false alarm is cheap, and a
-spurious wheel correction is far cheaper than a spurious lift. Arbitrating is when two sources disagree and
+extrapolated a short way, `pos + v·t + ½·a·t²`. Three things consume it: the lane preview leads the lane
+error with the motion the car is already committing to, so the steering anticipates drift instead of
+chasing it; the side to pass a rival on is picked from the predicted heading over the next second; and when
+the projection lands on a corner's outside it caps the combined input — full throttle on the centre line,
+none at the track edge, a light brake beyond it. That last one shows how a prediction usually ends: as a
+*bound* rather than a command, because the plan keeps asking for what it wants and the projection takes the
+lower. The horizon is short and the law crude, so a prediction belongs only where a false alarm is cheap,
+and a spurious wheel correction is far cheaper than a spurious lift. Arbitrating is when two sources disagree and
 one wins for now: take the lower of the model law and the measured one, or let the reading veto what the
 plan asked for — settled and forgotten, so the next lap meets it again from the same place. Adapting is
 state kept inside the loop while a condition lasts and released when it ends: an integrator rather than a
