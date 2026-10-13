@@ -576,8 +576,8 @@ namespace ARS
             // crossing would be the damper's one-way mistake in reverse.
             float crossingDeg = Vector3.SignedAngle(CurrentTrackPoint.Direction, Car.ForwardVector, Vector3.WorldUp);
             bool turningIn = _nextApexCorner != null && HasPassedBrakingTarget() && !HasPassedApex(_nextApexCorner.Node);
-            if (!turningIn && Math.Abs(crossingDeg) > LaneCrossingThresholdDegrees(speedMps) && laneSteerDeg * crossingDeg > 0f)
-                laneSteerDeg = 0f;
+            if (!turningIn && laneSteerDeg * crossingDeg > 0f)
+                laneSteerDeg *= LaneCrossingShare(Math.Abs(crossingDeg), speedMps);
             _steerPursuitDeg = laneSteerDeg;
             // --- Heading assist: match a side-by-side rival's heading ---
 
@@ -725,16 +725,22 @@ namespace ARS
         // Inside this bearing the car is on its aim to within the noise, so the command only flips sign from tick to
         // tick. The aim bearing carries the lateral error, so a car merely parallel to the road is not inside it.
         const float SmallAimBearingDegrees = 1f;
-        // The crossing-angle allowance: the heading that carries the car sideways at LaneCrossingLateralSpeedMps, so
-        // the threshold follows 1/speed and at speed it falls away to almost nothing. Past the threshold the lane ask
-        // that would cross the car further is dropped outright: a step rather than a taper, legible at the cost of a
-        // discontinuity, and a narrow taper is the fix if the step is ever seen to chatter.
+        // The crossing-angle allowance: the heading that carries the car sideways at LaneCrossingLateralSpeedMps, so it
+        // follows 1/speed and falls away to almost nothing at speed. It is a softness scale, not a boundary — the ask
+        // that would cross the car further keeps the share threshold/(threshold + crossing), so it fades with the
+        // crossing instead of stopping at a line, and the ask that unwinds a crossing is never scaled at all.
         const float LaneCrossingLateralSpeedMps = 1f;
 
         static float LaneCrossingThresholdDegrees(float speedMps)
         {
             float sine = ARS.Clamp(LaneCrossingLateralSpeedMps / Math.Max(speedMps, 0.1f), 0f, 1f);
             return ARS.RadToDeg((float)Math.Asin(sine));
+        }
+
+        static float LaneCrossingShare(float crossingDegrees, float speedMps)
+        {
+            float threshold = LaneCrossingThresholdDegrees(speedMps);
+            return threshold / (threshold + crossingDegrees);
         }
 
         // Pure pursuit's curvature law: the bearing to an aim point is the chord of the circle through the car, so the
