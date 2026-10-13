@@ -319,7 +319,9 @@ and a spurious wheel correction is far cheaper than a spurious lift. Arbitrating
 one wins for now: take the lower of the model law and the measured one, or let the reading veto what the
 plan asked for — settled and forgotten, so the next lap meets it again from the same place. Adapting is
 state kept inside the loop while a condition lasts and released when it ends: an integrator rather than a
-memory, which is what the parked slip allowance is and what the older throttle control was. Learning is the
+memory. Its live instance is the glide every pedal cap moves on — cutting at one rate and recovering at
+half of it — which is also why a cap that snapped on and off would read as a step; the parked slip
+allowance and the older live-adjusting throttle control were the same shape. Learning is the
 durable meeting — state kept against an object rather than a moment, per car, per corner or per track,
 corrected on clean evidence and used to change the model next time. The test between the last two is
 whether the state outlives the condition that created it, and whether it is attached to something the car
