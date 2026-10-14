@@ -148,6 +148,7 @@ namespace ARS
         float _laneRequestPrev = 0f;
         float _laneRate = 0f;
         float _laneMoverLoggedAt = 0f;
+        bool _laneSnap = false;
         bool _targetLaneAimed = false;
         public float TargetLane { get { return _targetLane; } }
 
@@ -558,8 +559,8 @@ namespace ARS
             laneRequest = ApplyRivalWalls(laneRequest, roadWide);
             if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneAimed = true; }
             _laneRequest = laneRequest;
-            UpdateLaneMover();
-            _targetLaneAimed = laneAimed;
+            UpdateLaneMover(roadWide);
+            _targetLaneAimed = laneAimed || Math.Abs(_targetLane - carOffset) > LaneOverrideHoldMeters;
 
             // Aim at the lookahead distance, offset by the target lane. The Gs-aware preview shifts
             // that offset by the lateral motion the car is already committing to, so the correction leads the drift
@@ -803,30 +804,57 @@ namespace ARS
             return true;
         }
 
+        // The aim carries an override until it has come back this close to the car's own lane, so a consumer gated on
+        // that fact is released with the steering rather than with the request.
+        const float LaneOverrideHoldMeters = 0.1f;
+
         // The lane mover's two numbers. The ideal line needs about 5 m/s of lateral motion through a sweeper taken at
         // 30 m/s (IdealLineOffset moves two safe bounds over 2R·leadAngle metres), so the cap sits above that and the
         // acceleration is what bounds a lunging request: 6 m/s^2 moves 0.75 m in the first half second.
         const float LaneMoverAccelMps2 = 6f;
         const float LaneMoverSpeedCapMps = 8f;
+        // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
+        // and walks back: the pedal path bounds its own step for the same reason.
+        const float LaneMoverMaxStepSeconds = 0.1f;
 
         // Carries the aimed lane onto the request. The rate is bounded by the acceleration, which is what stops a
         // request that flips inside half a second from stepping the lane; the arrival term decelerates on the rate
         // that just stops in the distance left; and the request's own rate feeds forward, so a line that moves
         // smoothly is tracked without the v^2/2a lag a pure arrival law would leave (2 m at 5 m/s).
-        void UpdateLaneMover()
+        void UpdateLaneMover(float roadWide)
         {
             float gap = _laneRequest - _targetLane;
             if (float.IsNaN(gap) || float.IsInfinity(gap)) return;
 
-            float requestRate = ARS.Clamp((_laneRequest - _laneRequestPrev) / Math.Max(TickScale, 0.001f), -LaneMoverSpeedCapMps, LaneMoverSpeedCapMps);
+            if (_laneSnap)
+            {
+                _laneSnap = false;
+                _targetLane = _laneRequest;
+                _laneRequestPrev = _laneRequest;
+                _laneRate = 0f;
+                return;
+            }
+
+            float dt = Math.Min(TickScale, LaneMoverMaxStepSeconds);
+            float requestRate = ARS.Clamp((_laneRequest - _laneRequestPrev) / dt, -LaneMoverSpeedCapMps, LaneMoverSpeedCapMps);
             _laneRequestPrev = _laneRequest;
 
+            // The two terms are clamped apart: the arrival never exceeds the cap, but a request already moving at the
+            // cap must not lose the arrival's headroom, or the gap can never close while the line keeps moving.
             float arrivalRate = Math.Sign(gap) * Math.Min(LaneMoverSpeedCapMps, (float)Math.Sqrt(2f * LaneMoverAccelMps2 * Math.Abs(gap)));
-            float desiredRate = ARS.Clamp(requestRate + arrivalRate, -LaneMoverSpeedCapMps, LaneMoverSpeedCapMps);
+            float desiredRate = requestRate + arrivalRate;
 
-            float rateStep = LaneMoverAccelMps2 * TickScale;
+            float rateStep = LaneMoverAccelMps2 * dt;
             _laneRate += ARS.Clamp(desiredRate - _laneRate, -rateStep, rateStep);
-            _targetLane += _laneRate * TickScale;
+            _targetLane += _laneRate * dt;
+
+            // The walls are a bound rather than a line: a rival that steps the corridor holds the aim inside it now.
+            float walled = ClampLaneToWalls(_targetLane, roadWide);
+            if (walled != _targetLane)
+            {
+                _targetLane = walled;
+                _laneRate = 0f;
+            }
 
             if (Math.Abs(_laneRate) > 0.2f && Game.GameTime > _laneMoverLoggedAt)
             {
@@ -974,9 +1002,20 @@ namespace ARS
             return true;
         }
 
-        float ApplyRivalWalls(float targetLane, float roadWide)
+        // One clamp site for the rival walls, shared by the chain that builds the request and the mover that lands the
+        // aim on it, so the bound cannot drift between the two.
+        float ClampLaneToWalls(float lane, float roadWide)
         {
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
+            float trackBound = roadWide;
+            float clampLeft = Math.Max(_avoidLeftWall + carHalfWidth, -trackBound);
+            float clampRight = Math.Min(_avoidRightWall - carHalfWidth, trackBound);
+            if (clampLeft > clampRight) return ARS.Clamp(lane, -trackBound, trackBound);
+            return ARS.Clamp(lane, clampLeft, clampRight);
+        }
+
+        float ApplyRivalWalls(float targetLane, float roadWide)
+        {
             // The outer bound here is the raw track edge with no car-width inset; the per-rival walls below carry
             // both cars' widths instead.
             float trackBound = roadWide;
@@ -1029,11 +1068,7 @@ namespace ARS
                 _avoidRightWall = mid + 1f;
             }
 
-            float clampLeft = Math.Max(_avoidLeftWall + carHalfWidth, -trackBound);
-            float clampRight = Math.Min(_avoidRightWall - carHalfWidth, trackBound);
-
-            if (clampLeft > clampRight) return ARS.Clamp(targetLane, -trackBound, trackBound);
-            return ARS.Clamp(targetLane, clampLeft, clampRight);
+            return ClampLaneToWalls(targetLane, roadWide);
         }
 
         // Above the authored peak slip × this the car counts as sliding, so the damper drops its aim reference.
@@ -1320,6 +1355,7 @@ namespace ARS
             _stuckRecoveryCooldownEndTime = 0;
             _stuckMoveSampleTime = 0;
             Control.LastAppliedSteerDegrees = 0f;
+            _laneSnap = true;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
         }
@@ -3712,6 +3748,7 @@ namespace ARS
             Car.Position = CurrentTrackPoint.Position + right * laneOffset + new Vector3(0f, 0f, 0.5f);
             Car.Heading = direction.ToHeading();
             Car.Velocity = direction * ARS.MphToMps(10f);
+            _laneSnap = true;
             FinishStuckRecovery();
         }
 
