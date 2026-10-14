@@ -605,9 +605,17 @@ namespace ARS
             // target lane, and parallel traffic must not kill the lane steer. It is added in the assembly after the
             // damper, the slide blend and the on-aim zeroing, so none of them can fade the one term that must not
             // fade — only the steer limiter bounds it, and that closes the steering last.
+            // The offset is the pair's relative course angle, ramped by the daylight between the two sides: nothing at
+            // the outer gap, the whole angle when the sides touch. The coming-at-my-side gate below is what makes that
+            // angle's sign mean "away" — a separating rival turns it into a push toward the rival, which is the slide
+            // blend's job to answer and not this term's.
+            const float ContactPushOuterGapMeters = 5f;
+            const float ContactPushMinSpeedMps = 1f;
             float contactSteerDeg = 0f;
             Vector3 velDir = speedMps > 0.5f ? Car.Velocity / speedMps : courseDir;
             Vector3 velRight = Vector3.Cross(velDir, Vector3.WorldUp);
+            Vector3 myHoriz = new Vector3(Car.Velocity.X, Car.Velocity.Y, 0f);
+            bool myDirectionKnown = myHoriz.Length() >= ContactPushMinSpeedMps;
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
@@ -615,17 +623,21 @@ namespace ARS
                 float longDist = Math.Abs(Vector3.Dot(delta, velDir));
                 float latDist = Math.Abs(Vector3.Dot(delta, velRight));
                 float longGate = (VehicleData.ModelDimensions.Y + r.RivalRacer.VehicleData.ModelDimensions.Y) * 0.5f + 1f;
-                float latGate = (VehicleData.BoundingBox + r.RivalRacer.VehicleData.BoundingBox) * 0.5f + 3f;
-                if (longDist > longGate || latDist > latGate) continue;
+                // Read live rather than off the half-second publish, because the touching point anchors the ramp below.
+                float combinedHalfWidth = (VehicleData.BoundingBox + r.RivalRacer.VehicleData.BoundingBox) * 0.5f;
+                if (longDist > longGate || latDist > combinedHalfWidth + ContactPushOuterGapMeters) continue;
                 Vector3 rivalVel = r.RivalRacer.Car.Velocity;
                 if (rivalVel.LengthSquared() < 0.01f) continue;
                 float latSide = Vector3.Dot(delta, velRight);
                 float latRelVel = Vector3.Dot(rivalVel - Car.Velocity, velRight);
                 if (latSide * latRelVel >= 0f) continue;
-                float dist = delta.Length();
-                float distScale = ARS.Remap(dist, 6f, 2f, 0.5f, 2f, true);
-                float strength = ARS.Remap(Math.Abs(latRelVel), 0.3f, 3f, 0f, 15f, true) * distScale;
-                contactSteerDeg += Math.Sign(latSide) * strength;
+                // Horizontal only: the published angle is three-dimensional, so a rival lifted on a crest beside the car
+                // would read a course difference with no lateral conflict in it.
+                Vector3 rivalHoriz = new Vector3(rivalVel.X, rivalVel.Y, 0f);
+                if (!myDirectionKnown || rivalHoriz.Length() < ContactPushMinSpeedMps) continue;
+                float surfaceGap = Math.Max(latDist - combinedHalfWidth, 0f);
+                float ramp = ARS.Remap(surfaceGap, ContactPushOuterGapMeters, 0f, 0f, 1f, true);
+                contactSteerDeg += Vector3.SignedAngle(myHoriz, rivalHoriz, Vector3.WorldUp) * ramp;
             }
 
 
