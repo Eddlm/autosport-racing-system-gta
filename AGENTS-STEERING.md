@@ -400,7 +400,7 @@ The axle gate that used to guard that halving, and `UndersteerDegrees` with it, 
 
 ## Lane systems — where on the track the car aims
 Resolved in `ComputeSteering`, later overriding earlier, over a base of **the lane the car is already in**:
-**high-speed line** (`Racer.cs` `TryComputeHighSpeedLane`, runs every tick and answers only where the node `speed × HighSpeedLaneChordSeconds` ahead carries a curve radius under the gate (`Racer.cs:718`, `:722`, `:729`), and says whether it has an answer instead of reporting silence as a zero lane),
+**high-speed line** (`Racer.cs` `TryComputeHighSpeedLane`, runs every tick and answers only where the node `speed × HighSpeedLaneChordSeconds` ahead carries a curve radius under the gate (`Racer.cs:725`, `:726`, `:805`), and it answers a **relative pull** — the car's own lane plus up to a metre toward the inside, faded linearly from nothing at the gate to the full metre at 250 m (`:812`, `:814`) — rather than the edge, so the crossing stays alive while the bend lasts and the drivable bound is what ends it; below the hold threshold it reports no opinion, because the answer is then the car's own lane),
 **corner line** (`Racer.cs` `ComputeCornerTargetLane`, the distance-parameterised ideal line),
 **avoidance** (`Racer.cs` `ComputeAvoidAheadLane`),
 then **`ApplyRivalWalls`** (`Racer.cs`) clamps the result between track bounds and rival walls — walls that sit exactly at `±roadWide` when nothing constrains them (`Racer.cs:884`, `:922-923`, `:938`).

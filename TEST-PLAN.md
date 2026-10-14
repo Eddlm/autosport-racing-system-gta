@@ -490,3 +490,17 @@ The override chain still picks the lane, but its answer is now a request (`_lane
 1. **The numbers are settled for one geometry.** `B` is the safe bound (half the track width less half the car) and the line's own motion scales with it, so the settling case of a 5 m half-width does not cover a wider track, whose line moves further and would want a little more acceleration. `LaneMoverAccelMps2` is the knob, and the cap has to stay above the line's own peak rate or the line itself is clipped.
 2. **If it is retuned, the log is the instrument** — `Lane mover <car>: asked …, aimed …, rate …`, at most once a second per car while the lane is actually moving.
 3. **What the mover deliberately does not touch** — contact avoidance stays its own steer term added after the damper, while the recovery's nearest-edge lane goes through the mover like every other source, so a turn-back that reads late is the case to watch for if one is ever seen.
+
+## The inside line is a pull, not the edge (not driven)
+
+The high-speed source no longer answers the full inside edge on a bend that passes its 500 m radius gate. It answers the car's own lane plus X metres toward the inside, recomputed every tick, with X one metre times a linear fade from 500 m down to 250 m of radius — nothing at the gate, half a metre at 375, the full metre at 250 and held below. Because the target is relative it recedes as the car moves, so the crossing stays alive for as long as the bend lasts and the drivable bound is what ends it; the lane mover stays the only rate bound.
+
+**Rejected on the way here**: a proportional *destination*, where the car aims X inside and stops, which leaves a long bend short of the inside; and a speed-driven allowance, because speed is the result of the curvature — it misreads a straight as a bend and the slowest corner as the one needing least line.
+
+1. **Judge it where it is visible, not at the gate.** X below the aligned-wheel deadband steers nothing, so the answer first appears near 465 m at the lower lookahead floor and near 370 m once the lookahead caps; a no-op read at 500 m is the deadband, not the change failing.
+2. **The corner line still wins.** The pull is replaced wherever the corner line answers, so only bends the corner detector has not claimed show it, and judging it on a registered corner is the likeliest misattribution.
+3. **The ask and the crossing are different readings.** On a tight bend at the limit the limiter clips the extra ask, so "a tight bend pulls harder" can be true of the intended lane and false of the realised crossing. Read the intended lane against the live deviation, not the crossing alone.
+4. **A bend long enough to traverse ends at the edge and holds it.** The traverse is computed from the observed crossing rate rather than a stopwatch, because X sets a rate and not a position; stopping short on a long bend, or crossing past the edge, is the falsifier.
+5. **No step, and no self-excitation.** No aim step when the chord node's radius jumps or across the gate; and since the request is now anchored on the car's own lane, the tell of the aim and the crossing trading through the mover's feedforward is the intended line sawtoothing against the live one.
+6. **The magnitude does not move with speed.** Only the deadband should make the onset differ between a slow and a fast pass; a speed-dependent X is a falsifier.
+7. **On exit it holds.** When the bend ends the source reports nothing, the request returns to the car's own lane, and the car holds the position it reached rather than unwinding.
