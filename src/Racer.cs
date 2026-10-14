@@ -548,7 +548,7 @@ namespace ARS
             // straight, where neither the high-speed line nor a corner line has an opinion.
             float laneRequest = carOffset;
             bool laneAimed = false;
-            if (TryComputeHighSpeedLane(roadWide, speedMps, out float highSpeedLane)) { laneRequest = highSpeedLane; laneAimed = true; }
+            if (TryComputeHighSpeedLane(roadWide, speedMps, carOffset, out float highSpeedLane)) { laneRequest = highSpeedLane; laneAimed = true; }
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
             if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
@@ -724,6 +724,10 @@ namespace ARS
         // Lane Control System 2: positions the car on the inside edge of the track curvature.
         const float HighSpeedLaneRadiusMeters = 500f;
         const float HighSpeedLaneChordSeconds = 1.01f;
+        // The pull a bend answers with and the radius at which it is full; the fade runs from nothing at the gate to
+        // that radius, and the edge is the only bound past it.
+        const float HighSpeedLanePullMeters = 1f;
+        const float HighSpeedLaneFullPullRadiusMeters = 250f;
 
         // Debug lock for the centring test: a near-centre aim offset, pinned for every racer.
         const float LaneLockTestOffsetMeters = 0.1f;
@@ -786,7 +790,7 @@ namespace ARS
             return PursuitSteerFromBearing(bearing, distance);
         }
 
-        bool TryComputeHighSpeedLane(float roadWide, float speedMps, out float lane)
+        bool TryComputeHighSpeedLane(float roadWide, float speedMps, float carOffset, out float lane)
         {
             lane = 0f;
             int count = ARS.TrackPoints.Count;
@@ -803,11 +807,14 @@ namespace ARS
             float cornerDir = Math.Sign(ahead.Angle);
             if (cornerDir == 0f) return false;
 
-            // The edge, absolute: a target that steps from wherever the car is holds a constant error and so never
-            // converges on the line. The gentleness belongs in the bearing, which grows as the car falls short.
+            // A relative pull rather than the edge: the target tracks the car, so the crossing stays alive for as long
+            // as the bend lasts and only the bound ends it — the asymmetry a reader would otherwise "fix" back to an edge.
+            float pull = ARS.Clamp((HighSpeedLaneRadiusMeters - ahead.PreciseCurveRadius) / Math.Max(HighSpeedLaneRadiusMeters - HighSpeedLaneFullPullRadiusMeters, 1f), 0f, 1f) * HighSpeedLanePullMeters;
             float insideBound = Math.Max(roadWide - VehicleData.BoundingBox * 0.5f, 0f);
-            lane = -cornerDir * insideBound;
-            return true;
+            lane = ARS.Clamp(carOffset - cornerDir * pull, -insideBound, insideBound);
+            // Under this the answer is the car's own lane, so it is not an opinion worth reporting: the flag it would
+            // set arms the outside-projection cap.
+            return pull > LaneOverrideHoldMeters;
         }
 
         // The aim carries an override until it has come back this close to the car's own lane, so a consumer gated on
