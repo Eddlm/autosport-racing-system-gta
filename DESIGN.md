@@ -305,6 +305,14 @@ still an instruction or while the aim has not yet come back close to the car's o
 because those are the two ways the same thing is true. That is why a request already withdrawn can
 still be under way.
 
+**The aim may lag, but never past the request and never across the car.** A lag is only harmless while
+the thing being chased holds still: whenever a source answers with the car's own lane, a lagged aim
+becomes a target that moves with the car, and the correction turns into a delayed function of the car's
+own motion — a loop with no fixed point, which is a limit cycle rather than a lag. So the aim is held
+inside the interval between the car's own lane and the request, which is a point on the car when the
+request *is* the car, and which leaves the ordinary trailing case untouched because the aim is already
+inside it.
+
 **Rejected shapes.** Leaving the target to step is the state that produced the symptom: a request valid
 for half a second moved the car most of a lane, which reads as a lunge. Smoothing the *source* is the
 same failure moved upstream and is worse, because the sources answer in fractions of a metre and change
