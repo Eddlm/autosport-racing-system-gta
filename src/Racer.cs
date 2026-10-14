@@ -141,7 +141,13 @@ namespace ARS
         float _avoidRightWall = 0f;
         int _activeRivalWallCount = 0;
         bool _avoidWallsInitialized = false;
+        // The aimed lane and the sources' request for it are separate: the mover carries one onto the other with
+        // lateral inertia, so a request that is valid for half a second cannot step the lane.
         float _targetLane = 0f;
+        float _laneRequest = 0f;
+        float _laneRequestPrev = 0f;
+        float _laneRate = 0f;
+        float _laneMoverLoggedAt = 0f;
         bool _targetLaneAimed = false;
         public float TargetLane { get { return _targetLane; } }
 
@@ -539,30 +545,31 @@ namespace ARS
             // A lane nobody defines holds the one the car is already in. Zero is the centre lane, not the absence of
             // an answer, so seeding the chain with it would steer every car back to the middle of the road on a
             // straight, where neither the high-speed line nor a corner line has an opinion.
-            float targetLane = carOffset;
+            float laneRequest = carOffset;
             bool laneAimed = false;
-            if (TryComputeHighSpeedLane(roadWide, speedMps, out float highSpeedLane)) { targetLane = highSpeedLane; laneAimed = true; }
+            if (TryComputeHighSpeedLane(roadWide, speedMps, out float highSpeedLane)) { laneRequest = highSpeedLane; laneAimed = true; }
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
             if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
-            if (cornerLane != 0f) { targetLane = cornerLane; laneAimed = true; }
+            if (cornerLane != 0f) { laneRequest = cornerLane; laneAimed = true; }
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
-            if (avoidAheadLane != 0f) { targetLane = avoidAheadLane; laneAimed = true; }
-            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { targetLane = NearestEdgeLane(carOffset, drivableEdge); laneAimed = true; }
-            targetLane = ApplyRivalWalls(targetLane, roadWide);
-            if (ARS.DebugToggles[Options.LockLaneCentre]) { targetLane = LaneLockTestOffsetMeters; laneAimed = true; }
-            _targetLane = targetLane;
+            if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneAimed = true; }
+            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { laneRequest = NearestEdgeLane(carOffset, drivableEdge); laneAimed = true; }
+            laneRequest = ApplyRivalWalls(laneRequest, roadWide);
+            if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneAimed = true; }
+            _laneRequest = laneRequest;
+            UpdateLaneMover();
             _targetLaneAimed = laneAimed;
 
             // Aim at the lookahead distance, offset by the target lane. The Gs-aware preview shifts
             // that offset by the lateral motion the car is already committing to, so the correction leads the drift
             // instead of reacting to it; shifting a real point keeps the pursuit's chord real.
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
-            float aimLane = targetLane;
+            float aimLane = _targetLane;
             if (ARS.DebugToggles[Options.GsAwarePreview])
             {
                 float laneAtProjection = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), steerRefPoint.Position, steerRefPoint.Direction);
-                aimLane = targetLane - GsPreviewBlend * (laneAtProjection - carOffset);
+                aimLane = _targetLane - GsPreviewBlend * (laneAtProjection - carOffset);
             }
             // The aim targets the car's centre, so it locks to the drivable edge; the rival walls bound to the raw edge.
             aimLane = ARS.Clamp(aimLane, -drivableEdge, drivableEdge);
@@ -794,6 +801,38 @@ namespace ARS
             float insideBound = Math.Max(roadWide - VehicleData.BoundingBox * 0.5f, 0f);
             lane = -cornerDir * insideBound;
             return true;
+        }
+
+        // The lane mover's two numbers. The ideal line needs about 5 m/s of lateral motion through a sweeper taken at
+        // 30 m/s (IdealLineOffset moves two safe bounds over 2R·leadAngle metres), so the cap sits above that and the
+        // acceleration is what bounds a lunging request: 6 m/s^2 moves 0.75 m in the first half second.
+        const float LaneMoverAccelMps2 = 6f;
+        const float LaneMoverSpeedCapMps = 8f;
+
+        // Carries the aimed lane onto the request. The rate is bounded by the acceleration, which is what stops a
+        // request that flips inside half a second from stepping the lane; the arrival term decelerates on the rate
+        // that just stops in the distance left; and the request's own rate feeds forward, so a line that moves
+        // smoothly is tracked without the v^2/2a lag a pure arrival law would leave (2 m at 5 m/s).
+        void UpdateLaneMover()
+        {
+            float gap = _laneRequest - _targetLane;
+            if (float.IsNaN(gap) || float.IsInfinity(gap)) return;
+
+            float requestRate = ARS.Clamp((_laneRequest - _laneRequestPrev) / Math.Max(TickScale, 0.001f), -LaneMoverSpeedCapMps, LaneMoverSpeedCapMps);
+            _laneRequestPrev = _laneRequest;
+
+            float arrivalRate = Math.Sign(gap) * Math.Min(LaneMoverSpeedCapMps, (float)Math.Sqrt(2f * LaneMoverAccelMps2 * Math.Abs(gap)));
+            float desiredRate = ARS.Clamp(requestRate + arrivalRate, -LaneMoverSpeedCapMps, LaneMoverSpeedCapMps);
+
+            float rateStep = LaneMoverAccelMps2 * TickScale;
+            _laneRate += ARS.Clamp(desiredRate - _laneRate, -rateStep, rateStep);
+            _targetLane += _laneRate * TickScale;
+
+            if (Math.Abs(_laneRate) > 0.2f && Game.GameTime > _laneMoverLoggedAt)
+            {
+                _laneMoverLoggedAt = Game.GameTime + 1000;
+                ARS.Log(ARS.LogImportance.Info, "Lane mover " + Name + ": asked " + _laneRequest.ToString("0.00") + ", aimed " + _targetLane.ToString("0.00") + ", rate " + _laneRate.ToString("0.00"));
+            }
         }
 
         // How far ahead of a corner the car decides whether it wants to position or brake for it.
