@@ -307,7 +307,8 @@ namespace ARS
         GridWait,
         Countersteer,
         StuckRecovery,
-        Instability
+        Instability,
+        Kick
     }
 
     public enum BrakeReason

@@ -126,6 +126,33 @@ namespace ARS
         const float DNFSlotOffsetMeters = 1f;
         const float DNFUnderTrackMeters = 5f;
 
+        // Throttle kick (recovery rejoin): at crawl, off track and aimed at the nearest edge, the pursuit's ask
+        // pins past the lock while the yaw the steering buys comes up short. Whether a burst CAN buy that
+        // rotation at the gear the car holds is read, not derived: the plan already floors the pedal and the
+        // TCS cut is live on it, so the rear axle is demonstrably past its grip. The card plays a window in
+        // which TCS yields and the slide blend stands down for the rotation the ask's own side wants, folding
+        // the moment the steer can place the aim again — or on no wheelspin, which says the prediction was wrong.
+        const float KickMaxSpeedMps = 8f;
+        const float KickMaxCloseSeconds = 1.5f;
+        const float KickFoldMarginDegrees = 5f;
+        const float KickMaxDriveBiasFront = 0.01f;
+        const float KickTcsCutLevel = 0.9f;
+        const float KickPedalLevel = 1f;
+        const float KickSpinEvidenceSlip = -0.2f;
+        const int KickArmSaturateMs = 250;
+        const int KickWindowMs = 800;
+        const int KickSpinFoldMs = 300;
+        const int KickCooldownMs = 1500;
+        bool _kickPlaying = false;
+        int _kickPlayingSince = 0;
+        int _kickWindowEnd = 0;
+        int _kickAskSaturatedSince = 0;
+        int _kickCooldownUntil = 0;
+        int _kickAskSign = 0;
+        // The raw pursuit ask, captured before the crossing scale: the kick's deficit is the pursuit's own
+        // demand against the lock, not what the scale and the limiter deliver of it.
+        float _kickAskDegrees = 0f;
+
 
         public float RouteLookAheadSeconds = 0.5f;
         public float RouteLookaheadSizeSeconds = 2.0f;
@@ -584,6 +611,7 @@ namespace ARS
             // --- Lane steer: pure pursuit toward the carried lane ---
 
             float laneSteerDeg = PursuitSteerDegrees(aimPoint, courseDir);
+            _kickAskDegrees = laneSteerDeg;
             if (LaneCrossingScale)
             {
                 // Turn-in is a crossing on purpose, so the taper stands down for the entry itself — braking target to
@@ -671,9 +699,14 @@ namespace ARS
             if (_slidePriority > 0f)
             {
                 // The correction term only - not the slidePriority ramp - and the share of the slide the countersteer
-                // answers, which reaches all of it at the top of the band.
-                float countersteerTarget = (steerKP * sideBySideSteerDeg) - (VehicleData.SlideAngle * CountersteerShare());
-                Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * _slidePriority;
+                // answers, which reaches all of it at the top of the band. The kick card's rotation is the wanted
+                // one while it shares the ask's side, so the blend is silent for it and the ordinary handover
+                // resumes at the fold — the same stand-down shape as the turn-in exemption above.
+                if (!KickWantsSlide())
+                {
+                    float countersteerTarget = (steerKP * sideBySideSteerDeg) - (VehicleData.SlideAngle * CountersteerShare());
+                    Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * _slidePriority;
+                }
             }
 
             // On its aim to within the noise the command has nothing to correct and only flips sign from tick to
@@ -1381,8 +1414,19 @@ namespace ARS
         // Forward speed gates it: reversing reads as a ~180° slide, and a reversed car must never be starved.
         bool IsFullCountersteer()
         {
+            if (KickWantsSlide()) return false;
             if (Vector3.Dot(Car.Velocity, Car.ForwardVector) < ARS.MphToMps(CountersteerMinSpeedMph)) return false;
             return _slidePriority >= 1f;
+        }
+
+        // The kick card's wanted rotation: the slide the burst buys rotates toward the aim, so it carries the
+        // ask's own sign — anything opposite is a spin the ordinary machinery must catch. Math.Sign throws on
+        // NaN, so an unreadable slide reads as unwanted and leaves the blend live.
+        bool KickWantsSlide()
+        {
+            float slide = VehicleData.SlideAngle;
+            if (float.IsNaN(slide) || float.IsInfinity(slide)) return false;
+            return _kickPlaying && _kickAskSign * Math.Sign(slide) > 0f;
         }
 
 
@@ -1409,6 +1453,13 @@ namespace ARS
             BaseBehavior = RacerBaseBehavior.Race;
             Lap = 1;
             _stuckArmAllowedTime = Game.GameTime + RecoveryArmDelayMs;
+            _kickPlaying = false;
+            _kickPlayingSince = 0;
+            _kickWindowEnd = 0;
+            _kickAskSaturatedSince = 0;
+            _kickCooldownUntil = 0;
+            _kickAskSign = 0;
+            _kickAskDegrees = 0f;
             LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
             VehicleData.ResetLapPeaks();
             CanRegisterNewLap = false;
@@ -1931,7 +1982,9 @@ namespace ARS
 
         void UpdateThrottleReasonCaps()
         {
-            Control.MaxThrottleFromTCS = GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
+            // The kick card plays on exactly the wheelspin this cut moderates: the card owns the pedal for its
+            // window, so the field is pinned for the window rather than glided back.
+            Control.MaxThrottleFromTCS = _kickPlaying ? 1f : GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
             Control.MaxThrottleFromInstability = GlideCap(Control.MaxThrottleFromInstability, IsUnstable() ? InstabilityThrottleLevel : 1f);
 
             bool overspeedArmed = Math.Abs(Control.SteerDegrees) < OverspeedArmMaxSteerDegrees && Math.Abs(VehicleData.SlideAngle) < OverspeedArmMaxSlideDegrees && Car.Velocity.Length() > ARS.MphToMps(OverspeedArmMinSpeedMph);
@@ -2020,6 +2073,11 @@ namespace ARS
         // reasons; grid wait owns the pedal outright and stuck recovery re-tags after.
         float ComposeThrottleCap(float baseThrottle, bool offtrackLimited, bool countersteering)
         {
+            // The kick card owns a floor, not a cap: its window raises the base before the argmin, and the only
+            // cap it defeats is TCS, pinned at the field — instability and the live caps still bound the result.
+            bool kickRaises = _kickPlaying && baseThrottle < KickPedalLevel;
+            if (kickRaises) baseThrottle = KickPedalLevel;
+
             float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromInstability);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOverspeed);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRival);
@@ -2042,6 +2100,7 @@ namespace ARS
             if (offtrackLimited) reason = ThrottleReason.Offtrack;
             if (countersteering) reason = ThrottleReason.Countersteer;
             if (BaseBehavior == RacerBaseBehavior.GridWait) reason = ThrottleReason.GridWait;
+            if (_kickPlaying && reason == ThrottleReason.Plan) reason = ThrottleReason.Kick;
 
             Control.ThrottleReason = reason;
             Control.ThrottleReasonLevel = binding;
@@ -3634,6 +3693,7 @@ namespace ARS
 
                 UpdateThrottleReasonCaps();
                 UpdateBrakeReasonCaps();
+                UpdateThrottleKick();
                 ConvertSpeedToPedals();
 
                 UpdateStuckCheck();
@@ -3852,6 +3912,78 @@ namespace ARS
         float NearestEdgeLane(float steerRefOffset, float drivableEdge)
         {
             return steerRefOffset >= 0f ? drivableEdge : -drivableEdge;
+        }
+
+        void UpdateThrottleKick()
+        {
+            if (!_kickPlaying)
+            {
+                TryArmThrottleKick();
+                return;
+            }
+
+            int now = Game.GameTime;
+            float slipEvidence = ARS.MaxWheelSlip(Car);
+            float kickForwardMps = ARS.GetForwardSpeed(Car);
+            bool spunNever = now - _kickPlayingSince >= KickSpinFoldMs && slipEvidence > KickSpinEvidenceSlip;
+            bool deficitClosed = Math.Abs(_kickAskDegrees) < VehicleData.SteeringLock - KickFoldMarginDegrees;
+            if (deficitClosed || now >= _kickWindowEnd || spunNever || _stuckPhase != StuckPhase.Drive
+                || OutOfTrackDistance() <= 0f || kickForwardMps <= 0f || kickForwardMps > KickMaxSpeedMps * 1.25f)
+            {
+                if (spunNever && !deficitClosed)
+                    ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": folded, no wheelspin " + slipEvidence.ToString("0.00"));
+                _kickPlaying = false;
+                _kickCooldownUntil = now + KickCooldownMs;
+            }
+        }
+
+        void TryArmThrottleKick()
+        {
+            float kickForwardMps = ARS.GetForwardSpeed(Car);
+            if (ControlledByPlayer || _stuckPhase != StuckPhase.Drive || OutOfTrackDistance() <= 0f
+                || kickForwardMps <= 0f || kickForwardMps > KickMaxSpeedMps
+                || VehicleMemory.GetDriveBiasFront(Car) > KickMaxDriveBiasFront
+                || Game.GameTime < _kickCooldownUntil || !PlanWantsToMove())
+            {
+                _kickAskSaturatedSince = 0;
+                return;
+            }
+            // A non-finite lock read would pass the gates below by compare-false; the card stays inert instead.
+            if (float.IsNaN(VehicleData.SteeringLock) || float.IsInfinity(VehicleData.SteeringLock))
+            {
+                _kickAskSaturatedSince = 0;
+                return;
+            }
+            // The deficit the kick answers, measured where the pursuit law cannot show it: the steering's ask
+            // itself never reads far past the lock, but the yaw rate full lock's own minimum radius buys at this
+            // speed decides how long the bearing takes to close, and a close time past this card's window is the
+            // steer-in the car cannot have. The arm holds the fold's own measure too — the card only plays while
+            // the steering cannot yet place the aim — so a play can never insta-fold. The TCS cut on the floored
+            // plan pedal is the evidence the burst overcomes the rear axle's grip at the gear the car holds.
+            float lockRad = ARS.DegToRad(VehicleData.SteeringLock);
+            float yawDegPerSecAtLock = ARS.RadToDeg(kickForwardMps * (float)Math.Tan(lockRad) / Math.Max(VehicleData.WheelBase, 0.1f));
+            float closeSeconds = Math.Abs(_steerAimBearingDegrees) / Math.Max(yawDegPerSecAtLock, 1f);
+            if (closeSeconds < KickMaxCloseSeconds || Math.Abs(_kickAskDegrees) < VehicleData.SteeringLock - KickFoldMarginDegrees
+                || Control.MaxThrottleFromTCS > KickTcsCutLevel)
+            {
+                _kickAskSaturatedSince = 0;
+                return;
+            }
+
+            int now = Game.GameTime;
+            if (_kickAskSaturatedSince == 0)
+            {
+                _kickAskSaturatedSince = now;
+                return;
+            }
+            if (now - _kickAskSaturatedSince < KickArmSaturateMs) return;
+
+            _kickPlaying = true;
+            _kickPlayingSince = now;
+            _kickWindowEnd = now + KickWindowMs;
+            _kickAskSign = Math.Sign(_kickAskDegrees);
+            _kickAskSaturatedSince = 0;
+            ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, ask " + _kickAskDegrees.ToString("0") + " deg, lock " + VehicleData.SteeringLock.ToString("0") + " deg, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"));
         }
 
         // Any part of the car on the drivable bound and moving forward, held: a reverse roll is not a recovered car.
