@@ -398,6 +398,7 @@ The blend's weight ramps to full across the **static** `LateralTractionCurve` �
 The target answers a share of the slide angle (`Racer.cs` `CountersteerShare`).
 The weight is computed before the damper because the limiter's allowance reads it, and the old gate constant is renamed `SlidingFraction`, whose only consumer is now the damper's reference gate (`Racer.cs:589`).
 The axle gate that used to guard that halving, and `UndersteerDegrees` with it, are deleted.
+**One deliberate silence**: the recovery rejoin's throttle kick card (`cc469ee`) buys a rotation on purpose — the slide sharing the arm-time ask's sign is wanted, so the blend and `IsFullCountersteer` stand down for it while the card plays (`KickWantsSlide` `Racer.cs`) and the ordinary handover resumes at the fold. A slide on the opposite side is not carded and gets no silence.
 
 ## Lane systems — where on the track the car aims
 Resolved in `ComputeSteering`, later overriding earlier, over a base of **the lane the car is already in**:
