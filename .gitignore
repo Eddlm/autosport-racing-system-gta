@@ -45,5 +45,10 @@ Util/
 # Dist mirror: keep only the data (ini/xml/docs), not the built binaries
 Dist/**/*.dll
 
+# A roster the game rewrites is session data, not shipped content. RefreshDist mirrors the live install
+# back into Dist, so this pool would dirty the tree after every run and deploy.yml would ship it with
+# the release. It stays on disk in both places; only its place in the repo goes.
+Dist/AutosportRacingSystem/Vehicles/tests.txt
+
 # Imported python tooling leaves bytecode behind (docs/check-settings-keys.py is imported by its own self-test)
 __pycache__/
