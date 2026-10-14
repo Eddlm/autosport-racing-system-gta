@@ -579,13 +579,16 @@ namespace ARS
             // --- Lane steer: pure pursuit toward the target lane ---
 
             float laneSteerDeg = PursuitSteerDegrees(laneAimPoint, courseDir);
-            // Turn-in is a crossing on purpose, so the taper stands down for the entry itself — braking target to apex —
-            // and no earlier, because everything before that is still lane work. Damping the ask that unwinds a
-            // crossing would be the damper's one-way mistake in reverse.
-            float crossingDeg = Vector3.SignedAngle(CurrentTrackPoint.Direction, Car.ForwardVector, Vector3.WorldUp);
-            bool turningIn = _nextApexCorner != null && HasPassedBrakingTarget() && !HasPassedApex(_nextApexCorner.Node);
-            if (LaneCrossingScale && !turningIn && laneSteerDeg * crossingDeg > 0f)
-                laneSteerDeg *= LaneCrossingShare(Math.Abs(crossingDeg), speedMps);
+            if (LaneCrossingScale)
+            {
+                // Turn-in is a crossing on purpose, so the taper stands down for the entry itself — braking target to
+                // apex — and no earlier, because everything before that is still lane work. Damping the ask that
+                // unwinds a crossing would be the damper's one-way mistake in reverse.
+                float crossingDeg = Vector3.SignedAngle(CurrentTrackPoint.Direction, Car.ForwardVector, Vector3.WorldUp);
+                bool turningIn = _nextApexCorner != null && HasPassedBrakingTarget() && !HasPassedApex(_nextApexCorner.Node);
+                if (!turningIn && laneSteerDeg * crossingDeg > 0f)
+                    laneSteerDeg *= LaneCrossingShare(Math.Abs(crossingDeg), speedMps);
+            }
             _steerPursuitDeg = laneSteerDeg;
             // --- Heading assist: match a side-by-side rival's heading ---
 
@@ -738,8 +741,8 @@ namespace ARS
         // that would cross the car further keeps the share threshold/(threshold + crossing), so it fades with the
         // crossing instead of stopping at a line, and the ask that unwinds a crossing is never scaled at all.
         const float LaneCrossingLateralSpeedMps = 1f;
-        // A/B switch for the crossing scale: off, the lane ask reaches the assembly unscaled, which is the shape the
-        // scale replaced. Kept as a switch rather than deleted so the two can be driven side by side.
+        // Off for a comparison still owed, not parked by decision: the mover upstream may make this scale redundant,
+        // and the two have never been driven in that order. The law stays compiled, so reviving it is this flag.
         static readonly bool LaneCrossingScale = false;
 
         static float LaneCrossingThresholdDegrees(float speedMps)
