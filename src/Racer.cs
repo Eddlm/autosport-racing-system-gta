@@ -145,12 +145,14 @@ namespace ARS
         // lateral inertia, so a request that is valid for half a second cannot step the lane.
         float _targetLane = 0f;
         float _laneRequest = 0f;
+        LaneReason _laneRequestReason = LaneReason.OwnLane;
         float _laneRequestPrev = 0f;
         float _laneRate = 0f;
         float _laneMoverLoggedAt = 0f;
         bool _laneSnap = false;
         bool _targetLaneAimed = false;
         public float TargetLane { get { return _targetLane; } }
+        public LaneReason LaneRequestReason { get { return _laneRequestReason; } }
 
         float _cornerSpd = 999f;
 
@@ -547,20 +549,24 @@ namespace ARS
             // an answer, so seeding the chain with it would steer every car back to the middle of the road on a
             // straight, where neither the high-speed line nor a corner line has an opinion.
             float laneRequest = carOffset;
-            bool laneAimed = false;
-            if (TryComputeHighSpeedLane(roadWide, speedMps, carOffset, out float highSpeedLane)) { laneRequest = highSpeedLane; laneAimed = true; }
+            LaneReason laneReason = LaneReason.OwnLane;
+            if (TryComputeHighSpeedLane(roadWide, speedMps, carOffset, out float highSpeedLane)) { laneRequest = highSpeedLane; laneReason = LaneReason.CurveLean; }
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
-            if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps);
-            if (cornerLane != 0f) { laneRequest = cornerLane; laneAimed = true; }
+            LaneReason cornerReason = LaneReason.OwnLane;
+            if (gotActiveCorner) cornerLane = ComputeCornerTargetLane(steerRefPoint, speedMps, out cornerReason);
+            if (cornerLane != 0f) { laneRequest = cornerLane; laneReason = cornerReason; }
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
-            if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneAimed = true; }
-            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { laneRequest = NearestEdgeLane(carOffset, drivableEdge); laneAimed = true; }
-            laneRequest = ApplyRivalWalls(laneRequest, roadWide);
-            if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneAimed = true; }
+            if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
+            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { laneRequest = NearestEdgeLane(carOffset, drivableEdge); laneReason = LaneReason.RecoveryEdge; }
+            float walledLane = ApplyRivalWalls(laneRequest, roadWide);
+            if (walledLane != laneRequest) laneReason = LaneReason.WallClamp;
+            laneRequest = walledLane;
+            if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneReason = LaneReason.DebugLock; }
             _laneRequest = laneRequest;
+            _laneRequestReason = laneReason;
             UpdateLaneMover(roadWide);
-            _targetLaneAimed = laneAimed || Math.Abs(_targetLane - carOffset) > LaneOverrideHoldMeters;
+            _targetLaneAimed = laneReason != LaneReason.OwnLane || Math.Abs(_targetLane - carOffset) > LaneOverrideHoldMeters;
 
             // Aim at the lookahead distance, offset by the target lane. The Gs-aware preview shifts
             // that offset by the lateral motion the car is already committing to, so the correction leads the drift
@@ -878,7 +884,7 @@ namespace ARS
             if (Math.Abs(_laneRate) > 0.2f && Game.GameTime > _laneMoverLoggedAt)
             {
                 _laneMoverLoggedAt = Game.GameTime + 1000;
-                ARS.Log(ARS.LogImportance.Info, "Lane mover " + Name + ": asked " + _laneRequest.ToString("0.00") + ", aimed " + _targetLane.ToString("0.00") + ", rate " + _laneRate.ToString("0.00"));
+                ARS.Log(ARS.LogImportance.Info, "Lane mover " + Name + ": asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + "), aimed " + _targetLane.ToString("0.00") + ", rate " + _laneRate.ToString("0.00"));
             }
         }
 
@@ -904,8 +910,9 @@ namespace ARS
             return safeBound * (2f * t * t * (3f - 2f * t) - 1f);
         }
 
-        float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps)
+        float ComputeCornerTargetLane(TrackPoint steerRefPoint, float speedMps, out LaneReason reason)
         {
+            reason = LaneReason.OwnLane;
             CornerPoint c = Brain.Corner.Point;
             int apexNode = c.Node;
 
@@ -933,6 +940,7 @@ namespace ARS
                 {
                     float gap = target.OccupiedLaneWidth + 0.6f;
                     float commitLane = target.OccupiedLane + (-cornerDir) * gap;
+                    reason = LaneReason.CommitLine;
                     return ARS.Clamp(commitLane, -safeBound, safeBound);
                 }
             }
@@ -943,6 +951,9 @@ namespace ARS
             bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.DetectedRadius) - ARS.MphToMps(20f);
             bool entryActive = wantsPosition && aboveApexSpeed;
             float offset = entryActive ? IdealLineOffset(fwdToApex, c.DetectedRadius, safeBound) : 0f;
+            // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
+            // outside line, and everything below it is the blend toward the apex.
+            if (entryActive) reason = offset >= safeBound ? LaneReason.OutsideLine : LaneReason.ApexLine;
 
             return cornerDir * offset;
         }
@@ -2558,6 +2569,29 @@ namespace ARS
         static readonly Color CountersteerReasonColor = Color.Orange;
         static readonly Color InstabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
         static readonly Color RecoveryReasonColor = Color.Cyan;
+        // The lane line's own two hues, plus the one colour for a bound rather than a source: a wall clamp and the debug
+        // pin are not opinions about where to go, so they must not read as one.
+        static readonly Color LaneReasonOutsideColor = Color.Orange;
+        static readonly Color LaneReasonApexColor = Color.FromArgb(255, 255, 60, 200);
+        static readonly Color LaneReasonBoundColor = Color.FromArgb(255, 170, 170, 170);
+
+        // One palette across both debug surfaces: a reason that means the same thing reads the same colour on the lane
+        // line and on the pedal bar.
+        public static Color LaneReasonColor(LaneReason reason)
+        {
+            switch (reason)
+            {
+                case LaneReason.CurveLean: return GripReasonColor;
+                case LaneReason.OutsideLine: return LaneReasonOutsideColor;
+                case LaneReason.ApexLine: return LaneReasonApexColor;
+                case LaneReason.CommitLine: return InstabilityReasonColor;
+                case LaneReason.Avoidance: return NonDangerousReasonColor;
+                case LaneReason.RecoveryEdge: return RecoveryReasonColor;
+                case LaneReason.WallClamp: return LaneReasonBoundColor;
+                case LaneReason.DebugLock: return LaneReasonBoundColor;
+            }
+            return Color.Red;
+        }
 
         struct PedalLimitSphere
         {

@@ -1829,12 +1829,18 @@ namespace ARS
                             Vector3 greenTo = nextPos + right * currentDeviation + new Vector3(0, 0, 0.2f);
                             DrawLine(greenFrom, greenTo, Color.Green);
 
-                            // Black/Red: intended lane deviation
-                            Color intendedColor = Math.Abs(intendedDeviation) < 0.01f ? Color.Black : Color.Red;
+                            // Black when there is no aim at all; otherwise the colour names why the lane is where it is.
+                            Color intendedColor = Math.Abs(intendedDeviation) < 0.01f ? Color.Black : Racer.LaneReasonColor(racer.LaneRequestReason);
                             Vector3 intendedFrom = pos + right * intendedDeviation + new Vector3(0, 0, 0.3f);
                             Vector3 intendedTo = nextPos + right * intendedDeviation + new Vector3(0, 0, 0.3f);
                             DrawLine(intendedFrom, intendedTo, intendedColor);
                         }
+
+                        // The colour alone cannot separate every reason, so the head of the line names it.
+                        TrackPoint labelNode = ARS.TrackPoints[currentNode];
+                        Vector3 labelRight = Vector3.Cross(labelNode.Direction, Vector3.WorldUp).Normalized;
+                        Vector3 labelPos = labelNode.Position + labelRight * intendedDeviation + new Vector3(0, 0, 0.9f);
+                        DrawText(labelPos, racer.LaneRequestReason.ToString(), Racer.LaneReasonColor(racer.LaneRequestReason), 0.35f);
                     }
                 }
 

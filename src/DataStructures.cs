@@ -319,6 +319,19 @@ namespace ARS
         StuckRecovery
     }
 
+    public enum LaneReason
+    {
+        OwnLane,
+        CurveLean,
+        OutsideLine,
+        ApexLine,
+        CommitLine,
+        Avoidance,
+        RecoveryEdge,
+        WallClamp,
+        DebugLock
+    }
+
     public enum StuckPhase
     {
         None,
