@@ -177,9 +177,9 @@ If a grip-scaled preview is ever proposed again, settle it by A/B'ing `speed/gri
 TORCS `bt` and `damned` both floor the preview against `oldlookahead − v·dt` — a **rate limit on the preview itself**, described as preventing "snap back" of lookahead on harsh braking.
 It is the only such guard in the corpus, and it matters because it makes the preview a state with dynamics.
 
-**This is the field's answer to a hazard ARS has**: the lane systems are a **hard switch** (outside → inside, no lerp) and `targetLane` can step, which steps the **lane error**, and so the command.
+**This is the field's answer to a hazard ARS had**: the lane systems are a **hard switch** (outside → inside, no lerp) and the chain's answer could step, which stepped the **lane error**, and so the command.
 The old D-term amplification is gone; the step now reaches the wheel as a pursuit-plus-damper jump, ramped off by the slew rate at a fixed °/s rather than spiking in a single frame.
-**Rate-limiting `targetLane` still fixes it at the source, and is still the better fix**: it removes the step from the P term instead of relying on the downstream slew to hide it, and it survives a slew-rate retune (ranked list item 3).
+**Rate-limiting the lane at the source was the better fix, and it is now built**: the lane mover carries the aimed lane onto the chain's request at 6 m/s^2 with an 8 m/s cap, which removes the step from the P term instead of relying on the downstream slew to hide it, and it survives a slew-rate retune (ranked list item 3).
 
 ## Anti-windup is mandatory when the actuator saturates — and ARS's steering saturates
 
@@ -329,7 +329,7 @@ The *derivative* half is already half-answered: the live damper's gain carries t
 `ComputeSteering` calls the pursuit whenever `TryGetSteerContext` passes (`Racer.cs:496`, `:624-633`): the old `|targetLane|` guard went with the error-based lane-bias era (`dcef913`), so a straight or gentle sweep — where the high-speed line has no answer — still steers on a real bearing rather than on nothing.
 
 **What the aim is decides the rest.**
-The aim offset is `targetLane` (`aimLane = targetLane`): the resolution chain is seeded with the car's own offset (`carOffset`), so with no corner line, no avoidance and no high-speed answer, `targetLane` **is** that offset — a straight-line standing offset is **held, not converged onto the centre** (the Lane systems base rule).
+The aim offset is the aimed lane (`aimLane = _targetLane`), and the chain's answer is a **request** that the lane mover carries it onto: the chain is seeded with the car's own offset (`carOffset`), so with no corner line, no avoidance and no high-speed answer the request **is** that offset — a straight-line standing offset is **held, not converged onto the centre** (the Lane systems base rule).
 `carOffset` is read in two places only: that seed, and the optional Gs-aware preview (zero at steady state).
 **The gate removal still has not had its own drive.**
 
@@ -349,7 +349,7 @@ Ranked by expected payoff:
    Grip normalisation (`SteerDampingScale`) stays retired (`a9603c4`); the grip divisor does that job.
    If the toll ever shows up again in the lane line, the reference is the lever that removes it.
 2. **Clamp and gate an integral** before I is ever turned up — **a precondition, not a task**: there is no integral to clamp today. Prefer clamp + saturation gate, or Game AI Pro ch.40's leaky rolling integral.
-3. **Rate-limit `targetLane`** so a hard lane switch cannot step the lane error — the TORCS preview-rate guard, applied to the lateral target. Removes the step from P at the source rather than leaning on the downstream slew to absorb it.
+3. ~~Rate-limit `targetLane`~~ — **BUILT, untested (`0f825b8`, `8e8884e`): the lane mover.** The chain's answer is a request and the aimed lane is carried onto it at 6 m/s^2 with an 8 m/s cap, so a request that flips inside half a second moves the lane 0.75 m instead of stepping it. The request's own rate feeds forward so a moving line is still tracked, the rival walls bound the aim as well as the request, and the green re-seeds it. **The drive is owed**, and the mover's own log line is the instrument.
 4. ~~A/B the grip-scaled preview against a speed-only one~~ — **WITHDRAWN: the premise does not exist.**
    Grip enters neither the steer reference nor the aim (see the preview properties above), so there is no grip-scaled preview to A/B and the constant-time arithmetic this item rested on described a form the code never had.
    What is still testable is the **band**, not the grip: outside it the preview time stretches below the floor and shortens above the cap, so the live question is whether those two bounds should move.
@@ -408,6 +408,8 @@ then **`ApplyRivalWalls`** (`Racer.cs`) clamps the result between track bounds a
 **The base is load-bearing**: zero is the *centre* lane, not the absence of an answer, so a chain seeded with zero steered every car back to the middle of the road wherever no source had an opinion — which is every straight (`dd484d3`).
 The corner and avoidance sources still report silence as zero, and that is what lets the high-speed line take over inside a corner the car has not asked to position for.
 
+**The chain's answer is a request, not the aim.** The lane mover (`Racer.cs` `UpdateLaneMover`) carries the aimed lane onto that request at 6 m/s^2 with an 8 m/s cap, so a requirement that is valid for half a second cannot step the lane; the request's own rate feeds forward, so a line that moves smoothly is still tracked without the v^2/2a lag a pure arrival law would leave.
+
 **Lane systems only *set* the target lane; how hard it is pursued is the authority chain's job.** Every lane target insets by half the car's width — the inside line, the avoidance bound and the corner line alike; `OutOfTrackDistance` (`Racer.cs:2560`) is centre-based on the raw half width, which is why a car pushed off is judged by its centre.
 
 - **Two steering lookaheads, and both are named — do not conflate them**: `TryComputeHighSpeedLane`'s chord is `HighSpeedLaneChordSeconds` (`Racer.cs:675`), beside `HighSpeedLaneRadiusMeters` (`:674`),
@@ -422,7 +424,7 @@ Adjacent profiles still merge by taking the further-in of the two, and an opposi
 That regime is no longer switchable (the Route Speed Limit toggle removal is the speed pipeline's `70e177c` note); the lever that shifts it is **Road Curvature Offset (mph)**.
 - **Corner-commit maneuvers** replace the corner line with a lane beside the target rival on the corner's inside, and clean up when their apex is passed.
 - **The lane pursuit's gate is REMOVED** — the pursuit runs ungated (see the ungated-pursuit section), driving from the car's live position.
-- **A lane becomes a steer by pure pursuit off its aim point** — the bearing from the car's travel direction to `steerRefPoint.Position + steerRight * targetLane`, turned into an angle by the wheelbase (`PursuitSteerDegrees` `Racer.cs`), then scaled by how far the car is crossed, except while the corner line owns the lane (`LaneCrossingShare` `Racer.cs`); **no radius produces a steer**, and every lane source feeds it.
+- **A lane becomes a steer by pure pursuit off its aim point** — the bearing from the car's travel direction to `steerRefPoint.Position` offset along `steerRight` by the aimed lane, turned into an angle by the wheelbase (`PursuitSteerDegrees` `Racer.cs`), then scaled by how far the car is crossed, except while the corner line owns the lane (`LaneCrossingShare` `Racer.cs`); **no radius produces a steer**, and every lane source feeds the request the mover carries the aim from.
   The inside line aims at the **inside edge** — `−cornerDir × (roadWide − half the car)` (`Racer.cs:731-737`).
   The steer carries pure pursuit's factor of two (`PursuitGain`, `Racer.cs`); a target that steps from wherever the car is instead holds a constant error and never converges.
   The ordering is load-bearing — car's-heading-to-the-aim is the steering command's own convention, and a minus inverts the lane.
