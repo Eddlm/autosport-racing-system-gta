@@ -2034,14 +2034,30 @@ namespace ARS
             {
                 ActiveManeuver.Type = ManeuverType.None;
                 ActiveManeuver.Target = null;
+                _divebombApexNode = -1;
             }
 
-            // Divebomb cleanup: off once we pass the armed apex.
-            if (ActiveManeuver.Type == ManeuverType.DiveBomb && HasPassedApex(_divebombApexNode))
+            // Divebomb cleanup: off once the partner stops being one — gone, out of the perceived set, off this piece
+            // of the route or travelling another way — and off once we pass the armed apex. The commit lane already
+            // drops when the target leaves the perceived set, because that lookup is by reference there; the brake
+            // effects do not, and they reach the next three apexes, so the release cannot wait for the apex.
+            if (ActiveManeuver.Type == ManeuverType.DiveBomb)
             {
-                ActiveManeuver.Type = ManeuverType.None;
-                ActiveManeuver.Target = null;
-                _divebombApexNode = -1;
+                Rival divePartner = null;
+                foreach (Rival r in Brain.Rivals)
+                {
+                    if (r.RivalRacer != ActiveManeuver.Target) continue;
+                    divePartner = r;
+                    break;
+                }
+                bool partnerLost = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || divePartner == null || Math.Abs(divePartner.RouteGapAhead) > SameSectionMaxGapMeters || Math.Abs(divePartner.DirectionDiff) > AvoidAngleGateDegrees;
+
+                if (partnerLost || HasPassedApex(_divebombApexNode))
+                {
+                    ActiveManeuver.Type = ManeuverType.None;
+                    ActiveManeuver.Target = null;
+                    _divebombApexNode = -1;
+                }
             }
 
             // DefendLane fold: off once we pass the defended apex or the target gets past us.
@@ -2177,12 +2193,18 @@ namespace ARS
             return true;
         }
 
-        const float DivebombEntranceSeconds = 5f;
+        // The window opens a lead before the plan's own braking point for this apex and closes as it arrives, so the
+        // card claims the approach it is about to brake into rather than a fixed slice of the straight. Too small a
+        // lead and the full-throttle gate has already closed by the time it could arm.
+        const float DivebombEntranceLeadSeconds = 0.5f;
+        // A partner reaches that entrance within this of the car: a wider band accepts a car the car will not fight
+        // there, a narrower one drops the slower car just ahead, which is the dive worth taking.
+        const float DivebombReachSeconds = 1f;
         const float DivebombFullThrottle = 0.99f;
-        const float DivebombOverlapReachSeconds = 2f;
 
-        // Divebomb card: at full throttle into a corner under 5s away, with an open side to commit
-        // into (at most one rival wall active), dive the closest rival we overlap or will reach within 2s.
+        // Divebomb card: at full throttle in the last band before the brakes, with an open side to commit into (at
+        // most one rival wall active), dive the rival arriving at that entrance with us and still on this piece of
+        // the route.
         bool TryPlayDivebombCard()
         {
             if (Brain.Corner == null) return false;
@@ -2193,15 +2215,20 @@ namespace ARS
             int entranceNode = CornerEntranceNode(Brain.Corner.Point, apexNode);
             if (entranceNode < 0) return false;
             float timeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
-            if (timeToEntrance > DivebombEntranceSeconds) return false;
+            float brakingTime = Math.Max(Car.Velocity.Length() - ApexSpeedWithDownforce(Brain.Corner.Point.DetectedRadius), 0f) / Math.Max(BrakingDecelBase(apexNode), 1f);
+            if (timeToEntrance > brakingTime + DivebombEntranceLeadSeconds) return false;
 
             Rival diveTarget = null;
             float nearestDive = float.MaxValue;
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
-                bool overlaps = r.RelativePosition == RelativePos.Left || r.RelativePosition == RelativePos.Right || r.TimeToContact <= DivebombOverlapReachSeconds;
-                if (!overlaps) continue;
+                // Arriving together is the question, not who arrives first: a one-sided test drops the slower car just
+                // ahead, which is the dive worth taking. The route band keeps the target on this piece of the road,
+                // and the forward distance wraps past the apex, so another stretch cannot answer for it.
+                float rivalTimeToEntrance = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f);
+                if (Math.Abs(rivalTimeToEntrance - timeToEntrance) > DivebombReachSeconds) continue;
+                if (!ARS.IsBetween(r.RouteGapAhead, -r.CombinedSize.Y, SameSectionMaxGapMeters)) continue;
                 if (r.Distance < nearestDive) { nearestDive = r.Distance; diveTarget = r; }
             }
             if (diveTarget == null) return false;
