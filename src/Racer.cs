@@ -887,7 +887,7 @@ namespace ARS
             // The aim may lag the request outward, but never beyond it and never across the car. With the car's own lane
             // requested the interval is a point on the car, so the aim tracks it exactly and the car cannot chase the
             // lag the mover gave it — a lagged aim is a target that moves with the car, which is a limit cycle.
-            if (!float.IsNaN(carOffset) && !float.IsInfinity(carOffset) && !float.IsNaN(_laneRequest) && !float.IsInfinity(_laneRequest))
+            if (!float.IsNaN(carOffset) && !float.IsInfinity(carOffset))
             {
                 float intervalClamped = ARS.Clamp(_targetLane, Math.Min(carOffset, _laneRequest), Math.Max(carOffset, _laneRequest));
                 if (intervalClamped != _targetLane)
