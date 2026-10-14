@@ -2229,6 +2229,9 @@ namespace ARS
                 float rivalTimeToEntrance = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f);
                 if (Math.Abs(rivalTimeToEntrance - timeToEntrance) > DivebombReachSeconds) continue;
                 if (!ARS.IsBetween(r.RouteGapAhead, -r.CombinedSize.Y, SameSectionMaxGapMeters)) continue;
+                // The release tests direction, so the arm has to as well: a target diverging past the gate would otherwise
+                // arm, release and re-arm inside the same tick, re-rolling the dive's brake bonus at the core rate.
+                if (Math.Abs(r.DirectionDiff) > AvoidAngleGateDegrees) continue;
                 if (r.Distance < nearestDive) { nearestDive = r.Distance; diveTarget = r; }
             }
             if (diveTarget == null) return false;

@@ -156,7 +156,7 @@ namespace ARS
         public float LateralGap = 0f;          // signed: + = rival right, - = rival left
         public float ForwardSpeedGap = 0f;      // signed: + = me faster than rival (along me's forward axis)
         public float Speed;                                   // the rival's own velocity magnitude, read once per publish
-        public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals
+        public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals; no reader since the divebomb's reach became an arrival band, kept as that drive's named fallback
         public float TimeToReach = float.PositiveInfinity;     // seconds to close the route gap while closing on it
         public float FrontGap = float.PositiveInfinity;        // front-to-rear distance along the route
         public float RouteGapAhead = 0f;                       // signed route arc in metres, + = rival ahead
