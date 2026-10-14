@@ -366,9 +366,9 @@ Ranked by expected payoff:
 Moved whole out of the project `AGENTS.md` to keep the instruction chain inside its cap. The order and the invariants stay in the parent; the systems live here.
 
 ## Per-frame pipeline (`Racer`)
-1. `UpdateTrackPosition` (`Racer.cs:2606`) — local node search with a global rescan fallback, time-based lookaheads, route radii, lap ticks.
-2. `ComputeTargetSpeed` (`Racer.cs:1453`) — builds the intended speed; see the Speed pipeline.
-3. `ComputeSteering` (`Racer.cs:492`) — resolves the lane into a target offset and sums the authority chain into `Control.SteerDegrees` (the `_debugLaneAimPoint` name is a trap — see the chain analysis above).
+1. `UpdateTrackPosition` (`Racer.cs:2809`) — local node search with a global rescan fallback, time-based lookaheads, route radii, lap ticks.
+2. `ComputeTargetSpeed` (`Racer.cs:1629`) — builds the intended speed; see the Speed pipeline.
+3. `ComputeSteering` (`Racer.cs:522`) — resolves the lane into a target offset and sums the authority chain into `Control.SteerDegrees` (the `_debugLaneAimPoint` name is a trap — see the chain analysis above).
 4. `ApplySteerLimits` (`Racer.cs` `ApplySteerLimits`) — the two side limits closed by a single `Clamp`, and it runs **last among the writers of the steering request**.
    The base is the peak-slip cap, the corner geometry being only a fallback when the peak reads unusable, eased up by the maneuvering ramp below its own end speed (what the peak reads is the saturation bullet above).
    The slide's `Math.Max` loosening of the base is gone — retired by decision, then deleted (`ebb3178`) — and the only thing the slide still opens is the side answering a rotation, through the countersteer allowance.
@@ -376,9 +376,9 @@ Moved whole out of the project `AGENTS.md` to keep the instruction chain inside 
    Yaw rate also cannot tell a clean turn-in from a stepped-out rear, and the slide's sign can.
    The **slip-balance knee is deleted** (`d434b86`); `d434b86` added the second governor, and `cd6efea` removed it.
    **A steering writer added below it is a silent bypass** — the bug class this shape removes.
-5. `ConvertSpeedToPedals` (`Racer.cs:1199`) — one `[-1,1]` combined input, split, then the **reason-cap compose** (also pre-slew) and the slew.
+5. `ConvertSpeedToPedals` (`Racer.cs:1375`) — one `[-1,1]` combined input, split, then the **reason-cap compose** (also pre-slew) and the slew.
    **GridWait lives in three places** (`ComputeTargetSpeed`, `ProcessAI` handbrake pulses, `ComputeSteering` hold-straight) — keep them in sync.
-6. `TranslateSteerToInput` (`Racer.cs:1433`) — slews steer toward target at `SteerSlewRate`, then remaps degrees → −1..1.
+6. `TranslateSteerToInput` (`Racer.cs:1609`) — slews steer toward target at `SteerSlewRate`, then remaps degrees → −1..1.
 
 **The maneuver cards decide at the top of the core pass**, after `UpdateTrackPosition` and before `ComputeTargetSpeed` (`ProcessAI`).
 The four tactical cards and the maneuver cleanups ride that pass on rival records the publish owns; the crowd card and the rival scan keep their own slower beats.
@@ -424,8 +424,8 @@ Adjacent profiles still merge by taking the further-in of the two, and an opposi
 That regime is no longer switchable (the Route Speed Limit toggle removal is the speed pipeline's `70e177c` note); the lever that shifts it is **Road Curvature Offset (mph)**.
 - **Corner-commit maneuvers** replace the corner line with a lane beside the target rival on the corner's inside, and clean up when their apex is passed.
 - **The lane pursuit's gate is REMOVED** — the pursuit runs ungated (see the ungated-pursuit section), driving from the car's live position.
-- **A lane becomes a steer by pure pursuit off its aim point** — the bearing from the car's travel direction to `steerRefPoint.Position` offset along `steerRight` by the aimed lane, turned into an angle by the wheelbase (`PursuitSteerDegrees` `Racer.cs`), then scaled by how far the car is crossed, except while the corner line owns the lane (`LaneCrossingShare` `Racer.cs`) — **that scale is off behind `LaneCrossingScale` while a comparison is owed, so the ask reaches the assembly unscaled**; **no radius produces a steer**, and every lane source feeds the request the mover carries the aim from.
-  The inside line aims at the **inside edge** — `−cornerDir × (roadWide − half the car)` (`Racer.cs:731-737`).
+- **A lane becomes a steer by pure pursuit off its aim point** — the bearing from the car's travel direction to `steerRefPoint.Position` offset along `steerRight` by the aimed lane, turned into an angle by the wheelbase (`PursuitSteerDegrees` `Racer.cs`), then scaled by how far the car is crossed, except across turn-in itself — the braking target to the apex (`LaneCrossingShare` `Racer.cs`) — **that scale is off behind `LaneCrossingScale` while a comparison is owed, so the ask reaches the assembly unscaled**; **no radius produces a steer**, and every lane source feeds the request the mover carries the aim from.
+  The inside line aims at the **inside edge** — `−cornerDir × (roadWide − half the car)` (`Racer.cs:808-809`).
   The steer carries pure pursuit's factor of two (`PursuitGain`, `Racer.cs`); a target that steps from wherever the car is instead holds a constant error and never converges.
   The ordering is load-bearing — car's-heading-to-the-aim is the steering command's own convention, and a minus inverts the lane.
   **The lane ask is scaled by the crossing, the ruling against a ceiling is why it is a scale, and the scale itself is off behind `LaneCrossingScale` while a comparison is owed.** That verdict — a ceiling flattens a lane law into a constant-command phase that builds lateral velocity the short tail cannot shed — was driven against the flat degrees-per-metre P, and both shapes tried since run into it: a step on the crossing, and a hard cap on the wheel. The share `allowance / (allowance + crossing)` fades instead and never reaches nothing. What keeps it out of the ceiling's way is also where it applies: only the ask that crosses the car further, never the unwinding one, and never during turn-in. The lookahead's length and the step into the line stay the levers for *how fast* a lane is taken (`AGENTS-TECHNOTES.md`). With the lane mover upstream, the owed drive is whether this scale is redundant or still the better answer for the case it was built for.
