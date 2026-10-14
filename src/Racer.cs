@@ -571,16 +571,12 @@ namespace ARS
             UpdateLaneMover(steerRefOffset);
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
-            // Aim at the lookahead distance, offset by the carried lane. The Gs-aware preview shifts
+            // Aim at the lookahead distance, offset by the carried lane. The Gs preview shifts
             // that offset by the lateral motion the car is already committing to, so the correction leads the drift
-            // instead of reacting to it; shifting a real point keeps the pursuit's chord real.
+            // instead of reacting to it; shifting a real point keeps the pursuit's chord real. Always on.
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
-            float aimPointOffset = _carriedLane;
-            if (ARS.DebugToggles[Options.GsAwarePreview])
-            {
-                float offsetAtProjection = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), steerRefPoint.Position, steerRefPoint.Direction);
-                aimPointOffset = _carriedLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset);
-            }
+            float offsetAtProjection = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), steerRefPoint.Position, steerRefPoint.Direction);
+            float aimPointOffset = _carriedLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset);
             // The aim targets the car's centre, so it locks to the drivable edge; the rival walls bound to the raw edge.
             aimPointOffset = ARS.Clamp(aimPointOffset, -drivableEdge, drivableEdge);
             Vector3 aimPoint = steerRefPoint.Position + steerRight * aimPointOffset;
@@ -2467,6 +2463,7 @@ namespace ARS
             if (ARS.DebugToggles[Options.ShowInputs]) DrawInputTrail();
             if (ARS.DebugToggles[Options.ShowTrackAnalysis]) DrawSteerAngles();
             if (ARS.DebugToggles[Options.ShowWheelSlip]) DrawWheelSlip();
+            if (ARS.DebugToggles[Options.ShowGsProjection]) DrawGsProjection();
         }
 
         const float FanLineLength = 5f;
@@ -2614,6 +2611,18 @@ namespace ARS
         const float SlipFloorLevel = 2.5f;
         const float WheelSlipSphereHeight = 1f;
         const float WheelSlipSphereSize = 0.35f;
+
+        void DrawGsProjection()
+        {
+            // Same roof convention as the steer fan: the model origin sits near the ground, so the roof is the
+            // full model height and the projection path floats at it rather than diving into the ground.
+            float lift = VehicleData.ModelDimensions.Z + 0.2f;
+            Vector3 origin = Car.Position + Vector3.WorldUp * lift;
+            Vector3 half = ProjectAhead(0.5f) + Vector3.WorldUp * lift;
+            Vector3 full = ProjectAhead(1f) + Vector3.WorldUp * lift;
+            ARS.DrawLine(origin, half, Color.White);
+            ARS.DrawLine(half, full, Color.Cyan);
+        }
 
         void DrawWheelSlip()
         {

@@ -50,7 +50,7 @@ namespace ARS
     // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, GsAwarePreview, ShowBumps, ShowWheelSlip
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection
     }
     public partial class ARS : Script
     {
@@ -191,9 +191,9 @@ namespace ARS
         { Options.ShowLeaderboard, true },
         { Options.ShowAiLapTimes, false },
         { Options.LockLaneCentre, false },
-        { Options.GsAwarePreview, true },
         { Options.ShowBumps, false },
-        { Options.ShowWheelSlip, false }
+        { Options.ShowWheelSlip, false },
+        { Options.ShowGsProjection, false }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -1256,7 +1256,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Draw a cyan marker at every lip the route scan found: a vertical tick and a line across the road, so the scan can be judged by eye before anything drives on it.");
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere a metre over each wheel of the closest AI car, coloured by that tyre's side-slip angle: white at rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
-            AddDebugCheckbox(debugMenu, Options.GsAwarePreview, "Gs-Aware Preview", "Lead the lane error with the lateral motion the car is already committing to, so the steering anticipates drift instead of reacting to it. Off measures the lane error at the car alone.");
+            AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the closest AI car's constant-acceleration path from its roof: one line to where it projects at 0.5s, then a second connected from there to the 1s mark, both floating at roof height. The bend at the joint is the acceleration the car is committing to.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
@@ -2001,7 +2001,7 @@ namespace ARS
 
                 
                 // Only the debug visuals read the focus racer, so the scan and its sort run only for them.
-                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip])
+                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowGsProjection])
                 {
                     Vector3 focusPos = Game.Player.Character.Position;
                     DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
