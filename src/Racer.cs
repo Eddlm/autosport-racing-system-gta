@@ -728,6 +728,9 @@ namespace ARS
         // that radius, and the edge is the only bound past it.
         const float HighSpeedLanePullMeters = 1f;
         const float HighSpeedLaneFullPullRadiusMeters = 250f;
+        // Under this the pull is too small to report as an opinion. Not the aim-release distance, which is its own
+        // threshold measured on the aimed lane, so neither can move the other from 250 lines away.
+        const float HighSpeedLanePullReportMeters = 0.1f;
 
         // Debug lock for the centring test: a near-centre aim offset, pinned for every racer.
         const float LaneLockTestOffsetMeters = 0.1f;
@@ -806,15 +809,15 @@ namespace ARS
 
             float cornerDir = Math.Sign(ahead.Angle);
             if (cornerDir == 0f) return false;
+            // Clamp answers a NaN with its min bound, so an unreadable car lane would ask for the wrong edge.
+            if (float.IsNaN(carOffset) || float.IsInfinity(carOffset)) return false;
 
             // A relative pull rather than the edge: the target tracks the car, so the crossing stays alive for as long
             // as the bend lasts and only the bound ends it — the asymmetry a reader would otherwise "fix" back to an edge.
             float pull = ARS.Clamp((HighSpeedLaneRadiusMeters - ahead.PreciseCurveRadius) / Math.Max(HighSpeedLaneRadiusMeters - HighSpeedLaneFullPullRadiusMeters, 1f), 0f, 1f) * HighSpeedLanePullMeters;
             float insideBound = Math.Max(roadWide - VehicleData.BoundingBox * 0.5f, 0f);
             lane = ARS.Clamp(carOffset - cornerDir * pull, -insideBound, insideBound);
-            // Under this the answer is the car's own lane, so it is not an opinion worth reporting: the flag it would
-            // set arms the outside-projection cap.
-            return pull > LaneOverrideHoldMeters;
+            return pull > HighSpeedLanePullReportMeters;
         }
 
         // The aim carries an override until it has come back this close to the car's own lane, so a consumer gated on
