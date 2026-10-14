@@ -126,12 +126,17 @@ namespace ARS
         const float DNFSlotOffsetMeters = 1f;
         const float DNFUnderTrackMeters = 5f;
 
-        // Throttle kick (limiter-saturation rotation): when the pursuit's ask sits past the steering limiter's
-        // granted ceiling with no slide in progress, the steering cannot rotate the car any faster — every extra
-        // degree of ask dies at the clamp. Held over a run of consecutive core calls, the card plays a
-        // full-throttle window, trusting the burst to break the rear axle's grip and rotate the car toward where
-        // it asks to go: TCS pinned off for the window, the slide blend standing down for the rotation the ask's
-        // own side wants. Gated to RWD and a forward roll; a no-wheelspin fold says the gear could not do it.
+        // Throttle kick (limiter-saturation rotation): inside the crawl band, where the maneuvering ramp's
+        // granted ceiling is the car's full lock, an ask sitting past it with no slide in progress is the
+        // pursuit wanting more rotation than the steering geometry can deliver — every extra degree dies at
+        // the clamp. Held over a run of consecutive core calls, the card plays a full-throttle window,
+        // trusting the burst to break the rear axle's grip and rotate the car toward where it asks to go:
+        // TCS pinned off for the window, the slide blend standing down for the rotation the ask's own side
+        // wants. The lap's evidence against a wider band, kept: above the ramp's start the ceiling is the
+        // grip's cornering law, every corner entry reads "over" for a second as the braking car's ceiling
+        // catches up with the ask, and a kick there floored the throttle mid-braking-zone — sixteen plays,
+        // all of them that state, all folded "limiter replaced" as the ceiling caught up.
+        const float KickMaxSpeedMps = 2.5f;
         const float KickMaxDriveBiasFront = 0.01f;
         const float KickPedalLevel = 1f;
         // The spin's spool is slower than the pedal slew: the first real kick read -0.06 to -0.11 inside the
@@ -3973,11 +3978,12 @@ namespace ARS
                 _kickArmSince = 0;
                 return;
             }
-            // The arm's one condition, read where it lands: the ask handed to the limiter sat past the granted
-            // ceiling one core tick ago — the steering cannot deliver what the pursuit wants, and with no slide
-            // there is no rotation being had. One tick stale by construction: the kick updates before the
-            // limiter runs on this tick, which the hold's own second absorbs.
-            bool overTheLimiter = Math.Abs(_steerPreLimitDegrees) > _steerGrantedCeiling;
+            // The arm's one condition, read where it lands: inside the crawl band the ramp's granted ceiling is
+            // the full lock, so an ask past it is the steer-in the steering cannot deliver; one core tick stale
+            // by construction — the kick updates before the limiter runs on this tick, which the hold's own
+            // second absorbs.
+            bool overTheLimiter = Math.Abs(_steerPreLimitDegrees) > _steerGrantedCeiling
+                && ARS.GetForwardSpeed(Car) <= KickMaxSpeedMps;
             if (!overTheLimiter)
             {
                 _kickArmSince = 0;
