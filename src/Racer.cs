@@ -126,33 +126,22 @@ namespace ARS
         const float DNFSlotOffsetMeters = 1f;
         const float DNFUnderTrackMeters = 5f;
 
-        // Throttle kick (limiter-saturation rotation): inside the crawl band, where the maneuvering ramp's
-        // granted ceiling is the car's full lock, an ask sitting past it with no slide in progress is the
-        // pursuit wanting more rotation than the steering geometry can deliver — every extra degree dies at
-        // the clamp. Held over a run of consecutive core calls, the card plays a full-throttle window,
-        // trusting the burst to break the rear axle's grip and rotate the car toward where it asks to go:
-        // TCS pinned off for the window, the slide blend standing down for the rotation the ask's own side
-        // wants. The lap's evidence against a wider band, kept: above the ramp's start the ceiling is the
-        // grip's cornering law, every corner entry reads "over" for a second as the braking car's ceiling
-        // catches up with the ask, and a kick there floored the throttle mid-braking-zone — sixteen plays,
-        // all of them that state, all folded "limiter replaced" as the ceiling caught up.
-        const float KickMaxSpeedMps = 2.5f;
+        // Throttle kick (limiter-saturation rotation): when the pursuit's ask sits past the steering limiter's
+        // granted ceiling with no slide in progress, the steering cannot rotate the car any faster — every
+        // extra degree of ask dies at the clamp. Held over a run of consecutive core calls, the card plays a
+        // full-throttle window, trusting the burst to break the rear axle's grip and rotate the car toward
+        // where it asks to go: TCS pinned off for the window, the slide blend standing down for the rotation
+        // the ask's own side wants. Gated to RWD and a forward roll. The window cap is the only fold.
         const float KickMaxDriveBiasFront = 0.01f;
         const float KickPedalLevel = 1f;
-        // The spin's spool is slower than the pedal slew: the first real kick read -0.06 to -0.11 inside the
-        // fold's 0.3 s, so the evidence is an absolute this shallow and the patience twice the old one — a car
-        // whose thrust cannot turn the axle still reads about zero at the deadline and folds as a no-op.
-        const float KickSpinEvidenceSlip = -0.1f;
         const int KickArmSaturateMs = 1000;
         const int KickWindowMs = 800;
-        const int KickSpinFoldMs = 600;
         const int KickCooldownMs = 1500;
         bool _kickPlaying = false;
         int _kickPlayingSince = 0;
         int _kickWindowEnd = 0;
         int _kickArmSince = 0;
         int _kickCooldownUntil = 0;
-        StuckPhase _kickEntryPhase = StuckPhase.None;
         int _kickSteerSign = 0;
         // The raw pursuit ask, captured before the crossing scale: the kick's deficit is the pursuit's own
         // demand against the lock, not what the scale and the limiter deliver of it.
@@ -1470,7 +1459,6 @@ namespace ARS
             _kickArmSince = 0;
             _kickCooldownUntil = 0;
             _kickSteerSign = 0;
-            _kickEntryPhase = StuckPhase.None;
             _kickAskDegrees = 0f;
             LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
             VehicleData.ResetLapPeaks();
@@ -3950,22 +3938,15 @@ namespace ARS
             }
 
             int now = Game.GameTime;
-            float slipEvidence = ARS.MaxWheelSlip(Car);
-            bool spunNever = now - _kickPlayingSince >= KickSpinFoldMs && slipEvidence > KickSpinEvidenceSlip;
-            bool limiterReplaced = Math.Abs(_steerPreLimitDegrees) <= _steerGrantedCeiling;
-            bool windowSpent = now >= _kickWindowEnd;
-            bool contextLost = _stuckPhase != _kickEntryPhase;
-            if (limiterReplaced || windowSpent || spunNever || contextLost)
-            {
-                string foldReason = spunNever ? "no wheelspin" : limiterReplaced ? "limiter replaced" : windowSpent ? "window spent" : "context lost";
-                // Forced: the kick's lifecycle is the card's own read-out and the drive's instrument, written
-                // whatever the Log Level; the event is rare and recovery-scoped, so the noise is bounded.
-                ARS.Log(ARS.LogImportance.Info,
-                    "Kick " + Name + ": folded " + foldReason
-                    + " after " + (now - _kickPlayingSince) + " ms, ask " + _kickAskDegrees.ToString("0") + " deg, slip " + slipEvidence.ToString("0.00"), true);
-                _kickPlaying = false;
-                _kickCooldownUntil = now + KickCooldownMs;
-            }
+            if (now < _kickWindowEnd) return;
+
+            // Forced: the kick's lifecycle is the card's own read-out and the drive's instrument, written
+            // whatever the Log Level; the event is rare, so the noise is bounded. The window cap is the only
+            // fold by decision: whatever the burst failed to do, the machinery left live answers it at the end.
+            ARS.Log(ARS.LogImportance.Info,
+                "Kick " + Name + ": folded after " + (now - _kickPlayingSince) + " ms, ask " + _kickAskDegrees.ToString("0") + " deg, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
+            _kickPlaying = false;
+            _kickCooldownUntil = now + KickCooldownMs;
         }
 
         void TryArmThrottleKick()
@@ -3978,12 +3959,11 @@ namespace ARS
                 _kickArmSince = 0;
                 return;
             }
-            // The arm's one condition, read where it lands: inside the crawl band the ramp's granted ceiling is
-            // the full lock, so an ask past it is the steer-in the steering cannot deliver; one core tick stale
-            // by construction — the kick updates before the limiter runs on this tick, which the hold's own
-            // second absorbs.
-            bool overTheLimiter = Math.Abs(_steerPreLimitDegrees) > _steerGrantedCeiling
-                && ARS.GetForwardSpeed(Car) <= KickMaxSpeedMps;
+            // The arm's one condition, read where it lands: the ask handed to the limiter one core tick ago sat
+            // past the ceiling it enforced — the steering cannot deliver what the pursuit wants, and with no
+            // slide there is no rotation being had. One tick stale by construction, which the hold's own second
+            // absorbs.
+            bool overTheLimiter = Math.Abs(_steerPreLimitDegrees) > _steerGrantedCeiling;
             if (!overTheLimiter)
             {
                 _kickArmSince = 0;
@@ -4003,7 +3983,6 @@ namespace ARS
             _kickWindowEnd = now + KickWindowMs;
             _kickArmSince = 0;
             _kickSteerSign = Math.Sign(_steerPreLimitDegrees);
-            _kickEntryPhase = _stuckPhase;
             ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, ask " + _steerPreLimitDegrees.ToString("0") + " deg past granted " + _steerGrantedCeiling.ToString("0") + " deg at " + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + " mph, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
         }
 
