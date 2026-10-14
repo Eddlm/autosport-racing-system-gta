@@ -272,6 +272,14 @@ again and self-arresting, because the lean's own answer is bounded and the car d
 when to stop leaning. On exit the lean holds the offset the car reached while the corner line is
 silent, so the car leaves on the line it chose rather than unwinding to the middle.
 
+**An ask that would undo progress is refused.** Below its far clamp the corner line's profile is a
+*position*, so a car already inside that position is asked to come back out to meet it — outward
+against the corner, and then inward again as the profile sweeps on, which reads as a lurch out and
+back. The blend therefore takes an ask only where it moves the car *toward* the apex. The hold at the
+clamp is exempt, because prepositioning on the outer edge is what the window is for, and so is a car
+off the road, for which this line is the way back. What is refused is the profile's outward half once
+the blend has begun, never the line.
+
 ## The lane's inertia — a request, a follower, and why they are two things
 
 **Goal:** carry the aim onto whatever the lane sources asked for, so that a request true for a moment

@@ -149,6 +149,7 @@ namespace ARS
         float _laneRequestPrev = 0f;
         float _laneRate = 0f;
         float _laneMoverLoggedAt = 0f;
+        float _cornerRefusalLoggedAt = 0f;
         bool _laneSnap = false;
         bool _laneOverride = false;
         public float CarriedLane { get { return _carriedLane; } }
@@ -556,7 +557,7 @@ namespace ARS
             bool gotActiveCorner = Brain.Corner != null && Lap > 0;
             float cornerLane = 0f;
             LaneReason cornerReason = LaneReason.OwnLane;
-            if (gotActiveCorner) cornerLane = ComputeCornerLane(steerRefPoint, speedMps, out cornerReason);
+            if (gotActiveCorner) cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, out cornerReason);
             if (cornerLane != 0f) { laneRequest = cornerLane; laneReason = cornerReason; }
             float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
             if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
@@ -958,7 +959,7 @@ namespace ARS
             return safeBound * (2f * t * t * (3f - 2f * t) - 1f);
         }
 
-        float ComputeCornerLane(TrackPoint steerRefPoint, float speedMps, out LaneReason reason)
+        float ComputeCornerLane(TrackPoint steerRefPoint, float speedMps, float ownLane, out LaneReason reason)
         {
             reason = LaneReason.OwnLane;
             CornerPoint c = Brain.Corner.Point;
@@ -1002,6 +1003,22 @@ namespace ARS
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
             // outside line, and everything below it is the blend toward the apex.
             if (entryActive) reason = offset >= safeBound ? LaneReason.OutsideLine : LaneReason.ApexLine;
+
+            // The blend may only pull toward the apex: a car already inside the demand is never sent back out to meet it,
+            // or the entry reads as out and then in. Three things are exempt by design - the hold at the clamp, because
+            // reaching the outer edge is what the outside approach is for; every reason that is not the blend; and a car
+            // off the road, whose way back is this line. The comparison is made against the car's own lane rather than
+            // the reference frame's, which reads inward by the bend's sagitta and would refuse the line outright on the
+            // fast tight corners it exists for.
+            if (reason == LaneReason.ApexLine && cornerDir * offset > cornerDir * ownLane && OutOfTrackDistance() <= 0f)
+            {
+                if (Game.GameTime > _cornerRefusalLoggedAt)
+                {
+                    _cornerRefusalLoggedAt = Game.GameTime + 1000;
+                    ARS.Log(ARS.LogImportance.Info, "Corner line refused " + Name + ": demand " + (cornerDir * offset).ToString("0.00") + ", own " + ownLane.ToString("0.00") + ", " + fwdToApex + "m to apex");
+                }
+                return 0f;
+            }
 
             return cornerDir * offset;
         }
