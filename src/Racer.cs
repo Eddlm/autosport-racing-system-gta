@@ -627,7 +627,6 @@ namespace ARS
                 float combinedHalfWidth = (VehicleData.BoundingBox + r.RivalRacer.VehicleData.BoundingBox) * 0.5f;
                 if (longDist > longGate || latDist > combinedHalfWidth + ContactPushOuterGapMeters) continue;
                 Vector3 rivalVel = r.RivalRacer.Car.Velocity;
-                if (rivalVel.LengthSquared() < 0.01f) continue;
                 float latSide = Vector3.Dot(delta, velRight);
                 float latRelVel = Vector3.Dot(rivalVel - Car.Velocity, velRight);
                 if (latSide * latRelVel >= 0f) continue;
