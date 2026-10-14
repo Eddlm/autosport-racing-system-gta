@@ -335,6 +335,20 @@ are a read-out of the request, and the name is authoritative wherever two reason
 for hue to separate them: a card ending mid-corner against the corner's own phase, or the instant the
 profile passes through zero and its answer reads as no answer at all.
 
+## The contact reaction — the last resort the lane does not own
+
+**Goal:** when two cars are actually closing on each other sideways, steer out of it directly, without pretending it is a lane intent.
+
+**The idea.** The lane and the side-by-side heading match both work by asking for a *place*, and a place is the wrong currency once the bodies are nearly touching: the lane layers already try to hold a car's own width of separation, so a pair still closing means those layers were not enough. The reaction is therefore not a second lane target and never moves the target lane. It is a steer offset added after everything else — deliberately outside the damper, the slide blend and the on-aim zeroing, because those stages exist to make a *corner* quiet and cannot be allowed to silence the one term whose whole job is an emergency. The neighbouring term is the pair's *prevention*: the heading match stops a convergence developing, and this one answers when it did not.
+
+**The magnitude is geometric, not a fudge.** The quantity that says how much two cars are converging is the angle between their *courses* — true movement, not where the noses point, because a sliding car's nose is not its path, and the rest of the chain is built the same way. That angle is already the speed scaling: for a rival closing laterally at some rate while both travel forward, it is the arc-tangent of that rate over the forward speed, so a separate speed term would count the same thing twice. What is left to scale is the *opportunity* — the daylight between the two sides — so the term is nothing when there is room and the whole angle when the surfaces touch. Zero has to mean touching bodywork, which is why the ramp reads the gap between the sides and never the distance between the centres.
+
+**The gate is what makes the sign honest.** The angle's sign and the side the rival is on only agree while the pair is closing, so the term is armed only then. Without that, a pair drifting apart would take the same angle the other way and push *toward* the rival — the countersteer's business, and the opposite of this term's.
+
+**Where the goal stops.** It answers relative movement and never proximity: a stationary rival alongside gives nothing, at any distance. It is expressed in the same units as every other steering term, so the limiter still bounds it — which is the honest answer when the closing needs more than the tyres have, because no steering can fix that. And the sum over rivals is deliberately open: the limiter closes the wheel last, so an uncapped sum simply saturates, and whether anything else should bound it is its own decision.
+
+**Rejected shapes.** A closing-rate remap onto a fixed degree ceiling, multiplied by a distance scale, was the first form, and it was speed-blind where it mattered: beside the tyre's own grant both factors read as a fudge, so the term became all-or-nothing at any racing speed and read as aggressive. A repulsion by proximity was rejected outright, because two cars passing close is racing while two cars *closing* is the thing to answer.
+
 ## The levels of the balance
 
 The same tension — take the line properly without upsetting the car — is balanced at more than one
