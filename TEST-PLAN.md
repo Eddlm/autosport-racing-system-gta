@@ -491,7 +491,9 @@ The override chain still picks the lane, but its answer is now a request (`_lane
 2. **If it is retuned, the log is the instrument** — `Lane mover <car>: asked …, aimed …, rate …`, at most once a second per car while the lane is actually moving.
 3. **What the mover deliberately does not touch** — contact avoidance stays its own steer term added after the damper, while the recovery's nearest-edge lane goes through the mover like every other source, so a turn-back that reads late is the case to watch for if one is ever seen.
 
-## The inside line is a pull, not the edge (not driven)
+## The inside line is a pull, not the edge (driver-verified — reads right)
+
+**Driven:** the lean reads right. The checks below stay as the record of what the shape is judged on if it is ever doubted.
 
 The high-speed source no longer answers the full inside edge on a bend that passes its 500 m radius gate. It answers the car's own lane plus X metres toward the inside, recomputed every tick, with X one metre times a linear fade from 500 m down to 250 m of radius — nothing at the gate, half a metre at 375, the full metre at 250 and held below. Because the target is relative it recedes as the car moves, so the crossing stays alive for as long as the bend lasts and the drivable bound is what ends it; the lane mover stays the only rate bound.
 
