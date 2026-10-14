@@ -545,7 +545,7 @@ The card armed up to five seconds before a corner entrance — hundreds of metre
 
 **First read-out (`3656c03`).** Fewer false arming events than the five-second window produced, read from the cars in a race. That settles the "too early" half of item 4 and leaves the other half open: nothing yet says the card still fires when a genuine partner is held through the braking zone, and that failure is the silent one, so it needs counting over cars and laps rather than judging by eye.
 
-## The lane error's own degrees are halved (compile-verified, drive owed)
+## The lane error's own degrees are halved (driver-observed: less aggressive, less unstable)
 
 The lane steer is one pure-pursuit bearing, so it carries the lane error and the road's own geometry together; the centring is the difference between the ask aimed at the carried lane and the same ask aimed at a point on the car's own lane, and `LaneErrorSteerShare` (`Racer.cs`) now scales that difference by one half. Why the centring was the aggressive term: the bearing law is a small angle per metre but a large lateral acceleration per metre — a 2.7 m wheelbase on a half-second preview asks 8 m/s^2 for every metre of lane error from about 58 to 216 km/h, worse above that where the 30 m cap clips the preview, so a metre and a half of error is the whole tyre and anything larger sits in the steer limiter, which is a bang-bang loop rather than a proportional one. The own-lane ask is state-free on purpose, so the second call cannot overwrite the on-aim bearing or the curvature the damper reads.
 
@@ -553,3 +553,5 @@ The lane steer is one pure-pursuit bearing, so it carries the lane error and the
 2. **The falsifier is a late or short outer edge**, because the same halving scales the turn-in crossing. If the entry goes lazy, the exemption is the next lever and the predicate for it already sits in the crossing-scale block (`turningIn`, `Racer.cs`); if instead the car still rings onto the line, the share is not the whole story and the preview length is the other candidate.
 3. **The road-following part is untouched**, so a car that runs wide of an apex it used to take is not this change — the corner line's geometry still comes through whole, and only the lane's own error is halved.
 4. **The knob is the share itself** (`LaneErrorSteerShare`, `Racer.cs`): one is the old behaviour, a half is this trial, and zero would leave the lane error uncorrected entirely.
+
+**Read-out (`9decee7`).** Driven: aggression and instability both read better on the outside line's centring, which is the case the change was aimed at. Item 2's falsifier was not reported either way, so it stands open rather than cleared. The halved share leaves a flat 4 m/s² of lateral acceleration per metre of lane error across the half-second band, so the error that asks for the whole tyre is now twice what it was — the next step if the ring is still visible, and it is the one constant.
