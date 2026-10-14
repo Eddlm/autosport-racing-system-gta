@@ -296,7 +296,7 @@ The parts, unchanged:
 
 - the **cornering ceiling** from the at-speed peak slip, with the geometry fallback when the live peak reads unusable;
 - the **maneuvering ramp** under it — a raise only, easing up to the car's own lock at 5 mph and below;
-- the slide **no longer adds** to the cornering law: that raise is retired by decision after the drive that showed the base law alone reads better (`SlideLimitRaise`, section at the end), so a sliding car is held to the peak-slip ceiling unless its command is the answering one;
+- the slide **no longer adds** to the cornering law: that raise was retired by decision after the drive that showed the base law alone reads better, and is now deleted (`ebb3178`), so a sliding car is held to the peak-slip ceiling unless its command is the answering one;
 - the **countersteer allowance** on the answering side, in proportion to the blend weight the slide has earned;
 - the **damper bypass** — raised to full lock when the damper term *and* the command both oppose the rotation.
 
@@ -348,9 +348,9 @@ The four tactical cards — nitro, defend, divebomb, yield — and the maneuver 
 5. **The crowd card is unchanged** — ChillOut should still come and go on its slow beat rather than flicker.
 6. **A restart is clean** — arm a card or two, then Restart Race from the menu: nothing may carry over. A divebomb armed in the race just abandoned must not brake the new race's first corners, and the new race must not start with the pressure the last one built, whose symptom is cars refusing to yield through the opening laps.
 
-## The slide's ceiling raise — retired by decision (dev build 487, driver-verified)
+## The slide's ceiling raise — retired by decision, then deleted (`ebb3178`; driven as build 487)
 
-The limiter used to keep the larger of the cornering law and half the slide angle plus a half degree of free play as its ceiling. That raise was driven with the answering side left on, and the base law alone read better, so it stays off behind `SlideLimitRaise` in `Racer.cs` and the decision is a keeper rather than an experiment. Everything else in the function is in force — the base ceiling with its geometry fallback and low-speed ramp, the countersteer allowance on the answering side, and the damper bypass to full lock — so a driver answering a rotation still reaches past the ceiling; what is gone is the general loosening the slide granted both sides. The raise, its two constants and the switch are a deletion for a later session if nothing misses them, and that is filed in the ladder.
+The limiter used to keep the larger of the cornering law and half the slide angle plus a half degree of free play as its ceiling. That raise was driven with the answering side left on, and the base law alone read better, so the decision is a keeper rather than an experiment, and nothing missed it: the raise, its two constants and the switch behind them are gone (`ebb3178`), leaving the limiter behaviour-identical to the build that was driven. Everything else in the function is in force — the base ceiling with its geometry fallback and low-speed ramp, the countersteer allowance on the answering side, and the damper bypass to full lock — so a driver answering a rotation still reaches past the ceiling; what is gone is the general loosening the slide granted both sides.
 
 The checks that produced the decision, kept as the record:
 

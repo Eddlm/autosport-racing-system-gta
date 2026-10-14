@@ -19,7 +19,7 @@ Four supersessions, each stated at its own section below:
 - the live **course** error is **velocity**-referenced (not nose);
 - there is **no PID** — no `SteerI`, no `SteerD`/`SteerTrim`; the steering knob is `SteerDampingGain`;
 - the damper targets the yaw the **aim point** requires (`SteerDampingAimReference`), the zero reference kept one flip away for A/B rather than deleted;
-- the steerable ceiling has one governor (the peak-slip cap): the yaw-usage turn-in share that replaced the Bias/Slip dials was itself retired, and the slide's `Math.Max` loosening is retired by decision behind `SlideLimitRaise` (see the limiter paragraph).
+- the steerable ceiling has one governor (the peak-slip cap): the yaw-usage turn-in share that replaced the Bias/Slip dials was itself retired, and the slide's `Math.Max` loosening was retired by decision and has since been deleted outright (see the limiter paragraph).
 
 **The lessons worth carrying forward** (they are why this section is kept):
 - a reference that contains its own correction closes a measurement loop through its own input;
@@ -371,7 +371,7 @@ Moved whole out of the project `AGENTS.md` to keep the instruction chain inside 
 3. `ComputeSteering` (`Racer.cs:492`) — resolves the lane into a target offset and sums the authority chain into `Control.SteerDegrees` (the `_debugLaneAimPoint` name is a trap — see the chain analysis above).
 4. `ApplySteerLimits` (`Racer.cs` `ApplySteerLimits`) — the two side limits closed by a single `Clamp`, and it runs **last among the writers of the steering request**.
    The base is the peak-slip cap, the corner geometry being only a fallback when the peak reads unusable, eased up by the maneuvering ramp below its own end speed (what the peak reads is the saturation bullet above).
-   The slide's `Math.Max` loosening of the base is retired by decision (`SlideLimitRaise`, off); the only thing the slide still opens is the side answering a rotation, through the countersteer allowance.
+   The slide's `Math.Max` loosening of the base is gone — retired by decision, then deleted (`ebb3178`) — and the only thing the slide still opens is the side answering a rotation, through the countersteer allowance.
    **The retired yaw-usage governor is the cautionary tale**: it scaled the ceiling by the car's own yaw rate, so a car not yet rotating got about a fifth of the law — least authority at exactly the moment it needed most — and under understeer, where yaw is low *because* the steering is not working, it took steering away from the car it exists to rescue.
    Yaw rate also cannot tell a clean turn-in from a stepped-out rear, and the slide's sign can.
    The **slip-balance knee is deleted** (`d434b86`); `d434b86` added the second governor, and `cd6efea` removed it.
