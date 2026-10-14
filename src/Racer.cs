@@ -2569,14 +2569,16 @@ namespace ARS
         static readonly Color CountersteerReasonColor = Color.Orange;
         static readonly Color InstabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
         static readonly Color RecoveryReasonColor = Color.Cyan;
-        // The lane line's own two hues, plus the one colour for a bound rather than a source: a wall clamp and the debug
-        // pin are not opinions about where to go, so they must not read as one.
+        // The lane line's own hues, plus the one colour for a bound rather than a source: a wall clamp and the debug
+        // pin are not opinions about where to go, so they must not read as one. The commit card takes the hue furthest
+        // from both corner phases, because a card ending and a corner blending can alternate within a second.
         static readonly Color LaneReasonOutsideColor = Color.Orange;
         static readonly Color LaneReasonApexColor = Color.FromArgb(255, 255, 60, 200);
+        static readonly Color LaneReasonCommitColor = Color.FromArgb(255, 0, 200, 120);
         static readonly Color LaneReasonBoundColor = Color.FromArgb(255, 170, 170, 170);
 
-        // One palette across both debug surfaces: a reason that means the same thing reads the same colour on the lane
-        // line and on the pedal bar.
+        // The pedal palette is reused only where the meaning is the same; the rest are the lane line's own, and the
+        // name drawn at the line is what settles a pair that hue alone cannot separate.
         public static Color LaneReasonColor(LaneReason reason)
         {
             switch (reason)
@@ -2584,7 +2586,7 @@ namespace ARS
                 case LaneReason.CurveLean: return GripReasonColor;
                 case LaneReason.OutsideLine: return LaneReasonOutsideColor;
                 case LaneReason.ApexLine: return LaneReasonApexColor;
-                case LaneReason.CommitLine: return InstabilityReasonColor;
+                case LaneReason.CommitLine: return LaneReasonCommitColor;
                 case LaneReason.Avoidance: return NonDangerousReasonColor;
                 case LaneReason.RecoveryEdge: return RecoveryReasonColor;
                 case LaneReason.WallClamp: return LaneReasonBoundColor;

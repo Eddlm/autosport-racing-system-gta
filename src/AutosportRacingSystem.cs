@@ -1836,11 +1836,13 @@ namespace ARS
                             DrawLine(intendedFrom, intendedTo, intendedColor);
                         }
 
-                        // The colour alone cannot separate every reason, so the head of the line names it.
+                        // The colour alone cannot separate every reason, so the near end of the line names it: the tag is
+                        // the request's while this position is the aim's, and the two are the same only once the mover
+                        // has caught up.
                         TrackPoint labelNode = ARS.TrackPoints[currentNode];
                         Vector3 labelRight = Vector3.Cross(labelNode.Direction, Vector3.WorldUp).Normalized;
                         Vector3 labelPos = labelNode.Position + labelRight * intendedDeviation + new Vector3(0, 0, 0.9f);
-                        DrawText(labelPos, racer.LaneRequestReason.ToString(), Racer.LaneReasonColor(racer.LaneRequestReason), 0.35f);
+                        DrawText(labelPos, racer.LaneRequestReason.ToString(), Racer.LaneReasonColor(racer.LaneRequestReason), 0.45f);
                     }
                 }
 
