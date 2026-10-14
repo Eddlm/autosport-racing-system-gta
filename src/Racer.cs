@@ -567,7 +567,7 @@ namespace ARS
             if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneReason = LaneReason.DebugLock; }
             _laneRequest = laneRequest;
             _laneRequestReason = laneReason;
-            UpdateLaneMover(roadWide, steerRefOffset);
+            UpdateLaneMover(steerRefOffset);
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
             // Aim at the lookahead distance, offset by the carried lane. The Gs-aware preview shifts
@@ -874,7 +874,7 @@ namespace ARS
         // request that flips inside half a second from stepping the lane; the arrival term decelerates on the rate
         // that just stops in the distance left; and the request's own rate feeds forward, so a line that moves
         // smoothly is tracked without the v^2/2a lag a pure arrival law would leave (2 m at 5 m/s).
-        void UpdateLaneMover(float roadWide, float steerRefOffset)
+        void UpdateLaneMover(float steerRefOffset)
         {
             float gap = _laneRequest - _carriedLane;
             if (float.IsNaN(gap) || float.IsInfinity(gap)) return;
@@ -925,13 +925,9 @@ namespace ARS
                 }
             }
 
-            // The walls are a bound rather than a line: a rival that steps the corridor holds the aim inside it now.
-            float walled = ClampLaneToWalls(_carriedLane, roadWide);
-            if (walled != _carriedLane)
-            {
-                _carriedLane = walled;
-                _laneRate = 0f;
-            }
+            // The walls bound the request alone. A bound laid on the aim is placed in one tick rather than carried
+            // onto, which is the step this mover exists to remove, so a corridor that closes is carried onto like any
+            // other request and nothing below the interval and the outward lead can move the aim without inertia.
 
             if (Math.Abs(_laneRate) > 0.2f && Game.GameTime > _laneMoverLoggedAt)
             {
@@ -1084,8 +1080,8 @@ namespace ARS
             return true;
         }
 
-        // One clamp site for the rival walls, shared by the chain that builds the request and the mover that lands the
-        // aim on it, so the bound cannot drift between the two.
+        // One clamp site for the rival walls, and it bounds the request alone: the mover carries the aim onto the
+        // request rather than placing it, so a wall that closes on the car cannot step the lane.
         float ClampLaneToWalls(float lane, float roadWide)
         {
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;

@@ -289,13 +289,17 @@ speed and an acceleration of its own, and those are what the follower has to kee
 its numbers are derived from the line rather than chosen for feel. A follower too slow for the line
 lags it through the whole traverse, and that is not a gentler lane change — it is the wrong line, held.
 
-**The bound belongs to the lane rather than to the follower.** The request is clamped by the same
-shared bounds every other lane target uses, so half a car's width is respected at the edge, and the
-follower clamps its own output the same way so that inertia cannot carry a car through a rival's wall
-either. The one relaxation is in the inertia rather than in the bound: the snap that re-seeds the aim
-when the car is *placed* rather than driven — teleported to the grid or returned to the track — skips
-the follower entirely, because a car put down on the road must not then drive to the lane it held
-before, while the value it snaps to came through the same bound upstream like any other request.
+**The bound belongs to the lane and not to the follower.** The request is clamped by the same shared
+bounds every other lane target uses, so half a car's width is respected at the edge. The follower is
+*not* clamped by them: a bound laid on the aim is placed in one tick rather than carried onto, so a
+corridor closing on the car teleported the lane the follower exists to keep continuous — the one
+quantity it is built to make gradual was the one that jumped. The accepted cost is that while the car
+is outside a corridor that has just closed, the aim sits between the car's own lane and the clamped
+request, so the line may read outside the corridor until the car itself arrives. The one relaxation is
+in the inertia: the snap that re-seeds the aim when the car is *placed* rather than driven — teleported
+to the grid or returned to the track — skips the follower entirely, because a car put down on the road
+must not then drive to the lane it held before, while the value it snaps to came through the same bound
+upstream like any other request.
 
 **The request and the aimed flag are separate facts, and the gap between them is the design.** A
 consumer that needs to know whether a lane is being *held* rather than merely *asked for* must be
