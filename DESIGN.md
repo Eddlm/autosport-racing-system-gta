@@ -190,8 +190,9 @@ be absolute: stated relative to wherever the car happens to be, it holds a const
 converges, so the *bearing* would have to grow as the car falls short. The corner's line is that kind
 of target, because it is a function of the distance to the apex and the car has to arrive somewhere.
 
-The lane is the other kind whenever it is a **lean into a bend**, and there a share of the way toward
-the inside edge is the right shape: the crossing then stays alive for as long as the bend lasts, the
+The lane is the other kind whenever it is a **lean into a bend**, which is what the chain's high-speed
+source answers, and there a share of the way toward the inside edge is the right shape: the crossing
+then stays alive for as long as the bend lasts, the
 bound is the edge rather than the answer, and nothing has to be unwound when the bend ends. The share
 is proportional to how tight the bend is — nothing where a bend has stopped mattering, the whole share
 inside the tight end, and the far edge only ever the bound. This is not the standing-error failure
@@ -240,11 +241,10 @@ driven; the scale was the one that read softer without going lazy.
   cut and it was wrong: the corner's positioning window opens seconds before the corner, so on any
   corner-dense track the rule was off for most of a lap.
 
-**Where it stands.** It is kept compiled and switched off while the comparison against the lane's
-inertia is owed, because the two answer the same question by different shapes: this scale softens the
-*ask* by how far the car has already crossed, while the follower softens *when* the ask arrives. The
-scale has been driven on its own and read softer than either rejected shape; the comparison is what
-would say whether the follower has made it redundant.
+**The open comparison.** The scale and the lane's follower answer the same question by different
+shapes: this one softens the *ask* by how far the car has already crossed, while the follower softens
+*when* the ask arrives. They have never been driven in that order, so whether the follower has made the
+scale redundant is a question for the wiring file, which carries the switch and the drive it waits on.
 
 ## The lane's clock — three parts, three times
 
@@ -266,7 +266,8 @@ because a lane change that arrives instantly is a step however smooth the line i
 
 **Where the parts hand over is the design.** Three handovers, and only one of them is a reversal. On
 entry the lean has the car pointing into the bend while the corner line asks for the *outside* line —
-the one place two sources want opposite lanes, and the lean is what halves the size of the reversal. At
+the one place two sources want opposite lanes, and because the lean is a fraction of the edge rather
+than the edge, the reversal it leaves behind is small. At
 the apex the corner line releases as its profile opens toward the exit and the lean resumes, inward
 again and self-arresting, because the lean's own answer is bounded and the car does not have to be told
 when to stop leaning. On exit the lean holds the offset the car reached while the corner line is
@@ -292,14 +293,17 @@ lags it through the whole traverse, and that is not a gentler lane change — it
 **The bound belongs to the lane rather than to the follower.** The request is clamped by the same
 shared bounds every other lane target uses, so half a car's width is respected at the edge, and the
 follower clamps its own output the same way so that inertia cannot carry a car through a rival's wall
-either. The one exception is the snap that re-seeds the aim when the car is *placed* rather than
-driven — teleported to the grid or returned to the track — because a car put down on the road must not
-then drive to the lane it held before.
+either. The one relaxation is in the inertia rather than in the bound: the snap that re-seeds the aim
+when the car is *placed* rather than driven — teleported to the grid or returned to the track — skips
+the follower entirely, because a car put down on the road must not then drive to the lane it held
+before, while the value it snaps to came through the same bound upstream like any other request.
 
 **The request and the aimed flag are separate facts, and the gap between them is the design.** A
 consumer that needs to know whether a lane is being *held* rather than merely *asked for* must be
-released with the steering and not with the request, so the flag is released only once the aim has come
-back close to the car's own lane. That is why a request already withdrawn can still be under way.
+released with the steering and not with the request, so the flag is armed either while the request is
+still an instruction or while the aim has not yet come back close to the car's own lane — one flag,
+because those are the two ways the same thing is true. That is why a request already withdrawn can
+still be under way.
 
 **Rejected shapes.** Leaving the target to step is the state that produced the symptom: a request valid
 for half a second moved the car most of a lane, which reads as a lunge. Smoothing the *source* is the
@@ -319,10 +323,11 @@ writes the lane, and the record outlives the tick only as a name. This is not bo
 sake: the corner's two phases, a commit card, an avoidance and a wall clamp can all produce the *same*
 number, and the reason is the only thing that tells them apart in a log after the fact.
 
-**The reason replaces the old flag rather than sitting beside it.** What a consumer reads that flag for
-is "this lane is an instruction, not just where the car already is", which is exactly the reason being
-something other than the car's own lane — one fact with one home. Keeping both would let the pair
-disagree, which is the disagreement the record exists to prevent.
+**The reason replaces the old flag rather than sitting beside it.** The writers used to keep a boolean
+of their own meaning "an instruction was written here", and the reason now carries exactly that, so the
+flag a consumer reads is that reason clause together with the aim clause it already had — one fact with
+one home, described where the request and the aim are separated above. Keeping the boolean as well
+would let the pair disagree, which is the disagreement the record exists to prevent.
 
 **What it is and is not.** The reason describes the **request**, while the lane that gets drawn is the
 **aim**, and the follower is why the two differ for a moment. The colour and the name on the debug line
