@@ -808,11 +808,14 @@ namespace ARS
         // that fact is released with the steering rather than with the request.
         const float LaneOverrideHoldMeters = 0.1f;
 
-        // The lane mover's two numbers. The ideal line needs about 5 m/s of lateral motion through a sweeper taken at
-        // 30 m/s (IdealLineOffset moves two safe bounds over 2R·leadAngle metres), so the cap sits above that and the
-        // acceleration is what bounds a lunging request: 6 m/s^2 moves 0.75 m in the first half second.
-        const float LaneMoverAccelMps2 = 6f;
-        const float LaneMoverSpeedCapMps = 8f;
+        // The lane mover's settled numbers for a 10 m track (5 m a side, so the safe bound B is 4 m). The ideal line
+        // crosses two bounds over 2R·leadAngle metres, which asks about 8 m/s and 21 m/s^2 at a supercar's own apex
+        // speed and 6.4 m/s and 13.6 m/s^2 at a vanilla car's — self-similar across radii, because a car takes each
+        // corner at its own limit — so the cap has to sit above the line's own rate and the acceleration is the only
+        // lunge knob. At 14 the aim tracks the line to 0.27 m, and a 6 m request valid for half a second moves 3.4 m
+        // where it used to step the whole way.
+        const float LaneMoverAccelMps2 = 14f;
+        const float LaneMoverSpeedCapMps = 12f;
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
         // and walks back: the pedal path bounds its own step for the same reason.
         const float LaneMoverMaxStepSeconds = 0.1f;
