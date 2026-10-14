@@ -1155,17 +1155,6 @@ namespace ARS
             return ARS.Remap(speedMph, SteerLimitRampEndMph, SteerLimitRampStartMph, ceiling, VehicleData.SteeringLock, true);
         }
 
-
-        // The slide-governed addition is this share of the slide angle plus this much free play, so the wheel reaches
-        // past the velocity vector to catch a rotation without the slide dictating the whole ceiling.
-        const float SlideLimitSlideShare = 0.5f;
-        const float SlideLimitFreeplayDegrees = 0.5f;
-        // Retired by decision: with the raise on, half the slide angle plus the free play loosened the ceiling for every
-        // command, and the base law alone was driven as the better of the two. Kept as a switch rather than deleted,
-        // and deliberately not const so the raise stays compiled while it is off. The countersteer allowance and the
-        // damper bypass are separate and stay; delete the raise, its constants and this switch together.
-        static readonly bool SlideLimitRaise = false;
-
         void ApplySteerLimits()
         {
             // NaN guard: Clamp would turn NaN into full-lock.
@@ -1184,16 +1173,7 @@ namespace ARS
             // lock: backing up is placing the car, and the geometry law inverts below −13 m/s anyway.
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float speedCeiling = VehicleData.SteeringLock;
-            if (fwdSpeed > 0f)
-            {
-                speedCeiling = ResolveSteerCeiling(fwdSpeed);
-                if (SlideLimitRaise)
-                {
-                    // The slide adds authority, it does not replace the cornering law: the ceiling is the larger of
-                    // the two, so a car can always steer in and rejoin, and a slide only ever opens more than it has.
-                    speedCeiling = Math.Max(speedCeiling, Math.Min(Math.Abs(VehicleData.SlideAngle) * SlideLimitSlideShare + SlideLimitFreeplayDegrees, VehicleData.SteeringLock));
-                }
-            }
+            if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
@@ -1245,6 +1225,9 @@ namespace ARS
         {
             // Open the launch window at the green: the player's input is judged during the launch itself.
             if (ControlledByPlayer) ARS.PlayerLaunchTestActive = true;
+
+            // Whether the plan's ceiling is still gating at the green or has already opened is a filed question; delete this line once it has been read.
+            if (!ControlledByPlayer) ARS.Log(ARS.LogImportance.Info, "Plan ceiling at the green " + Name + ": " + Brain.CurrentIntention.MaxSpeed.ToString("0.0") + " m/s of " + AiConstants.MaxSpeed.ToString("0.0") + " m/s, plan " + Brain.CurrentIntention.Speed.ToString("0.0"));
 
             Brain.Corner = null;
             _nextApexCorner = null;
