@@ -153,6 +153,8 @@ namespace ARS
         bool _laneOverride = false;
         public float CarriedLane { get { return _carriedLane; } }
         public LaneReason LaneRequestReason { get { return _laneRequestReason; } }
+        public float LaneRequest { get { return _laneRequest; } }
+        public float LaneRate { get { return _laneRate; } }
 
         float _cornerSpd = 999f;
 

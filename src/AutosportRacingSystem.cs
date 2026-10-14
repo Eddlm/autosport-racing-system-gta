@@ -1807,11 +1807,14 @@ namespace ARS
                         int count = ARS.TrackPoints.Count;
                         float nodeOffset = racer.Brain.CurrentPerception.CurrentNodeOffset;
                         float carriedOffset = racer.CarriedLane;
+                        float requestOffset = racer.LaneRequest;
+                        Color requestColor = Math.Abs(requestOffset) < 0.01f ? Color.Black : Racer.LaneReasonColor(racer.LaneRequestReason);
+                        requestColor = Color.FromArgb(120, requestColor.R, requestColor.G, requestColor.B);
 
                         for (int i = 0; i < 40; i++)
                         {
-                            int node = (currentNode + i) % count;
-                            int nextNode = (currentNode + i + 1) % count;
+                            int node = ARS.IsPointToPoint ? currentNode + i : (currentNode + i) % count;
+                            int nextNode = ARS.IsPointToPoint ? currentNode + i + 1 : (currentNode + i + 1) % count;
                             if (node >= count || nextNode >= count) continue;
 
                             Vector3 pos = ARS.TrackPoints[node].Position;
@@ -1834,15 +1837,25 @@ namespace ARS
                             Vector3 intendedFrom = pos + right * carriedOffset + new Vector3(0, 0, 0.3f);
                             Vector3 intendedTo = nextPos + right * carriedOffset + new Vector3(0, 0, 0.3f);
                             DrawLine(intendedFrom, intendedTo, carriedColor);
+
+                            // Dashed and dimmed, so the ask cannot be mistaken for the aim it is carried onto: this is what
+                            // the chain answered this tick, and the solid line is where the mover has got to so far.
+                            if (i % 2 == 0)
+                            {
+                                Vector3 requestFrom = pos + right * requestOffset + new Vector3(0, 0, 0.4f);
+                                Vector3 requestTo = nextPos + right * requestOffset + new Vector3(0, 0, 0.4f);
+                                DrawLine(requestFrom, requestTo, requestColor);
+                            }
                         }
 
-                        // The colour alone cannot separate every reason, so the near end of the line names it: the tag is
-                        // the request's while this position is the aim's, and the two are the same only once the mover
-                        // has caught up.
+                        // The colour alone cannot separate every reason, so the near end of the line names it and carries both
+                        // offsets: the tag and the colour belong to the request, the solid line sits at the aim, and the two
+                        // are the same only once the mover has caught up.
                         TrackPoint labelNode = ARS.TrackPoints[currentNode];
                         Vector3 labelRight = Vector3.Cross(labelNode.Direction, Vector3.WorldUp).Normalized;
                         Vector3 labelPos = labelNode.Position + labelRight * carriedOffset + new Vector3(0, 0, 0.9f);
-                        DrawText(labelPos, racer.LaneRequestReason.ToString(), Racer.LaneReasonColor(racer.LaneRequestReason), 0.45f);
+                        string laneReadout = racer.LaneRequestReason + "  ask " + requestOffset.ToString("0.0") + "m  aim " + carriedOffset.ToString("0.0") + "m  rate " + racer.LaneRate.ToString("0.0") + "m/s";
+                        DrawText(labelPos, laneReadout, Racer.LaneReasonColor(racer.LaneRequestReason), 0.45f);
                     }
                 }
 
