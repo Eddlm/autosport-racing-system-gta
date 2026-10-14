@@ -101,12 +101,17 @@ is the highest-value item in the whole audit precisely because it is not about s
   climb angle that the live `Racer.GetFollowPointSlopeAngle` (`Racer.cs:1716`) computes.
 - **`GetPreciseRadius` has no callers** (`AutosportRacingSystem.cs:2499`) and re-derives `TrackPoint.PreciseCurveRadius`,
   already stored per node (`TrackLoader.cs:213`).
-- `OccupiedLaneWidth = CombinedSize.X` (`DataStructures.cs:199`) is two fields for one number — noted only so
+- `CombinedWidth = CombinedSize.X` (`DataStructures.cs:199`) is two fields for one number — noted only so
   the pair is not mistaken for independent values.
+- **One bound, four locals.** `drivableEdge` (`Racer.cs:546`), `insideBound` (`:835`), `trackBound` in
+  `ComputeAvoidAheadLane` (`:996`) and again as a parameter of `TryPickAvoidanceSide` (`:1024`), and
+  `ClampLaneToWalls`'s own `trackBound`/`clampLeft`/`clampRight` all rebuild the same drivable bound from the
+  same inputs in the same tick; one computed value should serve every reader, the way the route-frame hit test
+  does. Found while naming the lane quantities, which is why the names were left alone rather than papered over.
 
 ## Already obeying the principle — do not "fix" these
 
-`OccupiedLane` is the rival's own `DeviationFromCenter` (`DataStructures.cs:200`); `CombinedSize` is built from
+`NodeOffset` is the rival's own `CurrentNodeOffset` (`DataStructures.cs:200`); `CombinedSize` is built from
 both cars' own cached dimensions (`:197-198`); the route gap reads the rival's own `CumulativeDistance` (`:209`)
 and the closure its own `AlongTrackSpeed`; `Rival.Update` reads each entity vector once and hands it down
 (`:175-183`). `Entity.Handle` is a stored value in SHVDN2, not a native, so handle comparisons cost nothing.

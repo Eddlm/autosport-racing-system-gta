@@ -109,7 +109,7 @@ in the same core-tick world; nothing reads them per frame.
 | steer-limited speed | `ComputeTargetSpeed` `:1626-1631` | `Control.SteerDegrees` — the previous tick's **post-slew** value |
 | overspeed arm gate | `UpdateThrottleReasonCaps` `:1780` | `Control.SteerDegrees` vs `OverspeedArmMaxSteerDegrees` (`:1761`) |
 | nitrous gate | `:2024` | `Control.SteerDegrees` vs `NitrousMaxSteerDegrees` (`:279`) |
-| debug lane lines | `AutosportRacingSystem.cs:1760` | `TargetLane` property (`Racer.cs:141`) |
+| debug lane lines | `AutosportRacingSystem.cs:1760` | `CarriedLane` property (`Racer.cs:141`) |
 | debug steer fan | `Racer.cs:2274-2280` | `_steerPursuitDeg`, `_damperTermDeg`, `Control.SteerDegrees` |
 | debug yaw panel | `Racer.cs:2502-2515` | `_debugYawTargetPerSecond`, `_debugDamperGainSeconds`, `_debugDamperSpeedScale`, `_damperTermDeg`, `YawUsagePercent()` |
 | pedal bar reason | `Racer.cs:2454`, `:1323`, `:1850` | `IsFullCountersteer()` → `_slidePriority` |
@@ -183,7 +183,7 @@ reader, or only a debug draw.
 | `VanillaSteerReductionPerMps`, `SteerCapGripReference`, `SteerCapGripFloor` | `Racer.cs:1050-1053` | reachable only through `GeometrySteerCeiling` — see **C6** |
 | `PursuitGain`, `MaxPursuitBearingDegrees`, `SmallAimBearingDegrees` | `Racer.cs:755-760` | live at `:767`, `:623` |
 | `SteerPreviewSeconds`, `SteerLookaheadMinMeters`, `MaxMeters`, `GsPreviewBlend` | `Racer.cs:129-133` | live at `:537`, `:2775` |
-| `HighSpeedLaneRadiusMeters`, `IdealLineLeadMultiple`, `RequirementLookaheadSeconds` | `Racer.cs:748`, `:819`, `:814` | live in the lane systems |
+| `CurveLeanRadiusMeters`, `IdealLineLeadMultiple`, `RequirementLookaheadSeconds` | `Racer.cs:748`, `:819`, `:814` | live in the lane systems |
 | `SideBySide*` | `Racer.cs:302-304` | live at `:657-670` |
 | `LaneLockTestOffsetMeters` | `Racer.cs:751` | debug toggle only (`:527`) |
 | `CornerLogApexBandNodes` | `Racer.cs:681` | diagnostic only — see **C1** |
@@ -387,7 +387,7 @@ the lock. Decision: amend the note, or confirm that the two modes were intended 
 
 **Q4 — the docs disagree with each other about straight-line lane control, and the code contradicts one side.**
 With no lane demand, `targetLane` is 0 and the aim follows it (`:534`); the aim point is
-`steerRefPoint.Position + steerRight × aimLane` (`:542`) and the pursuit runs unconditionally once the context gate
+`steerRefPoint.Position + steerRight × aimPointOffset` (`:542`) and the pursuit runs unconditionally once the context gate
 passes (`:548`; no `|targetLane|` gate on the command). So with no lane demand the aim is the **route centre
 at the lookahead**, not the car's own offset, and a car offset laterally on a straight has a non-zero bearing and
 gets a non-zero pursuit command. `AGENTS-STEERING.md:210` ("a car displaced laterally on a straight is therefore

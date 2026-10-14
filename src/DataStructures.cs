@@ -120,7 +120,7 @@ namespace ARS
 
         public class Perception
         {
-            public float DeviationFromCenter = 0f;
+            public float CurrentNodeOffset = 0f;
             public float CurveRadiusToFollowPoint = 0f;
             // Short-window radius for the high-speed lane pursuit gain.
             public float HighSpeedCurveRadius = 0f;
@@ -162,8 +162,8 @@ namespace ARS
         public float RouteGapAhead = 0f;                       // signed route arc in metres, + = rival ahead
 
         public Vector2 CombinedSize = Vector2.Zero;
-        public float OccupiedLane=0f;
-        public float OccupiedLaneWidth = 0f;
+        public float NodeOffset=0f;
+        public float CombinedWidth = 0f;
         // A rival below this speed has no meaningful direction of travel; it is treated as facing this car's way.
         const float SlowRivalMps = 1f;
         public void Update(Racer me)
@@ -196,8 +196,8 @@ namespace ARS
             float yBuffer = RelativeOffset.Y >= 0f ? 1f : 0.25f;
             CombinedSize.Y = Math.Abs((me.VehicleData.ModelDimensions.Y / 2) + (RivalRacer.VehicleData.ModelDimensions.Y / 2)) + yBuffer;
             CombinedSize.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
-            OccupiedLaneWidth = CombinedSize.X;
-            OccupiedLane = RivalRacer.Brain.CurrentPerception.DeviationFromCenter;
+            CombinedWidth = CombinedSize.X;
+            NodeOffset = RivalRacer.Brain.CurrentPerception.CurrentNodeOffset;
             Distance = (myPosition - rivalPosition).Length();
             UpdateRouteGap(me);
         }
@@ -273,7 +273,7 @@ namespace ARS
         {
             FrontGap = float.PositiveInfinity;
             if (RouteGapAhead <= 0f) return float.PositiveInfinity;
-            if (Math.Abs(OccupiedLane - me.Brain.CurrentPerception.DeviationFromCenter) > CombinedSize.X) return float.PositiveInfinity;
+            if (Math.Abs(NodeOffset - me.Brain.CurrentPerception.CurrentNodeOffset) > CombinedSize.X) return float.PositiveInfinity;
 
             FrontGap = RouteGapAhead - CombinedSize.Y;
             float closingAlong = me.AlongTrackSpeed - RivalRacer.AlongTrackSpeed;
@@ -325,7 +325,7 @@ namespace ARS
         CurveLean,
         OutsideLine,
         ApexLine,
-        CommitLine,
+        CommitCard,
         Avoidance,
         RecoveryEdge,
         WallClamp,

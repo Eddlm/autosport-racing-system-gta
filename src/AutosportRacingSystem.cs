@@ -1805,8 +1805,8 @@ namespace ARS
                         Racer racer = DebugFocusRacer;
                         int currentNode = racer.CurrentTrackPoint.Node;
                         int count = ARS.TrackPoints.Count;
-                        float currentDeviation = racer.Brain.CurrentPerception.DeviationFromCenter;
-                        float intendedDeviation = racer.TargetLane;
+                        float nodeOffset = racer.Brain.CurrentPerception.CurrentNodeOffset;
+                        float carriedOffset = racer.CarriedLane;
 
                         for (int i = 0; i < 40; i++)
                         {
@@ -1825,15 +1825,15 @@ namespace ARS
                             DrawLine(whiteFrom, whiteTo, Color.White);
 
                             // Green: current lane deviation
-                            Vector3 greenFrom = pos + right * currentDeviation + new Vector3(0, 0, 0.2f);
-                            Vector3 greenTo = nextPos + right * currentDeviation + new Vector3(0, 0, 0.2f);
+                            Vector3 greenFrom = pos + right * nodeOffset + new Vector3(0, 0, 0.2f);
+                            Vector3 greenTo = nextPos + right * nodeOffset + new Vector3(0, 0, 0.2f);
                             DrawLine(greenFrom, greenTo, Color.Green);
 
                             // Black when there is no aim at all; otherwise the colour names why the lane is where it is.
-                            Color intendedColor = Math.Abs(intendedDeviation) < 0.01f ? Color.Black : Racer.LaneReasonColor(racer.LaneRequestReason);
-                            Vector3 intendedFrom = pos + right * intendedDeviation + new Vector3(0, 0, 0.3f);
-                            Vector3 intendedTo = nextPos + right * intendedDeviation + new Vector3(0, 0, 0.3f);
-                            DrawLine(intendedFrom, intendedTo, intendedColor);
+                            Color carriedColor = Math.Abs(carriedOffset) < 0.01f ? Color.Black : Racer.LaneReasonColor(racer.LaneRequestReason);
+                            Vector3 intendedFrom = pos + right * carriedOffset + new Vector3(0, 0, 0.3f);
+                            Vector3 intendedTo = nextPos + right * carriedOffset + new Vector3(0, 0, 0.3f);
+                            DrawLine(intendedFrom, intendedTo, carriedColor);
                         }
 
                         // The colour alone cannot separate every reason, so the near end of the line names it: the tag is
@@ -1841,7 +1841,7 @@ namespace ARS
                         // has caught up.
                         TrackPoint labelNode = ARS.TrackPoints[currentNode];
                         Vector3 labelRight = Vector3.Cross(labelNode.Direction, Vector3.WorldUp).Normalized;
-                        Vector3 labelPos = labelNode.Position + labelRight * intendedDeviation + new Vector3(0, 0, 0.9f);
+                        Vector3 labelPos = labelNode.Position + labelRight * carriedOffset + new Vector3(0, 0, 0.9f);
                         DrawText(labelPos, racer.LaneRequestReason.ToString(), Racer.LaneReasonColor(racer.LaneRequestReason), 0.45f);
                     }
                 }

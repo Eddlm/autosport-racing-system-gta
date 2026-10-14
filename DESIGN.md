@@ -37,7 +37,7 @@ get there.
 ## The authority chain, and why the order is load-bearing
 
 1. The **lane** decides a lateral target in metres, each later member of the chain overriding the ones
-   before it: the lane the car is already in when nothing has an opinion, then the high-speed line, the
+   before it: the lane the car is already in when nothing has an opinion, then the curve lean, the
    corner's line, an avoidance lane, the recovery's edge while a stuck car is off the track, and finally
    the rival walls bounding whatever came out of it.
 2. The **aim point** is that lane offset applied to a lookahead point ahead of the car.

@@ -295,8 +295,8 @@ What it does **not** dodge: perception at frame rate means per-frame work that s
 is the thing the round-robin was built to avoid. It usually lowers total work, because it removes the O(N²)
 native reads, but it raises the per-frame floor — which is why the number comes first.
 
-**Much of the self-state reuse this implies already exists**, and it is worth knowing how much: `OccupiedLane`
-is the rival's own `DeviationFromCenter` (`DataStructures.cs:200`), `CombinedSize` is built from both cars'
+**Much of the self-state reuse this implies already exists**, and it is worth knowing how much: `NodeOffset`
+is the rival's own `CurrentNodeOffset` (`DataStructures.cs:200`), `CombinedSize` is built from both cars'
 own cached dimensions (`:197-198`), the route gap is the rival's own `CumulativeDistance` and the closure is
 its own `AlongTrackSpeed`. What is *not* reused is the raw pose — the relative-offset helper takes both cars
 (`:192`) and the rival's position and velocity are read directly (`:190`, `:178`). Those are relations no car
