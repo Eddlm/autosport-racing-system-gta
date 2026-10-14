@@ -3927,11 +3927,14 @@ namespace ARS
             float kickForwardMps = ARS.GetForwardSpeed(Car);
             bool spunNever = now - _kickPlayingSince >= KickSpinFoldMs && slipEvidence > KickSpinEvidenceSlip;
             bool deficitClosed = Math.Abs(_kickAskDegrees) < VehicleData.SteeringLock - KickFoldMarginDegrees;
-            if (deficitClosed || now >= _kickWindowEnd || spunNever || _stuckPhase != StuckPhase.Drive
-                || OutOfTrackDistance() <= 0f || kickForwardMps <= 0f || kickForwardMps > KickMaxSpeedMps * 1.25f)
+            bool windowSpent = now >= _kickWindowEnd;
+            bool leftTheCase = _stuckPhase != StuckPhase.Drive || OutOfTrackDistance() <= 0f || kickForwardMps <= 0f || kickForwardMps > KickMaxSpeedMps * 1.25f;
+            if (deficitClosed || windowSpent || spunNever || leftTheCase)
             {
-                if (spunNever && !deficitClosed)
-                    ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": folded, no wheelspin " + slipEvidence.ToString("0.00"));
+                string foldReason = spunNever ? "no wheelspin" : deficitClosed ? "deficit closed" : windowSpent ? "window spent" : "phase lost";
+                ARS.Log(ARS.LogImportance.Info,
+                    "Kick " + Name + ": folded " + foldReason
+                    + " after " + (now - _kickPlayingSince) + " ms, ask " + _kickAskDegrees.ToString("0") + " deg, slip " + slipEvidence.ToString("0.00"));
                 _kickPlaying = false;
                 _kickCooldownUntil = now + KickCooldownMs;
             }
