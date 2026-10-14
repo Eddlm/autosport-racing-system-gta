@@ -37,10 +37,10 @@ Four supersessions, each stated at its own section below:
 - The lane becomes a steer by pure pursuit, and pursuit is the loop's only position law.
 
 **The aim point is the pursuit's input, not a debug ornament.**
-It is built at `Racer.cs:575-583` and handed straight to `PursuitSteerDegrees` (`Racer.cs:587`), whose law is an `atan` on the bearing from the car's travel direction to it (`Racer.cs:793`) —
+It is built at `Racer.cs:574-582` and handed straight to `PursuitSteerDegrees` (`Racer.cs:586`), whose law is an `atan` on the bearing from the car's travel direction to it (`PursuitSteerFromBearing` `Racer.cs:786-790`) —
 so the live chain does carry a geometric gain and an aim angle, and the lane becomes a steer here and nowhere else.
 The bearing clamps at `MaxPursuitBearingDegrees` so `sin` cannot fade past abeam (`Racer.cs:684`, `:694`), and inside `SmallAimBearingDegrees` with no slide the command is zeroed outright (`Racer.cs:687`, `:617`).
-The aim's lateral coordinate also carries the Gs-aware lead — half the lateral motion the car is already committing to (`Racer.cs:535`, blend `:133`), on by default (`AutosportRacingSystem.cs:189`) — which is zero at steady state.
+The aim's lateral coordinate also carries the **Gs-aware lead**: the aim is the carried lane minus half of the lane error measured at the car's own 0.5 s kinematic projection — position + velocity·t + half the smoothed acceleration·t² (`ProjectAhead` `Racer.cs:2442`, read as a lane offset `Racer.cs:578`, blend `GsPreviewBlend` 0.5 `:137`) — so the correction leads the lateral drift instead of reacting after it lands, and the lead is nil at steady state. **Always on** — the behaviour toggle behind it was de-gated, and its menu slot is repurposed as the `ShowGsProjection` debug drawing of that same path (`AutosportRacingSystem.cs:1259`, drawn from the roof `Racer.cs:2615`).
 
 **The stability is loop *order*, not the setpoint: pursuit is position feedback driving a plant whose input is a rate, and the damper is the loop's only rate feedback.**
 To first order the pursuit acts on *where the car is*, not on where it points, and nothing but the damper closes that second-order loop (`Racer.cs:596`, `:602-603`).
