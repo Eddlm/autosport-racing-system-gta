@@ -3943,7 +3943,7 @@ namespace ARS
             float slipEvidence = ARS.MaxWheelSlip(Car);
             float kickForwardMps = ARS.GetForwardSpeed(Car);
             bool spunNever = now - _kickPlayingSince >= KickSpinFoldMs && slipEvidence > KickSpinEvidenceSlip;
-            bool steeringReleased = Math.Abs(Control.SteerDegrees) < VehicleData.SteeringLock * KickArmSteerShare;
+            bool steeringReleased = Math.Abs(_steerPursuitDeg) < VehicleData.SteeringLock * KickArmSteerShare;
             bool windowSpent = now >= _kickWindowEnd;
             bool leftTheCase = _stuckPhase != StuckPhase.Drive || OutOfTrackDistance() <= 0f || kickForwardMps <= 0f || kickForwardMps > KickMaxSpeedMps * 1.25f;
             if (steeringReleased || windowSpent || spunNever || leftTheCase)
@@ -3977,7 +3977,10 @@ namespace ARS
             // it lands: pinned near the lock for a run of consecutive calls, with the TCS cut binding at all —
             // the proof this gear's full throttle overcomes the rear axle, whatever the TCS's threshold
             // regulates the spin to. A cap sitting at 1 refuses the arm.
-            bool steeringPinned = Math.Abs(Control.SteerDegrees) >= VehicleData.SteeringLock * KickArmSteerShare;
+            // The pin reads the pursuit's own ask, and only that: the blend's replacement command on a live
+            // slide blows past the lock (85° of a 30° car, the lap's evidence) and must never arm the card —
+            // a piggyback on the countersteer would feed the very spin the machinery is answering.
+            bool steeringPinned = Math.Abs(_steerPursuitDeg) >= VehicleData.SteeringLock * KickArmSteerShare;
             bool gearCanKick = Control.MaxThrottleFromTCS < KickTcsBindLevel;
             if (!steeringPinned || !gearCanKick)
             {
@@ -3997,8 +4000,8 @@ namespace ARS
             _kickPlayingSince = now;
             _kickWindowEnd = now + KickWindowMs;
             _kickArmSince = 0;
-            _kickSteerSign = Math.Sign(Control.SteerDegrees);
-            ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, steer " + Control.SteerDegrees.ToString("0") + " deg of lock " + VehicleData.SteeringLock.ToString("0") + ", slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
+            _kickSteerSign = Math.Sign(_steerPursuitDeg);
+            ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, pursuit " + _steerPursuitDeg.ToString("0") + " deg of lock " + VehicleData.SteeringLock.ToString("0") + ", slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
         }
 
         // Any part of the car on the drivable bound and moving forward, held: a reverse roll is not a recovered car.
