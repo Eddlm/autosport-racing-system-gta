@@ -765,7 +765,7 @@ namespace ARS
         // The share of the lane error's own degrees that survives. Those degrees are the difference between the ask
         // aimed at the carried lane and the same ask aimed at the car's own lane, which is the road alone; the whole
         // ask cannot be scaled, because pure pursuit's gain of two is the exact curvature law.
-        const float LaneErrorSteerShare = 0.5f;
+        const float LaneErrorSteerShare = 0.75f;
         // sin falls again past a right angle, so an aim point abeam or behind the car would fade instead of saturating.
         const float MaxPursuitBearingDegrees = 90f;
         // Inside this bearing the car is on its aim to within the noise, so the command only flips sign from tick to
