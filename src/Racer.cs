@@ -138,10 +138,13 @@ namespace ARS
         const float KickMaxDriveBiasFront = 0.01f;
         const float KickTcsCutLevel = 0.9f;
         const float KickPedalLevel = 1f;
-        const float KickSpinEvidenceSlip = -0.2f;
+        // The spin's spool is slower than the pedal slew: the first real kick read -0.06 to -0.11 inside the
+        // fold's 0.3 s, so the evidence is an absolute this shallow and the patience twice the old one — a car
+        // whose thrust cannot turn the axle still reads about zero at the deadline and folds as a no-op.
+        const float KickSpinEvidenceSlip = -0.1f;
         const int KickArmSaturateMs = 250;
         const int KickWindowMs = 800;
-        const int KickSpinFoldMs = 300;
+        const int KickSpinFoldMs = 600;
         const int KickCooldownMs = 1500;
         bool _kickPlaying = false;
         int _kickPlayingSince = 0;
