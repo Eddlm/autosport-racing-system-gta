@@ -132,7 +132,6 @@ namespace ARS
         public class Intention
         {
             public float Speed;
-            public float MaxSpeed;
             public float IntendedSpeedChange;
             // Physics-limited cornering speed for the current track radius: v = √(g × grip × r)
             public float CorneringSpeedLimit;

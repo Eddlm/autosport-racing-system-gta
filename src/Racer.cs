@@ -1354,9 +1354,6 @@ namespace ARS
             // Open the launch window at the green: the player's input is judged during the launch itself.
             if (ControlledByPlayer) ARS.PlayerLaunchTestActive = true;
 
-            // Whether the plan's ceiling is still gating at the green or has already opened is a filed question; delete this line once it has been read.
-            if (!ControlledByPlayer) ARS.Log(ARS.LogImportance.Info, "Plan ceiling at the green " + Name + ": " + Brain.CurrentIntention.MaxSpeed.ToString("0.0") + " m/s of " + AiConstants.MaxSpeed.ToString("0.0") + " m/s, plan " + Brain.CurrentIntention.Speed.ToString("0.0"));
-
             Brain.Corner = null;
             _nextApexCorner = null;
             ActiveManeuver.Type = ManeuverType.None;
@@ -1460,8 +1457,6 @@ namespace ARS
 
             UpdateBrakeLearning();
 
-            if (Brain.CurrentIntention.MaxSpeed < AiConstants.MaxSpeed) Brain.CurrentIntention.MaxSpeed += 15 * TickScale;
-
         }
 
         // One linear map for both pedals: a direction swap needs no case of its own, because its error is the sum of the magnitudes and saturates anyway.
@@ -1488,7 +1483,7 @@ namespace ARS
         {
             if (Brain.CurrentIntention.Speed >= 0f)
             {
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, Brain.CurrentIntention.MaxSpeed);
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, AiConstants.MaxSpeed);
             }
         }
 
