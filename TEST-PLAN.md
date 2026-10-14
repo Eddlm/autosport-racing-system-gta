@@ -453,13 +453,19 @@ Corner speed is `√(grip · g · R)` and `R` was `SupposedRadius`, the region's
 3. **Judge it against the offsets at 0.** Both offsets ship at **+6 mph** (`AutosportRacingSystem.cs:153`) and the plan takes the lower of the two terms (`Racer.cs:1629`), so the +6 has been masking this bias. At 0 the plan's own number is on show; at the default the fudge absorbs part of the change.
 4. **The radius pair is no longer visible in game** — the circle label that printed `R plan/detected` is gone, so the per-corner gap cannot be read off the screen and behaviour is the evidence.
 
-## Contact avoidance is its own term, added after the damper and the blend (NOT DRIVEN)
+## Contact avoidance is its own term, added after the damper and the blend (driver-observed, gate read back)
 
-The steer-away correction used to be folded into the lane steer, so the lane system's own stages acted on it: the yaw damper modulated it, the slide handover replaced the command with a countersteer target that deliberately omits the lane term, and the on-aim rule zeroed the wheel. It is now its own `contactSteerDeg` (`Racer.cs:578-598`), added at `:644` after all three; only the steer limiter and the final slew bound it.
+The steer-away correction used to be folded into the lane steer, so the lane system's own stages acted on it: the yaw damper modulated it, the slide handover replaced the command with a countersteer target that deliberately omits the lane term, and the on-aim rule zeroed the wheel. It is now its own `contactSteerDeg` (`Racer.cs:591-612`), added at `:657` after all three; only the steer limiter and the final slew bound it.
+
+**The gate, read back.** A rival is skipped when it is itself slower than 0.1 m/s, when it sits outside a box of half the two lengths plus a metre by half the two widths plus three, or unless its lateral offset and its lateral closing rate in this car's frame carry **opposite signs** (`:607`) — the term is armed only while the pair closes sideways, so a rival drifting away laterally is excluded by that same line, and an exactly aligned one is excluded too, which is why a car dead ahead gets nothing from it. The closure is *relative*, so this car's own sideways movement arms it as much as the rival's, and the strength remap floors at 0.3 m/s of closing (`:610`), so a closing below that floor passes the gate and contributes exactly zero rather than a jitter.
+
+**The sibling term does not share that gate.** The side-by-side heading match (`:679-711`) tests the rival's *own* lateral velocity toward this car (`:702`) and not the relative one, which its comment states deliberately — this car's own closure is the rival walls' job — so it can stay armed while the pair separates under this car's movement, and at zero lateral separation it stays on by design where the contact term goes quiet. Both terms read only the three rivals in `Brain.Rivals` (`DataStructures.cs:115`), so a fourth car alongside is invisible to either.
+
+Observed reading fine in a race, but not at any of the four checks below — none of them was driven deliberately.
 
 1. **A slide alongside a rival** — the case the change exists for. A car sliding with someone closing on its flank must now steer away instead of handing the wheel entirely to the countersteer. The tell of the old behaviour is the wheel going quiet exactly as the slide peaked.
 2. **On its line with a rival closing** — a car sitting on its aim with a rival closing laterally used to have its command zeroed. It must now step away. Too little and nothing changes; too much reads as a twitch on a straight.
-3. **The margin** — a rival closing at the remap's floor (0.3 m/s) gives a fraction of a degree with nothing suppressing it any more, so watch for a small wheel jitter in side-by-side traffic that the old on-aim zeroing hid. The floor is the knob if it shows.
+3. **The margin** — a rival closing just past the remap's floor (0.3 m/s) gives a fraction of a degree with nothing suppressing it any more, and at the floor itself the clamped remap gives exactly none, so watch for a small wheel jitter in side-by-side traffic that the old on-aim zeroing hid. The floor is the knob if it shows.
 4. **What must not change** — the limiter and the slew still close the steering last, so the push cannot exceed the tyre's allowance within one tick; and with no rival closing the term is zero, so every other behaviour should be identical.
 
 ## Every racer brakes from its own confidence (NOT DRIVEN)
