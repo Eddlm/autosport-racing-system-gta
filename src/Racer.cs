@@ -3932,9 +3932,11 @@ namespace ARS
             if (deficitClosed || windowSpent || spunNever || leftTheCase)
             {
                 string foldReason = spunNever ? "no wheelspin" : deficitClosed ? "deficit closed" : windowSpent ? "window spent" : "phase lost";
+                // Forced: the kick's lifecycle is the card's own read-out and the drive's instrument, written
+                // whatever the Log Level; the event is rare and recovery-scoped, so the noise is bounded.
                 ARS.Log(ARS.LogImportance.Info,
                     "Kick " + Name + ": folded " + foldReason
-                    + " after " + (now - _kickPlayingSince) + " ms, ask " + _kickAskDegrees.ToString("0") + " deg, slip " + slipEvidence.ToString("0.00"));
+                    + " after " + (now - _kickPlayingSince) + " ms, ask " + _kickAskDegrees.ToString("0") + " deg, slip " + slipEvidence.ToString("0.00"), true);
                 _kickPlaying = false;
                 _kickCooldownUntil = now + KickCooldownMs;
             }
@@ -3986,7 +3988,7 @@ namespace ARS
             _kickWindowEnd = now + KickWindowMs;
             _kickAskSign = Math.Sign(_kickAskDegrees);
             _kickAskSaturatedSince = 0;
-            ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, ask " + _kickAskDegrees.ToString("0") + " deg, lock " + VehicleData.SteeringLock.ToString("0") + " deg, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"));
+            ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, ask " + _kickAskDegrees.ToString("0") + " deg, lock " + VehicleData.SteeringLock.ToString("0") + " deg, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
         }
 
         // Any part of the car on the drivable bound and moving forward, held: a reverse roll is not a recovered car.
