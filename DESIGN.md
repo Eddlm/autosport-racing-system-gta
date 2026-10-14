@@ -185,10 +185,24 @@ both ends:
 **The lever.** The gain itself, and the lookahead's time. Both change how fast a lane is taken, and
 neither changes what "on the lane" means.
 
-**A deliberate asymmetry.** A lateral target that steps from wherever the car is holds a constant
-error and therefore never converges; the aim is an absolute edge, so the *bearing* is what grows as
-the car falls short. Any rewrite that turns the target into "wherever I am plus a bit" reintroduces a
-standing offset.
+**Absolute targets and leaning targets, and the difference is deliberate.** A target *position* must
+be absolute: stated relative to wherever the car happens to be, it holds a constant error and never
+converges, so the *bearing* would have to grow as the car falls short. The corner's line is that kind
+of target, because it is a function of the distance to the apex and the car has to arrive somewhere.
+
+The lane is the other kind whenever it is a **lean into a bend**, and there a share of the way toward
+the inside edge is the right shape: the crossing then stays alive for as long as the bend lasts, the
+bound is the edge rather than the answer, and nothing has to be unwound when the bend ends. The share
+is proportional to how tight the bend is — nothing where a bend has stopped mattering, the whole share
+inside the tight end, and the far edge only ever the bound. This is not the standing-error failure
+above: there the error never closed, whereas here the bound is what ends the move.
+
+**Three shapes were rejected on the way, each because of what the geometry actually is.** Answering
+the *whole* inside edge once the bend is tight enough is a step, and a step is exactly what the
+follower exists to absorb. A proportional *destination* sounds tidier and fails at the long end: a
+sweeping bend never ends, so the car reaches the share and holds a lane it never gets the inside line
+from. A share driven by *speed* confuses cause with effect — speed is what the curvature produces, so
+a slow car would read as a tight corner and lean hardest exactly where there is least to lean for.
 
 ## The crossing rule — the second speed term
 
@@ -225,6 +239,96 @@ driven; the scale was the one that read softer without going lazy.
 - It stands down *only* there. Keying the exemption on "the corner line owns the lane" was the first
   cut and it was wrong: the corner's positioning window opens seconds before the corner, so on any
   corner-dense track the rule was off for most of a lap.
+
+**Where it stands.** It is kept compiled and switched off while the comparison against the lane's
+inertia is owed, because the two answer the same question by different shapes: this scale softens the
+*ask* by how far the car has already crossed, while the follower softens *when* the ask arrives. The
+scale has been driven on its own and read softer than either rejected shape; the comparison is what
+would say whether the follower has made it redundant.
+
+## The lane's clock — three parts, three times
+
+**Goal:** have every part of the lane look at the road on a schedule that matches what it is deciding,
+so that nothing is decided once and then held past the moment it was true.
+
+**The idea.** Where a source looks is a **time** — how far ahead the car will be on arrival — because a
+fixed distance means something different at every speed while a time means the same thing everywhere.
+What each part does with that time is then whatever its own question needs: the bend's tightness
+decides *how much* lean the car wants, an arrival chord decides *how far ahead* to read that tightness,
+and the corner's window decides *when* positioning is worth starting at all.
+
+**The three parts.** The lean into a bend is a question about curvature, so it is asked about the road
+the car will reach in a preview time and asked again every tick, which is what lets the answer grow and
+shrink with the radius instead of being decided once at entry. The corner's line is armed by *time*,
+because a positioning window is about when the corner will be there, and then shaped by *distance*,
+because its profile is a function of how far the car still is from the apex. The delivery is a *rate*,
+because a lane change that arrives instantly is a step however smooth the line it was aiming at was.
+
+**Where the parts hand over is the design.** Three handovers, and only one of them is a reversal. On
+entry the lean has the car pointing into the bend while the corner line asks for the *outside* line —
+the one place two sources want opposite lanes, and the lean is what halves the size of the reversal. At
+the apex the corner line releases as its profile opens toward the exit and the lean resumes, inward
+again and self-arresting, because the lean's own answer is bounded and the car does not have to be told
+when to stop leaning. On exit the lean holds the offset the car reached while the corner line is
+silent, so the car leaves on the line it chose rather than unwinding to the middle.
+
+## The lane's inertia — a request, a follower, and why they are two things
+
+**Goal:** carry the aim onto whatever the lane sources asked for, so that a request true for a moment
+cannot step the car, and a source can change its mind as often as the geometry does without every
+change being a movement.
+
+**The idea.** The sources are recomputed every tick and are *supposed* to be jumpy: a source that
+answers "the edge" and then answers nothing a tick later is telling the truth about the road, so
+smoothing the source would hide the road rather than the movement. The answer is split instead — the
+sources write a **request**, and a separate follower carries the **aim** onto it with lateral inertia.
+The request is allowed to flicker and the aim is not.
+
+**The follower is set against the line's own motion.** A lane offset traced through a bend moves at a
+speed and an acceleration of its own, and those are what the follower has to keep up with, which is why
+its numbers are derived from the line rather than chosen for feel. A follower too slow for the line
+lags it through the whole traverse, and that is not a gentler lane change — it is the wrong line, held.
+
+**The bound belongs to the lane rather than to the follower.** The request is clamped by the same
+shared bounds every other lane target uses, so half a car's width is respected at the edge, and the
+follower clamps its own output the same way so that inertia cannot carry a car through a rival's wall
+either. The one exception is the snap that re-seeds the aim when the car is *placed* rather than
+driven — teleported to the grid or returned to the track — because a car put down on the road must not
+then drive to the lane it held before.
+
+**The request and the aimed flag are separate facts, and the gap between them is the design.** A
+consumer that needs to know whether a lane is being *held* rather than merely *asked for* must be
+released with the steering and not with the request, so the flag is released only once the aim has come
+back close to the car's own lane. That is why a request already withdrawn can still be under way.
+
+**Rejected shapes.** Leaving the target to step is the state that produced the symptom: a request valid
+for half a second moved the car most of a lane, which reads as a lunge. Smoothing the *source* is the
+same failure moved upstream and is worse, because the sources answer in fractions of a metre and change
+their answer as the geometry does — a filter there throws away the road's own detail and leaves the car
+on a line that was true a moment ago.
+
+## The lane must explain itself
+
+**Goal:** make the lane answerable per tick — why the car is being sent where it is being sent —
+because every handover in this system is otherwise an inference from the car's behaviour.
+
+**The idea.** A lane is decided by a chain of writers, each overriding the last, and each answer is a
+number with no history, so reading the code tells a reader which writers *could* have fired and never
+which one did. Each writer therefore records **why** it wrote what it wrote, in the same statement that
+writes the lane, and the record outlives the tick only as a name. This is not bookkeeping for its own
+sake: the corner's two phases, a commit card, an avoidance and a wall clamp can all produce the *same*
+number, and the reason is the only thing that tells them apart in a log after the fact.
+
+**The reason replaces the old flag rather than sitting beside it.** What a consumer reads that flag for
+is "this lane is an instruction, not just where the car already is", which is exactly the reason being
+something other than the car's own lane — one fact with one home. Keeping both would let the pair
+disagree, which is the disagreement the record exists to prevent.
+
+**What it is and is not.** The reason describes the **request**, while the lane that gets drawn is the
+**aim**, and the follower is why the two differ for a moment. The colour and the name on the debug line
+are a read-out of the request, and the name is authoritative wherever two reasons alternate too often
+for hue to separate them: a card ending mid-corner against the corner's own phase, or the instant the
+profile passes through zero and its answer reads as no answer at all.
 
 ## The levels of the balance
 
