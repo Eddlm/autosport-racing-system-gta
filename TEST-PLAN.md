@@ -438,7 +438,7 @@ The whole session's UI work shipped without a game session: the menu tree, the t
 
 ## The lane ask is scaled down as the car crosses (DRIVEN — softer, still confident)
 
-**Switchable (`b390029`):** `LaneCrossingScale` gates the multiply, so the unscaled ask can be driven beside the scaled one — shipped off for that comparison. The verdict below was reached with the scale on and no lane inertia upstream of it, so the two have never been compared in the order they now sit, and that drive is for the comparison itself rather than a decision.
+**Switchable (`b390029`):** `LaneCrossingScale` gates the multiply, so the unscaled ask can be driven beside the scaled one — shipped off for that comparison. The verdict below was reached with the scale on and no lane inertia upstream of it, so the two have never been compared in the order they now sit, and that drive is for the comparison itself rather than a decision. **First read with it off (`b390029`):** turn-in reads more decisive without too much aggression — but that is the approach side, while the scale's own case is a car crossing hard toward a lane it would reach anyway, and this read did not single that out.
 
 **Driven:** the reads are softer than either rejected shape — the hard cap on the wheel and the step on the crossing — while the cars still steer with confidence, which is the scale doing its job with the allowance left where it was. What that drive did not cover: the fleet-wide read, since the car in hand was high grip, and the corner-line delivery at speed, which is item 3 below.
 
