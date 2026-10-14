@@ -190,8 +190,7 @@ be absolute: stated relative to wherever the car happens to be, it holds a const
 converges, so the *bearing* would have to grow as the car falls short. The corner's line is that kind
 of target, because it is a function of the distance to the apex and the car has to arrive somewhere.
 
-The lane is the other kind whenever it is a **lean into a bend**, which is what the chain's high-speed
-source answers, and there a share of the way toward the inside edge is the right shape: the crossing
+The lane is the other kind whenever it is a **lean into a bend**, which is what the chain's lean
 then stays alive for as long as the bend lasts, the
 bound is the edge rather than the answer, and nothing has to be unwound when the bend ends. The share
 is proportional to how tight the bend is — nothing where a bend has stopped mattering, the whole share
@@ -347,7 +346,7 @@ profile passes through zero and its answer reads as no answer at all.
 
 **Goal:** when two cars are actually closing on each other sideways, steer out of it directly, without pretending it is a lane intent.
 
-**The idea.** The lane and the side-by-side heading match both work by asking for a *place*, and a place is the wrong currency once the bodies are nearly touching: the lane layers already try to hold the pair's *combined* width of separation, so a pair still closing means those layers were not enough. The reaction is therefore not a second lane target and never moves the target lane. It is a steer offset added after everything else — deliberately outside the damper, the slide blend and the on-aim zeroing, because those stages exist to make a *corner* quiet and cannot be allowed to silence the one term whose whole job is an emergency. The neighbouring term is the pair's *prevention*: the heading match stops a convergence developing, and this one answers when it did not.
+**The idea.** The lane and the side-by-side heading match both work by asking for a *place*, and a place is the wrong currency once the bodies are nearly touching: the lane layers already try to hold the pair's *combined* width of separation, so a pair still closing means those layers were not enough. The reaction is therefore not a second lane request and never moves the request. It is a steer offset added after everything else — deliberately outside the damper, the slide blend and the on-aim zeroing, because those stages exist to make a *corner* quiet and cannot be allowed to silence the one term whose whole job is an emergency. The neighbouring term is the pair's *prevention*: the heading match stops a convergence developing, and this one answers when it did not.
 
 **The magnitude is geometric, not a fudge.** The quantity that says how much two cars are converging is the angle between their *courses* — true movement, not where the noses point, because a sliding car's nose is not its path, and the rest of the chain is built the same way. That angle is already the speed scaling: for a rival closing laterally at some rate while both travel forward, it is the arc-tangent of that rate over the forward speed, so a separate speed term would count the same thing twice. What is left to scale is the *opportunity* — the daylight between the two sides — so the term is nothing when there is room and the whole angle when the surfaces touch. Zero has to mean touching bodywork, which is why the ramp reads the gap between the sides and never the distance between the centres.
 

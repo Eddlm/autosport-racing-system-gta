@@ -162,6 +162,8 @@ namespace ARS
         public float RouteGapAhead = 0f;                       // signed route arc in metres, + = rival ahead
 
         public Vector2 CombinedSize = Vector2.Zero;
+        // Both are the rival's own copies, published on the rival beat: unlike this car's live CurrentNodeOffset and
+        // its own dimensions, a consumer reads the publish and inherits its staleness.
         public float NodeOffset=0f;
         public float CombinedWidth = 0f;
         // A rival below this speed has no meaningful direction of travel; it is treated as facing this car's way.

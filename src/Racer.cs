@@ -540,7 +540,7 @@ namespace ARS
             if (Car.Velocity.LengthSquared() > 0.01f) courseDir = Car.Velocity.Normalized;
 
 
-            // --- Lane resolution: override chain (high-speed → corner → avoidance → walls) ---
+            // --- Lane resolution: override chain (lean → corner → avoidance → recovery → walls → debug pin) ---
 
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float drivableEdge = Math.Max(roadWide - carHalfWidth, 0f);
@@ -1000,7 +1000,7 @@ namespace ARS
             Rival target = Brain.AvoidanceTarget;
             if (target == null || target.RivalRacer == null) return 0f;
 
-            if (!TryPickAvoidanceSide(target, trackBound, aggroBuffer, carHalfWidth, nodeOffset, out float targetLane, out bool targetGoLeft))
+            if (!TryPickAvoidanceSide(target, trackBound, aggroBuffer, carHalfWidth, nodeOffset, out float avoidanceLane, out bool targetGoLeft))
                 return 0f;
 
             foreach (Rival r in Brain.Rivals)
@@ -1015,10 +1015,10 @@ namespace ARS
                     continue;
 
                 if (secondGoLeft == targetGoLeft) continue;
-                return (targetLane + secondTarget) * 0.5f;
+                return (avoidanceLane + secondTarget) * 0.5f;
             }
 
-            return targetLane;
+            return avoidanceLane;
         }
 
         bool TryPickAvoidanceSide(Rival rival, float trackBound, float aggroBuffer, float carHalfWidth, float nodeOffset, out float passLane, out bool passLeft)
@@ -1068,7 +1068,7 @@ namespace ARS
             return ARS.Clamp(lane, clampLeft, clampRight);
         }
 
-        float ApplyRivalWalls(float targetLane, float roadWide)
+        float ApplyRivalWalls(float requestLane, float roadWide)
         {
             // The outer bound here is the raw track edge with no car-width inset; the per-rival walls below carry
             // both cars' widths instead.
@@ -1122,7 +1122,7 @@ namespace ARS
                 _avoidRightWall = mid + 1f;
             }
 
-            return ClampLaneToWalls(targetLane, roadWide);
+            return ClampLaneToWalls(requestLane, roadWide);
         }
 
         // Above the authored peak slip × this the car counts as sliding, so the damper drops its aim reference.

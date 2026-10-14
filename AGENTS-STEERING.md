@@ -36,8 +36,8 @@ Four supersessions, each stated at its own section below:
 - There is **no course-error term, no recovery term and no `laneBias` term**.
 - The lane becomes a steer by pure pursuit, and pursuit is the loop's only position law.
 
-**Despite its name, `_debugLaneAimPoint` is the pursuit's input, not a debug ornament.**
-It is built at `Racer.cs:531-539` and handed straight to `PursuitSteerDegrees` (`Racer.cs:543`), whose law is an `atan` on the bearing from the car's travel direction to it (`Racer.cs:695`, `:707`) —
+**The aim point is the pursuit's input, not a debug ornament.**
+It is built at `Racer.cs:575-583` and handed straight to `PursuitSteerDegrees` (`Racer.cs:587`), whose law is an `atan` on the bearing from the car's travel direction to it (`Racer.cs:793`) —
 so the live chain does carry a geometric gain and an aim angle, and the lane becomes a steer here and nowhere else.
 The bearing clamps at `MaxPursuitBearingDegrees` so `sin` cannot fade past abeam (`Racer.cs:684`, `:694`), and inside `SmallAimBearingDegrees` with no slide the command is zeroed outright (`Racer.cs:687`, `:617`).
 The aim's lateral coordinate also carries the Gs-aware lead — half the lateral motion the car is already committing to (`Racer.cs:535`, blend `:133`), on by default (`AutosportRacingSystem.cs:189`) — which is zero at steady state.
@@ -72,7 +72,7 @@ The gain is `SteerDampingFor`, and the term never adds lock: one that agrees in 
 `steerKP` is unity and dimensionless, so the pursuit and the side-by-side correction enter at 1.0 against that gain (`Racer.cs:577`, `:595`), and there is no course feedback anywhere in the sum.
 
 - **Rejected design, kept as history — the zero-reference damper, and the toll it paid.**
-  Until the term damped the *excess over* the yaw the aim requires, it damped against zero, so in a steady corner it removed `gain × ω` of command the corner needed — paid as a **standing lateral offset from the target lane**, growing with speed and corner tightness, which is the mechanism behind "stable but a little lazy".
+  Until the term damped the *excess over* the yaw the aim requires, it damped against zero, so in a steady corner it removed `gain × ω` of command the corner needed — paid as a **standing lateral offset from the carried lane**, growing with speed and corner tightness, which is the mechanism behind "stable but a little lazy".
   Re-referencing removes the setpoint error without weakening the damping.
   The durable trap that build exposed is a convention, not a number: a reference built in the steer command's own frame (positive = left) must **not** be negated, or the damper doubles its opposition in corners instead of removing the toll.
 
@@ -326,10 +326,10 @@ The *derivative* half is already half-answered: the live damper's gain carries t
 
 ## The lane pursuit is ungated, and a straight-line offset converges
 
-`ComputeSteering` calls the pursuit whenever `TryGetSteerContext` passes (`Racer.cs:496`, `:624-633`): the old `|targetLane|` guard went with the error-based lane-bias era (`dcef913`), so a straight or gentle sweep — where the high-speed line has no answer — still steers on a real bearing rather than on nothing.
+`ComputeSteering` calls the pursuit whenever `TryGetSteerContext` passes (`Racer.cs:496`, `:624-633`): the old `|targetLane|` guard went with the error-based lane-bias era (`dcef913`), so a straight or gentle sweep — where the lean has no answer — still steers on a real bearing rather than on nothing.
 
 **What the aim is decides the rest.**
-The aim offset is the carried lane (`aimPointOffset = _carriedLane`), and the chain's answer is a **request** that the lane mover carries it onto: the chain is seeded with the car's own offset (`steerRefOffset`), so with no corner line, no avoidance and no high-speed answer the request **is** that offset — a straight-line standing offset is **held, not converged onto the centre** (the Lane systems base rule).
+The aim offset is the carried lane (`aimPointOffset = _carriedLane`), and the chain's answer is a **request** that the lane mover carries it onto: the chain is seeded with the car's own offset (`steerRefOffset`), so with no corner line, no avoidance and no lean answer the request **is** that offset — a straight-line standing offset is **held, not converged onto the centre** (the Lane systems base rule).
 `steerRefOffset` is read in three places: that seed, the optional Gs-aware preview (zero at steady state), and the lane mover's interval clamp, which takes it as a parameter rather than reading the centre deviation.
 **The gate removal still has not had its own drive.**
 
@@ -368,7 +368,7 @@ Moved whole out of the project `AGENTS.md` to keep the instruction chain inside 
 ## Per-frame pipeline (`Racer`)
 1. `UpdateTrackPosition` (`Racer.cs:2809`) — local node search with a global rescan fallback, time-based lookaheads, route radii, lap ticks.
 2. `ComputeTargetSpeed` (`Racer.cs:1629`) — builds the intended speed; see the Speed pipeline.
-3. `ComputeSteering` (`Racer.cs:522`) — resolves the lane into a target offset and sums the authority chain into `Control.SteerDegrees` (the `_debugLaneAimPoint` name is a trap — see the chain analysis above).
+3. `ComputeSteering` (`Racer.cs:522`) — resolves the lane into a target offset and sums the authority chain into `Control.SteerDegrees` (the aim point is the pursuit's input — see the chain analysis above).
 4. `ApplySteerLimits` (`Racer.cs` `ApplySteerLimits`) — the two side limits closed by a single `Clamp`, and it runs **last among the writers of the steering request**.
    The base is the peak-slip cap, the corner geometry being only a fallback when the peak reads unusable, eased up by the maneuvering ramp below its own end speed (what the peak reads is the saturation bullet above).
    The slide's `Math.Max` loosening of the base is gone — retired by decision, then deleted (`ebb3178`) — and the only thing the slide still opens is the side answering a rotation, through the countersteer allowance.
@@ -411,7 +411,7 @@ The corner and avoidance sources still report silence as zero, and that is what 
 
 **The chain's answer is a request, not the aim.** The lane mover (`Racer.cs` `UpdateLaneMover`) carries the carried lane onto that request at 14 m/s^2 with a 12 m/s cap, so a requirement that is valid for half a second cannot step the lane; the request's own rate feeds forward, so a line that moves smoothly is still tracked without the v^2/2a lag a pure arrival law would leave. The numbers are settled against the line's own motion in the ranked list, item 3. **Every writer of the request also records why**: `LaneReason` tags it own lane, curve lean, the corner's outside or apex phase, a commit card, avoidance, the recovery edge, a wall that moved it, or the debug pin (`Racer.LaneRequestReason`), and the intended-lane debug line takes its colour from that tag with a name at the near end of the line. The tag describes the request and never the aim, which the mover's bounded carry keeps different for a moment. **The aim is clamped into the interval between the car's own lane and the request** (`Racer.cs:887-898`), after the integration and before the rivals' walls, because a lag is only harmless while the request holds still: with no source answering, the request *is* the car's own lane and a lagged aim turns the correction into a delayed function of the car's own motion, which is a limit cycle rather than a lag. The clamp takes the car's lane from the call site and not from the published centre deviation — two different frames, the steer reference sitting a lookahead ahead — and it zeroes the mover's rate when it moves the aim, or that rate winds up to the car's own lateral speed and carries the aim the wrong way on the first tick with a real request.
 
-**Lane systems only *set* the target lane; how hard it is pursued is the authority chain's job.** Every lane target insets by half the car's width — the inside line, the avoidance bound and the corner line alike; `OutOfTrackDistance` (`Racer.cs:2807`) is centre-based on the raw half width, which is why a car pushed off is judged by its centre.
+**Lane systems only *set* the request; how hard it is pursued is the authority chain's job.** Every lane answer insets by half the car's width — the inside line, the avoidance bound and the corner line alike; `OutOfTrackDistance` (`Racer.cs:2807`) is centre-based on the raw half width, which is why a car pushed off is judged by its centre.
 
 - **Two steering lookaheads, and both are named — do not conflate them**: `TryComputeCurveLean`'s chord is `CurveLeanChordSeconds` (`Racer.cs:675`), beside `CurveLeanRadiusMeters` (`:674`),
 while `LookAhead.SteerRef` — which feeds every lane bound, the aim point and the debug line — is a **preview time** (`SteerPreviewSeconds` `Racer.cs`), floored and capped in metres, rather than a fixed distance.

@@ -7,8 +7,11 @@ us writes this file at a time; the other reads it first. The reviewer's usual re
 
 > **Read the last table first.** The map's own "Proposed" column is the draft that was put to the reviewer,
 > and four of its proposals were refused in favour of better names. **The settled rename at the end of this
-> file is what landed**; the resolutions table above it records what happened to every annotation. This
-> file is the only place in the tree that still carries the old names, on purpose.
+> file is what landed**; the resolutions table above it records what happened to every annotation. The old
+> names survive here on purpose, as the draft and the record. A review pass found a handful elsewhere, and they
+> are dealt with: three parameter names in `Racer.cs` that the pass had missed, a few historical or stale
+> mentions in the docs, and a second copy of the source under `Util\shvdn-compat\build-2022api\`, which is a lab
+> copy and not the tree.
 
 ## Why this pass
 

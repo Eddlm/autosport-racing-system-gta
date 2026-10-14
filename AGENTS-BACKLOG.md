@@ -155,7 +155,7 @@
 
 ## Contact avoidance (`lane-repulsion-ceiling`) — its own term now, added after the damper, the blend and the zeroing
 
-**What it does**: for rivals inside a lateral and longitudinal gate box that are **actually closing laterally**, it steers away — the code owns the curve; the offset is the pair's relative course angle on horizontal velocities, scaled by the daylight between the two surfaces, so there is nothing at five metres of that gap and the whole angle when the sides touch, and a hard convergence at close range is what moves the wheel. **It is not a lane law**: the target lane is settled above it (`Racer.cs:548-569`) and this never touches it — the lane-side contact term is `ApplyRivalWalls` (`:562`), which really does move the target.
+**What it does**: for rivals inside a lateral and longitudinal gate box that are **actually closing laterally**, it steers away — the code owns the curve; the offset is the pair's relative course angle on horizontal velocities, scaled by the daylight between the two surfaces, so there is nothing at five metres of that gap and the whole angle when the sides touch, and a hard convergence at close range is what moves the wheel. **It is not a lane law**: the request is settled above it (`Racer.cs:548-569`) and this never touches it — the lane-side contact term is `ApplyRivalWalls` (`:562`), which really does move the request.
 
 **Where it sits now**: its own `contactSteerDeg` (`Racer.cs:603-640`), added to the command at `:685` **after** the damper, the slide blend and the on-aim zeroing. `laneSteerDeg` is pure pursuit again (`:587` → `:660`), which is what the old placement had quietly stopped being. The rule it still obeys is the old one — it adds, so parallel traffic cannot kill the lane steer — but membership in the lane variable was never what enforced that.
 
@@ -173,7 +173,7 @@
 
 **The profile's far end is still a clamp, and that is now intended.** `IdealLineOffset` (`:773`) runs from the inside edge at the apex to the outer edge at `DetectedRadius × acos((R − s)/(R + s)) × IdealLineLeadMultiple` — 34-55 m for the `R < 50 m` the line applies to — and every greater distance gets that same outer edge. The profile has no notion of where an approach begins, so the window is what bounds it, in time: inside the window the target is the outer edge immediately and holds until the blend begins. That is the outside approach the line exists for; the far end only read as a defect while the latch made the window irrelevant.
 
-**Levers, what is left**: the blend is still distance-parameterised, so re-parameterising it in time — outer edge at the entrance, inside edge at the apex, interpolated across the window — is the open lever if a drive says the outer edge is still taken too early. The rate-limit on `targetLane` is built — the lane mover, `AGENTS-STEERING.md` ranked list item 3 — and it treats the step and not the distance.
+**Levers, what is left**: the blend is still distance-parameterised, so re-parameterising it in time — outer edge at the entrance, inside edge at the apex, interpolated across the window — is the open lever if a drive says the outer edge is still taken too early. The rate-limit on the carried lane is built — the lane mover, `AGENTS-STEERING.md` ranked list item 3 — and it treats the step and not the distance.
 
 ## GitHub issue triage
 

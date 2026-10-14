@@ -103,11 +103,14 @@ is the highest-value item in the whole audit precisely because it is not about s
   already stored per node (`TrackLoader.cs:213`).
 - `CombinedWidth = CombinedSize.X` (`DataStructures.cs:199`) is two fields for one number — noted only so
   the pair is not mistaken for independent values.
-- **One bound, four locals.** `drivableEdge` (`Racer.cs:546`), `insideBound` (`:835`), `trackBound` in
-  `ComputeAvoidAheadLane` (`:996`) and again as a parameter of `TryPickAvoidanceSide` (`:1024`), and
-  `ClampLaneToWalls`'s own `trackBound`/`clampLeft`/`clampRight` all rebuild the same drivable bound from the
-  same inputs in the same tick; one computed value should serve every reader, the way the route-frame hit test
-  does. Found while naming the lane quantities, which is why the names were left alone rather than papered over.
+- **One bound, four places, raw and driven mixed.** `drivableEdge` (`Racer.cs:546`) is the drivable bound (half
+  the width less half a car); `insideBound` (`:835`) recomputes it one line for one; `trackBound` in
+  `ComputeAvoidAheadLane` (`:996`) and again as a parameter of `TryPickAvoidanceSide` (`:1024`) is the *raw*
+  track half-width, and `ApplyRivalWalls` holds its own raw copy; `ClampLaneToWalls` rebuilds `clampLeft` and
+  `clampRight` from the rival walls on every call. Raw and driven are two different numbers under one word, so a
+  reader cannot tell which a local holds; one computed pair per tick should serve every reader, the way the
+  route-frame hit test does. Found while naming the lane quantities, which is why the names were left alone
+  rather than papered over.
 
 ## Already obeying the principle — do not "fix" these
 
