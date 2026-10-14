@@ -31,6 +31,9 @@ namespace ARS
         public static float GetLateralTraction(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0098);
         public static float GetSteerLock(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0080);
         public static float GetDriveBiasFront(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0048);
+        // fInitialDriveForce: the member count from the verified 0x48 bias lands the block at 0x60 (bias 0x48,
+        // biasRear 0x4C, the u8 gear count at 0x50, inertia 0x54, the two clutch scales, then the force).
+        public static float GetInitialDriveForce(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0060);
         public static float GetDownforce(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0014);
         public static int GetHandlingFlags(Vehicle vehicle)
         {

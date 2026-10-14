@@ -126,17 +126,20 @@ namespace ARS
         const float DNFSlotOffsetMeters = 1f;
         const float DNFUnderTrackMeters = 5f;
 
-        // Throttle kick (limiter-saturation rotation): when the pursuit's ask sits past the steering limiter's
-        // granted ceiling with no slide in progress, the steering cannot rotate the car any faster — every
-        // extra degree of ask dies at the clamp. Held over a run of consecutive core calls, the card plays a
-        // full-throttle window, trusting the burst to break the rear axle's grip and rotate the car toward
-        // where it asks to go: TCS pinned off for the window, the slide blend standing down for the rotation
-        // the ask's own side wants. Gated to RWD and a forward roll. The window cap is the only fold.
+        // Throttle kick (limiter-saturation rotation): the pursuit's ask sitting past the steering limiter's
+        // granted ceiling with no slide in progress, held through a run of consecutive core calls, plays a
+        // full-throttle window — TCS pinned off for it, the slide blend standing down for the rotation the
+        // ask's own side wants. Gated to RWD and a forward roll, and to the gear gate: the computed burst
+        // thrust per rear wheel must beat the grip budget by the margin. The fold is the window cap or a
+        // slide the burst has delivered past its bound (either side: the machinery resumes to catch it).
         const float KickMaxDriveBiasFront = 0.01f;
         const float KickPedalLevel = 1f;
         const int KickArmSaturateMs = 1000;
-        const int KickWindowMs = 800;
+        const int KickWindowMs = 1250;
         const int KickCooldownMs = 1500;
+        const float KickFoldSlideDegrees = 30f;
+        const float KickGripMargin = 1.2f;
+        const float KickWheelLoadShare = 0.25f;
         bool _kickPlaying = false;
         int _kickPlayingSince = 0;
         int _kickWindowEnd = 0;
@@ -3929,6 +3932,34 @@ namespace ARS
             return Math.Abs(_steerAimBearingDegrees) / Math.Max(yawDegPerSecAtLock, 1f);
         }
 
+        // The transmission's gear ratio, ported from the leaked CTransmission::CalculateGearRatios: first is
+        // 1/0.3, top is 0.9, and the middles walk the 1.1 progression from a baseRatio seeded by the first's
+        // ratio — so the unread flag multipliers (the close-ratio gearbox and low-speed-torque flags halve the
+        // first) shift the whole ladder on flagged cars, not just first: those cars read a green light on
+        // multiplied thrust, which the fold's slip line exposes as a shallow burst.
+        static float KickGearRatio(int gear, int maxGear)
+        {
+            if (maxGear < 2 || gear >= maxGear) return 0.9f;
+            if (gear == 1) return 1.0f / 0.3f;
+            float first = 1.0f / 0.3f;
+            double baseRatio = Math.Pow((1.0 / Math.Pow(1.1, 0.5 * (maxGear - 1) * (maxGear - 2))) * first, 1.0 / (maxGear - 1));
+            return (float)(0.9 * Math.Pow(baseRatio, maxGear - gear) * Math.Pow(1.1, 0.5 * (maxGear - gear) * (maxGear - gear - 1.0)));
+        }
+
+        // Gear eligibility, from the leak's own thrust math: at full throttle the per-wheel force is throttle
+        // (1) x drive-force percent x the gear's ratio, split over the two drive wheels; the tyre budget is the
+        // live grip x the wheel's static load share. Mass and gravity cancel across the two sides, so the
+        // comparison is a single line. The clutch and rev factors only shrink the real burst, so this is the
+        // ceiling — the right side of the gate to be.
+        bool GearCanKick()
+        {
+            int currentGear = Function.Call<int>((Hash)CurrentDriveGearHash, Car);
+            int maxGear = Function.Call<int>((Hash)MaxDriveGearHash, Car);
+            if (currentGear < 1 || maxGear < 2) return false;
+            float thrustPerWheel = VehicleMemory.GetInitialDriveForce(Car) * KickGearRatio(currentGear, maxGear) / 2f;
+            return thrustPerWheel > VehicleData.CurrentMechanicalGrip * KickWheelLoadShare * KickGripMargin;
+        }
+
         void UpdateThrottleKick()
         {
             if (!_kickPlaying)
@@ -3938,13 +3969,14 @@ namespace ARS
             }
 
             int now = Game.GameTime;
-            if (now < _kickWindowEnd) return;
+            bool rotated = Math.Abs(VehicleData.SlideAngle) > KickFoldSlideDegrees;
+            if (now < _kickWindowEnd && !rotated) return;
 
             // Forced: the kick's lifecycle is the card's own read-out and the drive's instrument, written
-            // whatever the Log Level; the event is rare, so the noise is bounded. The window cap is the only
-            // fold by decision: whatever the burst failed to do, the machinery left live answers it at the end.
+            // whatever the Log Level; the event is rare, so the noise is bounded.
+            string foldReason = rotated ? "rotated" : "window spent";
             ARS.Log(ARS.LogImportance.Info,
-                "Kick " + Name + ": folded after " + (now - _kickPlayingSince) + " ms, ask " + _kickAskDegrees.ToString("0") + " deg, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
+                "Kick " + Name + ": folded " + foldReason + " after " + (now - _kickPlayingSince) + " ms, ask " + _kickAskDegrees.ToString("0") + " deg, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
             _kickPlaying = false;
             _kickCooldownUntil = now + KickCooldownMs;
         }
@@ -3953,7 +3985,7 @@ namespace ARS
         {
             if (ControlledByPlayer || ARS.GetForwardSpeed(Car) <= 0f
                 || VehicleMemory.GetDriveBiasFront(Car) > KickMaxDriveBiasFront
-                || Game.GameTime < _kickCooldownUntil
+                || Game.GameTime < _kickCooldownUntil || !GearCanKick()
                 || Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * SlideBlendStartFraction)
             {
                 _kickArmSince = 0;
