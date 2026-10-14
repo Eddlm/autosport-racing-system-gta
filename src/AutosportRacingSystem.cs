@@ -1847,15 +1847,6 @@ namespace ARS
                                 DrawLine(requestFrom, requestTo, requestColor);
                             }
                         }
-
-                        // The colour alone cannot separate every reason, so the near end of the line names it and carries both
-                        // offsets: the tag and the colour belong to the request, the solid line sits at the aim, and the two
-                        // are the same only once the mover has caught up.
-                        TrackPoint labelNode = ARS.TrackPoints[currentNode];
-                        Vector3 labelRight = Vector3.Cross(labelNode.Direction, Vector3.WorldUp).Normalized;
-                        Vector3 labelPos = labelNode.Position + labelRight * carriedOffset + new Vector3(0, 0, 0.9f);
-                        string laneReadout = racer.LaneRequestReason + "  ask " + requestOffset.ToString("0.0") + "m  aim " + carriedOffset.ToString("0.0") + "m  rate " + racer.LaneRate.ToString("0.0") + "m/s";
-                        DrawText(labelPos, laneReadout, Racer.LaneReasonColor(racer.LaneRequestReason), 0.45f);
                     }
                 }
 
