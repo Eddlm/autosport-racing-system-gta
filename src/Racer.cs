@@ -578,6 +578,9 @@ namespace ARS
                 float offsetAtProjection = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), steerRefPoint.Position, steerRefPoint.Direction);
                 aimPointOffset = _carriedLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset);
             }
+            // The aim with the lane error taken back out, so the point on the car's own lane rides in the aim's own
+            // frame — the preview's lead included, because that lead is not the error and is not scaled with it.
+            float holdPointOffset = aimPointOffset - (_carriedLane - steerRefOffset);
             // The aim targets the car's centre, so it locks to the drivable edge; the rival walls bound to the raw edge.
             aimPointOffset = ARS.Clamp(aimPointOffset, -drivableEdge, drivableEdge);
             Vector3 aimPoint = steerRefPoint.Position + steerRight * aimPointOffset;
@@ -585,6 +588,10 @@ namespace ARS
             // --- Lane steer: pure pursuit toward the carried lane ---
 
             float laneSteerDeg = PursuitSteerDegrees(aimPoint, courseDir);
+            // Halve the lane error's own degrees: the ask that holds the car's own lane wants the road alone, so the
+            // difference between the two asks is the centring, and that difference is what is scaled.
+            Vector3 holdPoint = steerRefPoint.Position + steerRight * ARS.Clamp(holdPointOffset, -drivableEdge, drivableEdge);
+            laneSteerDeg -= (1f - LaneErrorSteerShare) * (laneSteerDeg - HoldSteerDegrees(holdPoint, courseDir));
             if (LaneCrossingScale)
             {
                 // Turn-in is a crossing on purpose, so the taper stands down for the entry itself — braking target to
@@ -755,6 +762,10 @@ namespace ARS
         // Pure pursuit's steer carries a factor of two the plain bearing misses: the curvature to a point at a given
         // bearing is 2 sin(angle) over the distance, not the angle over it. This is the knob if the lane is still shy.
         const float PursuitGain = 2f;
+        // The share of the lane error's own degrees that survives. Those degrees are the difference between the ask
+        // aimed at the carried lane and the same ask aimed at the car's own lane, which is the road alone; the whole
+        // ask cannot be scaled, because pure pursuit's gain of two is the exact curvature law.
+        const float LaneErrorSteerShare = 0.5f;
         // sin falls again past a right angle, so an aim point abeam or behind the car would fade instead of saturating.
         const float MaxPursuitBearingDegrees = 90f;
         // Inside this bearing the car is on its aim to within the noise, so the command only flips sign from tick to
@@ -790,23 +801,36 @@ namespace ARS
             return ARS.RadToDeg((float)Math.Atan(PursuitGain * Math.Sin(ARS.DegToRad(bearing)) * VehicleData.WheelBase / distance));
         }
 
+        // Bearing and distance to a point, refused for the two cases the pursuit cannot answer: a point on top of
+        // the car, and a bearing the angle helper cannot produce.
+        bool TryAimGeometry(Vector3 point, Vector3 heading, out float bearing, out float distance)
+        {
+            Vector3 toPoint = point - Car.Position;
+            distance = new Vector3(toPoint.X, toPoint.Y, 0f).Length();
+            bearing = 0f;
+            if (distance <= 0.5f) return false;
+            bearing = Vector3.SignedAngle(heading, toPoint, Vector3.WorldUp);
+            if (float.IsNaN(bearing) || float.IsInfinity(bearing)) { bearing = 0f; return false; }
+            return true;
+        }
+
         float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading)
         {
-            Vector3 toAim = aimPoint - Car.Position;
-            float distance = new Vector3(toAim.X, toAim.Y, 0f).Length();
-            if (distance <= 0.5f)
-            {
-                _steerAimBearingDegrees = 0f;
-                return 0f;
-            }
-            float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
-            if (float.IsNaN(bearing) || float.IsInfinity(bearing))
+            if (!TryAimGeometry(aimPoint, heading, out float bearing, out float distance))
             {
                 _steerAimBearingDegrees = 0f;
                 return 0f;
             }
             _steerAimBearingDegrees = bearing;
             _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / distance;
+            return PursuitSteerFromBearing(bearing, distance);
+        }
+
+        // The same law for the point on the car's own lane, and stateless on purpose: the on-aim bearing and the
+        // curvature the damper reads belong to the true aim, so this second call must not overwrite them.
+        float HoldSteerDegrees(Vector3 ownLanePoint, Vector3 heading)
+        {
+            if (!TryAimGeometry(ownLanePoint, heading, out float bearing, out float distance)) return 0f;
             return PursuitSteerFromBearing(bearing, distance);
         }
 
