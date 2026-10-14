@@ -2001,7 +2001,7 @@ namespace ARS
 
                 
                 // Only the debug visuals read the focus racer, so the scan and its sort run only for them.
-                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis])
+                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip])
                 {
                     Vector3 focusPos = Game.Player.Character.Position;
                     DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
