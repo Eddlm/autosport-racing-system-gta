@@ -565,7 +565,7 @@ namespace ARS
             if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneReason = LaneReason.DebugLock; }
             _laneRequest = laneRequest;
             _laneRequestReason = laneReason;
-            UpdateLaneMover(roadWide);
+            UpdateLaneMover(roadWide, carOffset);
             _targetLaneAimed = laneReason != LaneReason.OwnLane || Math.Abs(_targetLane - carOffset) > LaneOverrideHoldMeters;
 
             // Aim at the lookahead distance, offset by the target lane. The Gs-aware preview shifts
@@ -857,7 +857,7 @@ namespace ARS
         // request that flips inside half a second from stepping the lane; the arrival term decelerates on the rate
         // that just stops in the distance left; and the request's own rate feeds forward, so a line that moves
         // smoothly is tracked without the v^2/2a lag a pure arrival law would leave (2 m at 5 m/s).
-        void UpdateLaneMover(float roadWide)
+        void UpdateLaneMover(float roadWide, float carOffset)
         {
             float gap = _laneRequest - _targetLane;
             if (float.IsNaN(gap) || float.IsInfinity(gap)) return;
@@ -883,6 +883,19 @@ namespace ARS
             float rateStep = LaneMoverAccelMps2 * dt;
             _laneRate += ARS.Clamp(desiredRate - _laneRate, -rateStep, rateStep);
             _targetLane += _laneRate * dt;
+
+            // The aim may lag the request outward, but never beyond it and never across the car. With the car's own lane
+            // requested the interval is a point on the car, so the aim tracks it exactly and the car cannot chase the
+            // lag the mover gave it — a lagged aim is a target that moves with the car, which is a limit cycle.
+            if (!float.IsNaN(carOffset) && !float.IsInfinity(carOffset) && !float.IsNaN(_laneRequest) && !float.IsInfinity(_laneRequest))
+            {
+                float intervalClamped = ARS.Clamp(_targetLane, Math.Min(carOffset, _laneRequest), Math.Max(carOffset, _laneRequest));
+                if (intervalClamped != _targetLane)
+                {
+                    _targetLane = intervalClamped;
+                    _laneRate = 0f;
+                }
+            }
 
             // The walls are a bound rather than a line: a rival that steps the corridor holds the aim inside it now.
             float walled = ClampLaneToWalls(_targetLane, roadWide);
