@@ -126,22 +126,19 @@ namespace ARS
         const float DNFSlotOffsetMeters = 1f;
         const float DNFUnderTrackMeters = 5f;
 
-        // Throttle kick (recovery rejoin): two read conditions held for a run of consecutive core calls — the
-        // wheel pinned near its lock (the steer-in the steering is at the limit of delivering) and the TCS cut
-        // binding at all, which is the proof full throttle at the gear the car holds overcomes the rear axle's
-        // grip, whatever the TCS's own threshold regulates the spin to. The card plays a window in which TCS
-        // yields and the slide blend stands down for the rotation the delivered steer's own side wants, folding
-        // when the wheel comes off the pin — or on no wheelspin, which says the gear could not do it after all.
-        const float KickMaxSpeedMps = 8f;
-        const float KickArmSteerShare = 0.85f;
-        const float KickTcsBindLevel = 0.995f;
+        // Throttle kick (limiter-saturation rotation): when the pursuit's ask sits past the steering limiter's
+        // granted ceiling with no slide in progress, the steering cannot rotate the car any faster — every extra
+        // degree of ask dies at the clamp. Held over a run of consecutive core calls, the card plays a
+        // full-throttle window, trusting the burst to break the rear axle's grip and rotate the car toward where
+        // it asks to go: TCS pinned off for the window, the slide blend standing down for the rotation the ask's
+        // own side wants. Gated to RWD and a forward roll; a no-wheelspin fold says the gear could not do it.
         const float KickMaxDriveBiasFront = 0.01f;
         const float KickPedalLevel = 1f;
         // The spin's spool is slower than the pedal slew: the first real kick read -0.06 to -0.11 inside the
         // fold's 0.3 s, so the evidence is an absolute this shallow and the patience twice the old one — a car
         // whose thrust cannot turn the axle still reads about zero at the deadline and folds as a no-op.
         const float KickSpinEvidenceSlip = -0.1f;
-        const int KickArmSaturateMs = 250;
+        const int KickArmSaturateMs = 1000;
         const int KickWindowMs = 800;
         const int KickSpinFoldMs = 600;
         const int KickCooldownMs = 1500;
@@ -150,6 +147,7 @@ namespace ARS
         int _kickWindowEnd = 0;
         int _kickArmSince = 0;
         int _kickCooldownUntil = 0;
+        StuckPhase _kickEntryPhase = StuckPhase.None;
         int _kickSteerSign = 0;
         // The raw pursuit ask, captured before the crossing scale: the kick's deficit is the pursuit's own
         // demand against the lock, not what the scale and the limiter deliver of it.
@@ -227,6 +225,10 @@ namespace ARS
         float _steerPursuitDeg = 0f;
         float _steerAimBearingDegrees = 0f;
         float _steerAimCurvature = 0f;
+        // The limiter's before-and-after: the ask it was handed and the granted ceiling it enforced, one core
+        // tick old when the kick card reads them, so the over-the-limiter test is the delivery's own.
+        float _steerPreLimitDegrees = 0f;
+        float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _offtrackInputCap = 1f;
 
@@ -1400,6 +1402,8 @@ namespace ARS
             }
 
             Control.SteerDegrees = ARS.Clamp(requestedSteer, -steerLimitRight, steerLimitLeft);
+            _steerPreLimitDegrees = requestedSteer;
+            _steerGrantedCeiling = requestedSteer >= 0f ? steerLimitLeft : steerLimitRight;
         }
 
 
@@ -1461,6 +1465,7 @@ namespace ARS
             _kickArmSince = 0;
             _kickCooldownUntil = 0;
             _kickSteerSign = 0;
+            _kickEntryPhase = StuckPhase.None;
             _kickAskDegrees = 0f;
             LapStartTime = ARS.IsPointToPoint ? Game.GameTime : 0;
             VehicleData.ResetLapPeaks();
@@ -3941,14 +3946,13 @@ namespace ARS
 
             int now = Game.GameTime;
             float slipEvidence = ARS.MaxWheelSlip(Car);
-            float kickForwardMps = ARS.GetForwardSpeed(Car);
             bool spunNever = now - _kickPlayingSince >= KickSpinFoldMs && slipEvidence > KickSpinEvidenceSlip;
-            bool steeringReleased = Math.Abs(_steerPursuitDeg) < VehicleData.SteeringLock * KickArmSteerShare;
+            bool limiterReplaced = Math.Abs(_steerPreLimitDegrees) <= _steerGrantedCeiling;
             bool windowSpent = now >= _kickWindowEnd;
-            bool leftTheCase = _stuckPhase != StuckPhase.Drive || OutOfTrackDistance() <= 0f || kickForwardMps <= 0f || kickForwardMps > KickMaxSpeedMps * 1.25f;
-            if (steeringReleased || windowSpent || spunNever || leftTheCase)
+            bool contextLost = _stuckPhase != _kickEntryPhase;
+            if (limiterReplaced || windowSpent || spunNever || contextLost)
             {
-                string foldReason = spunNever ? "no wheelspin" : steeringReleased ? "steering released" : windowSpent ? "window spent" : "phase lost";
+                string foldReason = spunNever ? "no wheelspin" : limiterReplaced ? "limiter replaced" : windowSpent ? "window spent" : "context lost";
                 // Forced: the kick's lifecycle is the card's own read-out and the drive's instrument, written
                 // whatever the Log Level; the event is rare and recovery-scoped, so the noise is bounded.
                 ARS.Log(ARS.LogImportance.Info,
@@ -3961,28 +3965,20 @@ namespace ARS
 
         void TryArmThrottleKick()
         {
-            float kickForwardMps = ARS.GetForwardSpeed(Car);
-            if (ControlledByPlayer || _stuckPhase != StuckPhase.Drive || OutOfTrackDistance() <= 0f
-                || kickForwardMps <= 0f || kickForwardMps > KickMaxSpeedMps
+            if (ControlledByPlayer || ARS.GetForwardSpeed(Car) <= 0f
                 || VehicleMemory.GetDriveBiasFront(Car) > KickMaxDriveBiasFront
                 || Game.GameTime < _kickCooldownUntil
-                || Brain.CurrentIntention.Speed - Car.Velocity.Length() <= ARS.MphToMps(RecoveryPlanGapMph))
+                || Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * SlideBlendStartFraction)
             {
                 _kickArmSince = 0;
                 return;
             }
-            // The deficit the kick answers, measured where the pursuit law cannot show it: at the lookahead's
-            // floor the steer-ref aim is always ~8 m ahead, so the ask itself never reads past the lock — the
-            // steer-in the scenario means lives in the rotation, not the angle. The wheel instead is read where
-            // it lands: pinned near the lock for a run of consecutive calls, with the TCS cut binding at all —
-            // the proof this gear's full throttle overcomes the rear axle, whatever the TCS's threshold
-            // regulates the spin to. A cap sitting at 1 refuses the arm.
-            // The pin reads the pursuit's own ask, and only that: the blend's replacement command on a live
-            // slide blows past the lock (85° of a 30° car, the lap's evidence) and must never arm the card —
-            // a piggyback on the countersteer would feed the very spin the machinery is answering.
-            bool steeringPinned = Math.Abs(_steerPursuitDeg) >= VehicleData.SteeringLock * KickArmSteerShare;
-            bool gearCanKick = Control.MaxThrottleFromTCS < KickTcsBindLevel;
-            if (!steeringPinned || !gearCanKick)
+            // The arm's one condition, read where it lands: the ask handed to the limiter sat past the granted
+            // ceiling one core tick ago — the steering cannot deliver what the pursuit wants, and with no slide
+            // there is no rotation being had. One tick stale by construction: the kick updates before the
+            // limiter runs on this tick, which the hold's own second absorbs.
+            bool overTheLimiter = Math.Abs(_steerPreLimitDegrees) > _steerGrantedCeiling;
+            if (!overTheLimiter)
             {
                 _kickArmSince = 0;
                 return;
@@ -4000,8 +3996,9 @@ namespace ARS
             _kickPlayingSince = now;
             _kickWindowEnd = now + KickWindowMs;
             _kickArmSince = 0;
-            _kickSteerSign = Math.Sign(_steerPursuitDeg);
-            ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, pursuit " + _steerPursuitDeg.ToString("0") + " deg of lock " + VehicleData.SteeringLock.ToString("0") + ", slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
+            _kickSteerSign = Math.Sign(_steerPreLimitDegrees);
+            _kickEntryPhase = _stuckPhase;
+            ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, ask " + _steerPreLimitDegrees.ToString("0") + " deg past granted " + _steerGrantedCeiling.ToString("0") + " deg at " + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + " mph, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
         }
 
         // Any part of the car on the drivable bound and moving forward, held: a reverse roll is not a recovered car.
