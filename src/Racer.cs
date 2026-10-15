@@ -1235,9 +1235,10 @@ namespace ARS
         const float SteerCapGripReference = 1f;
         const float SteerCapGripFloor = 0.5f;
         // The game scales one front wheel to this share of the command (TEMP_STEER_WHEEL_MULT, CWheel::SetSteerAngle,
-        // wheel.cpp:6445), so the axle angle the two-wheel model wants is the midpoint of the two front wheels.
+        // wheel.cpp:6445). The outer wheel carries the corner's load, so the ceiling caps the command so that wheel
+        // lands on the peak slip; the inner, steered to the full command, runs past it.
         const float EngineSteerWheelOuterShare = 0.75f;
-        const float PeakSlipMidpointCommandShare = 2f / (1f + EngineSteerWheelOuterShare);
+        const float PeakSlipOuterCommandShare = 1f / EngineSteerWheelOuterShare;
         // Below the ramp's end speed the ceiling eases back to the car's full lock, so a slow car can steer in
         // fully; above it the ceiling is the law's own. The band is in mph because that is how it is judged.
         const float SteerLimitRampStartMph = 5f;
@@ -1294,7 +1295,7 @@ namespace ARS
 
         float PeakSlipCeilingAt(float peakSlipDeg)
         {
-            return ARS.Clamp(peakSlipDeg * PeakSlipMidpointCommandShare, 0f, VehicleData.SteeringLock);
+            return ARS.Clamp(peakSlipDeg * PeakSlipOuterCommandShare, 0f, VehicleData.SteeringLock);
         }
 
         // The ceiling in force at this speed: the peak-slip cap, with the corner geometry as a fallback only when the
