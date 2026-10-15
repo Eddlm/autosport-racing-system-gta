@@ -16,9 +16,10 @@
 - `settings-doc-anchor-drift` — anchors DONE; the seven claim-level re-derivations remain.
 
 **Tier 1 — localised edits, low risk**
-- `council-minors` — save-per-scroll dirty flag; per-tick store reads; join chevron; `GridSize`; pace fallback.
+- `council-minors` — save-per-scroll dirty flag (**verified open**: no dirty or scroll-guard symbol exists); per-tick store reads; join chevron; `GridSize` (**verified done**: the item stores the value and snaps it on read, `AutosportRacingSystem.cs:731-739`); pace fallback.
+- `pace-index-cache` — restored from the compute-once audit, which still calls it its highest-value item and which the backlog compression had dropped: `Racer.Initialize` probes the three model natives live (`Racer.cs:531-543`) while the selection path is cache-first (`TryComputePlayerCarPaceIndex`, `AutosportRacingSystem.cs:3375`), so the player and the AI can reach the same PI by different routes, and only the live path has no non-finite filter. **partially settled (verified)**: the audit's quoted "Cache first…" comment no longer exists and the code now states the live probe as deliberate, so the open question is whether to accept that or make the cache first-class.
 - `weaponized-grid-filter` — weaponized cars must not reach the grid; mechanism settled, **not built**, wanted before 0.9.
-- `update-checker` — extract the update checker into a separate DLL.
+- `update-checker` — extract the update checker into a separate DLL. **not built** (verified: `src\UpdateChecker.cs` compiles into the single library, `NewRacingSystem.csproj:93`).
 - `slide-limit-raise-removal` — deleted (`ebb3178`); the countersteer allowance and damper bypass stay.
 
 **Tier 2 — verify in game, then tune**
@@ -35,14 +36,14 @@
 - `rival-publish-core` — the rival publish moves onto the core pass over a per-frame pose snapshot, so a card stops deciding on a record up to half a second old. **not built**: verified, `UpdateRivalInfo` still runs on its own 500 ms beat (`Racer.cs:3695-3699`) while the cards run on the core pass below it (`:3700`), and the second call (`:4183`) is the re-own path, not a cadence change.
 
 **Tier 5 — new controllers and design decisions**
-- `snap-oversteer` — a D-term that does not exist yet; dedicated session.
-- `gravity-grip` — gravity carries the offroad multiplier and grip stays the coefficient, both published; it needs its own drive. **DECIDED**
+- `snap-oversteer` — a D-term that does not exist yet; dedicated session. **not built** (verified: no derivative term anywhere in the steering chain).
+- `gravity-grip` — gravity carries the offroad multiplier and grip stays the coefficient, both published; it needs its own drive. **DECIDED; half built (verified)**: the flag multiplies gravity (`Racer.cs:525-526`) and the grip laws read `Handling.Gravity` (`:2033`, `:3585`, `:3594`), but `AckermannCeilingDegrees` (`:1268`) and `SteerLimitedSpeed` (`:1835`) still hard-code `9.8f`, so the multiplier never reaches the steer ceiling or the steer-limited speed.
 - `pace-model-theoretical` — pre-race selection is spawn-free by design, the player's car alone the live gap. Preserve the invariant that the leaderboard number equals the selection metric.
-- `overrotation-pedal` — a rotation-driven throttle authority; the pedal acts on rear grip, and the driver-observed case that puts it on the map is full throttle while the car slides.
+- `overrotation-pedal` — a rotation-driven throttle authority; the pedal acts on rear grip, and the driver-observed case that puts it on the map is full throttle while the car slides. **not built** (verified: no such symbol in `src`).
 - `yaw-damper` — reference and speed/grip schedule shipped (`d5a643f`); the crossing past neutral while the rear leads remains, with the floor-plus-ceiling shape as the fix.
 
 **Tier 6 — subsystem reworks**
-- `two-projection` — two-projection route speed replacing the geometric route speed.
+- `two-projection` — two-projection route speed replacing the geometric route speed. **not built** (verified: no such symbol in `src`).
 
 **Tier 7 — shipped, wants a second look**
 - `downhill-braking-term` — span consistency fixed and verified in game. The per-node decel profile is **not** a defect — the mean is the exact quantity — so do not "fix" it. Open: the brake-learning/grade coupling.
@@ -56,7 +57,7 @@
 **Relocated open items — ranked on entry**
 - `low-speed-ramp-peak` — closed by reading the source; refile only from a symptom the driver describes. **closed**
 - `grip-native-vs-lateral-g` — low-grip gate driver-verified; one unverified number under it, the grip native never checked against measured lateral g.
-- `saveroute-precision` — 4-decimal route writes. **DECIDED and implemented**
+- `saveroute-precision` — 4-decimal route writes. **DECIDED and implemented** (`Math.Round(v.X, 4)` at `TrackFile.cs:132,137,142`; the props keep their own 2 decimals).
 - `reverse-throttle` — removed by design; nitro charges at launch and per lap, no free-roam refill.
 - `instability-tuning` — tuned by driving, not derived.
 - `overspeed-correction` — driver-verified (`2dcbbcc`); the refresh rate and grade term remain.
@@ -66,7 +67,7 @@
 - `merge-rule-stress-test` — the two corner-merge rules need a stress test, the aligned window validated on one track only.
 - `dnf-final-death` — DNF is final death, driver-verified (`0623276`).
 - `rival-detection-route-frame` — route-frame detection, driver-verified (`0623276`); two residuals, both unobserved.
-- `immersive-join-points` — a chevron marks the nearest start line and the join follows Pace Mode.
+- `immersive-join-points` — **built and verified**: the chevron draws at the nearest start (`AutosportRacingSystem.cs:1880`), Context joins within 5 m (`:1885`), and the join takes the mode's anchor like any other start ("the join adds no pace override of its own", `:1887`). **closed**
 - `manual-apex-placement` — place apexes by hand. **(idea)**
 - `creator-apex-preview` — preview the apex table inside the creator. **(idea)**
 - `surface-stats-revival` — track surface composition. **(idea)**
@@ -87,7 +88,7 @@
 - `slip-axis-scale` — settled by live probe and fixed (`b11e52b`); the disproved reading it overturns is corrected in `AGENTS-TECHNOTES.md`. Parked before the drive.
 - `launch-slip-allowance` — allow more slip off the line, as a setting or a per-racer personality. **(idea)**
 - `outside-approach-window` — the outside line is in force from far too far back; both time gates are driver-verified, and `RequiresBraking` is deliberately not cleared so a plan holds through the apex. **closed**
-- `radius-variants` — audit the radius family and settle which rung every consumer reads.
+- `radius-variants` — audit the radius family. Verified rungs: per node `GeneralCurveRadius` and `PreciseCurveRadius` (`TrackLoader.cs:213-214`), the corner's `SupposedRadius` (tightest precise) and `DetectedRadius` (smoothed, `:713-714`), and the route's `CurveRadiusToFollowPoint` / `HighSpeedCurveRadius` (`Racer.cs:3125`, `:3135`). The dead rung: `HighSpeedCurveRadius` feeds only `Brain.CurrentIntention.CorneringSpeedLimit` (`Racer.cs:1854`), which no consumer reads.
 - `lane-crossing-share` — the lane ask is scaled down as the car crosses, except into a corner (driver-verified, `da63a0d`); a soft scale that never reaches nothing, with turn-in exempt for the entry alone. **closed**
 - `outward-lead-bound` — the aim may not lead the car's own lane by more than 1.5 m; driver-verified (`73756c7`). **closed**
 
