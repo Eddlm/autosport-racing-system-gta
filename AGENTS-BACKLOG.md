@@ -32,7 +32,7 @@
 
 **Tier 4 — coupled systems**
 - `corner-approach-braking` — start the outside-line move about a second before the car must brake for the apex, computed from its own speed profile rather than a fixed seconds-to-apex gate.
-- `rival-publish-core` — the rival publish moves onto the core pass over a per-frame pose snapshot, so a card stops deciding on a record up to half a second old. **not built**
+- `rival-publish-core` — the rival publish moves onto the core pass over a per-frame pose snapshot, so a card stops deciding on a record up to half a second old. **not built**: verified, `UpdateRivalInfo` still runs on its own 500 ms beat (`Racer.cs:3695-3699`) while the cards run on the core pass below it (`:3700`), and the second call (`:4183`) is the re-own path, not a cadence change.
 
 **Tier 5 — new controllers and design decisions**
 - `snap-oversteer` — a D-term that does not exist yet; dedicated session.
@@ -74,15 +74,15 @@
 - `section-roughness-sweep` — a lateral normal sweep giving a section's roughness, which would make a one-lane bump visible. Call it roughness or section quality — **not** stability, which is the car's own state. **(idea)**
 - `ceiling-factor-review` — closed (`0dfbf53`): reverted the midpoint to the outer wheel; the outer reference has since been driven. **closed**
 - `steer-slip-allowance` — the measured-slip allowance under the ceiling; built, driven once, parked off, and what it should be is a design call. **parked**
-- `wheel-contact-count` — a per-wheel ground-contact count for the stability check; the near-zero test is the part to fix, since a rolling tyre always reads a little noise. **not built**
+- `wheel-contact-count` — a per-wheel ground-contact count for the stability check; the near-zero test is the part to fix, since a rolling tyre always reads a little noise. **not built**: verified, no contact-count symbol exists in `src`.
 - `ceiling-factor-range` — closed (`29b267b`): the domain is 0.05 to 1.25 in 0.05 steps. **closed**
-- `tcs-cap-floor-setting` — the TCS cap's floor has no menu item, and it is the one part of the policy the driver cannot reach.
-- `overspeed-thresholds-setting` — the overspeed correction has no knobs.
-- `corner-record-dormant-fields` — the corner record carries fields nothing arms, the flagship an early-brake flag that can never be set. Decide per field: re-arm it, or delete it with its branch.
+- `tcs-cap-floor-setting` — verified: `TcsCapFloor` (`Racer.cs:1938`, read `:2050`) has no menu item and no key while the threshold and the span above it both have one, so it is the one part of the policy the driver cannot reach.
+- `overspeed-thresholds-setting` — verified: `OverspeedEnabled` is the only exposed setting (`AutosportRacingSystem.cs:1023`, `SettingsRepair.cs:147`); the five thresholds are consts with no key and no item (`Racer.cs:1966-1972`).
+- `corner-record-dormant-fields` — verified: `RequiresEarlyBrake` (`DataStructures.cs:387`) and `RampEndNode` (`:388`) have no writer anywhere, and their only reader is the dead `MaxSpeedForBrakingDistance` (`AutosportRacingSystem.cs:3075`), so `speed-plan-dead-ends` takes both fields with it. Decide per field: re-arm it, or delete it with its branch.
 - `grip-learner` — DISMISSED (driver). Do not rebuild it from memory: the two-sided bracket, its cleanliness filters and the grip-memory persistence were the dismissed design.
-- `surface-path-unread` — the surface classifier is wired to nothing while the live grip comes from elsewhere. Wire it or delete the declarations — deletion is the honest default.
+- `surface-path-unread` — verified dead: `ARS.TerrainGripMultipliers` (`AutosportRacingSystem.cs:287`) is cleared on load and written per node by the first two cars on track (`Racer.cs:4140-4142`), and read nowhere; the live grip path is `MeanWheelGripMultiplier` (`AutosportRacingSystem.cs:2901`) → `GroundGripMultiplier` → `CurrentMechanicalGrip`. Delete the table with its writer — deletion is the honest default.
 - `intention-maxspeed-ramp` — closed (`f894228`): the remnant is deleted; compile-verified, not drivable. **closed**
-- `speed-plan-dead-ends` — the speed plan carries a dead branch, a dead method and two write-only leftovers; delete rather than annotate.
+- `speed-plan-dead-ends` — verified, all four: the `else if (Brain.Corner != null)` branch (`Racer.cs:1791`) is unreachable because `Brain.Corner` is set only inside `if (NextApexNode >= 0)` (`Racer.cs:3426-3443`), which kills `ARS.MaxSpeedForBrakingDistance` (`AutosportRacingSystem.cs:3064`), its only caller; plus the write-only `VehicleData.PerformanceIndex` (`DataStructures.cs:94`, written `Racer.cs:533`) and `TrackProgress` (`Racer.cs:64`, written `:3019`). Delete rather than annotate.
 - `amputated-remnants` — closed: trimmed and compiled, the keeper decided.
 - `slip-axis-scale` — settled by live probe and fixed (`b11e52b`); the disproved reading it overturns is corrected in `AGENTS-TECHNOTES.md`. Parked before the drive.
 - `launch-slip-allowance` — allow more slip off the line, as a setting or a per-racer personality. **(idea)**
