@@ -628,3 +628,11 @@ The throttle cut was a binary declared by two arms — the chassis riding above 
 2. **A jump reads as airborne.** Over a crest or a launch the count should reach its maximum and the violet limit sphere should walk down about a quarter per wheel, arriving over roughly half a second.
 3. **Recovery is half the rate.** After landing the cap must climb back over about a second, slower than it fell, with the sphere following down rather than snapping back.
 4. **The arm that was lost.** A four-wheels-down slide no longer draws a throttle cut of its own — the TCS cap and the steering blend are what answer it now. A slide that reads unmanaged is this trade, not a defect in the count.
+
+## The creator's arc has a tightened middle (dev build 620, compile-verified, drive owed)
+
+`GenerateArc` emitted a constant-radius section, which left the apex search with no minimum to find: every node read the same radius, the first one won, and the apex landed at the arc's entrance. The section's middle is now pulled 8% tighter, radially about the arc's centre so both endpoints and both end tangents are untouched, with a flat band over the first and last 15% so the pull cannot register as a tighter bend at the joins.
+
+1. **The apex lands mid-arc.** Draw a section in the creator, save the track, load it and watch where the cars turn in: they should clip the middle of the drawn arc rather than arriving at its entrance.
+2. **The trade, when driven.** The middle is a genuinely tighter road, so the recorded apex radius is 8% smaller and that corner's 1 g speed about 4% lower on created tracks. That is what the tighter middle is for, but it is the thing to judge: if a drawn corner now reads as too slow, the depth is the number.
+3. **No kink at the joins.** A section joined to a straight or to another section must show no step and no twitch, which is what the end bands are for.

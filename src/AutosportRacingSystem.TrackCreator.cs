@@ -247,9 +247,12 @@ namespace ARS
             }
         }
 
-        // One constant-radius section: a circular arc from the route end to the aim point, leaving that end tangent
-        // to the incoming heading. Plan-view constant radius specifically, because that is the plane the racing
-        // system measures (Circumradius3D drops Z) — so this reads back as one radius per section.
+        // A circular arc from the route end to the aim point, leaving that end tangent to the incoming heading, with
+        // its middle pulled slightly tighter. A true constant radius gives the apex search nothing to find — every
+        // node reads the same radius, so the first one wins and the apex lands at the arc's entrance — which is what
+        // a bezier section gave naturally. The pull is radial about the arc's centre, so both endpoints and both end
+        // tangents are untouched, and it stays far inside the span walk's 1.6x or the walk stops early and the span
+        // shrinks. Plan-view throughout, because that is the plane the racing system measures.
         public static List<Vector3> GenerateArc(Vector3 sStart, Vector3 sDirection, Vector3 sEnd)
         {
             const float separationDist = 1f;
@@ -257,6 +260,13 @@ namespace ARS
             // curvature is worth, so the section is simply straight.
             const float straightRadiusFactor = 100f;
             const float halfPi = 1.5707964f;
+            // How much tighter the arc's middle is than its ends, as a share of the radius. The ends must stay inside
+            // the span walk's multiples of the apex radius — 1 / (1 - depth) is the ends-to-apex ratio.
+            const float apexBiasDepth = 0.08f;
+            // The share of each end left unbiased. Without it the pull starts on the first node, and the lateral
+            // offset it puts there reads as a tighter bend at the join — on a short section tighter than the middle,
+            // which would steal the apex.
+            const float apexBiasEndBand = 0.15f;
             // The aim is a raycast hit, so the arc is short; this only bounds a pathological caller.
             const int maxSteps = 4000;
 
@@ -295,7 +305,17 @@ namespace ARS
                 for (int i = 1; i <= steps; i++)
                 {
                     float angle = startAngle + (sweep * i / steps);
-                    points.Add(new Vector3(centre.X + (radius * (float)Math.Cos(angle)), centre.Y + (radius * (float)Math.Sin(angle)), sStart.Z));
+                    // sin² inside a band that leaves both ends flat: the slope vanishes at the joins and the pull
+                    // peaks at the middle, where the apex belongs.
+                    float along = i / (float)steps;
+                    float window = 0f;
+                    if (along > apexBiasEndBand && along < 1f - apexBiasEndBand)
+                    {
+                        window = (float)Math.Sin(Math.PI * ((along - apexBiasEndBand) / (1f - (2f * apexBiasEndBand))));
+                        window *= window;
+                    }
+                    float apexBias = 1f - (apexBiasDepth * window);
+                    points.Add(new Vector3(centre.X + (radius * apexBias * (float)Math.Cos(angle)), centre.Y + (radius * apexBias * (float)Math.Sin(angle)), sStart.Z));
                 }
             }
             else
