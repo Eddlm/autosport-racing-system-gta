@@ -11,7 +11,7 @@
 - `player-special-ability` — ignore the engine's player grip and steer advantage. **DECIDED (driver)**
 - `ai-free-abs` — ABS stays the car's flags plus ARS's own cap. **DECIDED (driver)**
 - `crest-gate` — entry move built and driver-verified (`27ee097`). The corner must account for the crest so cars brake earlier than an airborne arrival allows; the gate tests whether the crest falls inside the braking span and clears a severity floor — err generous. The two constants wait on the instrumented run.
-- `lane-guidance-gate` — REMOVED: the lane steer is ungated and the aim is the carried lane, so a straight-line standing offset is held; the drive is owed.
+- `lane-guidance-gate` — REMOVED: the lane steer is ungated and the aim is the carried lane, so a straight-line standing offset is held. **driver-verified**
 - `settings-key-symmetry` — shipped (`fb2b684`, `4852d7d`); the key name still has four homes.
 - `settings-doc-anchor-drift` — anchors DONE; the seven claim-level re-derivations remain.
 
@@ -86,10 +86,10 @@
 - `amputated-remnants` — closed: trimmed and compiled, the keeper decided.
 - `slip-axis-scale` — settled by live probe and fixed (`b11e52b`); the disproved reading it overturns is corrected in `AGENTS-TECHNOTES.md`. Parked before the drive.
 - `launch-slip-allowance` — allow more slip off the line, as a setting or a per-racer personality. **(idea)**
-- `outside-approach-window` — the outside line is in force from far too far back; both time gates await a drive, and `RequiresBraking` is deliberately not cleared so a plan holds through the apex.
+- `outside-approach-window` — the outside line is in force from far too far back; both time gates are driver-verified, and `RequiresBraking` is deliberately not cleared so a plan holds through the apex. **closed**
 - `radius-variants` — audit the radius family and settle which rung every consumer reads.
-- `lane-crossing-share` — the lane ask is scaled down as the car crosses, except into a corner (driver-verified, `da63a0d`); a soft scale that never reaches nothing, with turn-in exempt for the entry alone.
-- `outward-lead-bound` — the aim may not lead the car's own lane by more than 1.5 m; driver-verified (`73756c7`).
+- `lane-crossing-share` — the lane ask is scaled down as the car crosses, except into a corner (driver-verified, `da63a0d`); a soft scale that never reaches nothing, with turn-in exempt for the entry alone. **closed**
+- `outward-lead-bound` — the aim may not lead the car's own lane by more than 1.5 m; driver-verified (`73756c7`). **closed**
 
 ## Agenda — the workstreams named for the coming days
 - **A. Corner context, from the ground up** — one context-generation system naming brake point, turn-in and apex; diagnosed, partly shipped.
@@ -98,7 +98,7 @@
 - **D. The card system** — refine the live maneuvers toward the designed duel model; priority ChillOut → DefendLane → DiveBomb → Yield, nitro slotless, and a played card is never reconsidered. Coupled to C, and A is upstream of both.
 - **E. The route-frame ranking migration** — deferred to its own session; six consumers still rank by world `Distance`.
 - **F. A central perception manager** — deferred, own session, needs the measurement first; it contains E.
-- **G. Countersteer** — the next workstream, after the recovery drive; the slew stays one flat rate (`f84fe9a`) until then.
+- **G. Countersteer** — **closed (driver)**: taken with the steering chain, the slew left at one flat rate (`f84fe9a`).
 - **Aftermath of A, driver-observed and to revisit** — a bend before a chicane now registers as its own corner.
 
 ## Held for a future version
@@ -121,7 +121,7 @@
 - `dnf-final-death` — **driver-verified (`0623276`)**
 - `rival-detection-route-frame` — **driver-verified (`0623276`)**, residuals unobserved
 - `lane-repulsion-ceiling`, `player-special-ability`, `ai-free-abs` — **all DECIDED**
-- `outside-approach-window` — arming half driver-verified, the skip owed (`7619347`, `1395c30`)
+- `outside-approach-window` — **driver-verified (`7619347`, `1395c30`)**, both gates
 - `crest-gate` — entry move driver-verified (`27ee097`), gating constants pending
 - `steer-ramp-band` — **driver-verified (`489`, `e59e0a9`)**
 - `side-slip-scale` — **unsettled**; probe the side-slip field beside the longitudinal one on a single drive before moving the sphere landmarks or the parked allowance's constants
@@ -135,7 +135,7 @@
 - `grip-learner` — **DISMISSED (driver)**
 - `slip-axis-scale` — **settled and fixed (`b11e52b`)**, the TCS share restatement and the ABS knee with it, drives parked
 - `intention-maxspeed-ramp` — **closed (`f894228`)**, not drivable
-- `lane-crossing-share` — **driver-verified (`da63a0d`)**, off behind `LaneCrossingScale` (`b390029`); a comparison is owed
+- `lane-crossing-share` — **driver-verified (`da63a0d`)**, the comparison included (`b390029`)
 - `outward-lead-bound` — **driver-verified (`73756c7`)**
 - `slide-brake-rampdown` — **parked**
 - `steer-slip-allowance` — **parked** after one drive
@@ -143,6 +143,6 @@
 - `raceable-bikes` — **parked, post-0.9.0**
 - `wheel-contact-count` — **not built**
 - `amputated-remnants` — **closed (`8d1888e`)**
-- **Steering is closed (driver)** — the limiter, its ramp band, the ceiling and its factor, the damper, the slew and the blend are all driven and accepted.
+- **Steering is closed (driver)** — the limiter, its ramp band, the ceiling and its factor, the damper, the slew and the blend, the lane laws with the lane mover and its target timing, and the contact-avoidance term are all driven and accepted.
 - **Pushed**, newest first: `053146e..ea87461` (the slip axis settled by probe, the TCS pair as shares of the peak, the ABS knee on that peak, the kick and debug trains); `da8a407..053146e` (the lane chain's run); `c2e7e6b..7872758` (the ceiling's midpoint reference, the wheel-slip spheres, the measured-slip allowance built then parked, the settled steering pair); `ac5514b..c2e7e6b` (the debug-visual train, the slide-raise retirement, the ramp/damper batch, the overspeed ramp, the lane base and the Council fixes).
-- **Undriven across those runs**: the lane base and the Offshoot gate it inverted, the lane's reason tag, the re-grounded contact avoidance, the divebomb, the kick card and the debug-visual train — the drives owed are the last section of `TEST-PLAN.md`.
+- **Undriven across those runs**: the divebomb, the kick card and the debug-visual train — the drives owed are the last section of `TEST-PLAN.md`.
