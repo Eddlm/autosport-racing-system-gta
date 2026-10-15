@@ -60,7 +60,7 @@
 - `saveroute-precision` — 4-decimal route writes. **DECIDED and implemented** (`Math.Round(v.X, 4)` at `TrackFile.cs:132,137,142`; the props keep their own 2 decimals).
 - `reverse-throttle` — removed by design; nitro charges at launch and per lap, no free-roam refill.
 - `instability-tuning` — tuned by driving, not derived.
-- `overspeed-correction` — driver-verified (`2dcbbcc`); the refresh rate and grade term remain.
+- `overspeed-correction` — driver-verified (`2dcbbcc`); the two residuals, verified in place: the wheel-pushed Gs are sampled at ~3 Hz with a 0.1 G deadband (`Racer.cs:4109-4123`), and the comparison keeps no explicit grade term — the slope's contribution sits inside the measured excess rather than being separated from it.
 - `tcs-controller` — a reason cap, not a P-integrator (`1ebbd2c`); its two knobs are shares of the peak slip (`b11e52b`).
 - `steering-batch-residuals` — closed: the countersteer allowance and the damper's crossing were driven and stand as they are. **closed**
 - `merge-span-gap` — a surviving merge does not reach its own first corner's entrance.
@@ -78,7 +78,7 @@
 - `wheel-contact-count` — a per-wheel ground-contact count for the stability check; the near-zero test is the part to fix, since a rolling tyre always reads a little noise. **not built**: verified, no contact-count symbol exists in `src`.
 - `ceiling-factor-range` — closed (`29b267b`): the domain is 0.05 to 1.25 in 0.05 steps. **closed**
 - `tcs-cap-floor-setting` — verified: `TcsCapFloor` (`Racer.cs:1938`, read `:2050`) has no menu item and no key while the threshold and the span above it both have one, so it is the one part of the policy the driver cannot reach.
-- `overspeed-thresholds-setting` — verified: `OverspeedEnabled` is the only exposed setting (`AutosportRacingSystem.cs:1023`, `SettingsRepair.cs:147`); the five thresholds are consts with no key and no item (`Racer.cs:1966-1972`).
+- `overspeed-thresholds-setting` — verified: what is missing is the setting, not the shape — the mechanism already ramps (the half-throttle ladder became a linear cut between the two thresholds, `2dcbbcc`, driven), while `OverspeedEnabled` is the only exposed key (`AutosportRacingSystem.cs:1023`, `SettingsRepair.cs:147`) and the ramp pair (`OverspeedCutStartGs` / `OverspeedCutFullGs`) plus the arm trio (`OverspeedArmMaxSteerDegrees` / `…MaxSlideDegrees` / `…MinSpeedMph`) are consts with no item.
 - `corner-record-dormant-fields` — **deleted (dev build 614)**: `RequiresEarlyBrake` and `RampEndNode` had no writer anywhere and their only reader was the dead `MaxSpeedForBrakingDistance`, so both went with it. **closed**
 - `grip-learner` — DISMISSED (driver). Do not rebuild it from memory: the two-sided bracket, its cleanliness filters and the grip-memory persistence were the dismissed design.
 - `surface-path-unread` — **deleted (dev build 614)**: `ARS.TerrainGripMultipliers` and its per-node writer are gone; the live grip path is `MeanWheelGripMultiplier` → `GroundGripMultiplier` → `CurrentMechanicalGrip`. **closed**
