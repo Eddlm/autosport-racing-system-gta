@@ -95,7 +95,7 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 - **Sideloaded fleet handling** — ARS reads the live `CHandlingData` from memory, never the `Sideload\` resource files; the file of record and its flag-parsing path are in `AGENTS-TECHNOTES.md` and `AGENTS-FLAGS.md`.
 
 ## Per-racer state
-**Moved to the companions**: the shipped cards, rivals and nitro are in `AGENTS-DUEL.md` → "Live per-racer state"; instability and the throttle cut in `AGENTS-STEERING.md` → "Instability"; the player-vs-AI engine divergence in `AGENTS-VANILLA-STEERING.md`. The rule of thumb stays.
+**Moved to the companions**: the shipped cards, rivals and nitro are in `AGENTS-DUEL.md` → "Live per-racer state"; stability and the throttle cut in `AGENTS-STEERING.md` → "Stability"; the player-vs-AI engine divergence in `AGENTS-VANILLA-STEERING.md`. The rule of thumb stays.
 - **Rule of thumb: the player and the AI follow the same rules.** When adding a mechanic, default to one code path for both; diverge only when the game engine forces it (e.g. the player's special ability, the AI's free ABS).
 
 **Duel model (designed via Council, not implemented) — full design in `AGENTS-DUEL.md`.** Physics-aware card play on one shared time-to-apex primitive taken from each car's own live plan; **anything about rivals, overtaking or card play starts in `AGENTS-DUEL.md`.**

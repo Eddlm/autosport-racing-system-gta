@@ -2990,6 +2990,19 @@ namespace ARS
             return w;
         }
 
+        // A wheel out of contact reads exactly zero on the side-slip axis, so the zeroes are the wheels off the
+        // ground. The longitudinal ratio cannot serve this: a decompressed tyre still reads ~0 there.
+        static public unsafe int WheelsOffGround(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            int off = 0;
+            foreach (var wheel in wheelPtrs)
+            {
+                if (*((float*)(wheel + 0x1C4)) == 0f) off++;
+            }
+            return off;
+        }
+
         // Per-wheel side-slip angle on the traction curve's own axis (peaks at 1.0, flat from 2.5). The offset is
         // derived from the leaked CWheel member order and pinned by the neighbours already known on this build:
         // rot slip 0x174, material grip 0x198, steer angle 0x1CC, drive force 0x1D4.

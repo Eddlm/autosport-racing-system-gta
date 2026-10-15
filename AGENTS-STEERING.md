@@ -493,10 +493,11 @@ The apex plan is released only once braking is genuinely done, down at apex spee
 
 Track facts: node counts are treated as metres; measured spacing on `Airport Quick 1` averaged 1.034 m/node over 1491 gaps (0.877–2.394 m), so the convention is count-as-metres, not exact spacing. Circuit lookaheads use modulo and point-to-point clamps.
 
-## Instability — the throttle cut's landing state (moved out of the project memory, verbatim)
+## Stability — the throttle cut's landing state (moved out of the project memory, verbatim)
 
-- **Instability owns the throttle cut now, and it is a first cut (`Racer.cs:1675`)**: the 3 Hz `WheelsOnGround` latch, `AirborneThrottleLevel` and `MaxThrottleFromStability` are **removed**, and `IsUnstable` reads on every **timed core** pass, never per frame (`AutosportRacingSystem.cs:1888` paces the batch), firing when the chassis rides above the at-rest height captured in `Launch` or when its yaw rate demands more lateral acceleration than the known grip allows.
-  `CurrentMechanicalGrip` still carries no stability factor, and nothing models roll, pitch, load or suspension.
+- **Stability owns the throttle cut, and it is one signal (`Racer.cs`)**: the count of wheels reading zero on the side-slip axis (`ARS.WheelsOffGround`, `wheel+0x1C4`) sets a target of 1.0 less a quarter per wheel out of contact, glided onto the throttle cap at 2/s in and 1/s out — its own rate pair, so the shared reason-cap rates stay where they were — read on every **timed core** pass, never per frame.
+- **The arms it replaced are gone**: the ride-height-above-rest test and the yaw-demand test are **removed**, with `InstabilityRideHeightMargin`, `InstabilityMinSpeedMps` and `InstabilityYawTolerance`. That costs the four-wheels-down slide its throttle cut, so the TCS cap and the steering blend are what answer a slide now.
+- **The lateral axis is load-bearing**: this was built once before (`cead3dd`), counting near-zeroes on the **longitudinal** ratio, and retired (`c18444a`) because a decompressed tyre still reads ~0 there. `CurrentMechanicalGrip` carries no stability factor, and nothing models roll, pitch, load or suspension.
 
 ## Durable gotchas — steering and pipeline (moved out of the project memory, verbatim)
 

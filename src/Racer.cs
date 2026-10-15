@@ -1474,7 +1474,7 @@ namespace ARS
             Control.MaxBrakeFromABS = 1f;
             Control.MaxBrakeFromCountersteer = 1f;
             Control.MaxThrottleFromTCS = 1f;
-            Control.MaxThrottleFromInstability = 1f;
+            Control.MaxThrottleFromStability = 1f;
             Control.MaxThrottleFromOverspeed = 1f;
             Control.MaxThrottleFromRival = 1f;
             Control.MaxThrottleFromChillOut = 1f;
@@ -1945,14 +1945,11 @@ namespace ARS
         const float OffTrackSafeSpeedMph = 20f;
         const float OffTrackFullThrottleMph = 15f;
 
-        // Instability, the replacement's first cut: off-road the chassis is thrown around and the two consequences
-        // are losing grip and losing control. The ride height is captured at Launch, where the car is known to be at
-        // rest, so a rise above it is the chassis unloading off its suspension; the yaw side is the friction circle,
-        // since at this speed the tyres allow at most grip*g of lateral acceleration.
-        const float InstabilityRideHeightMargin = 0.1f;
-        const float InstabilityMinSpeedMps = 8f;
-        const float InstabilityYawTolerance = 1.2f;
-        const float InstabilityThrottleLevel = 0f;
+        // Stability: each wheel out of contact costs a quarter of the throttle, since it cannot use the grip it has.
+        // The count is zeroes on the side-slip axis, where a decompressed wheel does not read zero; falling is twice rising.
+        const float StabilityPerWheelOff = 0.25f;
+        const float StabilityFallPerSecond = 2f;
+        const float StabilityRisePerSecond = 1f;
 
         // The overspeed correction only arms while the car is going straight and up to speed: steering or slide of
         // its own puts lateral work and bump transients into the longitudinal read, and below the speed gate the
@@ -1967,11 +1964,16 @@ namespace ARS
         // Cutting is fast, recovering is deliberate: the shared rate going down, half of it coming back.
         const float ReasonCapRecoveryScale = 0.5f;
 
+        static float Glide(float current, float level, float fallRate, float riseRate, float tickScale)
+        {
+            float rate = level < current ? fallRate : riseRate;
+            float step = rate * tickScale;
+            return ARS.Clamp(current + ARS.Clamp(level - current, -step, step), 0f, 1f);
+        }
+
         float GlideCap(float current, float level)
         {
-            float rate = level < current ? ReasonCapSlewRate : ReasonCapSlewRate * ReasonCapRecoveryScale;
-            float step = rate * TickScale;
-            return ARS.Clamp(current + ARS.Clamp(level - current, -step, step), 0f, 1f);
+            return Glide(current, level, ReasonCapSlewRate, ReasonCapSlewRate * ReasonCapRecoveryScale, TickScale);
         }
 
         void UpdateThrottleReasonCaps()
@@ -1979,7 +1981,7 @@ namespace ARS
             // The kick card plays on exactly the wheelspin this cut moderates: the card owns the pedal for its
             // window, so the field is pinned for the window rather than glided back.
             Control.MaxThrottleFromTCS = _kickPlaying ? 1f : GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
-            Control.MaxThrottleFromInstability = GlideCap(Control.MaxThrottleFromInstability, IsUnstable() ? InstabilityThrottleLevel : 1f);
+            Control.MaxThrottleFromStability = Glide(Control.MaxThrottleFromStability, StabilityTarget(), StabilityFallPerSecond, StabilityRisePerSecond, TickScale);
 
             bool overspeedArmed = Math.Abs(Control.SteerDegrees) < OverspeedArmMaxSteerDegrees && Math.Abs(VehicleData.SlideAngle) < OverspeedArmMaxSlideDegrees && Car.Velocity.Length() > ARS.MphToMps(OverspeedArmMinSpeedMph);
             float overspeedLevel = 1f;
@@ -2016,14 +2018,9 @@ namespace ARS
         // Both signals are read every tick: the old system latched them at 3 Hz and missed crests shorter than the
         // sample period. Riding above the at-rest height means the chassis is unloaded, bouncing or airborne;
         // demanding more lateral acceleration than the grip allows means the car is rotating, not cornering.
-        bool IsUnstable()
+        float StabilityTarget()
         {
-            if (_restHeightAboveGround > 0f && Car.HeightAboveGround - _restHeightAboveGround > InstabilityRideHeightMargin) return true;
-
-            float speed = Car.Velocity.Length();
-            if (speed < InstabilityMinSpeedMps) return false;
-            float lateralDemand = ARS.DegToRad(Math.Abs(VehicleData.YawRotationPerSecondDegrees)) * speed;
-            return lateralDemand > VehicleData.CurrentMechanicalGrip * Handling.Gravity * InstabilityYawTolerance;
+            return Math.Max(0f, 1f - StabilityPerWheelOff * ARS.WheelsOffGround(Car));
         }
 
         // Both TCS knobs are shares of the peak slip; the field the wheels publish is the peak times that share.
@@ -2077,11 +2074,11 @@ namespace ARS
         float ComposeThrottleCap(float baseThrottle, bool offtrackLimited, bool countersteering)
         {
             // The kick card owns a floor, not a cap: its window raises the base before the argmin, and the only
-            // cap it defeats is TCS, pinned at the field — instability and the live caps still bound the result.
+            // cap it defeats is TCS, pinned at the field — stability and the live caps still bound the result.
             bool kickRaises = _kickPlaying && baseThrottle < KickPedalLevel;
             if (kickRaises) baseThrottle = KickPedalLevel;
 
-            float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromInstability);
+            float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromStability);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOverspeed);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRival);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromChillOut);
@@ -2093,7 +2090,7 @@ namespace ARS
             float binding = baseThrottle;
             ThrottleReason reason = ThrottleReason.Plan;
             if (Control.MaxThrottleFromTCS < binding) { binding = Control.MaxThrottleFromTCS; reason = ThrottleReason.Tcs; }
-            if (Control.MaxThrottleFromInstability < binding) { binding = Control.MaxThrottleFromInstability; reason = ThrottleReason.Instability; }
+            if (Control.MaxThrottleFromStability < binding) { binding = Control.MaxThrottleFromStability; reason = ThrottleReason.Stability; }
             if (Control.MaxThrottleFromOverspeed < binding) { binding = Control.MaxThrottleFromOverspeed; reason = ThrottleReason.Overspeed; }
             if (Control.MaxThrottleFromRival < binding) { binding = Control.MaxThrottleFromRival; reason = ThrottleReason.Rival; }
             if (Control.MaxThrottleFromChillOut < binding) { binding = Control.MaxThrottleFromChillOut; reason = ThrottleReason.ChillOut; }
@@ -2723,12 +2720,12 @@ namespace ARS
         const float PedalLimitReasonSize = 0.1f;
         const float PedalLimitCapSize = 0.09f;
         // Etiquette limits (rival, chill-out, yield) are harmless, so they read cool; grip limits yellow; the
-        // overspeed cut black; countersteer orange; instability violet; the recovery coast cyan.
+        // overspeed cut black; countersteer orange; stability violet; the recovery coast cyan.
         static readonly Color NonDangerousReasonColor = Color.FromArgb(255, 120, 200, 255);
         static readonly Color GripReasonColor = Color.Yellow;
         static readonly Color OverspeedReasonColor = Color.Black;
         static readonly Color CountersteerReasonColor = Color.Orange;
-        static readonly Color InstabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
+        static readonly Color StabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
         static readonly Color RecoveryReasonColor = Color.Cyan;
         // The lane line's own hues, plus the one colour for a bound rather than a source: a wall clamp and the debug
         // pin are not opinions about where to go, so they must not read as one. The commit card takes the hue furthest
@@ -2769,7 +2766,7 @@ namespace ARS
         {
             int count = 0;
             AddPedalLimit(Control.MaxThrottleFromTCS, GripReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxThrottleFromInstability, InstabilityReasonColor, PedalLimitReasonSize, ref count);
+            AddPedalLimit(Control.MaxThrottleFromStability, StabilityReasonColor, PedalLimitReasonSize, ref count);
             AddPedalLimit(Control.MaxThrottleFromOverspeed, OverspeedReasonColor, PedalLimitReasonSize, ref count);
             AddPedalLimit(Control.MaxThrottleFromRival, NonDangerousReasonColor, PedalLimitReasonSize, ref count);
             AddPedalLimit(Control.MaxThrottleFromChillOut, NonDangerousReasonColor, PedalLimitReasonSize, ref count);

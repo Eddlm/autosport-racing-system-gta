@@ -292,7 +292,7 @@ namespace ARS
         GridWait,
         Countersteer,
         StuckRecovery,
-        Instability,
+        Stability,
         Kick
     }
 
@@ -342,7 +342,7 @@ namespace ARS
         public float MaxThrottleFromRival = 1f;
         public float MaxThrottleFromChillOut = 1f;
         public float MaxThrottleFromYield = 1f;
-        public float MaxThrottleFromInstability = 1f;
+        public float MaxThrottleFromStability = 1f;
         public float MaxThrottleFromOffTrack = 1f;
         public float MaxThrottleFromRecovery = 1f;
         public ThrottleReason ThrottleReason = ThrottleReason.Plan;
