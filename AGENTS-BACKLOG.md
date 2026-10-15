@@ -32,27 +32,27 @@
 - `electric-pace` — slow-electrics class question, **DECIDED**: class membership must not influence an electric's treatment (`3d589d6`, user decision), and the ramp's peak stays the scored value, measured and deliberately left (`f3fc274`, `e6c0370`).
 
 **Tier 4 — coupled systems**
-- `corner-approach-braking` — start the outside-line move about a second before the car must brake for the apex, computed from its own speed profile rather than a fixed seconds-to-apex gate.
+- `corner-approach-braking` — **closed (driver)**: irrelevant now. **closed**
 - `rival-publish-core` — the rival publish moves onto the core pass over a per-frame pose snapshot, so a card stops deciding on a record up to half a second old. **not built**: verified, `UpdateRivalInfo` still runs on its own 500 ms beat (`Racer.cs:3695-3699`) while the cards run on the core pass below it (`:3700`), and the second call (`:4183`) is the re-own path, not a cadence change.
 
 **Tier 5 — new controllers and design decisions**
-- `snap-oversteer` — a D-term that does not exist yet; dedicated session. **not built** (verified: no derivative term anywhere in the steering chain).
+- `snap-oversteer` — **dropped (driver)**: old and irrelevant today. **closed**
 - `gravity-grip` — gravity carries the offroad multiplier and grip stays the coefficient, both published. **BUILT (compile-verified, dev build 613), drive owed**: the double-count is gone — the grip bake in `UpdatePerceivedGrip` is deleted, so grip is the coefficient again, and `AckermannCeilingDegrees` and `SteerLimitedSpeed` read `Handling.Gravity` like every other grip law. The rule stands: a quantity about actual grip takes the car's own gravity; a theoretical or reporting one (`ComputePaceIndex` `AutosportRacingSystem.cs:97`, the curvature-to-G conversion `:2670`) keeps the assumed 9.8.
 - `pace-model-theoretical` — pre-race selection is spawn-free by design, the player's car alone the live gap. Preserve the invariant that the leaderboard number equals the selection metric.
-- `overrotation-pedal` — a rotation-driven throttle authority; the pedal acts on rear grip, and the driver-observed case that puts it on the map is full throttle while the car slides. **not built** (verified: no such symbol in `src`).
-- `yaw-damper` — reference and speed/grip schedule shipped (`d5a643f`); the crossing past neutral while the rear leads remains, with the floor-plus-ceiling shape as the fix.
+- `overrotation-pedal` — **parked for 0.11.0 (driver)**, ideas category, not priority: a rotation-driven throttle authority on rear grip, from the driver-observed case of full throttle while the car slides. **not built** (verified: no such symbol in `src`).
+- `yaw-damper` — **dropped (driver)**: old and irrelevant today; the reference and its speed/grip schedule shipped (`d5a643f`) and the crossing residual is not planned. **closed**
 
 **Tier 6 — subsystem reworks**
-- `two-projection` — two-projection route speed replacing the geometric route speed. **not built** (verified: no such symbol in `src`).
+- `two-projection` — **closed (driver)**: the idea was a second projection assuming less grip, and it is not wanted. **closed**
 
 **Tier 7 — shipped, wants a second look**
-- `downhill-braking-term` — span consistency fixed and verified in game. The per-node decel profile is **not** a defect — the mean is the exact quantity — so do not "fix" it. Open: the brake-learning/grade coupling.
+- `downhill-braking-term` — **closed (driver)**: the brake learner covers the grade coupling. The per-node decel profile remains **not** a defect — the mean is the exact quantity — so do not "fix" it. **closed**
 
 **Tier 8 — removed for the WIP, reimplement later**
 - `slide-brake-rampdown` — taken out so the WIP ships a tuned steering/braking pair. **parked**, v0.9 and over; anything reimplemented must respect the pair **instant release, ramped recovery**.
 
 **Tier 9 — recorded ideas, not started**
-- `brake-learning` — a slide-learned ceiling per corner; a design call first, then wheel time, and the ceiling has to be per corner rather than per car.
+- `brake-learning` — **dropped (driver)**: the slide-learned ceiling is not relevant anymore. **closed**
 
 **Relocated open items — ranked on entry**
 - `low-speed-ramp-peak` — closed by reading the source; refile only from a symptom the driver describes. **closed**
@@ -71,11 +71,11 @@
 - `manual-apex-placement` — place apexes by hand. **(idea)**
 - `creator-apex-preview` — preview the apex table inside the creator. **(idea)**
 - `surface-stats-revival` — track surface composition. **(idea)**
-- `bump-ramp-window` — bumps are ramps, the airborne window; Stage 0 scan built and its overlay driver-verified (`f3f318f`). Detection must not reuse the crest instrument, ramps must be classified rather than treated alike, a bump on a crest takes the `min` of the two speed effects and never their sum, the classification lives in the consumer and never the detector, and both behaviours ship as a setting with an off state.
+- `bump-ramp-window` — bumps are ramps, the airborne window; Stage 0 scan built and its overlay driver-verified (`f3f318f`). Detection must not reuse the crest instrument, ramps must be classified rather than treated alike, a bump on a crest takes the `min` of the two speed effects and never their sum, the classification lives in the consumer and never the detector, and both behaviours ship as a setting with an off state. **for 0.11.0 (driver)**
 - `section-roughness-sweep` — a lateral normal sweep giving a section's roughness, which would make a one-lane bump visible. Call it roughness or section quality — **not** stability, which is the car's own state. **(idea)**
 - `ceiling-factor-review` — closed (`0dfbf53`): reverted the midpoint to the outer wheel; the outer reference has since been driven. **closed**
 - `steer-slip-allowance` — the measured-slip allowance under the ceiling; built, driven once, parked off, and what it should be is a design call. **parked**
-- `wheel-contact-count` — a per-wheel ground-contact count for the stability check; the near-zero test is the part to fix, since a rolling tyre always reads a little noise. **not built**: verified, no contact-count symbol exists in `src`.
+- `wheel-contact-count` — **to build now (driver)**. The signal already exists: `wheel+0x198` is the per-wheel surface grip multiplier and reads ~0 when the wheel is lifted (`MeanWheelGripMultiplier` averages it), so a contact count is "how many wheels read above the noise floor". The defect it fixes: the mean includes a momentarily unloaded wheel, so `CurrentMechanicalGrip` dips on every corner, kerb and crest, and a car in the air reads slip 0 and grip ~0 at once. Design: average only the grounded wheels, with the floor set above the rolling noise.
 - `ceiling-factor-range` — closed (`29b267b`): the domain is 0.05 to 1.25 in 0.05 steps. **closed**
 - `tcs-cap-floor-setting` — verified: `TcsCapFloor` (`Racer.cs:1938`, read `:2050`) has no menu item and no key while the threshold and the span above it both have one, so it is the one part of the policy the driver cannot reach.
 - `overspeed-thresholds-setting` — **BUILT (compile-verified, dev build 616), drive owed**: `Overspeed Correction` is a list now — `Off`, then `0.1` to `1.0` in 0.1 steps, default `0.2` — where the number is the throttle lifted per 0.1 G of surplus over the fixed 0.2 G threshold, so the cut completes at `0.2 + 0.1 / value` (`0.1` reproduces the shape driven at build 612, `1.0` completes at 0.30 G). `OverspeedEnabled` is retired and carried (False → Off, True → the default); the arm trio stays const. The drive it owes is the overspeed section of `TEST-PLAN.md`.
@@ -142,7 +142,7 @@
 - `steer-slip-allowance` — **parked** after one drive
 - `pi-controls-merge` — **DECIDED, not built**; wanted at the forefront of the next version
 - `raceable-bikes` — **parked, post-0.9.0**
-- `wheel-contact-count` — **not built**
+- `wheel-contact-count` — **to build now (driver)**
 - `amputated-remnants` — **closed (`8d1888e`)**
 - **Steering is closed (driver)** — the limiter, its ramp band, the ceiling and its factor, the damper, the slew and the blend, the lane laws with the lane mover and its target timing, and the contact-avoidance term are all driven and accepted.
 - **Pushed**, newest first: `053146e..ea87461` (the slip axis settled by probe, the TCS pair as shares of the peak, the ABS knee on that peak, the kick and debug trains); `da8a407..053146e` (the lane chain's run); `c2e7e6b..7872758` (the ceiling's midpoint reference, the wheel-slip spheres, the measured-slip allowance built then parked, the settled steering pair); `ac5514b..c2e7e6b` (the debug-visual train, the slide-raise retirement, the ramp/damper batch, the overspeed ramp, the lane base and the Council fixes).
