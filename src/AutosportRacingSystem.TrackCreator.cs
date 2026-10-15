@@ -253,7 +253,8 @@ namespace ARS
                 // The width fill above is what a rebuild has to see, so this is the first point it can run. A delete
                 // is read off the count rather than its own branch, because that branch can also clear the route.
                 if (rebuildFrom < 0 && RouteNodes.Count < routeCountAtStart) rebuildFrom = Math.Max(0, RouteNodes.Count - 1);
-                if (rebuildFrom >= 0 && RouteNodes.Count > 0) TrackLoader.RebuildRouteInfo(rebuildFrom, RouteNodes.Count - 1);
+                // Attack and Aim can both land in one frame; the lower anchor is the one that sees every changed node.
+                if (rebuildFrom >= 0 && RouteNodes.Count > 0) TrackLoader.RebuildRouteInfo(Math.Min(rebuildFrom, RouteNodes.Count - 1), RouteNodes.Count - 1);
 
             }
         }

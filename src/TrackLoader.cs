@@ -195,12 +195,15 @@ namespace ARS
         // is still the fresh object's default because the width is written *below* this call, so the read only ever
         // saw ten — an incremental pass over already-written points would have widened it silently.
         const int GeometryWindowNodes = 10;
+        // The point-to-point end band, where a node has no usable window. Its boundary is the route count minus this,
+        // so an append or a delete anywhere moves it — the band is invalidated as a whole by any change.
+        const int PointToPointEndBandNodes = 50;
 
         static void ComputePointGeometry(TrackPoint point, int nodeCount)
         {
             int average = GeometryWindowNodes;
             bool canCompute = ARS.IsPointToPoint
-                ? nodeCount > 50 && point.Node > 50 && point.Node < nodeCount - 50
+                ? nodeCount > PointToPointEndBandNodes && point.Node > PointToPointEndBandNodes && point.Node < nodeCount - PointToPointEndBandNodes
                 : point.Node >= 0 && point.Node < nodeCount;
 
             if (canCompute)
@@ -258,6 +261,7 @@ namespace ARS
         {
             ARS.TrackPoints.Clear();
             ARS.Corners.Clear();
+            ARS.Bumps.Clear();
             ARS.RouteLengthMeters = 0f;
             ARS.IsPointToPoint = false;
             ARS.CornersRevision++;
@@ -269,7 +273,9 @@ namespace ARS
         // seam spans the route, so no window of it is local. Both halves run the load pass's own rules.
         public static void RebuildRouteInfo(int firstChanged, int lastChanged)
         {
+            bool wasPointToPoint = ARS.IsPointToPoint;
             RefreshRouteTopology();
+            bool flipped = wasPointToPoint != ARS.IsPointToPoint;
             while (ARS.TrackPoints.Count > ARS.RouteNodes.Count) ARS.TrackPoints.RemoveAt(ARS.TrackPoints.Count - 1);
             while (ARS.TrackPoints.Count < ARS.RouteNodes.Count)
             {
@@ -278,31 +284,51 @@ namespace ARS
             }
 
             int count = ARS.RouteNodes.Count;
-            int from = Math.Max(0, firstChanged - GeometryWindowNodes);
-            int to = Math.Min(count - 1, lastChanged + GeometryWindowNodes);
-            for (int node = from; node <= to; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
-            // On a circuit the route wraps, so a change at the tail also moves the head: those nodes read forward
-            // across the seam into the new nodes.
-            if (!ARS.IsPointToPoint && count > GeometryWindowNodes)
-                for (int node = 0; node <= GeometryWindowNodes; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
+            long started = ARS.LogLevel <= ARS.LogImportance.Info ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
+            if (flipped)
+            {
+                // A flip moves every node between the two window laws, so nothing short of a full recompute is right.
+                for (int node = 0; node < count; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
+            }
+            else
+            {
+                int from = Math.Max(0, firstChanged - GeometryWindowNodes);
+                int to = Math.Min(count - 1, lastChanged + GeometryWindowNodes);
+                if (to < from) to = from;
+                for (int node = from; node <= to && node < count; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
+
+                if (!ARS.IsPointToPoint)
+                {
+                    // A circuit wraps, so a change at the tail also moves the head, which reads across the seam.
+                    for (int node = 0; node <= GeometryWindowNodes && node < count; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
+                }
+                else
+                {
+                    // The band's boundary is the count minus a constant, so any change moves it: both bands are
+                    // invalidated by an append or a delete, wherever it lands.
+                    for (int node = 0; node <= PointToPointEndBandNodes && node < count; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
+                    for (int node = Math.Max(0, count - 1 - PointToPointEndBandNodes); node < count; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
+                }
+            }
 
             RecomputeCumulativeDistances();
             BuildApexTable();
-            if (ARS.LogLevel <= ARS.LogImportance.Info) VerifyAgainstFullPass();
+            if (ARS.LogLevel <= ARS.LogImportance.Info) LogRebuildAndVerify(started);
         }
 
         // Test-only, and gated *before* any work is prepared: Log cannot suppress its own arguments, so the check
-        // returns early rather than being wrapped around a call. It re-runs the load pass over the same route, so the
-        // incremental table is proved against the reference instead of assumed to match it.
-        static void VerifyAgainstFullPass()
+        // returns early rather than being wrapped around a call. It times the local rebuild that just ran and then
+        // re-runs the load pass over the same route, so the incremental table is proved against the reference.
+        static void LogRebuildAndVerify(long started)
         {
+            long localMs = (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000L / System.Diagnostics.Stopwatch.Frequency;
             string incremental = CornerSignature();
             System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
             GenerateRouteInfo();
             watch.Stop();
             string full = CornerSignature();
             ARS.Log(ARS.LogImportance.Info, "Route rebuild: " + (incremental == full ? "incremental matches the full pass" : "INCREMENTAL DIFFERS from the full pass")
-                + " (" + ARS.RouteNodes.Count + " nodes, full pass " + watch.ElapsedMilliseconds + "ms)"
+                + " (" + ARS.RouteNodes.Count + " nodes, local " + localMs + "ms, full " + watch.ElapsedMilliseconds + "ms)"
                 + (incremental == full ? "" : "\n  incremental " + incremental + "\n  full        " + full));
         }
 
@@ -310,9 +336,18 @@ namespace ARS
         {
             System.Text.StringBuilder text = new System.Text.StringBuilder();
             text.Append("bumps=").Append(ARS.Bumps.Count);
+            foreach (Bump bump in ARS.Bumps)
+            {
+                text.Append(" b").Append(bump.LipNode).Append(',').Append(bump.RiseStartNode)
+                    .Append(',').Append(bump.DepartureGrade.ToString("0.###", CultureInfo.InvariantCulture));
+            }
             foreach (CornerPoint corner in ARS.Corners)
             {
                 text.Append(" | ").Append(corner.Node).Append(':').Append(corner.StartNode).Append('-').Append(corner.EndNode)
+                    .Append('@').Append(corner.Angle.ToString("0.###", CultureInfo.InvariantCulture))
+                    .Append('x').Append(corner.Speed.ToString("0.##", CultureInfo.InvariantCulture))
+                    .Append('l').Append(corner.LengthStart).Append(',').Append(corner.LengthEnd)
+                    .Append(corner.IsChicane ? "C" : "c")
                     .Append('/').Append(corner.SupposedRadius.ToString("0.##", CultureInfo.InvariantCulture))
                     .Append('/').Append(corner.DetectedRadius.ToString("0.##", CultureInfo.InvariantCulture))
                     .Append('/').Append(corner.CrestNode).Append(',').Append(corner.CrestEntryNode).Append(',')
