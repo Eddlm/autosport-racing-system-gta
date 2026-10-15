@@ -25,6 +25,7 @@
 - `apex-radius` — driver-observed on high-grip cars (`aa302e1`); the fleet-wide read is owed.
 - `constant-radius-generator` — a creator-built corner can collapse the span; watch created tracks specifically, with the stability tolerance as the lever.
 - `steer-ramp-band` — the limiter's ramp band is narrower; the ramp's end anchor scales with Steer Limit At Speed so the band stays continuous. **untested (`489`, `e59e0a9`)**
+- `side-slip-scale` — the side-slip field the wheel-slip spheres read was never probed the way the longitudinal one was: the leak writes it on a scale whose peak is 2.5 while the sphere colours call 1.0 the peak, and the layout lesson of `slip-axis-scale` applies to this block too. The live steering ceiling reads the model, not this field, so nothing in the ceiling moves either way. **unsettled**
 
 **Tier 3 — single-method changes**
 - `electric-pace` — slow-electrics class question; data plus a balance judgment.
@@ -123,6 +124,7 @@
 - `outside-approach-window` — arming half driver-verified, the skip owed (`7619347`, `1395c30`)
 - `crest-gate` — entry move driver-verified (`27ee097`), gating constants pending
 - `steer-ramp-band` — **untested (`e59e0a9`)**
+- `side-slip-scale` — **unsettled**; probe the side-slip field beside the longitudinal one on a single drive before moving the sphere landmarks or the parked allowance's constants
 - `ceiling-factor-review` — **closed (`0dfbf53`)**, the outer reference owes a drive
 - `tcs-cap-floor-setting`, `overspeed-thresholds-setting` — two open ranges; `ceiling-factor-range` is **closed (`29b267b`)**
 - `launch-slip-allowance` — **(idea)**; the removed launch ramp last existed in `a6fcf7d`
