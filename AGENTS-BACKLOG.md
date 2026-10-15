@@ -28,7 +28,7 @@
 - `side-slip-scale` — the side-slip field the wheel-slip spheres read was never probed the way the longitudinal one was: the leak writes it on a scale whose peak is 2.5 while the sphere colours call 1.0 the peak, and the layout lesson of `slip-axis-scale` applies to this block too. The live steering ceiling reads the model, not this field, so nothing in the ceiling moves either way. **unsettled**
 
 **Tier 3 — single-method changes**
-- `electric-pace` — slow-electrics class question; data plus a balance judgment.
+- `electric-pace` — slow-electrics class question, **DECIDED**: class membership must not influence an electric's treatment (`3d589d6`, user decision), and the ramp's peak stays the scored value, measured and deliberately left (`f3fc274`, `e6c0370`).
 
 **Tier 4 — coupled systems**
 - `corner-approach-braking` — start the outside-line move about a second before the car must brake for the apex, computed from its own speed profile rather than a fixed seconds-to-apex gate.

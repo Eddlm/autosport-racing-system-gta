@@ -146,7 +146,6 @@ these live violations:
   `result.Add(lastCar)` at `:3651` and nothing reads it. `dynamic` drags the C# binder in for nothing.
 - `Racer.cs:1460 activeCorner` — a LINQ scan of `ARS.Corners` per core tick, discarded (§3).
 - `Racer.cs:1538-1539 SlopeGripLossK/SlopeGripLossExp` — dead constants; the slope model that used them is gone.
-- `AutosportRacingSystem.cs:95 ElectricDriveAtTopSpeed`, `:1548 _shortTickMs`, `:626-627 _freeCamMovement/_freeCamRotation`.
 - `TrackCreator.cs:443 chevcolor` and the discarded `col.ToArgb()` at `:441`; dead locals `countmax`/`count`/`lastline`
   (`:368-372`, `:466-470`); the `fidelity` parameter (`:360`) is unused; `dd` (`:370/453`) is redundant with `ph`;
   `oldrWidepos`/`oldlWidepos` (`:495-496`, and `:401-402` in the dead twin) are computed with two
