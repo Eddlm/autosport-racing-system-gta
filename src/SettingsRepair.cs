@@ -144,7 +144,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("TipRate", TipFrequency.Medium.ToString(), Kind.Text, Enum.GetNames(typeof(TipFrequency))));
             settings.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("ForceFillGrid", "True", Kind.Bool));
-            settings.Specs.Add(new KeySpec("OverspeedEnabled", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("OverspeedCut", "0.2", Kind.Text, new[] { "Off", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" }));   // text so the off state reads Off rather than 0
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TcsEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("AbsEnabled", "True", Kind.Bool));

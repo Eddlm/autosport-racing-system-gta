@@ -611,3 +611,11 @@ The flag was applied twice: `Initialize` multiplied gravity by the engine's own 
 1. **This moves nearly the whole grid, not a subset.** 39 of the 41 fleet cars carry the ×1.2 off-road gravity bit, so expect a fleet-wide change: cornering speed down by about 9.5% (the grip term loses the baked 1.2 while gravity keeps its own) and grip-limited braking down with it. A car that does not carry the bit must be unchanged, and that is the control.
 2. **The two laws must now agree with each other.** The steer-limited speed and the cornering speed were reading different gravity, so the plan asked for an entry speed its own wheel could not hold; after this they share one gravity, and a corner entry should read as the wheel's limit rather than above it.
 3. **The precedence trap is untouched and still has nothing to bite.** `HF_OFFROAD_ABILITIES` (the ×1.1 tier) is still untested and no fleet car carries both tiers, which is the only case where ARS's ×1.2 overstates the engine's ×1.1.
+
+## The overspeed correction is a rate ladder (dev build 616, compile-verified, drive owed)
+
+The checkbox became a list: `Off`, then `0.1` to `1.0` in 0.1 steps, default `0.2`. The number is the throttle lifted per 0.1 G of surplus over the fixed 0.2 G start threshold, so the cut completes at `0.2 + 0.1 / value` — `0.1` reproduces the shape driven at build 612, `0.5` completes at 0.4 G, `1.0` at 0.30 G. The arm gate, the detector, its ~3 Hz sample and 0.1 G deadband, and the glide rates are all unchanged; a stored `OverspeedEnabled` False carries to `Off` and True to `0.2`.
+
+1. **The one that matters: `0.2` must not bite into normal driving.** A car climbing or cresting at racing speed must keep its throttle where it is legitimately pulling, with the cut appearing only where the engine's own acceleration exceeds what the wheels can explain. If the field reads as hesitant on climbs, the default is too sharp.
+2. **`0.1` is the control** — it reproduces build 614's behaviour exactly, so a car that behaved well there must behave identically at `0.1`. A difference means the rate is not the old slope.
+3. **The ends** — `Off` must leave the climb speed standing, and `1.0` should read as a near-switch, a full lift arriving in about a third of a second, with no crash and no stuttery car.

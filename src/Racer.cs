@@ -1961,9 +1961,8 @@ namespace ARS
         const float OverspeedArmMaxSlideDegrees = 2f;
         const float OverspeedArmMinSpeedMph = 30f;
 
-        // The correction ramps: no cut at the bottom of the range, a closed throttle at the top, linear between.
+        // Where the correction starts; how hard it then cuts is the player's rate.
         const float OverspeedCutStartGs = 0.2f;
-        const float OverspeedCutFullGs = 1.2f;
 
         // Cutting is fast, recovering is deliberate: the shared rate going down, half of it coming back.
         const float ReasonCapRecoveryScale = 0.5f;
@@ -1986,9 +1985,9 @@ namespace ARS
             float overspeedLevel = 1f;
             // A positive accept, not an absence test: Clamp returns its min bound for a NaN, so a non-finite excess
             // would otherwise command a full throttle cut instead of no cut at all.
-            if (ARS.OverspeedEnabled && overspeedArmed && VehicleData.OverspeedExcessGs > 0f)
+            if (ARS.OverspeedCutPerTenthG > 0f && overspeedArmed && VehicleData.OverspeedExcessGs > 0f)
             {
-                float overspeedCut = (VehicleData.OverspeedExcessGs - OverspeedCutStartGs) / (OverspeedCutFullGs - OverspeedCutStartGs);
+                float overspeedCut = ARS.OverspeedCutPerTenthG * (VehicleData.OverspeedExcessGs - OverspeedCutStartGs) / 0.1f;
                 overspeedLevel = ARS.Clamp(1f - overspeedCut, 0f, 1f);
             }
             Control.MaxThrottleFromOverspeed = GlideCap(Control.MaxThrottleFromOverspeed, overspeedLevel);
@@ -4113,7 +4112,7 @@ namespace ARS
 
                 // Compare measured forward Gs against wheel-pushed Gs: GTA lets an uphill car accelerate beyond
                 // what its wheel power should produce, and this is the correction for that.
-                if (ARS.OverspeedEnabled)
+                if (ARS.OverspeedCutPerTenthG > 0f)
                 {
                     List<float> wheelPowers = ARS.WheelPowers(Car);
                     float wheelGs = 0f;

@@ -142,7 +142,7 @@ namespace ARS
         public static bool UseMenyooSkins = true;
         // Repeat the pool's car models when it holds fewer cars than the grid target (tests.txt holds one).
         public static bool ForceFillGrid = true;
-        public static bool OverspeedEnabled = true;
+        public static float OverspeedCutPerTenthG = 0.2f;   // 0 = correction off
         public static bool SmartTuning = true;
         // Learn the effective braking decel that keeps the car at full brake through a braking phase.
         public static bool BrakeLearning = true;
@@ -1019,13 +1019,15 @@ namespace ARS
             rivalPaceMenu.Add(hillEffectItem);
             HookListTextPicker(hillEffectItem);
 
-            NativeCheckboxItem overspeedItem = new NativeCheckboxItem("Overspeed Correction", "Cuts a rival's throttle when the car pulls harder than its wheels can explain - GTA accelerates a car up a hill on its own. It arms only on a straight, settled car above 30 mph; off, that climb speed stands.", OverspeedEnabled);
-            overspeedItem.CheckboxChanged += (sender, args) =>
+            NativeListItem<string> overspeedItem = new NativeListItem<string>("Overspeed Correction", "How hard a rival's throttle is lifted when the car pulls harder than its wheels can explain - GTA accelerates a car up a hill on its own. The number is the throttle lifted per 0.1 G of surplus over the threshold, so 1.0 is all but a switch. It arms only on a straight, settled car above 30 mph; Off, that climb speed stands.", SettingsRepair.OptionsFor("OverspeedCut"));
+            overspeedItem.ItemChanged += (sender, args) =>
             {
-                OverspeedEnabled = overspeedItem.Checked;
-                SaveRacerSetting("OverspeedEnabled", OverspeedEnabled.ToString());
+                OverspeedCutPerTenthG = ParseOverspeedCut(overspeedItem.Items[args.Index]);
+                SaveRacerSetting("OverspeedCut", overspeedItem.Items[args.Index]);
             };
+            overspeedItem.SelectedIndex = Math.Max(0, overspeedItem.Items.IndexOf(OverspeedCutPerTenthG > 0f ? OverspeedCutPerTenthG.ToString("0.0", CultureInfo.InvariantCulture) : "Off"));
             rivalPaceMenu.Add(overspeedItem);
+            HookListTextPicker(overspeedItem);
 
             NativeCheckboxItem tcsItem = new NativeCheckboxItem("TCS", "Cap AI throttle against a wheelspin target. Off lets AI throttle go unlimited - no traction control at all.", TcsEnabled);
             tcsItem.CheckboxChanged += (sender, args) =>
@@ -3152,6 +3154,7 @@ namespace ARS
             string legacyPaceMode = retiredPaceSettings.GetValue<string>("MENU", "PaceMode", null);
             string legacyTcsLimit = retiredPaceSettings.GetValue<string>("MENU", "TcsSlipThreshold", null);
             string legacyTcsSpan = retiredPaceSettings.GetValue<string>("MENU", "TcsTaperSpan", null);
+            string legacyOverspeed = retiredPaceSettings.GetValue<string>("MENU", "OverspeedEnabled", null);
             SettingsRepair.CreateMissingFiles();
             SettingsRepair.PruneOwnedFiles();
 
@@ -3163,6 +3166,8 @@ namespace ARS
             // absent, so a value chosen after this load is never overwritten.
             SettingsMenuStore.Migrate("TcsSlipLimitPct", TcsShareFromSlip(SettingsRepair.OptionsFor("TcsSlipLimitPct"), legacyTcsLimit));
             SettingsMenuStore.Migrate("TcsTaperSpanPct", TcsShareFromSlip(SettingsRepair.OptionsFor("TcsTaperSpanPct"), legacyTcsSpan));
+            // The overspeed checkbox became a rate ladder: a stored False becomes Off, a stored True the default rate.
+            SettingsMenuStore.Migrate("OverspeedCut", legacyOverspeed == null ? null : (legacyOverspeed.Equals("True", StringComparison.OrdinalIgnoreCase) ? "0.2" : "Off"));
 
             Log(LogImportance.Info, "Loading per-menu settings (Menu-*.ini) ...");
             // The Settings menu's items lived in Menu-Racers.ini and the debug toggles in Menu-DevSettings.ini
@@ -3188,7 +3193,7 @@ namespace ARS
             if (legacyAiNitro != null) NitrousEnabled = !legacyAiNitro.Equals("Never", StringComparison.OrdinalIgnoreCase);
             NitrousEnabled = SettingsMenuStore.GetBool("NitrousEnabled", NitrousEnabled);
             ForceFillGrid = SettingsMenuStore.GetBool("ForceFillGrid", ForceFillGrid);
-            OverspeedEnabled = SettingsMenuStore.GetBool("OverspeedEnabled", OverspeedEnabled);
+            OverspeedCutPerTenthG = ParseOverspeedCut(SettingsMenuStore.Get("OverspeedCut", "0.2"));
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
@@ -3250,6 +3255,13 @@ namespace ARS
         {
             int limit;
             return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out limit) && limit > 0 ? limit : 0;
+        }
+
+        // Stored text -> throttle lifted per 0.1 G. Off, zero and unparseable text all mean no correction.
+        static float ParseOverspeedCut(string value)
+        {
+            float rate;
+            return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out rate) && rate > 0f ? rate : 0f;
         }
 
         // Stored text -> enum value; unknown or undefined text falls back.
