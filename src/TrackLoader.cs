@@ -863,7 +863,7 @@ namespace ARS
                 if (gapSeconds < closeCornerSeconds || sameBend)
                 {
                     CornerPoint survivor = corner.DetectedRadius < previous.DetectedRadius ? corner : previous;
-                    ExtendMergedCorner(survivor, previous.StartNode, corner.EndNode, count, smoothingNodes);
+                    ExtendMergedCorner(survivor, previous.StartNode, corner.EndNode, count);
                     ARS.Corners[ARS.Corners.Count - 1] = survivor;
                     return;
                 }
@@ -922,26 +922,20 @@ namespace ARS
         // region to the same hard node limit a fresh region uses, and the exit is re-derived from the apex the
         // same way a fresh region's is, bounded by the absorbed region's end. The floor is capped by what is left of
         // each bound, so neither walk can pass it and a chain of merges stops at the first corner of the complex.
-        static void ExtendMergedCorner(CornerPoint survivor, int unionStart, int unionEnd, int count, int smoothingNodes)
+        // A survivor owns the whole bend it absorbed, so its span is the union of the two: the entrance reaches the
+        // absorbed corner's entrance and the exit the new corner's exit, bounded only by the same hard node limit a
+        // fresh region uses. The radius walk is deliberately not consulted — it reads around the survivor's own apex,
+        // and since the survivor is usually the tighter corner its threshold is the smaller one, so a walk here could
+        // cover less road than the two corners did separately and leave the first corner's braking zone unrecorded.
+        static void ExtendMergedCorner(CornerPoint survivor, int unionStart, int unionEnd, int count)
         {
             int spanLimit = Math.Min(SpanNodeLimit, count - 1);
             int entranceDistance = Math.Min(ARS.IsPointToPoint ? survivor.Node - unionStart : Wrap(survivor.Node - unionStart, count), spanLimit);
-            int entranceStep = EntranceStep(survivor.Node, survivor.DetectedRadius, entranceDistance, count, smoothingNodes);
-            int entrance = ARS.IsPointToPoint ? survivor.Node - entranceStep : Wrap(survivor.Node - entranceStep, count);
             int exitDistance = Math.Min(ARS.IsPointToPoint ? unionEnd - survivor.Node : Wrap(unionEnd - survivor.Node, count), spanLimit);
-            int exitStep = ExitStep(survivor.Node, survivor.DetectedRadius, exitDistance, count, smoothingNodes);
-            int exit = ARS.IsPointToPoint ? survivor.Node + exitStep : Wrap(survivor.Node + exitStep, count);
-            float minEntranceExit = Math.Min(SpanMinimumMeters, spanLimit);
-            int entranceFloor = (int)Math.Min(minEntranceExit, entranceDistance);
-            int exitFloor = (int)Math.Min(minEntranceExit, exitDistance);
-            if ((ARS.IsPointToPoint ? survivor.Node - entrance : Wrap(survivor.Node - entrance, count)) < minEntranceExit)
-                entrance = ARS.IsPointToPoint ? survivor.Node - entranceFloor : Wrap(survivor.Node - entranceFloor, count);
-            if ((ARS.IsPointToPoint ? exit - survivor.Node : Wrap(exit - survivor.Node, count)) < minEntranceExit)
-                exit = ARS.IsPointToPoint ? survivor.Node + exitFloor : Wrap(survivor.Node + exitFloor, count);
-            survivor.StartNode = entrance;
-            survivor.EndNode = exit;
-            survivor.LengthStart = ARS.IsPointToPoint ? survivor.Node - entrance : Wrap(survivor.Node - entrance, count);
-            survivor.LengthEnd = ARS.IsPointToPoint ? exit - survivor.Node : Wrap(exit - survivor.Node, count);
+            survivor.StartNode = ARS.IsPointToPoint ? survivor.Node - entranceDistance : Wrap(survivor.Node - entranceDistance, count);
+            survivor.EndNode = ARS.IsPointToPoint ? survivor.Node + exitDistance : Wrap(survivor.Node + exitDistance, count);
+            survivor.LengthStart = entranceDistance;
+            survivor.LengthEnd = exitDistance;
         }
 
         static float SmoothedRadius(int node, int count, int halfWindow)

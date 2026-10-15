@@ -645,3 +645,12 @@ Applying a section or deleting nodes now rebuilds the derived table on the same 
 2. **The cost number.** That same line is the measurement that decides whether the local rebuild was worth building — if the local time is a rounding error beside the full pass, the locality is doing its job, and if it is not, the corner cut is where the time went.
 3. **Nothing throws on a clear.** With Show Bumps on, press Aim until the route empties: the log must not fill with the same exception every frame, which is what the missing bump clear would have caused.
 4. **The table survives the edit.** After several sections, the corners reported at draw time must be the ones the saved track loads with.
+
+## Merged corners own the whole bend (dev build 625, compile-verified, drive owed)
+
+When two corners merge, the survivor's span was re-walked on the radius criterion around its own apex. Since the survivor is usually the tighter corner, that threshold is the smaller one, so the merged corner could cover *less* road than the two corners had separately — leaving the first corner's entrance with no corner record, and therefore no braking zone. The survivor now takes the union of the two spans, bounded only by the hard node limit.
+
+1. **Two close corners.** Take a track with a pair that merges — a fast kink a second or two before a slower corner — and watch the approach: the cars must begin preparing at the *first* corner's entrance rather than somewhere between the two.
+2. **The braking zone is covered.** The tell of the old behaviour was a stretch at the first corner's entrance with no braking requirement on it; with the fix the plan should ask for that speed from the union's entrance onward.
+3. **No over-preparation.** The union is a superset of both spans, so a car must not now crawl through the second corner: if the merged bend reads too slow, the union is too generous rather than the merge rule being wrong.
+4. **The unmerged case.** Two corners that do *not* merge must be untouched — their spans still come from the region walk, which this change does not touch.
