@@ -154,7 +154,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("NoCollision", "False", Kind.Bool));
             settings.Specs.Add(new KeySpec("SteerDampingGain", "0.50", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));
             settings.Specs.Add(new KeySpec("SteerDampingSpeed", "70", Kind.Number, new[] { "10", "40", "70", "100", "130", "160", "190", "220", "250" }));
-            settings.Specs.Add(new KeySpec("SteerCeilingFactor", "1.00", Kind.Number, new[] { "0.20", "0.50", "0.75", "1.00" }));
+            settings.Specs.Add(new KeySpec("SteerCeilingFactor", "1.00", Kind.Number, new[] { "0.05", "0.10", "0.15", "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90", "0.95", "1.00", "1.05", "1.10", "1.15", "1.20", "1.25" }));
             settings.Specs.Add(new KeySpec("CrestEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("Rubberbanding", "0", Kind.Number, new[] { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" }));
