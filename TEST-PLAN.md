@@ -655,3 +655,11 @@ When two corners merge, the survivor's span was re-walked on the radius criterio
 2. **The braking zone is covered.** The tell of the old behaviour was a stretch at the first corner's entrance with no braking requirement on it; with the fix the plan should ask for that speed from the union's entrance onward.
 3. **No over-preparation.** The union is a superset of both spans, so a car must not now crawl through the second corner: if the merged bend reads too slow, the union is too generous rather than the merge rule being wrong.
 4. **The unmerged case.** Two corners that do *not* merge must be untouched — their spans still come from the region walk, which this change does not touch.
+
+## The track list survives a shrinking list (dev build 630, compile-verified, drive owed)
+
+`RefreshTrackList` swapped `_trackListItem.Items` while the selected index could sit past the new end, and LemonUI's `Items` setter reads `Items[index]` as it lands with no clamp, so a shorter list threw inside the setter; an emptied list threw at the assignment that follows it. The index is now parked on a valid entry before the swap, as the car-pool refresh already did.
+
+1. **A shrinking list** — with the game running, delete several `Tracks\*.xml` files from the folder, then make `RefreshTrackList` run against the shorter list (save a created track, or open the creator and apply a section): the Select Track row must rebuild with no exception popup, and the selection must land on a real entry.
+2. **An empty list** — move every track out of the folder and trigger the same refresh: the menu must still open with an empty row rather than throwing `'There are no available items.'`
+3. **Nothing moves at rest** — with the file set unchanged, opening the menu and saving a track must leave the same track selected, and `Menu-Race.ini`'s `Track` value must not change.
