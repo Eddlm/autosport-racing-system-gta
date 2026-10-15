@@ -1109,7 +1109,7 @@ namespace ARS
             HookListTextPicker(timeoutItem);
 
             NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "Damage handling for the rivals' cars.", EnumLabels<AutofixMode>());
-            autofixItem.ItemChanged += (sender, args) => SaveRacerSetting("AIRacerAutofix", ((AutofixMode)args.Index).ToString());
+            autofixItem.ItemChanged += (sender, args) => { Autofix = (AutofixMode)args.Index; SaveRacerSetting("AIRacerAutofix", Autofix.ToString()); };
             autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(EnumLabel(Autofix)));
             rulesMenu.Add(autofixItem);
             HookListTextPicker(autofixItem);
@@ -3170,6 +3170,7 @@ namespace ARS
             if (storedAutofix == "0") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Off.ToString());
             else if (storedAutofix == "1") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.DamageResistant.ToString());
             else if (storedAutofix == "2") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Invincible.ToString());
+            Autofix = ParseEnum(SettingsMenuStore.Get("AIRacerAutofix", AutofixMode.Invincible.ToString()), AutofixMode.Invincible);
             SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
             UseMenyooSkins = SettingsMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
             string legacyAiNitro = legacyRacers.GetValue<string>("RACERS", "AiNitro", null);
@@ -3230,8 +3231,9 @@ namespace ARS
         // without a second test. Forced calls still write — a silent install failure is worse than a log line.
         public enum LogImportance { Info, Error, Fatal, None }
 
-        // The rivals' damage handling, read live like the timeout so a menu change applies without a restart.
-        public static AutofixMode Autofix { get { return ParseEnum(SettingsMenuStore.Get("AIRacerAutofix", AutofixMode.Invincible.ToString()), AutofixMode.Invincible); } }
+        // The rivals' damage handling, cached where the key is loaded and written so the per-tick damage gate
+        // reads a field rather than walking the store for every car.
+        public static AutofixMode Autofix = AutofixMode.Invincible;
 
         // Off is the off state and everything else is PI units; an unknown spelling falls back to off.
         static int ParseDeviationLimit(string value)
