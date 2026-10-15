@@ -127,12 +127,12 @@
 - `steer-ramp-band` — **driver-verified (`489`, `e59e0a9`)**
 - `side-slip-scale` — **unsettled**; probe the side-slip field beside the longitudinal one on a single drive before moving the sphere landmarks or the parked allowance's constants
 - `ceiling-factor-review` — **closed (`0dfbf53`)**, the outer reference driven
-- `tcs-cap-floor-setting`, `overspeed-thresholds-setting` — two open ranges; `ceiling-factor-range` is **closed (`29b267b`)**
+- `tcs-cap-floor-setting` — the one open range; `overspeed-thresholds-setting` is **built (dev build 616)**, and `ceiling-factor-range` is **closed (`29b267b`)**
 - `launch-slip-allowance` — **(idea)**; the removed launch ramp last existed in `a6fcf7d`
 - `rival-publish-core` — **not built**
 - `apex-radius` — **driver-observed (`aa302e1`)** on high-grip cars; the fleet-wide read is owed
-- `radius-variants` — the radius-family audit, asked for later
-- `corner-record-dormant-fields` — filed, unowned; the early-brake branch is dead and the behaviour does not exist
+- `radius-variants` — **audited and corrected**: `HighSpeedCurveRadius` is live through the rocket-boost straight gate, and the genuinely dead rung `CorneringSpeedLimit` is deleted (dev build 614)
+- `corner-record-dormant-fields` — **deleted with its dead reader (dev build 614)**
 - `grip-learner` — **DISMISSED (driver)**
 - `slip-axis-scale` — **settled and fixed (`b11e52b`)**, the TCS share restatement and the ABS knee with it, drives parked
 - `intention-maxspeed-ramp` — **closed (`f894228`)**, not drivable
