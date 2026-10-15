@@ -381,6 +381,8 @@ The ceiling law is plotted in `docs/steer-ceiling.png`, regenerated with the nar
 
 ## The TCS and ABS taper, and its two knobs (dev build 523 — the TCS half driven, the ABS half owed)
 
+**Superseded by the share restatement at the end of this file**: the pair driven here, 0.2 with 0.3, is 50% and 75% of the peak in the units the knobs carry now.
+
 **Driven:** the TCS taper reads right at the live pair (`TcsSlipThreshold` 0.2 with `TcsTaperSpan` 0.3) — the cut fades in and settles rather than stepping. Still owed: the ABS half of the same shape (`f028a2e`), which cuts at the knee and floors at mingrip with no knobs of its own, and the knob extremes, which are the point of the range. **The ABS half needs a setup rather than a drive**: a car with no natural ABS of its own on a low-grip surface, so the wheels actually lock, and the instrument is the pedal bar's limit sphere for the cap (`Racer.cs:2566`).
 
 1. **The shape** — both caps now cut on a tanh between the threshold and one span past it, so the first response fades in instead of starting at a slope step and the floor is eased onto rather than hit. What should be felt is the *middle* of the span: a tanh runs above its own chord, so the car is trimmed a little earlier than the old straight ramp was at the same slip, and settles onto the floor rather than arriving at it.
@@ -589,3 +591,12 @@ Below the corner line's far clamp — the `ApexLine` phase — the demand is ref
 2. **On the line it reads as the dashed ask sitting on the green own-lane line** while the car is inside the demand, with `ApexLine` still appearing and stepping the ask inward once the sweep crosses the car.
 3. **Falsifier**: a car that stays inside on an entry it had room and time to open up, or an armed approach where `ApexLine` never appears at all. The first says the refusal is too aggressive, the second that it is refusing the whole blend.
 4. **A confound to separate on the drive**: this and the `outside-approach-window` skip gate produce the same tell, no outside line on a corner with room for one. The refusal logs; the skip gate does not.
+
+## The TCS pair stated as a share of the peak slip, and the ABS knee on that peak (compile-verified, drives owed)
+
+The slip axis was settled by a live probe (`b889222`, evidence on the ladder item `slip-axis-scale`): `wheel+0x174` is the raw signed slip ratio, so the traction curve peaks at 0.4 in the field and goes flat at 1.0 — every threshold ARS compared against that curve was 2.5× too high. Both TCS knobs are now shares of the peak (`TcsSlipLimitPct`, `TcsTaperSpanPct`: 10 to 200 in tens, default 80 and 80), and the ABS knee moved from 2.5 to the peak, its floor a span later at twice the peak.
+
+1. **The file converts itself once.** A `Menu-Settings.ini` holding the old raw pair (0.4 / 0.4 on this install) must come back as 100 / 100 with `TcsSlipThreshold` and `TcsTaperSpan` gone; 0.5 / 0.5 comes back as 120 / 120, because a tie rounds to the lower, tighter offer. `Log.log` must hold no "declares no key" line, and both new values must survive a reload.
+2. **The menu reads in shares.** `TCS Wheelspin Limit (%)` and `TCS Cut Softness (%)` under Rival Traction, and both descriptions name the peak as their reference. The ceiling is the limit plus the softness, so 80 with 80 bottoms the cut at 160% of the peak.
+3. **The extremes are the point of the range**: 10 with 10 should read as a field slower and safer than anything the old law could express, and 200 with 200 as traction control that barely intervenes, its floor landing at four times the peak — past the point the curve goes flat, where the tyres are simply spinning.
+4. **The ABS re-scale owes a setup rather than a drive** — a car with no ABS of its own on a low-grip surface, so the wheels actually lock, and the instrument the section above names. What to watch: the cap trimming the brake from the peak slip onward, with full authority before the wheel is locked. The falsifier is a car that can no longer brake to the threshold, which would say the taper is too tight for the plan. On a car whose own ABS is active the engine forces the field to ±5, so its cap sits at the brake floor either way and the re-scale cannot be judged there.
