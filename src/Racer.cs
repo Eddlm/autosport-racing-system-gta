@@ -1265,7 +1265,7 @@ namespace ARS
         {
             float grip = VehicleData.CurrentMechanicalGrip;
             if (float.IsNaN(grip) || fwdSpeed <= 0f) return VehicleData.SteeringLock;
-            float ratio = VehicleData.WheelBase * grip * 9.8f / (fwdSpeed * fwdSpeed);
+            float ratio = VehicleData.WheelBase * grip * Handling.Gravity / (fwdSpeed * fwdSpeed);
             if (float.IsNaN(ratio) || ratio <= 0f) return VehicleData.SteeringLock;
             return ARS.RadToDeg((float)Math.Atan(ratio));
         }
@@ -1832,7 +1832,7 @@ namespace ARS
             if (steerRad > 0.001f)
             {
                 float turnRadius = VehicleData.WheelBase / (float)Math.Tan(steerRad);
-                Brain.CurrentIntention.SteerLimitedSpeed = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Math.Max(turnRadius, 1f));
+                Brain.CurrentIntention.SteerLimitedSpeed = (float)Math.Sqrt(Handling.Gravity * VehicleData.CurrentMechanicalGrip * Math.Max(turnRadius, 1f));
                 followTrackSpd = 0.7f * Brain.CurrentIntention.SteerLimitedSpeed + 0.3f * followTrackSpd;
             }
             else
@@ -4090,11 +4090,6 @@ namespace ARS
             float handlingGrip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
             handlingGrip = ARS.Clamp(handlingGrip, 0.1f, 100f);
             handlingGrip /= 1f + 0.035f * Handling.Downforce;
-
-            // TEMP experiment: a car carrying the off-road FLAG has permanently raised gravity (set once in
-            // Initialize, not a surface state), and its grip is scaled with it.
-            float gravityGs = Handling.Gravity / 9.8f;
-            if (gravityGs > 1f) handlingGrip *= gravityGs;
 
             GroundGripMultiplier = ARS.MeanWheelGripMultiplier(Car);
 
