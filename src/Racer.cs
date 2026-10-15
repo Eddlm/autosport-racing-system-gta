@@ -1926,19 +1926,16 @@ namespace ARS
             return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
         }
 
-        // TCS is measured on the game's per-wheel slip ratio (wheel+0x174): 0 free rolling, the traction curve peaking
-        // at 1.0 and flat from 2.5 (sfTractionPeakAngle / sfTractionMinAngle, leaked wheel.cpp:94-97), spin negative.
-        // Driver-confirmed against live values: a stopped wheel reads ~15.
-        const float OffTrackSlipRatio = 0.5f;
+        // TCS and ABS are measured on the game's per-wheel slip ratio (wheel+0x174): 0 free rolling, 0.4 at the
+        // traction curve's peak, 1.0 where it goes flat, spin negative and lock positive. Read live: the slot is
+        // that raw signed ratio, and the engine's own ABS forces it to +/-5 while it is active (wheel.cpp:5061).
+        const float OffTrackTargetShare = 0.5f;
 
         // One home for the throttle reason caps: each reason states the level it wants, its field glides toward
         // that level at the shared rate both ways, and ConvertSpeedToPedals takes the minimum against the plan's
         // own throttle and tags the winner. The level is the logic half, the shared rate the clock half.
         const float ReasonCapSlewRate = 3.5f;
         const float TcsCapFloor = 0.25f;
-        // The curve is flat from here (CurveMin at 2.5): the brake cap's taper bottoms exactly at the knee — past it
-        // no deeper slip earns a deeper cut.
-        const float SlipCurveKnee = 2.5f;
 
         // The taper both reason caps cut on: nothing at the threshold, the cap's floor one span of slip past it, tanh
         // between so the onset has no slope step, normalised so the floor lands where the span says it does. A tanh
@@ -2036,23 +2033,32 @@ namespace ARS
             return lateralDemand > VehicleData.CurrentMechanicalGrip * Handling.Gravity * InstabilityYawTolerance;
         }
 
+        // Both TCS knobs are shares of the peak slip; the field the wheels publish is the peak times that share.
+        static float SlipForShare(int sharePercent)
+        {
+            return sharePercent * 0.01f * ARS.SlipPeakRatio;
+        }
+
         float TcsCapLevel()
         {
             if (!ARS.TcsEnabled) return 1f;
             float wheelspin = ARS.MaxWheelSlip(Car);
 
-            float slipTarget = -ARS.TcsSlipThreshold * (OutOfTrackDistance() > 0f ? OffTrackSlipRatio : 1f);
+            float slipTarget = -SlipForShare(ARS.TcsSlipLimitPct) * (OutOfTrackDistance() > 0f ? OffTrackTargetShare : 1f);
             float spinDepth = Math.Max(0f, slipTarget - wheelspin);
-            float depthShare = TaperShare(spinDepth, ARS.TcsTaperSpan);
+            float depthShare = TaperShare(spinDepth, SlipForShare(ARS.TcsTaperSpanPct));
             return 1f - depthShare * (1f - TcsCapFloor);
         }
 
-        // ABS: the brake-side twin, containment where TCS regulates: TCS holds a curve point, ABS guards the flat
-        // region past mingrip where full lock lives — a stopped wheel reads ~15 (driver-observed), so the cut starts
-        // at the knee (2.5) and floors by 5. Lock reads positive on the same +0x174 ratio (leaked wheel.cpp:5233
-        // spin negative, :5268 lock positive); the engine's own free ABS clamps coarsely; FLAG_WD_ABS is left alone;
-        // the driver sign check is the first test.
-        const float AbsFloorSlip = 5f;
+        // ABS: the brake-side twin, containment where TCS regulates: TCS holds a curve point, ABS guards the
+        // region past the peak where a locking wheel is losing force. The cut starts at the peak slip and floors
+        // one span later, at twice the peak — before the wheel is fully locked, which is the field's own 1.0, and
+        // before the curve goes flat at 2.5x it. Lock reads positive on the same +0x174 ratio (leaked wheel.cpp:5233
+        // spin negative, :5268 lock positive) and the engine's own free ABS leaves FLAG_WD_ABS alone. A car whose
+        // own ABS is active has the field forced to +/-5 by the engine (sfAbsActiveSlipRatio, :5061), so its cap
+        // sits at the floor on either constant.
+        const float AbsKneeSlip = ARS.SlipPeakRatio;
+        const float AbsFloorSlip = ARS.SlipPeakRatio * 2f;
         const float AbsBrakeFloor = 0.25f;
 
         void UpdateBrakeReasonCaps()
@@ -2067,8 +2073,8 @@ namespace ARS
             if (!ARS.AbsEnabled) return 1f;
             float lockSlip = ARS.MaxWheelLockSlip(Car);
 
-            float lockDepth = Math.Max(0f, lockSlip - SlipCurveKnee);
-            float depthShare = TaperShare(lockDepth, AbsFloorSlip - SlipCurveKnee);
+            float lockDepth = Math.Max(0f, lockSlip - AbsKneeSlip);
+            float depthShare = TaperShare(lockDepth, AbsFloorSlip - AbsKneeSlip);
             return 1f - depthShare * (1f - AbsBrakeFloor);
         }
 

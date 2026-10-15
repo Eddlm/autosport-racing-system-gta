@@ -148,8 +148,11 @@ namespace ARS
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TcsEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("AbsEnabled", "True", Kind.Bool));
-            settings.Specs.Add(new KeySpec("TcsSlipThreshold", "0.5", Kind.Number, new[] { "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0", "2.1", "2.2", "2.3", "2.4", "2.5" }));
-            settings.Specs.Add(new KeySpec("TcsTaperSpan", "0.5", Kind.Number, new[] { "0.1", "0.2", "0.3", "0.4", "0.5" }));
+            // The TCS pair is a share of the slip the tyres reach peak traction at, not a raw slip: the peak is
+            // 0.4 in the field the car reads (wheel.cpp:4465), so 100% is the peak and 200% is twice it. One
+            // ladder serves both knobs.
+            settings.Specs.Add(new KeySpec("TcsSlipLimitPct", "80", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
+            settings.Specs.Add(new KeySpec("TcsTaperSpanPct", "80", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
             settings.Specs.Add(new KeySpec("DNFUnderTrack", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("NoCollision", "False", Kind.Bool));
             settings.Specs.Add(new KeySpec("SteerDampingGain", "0.50", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));

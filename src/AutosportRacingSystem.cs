@@ -155,11 +155,14 @@ namespace ARS
         public static float SteerDampingGain = 0.5f;
         public static int SteerDampingSpeedMph = 70;
         public static float SteerCeilingFactor = 1f;
-        public static float TcsSlipThreshold = 0.5f;
-        public static float TcsTaperSpan = 0.5f;
-        // TEMPORARY slip probe state (delete with LogSlipProbe).
-        static int _slipProbeNextLogMs;
-        const int SlipProbeIntervalMs = 200;
+        // The slip the tyres reach peak traction at, in the field's own units: the curve is indexed from the
+        // field at x sfTractionMinAngle with its peak at argument 1.0, and the engine's own below-the-peak test
+        // compares the field against sfTractionPeakAngle x sfTractionMinAngleInv = 0.4 (wheel.cpp:4465, :4497).
+        public const float SlipPeakRatio = 0.4f;
+        // The TCS pair as a share of that peak: the limit is where the cut begins, the span how much further
+        // past it the throttle takes to reach its floor.
+        public static int TcsSlipLimitPct = 80;
+        public static int TcsTaperSpanPct = 80;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1033,25 +1036,25 @@ namespace ARS
             };
             rivalTractionMenu.Add(tcsItem);
 
-            NativeListItem<string> tcsThresholdItem = new NativeListItem<string>("TCS Wheelspin Limit", "The wheelspin the AI throttles to, on the slip ratio the traction curve is measured on: the curve peaks at 1.0 and is flat by 2.5, so 0.5 is half the peak. Nothing is cut below the threshold, and it holds on every surface and at every speed.", SettingsRepair.OptionsFor("TcsSlipThreshold"));
-            tcsThresholdItem.ItemChanged += (sender, args) =>
+            NativeListItem<string> tcsLimitItem = new NativeListItem<string>("TCS Wheelspin Limit (%)", "The wheelspin the AI throttles to, as a share of the slip the tyres reach peak traction at: 100% is the peak itself, 80% just under it, 200% only once the car is already sliding well past. Nothing is cut below the limit, and it holds on every surface and at every speed.", SettingsRepair.OptionsFor("TcsSlipLimitPct"));
+            tcsLimitItem.ItemChanged += (sender, args) =>
             {
-                TcsSlipThreshold = float.Parse(tcsThresholdItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("TcsSlipThreshold", tcsThresholdItem.Items[args.Index]);
+                TcsSlipLimitPct = int.Parse(tcsLimitItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("TcsSlipLimitPct", tcsLimitItem.Items[args.Index]);
             };
-            tcsThresholdItem.SelectedIndex = Math.Max(0, tcsThresholdItem.Items.IndexOf(SettingsMenuStore.GetFloat("TcsSlipThreshold", TcsSlipThreshold).ToString("0.0", CultureInfo.InvariantCulture)));
-            rivalTractionMenu.Add(tcsThresholdItem);
-            HookListTextPicker(tcsThresholdItem);
+            tcsLimitItem.SelectedIndex = Math.Max(0, tcsLimitItem.Items.IndexOf(SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct).ToString(CultureInfo.InvariantCulture)));
+            rivalTractionMenu.Add(tcsLimitItem);
+            HookListTextPicker(tcsLimitItem);
 
-            NativeListItem<string> tcsTaperSpanItem = new NativeListItem<string>("TCS Cut Softness", "How much wheelspin past the threshold the cut spans before the throttle reaches its floor, in the same slip ratio. The ceiling is the threshold plus this, and the cut eases in on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpan"));
-            tcsTaperSpanItem.ItemChanged += (sender, args) =>
+            NativeListItem<string> tcsSpanItem = new NativeListItem<string>("TCS Cut Softness (%)", "How much further past the limit the cut spans before the throttle reaches its floor, as the same share of the peak slip: the ceiling is the limit plus this, so 80 with 80 bottoms the cut at 160% of the peak. The cut eases in on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpanPct"));
+            tcsSpanItem.ItemChanged += (sender, args) =>
             {
-                TcsTaperSpan = float.Parse(tcsTaperSpanItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("TcsTaperSpan", tcsTaperSpanItem.Items[args.Index]);
+                TcsTaperSpanPct = int.Parse(tcsSpanItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("TcsTaperSpanPct", tcsSpanItem.Items[args.Index]);
             };
-            tcsTaperSpanItem.SelectedIndex = Math.Max(0, tcsTaperSpanItem.Items.IndexOf(SettingsMenuStore.GetFloat("TcsTaperSpan", TcsTaperSpan).ToString("0.0", CultureInfo.InvariantCulture)));
-            rivalTractionMenu.Add(tcsTaperSpanItem);
-            HookListTextPicker(tcsTaperSpanItem);
+            tcsSpanItem.SelectedIndex = Math.Max(0, tcsSpanItem.Items.IndexOf(SettingsMenuStore.GetInt("TcsTaperSpanPct", TcsTaperSpanPct).ToString(CultureInfo.InvariantCulture)));
+            rivalTractionMenu.Add(tcsSpanItem);
+            HookListTextPicker(tcsSpanItem);
 
             NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "Cap AI brake against a wheel-lock target, the TCS mirror on the brake side. Off lets AI brake go unlimited - plain brake force, engine-side ABS only.", AbsEnabled);
             absItem.CheckboxChanged += (sender, args) =>
@@ -1731,8 +1734,6 @@ namespace ARS
 
                 SmartTuner.Tick(GetRandomInt);
 
-                LogSlipProbe();
-
                 TrackLoader.TickQueuedFlares(FlareEffects);
 
                 
@@ -2079,32 +2080,6 @@ namespace ARS
                 Log(LogImportance.Error, "OnTick error: " + ex, true);
             }
         }
-        // TEMPORARY slip probe (delete once the slip-axis read is settled): the three wheel fields the leak's
-        // CWheel places at m_fRotAng / m_fRotAngVel / m_fRotSlipRatio, side by side on every wheel of the
-        // player's car. The angular velocity tracks -v/r, the rot angle is a wrapped radian angle, and the
-        // slip ratio sits near 0 while rolling, so one drive names all three.
-        unsafe void LogSlipProbe()
-        {
-            if (Game.GameTime < _slipProbeNextLogMs) return;
-            _slipProbeNextLogMs = Game.GameTime + SlipProbeIntervalMs;
-
-            Vehicle car = Game.Player.Character.CurrentVehicle;
-            if (!CanWeUse(car)) return;
-
-            List<ulong> wheels = GetWheelPtrs(car);
-            if (wheels.Count == 0) return;
-
-            string line = "SlipProbe " + car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture) + " m/s";
-            for (int i = 0; i < wheels.Count; i++)
-            {
-                line += " | w" + i
-                    + " 170 " + (*(float*)(wheels[i] + 0x170)).ToString("0.00", CultureInfo.InvariantCulture)
-                    + " 174 " + (*(float*)(wheels[i] + 0x174)).ToString("0.00", CultureInfo.InvariantCulture)
-                    + " 178 " + (*(float*)(wheels[i] + 0x178)).ToString("0.00", CultureInfo.InvariantCulture);
-            }
-            Log(LogImportance.Info, line, true);
-        }
-
         public static TimeSpan ParseToTimeSpan(int gameTime)
         {
             TimeSpan t = new TimeSpan();
@@ -3173,6 +3148,22 @@ namespace ARS
         }
 
         
+        // The TCS pair was stored in raw slip units before it was stated as a share of the peak slip: the old
+        // value times 100 / SlipPeakRatio is the share, and the ladder's nearest offer keeps it in the domain.
+        // Ties round to the lower offer, the tighter of the two.
+        static string TcsShareFromSlip(string[] offers, string rawSlip)
+        {
+            float raw;
+            if (rawSlip == null || !float.TryParse(rawSlip, NumberStyles.Float, CultureInfo.InvariantCulture, out raw)) return null;
+            float share = raw * (100f / SlipPeakRatio);
+            string best = offers[0];
+            foreach (string offer in offers)
+            {
+                if (Math.Abs(int.Parse(offer, CultureInfo.InvariantCulture) - share) < Math.Abs(int.Parse(best, CultureInfo.InvariantCulture) - share)) best = offer;
+            }
+            return best;
+        }
+
         void LoadSettings()
         {
             Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
@@ -3183,15 +3174,23 @@ namespace ARS
             ScriptSettings retiredDevToggles = ScriptSettings.Load(SettingsFolder + @"\Menu-DevSettings.ini");
             string legacyBrakeLearning = retiredDevToggles.GetValue<string>("MENU", "BrakeLearning", null);
             string legacyStagedSpawns = retiredDevToggles.GetValue<string>("MENU", "StagedSpawns", null);
-            // Menu-Settings.ini held the single Pace Mode key before that name was reused for the Settings file.
+            // Menu-Settings.ini held the single Pace Mode key before that name was reused for the Settings file,
+            // and the TCS pair in raw slip units before they were stated as a share of the peak slip.
             ScriptSettings retiredPaceSettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Settings.ini");
             string legacyPaceMode = retiredPaceSettings.GetValue<string>("MENU", "PaceMode", null);
+            string legacyTcsLimit = retiredPaceSettings.GetValue<string>("MENU", "TcsSlipThreshold", null);
+            string legacyTcsSpan = retiredPaceSettings.GetValue<string>("MENU", "TcsTaperSpan", null);
             SettingsRepair.CreateMissingFiles();
             SettingsRepair.PruneOwnedFiles();
 
             RaceMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Race.ini");
             SettingsMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Settings.ini");
             DebugMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Debug.ini");
+
+            // One-time unit change: a raw slip becomes a share of the peak slip, and only while the new key is
+            // absent, so a value chosen after this load is never overwritten.
+            SettingsMenuStore.Migrate("TcsSlipLimitPct", TcsShareFromSlip(SettingsRepair.OptionsFor("TcsSlipLimitPct"), legacyTcsLimit));
+            SettingsMenuStore.Migrate("TcsTaperSpanPct", TcsShareFromSlip(SettingsRepair.OptionsFor("TcsTaperSpanPct"), legacyTcsSpan));
 
             Log(LogImportance.Info, "Loading per-menu settings (Menu-*.ini) ...");
             // The Settings menu's items lived in Menu-Racers.ini and the debug toggles in Menu-DevSettings.ini
@@ -3229,8 +3228,8 @@ namespace ARS
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
-            TcsSlipThreshold = SettingsMenuStore.GetFloat("TcsSlipThreshold", TcsSlipThreshold);
-            TcsTaperSpan = SettingsMenuStore.GetFloat("TcsTaperSpan", TcsTaperSpan);
+            TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);
+            TcsTaperSpanPct = SettingsMenuStore.GetInt("TcsTaperSpanPct", TcsTaperSpanPct);
             DNFUnderTrack = SettingsMenuStore.GetBool("DNFUnderTrack", DNFUnderTrack);
             NoCollision = SettingsMenuStore.GetBool("NoCollision", NoCollision);
             CrestEffect = SettingsMenuStore.GetInt("CrestEffect", 100) * 0.01f;
