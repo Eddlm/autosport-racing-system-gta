@@ -13,8 +13,8 @@ system the code no longer serves the goal of is a **defect to file**, not a para
 Nothing here is a line number on purpose. If a claim needs one, it belongs in `AGENTS-STEERING.md`.
 
 Coverage began on the steering side and now includes the lane, the corner table, the traction control on the
-pedals, the levels the chain is balanced at, and the standing limit beneath all of it; the sections not yet
-written are named at the end.
+pedals, the levels the chain is balanced at, the standing limit beneath all of it, and the settings guard that
+keeps a key from lying about whether it persists; the sections not yet written are named at the end.
 
 ## The shape of a section
 
@@ -595,6 +595,20 @@ last attempt. That is the pattern to reach for, and the cost is paid in laps: on
 never braked for, the plan is running on the seed, which is a guess. It is why the first lap of a corner
 is not the one to judge the AI on, and why a learner that corrects on bad evidence is worse than no
 learner at all.
+
+## The settings guard — a key that is touched but not owned
+
+**Goal:** make it impossible for a setting to look like it persists while the next load quietly deletes it.
+
+**The schema owns the keys, and one place declares them.** Each owned ini file has a spec list naming every key, its default, its kind, and — for a list-backed key — the exact spellings the file is allowed to hold, while an absent default means absence is a real state rather than a hole. Nothing else is entitled to an opinion about which keys exist, which is what keeps the file's shape reviewable in one sitting instead of reconstructed from its call sites.
+
+**The store refuses what the schema does not own.** A read or a write of an undeclared key is rejected and reported rather than written, so the session behaves the way the next load will instead of pretending until then. Three read behaviours carry three meanings — a read seeds the key, a migration seeds it only when the target is absent, and a key whose absence *is* the state is probed without seeding — and mixing them up is how a sentinel ends up written into the file.
+
+**The load passes are ordered, and the order is the contract:** create the files, then prune, then complete. Pruning before completing is what stops a default shadowing a migration; completing last is what repairs a value the domain rejects, snapping a number to the nearest offered spelling and a mis-spelled string to the canonical one.
+
+**What the load cannot see, the checker reads.** The passes rule on the file they are handed and are blind to whether the code agrees with the schema, so a static check reads both, fails on any disagreement between them, and fails on a default the schema's own repair would reject. It states what it could not check rather than implying coverage, and it is wired as a build step rather than a report someone has to remember to consult.
+
+**Where the goal stops, and what was rejected.** The check is literal-only: a key declared in a loop, a computed default and a computed domain are counted and reported, never verified. It can also only judge whether a value is spelled legally, never whether it is right, so a setting that persists correctly and does the wrong thing is outside it. The rejected shape is trusting the load-time passes alone, which can only rule on the file they are handed: a key the code invents looks persistent for a whole session and is deleted at the next load, which is exactly how a governor switch once appeared to persist.
 
 ## What this file does not cover yet
 
