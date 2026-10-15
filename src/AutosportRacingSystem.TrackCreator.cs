@@ -32,6 +32,7 @@ namespace ARS
 
             CleanEverything();
             _routeSection.Clear();
+            TrackLoader.ClearRouteInfo();
             _routeEditorActive = true;
             if (!_freeCam.IsActive) _freeCam.Toggle();
         }
@@ -58,7 +59,9 @@ namespace ARS
         {
 
             
-            int cool = -1; 
+            int cool = -1;
+            int rebuildFrom = -1;
+            int routeCountAtStart = RouteNodes.Count;
 
             if (RouteNodes.Count > 50)
             {
@@ -139,6 +142,7 @@ namespace ARS
                         else
                         {
                             RouteNodes.Clear();
+                            TrackLoader.ClearRouteInfo();
                             return;
                         }
                     }
@@ -146,6 +150,7 @@ namespace ARS
                     
                     if (Game.IsControlJustPressed(2, GTA.Control.Attack) && cool < 1)
                     {
+                        rebuildFrom = RouteNodes.Count;
                         for (int i = 1; i < _routeSection.Count; i++)
                         {
                             RouteNodes.Add(_routeSection[i]);
@@ -220,6 +225,7 @@ namespace ARS
 
                     if (Game.IsControlJustPressed(2, GTA.Control.Attack) && ray.DitHitAnything)
                     {
+                        rebuildFrom = 0;
                         Vector3 p = ray.HitCoords;
                         RouteNodes.Add(p);
                         p = ray.HitCoords - (FreeCamRide.ForwardVector * 1);
@@ -243,6 +249,11 @@ namespace ARS
                 {
                     NodeHalfWidths.Remove(NodeHalfWidths.Count - 1);
                 }
+
+                // The width fill above is what a rebuild has to see, so this is the first point it can run. A delete
+                // is read off the count rather than its own branch, because that branch can also clear the route.
+                if (rebuildFrom < 0 && RouteNodes.Count < routeCountAtStart) rebuildFrom = Math.Max(0, RouteNodes.Count - 1);
+                if (rebuildFrom >= 0 && RouteNodes.Count > 0) TrackLoader.RebuildRouteInfo(rebuildFrom, RouteNodes.Count - 1);
 
             }
         }

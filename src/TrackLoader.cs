@@ -138,8 +138,7 @@ namespace ARS
             // Detect circuit vs point-to-point BEFORE GenerateRouteInfo so the geometry pass and BuildApexTable can
             // wrap node indices across the start/finish seam; without it, a corner sitting on the finish line is
             // invisible to the apex table on circuits.
-            ARS.IsPointToPoint = false;
-            if (ARS.RouteNodes[0].DistanceTo(ARS.RouteNodes[ARS.RouteNodes.Count - 1]) > 20) ARS.IsPointToPoint = true;
+            RefreshRouteTopology();
 
             GenerateRouteInfo();
 
@@ -182,6 +181,59 @@ namespace ARS
                 ARS.TrackPoints.Add(new TrackPoint { Node = node, Position = ARS.RouteNodes[node] });
             }
 
+            RecomputeCumulativeDistances();
+
+            int nodeCount = ARS.RouteNodes.Count;
+            foreach (TrackPoint point in ARS.TrackPoints) ComputePointGeometry(point, nodeCount);
+
+            BuildApexTable();
+            ARS.Log(ARS.LogImportance.Info, "Route generated");
+        }
+
+        // One node's plan-view geometry, shared by the load pass and the creator's incremental rebuild so the two
+        // cannot disagree. The angle window is a flat ten nodes: it used to read TrackHalfWidth, which on a full pass
+        // is still the fresh object's default because the width is written *below* this call, so the read only ever
+        // saw ten — an incremental pass over already-written points would have widened it silently.
+        const int GeometryWindowNodes = 10;
+
+        static void ComputePointGeometry(TrackPoint point, int nodeCount)
+        {
+            int average = GeometryWindowNodes;
+            bool canCompute = ARS.IsPointToPoint
+                ? nodeCount > 50 && point.Node > 50 && point.Node < nodeCount - 50
+                : point.Node >= 0 && point.Node < nodeCount;
+
+            if (canCompute)
+            {
+                Vector3 left = (ARS.RouteNodes[point.Node] - ARS.RouteNodes[Wrap(point.Node - average, nodeCount)]).Normalized;
+                Vector3 forward = (ARS.RouteNodes[Wrap(point.Node + average, nodeCount)] - ARS.RouteNodes[point.Node]).Normalized;
+                point.Direction = (ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)] - ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)]).Normalized;
+                point.Elevation = (ARS.RouteNodes[Wrap(point.Node + 3, nodeCount)] - ARS.RouteNodes[Wrap(point.Node - 3, nodeCount)]).Normalized.Z * 90f;
+                left.Z = 0f;
+                forward.Z = 0f;
+                point.Angle = Vector3.SignedAngle(left, forward, Vector3.WorldUp);
+                if (float.IsNaN(point.Angle) || float.IsInfinity(point.Angle)) point.Angle = 0f;
+                point.GeneralCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 10, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 10, nodeCount)], ARS.RouteNodes[point.Node]);
+                point.PreciseCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 4, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 4, nodeCount)], ARS.RouteNodes[point.Node]);
+                point.ExactRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)], ARS.RouteNodes[point.Node]);
+            }
+            else
+            {
+                // The point-to-point end band has no usable window, and a rebuilt point would otherwise keep the
+                // previous pass's radii: SmoothedRadius skips 999, so a stale value below it would read as curvature.
+                point.Angle = 0f;
+                point.Direction = nodeCount > 10 ? (ARS.RouteNodes[10] - ARS.RouteNodes[5]).Normalized : Vector3.Zero;
+                point.Elevation = 0f;
+                point.GeneralCurveRadius = 999f;
+                point.PreciseCurveRadius = 999f;
+                point.ExactRadius = 999f;
+            }
+
+            if (ARS.NodeHalfWidths.ContainsKey(point.Node)) point.TrackHalfWidth = ARS.NodeHalfWidths[point.Node];
+        }
+
+        static void RecomputeCumulativeDistances()
+        {
             float cumulative = 0f;
             for (int i = 0; i < ARS.TrackPoints.Count; i++)
             {
@@ -190,41 +242,83 @@ namespace ARS
                 cumulative += ARS.TrackPoints[i].Position.DistanceTo(ARS.TrackPoints[next].Position);
             }
             ARS.RouteLengthMeters = cumulative;
+        }
 
-            int nodeCount = ARS.RouteNodes.Count;
-            foreach (TrackPoint point in ARS.TrackPoints)
+        // Topology belongs to the route, not to the load: the last node within 20 m of the first closes the circuit.
+        // It has to be recomputed wherever the route changes, or a session inherits the flag from the last track it
+        // loaded, and every node window, the seam and the corner scan then run under the wrong assumption.
+        public static void RefreshRouteTopology()
+        {
+            ARS.IsPointToPoint = ARS.RouteNodes.Count > 1 && ARS.RouteNodes[0].DistanceTo(ARS.RouteNodes[ARS.RouteNodes.Count - 1]) > 20f;
+        }
+
+        // The derived table of a route that no longer exists. The creator clears it on entry, or the first apply
+        // would rebuild against the previous track's points and corners.
+        public static void ClearRouteInfo()
+        {
+            ARS.TrackPoints.Clear();
+            ARS.Corners.Clear();
+            ARS.RouteLengthMeters = 0f;
+            ARS.IsPointToPoint = false;
+            ARS.CornersRevision++;
+        }
+
+        // The creator appends and deletes at the tail, so the *geometry* only needs rebuilding around the change —
+        // every node-local read is within ten nodes. The apex table is rebuilt whole on purpose: its scan start is a
+        // whole-route search, corners merge against the previous one, the table is cyclic on a circuit and the bump
+        // seam spans the route, so no window of it is local. Both halves run the load pass's own rules.
+        public static void RebuildRouteInfo(int firstChanged, int lastChanged)
+        {
+            RefreshRouteTopology();
+            while (ARS.TrackPoints.Count > ARS.RouteNodes.Count) ARS.TrackPoints.RemoveAt(ARS.TrackPoints.Count - 1);
+            while (ARS.TrackPoints.Count < ARS.RouteNodes.Count)
             {
-                int average = (int)(point.TrackHalfWidth * 2);
-                bool canCompute = ARS.IsPointToPoint
-                    ? point.Node > 50 && point.Node < nodeCount - 50
-                    : point.Node >= 0 && point.Node < nodeCount;
-
-                if (canCompute)
-                {
-                    Vector3 left = (ARS.RouteNodes[point.Node] - ARS.RouteNodes[Wrap(point.Node - average, nodeCount)]).Normalized;
-                    Vector3 forward = (ARS.RouteNodes[Wrap(point.Node + average, nodeCount)] - ARS.RouteNodes[point.Node]).Normalized;
-                    point.Direction = (ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)] - ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)]).Normalized;
-                    point.Elevation = (ARS.RouteNodes[Wrap(point.Node + 3, nodeCount)] - ARS.RouteNodes[Wrap(point.Node - 3, nodeCount)]).Normalized.Z * 90f;
-                    left.Z = 0f;
-                    forward.Z = 0f;
-                    point.Angle = Vector3.SignedAngle(left, forward, Vector3.WorldUp);
-                    if (float.IsNaN(point.Angle) || float.IsInfinity(point.Angle)) point.Angle = 0f;
-                    point.GeneralCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 10, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 10, nodeCount)], ARS.RouteNodes[point.Node]);
-                    point.PreciseCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 4, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 4, nodeCount)], ARS.RouteNodes[point.Node]);
-                    point.ExactRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)], ARS.RouteNodes[point.Node]);
-                }
-                else
-                {
-                    point.Angle = 0f;
-                    point.Direction = (ARS.RouteNodes[10] - ARS.RouteNodes[5]).Normalized;
-                    point.Elevation = 0f;
-                }
-
-                if (ARS.NodeHalfWidths.ContainsKey(point.Node)) point.TrackHalfWidth = ARS.NodeHalfWidths[point.Node];
+                int node = ARS.TrackPoints.Count;
+                ARS.TrackPoints.Add(new TrackPoint { Node = node, Position = ARS.RouteNodes[node] });
             }
 
+            int count = ARS.RouteNodes.Count;
+            int from = Math.Max(0, firstChanged - GeometryWindowNodes);
+            int to = Math.Min(count - 1, lastChanged + GeometryWindowNodes);
+            for (int node = from; node <= to; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
+            // On a circuit the route wraps, so a change at the tail also moves the head: those nodes read forward
+            // across the seam into the new nodes.
+            if (!ARS.IsPointToPoint && count > GeometryWindowNodes)
+                for (int node = 0; node <= GeometryWindowNodes; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
+
+            RecomputeCumulativeDistances();
             BuildApexTable();
-            ARS.Log(ARS.LogImportance.Info, "Route generated");
+            if (ARS.LogLevel <= ARS.LogImportance.Info) VerifyAgainstFullPass();
+        }
+
+        // Test-only, and gated *before* any work is prepared: Log cannot suppress its own arguments, so the check
+        // returns early rather than being wrapped around a call. It re-runs the load pass over the same route, so the
+        // incremental table is proved against the reference instead of assumed to match it.
+        static void VerifyAgainstFullPass()
+        {
+            string incremental = CornerSignature();
+            System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+            GenerateRouteInfo();
+            watch.Stop();
+            string full = CornerSignature();
+            ARS.Log(ARS.LogImportance.Info, "Route rebuild: " + (incremental == full ? "incremental matches the full pass" : "INCREMENTAL DIFFERS from the full pass")
+                + " (" + ARS.RouteNodes.Count + " nodes, full pass " + watch.ElapsedMilliseconds + "ms)"
+                + (incremental == full ? "" : "\n  incremental " + incremental + "\n  full        " + full));
+        }
+
+        static string CornerSignature()
+        {
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            text.Append("bumps=").Append(ARS.Bumps.Count);
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                text.Append(" | ").Append(corner.Node).Append(':').Append(corner.StartNode).Append('-').Append(corner.EndNode)
+                    .Append('/').Append(corner.SupposedRadius.ToString("0.##", CultureInfo.InvariantCulture))
+                    .Append('/').Append(corner.DetectedRadius.ToString("0.##", CultureInfo.InvariantCulture))
+                    .Append('/').Append(corner.CrestNode).Append(',').Append(corner.CrestEntryNode).Append(',')
+                    .Append(corner.CrestSpanNodes).Append(',').Append(corner.CrestGs.ToString("0.###", CultureInfo.InvariantCulture));
+            }
+            return text.ToString();
         }
 
         public static void BuildApexTable()
