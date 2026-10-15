@@ -636,3 +636,12 @@ The throttle cut was a binary declared by two arms — the chassis riding above 
 1. **The apex lands mid-arc.** Draw a section in the creator, save the track, load it and watch where the cars turn in: they should clip the middle of the drawn arc rather than arriving at its entrance.
 2. **The trade, when driven.** The middle is a genuinely tighter road, so the recorded apex radius is 8% smaller and that corner's 1 g speed about 4% lower on created tracks. That is what the tighter middle is for, but it is the thing to judge: if a drawn corner now reads as too slow, the depth is the number.
 3. **No kink at the joins.** A section joined to a straight or to another section must show no step and no twitch, which is what the end bands are for.
+
+## The creator rebuilds the route table as you draw (dev build 624, compile-verified, drive owed)
+
+Applying a section or deleting nodes now rebuilds the derived table on the same tick — the node geometry around the change, the apex table whole — and the circuit/point-to-point flag is recomputed from the route's end gap rather than inherited from the last track loaded. Entering the creator clears the table it would otherwise carry over.
+
+1. **The rebuild agrees with the load.** With `Log.log` at Info, every apply and delete prints `Route rebuild: incremental matches the full pass (N nodes, local Xms, full Yms)`. `INCREMENTAL DIFFERS` is the check failing rather than a cosmetic message: the line carries both signatures, so copy them out.
+2. **The cost number.** That same line is the measurement that decides whether the local rebuild was worth building — if the local time is a rounding error beside the full pass, the locality is doing its job, and if it is not, the corner cut is where the time went.
+3. **Nothing throws on a clear.** With Show Bumps on, press Aim until the route empties: the log must not fill with the same exception every frame, which is what the missing bump clear would have caused.
+4. **The table survives the edit.** After several sections, the corners reported at draw time must be the ones the saved track loads with.
