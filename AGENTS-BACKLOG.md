@@ -33,7 +33,7 @@
 
 **Tier 4 — coupled systems**
 - `corner-approach-braking` — **closed (driver)**: irrelevant now. **closed**
-- `rival-publish-core` — the rival publish moves onto the core pass over a per-frame pose snapshot, so a card stops deciding on a record up to half a second old. **not built**: verified, `UpdateRivalInfo` still runs on its own 500 ms beat (`Racer.cs:3695-3699`) while the cards run on the core pass below it (`:3700`), and the second call (`:4183`) is the re-own path, not a cadence change.
+- `rival-publish-core` — **CLOSED (driver)**: the half-second-old rival record is fine as it stands, so the publish stays on its own 500 ms beat (`UpdateRivalInfo`, `Racer.cs`) while the cards run on the core pass below it. **not built, by decision.**
 
 **Tier 5 — new controllers and design decisions**
 - `snap-oversteer` — **dropped (driver)**: old and irrelevant today. **closed**
