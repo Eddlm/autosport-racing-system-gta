@@ -80,7 +80,6 @@ Full per-file detail: `AGENTS-TECHNOTES.md` → "Code map".
 - `SettingsRepair.cs` / `MenuSettings.cs` — the declared ini shape and its store.
 - `TrackLoader.cs` / `TrackRepository.cs` / `TrackVisuals.cs` / `GridBuilder.cs` / `VehicleCatalog.cs` / `VehicleSelector.cs` — track, grid and roster helpers.
 - `MenyooAppearance.cs` / `UpdateChecker.cs` / `FreeCamController.cs` / `Tips.cs` — the focused helpers.
-- `PersonalitySet.cs` / `SkillSet.cs` — empty husks since `c3b2e57` emptied them; deletion filed as `amputated-remnants`.
 
 ## Track, lane, speed and corner systems
 

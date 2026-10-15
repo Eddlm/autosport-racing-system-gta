@@ -82,7 +82,6 @@
     <Compile Include="src\VehicleCatalog.cs" />
     <Compile Include="src\VehicleSelector.cs" />
     <Compile Include="src\VehicleMemory.cs" />
-    <Compile Include="src\PersonalitySet.cs" />
     <Compile Include="src\Racer.cs" />
     <Compile Include="src\MenuSettings.cs" />
     <Compile Include="src\SettingsRepair.cs" />
@@ -92,7 +91,6 @@
     <Compile Include="src\AutosportRacingSystem.TrackFile.cs" />
     <Compile Include="src\SmartTuner.cs" />
     <Compile Include="src\UpdateChecker.cs" />
-    <Compile Include="src\SkillSet.cs" />
     <Compile Include="src\MenyooAppearance.cs" />
     <Compile Include="src\Tips.cs" />
   </ItemGroup>

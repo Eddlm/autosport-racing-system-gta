@@ -155,7 +155,6 @@ namespace ARS
         public float LateralGap = 0f;          // signed: + = rival right, - = rival left
         public float ForwardSpeedGap = 0f;      // signed: + = me faster than rival (along me's forward axis)
         public float Speed;                                   // the rival's own velocity magnitude, read once per publish
-        public float TimeToContact = float.PositiveInfinity; // longitudinal-only, forward rivals; no reader since the divebomb's reach became an arrival band, kept as that drive's named fallback
         public float TimeToReach = float.PositiveInfinity;     // seconds to close the route gap while closing on it
         public float FrontGap = float.PositiveInfinity;        // front-to-rear distance along the route
         public float RouteGapAhead = 0f;                       // signed route arc in metres, + = rival ahead
@@ -213,24 +212,13 @@ namespace ARS
             RouteGapAhead = gap;
         }
 
-        // Speed gaps and the times they imply. ForwardSpeedGap projects the relative velocity onto my forward axis,
-        // while TimeToContact uses the longitudinal gap.
+        // Speed gaps. ForwardSpeedGap projects the relative velocity onto my forward axis.
         void UpdateSpeedGaps(Racer me, Vector3 myVelocity, Vector3 rivalVelocity)
         {
             float mySpeedSquared = myVelocity.LengthSquared();
             Vector3 meForward = mySpeedSquared > 0.01f ? myVelocity.Normalized : me.Car.ForwardVector;
             Vector3 relativeVelocity = myVelocity - rivalVelocity;
             ForwardSpeedGap = Vector3.Dot(relativeVelocity, meForward);
-
-            // TimeToContact: only meaningful for rivals ahead of me that I'm closing on.
-            if (LongitudinalGap > 0f && ForwardSpeedGap > 0.001f)
-            {
-                TimeToContact = LongitudinalGap / ForwardSpeedGap;
-            }
-            else
-            {
-                TimeToContact = float.PositiveInfinity;
-            }
         }
 
         // Ahead, behind, or alongside: the longitudinal gap against the pair's combined length.
