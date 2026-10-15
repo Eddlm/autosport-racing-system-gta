@@ -13,7 +13,7 @@
 - `crest-gate` — entry move built and driver-verified (`27ee097`). The corner must account for the crest so cars brake earlier than an airborne arrival allows; the gate tests whether the crest falls inside the braking span and clears a severity floor — err generous. The two constants wait on the instrumented run.
 - `lane-guidance-gate` — REMOVED: the lane steer is ungated and the aim is the carried lane, so a straight-line standing offset is held. **driver-verified**
 - `settings-key-symmetry` — shipped (`fb2b684`, `4852d7d`); the key name still has four homes.
-- `settings-doc-anchor-drift` — anchors DONE; the seven claim-level re-derivations remain.
+- `settings-doc-anchor-drift` — **closed**: the filed list of claims had been lost, so they were re-derived from the settings section itself and the drifted ones are corrected — the `Laps` and `GridSize` defaults, `Menu-Settings.ini`'s own row and key list, `LogLevel`'s default, `AIRacerAutofix` cited as a snapping number, the claim that the live readers use `GetInt`, `OverspeedEnabled` described as a seed-on-read, and the retired `AiNitro`/`TriState` nitro design, which had drifted into three files including the nitro veto notes and a standing note here.
 
 **Tier 1 — localised edits, low risk**
 - `council-minors` — save-per-scroll dirty flag (**verified open**: no dirty or scroll-guard symbol exists); per-tick store reads; join chevron; `GridSize` (**verified done**: the item stores the value and snaps it on read, `AutosportRacingSystem.cs:731-739`); pace fallback.
@@ -110,7 +110,7 @@
 - **Track creator — revived and driver-verified.** Creating a track is deliberately on again, so the WIP's old no-track-mutation property no longer holds, and updating a loaded track is impossible: the dead `UpdateRoute` was cut (`c2ad2de`). **Do not vendor the game's `materials.dat`** — a stale copy misaligns silently and a row reorder would be invisible, so read the live table instead — and **never feed a surfaced material back into `CurrentMechanicalGrip`**, which would make the prior self-validating.
 - **Front slip angle is uncosted** — bounded by the steer ceiling, never priced in the pedal: TCS reads the longitudinal slip only, and body slip stays small in pure understeer.
 - **Corrections are corrections — never reuse one as an absolute target.** The rule is embodied in the code: countersteer is rebuilt as a full target and the steer blends toward it, never toward the bare correction term.
-- **Nitro pacing** — charged once at race launch and again on each lap increase, AI bottles gated on `AiNitro` with the player's never gated, and no free-roam refill.
+- **Nitro pacing** — charged once at race launch and again on each lap increase; the AI takes one bottle per lap through the card while the player fires on the key, a single `NitrousEnabled` checkbox gates both, and there is no free-roam refill.
 - **Stability awareness — partially implemented**: `IsUnstable` reads on every timed core pass, firing when the chassis rides above its at-rest height or when its yaw rate demands more lateral acceleration than the grip allows.
 - **Launch model — designed, not built (parked)**: start at a corner entrance at a multiple of the intended speed and integrate a ballistic projection forward, so a crest that unloads the tyres shows up as an airborne run.
 - **Rear-end prevention — open ideas**, separate from the corner-specific Yield maneuver, which overrides the speed plan only when trailing a faster rival near an entrance.
