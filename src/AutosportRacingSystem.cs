@@ -284,7 +284,6 @@ namespace ARS
         
         public static List<Vector3> RouteNodes = new List<Vector3>(); 
         public static Dictionary<int, float> Angles = new Dictionary<int, float>(); 
-        public static Dictionary<int, float> TerrainGripMultipliers = new Dictionary<int, float>();  
         public static Dictionary<int, float> NodeHalfWidths = new Dictionary<int, float>(); 
 
 
@@ -1677,7 +1676,6 @@ namespace ARS
             _raceTimedFinishMs = 0;
 
             Angles.Clear();
-            TerrainGripMultipliers.Clear();
             Bumps.Clear();
             RouteNodes.Clear();
             NodeHalfWidths.Clear();
@@ -3059,32 +3057,6 @@ namespace ARS
         
         
         
-        const float BrakingCoastSecondsBeforeApex = 1f; // reach corner speed this many seconds before the apex
-
-        public static float MaxSpeedForBrakingDistance(CornerPoint c, Racer r)
-        {
-            
-            int apexNode = c.Node;
-            if (!IsPointToPoint && apexNode < 0) apexNode += TrackPoints.Count;
-            float velTarget = CornerApexSpeed(c, r);
-            // Reserve coasting distance before the apex.
-            float coastReserve = velTarget * BrakingCoastSecondsBeforeApex;
-            // Pressure scales the reserve: low pressure brakes earlier.
-            coastReserve *= ARS.Remap(r.Pressure, 100f, 0f, 0.8f, 1.2f, true);
-            // Brake before a lifting lip.
-            int brakeTargetNode = (c.RequiresEarlyBrake && c.RampEndNode >= 0) ? c.RampEndNode : apexNode;
-            float rawDistance = brakeTargetNode - r.CurrentTrackPoint.Node;
-            if (!IsPointToPoint && rawDistance < 0f) rawDistance += TrackPoints.Count;
-            if (rawDistance < 0f) rawDistance = 0f;
-            float distance = rawDistance - coastReserve;
-            if (distance < 0f) distance = 0f;
-
-            float decel = r.BrakingDecel(apexNode, distance);
-
-            float spd = (float)Math.Sqrt(velTarget * velTarget + 2f * decel * distance);
-            if (float.IsNaN(spd) || float.IsInfinity(spd)) spd = 999f;
-            return spd;
-        }
 
         
 

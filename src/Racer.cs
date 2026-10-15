@@ -61,7 +61,6 @@ namespace ARS
 
         // Racer progress along the route.
         public TrackPoint CurrentTrackPoint = new TrackPoint();
-        public float TrackProgress = 0f;
         public float AlongTrackSpeed = 0f;
         public int RaceProgress = 0;
 
@@ -269,7 +268,6 @@ namespace ARS
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
         const float BrakeMaxFactor = 1.2f;
-        // Read by ARS.MaxSpeedForBrakingDistance (static) to scale its decel plan.
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
 
@@ -530,7 +528,6 @@ namespace ARS
 
             Handling.Grip = Function.Call<float>((Hash)0xA132FB5370554DB0, Car);
 
-            VehicleData.PerformanceIndex = (int)((Handling.EstimatedTopSpeed * 5) + (Handling.Grip * 100) + (Handling.Acceleration * 500));
             float modelGrip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, Car.Model.Hash);
             float modelTopSpeedMph = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, Car.Model.Hash));
             float modelAccel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, Car.Model.Hash);
@@ -1788,7 +1785,6 @@ namespace ARS
                 if (NextApexNode3 >= 0 && CornerRequiresBraking(NextApexNode3))
                     cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode3, NextApexSpeed3)));
             }
-            else if (Brain.Corner != null) cornerSpd = Math.Max(2, ARS.MaxSpeedForBrakingDistance(Brain.Corner.Point, this));
 
             // Route speed from the triple-check circumradius window.
             float followTrackSpd = RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint);
@@ -1850,8 +1846,6 @@ namespace ARS
             }
 
             Brain.CurrentIntention.Speed = Math.Min(cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph), followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph));
-            // Physics-limited cornering speed for the current high-speed curve radius.
-            Brain.CurrentIntention.CorneringSpeedLimit = (float)Math.Sqrt(9.8f * VehicleData.CurrentMechanicalGrip * Brain.CurrentPerception.HighSpeedCurveRadius) + ARS.MphToMps(ARS.CornerOffsetMph);
 
             // ChillOut: hold a standoff behind the closest rival ahead.
             if (ActiveManeuver.Type == ManeuverType.ChillOut)
@@ -3016,8 +3010,7 @@ namespace ARS
 
         void UpdateRaceProgress()
         {
-            TrackProgress = Lap * ARS.TrackPoints.Count + CurrentTrackPoint.Node;
-            RaceProgress = (int)TrackProgress;
+            RaceProgress = Lap * ARS.TrackPoints.Count + CurrentTrackPoint.Node;
         }
 
         public void UpdateTrackPosition()
@@ -4132,10 +4125,6 @@ namespace ARS
             }
 
 
-            if (Math.Abs(Brain.CurrentPerception.CurrentNodeOffset) < CurrentTrackPoint.TrackHalfWidth && RacePosition <= 2 && !ARS.TerrainGripMultipliers.ContainsKey(CurrentTrackPoint.Node))
-            {
-                ARS.TerrainGripMultipliers.Add(CurrentTrackPoint.Node, GroundGripMultiplier);
-            }
 
             VehicleData.YawRotationPerSecondDegrees = ARS.RadToDeg(Function.Call<Vector3>(Hash.GET_ENTITY_ROTATION_VELOCITY, Car).Z);
         }

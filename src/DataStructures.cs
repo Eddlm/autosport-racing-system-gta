@@ -91,7 +91,6 @@ namespace ARS
         }
 
 
-        public float PerformanceIndex = 0;
         public float PowerScale = 0;
         public string TextPerformanceIndex = "0";
         public float BoundingBox = 0f;
@@ -122,7 +121,7 @@ namespace ARS
         {
             public float CurrentNodeOffset = 0f;
             public float CurveRadiusToFollowPoint = 0f;
-            // Short-window radius for the high-speed lane pursuit gain.
+            // Short 0.5-1.0 s window radius, read by the rocket-boost straight gate.
             public float HighSpeedCurveRadius = 0f;
             // NEVER USED. Kept for future "two conflicting corners" work.
             public float CurveRadiusAfterFollowPoint = 0f;
@@ -133,8 +132,6 @@ namespace ARS
         {
             public float Speed;
             public float IntendedSpeedChange;
-            // Physics-limited cornering speed for the current track radius: v = √(g × grip × r)
-            public float CorneringSpeedLimit;
             // Max speed for the current steering input before exceeding available grip: v = √(grip × g × L / tan(δ))
             public float SteerLimitedSpeed;
 
@@ -383,9 +380,6 @@ namespace ARS
         public float Elevation = 0f;
         public float ElevationChange = 0f;
         public bool IsKey = false;
-        // True when a lifting lip sits before the apex. Car must brake before the lip.
-        public bool RequiresEarlyBrake = false;
-        public int RampEndNode = -1;
         // Vertical curvature Gs at the crest before this corner (negative = crest, positive = dip), measured at
         // generation at a fixed probe speed and rescaled by (v/probe)² at read. CrestNode is the unload's peak and
         // CrestEntryNode the onset the car meets first; both are -1 when there is no crest.
