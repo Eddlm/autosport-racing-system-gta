@@ -24,7 +24,7 @@
 **Tier 2 — verify in game, then tune**
 - `apex-radius` — driver-observed on high-grip cars (`aa302e1`); the fleet-wide read is owed.
 - `constant-radius-generator` — a creator-built corner can collapse the span; watch created tracks specifically, with the stability tolerance as the lever.
-- `steer-ramp-band` — the limiter's ramp band is narrower; the ramp's end anchor scales with Steer Limit At Speed so the band stays continuous. **untested (`489`, `e59e0a9`)**
+- `steer-ramp-band` — the limiter's ramp band is narrower; the ramp's end anchor scales with Steer Limit At Speed so the band stays continuous. **driver-verified (`489`, `e59e0a9`)**
 - `side-slip-scale` — the side-slip field the wheel-slip spheres read was never probed the way the longitudinal one was: the leak writes it on a scale whose peak is 2.5 while the sphere colours call 1.0 the peak, and the layout lesson of `slip-axis-scale` applies to this block too. The live steering ceiling reads the model, not this field, so nothing in the ceiling moves either way. **unsettled**
 
 **Tier 3 — single-method changes**
@@ -61,7 +61,7 @@
 - `instability-tuning` — tuned by driving, not derived.
 - `overspeed-correction` — driver-verified (`2dcbbcc`); the refresh rate and grade term remain.
 - `tcs-controller` — a reason cap, not a P-integrator (`1ebbd2c`); its two knobs are shares of the peak slip (`b11e52b`).
-- `steering-batch-residuals` — the countersteer allowance and the damper's crossing are still the same shape.
+- `steering-batch-residuals` — closed: the countersteer allowance and the damper's crossing were driven and stand as they are. **closed**
 - `merge-span-gap` — a surviving merge does not reach its own first corner's entrance.
 - `merge-rule-stress-test` — the two corner-merge rules need a stress test, the aligned window validated on one track only.
 - `dnf-final-death` — DNF is final death, driver-verified (`0623276`).
@@ -72,7 +72,7 @@
 - `surface-stats-revival` — track surface composition. **(idea)**
 - `bump-ramp-window` — bumps are ramps, the airborne window; Stage 0 scan built and its overlay driver-verified (`f3f318f`). Detection must not reuse the crest instrument, ramps must be classified rather than treated alike, a bump on a crest takes the `min` of the two speed effects and never their sum, the classification lives in the consumer and never the detector, and both behaviours ship as a setting with an off state.
 - `section-roughness-sweep` — a lateral normal sweep giving a section's roughness, which would make a one-lane bump visible. Call it roughness or section quality — **not** stability, which is the car's own state. **(idea)**
-- `ceiling-factor-review` — closed (`0dfbf53`): reverted the midpoint to the outer wheel; the outer reference owes a drive. **closed**
+- `ceiling-factor-review` — closed (`0dfbf53`): reverted the midpoint to the outer wheel; the outer reference has since been driven. **closed**
 - `steer-slip-allowance` — the measured-slip allowance under the ceiling; built, driven once, parked off, and what it should be is a design call. **parked**
 - `wheel-contact-count` — a per-wheel ground-contact count for the stability check; the near-zero test is the part to fix, since a rolling tyre always reads a little noise. **not built**
 - `ceiling-factor-range` — closed (`29b267b`): the domain is 0.05 to 1.25 in 0.05 steps. **closed**
@@ -123,9 +123,9 @@
 - `lane-repulsion-ceiling`, `player-special-ability`, `ai-free-abs` — **all DECIDED**
 - `outside-approach-window` — arming half driver-verified, the skip owed (`7619347`, `1395c30`)
 - `crest-gate` — entry move driver-verified (`27ee097`), gating constants pending
-- `steer-ramp-band` — **untested (`e59e0a9`)**
+- `steer-ramp-band` — **driver-verified (`489`, `e59e0a9`)**
 - `side-slip-scale` — **unsettled**; probe the side-slip field beside the longitudinal one on a single drive before moving the sphere landmarks or the parked allowance's constants
-- `ceiling-factor-review` — **closed (`0dfbf53`)**, the outer reference owes a drive
+- `ceiling-factor-review` — **closed (`0dfbf53`)**, the outer reference driven
 - `tcs-cap-floor-setting`, `overspeed-thresholds-setting` — two open ranges; `ceiling-factor-range` is **closed (`29b267b`)**
 - `launch-slip-allowance` — **(idea)**; the removed launch ramp last existed in `a6fcf7d`
 - `rival-publish-core` — **not built**
@@ -143,5 +143,6 @@
 - `raceable-bikes` — **parked, post-0.9.0**
 - `wheel-contact-count` — **not built**
 - `amputated-remnants` — **closed (`8d1888e`)**
+- **Steering is closed (driver)** — the limiter, its ramp band, the ceiling and its factor, the damper, the slew and the blend are all driven and accepted.
 - **Pushed**, newest first: `053146e..ea87461` (the slip axis settled by probe, the TCS pair as shares of the peak, the ABS knee on that peak, the kick and debug trains); `da8a407..053146e` (the lane chain's run); `c2e7e6b..7872758` (the ceiling's midpoint reference, the wheel-slip spheres, the measured-slip allowance built then parked, the settled steering pair); `ac5514b..c2e7e6b` (the debug-visual train, the slide-raise retirement, the ramp/damper batch, the overspeed ramp, the lane base and the Council fixes).
-- **Undriven across those runs**: the narrowed ramp band with its ceiling factor, the lane base and the Offshoot gate it inverted, the lane's reason tag, the re-grounded contact avoidance, the divebomb, the kick card and the debug-visual train — the drives owed are the last section of `TEST-PLAN.md`.
+- **Undriven across those runs**: the lane base and the Offshoot gate it inverted, the lane's reason tag, the re-grounded contact avoidance, the divebomb, the kick card and the debug-visual train — the drives owed are the last section of `TEST-PLAN.md`.
