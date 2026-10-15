@@ -1489,9 +1489,9 @@ namespace ARS
             List<string> names = new List<string>();
             foreach (string path in sorted)
                 names.Add(System.IO.Path.GetFileNameWithoutExtension(path));
-            // The index is parked on a valid entry before the swap, because the Items setter reads Items[index] as it lands.
-            if (_trackListItem.Items.Count > 0)
-                _trackListItem.SelectedIndex = Math.Min(_trackListItem.SelectedIndex, _trackListItem.Items.Count - 1);
+            // The index is parked before the swap (the Items setter reads Items[index] as it lands), which also clears
+            // the stale field an empty pass leaves behind, since an empty list cannot have its index set at all.
+            if (_trackListItem.Items.Count > 0) _trackListItem.SelectedIndex = 0;
             _trackListItem.Items = names;
 
             int idx = -1;
@@ -1511,6 +1511,8 @@ namespace ARS
 
             if (_trackListPaths.Count > 0)
                 _selectedTrackPath = _trackListPaths[_trackListItem.SelectedIndex];
+            else
+                _selectedTrackPath = null;
         }
 
         void RefreshPowerControls()
