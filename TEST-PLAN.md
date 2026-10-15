@@ -390,6 +390,7 @@ The ceiling law is plotted in `docs/steer-ceiling.png`, regenerated with the nar
 3. **Off-track halves it, and nothing else moves it** — the threshold is the setting on every surface and at every speed now: the surface-grip scaling is gone (it tightened the regulation where grip was scarce, tracking the lower peak slip a loose surface has, and it went for simplicity) and so is the launch ramp. The off-track half is the only modulation left, and the surface no longer reads into the value at all. Expect the cars to be a shade more permissive than before wherever grip is scarce and off the line — 0.5 everywhere, where the old law gave more slip at launch and less on dirt. A launch allowance, as a setting or a per-racer personality, is filed as `launch-slip-allowance`.
 4. **ABS** — the same shape with no knobs: the cut still starts at the knee and floors at mingrip, which are the traction curve's own numbers.
 5. **The menu and the file** — both items sit under TCS in Rival Traction, and their keys appear in `Menu-Settings.ini` on the first load after this build; `Log.log` must hold no "declares no key" line, and both values must survive a reload.
+6. **The cut floors at 0.2 throttle** (driver-decided, no row of its own): a car held at the bottom of a TCS cut keeps a fifth of the throttle, not a quarter. It is the floor the cut lands on at the far end of the taper, so it shows on a long wheelspin exit rather than in the middle of the span — a car that now reads as bogged or slow to recover is this number, not the taper.
 
 ## The ceiling's reference is the outer wheel (driver-verified)
 
@@ -401,9 +402,9 @@ The peak-slip ceiling is stated at the *outer* front wheel — the loaded wheel 
 2. **The tight stuff.** The tightened cap bites hardest above the ramp's end speed, where the ramp no longer reaches: watch a slow corner for a car that cannot place itself, or that turns in more lazily than it did.
 3. **The item and the file.** The description now names what 1.00 means; confirm it shows, the value survives a reload, and `Log.log` holds no "declares no key" line after a load.
 
-## The measured-slip allowance under the ceiling (PARKED — built, driven once, switched off; do not drive)
+## The measured-slip allowance under the ceiling (CLOSED — built, driven once, switched off; do not drive)
 
-**Parked** by decision after the first drive: the swerves read slower, but what the allowance should *be* — a rate limit on authority or an amplitude reference — is a design call, filed as `steer-slip-allowance`. `SlipPeakCeiling` is off, so the list below is what a future session resumes from rather than what is owed now.
+**Closed (driver)**: the allowance is a switch — `SlipPeakCeiling` is off and the update returns early — and the question it left open, what the ceiling is stated against, was settled at the outer wheel (`0dfbf53`), so nothing here is owed. The list below is what a future session resumes from if the switch is ever turned on.
 
 The ceiling in force is now the lower of the model law and an allowance read from the tyre: the wheel may lead the side slip it already carries by `SteerSlipLeadShare`, and the allowance climbs to the whole peak over `SteerSlipClimbSeconds` while the command keeps asking for more than it grants, falling at the same rate once it stops. The climb is timed to the peak, so a lower Steer Limit At Speed cuts the plateau without changing when it arrives.
 

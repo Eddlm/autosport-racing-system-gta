@@ -1929,7 +1929,7 @@ namespace ARS
         // that level at the shared rate both ways, and ConvertSpeedToPedals takes the minimum against the plan's
         // own throttle and tags the winner. The level is the logic half, the shared rate the clock half.
         const float ReasonCapSlewRate = 3.5f;
-        const float TcsCapFloor = 0.25f;
+        const float TcsCapFloor = 0.2f;
 
         // The taper both reason caps cut on: nothing at the threshold, the cap's floor one span of slip past it, tanh
         // between so the onset has no slope step, normalised so the floor lands where the span says it does. A tanh
