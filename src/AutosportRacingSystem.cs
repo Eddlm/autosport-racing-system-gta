@@ -283,7 +283,6 @@ namespace ARS
 
         
         public static List<Vector3> RouteNodes = new List<Vector3>(); 
-        public static Dictionary<int, float> Angles = new Dictionary<int, float>(); 
         public static Dictionary<int, float> NodeHalfWidths = new Dictionary<int, float>(); 
 
 
@@ -1677,7 +1676,6 @@ namespace ARS
             _routeEditorActive = false;
             _raceTimedFinishMs = 0;
 
-            Angles.Clear();
             Bumps.Clear();
             RouteNodes.Clear();
             NodeHalfWidths.Clear();
@@ -2610,34 +2608,6 @@ namespace ARS
             return TrackLoader.Circumradius3D(a, b, midpoint);
         }
 
-        public static float Circumradius2D(Vector2 a, Vector2 b, Vector2 midPoint)
-        {
-            return TrackLoader.Circumradius2D(a, b, midPoint);
-        }
-
-        public static float GetPreciseRadius(TrackPoint trackPoint, int span)
-        {
-            if (trackPoint == null || TrackPoints == null || TrackPoints.Count < 3) return 999f;
-
-            int safeSpan = Math.Max(1, span);
-            int node = (int)Clamp(trackPoint.Node, 0, TrackPoints.Count - 1);
-            int minSafeNode = safeSpan;
-            int maxSafeNode = TrackPoints.Count - 1 - safeSpan;
-            if (node < minSafeNode || node > maxSafeNode) return trackPoint.PreciseCurveRadius;
-
-            Vector3 prev = TrackPoints[node - safeSpan].Position;
-            Vector3 next = TrackPoints[node + safeSpan].Position;
-            Vector3 mid = TrackPoints[node].Position;
-
-            float r = Circumradius3D(prev, next, mid);
-            if (float.IsNaN(r) || float.IsInfinity(r) || r <= 0f) return trackPoint.PreciseCurveRadius;
-            return r;
-        }
-
-        
-        
-        
-        
         public static float HillGripDeltaGs(Vector3 start, Vector3 midpoint, Vector3 end, float velocity)
         {
             if (velocity <= 0f) return 0f;
