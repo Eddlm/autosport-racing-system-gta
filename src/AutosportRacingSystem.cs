@@ -157,6 +157,9 @@ namespace ARS
         public static float SteerCeilingFactor = 1f;
         public static float TcsSlipThreshold = 0.5f;
         public static float TcsTaperSpan = 0.5f;
+        // TEMPORARY slip probe state (delete with LogSlipProbe).
+        static int _slipProbeNextLogMs;
+        const int SlipProbeIntervalMs = 200;
         // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
@@ -1728,6 +1731,8 @@ namespace ARS
 
                 SmartTuner.Tick(GetRandomInt);
 
+                LogSlipProbe();
+
                 TrackLoader.TickQueuedFlares(FlareEffects);
 
                 
@@ -2074,6 +2079,32 @@ namespace ARS
                 Log(LogImportance.Error, "OnTick error: " + ex, true);
             }
         }
+        // TEMPORARY slip probe (delete once the slip-axis read is settled): the three wheel fields the leak's
+        // CWheel places at m_fRotAng / m_fRotAngVel / m_fRotSlipRatio, side by side on every wheel of the
+        // player's car. The angular velocity tracks -v/r, the rot angle is a wrapped radian angle, and the
+        // slip ratio sits near 0 while rolling, so one drive names all three.
+        unsafe void LogSlipProbe()
+        {
+            if (Game.GameTime < _slipProbeNextLogMs) return;
+            _slipProbeNextLogMs = Game.GameTime + SlipProbeIntervalMs;
+
+            Vehicle car = Game.Player.Character.CurrentVehicle;
+            if (!CanWeUse(car)) return;
+
+            List<ulong> wheels = GetWheelPtrs(car);
+            if (wheels.Count == 0) return;
+
+            string line = "SlipProbe " + car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture) + " m/s";
+            for (int i = 0; i < wheels.Count; i++)
+            {
+                line += " | w" + i
+                    + " 170 " + (*(float*)(wheels[i] + 0x170)).ToString("0.00", CultureInfo.InvariantCulture)
+                    + " 174 " + (*(float*)(wheels[i] + 0x174)).ToString("0.00", CultureInfo.InvariantCulture)
+                    + " 178 " + (*(float*)(wheels[i] + 0x178)).ToString("0.00", CultureInfo.InvariantCulture);
+            }
+            Log(LogImportance.Info, line, true);
+        }
+
         public static TimeSpan ParseToTimeSpan(int gameTime)
         {
             TimeSpan t = new TimeSpan();
