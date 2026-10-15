@@ -592,7 +592,9 @@ Below the corner line's far clamp — the `ApexLine` phase — the demand is ref
 3. **Falsifier**: a car that stays inside on an entry it had room and time to open up, or an armed approach where `ApexLine` never appears at all. The first says the refusal is too aggressive, the second that it is refusing the whole blend.
 4. **A confound to separate on the drive**: this and the `outside-approach-window` skip gate produce the same tell, no outside line on a corner with room for one. The refusal logs; the skip gate does not.
 
-## The TCS pair stated as a share of the peak slip, and the ABS knee on that peak (compile-verified, drives owed)
+## The TCS pair stated as a share of the peak slip, and the ABS knee on that peak (compile-verified — drives PARKED on a lower-grip handling)
+
+**Parked before the drive**, by the driver's call: neither the TCS percent extremes nor the brake re-scale can be judged on the grip the fleet runs today, because the AI neither spins nor locks on it. Both resume when a lower-grip handling is in use, and the readings below are what that drive picks up.
 
 The slip axis was settled by a live probe (`b889222`, evidence on the ladder item `slip-axis-scale`): `wheel+0x174` is the raw signed slip ratio, so the traction curve peaks at 0.4 in the field and goes flat at 1.0 — every threshold ARS compared against that curve was 2.5× too high. Both TCS knobs are now shares of the peak (`TcsSlipLimitPct`, `TcsTaperSpanPct`: 10 to 200 in tens, default 80 and 80), and the ABS knee moved from 2.5 to the peak, its floor a span later at twice the peak.
 
