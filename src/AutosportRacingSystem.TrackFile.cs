@@ -129,17 +129,17 @@ namespace ARS
                 
 
                 info = document.CreateElement("X");
-                info.InnerText = Math.Round(v.X, 2).ToString();
+                info.InnerText = Math.Round(v.X, 4).ToString();
                 info.InnerText = info.InnerText.Replace(",", ".");
                 p.AppendChild(info);
 
                 info = document.CreateElement("Y");
-                info.InnerText = Math.Round(v.Y, 2).ToString();
+                info.InnerText = Math.Round(v.Y, 4).ToString();
                 info.InnerText = info.InnerText.Replace(",", ".");
                 p.AppendChild(info);
 
                 info = document.CreateElement("Z");
-                info.InnerText = Math.Round(v.Z, 2).ToString();
+                info.InnerText = Math.Round(v.Z, 4).ToString();
                 info.InnerText = info.InnerText.Replace(",", ".");
                 p.AppendChild(info);
 
