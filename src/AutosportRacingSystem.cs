@@ -1489,6 +1489,9 @@ namespace ARS
             List<string> names = new List<string>();
             foreach (string path in sorted)
                 names.Add(System.IO.Path.GetFileNameWithoutExtension(path));
+            // The index is parked on a valid entry before the swap, because the Items setter reads Items[index] as it lands.
+            if (_trackListItem.Items.Count > 0)
+                _trackListItem.SelectedIndex = Math.Min(_trackListItem.SelectedIndex, _trackListItem.Items.Count - 1);
             _trackListItem.Items = names;
 
             int idx = -1;
@@ -1504,7 +1507,7 @@ namespace ARS
                     }
                 }
             }
-            _trackListItem.SelectedIndex = idx >= 0 ? idx : 0;
+            if (_trackListItem.Items.Count > 0) _trackListItem.SelectedIndex = idx >= 0 ? idx : 0;
 
             if (_trackListPaths.Count > 0)
                 _selectedTrackPath = _trackListPaths[_trackListItem.SelectedIndex];
@@ -1538,12 +1541,10 @@ namespace ARS
             _powerTargetItem.Items.Clear();
             foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0"));
             _powerTargetItem.SelectedIndex = !targetStored ? _powerTargetValues.Count / 2 : FindNearestPowerValue(_powerTargetValues, PowerTargetScale);
-            if (_powerTargetItem.SelectedIndex < 0) _powerTargetItem.SelectedIndex = _powerTargetValues.Count / 2;
             if (_powerTargetValues.Count > 0) PowerTargetScale = _powerTargetValues[_powerTargetItem.SelectedIndex];
             _resolvedPaceTarget = PowerTargetScale;
 
             if (_paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = FindNearestPowerValue(_paceOffsetValues, PaceOffsetScale);
-            if (_paceOffsetItem.SelectedIndex < 0 && _paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = _paceOffsetValues.Count / 2;
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
             RaceMenuStore.Migrate("PaceTarget", PowerTargetScale.ToString(CultureInfo.InvariantCulture));
             RaceMenuStore.Migrate("PaceOffset", PaceOffsetScale.ToString(CultureInfo.InvariantCulture));
