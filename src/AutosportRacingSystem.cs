@@ -1393,7 +1393,7 @@ namespace ARS
             if (CurrentPaceMode == PaceMode.RelativeToMine)
             {
                 if (TryComputePlayerCarPaceIndex(out float playerPace)) { _lastKnownPlayerPace = playerPace; _resolvedPaceTarget = playerPace + PaceOffsetScale; }
-                else if (!float.IsNaN(_lastKnownPlayerPace)) _resolvedPaceTarget = _lastKnownPlayerPace + PaceOffsetScale;
+                else if (!float.IsNaN(_lastKnownPlayerPace)) { _resolvedPaceTarget = _lastKnownPlayerPace + PaceOffsetScale; UI.Notify("~o~No vehicle to read a performance index from - using your last car's PI."); }
                 else UI.Notify("~o~No vehicle to read a performance index from - using the fixed PI Target.");
             }
 
