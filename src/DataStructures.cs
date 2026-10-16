@@ -415,6 +415,10 @@ namespace ARS
     {
         public int Node = -1;
         public CrestType Type = CrestType.Crest;
+        // The centripetal gs the car experiences crossing the peak at 100mph, as a magnitude. The
+        // scanner samples a 6-node triangle at v = 45 m/s and stores |gs|; crests and dips share
+        // the same sign convention the brake decel used to use.
+        public float GsAt100Mph = 0f;
     }
     public class Corner
     {

@@ -653,7 +653,13 @@ namespace ARS
                 else if (gradeBefore < 0f && gradeAfter > 0f) type = CrestType.Dip;  // descending then climbing = valley
                 else continue;                                                       // no sign change: not a peak
 
-                ARS.Crests.Add(new Crest { Node = node, Type = type });
+                // The centripetal gs the car would experience crossing the peak at 100mph, taken as
+                // a magnitude. HillGripDeltaGs uses the same 6-node sample the grade is computed on,
+                // so the value is local to the peak -- a small hill with a steep top reads high here
+                // even if the surrounding road is flat.
+                float gsAt100 = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position, 45f);
+
+                ARS.Crests.Add(new Crest { Node = node, Type = type, GsAt100Mph = Math.Abs(gsAt100) });
                 // Skip the next few nodes: a gradual sign change covers many adjacent nodes, and the same
                 // physical hill registers as multiple peaks at slightly different centres otherwise.
                 node += skipAfterPeak;
@@ -663,9 +669,9 @@ namespace ARS
             foreach (Crest c in ARS.Crests)
             {
                 if (c.Type == CrestType.Crest) crests++; else dips++;
-                ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " node=" + c.Node);
+                ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " node=" + c.Node + " gs@100mph=" + c.GsAt100Mph.ToString("0.00"));
             }
-            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips (sign change in local grade over " + window + "-node sample)");
+            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips (sign change in local grade over " + window + "-node sample, gs at 100mph)");
         }
 
         static bool TryResolveNode(int node, int count, out int resolved)
