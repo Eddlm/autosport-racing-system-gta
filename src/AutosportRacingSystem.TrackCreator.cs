@@ -172,15 +172,17 @@ namespace ARS
                         
                         World.DrawMarker(MarkerType.DebugSphere, ray.HitCoords, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.25f, 0.25f, 0.25f), Color.Blue);
 
-                        // GenerateArc probes the ground under every point, so it runs only when the aim has
+                        // GenerateBezier probes the ground under every point, so it runs only when the aim has
                         // moved a metre, the route end changed or the width did - what is drawn is what applies.
                         bool aimMoved = _previewRouteNodes != RouteNodes.Count || Vector3.Distance(_previewAim, ray.HitCoords) > PreviewRebuildDistance;
                         if (aimMoved)
                         {
                             Vector3 sStart = RouteNodes[RouteNodes.Count - 1];
                             Vector3 sDirection = (RouteNodes[RouteNodes.Count - 1] - RouteNodes[RouteNodes.Count - 2]).Normalized;
+                            Vector3 sEnd = ray.HitCoords;
+                            float sScale = sStart.DistanceTo(sEnd) * 0.5f;
 
-                            List<Vector3> temporaryRouteNodes = GenerateArc(sStart, sDirection, ray.HitCoords);
+                            List<Vector3> temporaryRouteNodes = GenerateBezier(sStart, sDirection, sEnd, sScale);
 
                             _routeSection.Clear();
                             _routeSection.AddRange(temporaryRouteNodes);
@@ -259,95 +261,72 @@ namespace ARS
             }
         }
 
-        // A circular arc from the route end to the aim point, leaving that end tangent to the incoming heading, with
-        // its middle pulled slightly tighter. A true constant radius gives the apex search nothing to find — every
-        // node reads the same radius, so the first one wins and the apex lands at the arc's entrance — which is what
-        // a bezier section gave naturally. The pull is radial about the arc's centre, so both endpoints and both end
-        // tangents are untouched, and it stays far inside the span walk's 1.6x or the walk stops early and the span
-        // shrinks. Plan-view throughout, because that is the plane the racing system measures.
-        public static List<Vector3> GenerateArc(Vector3 sStart, Vector3 sDirection, Vector3 sEnd)
+        // A quadratic bezier from the route end to the aim point, leaving that end tangent to the incoming
+        // heading. The two control points are sStart - middlePoint and (sEnd - middlePoint).Normalized *
+        // (sScale / 2), so the curve has a definite narrower middle that the apex search can latch onto. Plan-view
+        // throughout, because that is the plane the racing system measures.
+        public static List<Vector3> GenerateBezier(Vector3 sStart, Vector3 sDirection, Vector3 sEnd, float sScale)
         {
-            const float separationDist = 1f;
-            // Past this the centre is so distant that building the points loses more precision than the
-            // curvature is worth, so the section is simply straight.
-            const float straightRadiusFactor = 100f;
-            const float halfPi = 1.5707964f;
-            // How much tighter the arc's middle is than its ends, as a share of the radius. The ends must stay inside
-            // the span walk's multiples of the apex radius — 1 / (1 - depth) is the ends-to-apex ratio.
-            const float apexBiasDepth = 0.08f;
-            // The share of each end left unbiased. Without it the pull starts on the first node, and the lateral
-            // offset it puts there reads as a tighter bend at the join — on a short section tighter than the middle,
-            // which would steal the apex.
-            const float apexBiasEndBand = 0.15f;
-            // The aim is a raycast hit, so the arc is short; this only bounds a pathological caller.
-            const int maxSteps = 4000;
-
             List<Vector3> points = new List<Vector3>();
-            Vector3 flat = new Vector3(sEnd.X - sStart.X, sEnd.Y - sStart.Y, 0f);
-            Vector3 heading = new Vector3(sDirection.X, sDirection.Y, 0f);
+            sScale = sStart.DistanceTo2D(sEnd) * Remap(Vector3.Angle((sEnd - sStart).Normalized, sDirection), 0f, 90f, 1f, 1.5f, true);
 
-            float chord = flat.Length();
-            if (chord < 0.01f || heading.LengthSquared() < 0.0001f)
+
+            Vector3 middlePoint = sStart + (sDirection * (sScale / 2));
+            Vector3 directionStart = sStart - middlePoint;
+            Vector3 directionEnd = ((sEnd) - middlePoint).Normalized * (sScale / 2f);
+
+
+
+
+            float separationDist = 1f;
+
+            float addition = (1 / directionEnd.DistanceTo(directionStart));
+
+            float stepLerp = 0;
+            int step = 0;
+            float scaleAdjust = 0;
+            while (stepLerp < 1.0f && step < 400)
             {
-                points.Add(sEnd);
-                return points;
-            }
-            heading.Normalize();
+                step++;
 
-            // The tangent-chord theorem puts the chord at half the arc's central angle off the entry tangent, so
-            // the sweep is twice the aim's bearing. Past 90 degrees the aim is behind the heading, which no
-            // forward-tangent arc can reach: hold a semicircle, which shows the aim is out of range.
-            float bearing = (float)Math.Atan2((heading.X * flat.Y) - (heading.Y * flat.X), (heading.X * flat.X) + (heading.Y * flat.Y));
-            if (bearing > halfPi) bearing = halfPi;
-            if (bearing < -halfPi) bearing = -halfPi;
-            float sweep = bearing * 2f;
+                scaleAdjust = 0f;
 
-            float radius = chord / (2f * (float)Math.Sin(Math.Abs(sweep) / 2f));
+                Vector3 currentPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp);
+                Vector3 addPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp + addition);
 
-            if (!float.IsInfinity(radius) && radius <= chord * straightRadiusFactor)
-            {
-                float sign = Math.Sign(sweep);
-                Vector3 centre = sStart + new Vector3(-heading.Y * sign, heading.X * sign, 0f) * radius;
-                float startAngle = (float)Math.Atan2(sStart.Y - centre.Y, sStart.X - centre.X);
-                int steps = (int)Math.Min(maxSteps, Math.Max(1.0, Math.Ceiling(radius * Math.Abs(sweep) / separationDist)));
-
-                // Index 0 is the route end itself: the apply loop starts at 1, so the node already in
-                // RouteNodes is not written twice.
-                points.Add(sStart);
-                for (int i = 1; i <= steps; i++)
+                int tries = 0;
+                while (currentPos.DistanceTo2D(addPos) < separationDist - 0.001f && tries < 200)
                 {
-                    float angle = startAngle + (sweep * i / steps);
-                    // sin² inside a band that leaves both ends flat: the slope vanishes at the joins and the pull
-                    // peaks at the middle, where the apex belongs.
-                    float along = i / (float)steps;
-                    float window = 0f;
-                    if (along > apexBiasEndBand && along < 1f - apexBiasEndBand)
-                    {
-                        window = (float)Math.Sin(Math.PI * ((along - apexBiasEndBand) / (1f - (2f * apexBiasEndBand))));
-                        window *= window;
-                    }
-                    float apexBias = 1f - (apexBiasDepth * window);
-                    points.Add(new Vector3(centre.X + (radius * apexBias * (float)Math.Cos(angle)), centre.Y + (radius * apexBias * (float)Math.Sin(angle)), sStart.Z));
+                    tries++;
+                    scaleAdjust += 0.001f;
+                    addPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp + addition + scaleAdjust);
                 }
-            }
-            else
-            {
-                int straightSteps = (int)Math.Min(maxSteps, Math.Max(1.0, Math.Ceiling(chord / separationDist)));
-                points.Add(sStart);
-                for (int i = 1; i <= straightSteps; i++) points.Add(sStart + (flat * (i / (float)straightSteps)));
-            }
-
-            // Follow the terrain: the arc is computed in plan, so every point below the route end takes its
-            // height from the map. Sprint holds the section level, as it always did.
-            if (!Game.IsControlPressed(2, GTA.Control.Sprint))
-            {
-                for (int i = 1; i < points.Count; i++)
+                tries = 0;
+                while (currentPos.DistanceTo2D(addPos) > separationDist + 0.001f && tries < 200)
                 {
-                    float ground;
-                    if (TryResolveGround(points[i], out ground)) points[i] = new Vector3(points[i].X, points[i].Y, ground);
+                    tries++;
+                    scaleAdjust -= 0.001f;
+                    addPos = middlePoint + Bezier2(directionStart, directionEnd, stepLerp + addition + scaleAdjust);
                 }
+                stepLerp += addition + scaleAdjust;
+
+
+
+                if (!Game.IsControlPressed(2, GTA.Control.Sprint))
+                {
+                    RaycastResult toGround = World.Raycast(addPos + new Vector3(0, 0, 2f), addPos + (Vector3.WorldDown * 30f), IntersectOptions.Map);
+                    if (toGround.DitHitAnything) addPos.Z = toGround.HitCoords.Z;
+                }
+                points.Add(addPos);
+
             }
             return points;
+        }
+
+        // The cubic is unused; the quadratic from a single anchor and direction is the shape the creator wants.
+        public static Vector3 Bezier2(Vector3 Start, Vector3 End, float t)
+        {
+            return (((1 - t) * (1 - t)) * Start) + (2 * t * (1 - t) * Vector3.Zero) + ((t * t) * End);
         }
 
         // The probe starts well above the point: anchored below the surface it finds nothing and the point keeps
