@@ -591,7 +591,7 @@ namespace ARS
             return (ARS.TrackPoints[ahead].Position.Z - ARS.TrackPoints[behind].Position.Z) / run;
         }
 
-        static int NodeAhead(int from, float meters, int count)
+        internal static int NodeAhead(int from, float meters, int count)
         {
             int node = from;
             float walked = 0f;

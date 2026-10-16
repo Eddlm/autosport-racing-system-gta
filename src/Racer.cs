@@ -1810,25 +1810,24 @@ namespace ARS
                 followTrackSpd *= slopeSpeedFactor;
             }
 
-            // Crest/dip vertical curvature grip effect on the route speed; the corner term gets the same check below, at the apex.
+            // Vertical-curvature no-fly gate: a single sample of the road centred on the car, with
+            // the near sample 0.5s ahead and the far sample 1.0s ahead at the live car speed. The
+            // factor is read once and applied to both route and corner speeds; the corner's apex
+            // speed already flows from the route speed, so the corner inherits the slow-down.
             int count = ARS.TrackPoints.Count;
-            int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteLookAheadSeconds), 0, count - 1);
-            followTrackSpd *= CrestGripSpeedFactor(OffsetCornerNode(followNode, -3), followNode, OffsetCornerNode(followNode, 3), out _);
-            LiveRouteCrestNode = followNode;
+            int carNode = CurrentTrackPoint.Node;
+            float routeCrestFactor = CrestGripSpeedFactor(carNode, count, out int routeNear, out int routeFar, out _);
+            // Visualise the two lookahead nodes the live system just sampled: routeNear (0.5s ahead)
+            // and routeFar (1.0s ahead). The car itself is at carNode, implicit.
+            LiveRouteCrestNode = routeNear;
+            LiveCornerCrestNode = routeFar;
+            followTrackSpd *= routeCrestFactor;
 
             // The apex speed before vertical grip, and the only input the corner's crest call takes as its entry speed.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
             float cornerApexSpeedWithVerticalGrip = _cornerSpd;
-
-            // Corner crest/dip: same check as route, centered on the apex node.
-            if (Brain.Corner != null)
-            {
-                CornerPoint crestCorner = Brain.Corner.Point;
-                float cornerCrestFactor = CrestGripSpeedFactor(OffsetCornerNode(crestCorner.Node, -3), crestCorner.Node, OffsetCornerNode(crestCorner.Node, 3), out _);
-                LiveCornerCrestNode = crestCorner.Node;
-                cornerSpd *= cornerCrestFactor;
-                cornerApexSpeedWithVerticalGrip *= cornerCrestFactor;
-            }
+            cornerSpd *= routeCrestFactor;
+            cornerApexSpeedWithVerticalGrip *= routeCrestFactor;
 
             // Steer-limited speed: max speed for current steer angle before sliding. Blended into route speed so an outside car (less steering) may carry more speed.
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
@@ -1877,26 +1876,39 @@ namespace ARS
                 Brain.CurrentIntention.Speed *= rbFactor;
         }
 
-        // Vertical-curvature grip factor over the three-node window centred on a node, as a speed multiplier.
-        // The car always slows enough to bring the gs at the peak down to safeGsTarget -- the speed factor
-        // is sqrt(safeGsTarget / |deltaGs|) so a 1.2g peak forces the car to 0.41 of its current speed (gs at
-        // the new speed = 0.2g). Dips load the tyres, not unload, so they're ignored. The previous design
-        // had aggression (1 -> 0 by radius) and crestFloor (0.4 -> 0.8 by radius), both removed here: a slow
-        // corner is a slow corner, and a 1g+ peak always forces the no-fly gate regardless of radius. The
-        // function takes the live car speed as the probe velocity (the previous design passed entrySpeed /
-        // _cornerSpd from the caller, but the formula is no longer radius-conditional).
+        // Vertical-curvature grip factor over a triangle the car is currently inside, as a speed multiplier.
+        // The triangle's three points are the car (centre), 0.5s ahead at the current speed, and 1.0s ahead.
+        // The car always slows enough to bring the gs at the centre down to safeGsTarget -- the speed
+        // factor is sqrt(safeGsTarget / |deltaGs|) so a 1.2g reading forces the car to 0.41 of its current
+        // speed. Dips load the tyres, not unload, so they're ignored. The function takes the live car
+        // speed as the probe velocity, so a faster car sees a longer sample arc and a slower one a
+        // shorter one -- the same 0.5s/1.0s time window expressed in metres.
         const float safeGsTarget = 0.2f;
-        float CrestGripSpeedFactor(int startNode, int centreNode, int endNode, out float rawDeltaGs)
+        const float nearSeconds = 0.5f;
+        const float farSeconds = 1.0f;
+        float CrestGripSpeedFactor(int carNode, int count, out int nearNode, out int farNode, out float rawDeltaGs)
         {
+            nearNode = -1;
+            farNode = -1;
             rawDeltaGs = 0f;
-            if (startNode < 0 || centreNode < 0 || endNode < 0) return 1f;
-            if (startNode == endNode || startNode == centreNode || endNode == centreNode) return 1f;
+            if (carNode < 0 || carNode >= count) return 1f;
+            float v = Car.Velocity.Length();
+            if (v < 0.5f) return 1f;     // parked: no forward motion, no sample
 
-            float deltaGs = ARS.HillGripDeltaGs(ARS.TrackPoints[startNode].Position, ARS.TrackPoints[centreNode].Position, ARS.TrackPoints[endNode].Position, Car.Velocity.Length());
+            // Walk forward in metres, accumulating along the route, until the target seconds are reached.
+            // On a circuit the wrap is implicit (mod count), on point-to-point the walk clamps to count-1.
+            int near = TrackLoader.NodeAhead(carNode, nearSeconds * v, count);
+            int far = TrackLoader.NodeAhead(carNode, farSeconds * v, count);
+            if (near < 0 || far < 0) return 1f;
+            if (near == carNode || far == carNode || near == far) return 1f;
+            nearNode = near;
+            farNode = far;
+
+            float deltaGs = ARS.HillGripDeltaGs(ARS.TrackPoints[carNode].Position, ARS.TrackPoints[near].Position, ARS.TrackPoints[far].Position, v);
             rawDeltaGs = deltaGs;
-            if (deltaGs > 0f) deltaGs = 0f;       // dips ignored
+            if (deltaGs > 0f) deltaGs = 0f;
             float magGs = Math.Abs(deltaGs);
-            if (magGs <= safeGsTarget) return 1f;  // already below target; no slow-down
+            if (magGs <= safeGsTarget) return 1f;
             return (float)Math.Sqrt(safeGsTarget / magGs);
         }
 
