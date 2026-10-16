@@ -2071,14 +2071,15 @@ namespace ARS
         }
 
         // ABS: the brake-side twin, containment where TCS regulates: TCS holds a curve point, ABS guards the
-        // region past the peak where a locking wheel is losing force. The cap engages at slip 0.5 (a quarter
-        // past the peak, where the curve is rolling off but the wheel isn't fully locked) and floors at slip
-        // 1.0 (the engine's "locked" reading). Span 0.5, floor brake 0.25. A wheel whose own engine ABS is
-        // active has the field forced to +/-5 by the engine (sfAbsActiveSlipRatio, :5061), so its cap sits
-        // at the floor on either constant.
+        // region past the peak where a locking wheel is losing force. The cap leaves the brake untouched
+        // up to slip 0.5 (a quarter past the peak, where the curve is rolling off but the wheel isn't
+        // fully locked). From 0.5 to 1.0 (the engine's 'locked' reading), tanh drops the brake force from
+        // 1.0 to 0.0 -- a fully locked wheel gets no brake, the driver has lost the wheel and easing is
+        // the only recovery. A wheel whose own engine ABS is active has the field forced to +/-5 by the
+        // engine (sfAbsActiveSlipRatio, :5061), so its cap sits at 0 on either constant.
         const float AbsKneeSlip = 0.5f;
         const float AbsFloorSlip = 1.0f;
-        const float AbsBrakeFloor = 0.25f;
+        const float AbsBrakeFloor = 0.0f;
 
         void UpdateBrakeReasonCaps()
         {
