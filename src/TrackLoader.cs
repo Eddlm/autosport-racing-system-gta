@@ -645,7 +645,7 @@ namespace ARS
         // single chunk iteration that produces no usable feature still advances by at least one node.
         static void AssignCrests(int count)
         {
-            const float threshold = 0.15f;
+            const float threshold = 0.50f;
             const int window = 6;
             const int scanBack = 100;
             const int minRun = 3;
