@@ -826,8 +826,17 @@ namespace ARS
             // never settles, so without a cap the walk runs all the way out to the region bound. The step is also capped
             // by what the scan list holds, because the walk returns a step count and these are list positions.
             int spanLimit = Math.Min(SpanNodeLimit, count - 1);
-            startPosition = Math.Max(regionStart, apexPosition - EntranceStep(apexNode, detectedRadius, Math.Min(spanLimit, apexPosition), count, smoothingNodes));
-            endPosition = Math.Min(regionEnd, apexPosition + ExitStep(apexNode, detectedRadius, Math.Min(spanLimit, scanNodes.Count - 1 - apexPosition), count, smoothingNodes));
+            int entranceMaxStep = Math.Min(spanLimit, apexPosition);
+            int exitMaxStep = Math.Min(spanLimit, scanNodes.Count - 1 - apexPosition);
+            int entranceStep = EntranceStep(apexNode, detectedRadius, entranceMaxStep, count, smoothingNodes);
+            int exitStep = ExitStep(apexNode, detectedRadius, exitMaxStep, count, smoothingNodes);
+            int unclampedStart = apexPosition - entranceStep;
+            int unclampedEnd = apexPosition + exitStep;
+            startPosition = Math.Max(regionStart, unclampedStart);
+            endPosition = Math.Min(regionEnd, unclampedEnd);
+            // Diagnostic: log every corner's region bounds, walk direction, and where the clamping actually happens.
+            // The user observed that one corner's entrance lands at regionStart regardless of the multiple — confirm.
+            ARS.Log(ARS.LogImportance.Info, "Corner add: apex=" + apexNode + " angle=" + ARS.TrackPoints[apexNode].Angle.ToString("0.0") + " detectedR=" + detectedRadius.ToString("0.0") + " region=" + regionStart + "-" + regionEnd + " entranceStep=" + entranceStep + "/" + entranceMaxStep + (entranceStep >= entranceMaxStep ? " (at cap)" : "") + " unclampedStart=" + unclampedStart + " start=" + startPosition + (startPosition > unclampedStart ? " (clamped to regionStart)" : (startPosition == unclampedStart ? " (walk stop)" : "")) + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " (at cap)" : "") + " unclampedEnd=" + unclampedEnd + " end=" + endPosition);
             // Flat rather than the apex radius: scaling it gave a sweeper a span of twice its own radius, so the cars
             // prepared across the whole corner.
             float minEntranceExit = Math.Min(SpanMinimumMeters, spanLimit);
