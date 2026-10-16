@@ -928,7 +928,7 @@ namespace ARS
         }
 
         const float SpanMinimumMeters = 20f;
-        const float SpanEntranceRadiusMultiple = 1.4f;
+        const float SpanEntranceRadiusMultiple = 1.6f;
         const float SpanExitRadiusMultiple = 2f;
         const int SpanNodeLimit = 500;
         // Outer bound on how far from the apex an entrance or exit may land. The walk can otherwise run to its step
