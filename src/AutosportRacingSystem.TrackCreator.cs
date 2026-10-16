@@ -24,6 +24,7 @@ namespace ARS
         // CleanEverything tears down any loaded track and clears the route statics, so it must run first.
         void StartTrackCreator()
         {
+            Log(LogImportance.Info, "[DIAG] StartTrackCreator entered; _routeEditorActive before = " + _routeEditorActive + ", _freeCam.IsActive = " + _freeCam.IsActive + ", FreeCamRide.CanWeUse = " + CanWeUse(FreeCamRide));
             if (!CanWeUse(FreeCamRide))
             {
                 Log(LogImportance.Error, "Track creator: the freecam ride is unavailable, so creator mode was not entered.");
@@ -35,6 +36,7 @@ namespace ARS
             TrackLoader.ClearRouteInfo();
             _routeEditorActive = true;
             if (!_freeCam.IsActive) _freeCam.Toggle();
+            Log(LogImportance.Info, "[DIAG] StartTrackCreator done; _routeEditorActive after = " + _routeEditorActive + ", _freeCam.IsActive = " + _freeCam.IsActive);
         }
 
         // SaveRoute always builds a fresh document, so this is the new-track path only.
@@ -103,6 +105,7 @@ namespace ARS
             // Route editing is available only from freecam.
             if (_routeEditorActive && _freeCam.IsActive)
             {
+                Log(LogImportance.Info, "[DIAG] HandleTrackCreator gate open; _routeEditorActive = " + _routeEditorActive + ", _freeCam.IsActive = " + _freeCam.IsActive + ", RouteNodes.Count = " + RouteNodes.Count);
                 RaycastResult ray = World.Raycast(GameplayCamera.Position, GameplayCamera.Position + ((GameplayCamera.Direction.Normalized) * 100), IntersectOptions.Everything);
 
                 // Width is the only knob the geometry leaves open — the arc always runs to the aim point, so the
