@@ -63,6 +63,11 @@ namespace ARS
         public TrackPoint CurrentTrackPoint = new TrackPoint();
         public float AlongTrackSpeed = 0f;
         public int RaceProgress = 0;
+        // The two nodes the live crest-grip system is currently reading: route lookahead centre and
+        // next-corner apex. Set by CrestGripSpeedFactor's callers and read by the track-analysis visual
+        // so the driver can see which 6-node sample the no-fly gate is checking this tick.
+        public int LiveRouteCrestNode = -1;
+        public int LiveCornerCrestNode = -1;
 
         // Time-based route references used by steering and speed calculations.
         public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
@@ -1808,7 +1813,8 @@ namespace ARS
             // Crest/dip vertical curvature grip effect on the route speed; the corner term gets the same check below, at the apex.
             int count = ARS.TrackPoints.Count;
             int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteLookAheadSeconds), 0, count - 1);
-            followTrackSpd *= CrestGripSpeedFactor(OffsetCornerNode(followNode, -3), followNode, OffsetCornerNode(followNode, 3), Brain.CurrentPerception.CurveRadiusToFollowPoint, Car.Velocity.Length(), out _);
+            followTrackSpd *= CrestGripSpeedFactor(OffsetCornerNode(followNode, -3), followNode, OffsetCornerNode(followNode, 3), out _);
+            LiveRouteCrestNode = followNode;
 
             // The apex speed before vertical grip, and the only input the corner's crest call takes as its entry speed.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
@@ -1818,7 +1824,8 @@ namespace ARS
             if (Brain.Corner != null)
             {
                 CornerPoint crestCorner = Brain.Corner.Point;
-                float cornerCrestFactor = CrestGripSpeedFactor(OffsetCornerNode(crestCorner.Node, -3), crestCorner.Node, OffsetCornerNode(crestCorner.Node, 3), NextApexRadius, _cornerSpd, out _);
+                float cornerCrestFactor = CrestGripSpeedFactor(OffsetCornerNode(crestCorner.Node, -3), crestCorner.Node, OffsetCornerNode(crestCorner.Node, 3), out _);
+                LiveCornerCrestNode = crestCorner.Node;
                 cornerSpd *= cornerCrestFactor;
                 cornerApexSpeedWithVerticalGrip *= cornerCrestFactor;
             }
@@ -1871,24 +1878,26 @@ namespace ARS
         }
 
         // Vertical-curvature grip factor over the three-node window centred on a node, as a speed multiplier.
-        // 1 means the window is degenerate or a straight; both the aggression and the floor scale with the local
-        // radius, so a tight corner is cautious and a straight is aggressive. A corner reads its own entrance and exit
-        // as the outer samples, the route a short window around its lookahead point.
-        float CrestGripSpeedFactor(int startNode, int centreNode, int endNode, float radius, float entrySpeed, out float rawDeltaGs)
+        // The car always slows enough to bring the gs at the peak down to safeGsTarget -- the speed factor
+        // is sqrt(safeGsTarget / |deltaGs|) so a 1.2g peak forces the car to 0.41 of its current speed (gs at
+        // the new speed = 0.2g). Dips load the tyres, not unload, so they're ignored. The previous design
+        // had aggression (1 -> 0 by radius) and crestFloor (0.4 -> 0.8 by radius), both removed here: a slow
+        // corner is a slow corner, and a 1g+ peak always forces the no-fly gate regardless of radius. The
+        // function takes the live car speed as the probe velocity (the previous design passed entrySpeed /
+        // _cornerSpd from the caller, but the formula is no longer radius-conditional).
+        const float safeGsTarget = 0.2f;
+        float CrestGripSpeedFactor(int startNode, int centreNode, int endNode, out float rawDeltaGs)
         {
             rawDeltaGs = 0f;
             if (startNode < 0 || centreNode < 0 || endNode < 0) return 1f;
             if (startNode == endNode || startNode == centreNode || endNode == centreNode) return 1f;
 
-            float deltaGs = ARS.HillGripDeltaGs(ARS.TrackPoints[startNode].Position, ARS.TrackPoints[centreNode].Position, ARS.TrackPoints[endNode].Position, entrySpeed);
+            float deltaGs = ARS.HillGripDeltaGs(ARS.TrackPoints[startNode].Position, ARS.TrackPoints[centreNode].Position, ARS.TrackPoints[endNode].Position, Car.Velocity.Length());
             rawDeltaGs = deltaGs;
-            if (deltaGs > 0f) deltaGs = 0f;
-            float aggression = ARS.MapGamma(radius, 100f, 300f, 0f, 1f, 0.5f, true);
-            float crestFloor = ARS.MapGamma(radius, 100f, 500f, 0.4f, 0.8f, 0.5f, true);
-            if (deltaGs < 0f) deltaGs *= (1f - aggression);
-            float verticalGripFactor = Math.Max(1f + deltaGs, crestFloor);
-            if (verticalGripFactor < 1f) verticalGripFactor = 1f - Math.Min((1f - verticalGripFactor) * ARS.CrestEffect, 0.9f);
-            return (float)Math.Sqrt(verticalGripFactor);
+            if (deltaGs > 0f) deltaGs = 0f;       // dips ignored
+            float magGs = Math.Abs(deltaGs);
+            if (magGs <= safeGsTarget) return 1f;  // already below target; no slow-down
+            return (float)Math.Sqrt(safeGsTarget / magGs);
         }
 
         // Rubber-band factor: <1 for leaders (penalty), >1 for laggards (boost), 1 at center.

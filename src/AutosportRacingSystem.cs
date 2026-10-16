@@ -1860,6 +1860,9 @@ namespace ARS
                             }
                         }
                     }
+
+                    if (DebugFocusRacer != null)
+                        TrackVisuals.DrawLiveCrestChecks(DebugFocusRacer, ARS.TrackPoints);
                 }
 
                 // Nitro: one charge at launch, then a fresh bottle each lap.
