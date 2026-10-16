@@ -649,7 +649,7 @@ namespace ARS
             const int window = 6;
             const int scanBack = 100;
             const int minRun = 3;
-            const int chunkSize = 20;
+            const int chunkSize = 2;
             const int halfSpanCap = 60;
             const float scanSpeed = 90f;            // 200 mph, the high anchor; anything not a crest here isn't one at all
             const float speedStep = 2f;             // 2 m/s steps; activation speed has ~2 m/s precision
