@@ -654,6 +654,7 @@ namespace ARS
             const float speedStep = 2f;             // 2 m/s steps; activation speed has ~2 m/s precision
             const float minActivationSpeed = 5f;    // a feature that doesn't crest above 5 m/s is too slow to matter
             const float entryExitGs = 0.05f;        // absolute |gs| where the half-gs walk stops; flat-ground boundary
+            const int minPeakDistance = 10;         // adjacent detected peaks must be at least this many nodes apart
 
             ARS.Crests.Clear();
             // The outer 'while (node < count)' is wrong on a circuit: 'node = Wrap(node + 1, count)' cycles
@@ -808,9 +809,14 @@ namespace ARS
                 };
                 ARS.Crests.Add(feature);
 
-                // Advance past the exit so the next chunk starts after this feature.
-                int next = ARS.IsPointToPoint ? exit + 1 : Wrap(exit + 1, count);
-                if (next == node) { node = Wrap(node + 1, count); continue; }     // a stuck exit can't make progress; force one node
+                // Advance past the peak by minPeakDistance (10 nodes). On a symmetric 5-10m transition,
+                // the 6-node curvature sample reads the same feature from multiple sample-midpoint
+                // positions as the outer pointer advances -- the off-centre reading at offset 0 vs
+                // offset 1 vs offset 2 produces 3-5 candidate peaks for the same physical feature.
+                // The 10-node advance guarantees any two adjacent detected peaks are at least 10
+                // nodes apart, suppressing the duplicates.
+                int next = ARS.IsPointToPoint ? peakNode + minPeakDistance : Wrap(peakNode + minPeakDistance, count);
+                if (next == node) { node = Wrap(node + 1, count); continue; }
                 node = next;
             }
 
