@@ -65,6 +65,9 @@ namespace ARS
         public static int CornersRevision = 0;
         // Lifting lips found on the route. The debug view reads this; nothing drives on it yet.
         public static List<Bump> Bumps = new List<Bump>();
+        // Crests and dips along the route, with entry/exit at the half-gs threshold. Read by the brake decel
+        // factor and the track-analysis visual; nothing else.
+        public static List<Crest> Crests = new List<Crest>();
 
         public static List<string> KnownTracks = new List<string>();
         // Raw grip (max traction, in G) per model, keyed by the XML <Model> hash text.
@@ -1806,6 +1809,11 @@ namespace ARS
                         TrackVisuals.DrawCornerRegions(PlayerRacer, ARS.Corners, ARS.TrackPoints);
                     else if (raceLive)
                         TrackVisuals.DrawCornerRegions(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
+
+                    if (PlayerRacer != null)
+                        TrackVisuals.DrawCrests(PlayerRacer, ARS.Crests, ARS.TrackPoints);
+                    else if (raceLive)
+                        TrackVisuals.DrawCrests(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Crests, ARS.TrackPoints);
 
                     if (DebugFocusRacer != null)
                     {

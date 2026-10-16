@@ -3509,25 +3509,62 @@ namespace ARS
         // along-slope gravity component, which a crest does not change. The crest covers its extent, so the unload is
         // the area of that ramp clipped to the solve span rather than a point test: a binary in/out steps the planned
         // decel mid-braking, and those samples are far too sparse to integrate it.
+        // The crest is read from ARS.Crests by span overlap with the brake solve: the worst (largest |PeakGs|) crest
+        // whose entry-to-exit window overlaps (CurrentTrackPoint.Node, apexNode) on the braking direction is the one
+        // whose unload is integrated. The corner carries no crest field any more.
         float CrestDecelFactor(int apexNode, float spanMeters)
         {
-            CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
-            if (corner == null || corner.CrestNode < 0 || corner.CrestSpanNodes <= 0 || spanMeters < 1f) return 1f;
-            if (corner.CrestGs >= 0f) return 1f;
+            if (spanMeters < 1f) return 1f;
             int count = ARS.TrackPoints.Count;
-            int toCrest = corner.CrestNode - CurrentTrackPoint.Node;
-            if (!ARS.IsPointToPoint) toCrest = ((toCrest % count) + count) % count;
-            float halfExtent = Math.Max(1f, corner.CrestSpanNodes * 0.5f);
-            float start = toCrest - halfExtent;
-            float end = toCrest + halfExtent;
+            if (count == 0) return 1f;
+
+            // Span endpoints in the car's direction-of-travel coordinates.
+            int carNode = CurrentTrackPoint.Node;
+            int solveStart, solveEnd;
+            if (ARS.IsPointToPoint)
+            {
+                solveStart = Math.Min(carNode, apexNode);
+                solveEnd = Math.Max(carNode, apexNode);
+            }
+            else
+            {
+                int fwd = ((apexNode - carNode) % count + count) % count;
+                solveStart = 0;
+                solveEnd = fwd;
+            }
+
+            Crest worst = null;
+            foreach (Crest c in ARS.Crests)
+            {
+                // Skip dips -- they load the tyres, not unload them.
+                if (c.Type != CrestType.Crest) continue;
+                int entrySpan = ((c.EntryNode - carNode) % count + count) % count;
+                int peakSpan = ((c.Node - carNode) % count + count) % count;
+                int exitSpan = ((c.ExitNode - carNode) % count + count) % count;
+                // Crests before the car (entrySpan > solveEnd) or past the apex (exitSpan < 0) don't apply.
+                if (!ARS.IsPointToPoint && entrySpan > solveEnd) continue;
+                if (ARS.IsPointToPoint && (c.ExitNode < solveStart || c.EntryNode > solveEnd)) continue;
+                if (Math.Abs(c.PeakGs) <= Math.Abs((worst != null) ? worst.PeakGs : 0f)) continue;
+                worst = c;
+            }
+            if (worst == null) return 1f;
+
+            float peakGs = worst.PeakGs;
+            if (peakGs >= 0f) return 1f;
+            int peak = ((worst.Node - carNode) % count + count) % count;
+            int entry = ((worst.EntryNode - carNode) % count + count) % count;
+            int exit = ((worst.ExitNode - carNode) % count + count) % count;
+            float halfExtent = Math.Max(1f, (exit - entry) * 0.5f);
+            float start = peak - halfExtent;
+            float end = peak + halfExtent;
             float lo = Math.Max(start, 0f);
             float hi = Math.Min(end, spanMeters);
             if (end <= 0f || start >= spanMeters) return 1f;
-            float peak = ARS.Clamp(toCrest, lo, hi);
-            float risingUnscaled = RampIntegralUnscaled(start, lo, peak);
-            float fallingUnscaled = RampIntegralUnscaled(end, hi, peak);
+            float clampedPeak = ARS.Clamp(peak, lo, hi);
+            float risingUnscaled = RampIntegralUnscaled(start, lo, clampedPeak);
+            float fallingUnscaled = RampIntegralUnscaled(end, hi, clampedPeak);
             float speedRatio = Car.Velocity.Length() / CrestProbeSpeed;
-            float unload = 1f + corner.CrestGs * speedRatio * speedRatio * (risingUnscaled + fallingUnscaled) / (2f * halfExtent * spanMeters);
+            float unload = 1f + peakGs * speedRatio * speedRatio * (risingUnscaled + fallingUnscaled) / (2f * halfExtent * spanMeters);
             if (float.IsNaN(unload) || float.IsInfinity(unload)) return 1f;
             unload = Math.Max(unload, CrestDecelFloor);
             return 1f - Math.Min((1f - unload) * ARS.CrestEffect, 0.9f);

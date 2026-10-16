@@ -145,6 +145,56 @@ namespace ARS
             }
         }
 
+        // Crossing lines at entry and exit of each crest and dip within range, plus a vertical tick at the peak
+        // for caller. Crests draw orange (unload), dips draw cyan (load); the peak tick sits a half-metre off the road
+        // in the relevant colour so it is visible from a chase camera.
+        public static void DrawCrests(Racer player, List<Crest> crests, List<TrackPoint> trackPoints)
+        {
+            if (crests.Count == 0 || trackPoints.Count == 0) return;
+            int playerNode = player.CurrentTrackPoint.Node;
+
+            for (int i = 0; i < crests.Count; i++)
+            {
+                Crest c = crests[i];
+                if (c.Node < 0 || c.Node >= trackPoints.Count) continue;
+
+                int delta = ARS.IsPointToPoint ? c.Node - playerNode : ((c.Node - playerNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
+                if (!ARS.IsBetween(delta, -10, 400)) continue;
+
+                Color entryColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 255, 140, 0) : Color.FromArgb(200, 0, 200, 255);
+                Color exitColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 200, 80, 0) : Color.FromArgb(200, 0, 140, 220);
+                Color peakColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 200, 0) : Color.FromArgb(255, 0, 220, 255);
+
+                if (c.EntryNode >= 0 && c.EntryNode < trackPoints.Count)
+                    DrawTrackCrossingLine(trackPoints, c.EntryNode, entryColor);
+                if (c.ExitNode >= 0 && c.ExitNode < trackPoints.Count)
+                    DrawTrackCrossingLine(trackPoints, c.ExitNode, exitColor);
+
+                // Vertical tick at the peak: half a metre above the road, two metres tall, two line segments.
+                Vector3 peakPos = trackPoints[c.Node].Position + new Vector3(0f, 0f, 0.5f);
+                ARS.DrawLine(peakPos, peakPos + new Vector3(0f, 0f, 2f), peakColor);
+                ARS.DrawLine(peakPos + new Vector3(0f, -0.3f, 0f), peakPos + new Vector3(0f, 0.3f, 0f), peakColor);
+            }
+        }
+
+        // Spectator overload: draw crests whose peak is within a radius of the centre.
+        public static void DrawCrests(Vector3 center, float radiusMeters, List<Crest> crests, List<TrackPoint> trackPoints)
+        {
+            if (crests.Count == 0 || trackPoints.Count == 0) return;
+            for (int i = 0; i < crests.Count; i++)
+            {
+                Crest c = crests[i];
+                if (c.Node < 0 || c.Node >= trackPoints.Count) continue;
+                if (trackPoints[c.Node].Position.DistanceTo2D(center) > radiusMeters) continue;
+                Color entryColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 255, 140, 0) : Color.FromArgb(200, 0, 200, 255);
+                Color exitColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 200, 80, 0) : Color.FromArgb(200, 0, 140, 220);
+                if (c.EntryNode >= 0 && c.EntryNode < trackPoints.Count)
+                    DrawTrackCrossingLine(trackPoints, c.EntryNode, entryColor);
+                if (c.ExitNode >= 0 && c.ExitNode < trackPoints.Count)
+                    DrawTrackCrossingLine(trackPoints, c.ExitNode, exitColor);
+            }
+        }
+
         static void DrawTrackCrossingLine(List<TrackPoint> trackPoints, int node, Color color)
         {
             TrackPoint tp = trackPoints[node];

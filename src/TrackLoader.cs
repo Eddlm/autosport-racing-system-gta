@@ -348,9 +348,7 @@ namespace ARS
                     .Append('l').Append(corner.LengthStart).Append(',').Append(corner.LengthEnd)
                     .Append(corner.IsChicane ? "C" : "c")
                     .Append('/').Append(corner.SupposedRadius.ToString("0.##", CultureInfo.InvariantCulture))
-                    .Append('/').Append(corner.DetectedRadius.ToString("0.##", CultureInfo.InvariantCulture))
-                    .Append('/').Append(corner.CrestNode).Append(',').Append(corner.CrestEntryNode).Append(',')
-                    .Append(corner.CrestSpanNodes).Append(',').Append(corner.CrestGs.ToString("0.###", CultureInfo.InvariantCulture));
+                    .Append('/').Append(corner.DetectedRadius.ToString("0.##", CultureInfo.InvariantCulture));
             }
             return text.ToString();
         }
@@ -474,7 +472,7 @@ namespace ARS
                 }
             }
 
-            AssignCrestNodes(nodeCount);
+            AssignCrests(nodeCount);
             AssignBumpNodes(nodeCount);
 
             ARS.CornersRevision++;
@@ -629,9 +627,12 @@ namespace ARS
         // A crest before a corner unloads the tyres exactly where the car wants to brake, so the braking plan must know
         // about it and the entrance moves back to its top. Scanned once here, after the merges, because every rule that
         // rewrites the entrance has to have settled first. The scan is deliberately boundary-free: a crest that belongs
-        // to the previous corner is still crossed before this one, so the unload is real for this corner's plan -- only
-        // the move below is bounded by the previous corner.
-        static void AssignCrestNodes(int count)
+        // Route-wide scan for crests and dips. Entry and exit are the first nodes each side of the peak where the
+        // |HillGripDeltaGs| has fallen to half the peak's; this lets the brake decel and the track-analysis
+        // visual treat the feature by its own shape rather than by the detection sweep's tolerance. Type is
+        // Crests if the peak gs is negative (unload), Dips if positive (load). Two adjacent features of the same
+        // sign are kept separate -- the run builds on each consecutive sign-straddling node.
+        static void AssignCrests(int count)
         {
             const float probeSpeed = ARS.CrestProbeSpeed;
             const float threshold = 0.15f;
@@ -639,142 +640,91 @@ namespace ARS
             const int scanBack = 100;
             const int minRun = 3;
 
-            foreach (CornerPoint corner in ARS.Corners)
+            ARS.Crests.Clear();
+            for (int node = 0; node < count; node++)
             {
-                corner.CrestNode = -1;
-                corner.CrestGs = 0f;
-                corner.CrestEntryNode = -1;
-                corner.CrestSpanNodes = 0;
+                if (!TryResolveNode(node - window, count, out int before)) continue;
+                if (!TryResolveNode(node, count, out int centre)) continue;
+                if (!TryResolveNode(node + window, count, out int after)) continue;
+                float g = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[centre].Position, ARS.TrackPoints[after].Position, probeSpeed);
+                if (Math.Abs(g) < threshold) continue;
 
-                int entrance = corner.StartNode;
-                (int peakNode, float peakGs, int length) run = (-1, 0f, 0);
+                CrestType type = g < 0f ? CrestType.Crest : CrestType.Dip;
+                int sign = g < 0f ? -1 : 1;
+                int peakNode = node;
+                float peakGs = g;
+
+                // Walk backwards until |Gs| has fallen to half the peak (the entry).
+                int entry = peakNode;
                 for (int back = 1; back <= scanBack; back++)
                 {
-                    if (!TryResolveNode(entrance - back, count, out int node)) break;
-                    if (!TryResolveNode(entrance - back - window, count, out int before)) break;
-                    if (!TryResolveNode(entrance - back + window, count, out int after)) break;
-                    float g = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position, probeSpeed);
-                    if (g >= threshold) break;
-                    if (g > -threshold)
+                    if (!TryResolveNode(peakNode - back, count, out int b)) break;
+                    if (!TryResolveNode(peakNode - back - window, count, out int bb)) break;
+                    if (!TryResolveNode(peakNode - back + window, count, out int ba)) break;
+                    float g2 = ARS.HillGripDeltaGs(ARS.TrackPoints[bb].Position, ARS.TrackPoints[b].Position, ARS.TrackPoints[ba].Position, probeSpeed);
+                    // Stop on sign flip or when |g2| drops to half the peak's. Either way we have the entry.
+                    if (Math.Sign(g2) != sign || Math.Abs(g2) <= Math.Abs(peakGs) * 0.5f)
                     {
-                        if (run.length >= minRun) break;
-                        run = (-1, 0f, 0);
-                        continue;
+                        entry = ARS.IsPointToPoint ? peakNode - (back - 1) : Wrap(peakNode - (back - 1), count);
+                        break;
                     }
-                    run.length++;
-                    if (g < run.peakGs) run = (node, g, run.length);
                 }
-                if (run.length < minRun) continue;
-                corner.CrestNode = run.peakNode;
-                corner.CrestGs = run.peakGs;
-                corner.CrestSpanNodes = CrestBaseWidth(run.peakNode, run.length, count);
-                int entryWalk = NodesToInflection(run.peakNode, -1, run.length, count);
-                if (TryResolveNode(run.peakNode - entryWalk, count, out int entryNode)) corner.CrestEntryNode = entryNode;
-            }
-
-            int crests = 0;
-            foreach (CornerPoint corner in ARS.Corners)
-            {
-                if (corner.CrestNode < 0) continue;
-                crests++;
-                ARS.Log(ARS.LogImportance.Info, "Crest " + crests + ": node=" + corner.CrestNode + " entry=" + corner.CrestEntryNode + " gs=" + corner.CrestGs.ToString("0.000") + " extent=" + corner.CrestSpanNodes + " from=" + corner.StartNode + " apex=" + corner.Node);
-            }
-
-            if (CrestMovesDisabled)
-                ARS.Log(ARS.LogImportance.Info, "Crest move-back disabled by CrestMovesDisabled; per-corner Crest lines above still report detected crests but no entrance was moved.");
-            else
-                MoveEntrancesToCrests(count);
-
-            ARS.Log(ARS.LogImportance.Info, "Crests: " + crests + " of " + ARS.Corners.Count + " corners carry one, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s" + (CrestMovesDisabled ? " (move-back disabled)" : ""));
-        }
-
-        // The entrance walks back to the crest's entry -- where the track stops being flat -- not to the unload's
-        // peak, bounded so it never lands inside the previous corner. The EXIT binds
-        // rather than the apex: the previous corner's region runs to its exit, and anchoring this corner's braking plan
-        // inside that region demands this apex speed while the car is still at the previous corner's curvature, which
-        // over-slows that exit and samples this plan across it. ExitStep walks forward, so the exit is past the apex.
-        const int CrestMoveMarginNodes = 10;
-        const int CrestMoveCapNodes = 40;          // moves that land AT or past this are skipped (too aggressive)
-        const bool CrestMovesDisabled = true;     // TEMP: user disabled the move-back to diagnose ab1638a + 001eb38
-
-        static void MoveEntrancesToCrests(int count)
-        {
-            for (int i = 0; i < ARS.Corners.Count; i++)
-            {
-                CornerPoint corner = ARS.Corners[i];
-                if (corner.CrestNode < 0) continue;
-                int target = corner.CrestEntryNode >= 0 ? corner.CrestEntryNode : corner.CrestNode;
-                int move = ARS.IsPointToPoint ? corner.StartNode - target : Wrap(corner.StartNode - target, count);
-                CornerPoint previous = null;
-                if (i > 0) previous = ARS.Corners[i - 1];
-                else if (!ARS.IsPointToPoint) previous = ARS.Corners[ARS.Corners.Count - 1];
-
-                if (!CanMoveEntrance(corner, previous, target, move, count, out string skipReason))
+                // Walk forward until |Gs| has fallen to half the peak (the exit).
+                int exit = peakNode;
+                for (int fwd = 1; fwd <= scanBack; fwd++)
                 {
-                    ARS.Log(ARS.LogImportance.Info, "Crest move skipped: node=" + target + " move=" + move + "m (" + skipReason + ")");
-                    continue;
+                    if (!TryResolveNode(peakNode + fwd, count, out int f)) break;
+                    if (!TryResolveNode(peakNode + fwd - window, count, out int ff)) break;
+                    if (!TryResolveNode(peakNode + fwd + window, count, out int fa)) break;
+                    float g3 = ARS.HillGripDeltaGs(ARS.TrackPoints[ff].Position, ARS.TrackPoints[f].Position, ARS.TrackPoints[fa].Position, probeSpeed);
+                    if (Math.Sign(g3) != sign || Math.Abs(g3) <= Math.Abs(peakGs) * 0.5f)
+                    {
+                        exit = ARS.IsPointToPoint ? peakNode + (fwd - 1) : Wrap(peakNode + (fwd - 1), count);
+                        break;
+                    }
                 }
 
-                corner.StartNode = target;
-                corner.LengthStart = ARS.IsPointToPoint ? corner.Node - target : Wrap(corner.Node - target, count);
-            }
-        }
-
-        static bool CanMoveEntrance(CornerPoint corner, CornerPoint previous, int targetNode, int move, int count, out string skipReason)
-        {
-            if (move < 1)
-            {
-                skipReason = "no move";
-                return false;
-            }
-            if (move >= CrestMoveCapNodes)
-            {
-                skipReason = "at cap";
-                return false;
-            }
-            if (previous != null)
-            {
-                int toApex = ARS.IsPointToPoint ? corner.Node - previous.EndNode : Wrap(corner.Node - previous.EndNode, count);
-                int toCrest = ARS.IsPointToPoint ? targetNode - previous.EndNode : Wrap(targetNode - previous.EndNode, count);
-                if (toCrest < CrestMoveMarginNodes)
+                // Skip features shorter than the run threshold -- a single noisy node.
+                if (ARS.IsPointToPoint)
                 {
-                    skipReason = "inside previous margin";
-                    return false;
+                    if (exit - peakNode < minRun || peakNode - entry < minRun) continue;
                 }
-                if (toCrest > toApex)
+                else
                 {
-                    skipReason = "before previous exit";
-                    return false;
+                    int entryRun = Wrap(peakNode - entry, count);
+                    int exitRun = Wrap(exit - peakNode, count);
+                    if (exitRun < minRun || entryRun < minRun) continue;
                 }
+
+                // Skip overlapping peaks: if the last crest we recorded already covers this node, keep the
+                // deeper one. Crests at different strengths on a long climb are still separate features.
+                if (ARS.Crests.Count > 0)
+                {
+                    Crest prev = ARS.Crests[ARS.Crests.Count - 1];
+                    bool overlap;
+                    if (ARS.IsPointToPoint) overlap = prev.ExitNode >= entry && prev.Node < peakNode;
+                    else overlap = Wrap(entry - prev.Node, count) < Wrap(prev.ExitNode - prev.Node, count);
+                    if (overlap) continue;
+                }
+
+                Crest feature = new Crest
+                {
+                    Node = peakNode,
+                    EntryNode = entry,
+                    ExitNode = exit,
+                    PeakGs = peakGs,
+                    Type = type
+                };
+                ARS.Crests.Add(feature);
             }
-            skipReason = null;
-            return true;
-        }
 
-        // The run is only the threshold-crossing width and the triangle reaches zero at the inflections, so using the run
-        // as the extent would under-count the unload. Each side walks to zero curvature, capped at the run, so a shallow
-        // shoulder cannot inflate it. The two sides usually differ and the ramp is one scalar, so it stays symmetric
-        // about the peak and averages that asymmetry rather than following it.
-        static int CrestBaseWidth(int peak, int run, int count)
-        {
-            return NodesToInflection(peak, -1, run, count) + NodesToInflection(peak, 1, run, count) + 1;
-        }
-
-        static int NodesToInflection(int from, int step, int maxNodes, int count)
-        {
-            int walked = 0;
-            while (walked < maxNodes && GsAtProbeSpeed(from + step * (walked + 1), count) < 0f) walked++;
-            return walked;
-        }
-
-        static float GsAtProbeSpeed(int node, int count)
-        {
-            const float probeSpeed = ARS.CrestProbeSpeed;
-            const int window = 6;
-            if (!TryResolveNode(node, count, out int centre)) return 0f;
-            if (!TryResolveNode(node - window, count, out int before)) return 0f;
-            if (!TryResolveNode(node + window, count, out int after)) return 0f;
-            return ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[centre].Position, ARS.TrackPoints[after].Position, probeSpeed);
+            int crests = 0, dips = 0;
+            foreach (Crest c in ARS.Crests)
+            {
+                if (c.Type == CrestType.Crest) crests++; else dips++;
+                ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " peak=" + c.Node + " entry=" + c.EntryNode + " exit=" + c.ExitNode + " gs=" + c.PeakGs.ToString("0.000") + " extent=" + (c.ExitNode - c.Node) + "+" + (c.Node - c.EntryNode));
+            }
+            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s");
         }
 
         static bool TryResolveNode(int node, int count, out int resolved)

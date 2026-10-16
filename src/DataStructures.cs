@@ -380,13 +380,10 @@ namespace ARS
         public float Elevation = 0f;
         public float ElevationChange = 0f;
         public bool IsKey = false;
-        // Vertical curvature Gs at the crest before this corner (negative = crest, positive = dip), measured at
-        // generation at a fixed probe speed and rescaled by (v/probe)² at read. CrestNode is the unload's peak and
-        // CrestEntryNode the onset the car meets first; both are -1 when there is no crest.
-        public float CrestGs = 0f;
-        public int CrestNode = -1;
-        public int CrestEntryNode = -1;
-        public int CrestSpanNodes = 0;
+        // Vertical curvature for the corner's peak feature used to live here (CrestGs, CrestNode, CrestEntryNode,
+//        CrestSpanNodes); it moved to a global table at ARS.Crests so entry/exit can be defined by the half-gs
+//        threshold rather than the detection sweep's tolerance, and so the brake decel can read it without
+//        rewriting StartNode. The four fields are gone; nothing on the live read path named them.
         // Part of a chicane: two close corners with opposite curvature signs.
         public bool IsChicane = false;
         // The corner radius from its region limits: the region's minimum *precise* radius, i.e. the noisy tail
@@ -407,6 +404,19 @@ namespace ARS
         public int RiseStartNode = -1;
         public float DepartureGrade = 0f;
         public float LipCurvature = 0f;
+    }
+    // A crest or dip the route carries. The peak is where the vertical curvature is most extreme; entry and exit
+    // are the first nodes each side where the |Gs| has fallen to half the peak's. Type separates crests (unload the
+    // tyres mid-corner) from dips (load them). Live in ARS.Crests and read by the brake decel and the track
+    // analysis visual; nothing else writes them.
+    public enum CrestType { Crest, Dip }
+    public class Crest
+    {
+        public int Node = -1;
+        public int EntryNode = -1;
+        public int ExitNode = -1;
+        public float PeakGs = 0f;
+        public CrestType Type = CrestType.Crest;
     }
     public class Corner
     {
