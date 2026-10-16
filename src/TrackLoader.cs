@@ -651,7 +651,7 @@ namespace ARS
             const int minRun = 3;
             const int chunkSize = 2;
             const int halfSpanCap = 60;
-            const float scanSpeed = 90f;            // 200 mph, the high anchor; anything not a crest here isn't one at all
+            const float scanSpeed = 200f;           // 720 km/h, the high anchor; gs scales with v² so the curvature sample at 200 m/s catches relative peaks (a road that goes 45°-60°-45° reads as a dip at this speed even though no absolute crest is present)
             const float speedStep = 2f;             // 2 m/s steps; activation speed has ~2 m/s precision
             const float minActivationSpeed = 5f;    // a feature that doesn't crest above 5 m/s is too slow to matter
             const float entryExitGs = 0.05f;        // absolute |gs| where the half-gs walk stops; flat-ground boundary
