@@ -1756,7 +1756,6 @@ namespace ARS
 
                 _menuPool.Process();
                 HandleTrackCreator();
-                _FenceEditor();
 
 
                 
@@ -2068,8 +2067,12 @@ namespace ARS
                 }
 
                 
-                bool allRacersParked = Racers.Count(r => !r.IsDNF) == 0;
-                if ((LeaderboardFinish.Count > 0 || allRacersParked) && (LeaderboardFinish.Count == Racers.Count(r => !r.IsDNF) || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs)))
+                // A real race-completion signal: someone has crossed the line OR the timeout has fired.
+                // The earlier 'allRacersParked = Racers.Count(r => !r.IsDNF) == 0' was a false positive
+                // out of a race (no racers = 'all parked') that fired CleanEverything every tick, killing
+                // the Start Creator the moment the user opened it.
+                bool raceCompleted = LeaderboardFinish.Count > 0 || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs);
+                if (raceCompleted && (LeaderboardFinish.Count == Racers.Count(r => !r.IsDNF) || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs)))
                 {
                     foreach (Racer r in Racers.Where(r => r.FinalPosition == 0).OrderByDescending(r => r.RaceProgress))
                         r.FinalPosition = LeaderboardFinish.Count + 1;
