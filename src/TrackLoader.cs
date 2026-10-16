@@ -680,9 +680,12 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Crest " + crests + ": node=" + corner.CrestNode + " entry=" + corner.CrestEntryNode + " gs=" + corner.CrestGs.ToString("0.000") + " extent=" + corner.CrestSpanNodes + " from=" + corner.StartNode + " apex=" + corner.Node);
             }
 
-            MoveEntrancesToCrests(count);
+            if (CrestMovesDisabled)
+                ARS.Log(ARS.LogImportance.Info, "Crest move-back disabled by CrestMovesDisabled; per-corner Crest lines above still report detected crests but no entrance was moved.");
+            else
+                MoveEntrancesToCrests(count);
 
-            ARS.Log(ARS.LogImportance.Info, "Crests: " + crests + " of " + ARS.Corners.Count + " corners carry one, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s");
+            ARS.Log(ARS.LogImportance.Info, "Crests: " + crests + " of " + ARS.Corners.Count + " corners carry one, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s" + (CrestMovesDisabled ? " (move-back disabled)" : ""));
         }
 
         // The entrance walks back to the crest's entry -- where the track stops being flat -- not to the unload's
@@ -692,6 +695,7 @@ namespace ARS
         // over-slows that exit and samples this plan across it. ExitStep walks forward, so the exit is past the apex.
         const int CrestMoveMarginNodes = 10;
         const int CrestMoveCapNodes = 40;          // moves that land AT or past this are skipped (too aggressive)
+        const bool CrestMovesDisabled = true;     // TEMP: user disabled the move-back to diagnose ab1638a + 001eb38
 
         static void MoveEntrancesToCrests(int count)
         {
