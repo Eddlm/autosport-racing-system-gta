@@ -646,6 +646,7 @@ namespace ARS
             const int minRun = 3;
             const int chunkSize = 20;
             const int halfSpanCap = 60;
+            const float halfSpanMetersCap = 100f;
 
             ARS.Crests.Clear();
             // The outer 'while (node < count)' is wrong on a circuit: 'node = Wrap(node + 1, count)' cycles
@@ -688,7 +689,11 @@ namespace ARS
                 int peakNode = bestNode;
                 float peakGs = bestGs;
 
-                // Walk backwards until |Gs| has fallen to half the peak or halfSpanCap nodes have passed.
+                // Walk backwards until |Gs| has fallen to half the peak, or halfSpanCap nodes have passed, or the
+                // walk has moved halfSpanMetersCap from the peak in world space -- whichever comes first.
+                // The metre cap keeps a long ramp/slope from inflating the entry distance to the point
+                // where the feature is no longer a true crest or dip but a section of a hill.
+                Vector3 peakPos = ARS.TrackPoints[peakNode].Position;
                 int entry = peakNode;
                 bool entryClosed = false;
                 for (int back = 1; back <= halfSpanCap; back++)
@@ -696,6 +701,7 @@ namespace ARS
                     if (!TryResolveNode(peakNode - back, count, out int b)) break;
                     if (!TryResolveNode(peakNode - back - window, count, out int bb)) break;
                     if (!TryResolveNode(peakNode - back + window, count, out int ba)) break;
+                    if (peakPos.DistanceTo2D(ARS.TrackPoints[b].Position) > halfSpanMetersCap) break;
                     float g2 = ARS.HillGripDeltaGs(ARS.TrackPoints[bb].Position, ARS.TrackPoints[b].Position, ARS.TrackPoints[ba].Position, probeSpeed);
                     if (Math.Sign(g2) != sign || Math.Abs(g2) <= Math.Abs(peakGs) * 0.5f)
                     {
@@ -704,7 +710,8 @@ namespace ARS
                         break;
                     }
                 }
-                // Walk forward until |Gs| has fallen to half the peak or halfSpanCap nodes have passed.
+                // Walk forward until |Gs| has fallen to half the peak, halfSpanCap nodes have passed, or
+                // the walk has moved halfSpanMetersCap from the peak.
                 int exit = peakNode;
                 bool exitClosed = false;
                 for (int fwd = 1; fwd <= halfSpanCap; fwd++)
@@ -712,6 +719,7 @@ namespace ARS
                     if (!TryResolveNode(peakNode + fwd, count, out int f)) break;
                     if (!TryResolveNode(peakNode + fwd - window, count, out int ff)) break;
                     if (!TryResolveNode(peakNode + fwd + window, count, out int fa)) break;
+                    if (peakPos.DistanceTo2D(ARS.TrackPoints[f].Position) > halfSpanMetersCap) break;
                     float g3 = ARS.HillGripDeltaGs(ARS.TrackPoints[ff].Position, ARS.TrackPoints[f].Position, ARS.TrackPoints[fa].Position, probeSpeed);
                     if (Math.Sign(g3) != sign || Math.Abs(g3) <= Math.Abs(peakGs) * 0.5f)
                     {
@@ -761,7 +769,7 @@ namespace ARS
                 if (c.Type == CrestType.Crest) crests++; else dips++;
                 ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " peak=" + c.Node + " entry=" + c.EntryNode + " exit=" + c.ExitNode + " gs=" + c.PeakGs.ToString("0.000") + " extent=" + (c.ExitNode - c.Node) + "+" + (c.Node - c.EntryNode));
             }
-            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s, chunk=" + chunkSize + " nodes, halfSpan=" + halfSpanCap);
+            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s, chunk=" + chunkSize + " nodes, halfSpan=" + halfSpanCap + " nodes / " + halfSpanMetersCap.ToString("0") + "m");
         }
 
         static bool TryResolveNode(int node, int count, out int resolved)
