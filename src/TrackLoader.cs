@@ -840,8 +840,25 @@ namespace ARS
             // Flat rather than the apex radius: scaling it gave a sweeper a span of twice its own radius, so the cars
             // prepared across the whole corner.
             float minEntranceExit = Math.Min(SpanMinimumMeters, spanLimit);
-            if (apexPosition - startPosition < minEntranceExit) startPosition = Math.Max(regionStart, apexPosition - (int)minEntranceExit);
-            if (endPosition - apexPosition < minEntranceExit) endPosition = Math.Min(regionEnd, apexPosition + (int)minEntranceExit);
+            // Rule 5 disabled while the cap is the user-facing rule: the floor pulled the entrance to 20m on
+            // any corner where the walk returned a small step, which fought the cap and made the bound meaningless.
+            // if (apexPosition - startPosition < minEntranceExit) startPosition = Math.Max(regionStart, apexPosition - (int)minEntranceExit);
+            // if (endPosition - apexPosition < minEntranceExit) endPosition = Math.Min(regionEnd, apexPosition + (int)minEntranceExit);
+            // Outer bound on entrance/exit distance from apex: the walk's uncapped step is hard-clamped at SpanMaxDistanceNodes,
+            // regardless of region bounds or the multiple-based walk stop. If the cap binds, log a detailed line so the
+            // road geometry that triggered it is visible.
+            if (apexPosition - startPosition > SpanMaxDistanceNodes)
+            {
+                int priorStart = startPosition;
+                startPosition = apexPosition - SpanMaxDistanceNodes;
+                ARS.Log(ARS.LogImportance.Info, "Corner add CAP: apex=" + apexNode + " side=entrance priorStart=" + priorStart + " (distance=" + (apexPosition - priorStart) + ") clamped to start=" + startPosition + " (distance=" + (apexPosition - startPosition) + "); region=" + regionStart + "-" + regionEnd + " entranceStep=" + entranceStep + "/" + entranceMaxStep + (entranceStep >= entranceMaxStep ? " walkAtCap" : " walkStoppedEarly") + " unclampedStart=" + unclampedStart);
+            }
+            if (endPosition - apexPosition > SpanMaxDistanceNodes)
+            {
+                int priorEnd = endPosition;
+                endPosition = apexPosition + SpanMaxDistanceNodes;
+                ARS.Log(ARS.LogImportance.Info, "Corner add CAP: apex=" + apexNode + " side=exit priorEnd=" + priorEnd + " (distance=" + (priorEnd - apexPosition) + ") clamped to end=" + endPosition + " (distance=" + (endPosition - apexPosition) + "); region=" + regionStart + "-" + regionEnd + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " walkAtCap" : " walkStoppedEarly") + " unclampedEnd=" + unclampedEnd);
+            }
             CornerPoint corner = new CornerPoint
             {
                 Node = apexNode,
@@ -914,6 +931,12 @@ namespace ARS
         const float SpanEntranceRadiusMultiple = 1.4f;
         const float SpanExitRadiusMultiple = 2f;
         const int SpanNodeLimit = 500;
+        // Outer bound on how far from the apex an entrance or exit may land. The walk can otherwise run to its step
+        // cap on long gentle approaches whose SmoothedRadius never opens past the multiple (a regime the b587cc5f
+        // commit warned about), and the previous bound -- regionStart -- followed the detection sweep's tolerance,
+        // which on Figureight reaches 100+ nodes. This cap is the user-facing rule: the entrance or exit cannot be
+        // further than this many nodes from the apex; if the walk's unclamped step exceeds it, we clamp and log.
+        const int SpanMaxDistanceNodes = 40;
         const float MaximumApexRadius = 200f;
         const float AlignedCornerSeconds = 3f;
         const float AlignedCornerDegrees = 15f;
