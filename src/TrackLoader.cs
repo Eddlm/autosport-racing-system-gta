@@ -894,12 +894,16 @@ namespace ARS
                     // The radii differ by more than the gate: the two corners are unrelated bends, not the same
                     // bend with a kink. Skip the merge and drop the bigger-radius one -- the walker's walked
                     // bounds for the surviving smaller corner are kept, and the lost corner stays out of the list.
+                    // 'fast corner followed by slow corner' -- drop the previous fast corner, keep the new slow one.
                     if (Math.Abs(corner.DetectedRadius - previous.DetectedRadius) > SpanMergeRadiusGate)
                     {
                         CornerPoint loser = corner.DetectedRadius < previous.DetectedRadius ? previous : corner;
-                        ARS.Log(ARS.LogImportance.Info, "Corner skipped (radii differ by >" + SpanMergeRadiusGate.ToString("0") + "m): previousR=" + previous.DetectedRadius.ToString("0.0") + " cornerR=" + corner.DetectedRadius.ToString("0.0") + " loserApex=" + loser.Node + " survivorApex=" + (loser.Node == corner.Node ? previous.Node : corner.Node));
-                        if (loser.Node == corner.Node) return;
-                        ARS.Corners.RemoveAt(ARS.Corners.Count - 1);
+                        bool dropPrevious = loser.Node == previous.Node;
+                        ARS.Log(ARS.LogImportance.Info, "Corner skipped (radii differ by >" + SpanMergeRadiusGate.ToString("0") + "m): previousR=" + previous.DetectedRadius.ToString("0.0") + " cornerR=" + corner.DetectedRadius.ToString("0.0") + " loserApex=" + loser.Node + (dropPrevious ? " (previous)" : " (new)"));
+                        // The smaller-radius corner wins. Drop the previous if it is the loser, otherwise the new corner
+                        // is the loser and we keep the previous as-is.
+                        if (dropPrevious) ARS.Corners.RemoveAt(ARS.Corners.Count - 1);
+                        if (!dropPrevious) ARS.Corners.Add(corner);
                         return;
                     }
                     CornerPoint survivor = corner.DetectedRadius < previous.DetectedRadius ? corner : previous;
