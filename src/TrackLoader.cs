@@ -654,6 +654,7 @@ namespace ARS
             const float scanSpeed = 90f;            // 200 mph, the high anchor; anything not a crest here isn't one at all
             const float speedStep = 2f;             // 2 m/s steps; activation speed has ~2 m/s precision
             const float minActivationSpeed = 5f;    // a feature that doesn't crest above 5 m/s is too slow to matter
+            const float entryExitGs = 0.05f;        // absolute |gs| where the half-gs walk stops; flat-ground boundary
 
             ARS.Crests.Clear();
             // The outer 'while (node < count)' is wrong on a circuit: 'node = Wrap(node + 1, count)' cycles
@@ -735,9 +736,12 @@ namespace ARS
                 // at the speed the car actually crosses it.
                 peakGs = ARS.HillGripDeltaGs(ARS.TrackPoints[peakBefore].Position, ARS.TrackPoints[peakCentre].Position, ARS.TrackPoints[peakAfter].Position, activationSpeed);
 
-                // Walk backwards until |Gs| has fallen to half the peak, or halfSpanCap nodes have passed -- whichever
-                // comes first. The walk keeps the entry local to the peak; a long ramp's half-gs point may
-                // never come, in which case the feature is dropped by the entryClosed / exitClosed gate.
+                // Walk backwards until |Gs| has fallen to entryExitGs (0.05g, an absolute flatness
+                // threshold) or a sign flip, or halfSpanCap nodes have passed. The absolute threshold
+                // is independent of peak strength, so a 0.2g peak and a 0.8g peak both stop walking
+                // at the same flat-ground boundary -- two close features' exits no longer cross each
+                // other's entries, and a low-strength peak's entry sits close to its peak rather than
+                // out on the slope.
                 int entry = peakNode;
                 bool entryClosed = false;
                 for (int back = 1; back <= halfSpanCap; back++)
@@ -746,14 +750,14 @@ namespace ARS
                     if (!TryResolveNode(peakNode - back - window, count, out int bb)) break;
                     if (!TryResolveNode(peakNode - back + window, count, out int ba)) break;
                     float g2 = ARS.HillGripDeltaGs(ARS.TrackPoints[bb].Position, ARS.TrackPoints[b].Position, ARS.TrackPoints[ba].Position, activationSpeed);
-                    if (Math.Sign(g2) != sign || Math.Abs(g2) <= Math.Abs(peakGs) * 0.5f)
+                    if (Math.Sign(g2) != sign || Math.Abs(g2) <= entryExitGs)
                     {
                         entry = ARS.IsPointToPoint ? peakNode - (back - 1) : Wrap(peakNode - (back - 1), count);
                         entryClosed = true;
                         break;
                     }
                 }
-                // Walk forward until |Gs| has fallen to half the peak or halfSpanCap nodes have passed.
+                // Walk forward until |Gs| has fallen to entryExitGs or a sign flip, or halfSpanCap nodes.
                 int exit = peakNode;
                 bool exitClosed = false;
                 for (int fwd = 1; fwd <= halfSpanCap; fwd++)
@@ -762,7 +766,7 @@ namespace ARS
                     if (!TryResolveNode(peakNode + fwd - window, count, out int ff)) break;
                     if (!TryResolveNode(peakNode + fwd + window, count, out int fa)) break;
                     float g3 = ARS.HillGripDeltaGs(ARS.TrackPoints[ff].Position, ARS.TrackPoints[f].Position, ARS.TrackPoints[fa].Position, activationSpeed);
-                    if (Math.Sign(g3) != sign || Math.Abs(g3) <= Math.Abs(peakGs) * 0.5f)
+                    if (Math.Sign(g3) != sign || Math.Abs(g3) <= entryExitGs)
                     {
                         exit = ARS.IsPointToPoint ? peakNode + (fwd - 1) : Wrap(peakNode + (fwd - 1), count);
                         exitClosed = true;
@@ -811,7 +815,7 @@ namespace ARS
                 if (c.Type == CrestType.Crest) crests++; else dips++;
                 ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " peak=" + c.Node + " entry=" + c.EntryNode + " exit=" + c.ExitNode + " gs=" + c.PeakGs.ToString("0.000") + " act=" + c.ActivationSpeed.ToString("0") + "m/s extent=" + (c.ExitNode - c.Node) + "+" + (c.Node - c.EntryNode));
             }
-            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g, scanSpeed=" + scanSpeed.ToString("0") + "m/s, chunk=" + chunkSize + " nodes, halfSpan=" + halfSpanCap + " nodes");
+            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g, entryExit=" + entryExitGs.ToString("0.00") + "g, scanSpeed=" + scanSpeed.ToString("0") + "m/s, chunk=" + chunkSize + " nodes, halfSpan=" + halfSpanCap + " nodes");
         }
 
         static bool TryResolveNode(int node, int count, out int resolved)
