@@ -647,15 +647,13 @@ namespace ARS
         {
             const float threshold = 0.50f;
             const int window = 6;
-            const int scanBack = 100;
             const int minRun = 3;
             const int chunkSize = 2;
             const int halfSpanCap = 60;
-            const float scanSpeed = 200f;           // 720 km/h, the high anchor; gs scales with v² so the curvature sample at 200 m/s catches relative peaks (a road that goes 45°-60°-45° reads as a dip at this speed even though no absolute crest is present)
+            const float scanSpeed = 90f;            // 200 mph, the high anchor; anything not a crest here isn't one at all
             const float speedStep = 2f;             // 2 m/s steps; activation speed has ~2 m/s precision
             const float minActivationSpeed = 5f;    // a feature that doesn't crest above 5 m/s is too slow to matter
             const float entryExitGs = 0.05f;        // absolute |gs| where the half-gs walk stops; flat-ground boundary
-            const int minFeatureSpanNodes = 20;     // a real crest/dip has a wide flatness extent; sharp lips close in <20 nodes
 
             ARS.Crests.Clear();
             // The outer 'while (node < count)' is wrong on a circuit: 'node = Wrap(node + 1, count)' cycles
@@ -792,22 +790,12 @@ namespace ARS
                     int exitRun = Wrap(exit - peakNode, count);
                     if (exitRun < minRun || entryRun < minRun) { node = Wrap(peakNode + 1, count); continue; }
                 }
-                // A real crest or dip has a wide flatness extent: the curvature rolls up over many nodes
-                // and back down. A sharp lip or jump has gs that drops from 1g+ to 0.05g in 1-3 nodes,
-                // which closes the half-gs walk too soon and produces a tiny spurious feature. The
-                // minFeatureSpanNodes gate drops both crests and dips that close faster than this -- the
-                // 0.05g absolute threshold can be reached by a single curved-edge transition; the 20-node
-                // span is what separates a true rolling crest from a lifting lip.
-                if (ARS.IsPointToPoint)
-                {
-                    if (exit - peakNode < minFeatureSpanNodes || peakNode - entry < minFeatureSpanNodes) { node = Math.Min(peakNode + 1, count); continue; }
-                }
-                else
-                {
-                    int entrySpan = Wrap(peakNode - entry, count);
-                    int exitSpan = Wrap(exit - peakNode, count);
-                    if (exitSpan < minFeatureSpanNodes || entrySpan < minFeatureSpanNodes) { node = Wrap(peakNode + 1, count); continue; }
-                }
+                // (minFeatureSpanNodes gate removed: a 20-node minimum extent was over-aggressive on
+                // 5-10m rolling hills whose half-gs walk closes in 2-5 nodes at the activation speed. The
+                // activation-speed sweep already rejects features whose activation speed is too high
+                // (i.e. very sharp), and the half-gs walks' 60-node cap plus the 0.05g entry/exit
+                // absolute threshold are the right shape for filtering sharp lips without losing rolling
+                // hills.)
 
                 Crest feature = new Crest
                 {
