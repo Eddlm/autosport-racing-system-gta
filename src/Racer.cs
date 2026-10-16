@@ -1201,11 +1201,12 @@ namespace ARS
 
         // Above the authored peak slip × this the car counts as sliding, so the damper drops its aim reference.
         const float SlidingFraction = 0.3f;
-        // The blend ramps in across these multiples of the authored peak slip, then the countersteer answers this
-        // share of the slide, growing from half to all of it over the next band.
-        const float SlideBlendStartFraction = 0.25f;
-        const float SlideBlendFullFraction = 0.5f;
-        const float CountersteerSlideShare = 0.5f;
+        // The blend ramps in across these multiples of the authored peak slip. The blend is linear from
+        // peak × 0.5 (the slide is just past the traction peak) to peak × 2.5 (a deep slide), and the
+        // countersteer answers the full slide — the blend is the only modulator.
+        const float SlideBlendStartFraction = 0.5f;
+        const float SlideBlendFullFraction = 2.5f;
+        const float CountersteerSlideShare = 1f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
@@ -1408,13 +1409,8 @@ namespace ARS
         }
 
 
-        // The share of the slide the countersteer answers: half once the blend is full, all of it by the top of the band.
-        float CountersteerShare()
-        {
-            float peak = Handling.LateralTractionCurve;
-            if (peak <= 0.01f) return CountersteerSlideShare;
-            return ARS.Remap(Math.Abs(VehicleData.SlideAngle), peak * SlideBlendFullFraction, peak, CountersteerSlideShare, 1f, true);
-        }
+        // The share of the slide the countersteer answers is a constant — the blend is the only modulator.
+        float CountersteerShare() => CountersteerSlideShare;
 
 
         // True when the blend has reached full authority at half the authored peak slip.
