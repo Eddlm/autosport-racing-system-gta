@@ -169,11 +169,10 @@ namespace ARS
                     DrawTrackCrossingLine(trackPoints, c.EntryNode, entryColor);
                 if (c.ExitNode >= 0 && c.ExitNode < trackPoints.Count)
                     DrawTrackCrossingLine(trackPoints, c.ExitNode, exitColor);
-
-                // Vertical tick at the peak: half a metre above the road, two metres tall, two line segments.
-                Vector3 peakPos = trackPoints[c.Node].Position + new Vector3(0f, 0f, 0.5f);
-                ARS.DrawLine(peakPos, peakPos + new Vector3(0f, 0f, 2f), peakColor);
-                ARS.DrawLine(peakPos + new Vector3(0f, -0.3f, 0f), peakPos + new Vector3(0f, 0.3f, 0f), peakColor);
+                // White track-crossing line at the peak: same shape as the corner visual, visible at any
+                // chase distance. Colour signals type, the white peak marks the strongest curvature point.
+                Color peakLineColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 220, 240, 255);
+                DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
             }
         }
 
@@ -188,10 +187,12 @@ namespace ARS
                 if (trackPoints[c.Node].Position.DistanceTo2D(center) > radiusMeters) continue;
                 Color entryColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 255, 140, 0) : Color.FromArgb(200, 0, 200, 255);
                 Color exitColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 200, 80, 0) : Color.FromArgb(200, 0, 140, 220);
+                Color peakLineColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 220, 240, 255);
                 if (c.EntryNode >= 0 && c.EntryNode < trackPoints.Count)
                     DrawTrackCrossingLine(trackPoints, c.EntryNode, entryColor);
                 if (c.ExitNode >= 0 && c.ExitNode < trackPoints.Count)
                     DrawTrackCrossingLine(trackPoints, c.ExitNode, exitColor);
+                DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
             }
         }
 
