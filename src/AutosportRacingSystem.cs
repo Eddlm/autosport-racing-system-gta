@@ -1756,6 +1756,7 @@ namespace ARS
 
                 _menuPool.Process();
                 HandleTrackCreator();
+                _FenceEditor();
 
 
                 

@@ -39,6 +39,23 @@ namespace ARS
             Log(LogImportance.Info, "[DIAG] StartTrackCreator done; _routeEditorActive after = " + _routeEditorActive + ", _freeCam.IsActive = " + _freeCam.IsActive);
         }
 
+        // Per-tick fence: log every tick where the static would have been set to false. The user reports
+        // the editor exits immediately, so capturing the exit moment tells us which code path is
+        // turning it off.
+        void _FenceEditor()
+        {
+            if (_routeEditorActive) return;
+            // Static was false this tick. Walk the call stack and log it.
+            System.Diagnostics.StackTrace st = new System.Diagnostics.StackTrace(true);
+            string stack = "";
+            for (int i = 0; i < Math.Min(8, st.FrameCount); i++)
+            {
+                System.Diagnostics.StackFrame sf = st.GetFrame(i);
+                stack += " | " + sf.GetMethod().DeclaringType.Name + "." + sf.GetMethod().Name;
+            }
+            Log(LogImportance.Info, "[DIAG] _routeEditorActive is FALSE this tick. Stack: " + stack);
+        }
+
         // SaveRoute always builds a fresh document, so this is the new-track path only.
         void SaveTrackFromCreator()
         {
