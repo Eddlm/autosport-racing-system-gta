@@ -649,12 +649,8 @@ namespace ARS
 
             ARS.Crests.Clear();
             int node = 0;
-            int safetyIterations = 0;
-            int safetyMaxIterations = count + 8;     // a generous cap on outer-advance steps; defends against a stuck chunk
             while (node < count)
             {
-                if (++safetyIterations > safetyMaxIterations) break;
-                int chunkEnd = ARS.IsPointToPoint ? Math.Min(node + chunkSize, count) : Wrap(node + chunkSize, count);
                 int bestNode = -1;
                 float bestGs = 0f;
                 // For circuit wraps the chunk crosses zero; iterate up to chunkSize nodes starting at 'node',
@@ -672,7 +668,6 @@ namespace ARS
                     bestGs = g;
                     bestNode = i;
                 }
-                chunkEnd = bestNode;     // chunkEnd isn't otherwise read after the loop; set it for the run-min check's branch.
 
                 if (bestNode < 0)
                 {
@@ -686,10 +681,9 @@ namespace ARS
                 int peakNode = bestNode;
                 float peakGs = bestGs;
 
-                // Walk backwards until |Gs| has fallen to half the peak or we've travelled halfSpanCap nodes,
-                // whichever comes first. entry defaults to halfSpanCap behind peak when the walk never closes.
-                int entry = ARS.IsPointToPoint ? Math.Max(peakNode - halfSpanCap, 0) : Wrap(peakNode - halfSpanCap, count);
-                bool entryFound = false;
+                // Walk backwards until |Gs| has fallen to half the peak or halfSpanCap nodes have passed.
+                int entry = peakNode;
+                bool entryClosed = false;
                 for (int back = 1; back <= halfSpanCap; back++)
                 {
                     if (!TryResolveNode(peakNode - back, count, out int b)) break;
@@ -699,12 +693,13 @@ namespace ARS
                     if (Math.Sign(g2) != sign || Math.Abs(g2) <= Math.Abs(peakGs) * 0.5f)
                     {
                         entry = ARS.IsPointToPoint ? peakNode - (back - 1) : Wrap(peakNode - (back - 1), count);
-                        entryFound = true;
+                        entryClosed = true;
                         break;
                     }
                 }
                 // Walk forward until |Gs| has fallen to half the peak or halfSpanCap nodes have passed.
-                int exit = ARS.IsPointToPoint ? Math.Min(peakNode + halfSpanCap, count - 1) : Wrap(peakNode + halfSpanCap, count);
+                int exit = peakNode;
+                bool exitClosed = false;
                 for (int fwd = 1; fwd <= halfSpanCap; fwd++)
                 {
                     if (!TryResolveNode(peakNode + fwd, count, out int f)) break;
@@ -714,9 +709,16 @@ namespace ARS
                     if (Math.Sign(g3) != sign || Math.Abs(g3) <= Math.Abs(peakGs) * 0.5f)
                     {
                         exit = ARS.IsPointToPoint ? peakNode + (fwd - 1) : Wrap(peakNode + (fwd - 1), count);
+                        exitClosed = true;
                         break;
                     }
                 }
+
+                // Drop the feature if either half-gs walk never closed: the road never came back to flat
+                // within halfSpanCap, so the scanner is reading noise rather than a closed shape. The default
+                // 60-node entry/exit can otherwise wrap the seam on a short circuit and produce a 120-node
+                // feature whose entry sits past its exit in drive-order.
+                if (!entryClosed || !exitClosed) { node = Wrap(peakNode + 1, count); continue; }
 
                 // Skip features shorter than the run threshold -- a single noisy node.
                 if (ARS.IsPointToPoint)

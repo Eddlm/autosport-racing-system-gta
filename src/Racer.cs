@@ -3538,12 +3538,12 @@ namespace ARS
             {
                 // Skip dips -- they load the tyres, not unload them.
                 if (c.Type != CrestType.Crest) continue;
-                int entrySpan = ((c.EntryNode - carNode) % count + count) % count;
                 int peakSpan = ((c.Node - carNode) % count + count) % count;
-                int exitSpan = ((c.ExitNode - carNode) % count + count) % count;
-                // Crests before the car (entrySpan > solveEnd) or past the apex (exitSpan < 0) don't apply.
-                if (!ARS.IsPointToPoint && entrySpan > solveEnd) continue;
-                if (ARS.IsPointToPoint && (c.ExitNode < solveStart || c.EntryNode > solveEnd)) continue;
+                // On a circuit the peak must lie in the car's drive arc to the apex: peakSpan > 0 rules out
+                // the previous-lap arc, peakSpan <= solveEnd rules out the long-way-around path that comes
+                // back from before the car.
+                if (!ARS.IsPointToPoint && (peakSpan <= 0 || peakSpan > solveEnd)) continue;
+                if (ARS.IsPointToPoint && (c.Node < solveStart || c.Node > solveEnd)) continue;
                 if (Math.Abs(c.PeakGs) <= Math.Abs((worst != null) ? worst.PeakGs : 0f)) continue;
                 worst = c;
             }
