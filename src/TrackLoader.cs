@@ -654,7 +654,9 @@ namespace ARS
             const float speedStep = 2f;             // 2 m/s steps; activation speed has ~2 m/s precision
             const float minActivationSpeed = 5f;    // a feature that doesn't crest above 5 m/s is too slow to matter
             const float entryExitGs = 0.05f;        // absolute |gs| where the half-gs walk stops; flat-ground boundary
-            const int minPeakDistance = 10;         // adjacent detected peaks must be at least this many nodes apart
+            const int minPeakDistance = 30;         // adjacent detected peaks must be at least this many nodes apart
+            const int minEntryNodes = 10;           // minimum node-distance from peak to entry (and to exit)
+            const int minExitNodes = 10;
 
             ARS.Crests.Clear();
             // The outer 'while (node < count)' is wrong on a circuit: 'node = Wrap(node + 1, count)' cycles
@@ -791,12 +793,22 @@ namespace ARS
                     int exitRun = Wrap(exit - peakNode, count);
                     if (exitRun < minRun || entryRun < minRun) { node = Wrap(peakNode + 1, count); continue; }
                 }
-                // (minFeatureSpanNodes gate removed: a 20-node minimum extent was over-aggressive on
-                // 5-10m rolling hills whose half-gs walk closes in 2-5 nodes at the activation speed. The
-                // activation-speed sweep already rejects features whose activation speed is too high
-                // (i.e. very sharp), and the half-gs walks' 60-node cap plus the 0.05g entry/exit
-                // absolute threshold are the right shape for filtering sharp lips without losing rolling
-                // hills.)
+                // A proper feature has both an entry and an exit at least minEntry / minExit nodes from
+                // the peak. The 0.05g absolute flatness threshold can be reached in 1-3 nodes by a sharp
+                // micro-bump; a real rolling crest/dip's half-gs walk takes 10+ nodes each side to
+                // close. The earlier 20-node min-width was over-aggressive (it filtered legitimate
+                // 5-10m hills whose walk closes in 2-5 nodes); 10/10 catches a proper feature while
+                // still letting rolling hills through.
+                if (ARS.IsPointToPoint)
+                {
+                    if (peakNode - entry < minEntryNodes || exit - peakNode < minExitNodes) { node = Wrap(peakNode + 1, count); continue; }
+                }
+                else
+                {
+                    int entryRun = Wrap(peakNode - entry, count);
+                    int exitRun = Wrap(exit - peakNode, count);
+                    if (entryRun < minEntryNodes || exitRun < minExitNodes) { node = Wrap(peakNode + 1, count); continue; }
+                }
 
                 Crest feature = new Crest
                 {
@@ -809,12 +821,12 @@ namespace ARS
                 };
                 ARS.Crests.Add(feature);
 
-                // Advance past the peak by minPeakDistance (10 nodes). On a symmetric 5-10m transition,
+                // Advance past the peak by minPeakDistance (30 nodes). On a symmetric 5-10m transition,
                 // the 6-node curvature sample reads the same feature from multiple sample-midpoint
                 // positions as the outer pointer advances -- the off-centre reading at offset 0 vs
                 // offset 1 vs offset 2 produces 3-5 candidate peaks for the same physical feature.
-                // The 10-node advance guarantees any two adjacent detected peaks are at least 10
-                // nodes apart, suppressing the duplicates.
+                // The 30-node advance guarantees any two adjacent accepted peaks are at least 30
+                // nodes apart, suppressing the duplicates from off-centre sampling.
                 int next = ARS.IsPointToPoint ? peakNode + minPeakDistance : Wrap(peakNode + minPeakDistance, count);
                 if (next == node) { node = Wrap(node + 1, count); continue; }
                 node = next;
