@@ -145,9 +145,9 @@ namespace ARS
             }
         }
 
-        // Crossing lines at entry and exit of each crest and dip within range, plus a vertical tick at the peak
-        // for caller. Crests draw orange (unload), dips draw cyan (load); the peak tick sits a half-metre off the road
-        // in the relevant colour so it is visible from a chase camera.
+        // A single track-crossing line at each crest/dip peak. Crests are the top of a climb; dips are the
+        // bottom of a valley. Crests draw orange, dips draw cyan. The peak is the only signal we have --
+        // the scanner no longer produces entry/exit lines.
         public static void DrawCrests(Racer player, List<Crest> crests, List<TrackPoint> trackPoints)
         {
             if (crests.Count == 0 || trackPoints.Count == 0) return;
@@ -161,17 +161,7 @@ namespace ARS
                 int delta = ARS.IsPointToPoint ? c.Node - playerNode : ((c.Node - playerNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
                 if (!ARS.IsBetween(delta, -10, 400)) continue;
 
-                Color entryColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 255, 140, 0) : Color.FromArgb(200, 0, 200, 255);
-                Color exitColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 200, 80, 0) : Color.FromArgb(200, 0, 140, 220);
-                Color peakColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 200, 0) : Color.FromArgb(255, 0, 220, 255);
-
-                if (c.EntryNode >= 0 && c.EntryNode < trackPoints.Count)
-                    DrawTrackCrossingLine(trackPoints, c.EntryNode, entryColor);
-                if (c.ExitNode >= 0 && c.ExitNode < trackPoints.Count)
-                    DrawTrackCrossingLine(trackPoints, c.ExitNode, exitColor);
-                // White track-crossing line at the peak: same shape as the corner visual, visible at any
-                // chase distance. Colour signals type, the white peak marks the strongest curvature point.
-                Color peakLineColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 220, 240, 255);
+                Color peakLineColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 140, 0) : Color.FromArgb(255, 0, 200, 255);
                 DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
             }
         }
@@ -185,13 +175,7 @@ namespace ARS
                 Crest c = crests[i];
                 if (c.Node < 0 || c.Node >= trackPoints.Count) continue;
                 if (trackPoints[c.Node].Position.DistanceTo2D(center) > radiusMeters) continue;
-                Color entryColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 255, 140, 0) : Color.FromArgb(200, 0, 200, 255);
-                Color exitColor = c.Type == CrestType.Crest ? Color.FromArgb(200, 200, 80, 0) : Color.FromArgb(200, 0, 140, 220);
-                Color peakLineColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 220, 240, 255);
-                if (c.EntryNode >= 0 && c.EntryNode < trackPoints.Count)
-                    DrawTrackCrossingLine(trackPoints, c.EntryNode, entryColor);
-                if (c.ExitNode >= 0 && c.ExitNode < trackPoints.Count)
-                    DrawTrackCrossingLine(trackPoints, c.ExitNode, exitColor);
+                Color peakLineColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 140, 0) : Color.FromArgb(255, 0, 200, 255);
                 DrawTrackCrossingLine(trackPoints, c.Node, peakLineColor);
             }
         }

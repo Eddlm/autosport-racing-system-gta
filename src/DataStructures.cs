@@ -407,22 +407,14 @@ namespace ARS
     }
     // A crest or dip the route carries. The peak is where the vertical curvature is most extreme; entry and exit
     // are the first nodes each side where the |Gs| has fallen to half the peak's. Type separates crests (unload the
-    // tyres mid-corner) from dips (load them). Live in ARS.Crests and read by the brake decel and the track
-    // analysis visual; nothing else writes them.
+    // A sign change in the local road grade: a crest is where the road is climbing and then descending
+    // (top of a hill), a dip is where it's descending and then climbing (bottom of a valley). Live in
+    // ARS.Crests and read by the track-analysis visual; nothing else writes them.
     public enum CrestType { Crest, Dip }
     public class Crest
     {
         public int Node = -1;
-        public int EntryNode = -1;
-        public int ExitNode = -1;
-        public float PeakGs = 0f;
         public CrestType Type = CrestType.Crest;
-        // The lowest speed (m/s) at which this feature's curvature still produces |gs| >= the detection
-        // threshold. A feature that activates at 30 m/s is a slow-speed crest (low curve, low unload); a
-        // feature that only activates at 80 m/s is a high-speed one (sharp curve, big unload at speed).
-        // The brake decel scales the unload by (v / ActivationSpeed)^2, so a feature with a high
-        // activation speed is silent at low speeds and loud at high speeds.
-        public float ActivationSpeed = 0f;
     }
     public class Corner
     {

@@ -3491,98 +3491,14 @@ namespace ARS
             return spd;
         }
 
-        // A crest unloads the tyres before a corner and the span's mean grade cannot see it: an up-then-down bump
-        // averages to no grade at all. Geometry is measured once at generation at this probe, so the live speed
-        // rescales it, and the unload is floored the way the hill grip model floors its own.
-        const float CrestProbeSpeed = ARS.CrestProbeSpeed;
-        const float CrestDecelFloor = 0.5f;
-
         // Braking decel over a span: grip-limited base plus the gravity component of the span's mean grade.
         // The solve is v² = vApex² + 2∫a·ds, so the mean decel over the span is the exact quantity.
+        // (CrestDecelFactor was removed: the scanner no longer produces a per-feature gs reading, so the
+        // brake decel cannot integrate an unload term. The crest/dip table is for visualisation only.)
         public float BrakingDecel(int apexNode, float spanMeters)
         {
-            float decel = BrakingDecelBase(apexNode) * CrestDecelFactor(apexNode, spanMeters) + Handling.Gravity * BrakingGradeSine(spanMeters);
+            float decel = BrakingDecelBase(apexNode) + Handling.Gravity * BrakingGradeSine(spanMeters);
             return Math.Max(decel, 0.1f);
-        }
-
-        // Vertical curvature changes normal load, so it scales the grip-limited base only -- the grade term is the
-        // along-slope gravity component, which a crest does not change. The crest covers its extent, so the unload is
-        // the area of that ramp clipped to the solve span rather than a point test: a binary in/out steps the planned
-        // decel mid-braking, and those samples are far too sparse to integrate it.
-        // The crest is read from ARS.Crests by span overlap with the brake solve: the worst (largest |PeakGs|) crest
-        // whose entry-to-exit window overlaps (CurrentTrackPoint.Node, apexNode) on the braking direction is the one
-        // whose unload is integrated. The corner carries no crest field any more.
-        float CrestDecelFactor(int apexNode, float spanMeters)
-        {
-            if (spanMeters < 1f) return 1f;
-            int count = ARS.TrackPoints.Count;
-            if (count == 0) return 1f;
-
-            // Span endpoints in the car's direction-of-travel coordinates.
-            int carNode = CurrentTrackPoint.Node;
-            int solveStart, solveEnd;
-            if (ARS.IsPointToPoint)
-            {
-                solveStart = Math.Min(carNode, apexNode);
-                solveEnd = Math.Max(carNode, apexNode);
-            }
-            else
-            {
-                int fwd = ((apexNode - carNode) % count + count) % count;
-                solveStart = 0;
-                solveEnd = fwd;
-            }
-
-            Crest worst = null;
-            foreach (Crest c in ARS.Crests)
-            {
-                // Skip dips -- they load the tyres, not unload them.
-                if (c.Type != CrestType.Crest) continue;
-                int peakSpan = ((c.Node - carNode) % count + count) % count;
-                // On a circuit the peak must lie in the car's drive arc to the apex: peakSpan > 0 rules out
-                // the previous-lap arc, peakSpan <= solveEnd rules out the long-way-around path that comes
-                // back from before the car.
-                if (!ARS.IsPointToPoint && (peakSpan <= 0 || peakSpan > solveEnd)) continue;
-                if (ARS.IsPointToPoint && (c.Node < solveStart || c.Node > solveEnd)) continue;
-                if (Math.Abs(c.PeakGs) <= Math.Abs((worst != null) ? worst.PeakGs : 0f)) continue;
-                worst = c;
-            }
-            if (worst == null) return 1f;
-
-            float peakGs = worst.PeakGs;
-            if (peakGs >= 0f) return 1f;
-            int peak = ((worst.Node - carNode) % count + count) % count;
-            int entry = ((worst.EntryNode - carNode) % count + count) % count;
-            int exit = ((worst.ExitNode - carNode) % count + count) % count;
-            float halfExtent = Math.Max(1f, (exit - entry) * 0.5f);
-            float start = peak - halfExtent;
-            float end = peak + halfExtent;
-            float lo = Math.Max(start, 0f);
-            float hi = Math.Min(end, spanMeters);
-            if (end <= 0f || start >= spanMeters) return 1f;
-            float clampedPeak = ARS.Clamp(peak, lo, hi);
-            float risingUnscaled = RampIntegralUnscaled(start, lo, clampedPeak);
-            float fallingUnscaled = RampIntegralUnscaled(end, hi, clampedPeak);
-            // peakGs was measured at activationSpeed; the unload scales by (v / activationSpeed)^2
-            // because gs itself is (v^2 * kappa) / g. A feature with activationSpeed = 80 m/s is
-            // silent at 30 m/s (the car isn't going fast enough for this curvature to register as
-            // an unload) and loud at 80 m/s or above. CrestProbeSpeed stays as a normalisation
-            // anchor in case the table lookup ever misses and falls back to the const.
-            float carSpeed = Car.Velocity.Length();
-            float refSpeed = worst.ActivationSpeed > 0f ? worst.ActivationSpeed : CrestProbeSpeed;
-            if (carSpeed < refSpeed) return 1f;
-            float speedRatio = carSpeed / refSpeed;
-            float unload = 1f + peakGs * speedRatio * speedRatio * (risingUnscaled + fallingUnscaled) / (2f * halfExtent * spanMeters);
-            if (float.IsNaN(unload) || float.IsInfinity(unload)) return 1f;
-            unload = Math.Max(unload, CrestDecelFloor);
-            return 1f - Math.Min((1f - unload) * ARS.CrestEffect, 0.9f);
-        }
-
-        // The raw expression before the 1/(2h) normalisation: 2h times the area under one half of the ramp. Its endpoints
-        // go in distance order so the result stays positive; swapping them negates the area and the unload with it.
-        static float RampIntegralUnscaled(float zeroAt, float from, float to)
-        {
-            return (to - zeroAt) * (to - zeroAt) - (from - zeroAt) * (from - zeroAt);
         }
 
         // The grade-free half, so a horizon test can ask the same question without walking the span.

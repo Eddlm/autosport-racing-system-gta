@@ -170,9 +170,6 @@ namespace ARS
         // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
         public static float CrestEffect = 1f;
         public static float HillGripEffect = 1f;
-        // The probe speed both the generation scan and the live read scale a crest's Gs to. One home, because the stored
-        // field only means "Gs at the probe" while every reader agrees on the value.
-        public const float CrestProbeSpeed = 40f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
         // Show or hide the staged Load Track / Build Grid items in the Race menu.
@@ -2655,8 +2652,20 @@ namespace ARS
             return deltaGs;
         }
 
+        // The local road grade along the segment from a to b: vertical rise over ground-plane run. Returns
+        // 0 on a degenerate segment (zero distance). A positive grade is an ascent, a negative grade is a
+        // descent, 0 is flat. The simple sign change in this grade is the scanner's only signal.
+        public static float LocalSlope(Vector3 a, Vector3 b)
+        {
+            float dx = b.X - a.X;
+            float dy = b.Y - a.Y;
+            float ground = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (ground < 0.001f) return 0f;
+            return (b.Z - a.Z) / ground;
+        }
+
         
-        
+
         
         
         public static float GetHillGsLossAtCurrentTrackPoint(Racer r)
