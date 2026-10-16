@@ -157,9 +157,6 @@ namespace ARS
         // The raw pursuit ask, captured before the crossing scale: the kick's deficit is the pursuit's own
         // demand against the lock, not what the scale and the limiter deliver of it.
         float _kickAskDegrees = 0f;
-
-
-        public float RouteLookAheadSeconds = 0.5f;
         public float RouteLookaheadSizeSeconds = 2.0f;
         // The steer reference is a preview *time*: a fixed distance raises the loop's natural frequency with speed.
         const float SteerPreviewSeconds = 0.5f;
@@ -1937,14 +1934,20 @@ namespace ARS
         // TrackPoint.Elevation is 90·sin(pitch), so this converts it back to the slope sine.
         const float ElevationToSlopeSine = 1f / 90f;
 
+        // Slope angle at the lookahead point: average grade over the 1.0s-to-2.0s window ahead of the
+        // car, matching the no-fly gate's triangle so the slope and the crest read the same road
+        // sample. Two-point linear fit: slope = (zFar - zNear) / (sFar - sNear). The angle is the
+        // atan of that ratio; the caller takes the magnitude via the absolute value.
         float GetFollowPointSlopeAngle()
         {
-            int followNode = (int)ARS.Clamp(CurrentTrackPoint.Node + (int)(Car.Velocity.Length() * RouteLookAheadSeconds), 0, ARS.TrackPoints.Count - 1);
-            int aheadNode = (int)ARS.Clamp(followNode + 5, 0, ARS.TrackPoints.Count - 1);
-            if (aheadNode == followNode) return 0f;
+            float v = Car.Velocity.Length();
+            if (v < 0.5f) return 0f;
+            int near = TrackLoader.NodeAhead(CurrentTrackPoint.Node, 1.0f * v, ARS.TrackPoints.Count);
+            int far = TrackLoader.NodeAhead(CurrentTrackPoint.Node, 2.0f * v, ARS.TrackPoints.Count);
+            if (near < 0 || far < 0 || near == far) return 0f;
 
-            Vector3 from = ARS.TrackPoints[followNode].Position;
-            Vector3 to = ARS.TrackPoints[aheadNode].Position;
+            Vector3 from = ARS.TrackPoints[near].Position;
+            Vector3 to = ARS.TrackPoints[far].Position;
             float horizDist = Vector2.Distance(new Vector2(from.X, from.Y), new Vector2(to.X, to.Y));
             if (horizDist < 0.01f) return 0f;
             return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
@@ -3737,9 +3740,6 @@ namespace ARS
                 Pressure = Math.Max(Pressure - PressureFallPerSecond * TickScale, targetPressure);
 
             Pressure = ARS.Clamp(Pressure, 0f, PressureRange);
-
-            // Pressure-driven lookahead is intentionally disabled.
-            RouteLookAheadSeconds = 0.5f;
         }
  
  
