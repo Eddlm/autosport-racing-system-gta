@@ -689,7 +689,9 @@ namespace ARS
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
             float damperGain = SteerDampingFor(fwdSpeed);
             float nonDamperSteerDeg = (steerKP * sideBySideSteerDeg) + (steerKP * laneSteerDeg);
-            float damperTermDeg = -damperGain * yawRateToDamp;
+            // The damper's offset on overrotation is halved: half authority against the yaw so the
+            // countersteer chain still has the room to answer the slide.
+            float damperTermDeg = -damperGain * yawRateToDamp * DamperEffectScale;
             // The damper only ever subtracts: a left command never gets more left from it.
             if (damperTermDeg * nonDamperSteerDeg > 0f) damperTermDeg = 0f;
             // Past neutral it is countersteering — the wheel pointing against the car's own rotation rather than
@@ -1212,10 +1214,12 @@ namespace ARS
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
         const float SteerSlewRate = 180f;
-        // How much of the damper's overshoot past neutral survives. 0.5 halves the damper's effect on the
-        // steering when the signs do not match: the damper is allowed to countersteer, but at half
-        // authority, so the slide response is not double-amplified by the damper on top of the countersteer.
-        const float DamperCrossingShare = 0.5f;
+        // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
+        // signs do not match: the damper is allowed to countersteer at full authority on a slide.
+        const float DamperCrossingShare = 1f;
+        // The damper's effect on the steering is halved: half authority against the overrotation so the
+        // countersteer chain still has the room to answer the slide.
+        const float DamperEffectScale = 0.5f;
         // Kill switch for the yaw-rate damper. Driven with it off the cars cannot hold centre — the term is the
         // only thing opposing a rotation the course chain has already started, so it is load-bearing, not trim.
         const bool SteerDampingEnabled = true;
