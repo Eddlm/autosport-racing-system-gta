@@ -691,7 +691,7 @@ namespace ARS
         // inside that region demands this apex speed while the car is still at the previous corner's curvature, which
         // over-slows that exit and samples this plan across it. ExitStep walks forward, so the exit is past the apex.
         const int CrestMoveMarginNodes = 10;
-        const int CrestMoveCapNodes = 60;
+        const int CrestMoveCapNodes = 60;          // moves that land AT the cap are skipped (too aggressive)
 
         static void MoveEntrancesToCrests(int count)
         {
@@ -723,9 +723,9 @@ namespace ARS
                 skipReason = "no move";
                 return false;
             }
-            if (move > CrestMoveCapNodes)
+            if (move >= CrestMoveCapNodes)
             {
-                skipReason = "over cap";
+                skipReason = "at cap";
                 return false;
             }
             if (previous != null)
