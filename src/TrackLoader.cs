@@ -891,6 +891,17 @@ namespace ARS
                 bool sameBend = gapSeconds < AlignedCornerSeconds && AimsSameWay(previous, corner, AlignedCornerDegrees);
                 if (gapSeconds < closeCornerSeconds || sameBend)
                 {
+                    // The radii differ by more than the gate: the two corners are unrelated bends, not the same
+                    // bend with a kink. Skip the merge and drop the bigger-radius one -- the walker's walked
+                    // bounds for the surviving smaller corner are kept, and the lost corner stays out of the list.
+                    if (Math.Abs(corner.DetectedRadius - previous.DetectedRadius) > SpanMergeRadiusGate)
+                    {
+                        CornerPoint loser = corner.DetectedRadius < previous.DetectedRadius ? previous : corner;
+                        ARS.Log(ARS.LogImportance.Info, "Corner skipped (radii differ by >" + SpanMergeRadiusGate.ToString("0") + "m): previousR=" + previous.DetectedRadius.ToString("0.0") + " cornerR=" + corner.DetectedRadius.ToString("0.0") + " loserApex=" + loser.Node + " survivorApex=" + (loser.Node == corner.Node ? previous.Node : corner.Node));
+                        if (loser.Node == corner.Node) return;
+                        ARS.Corners.RemoveAt(ARS.Corners.Count - 1);
+                        return;
+                    }
                     CornerPoint survivor = corner.DetectedRadius < previous.DetectedRadius ? corner : previous;
                     ExtendMergedCorner(survivor, previous.StartNode, corner.EndNode, count);
                     ARS.Corners[ARS.Corners.Count - 1] = survivor;
@@ -931,6 +942,11 @@ namespace ARS
         const float SpanMinimumMeters = 20f;
         const float SpanEntranceRadiusMultiple = 1.5f;
         const float SpanExitRadiusMultiple = 1.5f;
+        // Two apexes whose DetectedRadius differ by more than this are unrelated bends, not a kink in the same bend:
+        // merging them drags the survivor's walked entrance to the looser corner's bound, which can produce an
+        // entrance tens of nodes too far back on the apex the racer actually plans around. Skip the merge and drop
+        // the bigger-radius corner instead.
+        const float SpanMergeRadiusGate = 50f;
         const int SpanNodeLimit = 500;
         // Outer bound on how far from the apex an entrance or exit may land. The walk can otherwise run to its step
         // cap on long gentle approaches whose SmoothedRadius never opens past the multiple (a regime the b587cc5f
