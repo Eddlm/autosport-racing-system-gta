@@ -916,7 +916,7 @@ namespace ARS
         // multiple * SupposedRadius, with the walk step being the first one whose N consecutive ahead are open.
         // The walk is capped by the region the detector already found, because a corner whose approach is all
         // tighter than the multiple would otherwise run to the node cap.
-        const int SpanConsecutiveNodes = 5;
+        const int SpanConsecutiveNodes = 8;
 
         static int EntranceStep(int apexNode, float apexRadius, int maxStep, int count)
         {
@@ -929,8 +929,8 @@ namespace ARS
         }
 
         const float SpanMinimumMeters = 20f;
-        const float SpanEntranceRadiusMultiple = 1.1f;
-        const float SpanExitRadiusMultiple = 1.1f;
+        const float SpanEntranceRadiusMultiple = 1.5f;
+        const float SpanExitRadiusMultiple = 1.5f;
         const int SpanNodeLimit = 500;
         // Outer bound on how far from the apex an entrance or exit may land. The walk can otherwise run to its step
         // cap on long gentle approaches whose SmoothedRadius never opens past the multiple (a regime the b587cc5f
