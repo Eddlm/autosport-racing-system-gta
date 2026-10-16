@@ -636,6 +636,7 @@ namespace ARS
         static void AssignCrests(int count)
         {
             const int window = 6;        // each grade sample looks window nodes back and forward
+            const int skipAfterPeak = 5;        // after a sign change, advance 5 nodes before testing the next one (dedup)
 
             ARS.Crests.Clear();
             for (int node = 0; node < count; node++)
@@ -653,6 +654,9 @@ namespace ARS
                 else continue;                                                       // no sign change: not a peak
 
                 ARS.Crests.Add(new Crest { Node = node, Type = type });
+                // Skip the next few nodes: a gradual sign change covers many adjacent nodes, and the same
+                // physical hill registers as multiple peaks at slightly different centres otherwise.
+                node += skipAfterPeak;
             }
 
             int crests = 0, dips = 0;
