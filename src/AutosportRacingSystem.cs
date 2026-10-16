@@ -1001,7 +1001,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeListItem<string> maxCrestLiftItem = new NativeListItem<string>("Max Crest Lift (g)", "The maximum crest lift (gs reading at the 1.0s-ahead sample) the car is allowed to feel before the no-fly gate forces a slow-down. The speed factor is sqrt(MaxCrestLift / |gs|), so 1.0g means the car always slows until the gs at the sample is 1.0g or less. 0.1g is very conservative; 2.0g only fires for the sharpest crests. Dips are ignored -- they load the tyres, not unload.", SettingsRepair.OptionsFor("MaxCrestLift"));
+            NativeListItem<string> maxCrestLiftItem = new NativeListItem<string>("Max Crest Lift (g)", "The maximum crest lift (gs reading at the 1.0s-ahead sample) the car is allowed to feel before the no-fly gate forces a slow-down. The speed factor is sqrt(MaxCrestLift / |gs|), so 1.0g means the car never slows for a peak below 1.0g -- only features that would physically lift the car at the current speed engage the gate. 0.1g is very conservative and slows on every noticeable crest; 2.0g only fires for the sharpest features. Dips are ignored -- they load the tyres, not unload. The previous build's 'Crest Loss' was a multiplier on a 0.2g fixed cap; this replaces it with an absolute threshold.", SettingsRepair.OptionsFor("MaxCrestLift"));
             maxCrestLiftItem.ItemChanged += (sender, args) =>
             {
                 MaxCrestLift = float.Parse(maxCrestLiftItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -3225,6 +3225,19 @@ namespace ARS
             DNFUnderTrack = SettingsMenuStore.GetBool("DNFUnderTrack", DNFUnderTrack);
             NoCollision = SettingsMenuStore.GetBool("NoCollision", NoCollision);
             MaxCrestLift = SettingsMenuStore.GetFloat("MaxCrestLift", MaxCrestLift);
+            // Old 'Crest Loss' was a 0-200% multiplier on a 0.2g fixed cap; the new setting is an
+            // absolute gs threshold. Read the retired key via ScriptSettings (bypassing the schema
+            // store so the SettingsRepair schema check does not flag it as an undeclared read) and
+            // map it to the new shape: CrestEffect=100 -> 0.2g cap, 50 -> 0.1g, 200 -> 0.4g. The
+            // 0.1-step menu values round the migration target to one slot.
+            int legacyCrestEffect = retiredPaceSettings.GetValue<int>("MENU", "CrestEffect", -1);
+            if (legacyCrestEffect > 0)
+            {
+                float legacyCap = legacyCrestEffect * 0.01f * 0.2f;
+                string rounded = Math.Round(legacyCap, 1).ToString("0.0", CultureInfo.InvariantCulture);
+                SettingsMenuStore.Migrate("MaxCrestLift", rounded);
+                MaxCrestLift = SettingsMenuStore.GetFloat("MaxCrestLift", MaxCrestLift);
+            }
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 0);
             CurrentRubberbandMode = ParseEnum(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString()), CurrentRubberbandMode);

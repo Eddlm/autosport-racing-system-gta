@@ -181,7 +181,7 @@ namespace ARS
         }
 
         // The two nodes the live crest-grip system is currently reading on the supplied racer: the
-        // 0.5s-ahead point (blue) and the 1.0s-ahead point (red). Drawn on the track surface as
+        // 1.0s-ahead point (blue) and the 2.0s-ahead point (red). Drawn on the track surface as
         // track-crossing lines so the driver can see which sample the no-fly gate is checking this
         // tick. The car itself is at its own position (chase cam shows it). -1 means no live read
         // this tick (parked, degenerate triangle, etc.).
