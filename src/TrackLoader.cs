@@ -627,11 +627,11 @@ namespace ARS
         // A crest before a corner unloads the tyres exactly where the car wants to brake, so the braking plan must know
         // about it and the entrance moves back to its top. Scanned once here, after the merges, because every rule that
         // rewrites the entrance has to have settled first. The scan is deliberately boundary-free: a crest that belongs
-        // Route-wide scan for crests and dips. Entry and exit are the first nodes each side of the peak where the
-        // |HillGripDeltaGs| has fallen to half the peak's; this lets the brake decel and the track-analysis
-        // visual treat the feature by its own shape rather than by the detection sweep's tolerance. Type is
-        // Crests if the peak gs is negative (unload), Dips if positive (load). Two adjacent features of the same
-        // sign are kept separate -- the run builds on each consecutive sign-straddling node.
+        // Route-wide scan for crests and dips. The scanner advances in fixed 20-node chunks: in each chunk it finds
+        // the strongest |Gs| peak (largest magnitude, ties broken by first), writes the feature's entry/exit at
+        // the half-peak-gs threshold on each side, then jumps to exit + 1. A long climb with bumps every few
+        // nodes therefore produces one crest per 20-node window instead of one per node -- no overlap, no
+        // re-checking. The half-gs rule on each side is unchanged from the per-node scan.
         static void AssignCrests(int count)
         {
             const float probeSpeed = ARS.CrestProbeSpeed;
@@ -639,20 +639,38 @@ namespace ARS
             const int window = 6;
             const int scanBack = 100;
             const int minRun = 3;
+            const int chunkSize = 20;
 
             ARS.Crests.Clear();
-            for (int node = 0; node < count; node++)
+            int node = 0;
+            while (node < count)
             {
-                if (!TryResolveNode(node - window, count, out int before)) continue;
-                if (!TryResolveNode(node, count, out int centre)) continue;
-                if (!TryResolveNode(node + window, count, out int after)) continue;
-                float g = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[centre].Position, ARS.TrackPoints[after].Position, probeSpeed);
-                if (Math.Abs(g) < threshold) continue;
+                int chunkEnd = ARS.IsPointToPoint ? Math.Min(node + chunkSize, count) : node + chunkSize;
+                int bestNode = -1;
+                float bestGs = 0f;
+                for (int i = node; i < chunkEnd; i++)
+                {
+                    if (!TryResolveNode(i - window, count, out int before)) continue;
+                    if (!TryResolveNode(i, count, out int centre)) continue;
+                    if (!TryResolveNode(i + window, count, out int after)) continue;
+                    float g = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[centre].Position, ARS.TrackPoints[after].Position, probeSpeed);
+                    if (Math.Abs(g) < threshold) continue;
+                    if (Math.Abs(g) <= Math.Abs(bestGs)) continue;
+                    bestGs = g;
+                    bestNode = i;
+                }
 
-                CrestType type = g < 0f ? CrestType.Crest : CrestType.Dip;
-                int sign = g < 0f ? -1 : 1;
-                int peakNode = node;
-                float peakGs = g;
+                if (bestNode < 0)
+                {
+                    // No peak in this chunk; advance by the chunk size.
+                    node = ARS.IsPointToPoint ? node + 1 : Wrap(node + chunkSize, count);
+                    continue;
+                }
+
+                CrestType type = bestGs < 0f ? CrestType.Crest : CrestType.Dip;
+                int sign = bestGs < 0f ? -1 : 1;
+                int peakNode = bestNode;
+                float peakGs = bestGs;
 
                 // Walk backwards until |Gs| has fallen to half the peak (the entry).
                 int entry = peakNode;
@@ -662,7 +680,6 @@ namespace ARS
                     if (!TryResolveNode(peakNode - back - window, count, out int bb)) break;
                     if (!TryResolveNode(peakNode - back + window, count, out int ba)) break;
                     float g2 = ARS.HillGripDeltaGs(ARS.TrackPoints[bb].Position, ARS.TrackPoints[b].Position, ARS.TrackPoints[ba].Position, probeSpeed);
-                    // Stop on sign flip or when |g2| drops to half the peak's. Either way we have the entry.
                     if (Math.Sign(g2) != sign || Math.Abs(g2) <= Math.Abs(peakGs) * 0.5f)
                     {
                         entry = ARS.IsPointToPoint ? peakNode - (back - 1) : Wrap(peakNode - (back - 1), count);
@@ -687,24 +704,13 @@ namespace ARS
                 // Skip features shorter than the run threshold -- a single noisy node.
                 if (ARS.IsPointToPoint)
                 {
-                    if (exit - peakNode < minRun || peakNode - entry < minRun) continue;
+                    if (exit - peakNode < minRun || peakNode - entry < minRun) { node = chunkEnd; continue; }
                 }
                 else
                 {
                     int entryRun = Wrap(peakNode - entry, count);
                     int exitRun = Wrap(exit - peakNode, count);
-                    if (exitRun < minRun || entryRun < minRun) continue;
-                }
-
-                // Skip overlapping peaks: if the last crest we recorded already covers this node, keep the
-                // deeper one. Crests at different strengths on a long climb are still separate features.
-                if (ARS.Crests.Count > 0)
-                {
-                    Crest prev = ARS.Crests[ARS.Crests.Count - 1];
-                    bool overlap;
-                    if (ARS.IsPointToPoint) overlap = prev.ExitNode >= entry && prev.Node < peakNode;
-                    else overlap = Wrap(entry - prev.Node, count) < Wrap(prev.ExitNode - prev.Node, count);
-                    if (overlap) continue;
+                    if (exitRun < minRun || entryRun < minRun) { node = Wrap(chunkEnd, count); continue; }
                 }
 
                 Crest feature = new Crest
@@ -716,6 +722,9 @@ namespace ARS
                     Type = type
                 };
                 ARS.Crests.Add(feature);
+
+                // Advance past the exit so the next chunk starts after this feature.
+                node = ARS.IsPointToPoint ? exit + 1 : Wrap(exit + 1, count);
             }
 
             int crests = 0, dips = 0;
@@ -724,7 +733,7 @@ namespace ARS
                 if (c.Type == CrestType.Crest) crests++; else dips++;
                 ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " peak=" + c.Node + " entry=" + c.EntryNode + " exit=" + c.ExitNode + " gs=" + c.PeakGs.ToString("0.000") + " extent=" + (c.ExitNode - c.Node) + "+" + (c.Node - c.EntryNode));
             }
-            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s");
+            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s, chunk=" + chunkSize + " nodes");
         }
 
         static bool TryResolveNode(int node, int count, out int resolved)
