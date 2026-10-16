@@ -3563,7 +3563,15 @@ namespace ARS
             float clampedPeak = ARS.Clamp(peak, lo, hi);
             float risingUnscaled = RampIntegralUnscaled(start, lo, clampedPeak);
             float fallingUnscaled = RampIntegralUnscaled(end, hi, clampedPeak);
-            float speedRatio = Car.Velocity.Length() / CrestProbeSpeed;
+            // peakGs was measured at activationSpeed; the unload scales by (v / activationSpeed)^2
+            // because gs itself is (v^2 * kappa) / g. A feature with activationSpeed = 80 m/s is
+            // silent at 30 m/s (the car isn't going fast enough for this curvature to register as
+            // an unload) and loud at 80 m/s or above. CrestProbeSpeed stays as a normalisation
+            // anchor in case the table lookup ever misses and falls back to the const.
+            float carSpeed = Car.Velocity.Length();
+            float refSpeed = worst.ActivationSpeed > 0f ? worst.ActivationSpeed : CrestProbeSpeed;
+            if (carSpeed < refSpeed) return 1f;
+            float speedRatio = carSpeed / refSpeed;
             float unload = 1f + peakGs * speedRatio * speedRatio * (risingUnscaled + fallingUnscaled) / (2f * halfExtent * spanMeters);
             if (float.IsNaN(unload) || float.IsInfinity(unload)) return 1f;
             unload = Math.Max(unload, CrestDecelFloor);

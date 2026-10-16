@@ -417,6 +417,12 @@ namespace ARS
         public int ExitNode = -1;
         public float PeakGs = 0f;
         public CrestType Type = CrestType.Crest;
+        // The lowest speed (m/s) at which this feature's curvature still produces |gs| >= the detection
+        // threshold. A feature that activates at 30 m/s is a slow-speed crest (low curve, low unload); a
+        // feature that only activates at 80 m/s is a high-speed one (sharp curve, big unload at speed).
+        // The brake decel scales the unload by (v / ActivationSpeed)^2, so a feature with a high
+        // activation speed is silent at low speeds and loud at high speeds.
+        public float ActivationSpeed = 0f;
     }
     public class Corner
     {

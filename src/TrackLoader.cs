@@ -633,19 +633,27 @@ namespace ARS
         // nodes therefore produces one crest per 20-node window instead of one per node -- no overlap, no
         // re-checking. The half-gs rule on each side is unchanged from the per-node scan.
         //
+        // Per-peak speed sweep: a feature's activation speed is the lowest m/s at which its curvature
+        // still produces |gs| >= threshold. A feature that only activates at 80 m/s is invisible to a
+        // 30 m/s car; one that activates at 25 m/s is a real low-speed crest. The chunked scan finds
+        // candidate peaks at scanSpeed (a high anchor so anything that *can* be a crest gets picked),
+        // then each peak's activation speed is refined by a per-peak decreasing sweep.
+        //
         // Hard cap of 60 nodes in each direction from the peak: a feature whose half-gs walk never closes (flat
         // road, no sign flip) was unbounded and could pin a position forever; the cap mirrors the user's
         // intent that the entry/exit live close to the peak. The scanner's outer advance is also bounded: any
         // single chunk iteration that produces no usable feature still advances by at least one node.
         static void AssignCrests(int count)
         {
-            const float probeSpeed = ARS.CrestProbeSpeed;
             const float threshold = 0.15f;
             const int window = 6;
             const int scanBack = 100;
             const int minRun = 3;
             const int chunkSize = 20;
             const int halfSpanCap = 60;
+            const float scanSpeed = 90f;            // 200 mph, the high anchor; anything not a crest here isn't one at all
+            const float speedStep = 2f;             // 2 m/s steps; activation speed has ~2 m/s precision
+            const float minActivationSpeed = 5f;    // a feature that doesn't crest above 5 m/s is too slow to matter
 
             ARS.Crests.Clear();
             // The outer 'while (node < count)' is wrong on a circuit: 'node = Wrap(node + 1, count)' cycles
@@ -662,6 +670,8 @@ namespace ARS
                 float bestGs = 0f;
                 // For circuit wraps the chunk crosses zero; iterate up to chunkSize nodes starting at 'node',
                 // wrapping at 'count' so the inner loop never runs past 'node + chunkSize' in node-space.
+                // The peak finder runs at scanSpeed (the high anchor) so any feature that *can* be a crest
+                // at any speed is captured here. The per-peak activation-speed sweep refines the actual gs.
                 for (int step = 0; step < chunkSize; step++)
                 {
                     int i = ARS.IsPointToPoint ? node + step : Wrap(node + step, count);
@@ -669,7 +679,7 @@ namespace ARS
                     if (!TryResolveNode(i - window, count, out int before)) continue;
                     if (!TryResolveNode(i, count, out int centre)) continue;
                     if (!TryResolveNode(i + window, count, out int after)) continue;
-                    float g = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[centre].Position, ARS.TrackPoints[after].Position, probeSpeed);
+                    float g = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[centre].Position, ARS.TrackPoints[after].Position, scanSpeed);
                     if (Math.Abs(g) < threshold) continue;
                     if (Math.Abs(g) <= Math.Abs(bestGs)) continue;
                     bestGs = g;
@@ -688,6 +698,43 @@ namespace ARS
                 int peakNode = bestNode;
                 float peakGs = bestGs;
 
+                // Per-peak activation-speed sweep. Start at scanSpeed (where bestGs was just measured),
+                // step down by speedStep until |gs| drops below threshold. The activation speed is the
+                // last speed still above threshold -- the lowest speed at which this feature still
+                // classifies as a crest or dip. A feature that doesn't crest above minActivationSpeed
+                // is road noise at any speed the car can carry; drop it.
+                float activationSpeed = scanSpeed;
+                if (!TryResolveNode(peakNode - window, count, out int peakBefore) ||
+                    !TryResolveNode(peakNode, count, out int peakCentre) ||
+                    !TryResolveNode(peakNode + window, count, out int peakAfter))
+                {
+                    node = ARS.IsPointToPoint ? node + 1 : Wrap(node + 1, count);
+                    continue;
+                }
+                bool activationFound = false;
+                for (float s = scanSpeed; s >= minActivationSpeed; s -= speedStep)
+                {
+                    float gAtS = ARS.HillGripDeltaGs(ARS.TrackPoints[peakBefore].Position, ARS.TrackPoints[peakCentre].Position, ARS.TrackPoints[peakAfter].Position, s);
+                    if (Math.Sign(gAtS) != sign) continue;       // a sign flip in the sweep is a different feature, not this one
+                    if (Math.Abs(gAtS) < threshold)
+                    {
+                        // The previous step was the last speed that still produced |gs| >= threshold.
+                        activationFound = true;
+                        break;
+                    }
+                    activationSpeed = s;
+                }
+                if (!activationFound || activationSpeed < minActivationSpeed)
+                {
+                    node = ARS.IsPointToPoint ? node + 1 : Wrap(node + 1, count);
+                    continue;
+                }
+                // The half-gs walks use the activation speed so the entry/exit live at the gs values
+                // the car actually experiences. peakGs is re-measured at activation speed: a feature
+                // whose gs grows quadratically with v would have a much higher peak at scanSpeed than
+                // at the speed the car actually crosses it.
+                peakGs = ARS.HillGripDeltaGs(ARS.TrackPoints[peakBefore].Position, ARS.TrackPoints[peakCentre].Position, ARS.TrackPoints[peakAfter].Position, activationSpeed);
+
                 // Walk backwards until |Gs| has fallen to half the peak, or halfSpanCap nodes have passed -- whichever
                 // comes first. The walk keeps the entry local to the peak; a long ramp's half-gs point may
                 // never come, in which case the feature is dropped by the entryClosed / exitClosed gate.
@@ -698,7 +745,7 @@ namespace ARS
                     if (!TryResolveNode(peakNode - back, count, out int b)) break;
                     if (!TryResolveNode(peakNode - back - window, count, out int bb)) break;
                     if (!TryResolveNode(peakNode - back + window, count, out int ba)) break;
-                    float g2 = ARS.HillGripDeltaGs(ARS.TrackPoints[bb].Position, ARS.TrackPoints[b].Position, ARS.TrackPoints[ba].Position, probeSpeed);
+                    float g2 = ARS.HillGripDeltaGs(ARS.TrackPoints[bb].Position, ARS.TrackPoints[b].Position, ARS.TrackPoints[ba].Position, activationSpeed);
                     if (Math.Sign(g2) != sign || Math.Abs(g2) <= Math.Abs(peakGs) * 0.5f)
                     {
                         entry = ARS.IsPointToPoint ? peakNode - (back - 1) : Wrap(peakNode - (back - 1), count);
@@ -714,7 +761,7 @@ namespace ARS
                     if (!TryResolveNode(peakNode + fwd, count, out int f)) break;
                     if (!TryResolveNode(peakNode + fwd - window, count, out int ff)) break;
                     if (!TryResolveNode(peakNode + fwd + window, count, out int fa)) break;
-                    float g3 = ARS.HillGripDeltaGs(ARS.TrackPoints[ff].Position, ARS.TrackPoints[f].Position, ARS.TrackPoints[fa].Position, probeSpeed);
+                    float g3 = ARS.HillGripDeltaGs(ARS.TrackPoints[ff].Position, ARS.TrackPoints[f].Position, ARS.TrackPoints[fa].Position, activationSpeed);
                     if (Math.Sign(g3) != sign || Math.Abs(g3) <= Math.Abs(peakGs) * 0.5f)
                     {
                         exit = ARS.IsPointToPoint ? peakNode + (fwd - 1) : Wrap(peakNode + (fwd - 1), count);
@@ -747,7 +794,8 @@ namespace ARS
                     EntryNode = entry,
                     ExitNode = exit,
                     PeakGs = peakGs,
-                    Type = type
+                    Type = type,
+                    ActivationSpeed = activationSpeed
                 };
                 ARS.Crests.Add(feature);
 
@@ -761,9 +809,9 @@ namespace ARS
             foreach (Crest c in ARS.Crests)
             {
                 if (c.Type == CrestType.Crest) crests++; else dips++;
-                ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " peak=" + c.Node + " entry=" + c.EntryNode + " exit=" + c.ExitNode + " gs=" + c.PeakGs.ToString("0.000") + " extent=" + (c.ExitNode - c.Node) + "+" + (c.Node - c.EntryNode));
+                ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " peak=" + c.Node + " entry=" + c.EntryNode + " exit=" + c.ExitNode + " gs=" + c.PeakGs.ToString("0.000") + " act=" + c.ActivationSpeed.ToString("0") + "m/s extent=" + (c.ExitNode - c.Node) + "+" + (c.Node - c.EntryNode));
             }
-            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s, chunk=" + chunkSize + " nodes, halfSpan=" + halfSpanCap + " nodes");
+            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g, scanSpeed=" + scanSpeed.ToString("0") + "m/s, chunk=" + chunkSize + " nodes, halfSpan=" + halfSpanCap + " nodes");
         }
 
         static bool TryResolveNode(int node, int count, out int resolved)
