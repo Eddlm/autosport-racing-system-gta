@@ -1884,17 +1884,17 @@ namespace ARS
         }
 
         // Vertical-curvature grip factor over a triangle the car is currently inside, as a speed multiplier.
-        // The triangle's three points are the car (start), 0.5s ahead at the current speed (midpoint), and
-        // 1.0s ahead. The car always slows enough to bring the gs at the triangle's midpoint down to
+        // The triangle's three points are the car (start), 1.0s ahead at the current speed (midpoint), and
+        // 2.0s ahead. The car always slows enough to bring the gs at the triangle's midpoint down to
         // safeGsTarget -- the speed factor is sqrt(safeGsTarget / |deltaGs|) so a 1.2g reading forces the
-        // car to 0.41 of its current speed. The gs is the gs the car will feel in 0.5s (the curvature's
+        // car to 0.41 of its current speed. The gs is the gs the car will feel in 1.0s (the curvature's
         // centre), not the gs the car is currently on -- that is the lookahead lead time, not the
         // current state. Dips load the tyres, not unload, so they're ignored. The function takes the
         // live car speed as the probe velocity, so a faster car sees a longer sample arc and a slower
-        // one a shorter one -- the same 0.5s/1.0s time window expressed in metres.
+        // one a shorter one -- the same 1.0s/2.0s time window expressed in metres.
         const float safeGsTarget = 0.2f;
-        const float nearSeconds = 0.5f;
-        const float farSeconds = 1.0f;
+        const float nearSeconds = 1.0f;
+        const float farSeconds = 2.0f;
         float CrestGripSpeedFactor(int carNode, int count, out int nearNode, out int farNode, out float rawDeltaGs)
         {
             nearNode = -1;
