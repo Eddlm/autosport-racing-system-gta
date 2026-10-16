@@ -650,7 +650,7 @@ namespace ARS
             const int minRun = 3;
             const int chunkSize = 2;
             const int halfSpanCap = 60;
-            const float scanSpeed = 90f;            // 200 mph, the high anchor; anything not a crest here isn't one at all
+            const float scanSpeed = 45f;            // 100 mph, the high anchor; anything not a crest here isn't one at all
             const float speedStep = 2f;             // 2 m/s steps; activation speed has ~2 m/s precision
             const float minActivationSpeed = 5f;    // a feature that doesn't crest above 5 m/s is too slow to matter
             const float entryExitGs = 0.05f;        // absolute |gs| where the half-gs walk stops; flat-ground boundary
