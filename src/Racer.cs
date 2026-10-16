@@ -1202,10 +1202,10 @@ namespace ARS
         // Above the authored peak slip × this the car counts as sliding, so the damper drops its aim reference.
         const float SlidingFraction = 0.3f;
         // The blend ramps in across these multiples of the authored peak slip. The blend is linear from
-        // peak × 0.5 (the slide is just past the traction peak) to peak × 2.5 (a deep slide), and the
-        // countersteer answers the full slide — the blend is the only modulator.
+        // peak × 0.5 (the slide is just past the traction peak) to peak × 2.0 (twice the authored peak), and
+        // the countersteer answers the full slide — the blend is the only modulator.
         const float SlideBlendStartFraction = 0.5f;
-        const float SlideBlendFullFraction = 2.5f;
+        const float SlideBlendFullFraction = 2.0f;
         const float CountersteerSlideShare = 1f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
         const float CountersteerRollThrottle = 0.05f;
