@@ -648,9 +648,16 @@ namespace ARS
             const int halfSpanCap = 60;
 
             ARS.Crests.Clear();
+            // The outer 'while (node < count)' is wrong on a circuit: 'node = Wrap(node + 1, count)' cycles
+            // through [0, count) forever on a flat road. Track which nodes have been visited and stop when
+            // the next 'node' has already been seen. On a point-to-point track the guard fires only on a
+            // real revisit, which never happens with the current advances.
+            bool[] visited = new bool[count];
             int node = 0;
             while (node < count)
             {
+                if (visited[node]) break;
+                visited[node] = true;
                 int bestNode = -1;
                 float bestGs = 0f;
                 // For circuit wraps the chunk crosses zero; iterate up to chunkSize nodes starting at 'node',
