@@ -658,8 +658,17 @@ namespace ARS
                 // so the value is local to the peak -- a small hill with a steep top reads high here
                 // even if the surrounding road is flat.
                 float gsAt100 = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position, 45f);
+                float gsMag = Math.Abs(gsAt100);
 
-                ARS.Crests.Add(new Crest { Node = node, Type = type, GsAt100Mph = Math.Abs(gsAt100) });
+                // The 1g mark is the physical ceiling: at gs = 1.0 the tyres need a horizontal force
+                // equal to the car's weight to track the curve, with no vertical grip left. Below 1g
+                // the road car is at safe_v = 100mph / sqrt(gs), so a 0.5g peak only forces the car to
+                // 141mph -- a 0.8g peak only forces it to 112mph. None of these need the driver to
+                // change plans. Filter them out so the table only lists features that affect the
+                // brake plan.
+                if (gsMag < 1f) { node += skipAfterPeak; continue; }
+
+                ARS.Crests.Add(new Crest { Node = node, Type = type, GsAt100Mph = gsMag });
                 // Skip the next few nodes: a gradual sign change covers many adjacent nodes, and the same
                 // physical hill registers as multiple peaks at slightly different centres otherwise.
                 node += skipAfterPeak;
