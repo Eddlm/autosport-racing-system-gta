@@ -828,15 +828,15 @@ namespace ARS
             int spanLimit = Math.Min(SpanNodeLimit, count - 1);
             int entranceMaxStep = Math.Min(spanLimit, apexPosition);
             int exitMaxStep = Math.Min(spanLimit, scanNodes.Count - 1 - apexPosition);
-            int entranceStep = EntranceStep(apexNode, detectedRadius, entranceMaxStep, count, smoothingNodes);
-            int exitStep = ExitStep(apexNode, detectedRadius, exitMaxStep, count, smoothingNodes);
+            int entranceStep = EntranceStep(apexNode, tightestRadius, entranceMaxStep, count);
+            int exitStep = ExitStep(apexNode, tightestRadius, exitMaxStep, count);
             int unclampedStart = apexPosition - entranceStep;
             int unclampedEnd = apexPosition + exitStep;
             startPosition = Math.Max(regionStart, unclampedStart);
             endPosition = Math.Min(regionEnd, unclampedEnd);
             // Diagnostic: log every corner's region bounds, walk direction, and where the clamping actually happens.
             // The user observed that one corner's entrance lands at regionStart regardless of the multiple — confirm.
-            ARS.Log(ARS.LogImportance.Info, "Corner add: apex=" + apexNode + " angle=" + ARS.TrackPoints[apexNode].Angle.ToString("0.0") + " detectedR=" + detectedRadius.ToString("0.0") + " region=" + regionStart + "-" + regionEnd + " entranceStep=" + entranceStep + "/" + entranceMaxStep + (entranceStep >= entranceMaxStep ? " (at cap)" : "") + " unclampedStart=" + unclampedStart + " start=" + startPosition + (startPosition > unclampedStart ? " (clamped to regionStart)" : (startPosition == unclampedStart ? " (walk stop)" : "")) + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " (at cap)" : "") + " unclampedEnd=" + unclampedEnd + " end=" + endPosition);
+            ARS.Log(ARS.LogImportance.Info, "Corner add: apex=" + apexNode + " angle=" + ARS.TrackPoints[apexNode].Angle.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " region=" + regionStart + "-" + regionEnd + " entranceStep=" + entranceStep + "/" + entranceMaxStep + (entranceStep >= entranceMaxStep ? " (at cap)" : "") + " unclampedStart=" + unclampedStart + " start=" + startPosition + (startPosition > unclampedStart ? " (clamped to regionStart)" : (startPosition == unclampedStart ? " (walk stop)" : "")) + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " (at cap)" : "") + " unclampedEnd=" + unclampedEnd + " end=" + endPosition);
             // Flat rather than the apex radius: scaling it gave a sweeper a span of twice its own radius, so the cars
             // prepared across the whole corner.
             float minEntranceExit = Math.Min(SpanMinimumMeters, spanLimit);
@@ -911,18 +911,19 @@ namespace ARS
             return !float.IsNaN(angle) && !float.IsInfinity(angle) && Math.Abs(angle) <= degrees;
         }
 
-        // A span end is where the road has opened out to a multiple of the apex radius, so the span scales with the
-        // corner rather than sitting on its floor. The entrance multiple is the tighter of the two, so a radius
-        // hovering on the threshold cannot chatter the ends against each other. The walk is capped by the region the
-        // detector already found, because a corner whose neighbours are all tighter than the multiple would otherwise
-        // run to the node cap and have the cars brake for hundreds of metres.
-        static int EntranceStep(int apexNode, float apexRadius, int maxStep, int count, int smoothingNodes)
+        // A span end is where the road has held itself open for a stretch, so the entrance or exit cannot chatter
+        // against a single noisy reading. The criterion is N consecutive PreciseCurveRadius values all above
+        // multiple * SupposedRadius, with the walk step being the first one whose N consecutive ahead are open.
+        // The walk is capped by the region the detector already found, because a corner whose approach is all
+        // tighter than the multiple would otherwise run to the node cap.
+        const int SpanConsecutiveNodes = 5;
+
+        static int EntranceStep(int apexNode, float apexRadius, int maxStep, int count)
         {
+            float threshold = apexRadius * SpanEntranceRadiusMultiple;
             for (int step = 1; step <= maxStep; step++)
             {
-                int node = ARS.IsPointToPoint ? apexNode - step : Wrap(apexNode - step, count);
-                if (ARS.IsPointToPoint && node < 0) break;
-                if (SmoothedRadius(node, count, smoothingNodes) > apexRadius * SpanEntranceRadiusMultiple) return step;
+                if (IsOpenedFor(apexNode, -1, step, SpanConsecutiveNodes, count, threshold)) return step;
             }
             return maxStep;
         }
@@ -942,15 +943,31 @@ namespace ARS
         const float AlignedCornerDegrees = 15f;
 
         // The exit is the entrance's mirror, walked forward on the looser multiple.
-        static int ExitStep(int apexNode, float apexRadius, int maxStep, int count, int smoothingNodes)
+        static int ExitStep(int apexNode, float apexRadius, int maxStep, int count)
         {
+            float threshold = apexRadius * SpanExitRadiusMultiple;
             for (int step = 1; step <= maxStep; step++)
             {
-                int node = ARS.IsPointToPoint ? apexNode + step : Wrap(apexNode + step, count);
-                if (ARS.IsPointToPoint && node >= count) break;
-                if (SmoothedRadius(node, count, smoothingNodes) > apexRadius * SpanExitRadiusMultiple) return step;
+                if (IsOpenedFor(apexNode, 1, step, SpanConsecutiveNodes, count, threshold)) return step;
             }
             return maxStep;
+        }
+
+        // True when N consecutive nodes from (apexNode + direction * step) onward (going the same direction) are
+        // all above the threshold. The walk step is the first one where this holds, so the entrance or exit lands
+        // where the road has held itself open rather than on a single noisy reading.
+        static bool IsOpenedFor(int apexNode, int direction, int step, int consecutive, int count, float threshold)
+        {
+            for (int offset = 0; offset < consecutive; offset++)
+            {
+                int walk = step + offset;
+                int node = ARS.IsPointToPoint
+                    ? apexNode + direction * walk
+                    : Wrap(apexNode + direction * walk, count);
+                if (ARS.IsPointToPoint && (node < 0 || node >= count)) return false;
+                if (ARS.TrackPoints[node].PreciseCurveRadius < threshold) return false;
+            }
+            return true;
         }
 
         // A merged survivor's extensions, re-walked rather than inherited: the entrance runs in over the absorbed
