@@ -686,6 +686,14 @@ namespace ARS
                 MoveEntrancesToCrests(count);
 
             ARS.Log(ARS.LogImportance.Info, "Crests: " + crests + " of " + ARS.Corners.Count + " corners carry one, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s" + (CrestMovesDisabled ? " (move-back disabled)" : ""));
+
+            // Diagnostic: dump every corner's current StartNode + apex + angle, so we can see whether the move-back
+            // actually wrote into StartNode or some other path did. Temporary — drop once the entrance-move story is settled.
+            for (int i = 0; i < ARS.Corners.Count; i++)
+            {
+                CornerPoint corner = ARS.Corners[i];
+                ARS.Log(ARS.LogImportance.Info, "Corner " + i + ": apex=" + corner.Node + " angle=" + corner.Angle.ToString("0.0") + " start=" + corner.StartNode + " end=" + corner.EndNode + " crestNode=" + corner.CrestNode + " crestEntry=" + corner.CrestEntryNode);
+            }
         }
 
         // The entrance walks back to the crest's entry -- where the track stops being flat -- not to the unload's
