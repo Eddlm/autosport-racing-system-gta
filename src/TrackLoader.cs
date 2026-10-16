@@ -900,10 +900,13 @@ namespace ARS
                         CornerPoint loser = corner.DetectedRadius < previous.DetectedRadius ? previous : corner;
                         bool dropPrevious = loser.Node == previous.Node;
                         ARS.Log(ARS.LogImportance.Info, "Corner skipped (radii differ by >" + SpanMergeRadiusGate.ToString("0") + "m): previousR=" + previous.DetectedRadius.ToString("0.0") + " cornerR=" + corner.DetectedRadius.ToString("0.0") + " loserApex=" + loser.Node + (dropPrevious ? " (previous)" : " (new)"));
-                        // The smaller-radius corner wins. Drop the previous if it is the loser, otherwise the new corner
-                        // is the loser and we keep the previous as-is.
-                        if (dropPrevious) ARS.Corners.RemoveAt(ARS.Corners.Count - 1);
-                        if (!dropPrevious) ARS.Corners.Add(corner);
+                        // The smaller-radius corner wins. If the previous is the loser, drop it and add the new
+                        // corner in its place; if the new is the loser, leave the previous as-is.
+                        if (dropPrevious)
+                        {
+                            ARS.Corners.RemoveAt(ARS.Corners.Count - 1);
+                            ARS.Corners.Add(corner);
+                        }
                         return;
                     }
                     CornerPoint survivor = corner.DetectedRadius < previous.DetectedRadius ? corner : previous;
