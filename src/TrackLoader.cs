@@ -902,7 +902,7 @@ namespace ARS
         }
 
         const float SpanMinimumMeters = 20f;
-        const float SpanEntranceRadiusMultiple = 1.6f;
+        const float SpanEntranceRadiusMultiple = 1.4f;
         const float SpanExitRadiusMultiple = 2f;
         const int SpanNodeLimit = 500;
         const float MaximumApexRadius = 200f;
