@@ -1815,14 +1815,14 @@ namespace ARS
             }
 
             // Vertical-curvature no-fly gate: a single sample of the road centred on the car, with
-            // the near sample 0.5s ahead and the far sample 1.0s ahead at the live car speed. The
+            // the near sample 1.0s ahead and the far sample 2.0s ahead at the live car speed. The
             // factor is read once and applied to both route and corner speeds; the corner's apex
             // speed already flows from the route speed, so the corner inherits the slow-down.
             int count = ARS.TrackPoints.Count;
             int carNode = CurrentTrackPoint.Node;
             float routeCrestFactor = CrestGripSpeedFactor(carNode, count, out int routeNear, out int routeFar, out _);
-            // Visualise the two lookahead nodes the live system just sampled: routeNear (0.5s ahead)
-            // and routeFar (1.0s ahead). The car itself is at carNode, implicit.
+            // Visualise the two lookahead nodes the live system just sampled: routeNear (1.0s ahead)
+            // and routeFar (2.0s ahead). The car itself is at carNode, implicit.
             LiveRouteCrestNode = routeNear;
             LiveRouteCrestFarNode = routeFar;
             followTrackSpd *= routeCrestFactor;
@@ -1886,13 +1886,13 @@ namespace ARS
         // Vertical-curvature grip factor over a triangle the car is currently inside, as a speed multiplier.
         // The triangle's three points are the car (start), 1.0s ahead at the current speed (midpoint), and
         // 2.0s ahead. The car always slows enough to bring the gs at the triangle's midpoint down to
-        // safeGsTarget -- the speed factor is sqrt(safeGsTarget / |deltaGs|) so a 1.2g reading forces the
-        // car to 0.41 of its current speed. The gs is the gs the car will feel in 1.0s (the curvature's
-        // centre), not the gs the car is currently on -- that is the lookahead lead time, not the
-        // current state. Dips load the tyres, not unload, so they're ignored. The function takes the
-        // live car speed as the probe velocity, so a faster car sees a longer sample arc and a slower
-        // one a shorter one -- the same 1.0s/2.0s time window expressed in metres.
-        const float safeGsTarget = 0.2f;
+        // ARS.MaxCrestLift -- the speed factor is sqrt(MaxCrestLift / |deltaGs|) so a 1.2g reading on a
+        // 1.0g cap forces the car to 0.91 of its current speed, and a 2.0g reading on a 0.5g cap forces
+        // 0.5. The gs is the gs the car will feel in 1.0s (the curvature's centre), not the gs the car
+        // is currently on -- that is the lookahead lead time, not the current state. Dips load the
+        // tyres, not unload, so they're ignored. The function takes the live car speed as the probe
+        // velocity, so a faster car sees a longer sample arc and a slower one a shorter one -- the
+        // same 1.0s/2.0s time window expressed in metres.
         const float nearSeconds = 1.0f;
         const float farSeconds = 2.0f;
         float CrestGripSpeedFactor(int carNode, int count, out int nearNode, out int farNode, out float rawDeltaGs)
@@ -1917,8 +1917,8 @@ namespace ARS
             rawDeltaGs = deltaGs;
             if (deltaGs > 0f) deltaGs = 0f;
             float magGs = Math.Abs(deltaGs);
-            if (magGs <= safeGsTarget) return 1f;
-            return (float)Math.Sqrt(safeGsTarget / magGs);
+            if (magGs <= ARS.MaxCrestLift) return 1f;
+            return (float)Math.Sqrt(ARS.MaxCrestLift / magGs);
         }
 
         // Rubber-band factor: <1 for leaders (penalty), >1 for laggards (boost), 1 at center.

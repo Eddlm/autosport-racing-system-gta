@@ -166,9 +166,12 @@ namespace ARS
         // past it the throttle takes to reach its floor.
         public static int TcsSlipLimitPct = 80;
         public static int TcsTaperSpanPct = 80;
-        // Terrain speed-effect intensity, 1 = the tuned default, 0 = that terrain effect off. Each scales
-        // grip LOSS only, so a dip's speed bonus is never amplified and 1 stays the verified behaviour.
-        public static float CrestEffect = 1f;
+        // The maximum crest lift (gs reading at the 1.0s-ahead sample) the car is allowed to feel
+        // before the no-fly gate forces a slow-down. The speed factor is sqrt(MaxCrestLift / |gs|),
+        // so 1.0g means the car always slows until the gs at the sample is 1.0g or less. 0.1g is
+        // very conservative; 2.0g only fires for the sharpest crests. Dips are ignored -- they load
+        // the tyres, not unload.
+        public static float MaxCrestLift = 1.0f;
         public static float HillGripEffect = 1f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
@@ -998,15 +1001,15 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeListItem<string> crestEffectItem = new NativeListItem<string>("Crest Loss (%)", "A share of the tuned speed cut over a crest: 0% ignores them, 100% is the tuned cut, 200% doubles it. Losses only, so a dip's grip bonus is never amplified.", SettingsRepair.OptionsFor("CrestEffect"));
-            crestEffectItem.ItemChanged += (sender, args) =>
+            NativeListItem<string> maxCrestLiftItem = new NativeListItem<string>("Max Crest Lift (g)", "The maximum crest lift (gs reading at the 1.0s-ahead sample) the car is allowed to feel before the no-fly gate forces a slow-down. The speed factor is sqrt(MaxCrestLift / |gs|), so 1.0g means the car always slows until the gs at the sample is 1.0g or less. 0.1g is very conservative; 2.0g only fires for the sharpest crests. Dips are ignored -- they load the tyres, not unload.", SettingsRepair.OptionsFor("MaxCrestLift"));
+            maxCrestLiftItem.ItemChanged += (sender, args) =>
             {
-                CrestEffect = int.Parse(crestEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
-                SaveRacerSetting("CrestEffect", crestEffectItem.Items[args.Index]);
+                MaxCrestLift = float.Parse(maxCrestLiftItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("MaxCrestLift", maxCrestLiftItem.Items[args.Index]);
             };
-            crestEffectItem.SelectedIndex = Math.Max(0, crestEffectItem.Items.IndexOf(SettingsMenuStore.GetInt("CrestEffect", 100).ToString(CultureInfo.InvariantCulture)));
-            rivalPaceMenu.Add(crestEffectItem);
-            HookListTextPicker(crestEffectItem);
+            maxCrestLiftItem.SelectedIndex = Math.Max(0, maxCrestLiftItem.Items.IndexOf(SettingsMenuStore.GetFloat("MaxCrestLift", 1.0f).ToString("0.0", CultureInfo.InvariantCulture)));
+            rivalPaceMenu.Add(maxCrestLiftItem);
+            HookListTextPicker(maxCrestLiftItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "A share of the tuned speed cut for slopes: 0% ignores them, 100% is the tuned cut, 200% doubles it. The pitch counts either way, so a descent costs speed like a climb; at 100%, 15 degrees halves grip.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
@@ -3221,7 +3224,7 @@ namespace ARS
             TcsTaperSpanPct = SettingsMenuStore.GetInt("TcsTaperSpanPct", TcsTaperSpanPct);
             DNFUnderTrack = SettingsMenuStore.GetBool("DNFUnderTrack", DNFUnderTrack);
             NoCollision = SettingsMenuStore.GetBool("NoCollision", NoCollision);
-            CrestEffect = SettingsMenuStore.GetInt("CrestEffect", 100) * 0.01f;
+            MaxCrestLift = SettingsMenuStore.GetFloat("MaxCrestLift", MaxCrestLift);
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 0);
             CurrentRubberbandMode = ParseEnum(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString()), CurrentRubberbandMode);
