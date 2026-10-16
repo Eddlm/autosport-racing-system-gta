@@ -2071,14 +2071,13 @@ namespace ARS
         }
 
         // ABS: the brake-side twin, containment where TCS regulates: TCS holds a curve point, ABS guards the
-        // region past the peak where a locking wheel is losing force. The cap engages only when the wheel is
-        // clearly past the peak -- knee at twice the peak (0.8), floor at three times (1.2), span 0.4. The
-        // standard AI (no engine ABS) is free to use full brake through the peak-slip region; the cap only
-        // eases when the wheel is well into lock territory. The curve goes flat at 2.5x and a wheel whose own
-        // ABS is active has the field forced to +/-5 by the engine (sfAbsActiveSlipRatio, :5061), so the cap
-        // sits at the floor on either constant.
-        const float AbsKneeSlip = ARS.SlipPeakRatio * 2f;
-        const float AbsFloorSlip = ARS.SlipPeakRatio * 3f;
+        // region past the peak where a locking wheel is losing force. The cap engages at slip 0.5 (a quarter
+        // past the peak, where the curve is rolling off but the wheel isn't fully locked) and floors at slip
+        // 1.0 (the engine's "locked" reading). Span 0.5, floor brake 0.25. A wheel whose own engine ABS is
+        // active has the field forced to +/-5 by the engine (sfAbsActiveSlipRatio, :5061), so its cap sits
+        // at the floor on either constant.
+        const float AbsKneeSlip = 0.5f;
+        const float AbsFloorSlip = 1.0f;
         const float AbsBrakeFloor = 0.25f;
 
         void UpdateBrakeReasonCaps()
