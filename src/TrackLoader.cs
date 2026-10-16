@@ -632,6 +632,11 @@ namespace ARS
         // the half-peak-gs threshold on each side, then jumps to exit + 1. A long climb with bumps every few
         // nodes therefore produces one crest per 20-node window instead of one per node -- no overlap, no
         // re-checking. The half-gs rule on each side is unchanged from the per-node scan.
+        //
+        // Hard cap of 60 nodes in each direction from the peak: a feature whose half-gs walk never closes (flat
+        // road, no sign flip) was unbounded and could pin a position forever; the cap mirrors the user's
+        // intent that the entry/exit live close to the peak. The scanner's outer advance is also bounded: any
+        // single chunk iteration that produces no usable feature still advances by at least one node.
         static void AssignCrests(int count)
         {
             const float probeSpeed = ARS.CrestProbeSpeed;
@@ -640,16 +645,24 @@ namespace ARS
             const int scanBack = 100;
             const int minRun = 3;
             const int chunkSize = 20;
+            const int halfSpanCap = 60;
 
             ARS.Crests.Clear();
             int node = 0;
+            int safetyIterations = 0;
+            int safetyMaxIterations = count + 8;     // a generous cap on outer-advance steps; defends against a stuck chunk
             while (node < count)
             {
-                int chunkEnd = ARS.IsPointToPoint ? Math.Min(node + chunkSize, count) : node + chunkSize;
+                if (++safetyIterations > safetyMaxIterations) break;
+                int chunkEnd = ARS.IsPointToPoint ? Math.Min(node + chunkSize, count) : Wrap(node + chunkSize, count);
                 int bestNode = -1;
                 float bestGs = 0f;
-                for (int i = node; i < chunkEnd; i++)
+                // For circuit wraps the chunk crosses zero; iterate up to chunkSize nodes starting at 'node',
+                // wrapping at 'count' so the inner loop never runs past 'node + chunkSize' in node-space.
+                for (int step = 0; step < chunkSize; step++)
                 {
+                    int i = ARS.IsPointToPoint ? node + step : Wrap(node + step, count);
+                    if (i >= count) break;
                     if (!TryResolveNode(i - window, count, out int before)) continue;
                     if (!TryResolveNode(i, count, out int centre)) continue;
                     if (!TryResolveNode(i + window, count, out int after)) continue;
@@ -659,11 +672,12 @@ namespace ARS
                     bestGs = g;
                     bestNode = i;
                 }
+                chunkEnd = bestNode;     // chunkEnd isn't otherwise read after the loop; set it for the run-min check's branch.
 
                 if (bestNode < 0)
                 {
-                    // No peak in this chunk; advance by the chunk size.
-                    node = ARS.IsPointToPoint ? node + 1 : Wrap(node + chunkSize, count);
+                    // No peak in this chunk; advance by one node so we keep making progress.
+                    node = ARS.IsPointToPoint ? node + 1 : Wrap(node + 1, count);
                     continue;
                 }
 
@@ -672,9 +686,11 @@ namespace ARS
                 int peakNode = bestNode;
                 float peakGs = bestGs;
 
-                // Walk backwards until |Gs| has fallen to half the peak (the entry).
-                int entry = peakNode;
-                for (int back = 1; back <= scanBack; back++)
+                // Walk backwards until |Gs| has fallen to half the peak or we've travelled halfSpanCap nodes,
+                // whichever comes first. entry defaults to halfSpanCap behind peak when the walk never closes.
+                int entry = ARS.IsPointToPoint ? Math.Max(peakNode - halfSpanCap, 0) : Wrap(peakNode - halfSpanCap, count);
+                bool entryFound = false;
+                for (int back = 1; back <= halfSpanCap; back++)
                 {
                     if (!TryResolveNode(peakNode - back, count, out int b)) break;
                     if (!TryResolveNode(peakNode - back - window, count, out int bb)) break;
@@ -683,12 +699,13 @@ namespace ARS
                     if (Math.Sign(g2) != sign || Math.Abs(g2) <= Math.Abs(peakGs) * 0.5f)
                     {
                         entry = ARS.IsPointToPoint ? peakNode - (back - 1) : Wrap(peakNode - (back - 1), count);
+                        entryFound = true;
                         break;
                     }
                 }
-                // Walk forward until |Gs| has fallen to half the peak (the exit).
-                int exit = peakNode;
-                for (int fwd = 1; fwd <= scanBack; fwd++)
+                // Walk forward until |Gs| has fallen to half the peak or halfSpanCap nodes have passed.
+                int exit = ARS.IsPointToPoint ? Math.Min(peakNode + halfSpanCap, count - 1) : Wrap(peakNode + halfSpanCap, count);
+                for (int fwd = 1; fwd <= halfSpanCap; fwd++)
                 {
                     if (!TryResolveNode(peakNode + fwd, count, out int f)) break;
                     if (!TryResolveNode(peakNode + fwd - window, count, out int ff)) break;
@@ -704,13 +721,13 @@ namespace ARS
                 // Skip features shorter than the run threshold -- a single noisy node.
                 if (ARS.IsPointToPoint)
                 {
-                    if (exit - peakNode < minRun || peakNode - entry < minRun) { node = chunkEnd; continue; }
+                    if (exit - peakNode < minRun || peakNode - entry < minRun) { node = Math.Min(peakNode + 1, count); continue; }
                 }
                 else
                 {
                     int entryRun = Wrap(peakNode - entry, count);
                     int exitRun = Wrap(exit - peakNode, count);
-                    if (exitRun < minRun || entryRun < minRun) { node = Wrap(chunkEnd, count); continue; }
+                    if (exitRun < minRun || entryRun < minRun) { node = Wrap(peakNode + 1, count); continue; }
                 }
 
                 Crest feature = new Crest
@@ -724,7 +741,9 @@ namespace ARS
                 ARS.Crests.Add(feature);
 
                 // Advance past the exit so the next chunk starts after this feature.
-                node = ARS.IsPointToPoint ? exit + 1 : Wrap(exit + 1, count);
+                int next = ARS.IsPointToPoint ? exit + 1 : Wrap(exit + 1, count);
+                if (next == node) { node = Wrap(node + 1, count); continue; }     // a stuck exit can't make progress; force one node
+                node = next;
             }
 
             int crests = 0, dips = 0;
@@ -733,7 +752,7 @@ namespace ARS
                 if (c.Type == CrestType.Crest) crests++; else dips++;
                 ARS.Log(ARS.LogImportance.Info, (c.Type == CrestType.Crest ? "Crest" : "Dip") + " peak=" + c.Node + " entry=" + c.EntryNode + " exit=" + c.ExitNode + " gs=" + c.PeakGs.ToString("0.000") + " extent=" + (c.ExitNode - c.Node) + "+" + (c.Node - c.EntryNode));
             }
-            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s, chunk=" + chunkSize + " nodes");
+            ARS.Log(ARS.LogImportance.Info, "Features: " + crests + " crests, " + dips + " dips, threshold " + threshold.ToString("0.00") + "g at " + probeSpeed.ToString("0") + "m/s, chunk=" + chunkSize + " nodes, halfSpan=" + halfSpanCap);
         }
 
         static bool TryResolveNode(int node, int count, out int resolved)
