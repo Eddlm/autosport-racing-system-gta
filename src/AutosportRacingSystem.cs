@@ -1861,8 +1861,13 @@ namespace ARS
                         }
                     }
 
-                    if (DebugFocusRacer != null)
-                        TrackVisuals.DrawLiveCrestChecks(DebugFocusRacer, ARS.TrackPoints);
+                    // The no-fly gate is per-racer (it's a Racer.cs function on the racer being
+                    // controlled). On a fresh ShowTrackAnalysis toggle DebugFocusRacer defaults to
+                    // the nearest AI, so prefer the player and fall back to the focus racer only if
+                    // the player isn't on the track.
+                    Racer liveCrestRacer = PlayerRacer ?? DebugFocusRacer;
+                    if (liveCrestRacer != null)
+                        TrackVisuals.DrawLiveCrestChecks(liveCrestRacer, ARS.TrackPoints);
                 }
 
                 // Nitro: one charge at launch, then a fresh bottle each lap.

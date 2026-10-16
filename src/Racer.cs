@@ -63,11 +63,15 @@ namespace ARS
         public TrackPoint CurrentTrackPoint = new TrackPoint();
         public float AlongTrackSpeed = 0f;
         public int RaceProgress = 0;
-        // The two nodes the live crest-grip system is currently reading: route lookahead centre and
-        // next-corner apex. Set by CrestGripSpeedFactor's callers and read by the track-analysis visual
-        // so the driver can see which 6-node sample the no-fly gate is checking this tick.
+        // The two nodes the live crest-grip system is currently reading on the route: the
+        // 0.5s-ahead point (centre of the Menger-curvature triangle) and the 1.0s-ahead point.
+        // Set by CrestGripSpeedFactor's caller and read by the track-analysis visual so the
+        // driver can see which sample the no-fly gate is checking this tick. (The previous name
+        // LiveCornerCrestNode was a holdover from a design that read the next corner's apex;
+        // the new design samples relative to the car, so the variable now holds the 1.0s-ahead
+        // route point instead.)
         public int LiveRouteCrestNode = -1;
-        public int LiveCornerCrestNode = -1;
+        public int LiveRouteCrestFarNode = -1;
 
         // Time-based route references used by steering and speed calculations.
         public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
@@ -1820,14 +1824,17 @@ namespace ARS
             // Visualise the two lookahead nodes the live system just sampled: routeNear (0.5s ahead)
             // and routeFar (1.0s ahead). The car itself is at carNode, implicit.
             LiveRouteCrestNode = routeNear;
-            LiveCornerCrestNode = routeFar;
+            LiveRouteCrestFarNode = routeFar;
             followTrackSpd *= routeCrestFactor;
 
             // The apex speed before vertical grip, and the only input the corner's crest call takes as its entry speed.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
-            float cornerApexSpeedWithVerticalGrip = _cornerSpd;
+            // Not "with vertical grip at the apex" -- the route factor is read at the car's current
+            // position, not at the apex. The factor projects the current gate onto the apex target,
+            // and the brake has already started. The rename makes the dataflow explicit.
+            float apexTargetWithCurrentRouteGrip = _cornerSpd;
             cornerSpd *= routeCrestFactor;
-            cornerApexSpeedWithVerticalGrip *= routeCrestFactor;
+            apexTargetWithCurrentRouteGrip *= routeCrestFactor;
 
             // Steer-limited speed: max speed for current steer angle before sliding. Blended into route speed so an outside car (less steering) may carry more speed.
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
@@ -1877,12 +1884,14 @@ namespace ARS
         }
 
         // Vertical-curvature grip factor over a triangle the car is currently inside, as a speed multiplier.
-        // The triangle's three points are the car (centre), 0.5s ahead at the current speed, and 1.0s ahead.
-        // The car always slows enough to bring the gs at the centre down to safeGsTarget -- the speed
-        // factor is sqrt(safeGsTarget / |deltaGs|) so a 1.2g reading forces the car to 0.41 of its current
-        // speed. Dips load the tyres, not unload, so they're ignored. The function takes the live car
-        // speed as the probe velocity, so a faster car sees a longer sample arc and a slower one a
-        // shorter one -- the same 0.5s/1.0s time window expressed in metres.
+        // The triangle's three points are the car (start), 0.5s ahead at the current speed (midpoint), and
+        // 1.0s ahead. The car always slows enough to bring the gs at the triangle's midpoint down to
+        // safeGsTarget -- the speed factor is sqrt(safeGsTarget / |deltaGs|) so a 1.2g reading forces the
+        // car to 0.41 of its current speed. The gs is the gs the car will feel in 0.5s (the curvature's
+        // centre), not the gs the car is currently on -- that is the lookahead lead time, not the
+        // current state. Dips load the tyres, not unload, so they're ignored. The function takes the
+        // live car speed as the probe velocity, so a faster car sees a longer sample arc and a slower
+        // one a shorter one -- the same 0.5s/1.0s time window expressed in metres.
         const float safeGsTarget = 0.2f;
         const float nearSeconds = 0.5f;
         const float farSeconds = 1.0f;

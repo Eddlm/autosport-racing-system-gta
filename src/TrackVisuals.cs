@@ -181,16 +181,17 @@ namespace ARS
         }
 
         // The two nodes the live crest-grip system is currently reading on the supplied racer: the
-        // route lookahead centre (blue) and the next-corner apex (red). Drawn on the track surface as
-        // track-crossing lines so the driver can see which 6-node sample the no-fly gate is checking
-        // this tick. -1 means no live read (e.g. no corner in plan).
+        // 0.5s-ahead point (blue) and the 1.0s-ahead point (red). Drawn on the track surface as
+        // track-crossing lines so the driver can see which sample the no-fly gate is checking this
+        // tick. The car itself is at its own position (chase cam shows it). -1 means no live read
+        // this tick (parked, degenerate triangle, etc.).
         public static void DrawLiveCrestChecks(Racer racer, List<TrackPoint> trackPoints)
         {
             if (trackPoints.Count == 0) return;
             if (racer.LiveRouteCrestNode >= 0 && racer.LiveRouteCrestNode < trackPoints.Count)
                 DrawTrackCrossingLine(trackPoints, racer.LiveRouteCrestNode, Color.FromArgb(200, 80, 160, 255));
-            if (racer.LiveCornerCrestNode >= 0 && racer.LiveCornerCrestNode < trackPoints.Count)
-                DrawTrackCrossingLine(trackPoints, racer.LiveCornerCrestNode, Color.FromArgb(220, 255, 60, 60));
+            if (racer.LiveRouteCrestFarNode >= 0 && racer.LiveRouteCrestFarNode < trackPoints.Count)
+                DrawTrackCrossingLine(trackPoints, racer.LiveRouteCrestFarNode, Color.FromArgb(220, 255, 60, 60));
         }
 
         static void DrawTrackCrossingLine(List<TrackPoint> trackPoints, int node, Color color)
