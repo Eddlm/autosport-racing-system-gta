@@ -333,6 +333,10 @@ namespace ARS
 
         // Feature gate for nitrous (ARS.NitrousEnabled).
         const float NitrousPowerMultiplier = 2.5f;
+        // Temporary and deliberate: the AI's bottle reads far weaker than the player's, and no cause has been found
+        // in the ARS side (same natives, same duration, same one bottle per lap), so its burn carries twice the
+        // power until the cause is known. Remove this scale, never the multiplier, when the asymmetry is explained.
+        const float NitrousAiBoostScale = 2f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
         const float NitrousCornerLookaheadSeconds = 8f;
@@ -2962,7 +2966,7 @@ namespace ARS
         void ApplyPowerMultiplier()
         {
             float multiplier = _powerCounter;
-            if (Game.GameTime < _nitrousActiveUntil) multiplier *= NitrousPowerMultiplier;
+            if (Game.GameTime < _nitrousActiveUntil) multiplier *= NitrousPowerMultiplier * (ControlledByPlayer ? 1f : NitrousAiBoostScale);
 
             if (float.IsNaN(multiplier) || float.IsInfinity(multiplier) || multiplier < 0f || multiplier > 10f) multiplier = 1f;
 
