@@ -17,7 +17,7 @@ ARS is finally working and up to date. As of now, it has been reduced to the cor
 
 ## What is gone temporarily
 - Racer creation.
-- Route creation and edit.
+- Track editing. Creating a route and saving it works; reopening a saved track to change it is not back yet.
 - Personalities.
 
 ## What is the plan
