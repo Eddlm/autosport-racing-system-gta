@@ -93,7 +93,7 @@
 - `outside-approach-window` — the outside line is in force from far too far back; both time gates are driver-verified, and `RequiresBraking` is deliberately not cleared so a plan holds through the apex. **closed**
 - `radius-variants` — audit the radius family. Verified rungs: per node `GeneralCurveRadius` and `PreciseCurveRadius` (`TrackLoader.cs:213-214`), the corner's `SupposedRadius` (tightest precise) and `DetectedRadius` (smoothed, `:713-714`), the route's `CurveRadiusToFollowPoint`, and the short-window `HighSpeedCurveRadius`, which the rocket-boost straight gate reads. **Corrected: `HighSpeedCurveRadius` is NOT dead — the first audit line here missed that reader and it had to be restored mid-deletion; the genuinely dead rung was `CorneringSpeedLimit`, deleted with its writer (dev build 614), while `CurveRadiusAfterFollowPoint` stays as the explicitly-kept never-used field.**
 - `lane-crossing-share` — the lane ask is scaled down as the car crosses, except into a corner (driver-verified, `da63a0d`); a soft scale that never reaches nothing, with turn-in exempt for the entry alone. **closed**
-- `outward-lead-bound` — the aim may not lead the car's own lane by more than 1.5 m; driver-verified (`73756c7`). **closed**
+- `outward-lead-bound` — the hard stop at 1.5 m (`73756c7`) is reshaped: full send until 1 m of lead, then each outward tick scales by the band's tanh and the aim approaches a **3 m cap** asymptotically; the clamps stay as the failsafe. **BUILT (compile-verified, build 703), drive owed**
 
 ## Agenda — the workstreams named for the coming days
 
@@ -145,7 +145,7 @@
 - `slip-axis-scale` — **settled and fixed (`b11e52b`)**, the TCS share restatement and the ABS knee with it, drives parked
 - `intention-maxspeed-ramp` — **closed (`f894228`)**, not drivable
 - `lane-crossing-share` — **driver-verified (`da63a0d`)**, the comparison included (`b390029`)
-- `outward-lead-bound` — **driver-verified (`73756c7`)**
+- `outward-lead-bound` — the tanh reshape is built (build 703), drive owed
 - `slide-brake-rampdown` — **parked**
 - `steer-slip-allowance` — **closed (driver)**: a switch that is off, its reference settled at the outer wheel (`0dfbf53`)
 - `pi-controls-merge` — **DECIDED, not built**; wanted at the forefront of the next version
