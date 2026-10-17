@@ -453,7 +453,7 @@ The lane steer is pure pursuit on the bearing to its aim point, and the first an
 4. **Fast corners** — a car at the limit genuinely carries a few degrees of crossing, so the scale bites there too; the tell is a car that cannot hold its inside line through a quick bend. **The fade is what to judge here**: there is no width to tune and no cliff, so chatter around the allowance is not expected — if the cars still cross too hard, the allowance is the knob rather than a new shape.
 5. **Low speed must be unchanged** — the threshold grows as speed falls, so placing a crawling car, an off-line start or a recovery must still turn as it did.
 
-## Apex speed reads the smoothed radius (driven on high-grip cars: faster and more consistent — the fleet-wide read is still owed)
+## Apex speed reads the smoothed radius (driven on high-grip cars: faster and more consistent — the fleet read is owed, non-blocking: one car under 1.5 G, one over 2.5 G)
 
 Corner speed is `√(grip · g · R)` and `R` was `SupposedRadius`, the region's **minimum precise** radius — a short-chord measurement, so a minimum over many samples sat on the low tail of the noise and held every corner speed down. The speed path now reads `DetectedRadius`, the smoothed region radius the rest of the system already used: the tight flag (`Racer.cs:2986`), the entrance and exit spans and the merge survivor (`TrackLoader.cs:698-699`, `:737`). Six sites moved: `CornerApexSpeed` (`AutosportRacingSystem.cs:2779`), the outside-line entry gate (`Racer.cs:833`), the braking-requirement flag's intended speed (`Racer.cs:2989`) and the three held-apex radii (`Racer.cs:3039`, `:3055`, `:3069`).
 

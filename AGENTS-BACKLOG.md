@@ -25,7 +25,7 @@
 - `slide-limit-raise-removal` — deleted (`ebb3178`); the countersteer allowance and damper bypass stay.
 
 **Tier 2 — verify in game, then tune**
-- `apex-radius` — driver-observed on high-grip cars (`aa302e1`); the fleet-wide read is owed.
+- `apex-radius` — driver-observed on high-grip cars (`aa302e1`); the fleet-wide read is owed and **non-blocking** — it is a sanity check at the ends of the grip range: a car under **1.5 G** and one over **2.5 G** must both behave decently (no lazy turn-in, no washing wide on entry).
 - `constant-radius-generator` — **closed (driver)**: the creator no longer emits a constant radius, so the filed case is gone at the source. `GenerateArc` pulls the section's middle 8% tighter radially about the arc centre, with a flat band at each end so the joins keep their tangents (`043268b`, dev build 620) — which is what gives the apex search the single minimum an exact arc denied it, since on a constant radius every node reads the same and the strict comparison keeps the first, landing the apex at the entrance. The mechanism read stays as the record for a hand-authored arc: the span is walked out from the apex while the *smoothed* radius stays within 1.6× inward and 2× outward (floored 20 m each side, clamped by the region), the region gated on ≥25 nodes, both radii under 50 m, a 4-node relaxation and a 2 s merge, while `SupposedRadius` keys on the **tightest precise** 4-node radius (`TrackLoader.cs`), whose noise can sit tens of metres off the real apex on a wide corner — so a noisy small smoothed radius collapses the span to the floor. **No per-corner instrument exists** (generation logs one aggregate `Apex table:` line), so reopen from a created track whose corner reads wrong rather than from the arc case, and add that per-corner line first.
 - `steer-ramp-band` — the limiter's ramp band is narrower; the ramp's end anchor scales with Steer Limit At Speed so the band stays continuous. **driver-verified (`489`, `e59e0a9`)**
 - `side-slip-scale` — **closed (verified)**: the wheel-slip spheres' colour landmark is the only live consumer. The steering ceiling reads the *modelled* peak slip and not this field, and `MaxWheelSideSlip` feeds only the parked measured-slip allowance (`SlipPeakCeiling` off) and the debug spheres — so nothing that drives moves either way, and the longitudinal axis is the one that was settled by the live probe. Reopen only if a drive shows the sphere colours disagreeing with the tyre. **closed**
@@ -140,7 +140,7 @@
 - `tcs-cap-floor-setting` — **DECIDED (driver): no menu item, the floor is 0.2**; `overspeed-thresholds-setting` is **built (dev build 616)** and drive owed, and `ceiling-factor-range` is **closed (`29b267b`)**
 - `launch-slip-allowance` — **(idea)**; the removed launch ramp last existed in `a6fcf7d`
 - `rival-publish-core` — **not built**
-- `apex-radius` — **driver-observed (`aa302e1`)** on high-grip cars; the fleet-wide read is owed
+- `apex-radius` — **driver-observed (`aa302e1`)** on high-grip cars; the fleet-wide read is owed and **non-blocking**: one car under 1.5 G and one over 2.5 G must behave decently
 - `radius-variants` — **audited and corrected**: `HighSpeedCurveRadius` is live through the rocket-boost straight gate, and the genuinely dead rung `CorneringSpeedLimit` is deleted (dev build 614)
 - `corner-record-dormant-fields` — **deleted with its dead reader (dev build 614)**
 - `grip-learner` — **DISMISSED (driver)**
