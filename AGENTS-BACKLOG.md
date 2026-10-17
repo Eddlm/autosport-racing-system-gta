@@ -93,7 +93,7 @@
 - `outside-approach-window` — the outside line is in force from far too far back; both time gates are driver-verified, and `RequiresBraking` is deliberately not cleared so a plan holds through the apex. **closed**
 - `radius-variants` — audit the radius family. Verified rungs: per node `GeneralCurveRadius` and `PreciseCurveRadius` (`TrackLoader.cs:213-214`), the corner's `SupposedRadius` (tightest precise) and `DetectedRadius` (smoothed, `:713-714`), the route's `CurveRadiusToFollowPoint`, and the short-window `HighSpeedCurveRadius`, which the rocket-boost straight gate reads. **Corrected: `HighSpeedCurveRadius` is NOT dead — the first audit line here missed that reader and it had to be restored mid-deletion; the genuinely dead rung was `CorneringSpeedLimit`, deleted with its writer (dev build 614), while `CurveRadiusAfterFollowPoint` stays as the explicitly-kept never-used field.**
 - `lane-crossing-share` — the lane ask is scaled down as the car crosses, except into a corner (driver-verified, `da63a0d`); a soft scale that never reaches nothing, with turn-in exempt for the entry alone. **closed**
-- `outward-lead-bound` — the hard stop at 1.5 m (`73756c7`) is reshaped: full send until 1 m of lead, then each outward tick scales by the band's tanh and the aim approaches a **3 m cap** asymptotically; the clamps stay as the failsafe. **BUILT (compile-verified, build 703), drive owed**
+- `outward-lead-bound` — the hard stop at 1.5 m (`73756c7`) is reshaped: full send until 1 m of lead, then each outward tick scales by the band's tanh and the aim approaches a **3 m cap** asymptotically; the clamps stay as the failsafe. **driver-verified (build 703)**
 
 ## Agenda — the workstreams named for the coming days
 
@@ -145,7 +145,7 @@
 - `slip-axis-scale` — **settled and fixed (`b11e52b`)**, the TCS share restatement and the ABS knee with it, drives parked
 - `intention-maxspeed-ramp` — **closed (`f894228`)**, not drivable
 - `lane-crossing-share` — **driver-verified (`da63a0d`)**, the comparison included (`b390029`)
-- `outward-lead-bound` — the tanh reshape is built (build 703), drive owed
+- `outward-lead-bound` — the tanh reshape is **driver-verified (build 703)**
 - `slide-brake-rampdown` — **parked**
 - `steer-slip-allowance` — **closed (driver)**: a switch that is off, its reference settled at the outer wheel (`0dfbf53`)
 - `pi-controls-merge` — **DECIDED, not built**; wanted at the forefront of the next version
@@ -153,5 +153,5 @@
 - `wheel-contact-count` — **to build now (driver)**
 - `amputated-remnants` — **closed (`8d1888e`)**
 - **Steering is closed (driver)** — the limiter, its ramp band, the ceiling and its factor, the damper's crossing with its scale walked back to full authority, the slide blend's band and the countersteer's share, the slew, the lane laws with the lane mover and its target timing, and the contact-avoidance term are all driven and accepted; the slide batch's own verdict and bounds are `TEST-PLAN.md`'s last section.
-- **Pushed**, newest first: `053146e..ea87461` (the slip axis settled by probe, the TCS pair as shares of the peak, the ABS knee on that peak, the kick and debug trains); `da8a407..053146e` (the lane chain's run); `c2e7e6b..7872758` (the ceiling's midpoint reference, the wheel-slip spheres, the measured-slip allowance built then parked, the settled steering pair); `ac5514b..c2e7e6b` (the debug-visual train, the slide-raise retirement, the ramp/damper batch, the overspeed ramp, the lane base and the Council fixes).
+- **Pushed**, newest first: `424f4ad..13c8071` (the AI nitro scale, the damper's scale restored, the outward lead taper — driven in one run); `053146e..ea87461` (the slip axis settled by probe, the TCS pair as shares of the peak, the ABS knee on that peak, the kick and debug trains); `da8a407..053146e` (the lane chain's run); `c2e7e6b..7872758` (the ceiling's midpoint reference, the wheel-slip spheres, the measured-slip allowance built then parked, the settled steering pair); `ac5514b..c2e7e6b` (the debug-visual train, the slide-raise retirement, the ramp/damper batch, the overspeed ramp, the lane base and the Council fixes).
 - **Undriven across those runs**: the divebomb, the kick card and the debug-visual train — the drives owed are the last section of `TEST-PLAN.md`.
