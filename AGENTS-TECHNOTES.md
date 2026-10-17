@@ -200,7 +200,7 @@ A 3-way "Weaponized Cars" menu option + `DOES_VEHICLE_HAVE_WEAPONS`-based LoadGr
 | File | Keys (default) |
 | --- | --- |
 | `Menu-Race.ini` | `Track` *(optional)*, `Laps` (6), `GridSize` (8), `PaceMode` (`RelativeToMine` — the menu calls the item `Grid PI Mode` and spaces the option to "Relative To Mine"), `PaceOffset` (0), `PaceTarget` *(optional)*, `PaceDeviation` (`Off`), `ReverseRoute` (False) |
-| `Menu-Settings.ini` | the Rivals, Race Rules, Rival Pace, Rival Traction, Rival Steering and Controls knobs, including Hotkeys (True), MenuModifierKey (Left Shift / 160), MenuKey (E / 69) and LogLevel (`None` — the shipped default); `SettingsRepair.BuildSchema()` holds the full set and its domains |
+| `Menu-Settings.ini` | the Rivals, Race Rules, Rival Pace, Rival Traction, Rival Steering and Controls knobs, including Hotkeys (True), MenuModifierKey (Left Shift / 160), MenuKey (E / 69) and LogLevel (`Error` — the shipped default); `SettingsRepair.BuildSchema()` holds the full set and its domains |
 | `Menu-Debug.ini` | one key per `DebugToggles` entry — the table *is* the schema, so retiring a toggle retires its key automatically |
 
 - `Menu-Settings.ini` **carried the retired `PaceMode` key** (`9b8da25`): `LoadSettings` reads its `PaceMode` **before the prune pass** and carries it into `Menu-Race.ini`. This legacy read is one of two that cannot move below the prune — the other is `Menu-DevSettings.ini`'s `BrakeLearning`/`StagedSpawns`.
@@ -284,7 +284,7 @@ The two-livery-spaces trap (mod slot 48 vs the livery list), the exact natives a
 
 ## Logging — levels, and why `None` is the default
 
-- `LogImportance` is a **floor**, not a switch: `Log()` returns when `LogLevel > i`. `None` is deliberately the **last (highest) enum member**, so it silences every level through that same test with no second branch — and it is the **shipped default** (code static *and* `SettingsRepair` KeySpec). Levels persist by **name**, so adding a member renumbers nothing.
+- `LogImportance` is a **floor**, not a switch: `Log()` returns when `LogLevel > i`. `None` is deliberately the **last (highest) enum member**, so it silences every level through that same test with no second branch; the **shipped default** is `Error` (code static *and* `SettingsRepair` KeySpec), so a fresh install records errors without the Info chatter. Levels persist by **name**, so adding a member renumbers nothing.
 - **The session banner** (truncate + separator) is written in the ctor **before `LoadSettings`**, so it cannot consult the stored level — 2 writes a session; it also stops a stale log reading as current evidence.
 - **`forced: true` calls** — all error paths: settings repair, model and ped load failures, the `OnTick` catch, the bridge probe. Keeping those is the whole reason `None` is a floor rather than a hard kill — `VerifyScriptBridge` runs *before* `LoadSettings`, so a suppressed forced line would make a bad SHVDN asi/dll pairing completely silent in our log. That is why the release README's "the log names the reason" stays true under the default.
 - Verified in game: with `None` the live `Log.log` is exactly the two banner lines plus the single forced `Initialization complete.` line.

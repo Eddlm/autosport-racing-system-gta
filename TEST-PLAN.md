@@ -459,7 +459,7 @@ Corner speed is `√(grip · g · R)` and `R` was `SupposedRadius`, the region's
 
 1. **Cars brake later everywhere.** This raises every corner speed, so the first thing to expect is later, deeper braking into slow corners. The steering pipeline did not change at all; a car that turns in lazily *at the same speed* is not this.
 2. **The failure to watch is over-confidence.** A smoothed radius is also a larger one, so a car that was conservative now carries more speed to the apex — the tell is a car washing wide or sliding on entry in a tight corner, especially one whose apex sits on a noise spike. The tight stuff is where this holds or does not.
-3. **Judge it against the offsets at 0.** Both offsets ship at **+6 mph** (`AutosportRacingSystem.cs:153`) and the plan takes the lower of the two terms (`Racer.cs:1629`), so the +6 has been masking this bias. At 0 the plan's own number is on show; at the default the fudge absorbs part of the change.
+3. **Judge it against the offsets at 0.** The offsets ship at **+2 mph** (corner) and **+4 mph** (route) (`AutosportRacingSystem.cs:153`) and the plan takes the lower of the two terms (`Racer.cs:1629`), so the pair has been masking this bias. At 0 the plan's own number is on show; at the shipped values the fudge absorbs part of the change.
 4. **The radius pair is no longer visible in game** — the circle label that printed `R plan/detected` is gone, so the per-corner gap cannot be read off the screen and behaviour is the evidence.
 
 ## Contact avoidance is its own term, added after the damper and the blend (re-grounded, driver-verified)
@@ -694,3 +694,5 @@ The table's ceiling and the region scan both drop from 100 m to 50 m (they alrea
 2. **The sweepers are driven on route speed.** A bend that used to have a braking plan should now come on the route limiter's speed; the tell of a problem is a late, sharp brake rather than a prepared approach.
 3. **The tight corners keep their braking and their outside lines.** No corner the table still holds may read slower or miss its approach — that would be the ceiling cutting into the population it should keep.
 4. **The lap times tell the trade.** Fewer braking plans can read faster (less over-preparation) or slower (more reactive braking); which way this track goes is the judgement.
+
+**Shipped default moved to 80 m.** The ladder ships at 80, not the 50 this section was written at: corners between 50 m (the tightness gate) and 80 m now exist as the "wide" class, so the picker skip is live for them again, while bends wider than 80 m stay off the table and on route speed.

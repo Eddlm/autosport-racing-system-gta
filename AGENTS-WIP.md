@@ -34,7 +34,7 @@ The track creator is live — a root Track Creator submenu records a route and S
 - [ ] A fresh settings folder creates usable defaults, and a second load does not rewrite it.
 - [ ] A legacy install migrates old per-menu files without losing user-facing values.
 - [ ] Show Pedal Trail, Track Analysis, Corner Checkpoints, Edge Chevrons and Leaderboard match the closest AI car or race state they describe.
-- [ ] `Log.log` records the session banner and actionable load failures. With **Log Level `None`** (the shipped default) that is *all* it records: the banner plus forced error lines — one of which is the bridge probe's, which is why the release README's "the log names the reason" still holds.
+- [ ] `Log.log` records the session banner and actionable load failures. With **Log Level `Error`** (the shipped default) that is the banner, every ARS error and fatal line, and the forced diagnostics — one of which is the bridge probe's, which is why the release README's "the log names the reason" still holds. Info is opt-in.
 - [ ] Every retired settings file is removed on load (`Settings.ini`, `Options.ini`, `DevSettings.ini`, `DevConfig.ini`, `MemoryOffsets.ini`, `Menu-Racers.ini`, `Menu-DevSettings.ini`). **`Options.ini` has no reader at all** — nothing left in it to verify.
 
 ## Versioning and releases — the convention

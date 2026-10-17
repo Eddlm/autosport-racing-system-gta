@@ -137,8 +137,8 @@ namespace ARS
             settings.Specs.Add(new KeySpec("VehiclePool", "cars.txt"));   // any Vehicles\*.txt; free text by design (the file list is dynamic)
             settings.Specs.Add(new KeySpec("TimeoutSeconds", "60", Kind.Number, new[] { "15", "30", "45", "60" }));
             settings.Specs.Add(new KeySpec("AIRacerAutofix", AutofixMode.Invincible.ToString(), Kind.Text, Enum.GetNames(typeof(AutofixMode))));
-            settings.Specs.Add(new KeySpec("CornerOffset", "6", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
-            settings.Specs.Add(new KeySpec("RouteOffset", "6", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
+            settings.Specs.Add(new KeySpec("CornerOffset", "2", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
+            settings.Specs.Add(new KeySpec("RouteOffset", "4", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
             settings.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("NitrousEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TipRate", TipFrequency.Medium.ToString(), Kind.Text, Enum.GetNames(typeof(TipFrequency))));
@@ -155,7 +155,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("TcsTaperSpanPct", "80", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
             settings.Specs.Add(new KeySpec("DNFUnderTrack", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("NoCollision", "False", Kind.Bool));
-            settings.Specs.Add(new KeySpec("SteerDampingGain", "0.50", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));
+            settings.Specs.Add(new KeySpec("SteerDampingGain", "1.00", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));
             settings.Specs.Add(new KeySpec("SteerDampingSpeed", "70", Kind.Number, new[] { "10", "40", "70", "100", "130", "160", "190", "220", "250" }));
             settings.Specs.Add(new KeySpec("SteerCeilingFactor", "1.00", Kind.Number, new[] { "0.05", "0.10", "0.15", "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90", "0.95", "1.00", "1.05", "1.10", "1.15", "1.20", "1.25" }));
             settings.Specs.Add(new KeySpec("MaxCrestLift", "1.0", Kind.Number, new[] { "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0" }));
@@ -166,8 +166,8 @@ namespace ARS
             settings.Specs.Add(new KeySpec("Hotkeys", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("MenuModifierKey", ((int)Keys.LShiftKey).ToString(), Kind.Number, ARS.MenuHotkeyValues));
             settings.Specs.Add(new KeySpec("MenuKey", ((int)Keys.E).ToString(), Kind.Number, ARS.MenuHotkeyValues));
-            settings.Specs.Add(new KeySpec("LogLevel", ARS.LogImportance.None.ToString(), Kind.Text, Enum.GetNames(typeof(ARS.LogImportance))));
-            settings.Specs.Add(new KeySpec("CornerCeiling", "50", Kind.Text, ARS.CornerCeilingValues));
+            settings.Specs.Add(new KeySpec("LogLevel", ARS.LogImportance.Error.ToString(), Kind.Text, Enum.GetNames(typeof(ARS.LogImportance))));
+            settings.Specs.Add(new KeySpec("CornerCeiling", "80", Kind.Text, ARS.CornerCeilingValues));
             settings.Specs.Add(new KeySpec("AiNitroPct", "100", Kind.Text, ARS.AiNitroValues));
             files.Add(settings);
 

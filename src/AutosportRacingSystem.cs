@@ -67,7 +67,7 @@ namespace ARS
         // is dropped, so it gets no apex entry, braking plan or chevron and route speed is its only law. The region
         // scan opens at this same number, so the two can never disagree. The Debug menu owns it at runtime and
         // rebuilds the table on a change, mid-race included.
-        public static int CornerCeilingMeters = 50;
+        public static int CornerCeilingMeters = 80;
         // The menu's ladder and the settings repair's domain, from one place: a value stored off this ladder is
         // snapped to its nearest offer on load, so the two lists must not drift.
         public static readonly string[] CornerCeilingValues = { "20", "40", "60", "80", "100", "120", "140", "160", "180", "200" };
@@ -165,9 +165,9 @@ namespace ARS
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = true;
         // Flat mph added to the corner plan; Road Curvature Offset is the same knob for the route term.
-        public static int CornerOffsetMph = 6;
-        public static int RouteOffsetMph = 6;
-        public static float SteerDampingGain = 0.5f;
+        public static int CornerOffsetMph = 2;
+        public static int RouteOffsetMph = 4;
+        public static float SteerDampingGain = 1f;
         public static int SteerDampingSpeedMph = 70;
         public static float SteerCeilingFactor = 1f;
         // The slip the tyres reach peak traction at, in the field's own units: the curve is indexed from the
@@ -194,7 +194,7 @@ namespace ARS
         public static Keys MenuKey = Keys.E;
         static readonly Keys[] MenuHotkeyKeys = Enum.GetValues(typeof(Keys)).Cast<Keys>().Where(key => (int)key >= 8 && (int)key <= 255).Distinct().OrderBy(key => (int)key).ToArray();
         public static readonly string[] MenuHotkeyValues = MenuHotkeyKeys.Select(key => ((int)key).ToString(CultureInfo.InvariantCulture)).ToArray();
-        public static LogImportance LogLevel = LogImportance.None;
+        public static LogImportance LogLevel = LogImportance.Error;
 
         // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs and ShowTrackAnalysis visuals.
         public static Racer DebugFocusRacer;
