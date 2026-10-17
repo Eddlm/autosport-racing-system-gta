@@ -677,8 +677,8 @@ namespace ARS
             // Damp the excess over the yaw the aim point requires, not over zero which taxes every steady corner; the
             // slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
             float fwdSpeed = ARS.GetForwardSpeed(Car);
-            // The blend's weight: the slide is answered from a quarter of the authored peak slip and at full weight by
-            // half of it, so a slide is caught well before the tyres' limit is gone. Both bands read the car's own
+            // The blend's weight: the slide is answered from half of the authored peak slip and at full weight by
+            // four-fifths of it, so a slide is caught before the tyres' limit is gone. Both bands read the car's own
             // tyres, not the speed-scaled peak, so the response is the same at every speed.
             if (Handling.LateralTractionCurve > 0.01f && fwdSpeed >= 2f)
                 _slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * SlideBlendStartFraction, Handling.LateralTractionCurve * SlideBlendFullFraction, 0f, 1f, true);
@@ -695,8 +695,9 @@ namespace ARS
             // The damper only ever subtracts: a left command never gets more left from it.
             if (damperTermDeg * nonDamperSteerDeg > 0f) damperTermDeg = 0f;
             // Past neutral it is countersteering — the wheel pointing against the car's own rotation rather than
-            // merely less into it — and there it keeps half its authority. Not a cap tied to the slide: that fell to
-            // zero with the slide and took the rate feedback off a car going straight, which set it oscillating.
+            // merely less into it — and there its overshoot is kept whole, on a term already scaled down by
+            // DamperEffectScale. Not a cap tied to the slide: that fell to zero with the slide and took the rate
+            // feedback off a car going straight, which set it oscillating.
             float damperOvershootDeg = Math.Abs(damperTermDeg) - Math.Abs(nonDamperSteerDeg);
             if (damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f) damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + damperOvershootDeg * DamperCrossingShare);
             _damperTermDeg = damperTermDeg;

@@ -68,7 +68,8 @@ The pursuit is not gated either (see the ungated-pursuit section), so a straight
 **One body-yaw feedback path, and it is the loop's only rate term.**
 The signal is the raw native yaw rate — `GET_ENTITY_ROTATION_VELOCITY.Z` in °/s, unfiltered and undifferentiated (`Racer.cs:3591`).
 The term is `−gain·(yawRate − yawTarget)`, where `yawTarget` is the yaw the **aim point** requires, `fwdSpeed × _steerAimCurvature`, dropped above `LateralTractionCurve × SlidingFraction` because a sliding car's wanted rotation is the countersteer's (`Racer.cs:589-590`, `:714`, `:942`) — the reference is live (`SteerDampingAimReference`, `Racer.cs:960`).
-The gain is `SteerDampingFor`, and the term never adds lock: one that agrees in sign with the rest of the command is zeroed, and one that crosses neutral keeps `DamperCrossingShare` of its overshoot past neutral (`Racer.cs:598`, `:602-603`, `a0134d9`).
+The gain is `SteerDampingFor`, and the term never adds lock: one that agrees in sign with the rest of the command is zeroed, and one that crosses neutral keeps `DamperCrossingShare` of its overshoot past neutral (`Racer.cs`, `a0134d9`).
+**The whole term is then scaled by `DamperEffectScale`, and that pair is one decision — driven: the slides answer.** The damper was fighting the yaw the countersteer chain had to answer, so its authority against the car's rotation is halved while its crossing overshoot is kept whole; halving only the crossing left the base term at full strength and did not free the slide.
 `steerKP` is unity and dimensionless, so the pursuit and the side-by-side correction enter at 1.0 against that gain (`Racer.cs:577`, `:595`), and there is no course feedback anywhere in the sum.
 
 - **Rejected design, kept as history — the zero-reference damper, and the toll it paid.**
@@ -393,9 +394,9 @@ The repulsion term itself is now the pair's relative course angle taken on horiz
 
 **No term is gated** — `ApplySteerLimits` and the slew rate only cap the output; the pursuit's gating story is the ungated-pursuit section above.
 
-**The slide batch hands the countersteer to a blend and leaves the damper only a share of its crossing (`d5a643f`, re-cut in `7297050`).**
-The blend's weight ramps to full across the **static** `LateralTractionCurve` — not the speed-scaled peak, and with no rear-led sign gate.
-The target answers a share of the slide angle (`Racer.cs` `CountersteerShare`).
+**The slide batch hands the countersteer to a blend and halves the damper's whole term (`d5a643f`, re-cut in `7297050`, settled by the slide drive).**
+The blend's weight ramps linearly from a fraction of the **static** `LateralTractionCurve` to full at a higher fraction of it — not the speed-scaled peak, and with no rear-led sign gate — so the slide is caught before the tyres' limit is gone and the countersteer reaches full authority inside the band.
+The target answers the whole slide angle (`Racer.cs` `CountersteerShare`); the blend weight is the only modulator, and the limiter's countersteer allowance reads the same weight.
 The weight is computed before the damper because the limiter's allowance reads it, and the old gate constant is renamed `SlidingFraction`, whose only consumer is now the damper's reference gate (`Racer.cs:589`).
 The axle gate that used to guard that halving, and `UndersteerDegrees` with it, are deleted.
 **One deliberate silence**: the recovery rejoin's throttle kick card (`cc469ee`) buys a rotation on purpose — the slide sharing the arm-time ask's sign is wanted, so the blend and `IsFullCountersteer` stand down for it while the card plays (`KickWantsSlide` `Racer.cs`) and the ordinary handover resumes at the fold. A slide on the opposite side is not carded and gets no silence.
