@@ -4,7 +4,7 @@
 
 ## Live per-racer state — rivals, overtaking, cards, maneuvers, nitro, Passengerize
 
-- **Aggression** is grid-assigned by position (first lowest, last highest, the player mid) and scales only the avoidance buffer. The old note that it scaled TCS wheelspin is retired: `TcsCapLevel` reads no aggression. **Pressure** is proximity × aggression, rising slowly and falling quickly, and drives divebomb/defend/arming.
+- **Aggression** is grid-assigned by position (first lowest, last highest; the player is skipped and takes the last grid slot), and it scales the avoidance buffer — the higher it is, the less room the car gives — and the pressure target. The old note that it scaled TCS wheelspin is retired: `TcsCapLevel` reads no aggression. **Pressure** is proximity × aggression to the nearest car, rising slowly and falling quickly, and its only consumer is Yield.
 - **Maneuvers are cards** (`Maneuver` on the racer, no legacy arm blocks). A card **plays** into the slot and **folds** on its own condition, priority **ChillOut → DefendLane → DiveBomb → Yield**, with **Nitro slotless**. A played card is **never reconsidered mid-play** — unplaying causes thrash.
 - **ChillOut** halves throttle and holds station behind the closest rival ahead until the field thins, arming only above a minimum speed so a slow car cannot become a roadblock.
 - **DiveBomb** targets the closest reachable rival with a deeper braking target while its card lives. **DefendLane** covers the inside against a faster chaser; **Yield** lets a faster overlapping rival by near the entrance. The corner-commit lane (`Racer.cs:727`) engages inside the outside-approach window and ignores the one-way hold latch and the per-corner positioning decision while the card lives.
