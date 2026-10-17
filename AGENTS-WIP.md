@@ -63,3 +63,14 @@ The track creator is live — a root Track Creator submenu records a route and S
 - The grid uses model-level pace, not the installed upgrades of a particular vehicle instance.
 - Low-grip steering behavior still needs the dedicated release-gate drive above.
 - The beater/rust matte paint rule is implemented and ships **unverified in game** — drive a `rusty`/`rat look`/`junkyard`/`primed` livery before trusting it.
+
+## Release sequence — 0.9.0 (prep state)
+
+`AssemblyInfo.cs` carries `0.9.0.0` ahead of the cut, so the in-game banner announces the version the tag claims; the two are still hand-moved and nothing derives either from the other. The notes are hand-written in `docs/RELEASE-NOTES.md`, because the auto-generated body would span every commit since `v0.8.6` and read as noise.
+
+1. Land and push the release commit; CI builds from a fresh checkout, so a local build counter ahead of it does not matter.
+2. Tag `v0.9.0` and push the tag — `deploy.yml` attaches a prerelease with an auto-generated body.
+3. Replace that body: `gh release edit v0.9.0 --notes-file docs/RELEASE-NOTES.md`.
+4. **Clean install before flipping**: download the attached zip, extract into a clean `Scripts\` beside the matched SHVDN pair, and run the race-loop gate above.
+5. Flip the prerelease off — that is what moves `releases/latest` and lets the in-game update notice fire.
+6. Close what the release answers, one line each: **#8** (a build the mod cannot drive on now logs a forced error instead of crashing) and **#3** (the downforce toggle — the reporter confirmed it works). **#1** and **#7** are old and unrelated: close as stale or leave, the owner's call rather than the release's.
