@@ -2178,6 +2178,11 @@ namespace ARS
             DrawText(new Vector2(leftX, 0.87f), "TIME    " + totalTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
         }
 
+        // The lap's peak physics columns — accel, decel, lateral G and top speed. Parked, not removed: the racer still
+        // records the peaks (the lap-time log line reads them) and the column code below is intact; flip this to true
+        // to put the four columns back on the board.
+        const bool ShowPeakStats = false;
+
         static void DrawLeaderboard()
         {
             const float headerY = 0.06f;
@@ -2199,10 +2204,13 @@ namespace ARS
             DrawText(new Vector2(colPI, headerY), "PI", hCol, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colCar, headerY), "CAR", hCol, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colBest, headerY), "BEST LAP", hCol, font, DrawTextAlign.Left, scale);
-            DrawText(new Vector2(colAcc, headerY), "ACCGS", hCol, font, DrawTextAlign.Left, scale);
-            DrawText(new Vector2(colDec, headerY), "DECGS", hCol, font, DrawTextAlign.Left, scale);
-            DrawText(new Vector2(colLat, headerY), "LATGS", hCol, font, DrawTextAlign.Left, scale);
-            DrawText(new Vector2(colTop, headerY), "TOP MPH", hCol, font, DrawTextAlign.Left, scale);
+            if (ShowPeakStats)
+            {
+                DrawText(new Vector2(colAcc, headerY), "ACCGS", hCol, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colDec, headerY), "DECGS", hCol, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colLat, headerY), "LATGS", hCol, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colTop, headerY), "TOP MPH", hCol, font, DrawTextAlign.Left, scale);
+            }
 
             float y = headerY + step;
             int pos = 1;
@@ -2238,6 +2246,7 @@ namespace ARS
         {
             TimeSpan? best = r.BestLap();
             DrawText(new Vector2(colBest, y), best.HasValue ? best.Value.ToString("m':'ss'.'f") : "-", c, font, DrawTextAlign.Left, scale);
+            if (!ShowPeakStats) return;
             DrawText(new Vector2(colAcc, y), r.VehicleData.PeakAccelG.ToString("0.00"), c, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colDec, y), Math.Abs(r.VehicleData.PeakDecelG).ToString("0.00"), c, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colLat, y), r.VehicleData.PeakLateralG.ToString("0.00"), c, font, DrawTextAlign.Left, scale);
