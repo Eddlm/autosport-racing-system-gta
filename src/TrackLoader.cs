@@ -359,7 +359,7 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             if (count < 1) return;
 
-            const float regionRadius = 200f;
+            const float regionRadius = 100f;
             const int smoothingNodes = 2;
             const int exitRelaxationNodes = 4;
             const int minimumCornerNodes = 25;
@@ -867,7 +867,10 @@ namespace ARS
         // which on Figureight reaches 100+ nodes. This cap is the user-facing rule: the entrance or exit cannot be
         // further than this many nodes from the apex; if the walk's unclamped step exceeds it, we clamp and log.
         const int SpanMaxDistanceNodes = 40;
-        const float MaximumApexRadius = 200f;
+        // What the table calls a corner: anything wider than this on its tightest node is a bend and is not one,
+        // which is the same number the region scan opens at (regionRadius), so a region is never opened for a bend
+        // the table would discard. Driver-directed at 100 m.
+        const float MaximumApexRadius = 100f;
         const float AlignedCornerSeconds = 3f;
         const float AlignedCornerDegrees = 15f;
 
