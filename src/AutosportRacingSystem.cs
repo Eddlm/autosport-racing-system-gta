@@ -1913,7 +1913,12 @@ namespace ARS
                     foreach (Racer racer in Racers)
                     {
                         if (!CanWeUse(racer.Car) || racer.NitroChargedLap >= racer.Lap) continue;
-                        if (TopUpNitrous(racer.Car)) racer.NitroChargedLap = racer.Lap;
+                        if (TopUpNitrous(racer.Car))
+                        {
+                            racer.NitroChargedLap = racer.Lap;
+                            if (racer.ControlledByPlayer) Log(LogImportance.Info, "Player bottle charged for lap " + racer.Lap);
+                        }
+                        else if (racer.ControlledByPlayer) Log(LogImportance.Info, "Player bottle not charged (nitro reads active, or the car is unusable)");
                     }
                 }
                 // Player nitro: fire on key press when a charged bottle is available.

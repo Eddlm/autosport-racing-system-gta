@@ -385,6 +385,7 @@ namespace ARS
         public Maneuver ActiveManeuver = new Maneuver();
         int _nitrousActiveUntil = 0;
         int _nitrousLapUsed = -1;
+        int _nitroRefusalLoggedAt = 0;
         float _powerCounter = 1f;
         float _appliedThrottleLastFrame = 1f;
         int _powerCounterLoggedAt = 0;
@@ -2498,7 +2499,24 @@ namespace ARS
 
         public bool TryFireNitrous()
         {
-            if (Game.GameTime < _nitrousActiveUntil || NitroChargedLap < Lap || Lap <= _nitrousLapUsed) return false;
+            // The player's only route to the burn, so every refusal is logged at Info (once a second while the key
+            // is held): without that line a missing bottle and a missing key press read identically from outside.
+            bool live = Game.GameTime < _nitrousActiveUntil;
+            string refusal = live
+                ? "the burn is still live"
+                : NitroChargedLap < Lap
+                    ? "no bottle: charged lap " + NitroChargedLap + ", now lap " + Lap
+                    : Lap <= _nitrousLapUsed ? "the bottle was spent on this lap" : null;
+            if (refusal != null)
+            {
+                if (Game.GameTime > _nitroRefusalLoggedAt)
+                {
+                    _nitroRefusalLoggedAt = Game.GameTime + 1000;
+                    ARS.Log(ARS.LogImportance.Info, "Player nitrous refused: " + refusal);
+                }
+                return false;
+            }
+            ARS.Log(ARS.LogImportance.Info, "Player nitrous fired on lap " + Lap + " (bottle charged on lap " + NitroChargedLap + ")");
             StartNitrous();
             return true;
         }
