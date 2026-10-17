@@ -359,7 +359,7 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             if (count < 1) return;
 
-            const float regionRadius = 100f;
+            const float regionRadius = 50f;
             const int smoothingNodes = 2;
             const int exitRelaxationNodes = 4;
             const int minimumCornerNodes = 25;
@@ -869,8 +869,10 @@ namespace ARS
         const int SpanMaxDistanceNodes = 40;
         // What the table calls a corner: anything wider than this on its tightest node is a bend and is not one,
         // which is the same number the region scan opens at (regionRadius), so a region is never opened for a bend
-        // the table would discard. Driver-directed at 100 m.
-        const float MaximumApexRadius = 100f;
+        // the table would discard. At 50 m every corner the table keeps is also under Racer.CornerTightRadius, so
+        // the position window sees no "wide" class at all; the picker's skip still guards the case a track or a
+        // future ceiling produces one. Driver-directed.
+        const float MaximumApexRadius = 50f;
         const float AlignedCornerSeconds = 3f;
         const float AlignedCornerDegrees = 15f;
 
