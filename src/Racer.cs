@@ -3352,14 +3352,18 @@ namespace ARS
                 bool inPositionRange = tight && timeToEntrance <= RequirementLookaheadSeconds;
 
                 // A corner too wide to ask for positioning that has not asked for braking by the time the car is
-                // inside its window is one the car is passing through: it is flagged here, one half-second gate
-                // before the picker would make it the nearest corner, and the picker looks past it so the corner
-                // behind is promoted from further out. The flag rides in the same per-approach state as the flags
-                // above; a late braking arm still reaches the plan through the queue's braking slots.
-                if (!tight && !context.RequiresBraking && timeToEntrance <= RequirementLookaheadSeconds && _skippedApexes.Add(corner.Node))
+                // inside its window is one the car is passing through: it is flagged here and the picker looks past
+                // it so the corner behind is promoted from further out. The flag holds until the apex is behind, and
+                // the arming below revokes it the same pass a braking plan is asked for — an armed corner is never
+                // skipped. A flag landing forces this tick's refill, or the picker would switch a gate late.
+                if (!tight && !context.RequiresBraking && timeToEntrance <= RequirementLookaheadSeconds)
                 {
-                    ARS.Log(ARS.LogImportance.Info, "Queue skip " + Name + ": corner " + corner.Node + " ignored (wide "
-                        + corner.DetectedRadius.ToString("0") + " m, no braking asked), the picker looks past it");
+                    if (_skippedApexes.Add(corner.Node))
+                    {
+                        flipped = true;
+                        ARS.Log(ARS.LogImportance.Info, "Queue skip " + Name + ": corner " + corner.Node + " ignored (wide "
+                            + corner.DetectedRadius.ToString("0") + " m, no braking asked), the picker looks past it");
+                    }
                 }
 
                 if (!inBrakingRange && !inPositionRange) continue;
@@ -3372,6 +3376,7 @@ namespace ARS
                 if (!context.RequiresBraking && inBrakingRange && excess > ARS.MphToMps(tight ? PositionExcessMph : BrakeExcessMph))
                 {
                     context.RequiresBraking = true;
+                    _skippedApexes.Remove(corner.Node);
                     flipped = true;
                 }
                 if (!context.RequiresPositioning && context.ApproachStarted && inPositionRange && excess > ARS.MphToMps(PositionExcessMph))
