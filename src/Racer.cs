@@ -693,14 +693,11 @@ namespace ARS
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
             float damperGain = SteerDampingFor(fwdSpeed);
             float nonDamperSteerDeg = (steerKP * sideBySideSteerDeg) + (steerKP * laneSteerDeg);
-            // The damper's offset on overrotation is halved: half authority against the yaw so the
-            // countersteer chain still has the room to answer the slide.
             float damperTermDeg = -damperGain * yawRateToDamp * DamperEffectScale;
             // The damper only ever subtracts: a left command never gets more left from it.
             if (damperTermDeg * nonDamperSteerDeg > 0f) damperTermDeg = 0f;
             // Past neutral it is countersteering — the wheel pointing against the car's own rotation rather than
-            // merely less into it — and there its overshoot is kept whole, on a term already scaled down by
-            // DamperEffectScale. Not a cap tied to the slide: that fell to zero with the slide and took the rate
+            // merely less into it. Not a cap tied to the slide: that fell to zero with the slide and took the rate
             // feedback off a car going straight, which set it oscillating.
             float damperOvershootDeg = Math.Abs(damperTermDeg) - Math.Abs(nonDamperSteerDeg);
             if (damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f) damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + damperOvershootDeg * DamperCrossingShare);
@@ -1222,9 +1219,10 @@ namespace ARS
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
-        // The damper's effect on the steering is halved: half authority against the overrotation so the
-        // countersteer chain still has the room to answer the slide.
-        const float DamperEffectScale = 0.5f;
+        // The damper's authority against the car's own rotation. The slide batch drove it at 0.5 and the slides
+        // answered, but that field read a smidge unstable, so the knob sits back at full — the slide response to keep
+        // is the blend's band and share, with the crossing overshoot whole.
+        const float DamperEffectScale = 1f;
         // Kill switch for the yaw-rate damper. Driven with it off the cars cannot hold centre — the term is the
         // only thing opposing a rotation the course chain has already started, so it is load-bearing, not trim.
         const bool SteerDampingEnabled = true;
