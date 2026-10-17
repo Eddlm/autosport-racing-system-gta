@@ -168,7 +168,6 @@ namespace ARS
         public static int CornerOffsetMph = 2;
         public static int RouteOffsetMph = 4;
         public static float SteerDampingGain = 1f;
-        public static int SteerDampingSpeedMph = 70;
         public static float SteerCeilingFactor = 1f;
         // The slip the tyres reach peak traction at, in the field's own units: the curve is indexed from the
         // field at x sfTractionMinAngle with its peak at argument 1.0, and the engine's own below-the-peak test
@@ -1088,16 +1087,6 @@ namespace ARS
             steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain).ToString("0.00", CultureInfo.InvariantCulture)));
             rivalSteeringMenu.Add(steerKDItem);
             HookListTextPicker(steerKDItem);
-
-            NativeListItem<string> steerKDSpeedItem = new NativeListItem<string>("Steer Damping Speed (mph)", "The forward speed the damping gain is defined at. The damper runs at the Steer Damping value up to this speed, then falls as this speed over the car's, so twice this speed damps at half.", SettingsRepair.OptionsFor("SteerDampingSpeed"));
-            steerKDSpeedItem.ItemChanged += (sender, args) =>
-            {
-                SteerDampingSpeedMph = int.Parse(steerKDSpeedItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerDampingSpeed", steerKDSpeedItem.Items[args.Index]);
-            };
-            steerKDSpeedItem.SelectedIndex = Math.Max(0, steerKDSpeedItem.Items.IndexOf(SettingsMenuStore.GetInt("SteerDampingSpeed", SteerDampingSpeedMph).ToString(CultureInfo.InvariantCulture)));
-            rivalSteeringMenu.Add(steerKDSpeedItem);
-            HookListTextPicker(steerKDSpeedItem);
 
             NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Limit At Speed", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 puts the outer front wheel — the loaded wheel in a corner — on that peak slip angle, lower holds the wheel tighter at speed, and above 1.00 asks past the peak, which is how a rival is made to slide. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
             steerCeilingFactorItem.ItemChanged += (sender, args) =>
@@ -3255,7 +3244,6 @@ namespace ARS
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
-            SteerDampingSpeedMph = SettingsMenuStore.GetInt("SteerDampingSpeed", SteerDampingSpeedMph);
             SteerCeilingFactor = SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);

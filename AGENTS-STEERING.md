@@ -90,11 +90,11 @@ The gain is `SteerDampingFor`, and the term never adds lock: one that agrees in 
   A damper referenced to the track's own required yaw (`r_des = v·κ`) was built and then deleted, along with its switch (`SteerDampingTrackReference`) and the steer variable it fed; what it left behind is the convention trap above.
   Its cost estimate also flattered the zero form: "a corner only needs `L/R` of steer" counts the kinematic angle alone, while a limit corner must also carry the slip angle that generates the force — the quantity `TRLateralAtSpeed` feeds `PeakSlipCeilingAt` (`Racer.cs:1035`, see the saturation bullet above).
 
-**The gain is grip-normalised, and speed-scheduled above the reference speed (`SteerDampingFor`, `Racer.cs:966-971`).**
-`SteerDampingGain` is an **absolute gain in seconds**: the dial *is* the gain at and below the **Steer Damping Speed** menu setting, read live from `ARS.SteerDampingSpeedMph` so the schedule's break point is a setting rather than a constant, and above it the term falls as `1/|v|`, tracking the steer a yaw rate actually needs.
-The divisor is the floored `BaseMechanicalGrip` — read rather than the live perceived grip, so at a fixed speed the dial is a **uniform multiplier** (every car's term moves by the same ratio) and a low grip reading cannot blow the term up.
+**The gain is grip-normalised and constant with speed (`SteerDampingFor`, `Racer.cs`).**
+`SteerDampingGain` is an **absolute gain in seconds**: the dial *is* the gain, divided by the floored `BaseMechanicalGrip` — read rather than the live perceived grip, so at a fixed dial the term is a **uniform multiplier** (every car's term moves by the same ratio) and a low grip reading cannot blow it up.
+**The speed schedule is REMOVED (driver):** the term used to fall as a reference speed over the car's above that speed, and at a dial of 1.0 the cars damped cleanly at every speed, so the axis, its menu item and `ARS.SteerDampingSpeedMph` are gone; a stored `SteerDampingSpeed` is dropped by the repair pass as an undeclared key.
 The divisor is grip itself rather than its square root, so the term falls faster with grip than a constant-damping-ratio law would need.
-Speed therefore enters the live loop twice, through this scale and through the pursuit's growing `range`.
+Speed therefore enters the live loop only through the pursuit's growing `range`.
 
 ## The dominant architecture is feedforward + feedback, not a lone PID
 

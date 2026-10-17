@@ -693,7 +693,7 @@ namespace ARS
             float yawTarget = 0f;
             if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * SlidingFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
-            float damperGain = SteerDampingFor(fwdSpeed);
+            float damperGain = SteerDampingFor();
             float nonDamperSteerDeg = (steerKP * sideBySideSteerDeg) + (steerKP * laneSteerDeg);
             float damperTermDeg = -damperGain * yawRateToDamp * DamperEffectScale;
             // The damper only ever subtracts: a left command never gets more left from it.
@@ -1254,11 +1254,11 @@ namespace ARS
         // dial times that speed over the car's, so the term follows the steer a yaw rate actually needs - weaker above
         // it, and at most the dial below it. The cap is load-bearing: uncapped, a slow car ran many times the dial and
         // the term vetoed the steering instead of damping it.
-        float SteerDampingFor(float forwardSpeed)
+        float SteerDampingFor()
         {
-            // Abs, not the raw speed: a car travelling backwards needs the same steer per yaw rate as one going forwards.
-            float speedScale = Math.Min(1f, ARS.MphToMps(ARS.SteerDampingSpeedMph) / Math.Max(Math.Abs(forwardSpeed), 1f));
-            return SteerDampingEnabled ? ARS.SteerDampingGain * speedScale / Math.Max(VehicleData.BaseMechanicalGrip, 1f) : 0f;
+            // Grip is the only divisor: the gain used to fall as a reference speed over the car's above that speed,
+            // and a full-authority dial damped cleanly at every speed, so the schedule was removed by direction.
+            return SteerDampingEnabled ? ARS.SteerDampingGain / Math.Max(VehicleData.BaseMechanicalGrip, 1f) : 0f;
         }
         // Vanilla's player steering limiter used as a ceiling (AGENTS.md pipeline step 4): vanilla divides by
         // 1 + 0.075 × (forward speed − 5) in m/s and skips it while the car is sliding. The 5 m/s shift and its
