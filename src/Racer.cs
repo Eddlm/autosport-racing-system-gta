@@ -335,12 +335,9 @@ namespace ARS
         bool _isPassengerized = false;
         const float RivalSearchRangeMeters = 200f;
 
-        // Feature gate for nitrous (ARS.NitrousEnabled).
+        // Feature gate for nitrous (ARS.NitrousEnabled). Both sides burn the same multiplier; the AI's share of it
+        // is the Race Rules setting ARS.AiNitroPct, which ships at 100 so the two are equal until tuned.
         const float NitrousPowerMultiplier = 2.5f;
-        // Temporary and deliberate: the AI's bottle reads far weaker than the player's, and no cause has been found
-        // in the ARS side (same natives, same duration, same one bottle per lap), so its burn carries twice the
-        // power until the cause is known. Remove this scale, never the multiplier, when the asymmetry is explained.
-        const float NitrousAiBoostScale = 2f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
         const float NitrousCornerLookaheadSeconds = 8f;
@@ -2988,7 +2985,7 @@ namespace ARS
         void ApplyPowerMultiplier()
         {
             float multiplier = _powerCounter;
-            if (Game.GameTime < _nitrousActiveUntil) multiplier *= NitrousPowerMultiplier * (ControlledByPlayer ? 1f : NitrousAiBoostScale);
+            if (Game.GameTime < _nitrousActiveUntil) multiplier *= NitrousPowerMultiplier * (ControlledByPlayer ? 1f : ARS.AiNitroPct * 0.01f);
 
             if (float.IsNaN(multiplier) || float.IsInfinity(multiplier) || multiplier < 0f || multiplier > 10f) multiplier = 1f;
 

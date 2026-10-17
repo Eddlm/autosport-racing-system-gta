@@ -71,6 +71,10 @@ namespace ARS
         // The menu's ladder and the settings repair's domain, from one place: a value stored off this ladder is
         // snapped to its nearest offer on load, so the two lists must not drift.
         public static readonly string[] CornerCeilingValues = { "20", "40", "60", "80", "100", "120", "140", "160", "180", "200" };
+        // The AI's nitrous strength as a percentage of the player's: 100 matches the player's burn. Only the AI's
+        // share is scaled, and both use the same multiplier otherwise. The Race Rules menu owns it.
+        public static int AiNitroPct = 100;
+        public static readonly string[] AiNitroValues = { "50", "100", "150", "200" };
         // Lifting lips found on the route. The debug view reads this; nothing drives on it yet.
         public static List<Bump> Bumps = new List<Bump>();
         // Crests and dips along the route, with entry/exit at the half-gs threshold. Read by the brake decel
@@ -1170,6 +1174,17 @@ namespace ARS
                 SaveRacerSetting("NitrousEnabled", NitrousEnabled.ToString());
             };
             rulesMenu.Add(nitroItem);
+
+            NativeListItem<string> aiNitroItem = new NativeListItem<string>("AI Nitrous Power (%)", "The AI's bottle as a percentage of the player's: 100 is the same strength, 200 is twice. The player's own burn is unchanged.", AiNitroValues);
+            aiNitroItem.SelectedIndex = Math.Max(0, aiNitroItem.Items.IndexOf(AiNitroPct.ToString(CultureInfo.InvariantCulture)));
+            aiNitroItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index < 0 || args.Index >= aiNitroItem.Items.Count) return;
+                AiNitroPct = int.Parse(aiNitroItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("AiNitroPct", AiNitroPct.ToString(CultureInfo.InvariantCulture));
+            };
+            rulesMenu.Add(aiNitroItem);
+            HookListTextPicker(aiNitroItem);
 
             AddDebugCheckbox(rulesMenu, Options.HighDownforceOnline, "Online Downforce Curve", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
 
@@ -3291,6 +3306,7 @@ namespace ARS
             MenuKey = ParseMenuHotkey(SettingsMenuStore.GetInt("MenuKey", (int)MenuKey), MenuKey);
             LogLevel = ParseEnum(SettingsMenuStore.Get("LogLevel", LogLevel.ToString()), LogLevel);
             CornerCeilingMeters = SettingsMenuStore.GetInt("CornerCeiling", CornerCeilingMeters);
+            AiNitroPct = SettingsMenuStore.GetInt("AiNitroPct", AiNitroPct);
             foreach (Options option in DebugToggles.Keys.ToArray())
                 DebugToggles[option] = DebugMenuStore.GetBool(option.ToString(), DebugToggles[option]);
             DebugToggles[Options.ReverseRoute] = RaceMenuStore.GetBool("ReverseRoute", DebugToggles[Options.ReverseRoute]);
