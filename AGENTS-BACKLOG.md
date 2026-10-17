@@ -135,7 +135,7 @@
 - `steer-ramp-band` — **driver-verified (`489`, `e59e0a9`)**
 - `side-slip-scale` — **closed (verified)**: the field's only live consumer is the debug spheres' colour landmark, and the parked allowance that also read it is off
 - `picker-skip-ignored-corner` — a wide, unarmed corner inside its window is flagged by the scan and the picker gives slot one to the next, so a flat sweeper cannot kill the tight corner's approach behind it. **driver-verified on the reported corner (build 704)**; the review's two fixes — revoke the flag when braking arms, force the refill when a flag lands — are **built (build 706), drive owed**
-- `corner-ceiling` — the table calls a corner anything under 50 m (tightest node; bend otherwise), the region scan at the same number. **BUILT (build 706), drive owed**
+- `corner-ceiling` — the table calls a corner anything under 50 m (tightest node; bend otherwise), the region scan at the same number. **BUILT (build 707)**: the number is a Debug menu item (20–200 m, step 20) that rebuilds the table on change, mid-race included; drive owed to judge the ladder.
 - `ceiling-factor-review` — **closed (`0dfbf53`)**, the outer reference driven
 - `tcs-cap-floor-setting` — **DECIDED (driver): no menu item, the floor is 0.2**; `overspeed-thresholds-setting` is **built (dev build 616)** and drive owed, and `ceiling-factor-range` is **closed (`29b267b`)**
 - `launch-slip-allowance` — **(idea)**; the removed launch ramp last existed in `a6fcf7d`

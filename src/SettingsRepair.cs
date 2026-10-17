@@ -167,6 +167,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("MenuModifierKey", ((int)Keys.LShiftKey).ToString(), Kind.Number, ARS.MenuHotkeyValues));
             settings.Specs.Add(new KeySpec("MenuKey", ((int)Keys.E).ToString(), Kind.Number, ARS.MenuHotkeyValues));
             settings.Specs.Add(new KeySpec("LogLevel", ARS.LogImportance.None.ToString(), Kind.Text, Enum.GetNames(typeof(ARS.LogImportance))));
+            settings.Specs.Add(new KeySpec("CornerCeiling", "50", Kind.Text, ARS.CornerCeilingValues));
             files.Add(settings);
 
             // The debug key set is the toggle table itself: retiring a toggle retires its key.

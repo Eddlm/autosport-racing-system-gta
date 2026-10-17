@@ -359,7 +359,7 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             if (count < 1) return;
 
-            const float regionRadius = 50f;
+            float regionRadius = ARS.CornerCeilingMeters;
             const int smoothingNodes = 2;
             const int exitRelaxationNodes = 4;
             const int minimumCornerNodes = 25;
@@ -725,7 +725,7 @@ namespace ARS
             if (float.IsNaN(tightestRadius) || float.IsInfinity(tightestRadius)) return;
             // A wide region is a bend, not a corner: the tightest node reads the precise radius, which the region's
             // smoothed radius can sit well under, so a region does open without a tight node inside it.
-            if (tightestRadius > MaximumApexRadius) return;
+            if (tightestRadius > ARS.CornerCeilingMeters) return;
 
             int apexNode = scanNodes[apexPosition];
             // A span is capped at a hard node count each way rather than by the corner's own size: offroad the radius
@@ -867,12 +867,6 @@ namespace ARS
         // which on Figureight reaches 100+ nodes. This cap is the user-facing rule: the entrance or exit cannot be
         // further than this many nodes from the apex; if the walk's unclamped step exceeds it, we clamp and log.
         const int SpanMaxDistanceNodes = 40;
-        // What the table calls a corner: anything wider than this on its tightest node is a bend and is not one,
-        // which is the same number the region scan opens at (regionRadius), so a region is never opened for a bend
-        // the table would discard. At 50 m every corner the table keeps is also under Racer.CornerTightRadius, so
-        // the position window sees no "wide" class at all; the picker's skip still guards the case a track or a
-        // future ceiling produces one. Driver-directed.
-        const float MaximumApexRadius = 50f;
         const float AlignedCornerSeconds = 3f;
         const float AlignedCornerDegrees = 15f;
 

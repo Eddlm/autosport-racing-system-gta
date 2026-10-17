@@ -63,6 +63,14 @@ namespace ARS
         public static List<CornerPoint> Corners = new List<CornerPoint>();
         // Bumped on every apex-table rebuild so each racer's corner contexts know to re-sync.
         public static int CornersRevision = 0;
+        // What the table calls a corner: at or under this radius on its tightest node; anything wider is a bend and
+        // is dropped, so it gets no apex entry, braking plan or chevron and route speed is its only law. The region
+        // scan opens at this same number, so the two can never disagree. The Debug menu owns it at runtime and
+        // rebuilds the table on a change, mid-race included.
+        public static int CornerCeilingMeters = 50;
+        // The menu's ladder and the settings repair's domain, from one place: a value stored off this ladder is
+        // snapped to its nearest offer on load, so the two lists must not drift.
+        public static readonly string[] CornerCeilingValues = { "20", "40", "60", "80", "100", "120", "140", "160", "180", "200" };
         // Lifting lips found on the route. The debug view reads this; nothing drives on it yet.
         public static List<Bump> Bumps = new List<Bump>();
         // Crests and dips along the route, with entry/exit at the half-gs threshold. Read by the brake decel
@@ -1276,6 +1284,21 @@ namespace ARS
             logLevelItem.SelectedIndex = Math.Max(0, logLevelItem.Items.IndexOf(EnumLabel(LogLevel)));
             debugMenu.Add(logLevelItem);
             HookListTextPicker(logLevelItem);
+
+            // The corner ceiling, owned by this menu: a change rebuilds the derived table at once, so it can be
+            // judged mid-race. The item is seeded before its handler is attached, or the seed itself would rebuild.
+            NativeListItem<string> cornerCeilingItem = new NativeListItem<string>("Corner Ceiling", "What the track table calls a corner: at or under this radius on its tightest node. Anything wider is a bend, driven on route speed alone with no apex entry, braking plan or chevron. A change rebuilds the table at once, mid-race included.", CornerCeilingValues);
+            cornerCeilingItem.SelectedIndex = Math.Max(0, cornerCeilingItem.Items.IndexOf(CornerCeilingMeters.ToString(CultureInfo.InvariantCulture)));
+            cornerCeilingItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index < 0 || args.Index >= cornerCeilingItem.Items.Count) return;
+                CornerCeilingMeters = int.Parse(cornerCeilingItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("CornerCeiling", CornerCeilingMeters.ToString(CultureInfo.InvariantCulture));
+                TrackLoader.BuildApexTable();
+                Log(LogImportance.Info, "Corner ceiling " + CornerCeilingMeters + " m: " + Corners.Count + " corner(s) in the table.");
+            };
+            debugMenu.Add(cornerCeilingItem);
+            HookListTextPicker(cornerCeilingItem);
 
             if (!StagedSpawns)
             {
@@ -3267,6 +3290,7 @@ namespace ARS
             MenuModifierKey = ParseMenuHotkey(SettingsMenuStore.GetInt("MenuModifierKey", (int)MenuModifierKey), MenuModifierKey);
             MenuKey = ParseMenuHotkey(SettingsMenuStore.GetInt("MenuKey", (int)MenuKey), MenuKey);
             LogLevel = ParseEnum(SettingsMenuStore.Get("LogLevel", LogLevel.ToString()), LogLevel);
+            CornerCeilingMeters = SettingsMenuStore.GetInt("CornerCeiling", CornerCeilingMeters);
             foreach (Options option in DebugToggles.Keys.ToArray())
                 DebugToggles[option] = DebugMenuStore.GetBool(option.ToString(), DebugToggles[option]);
             DebugToggles[Options.ReverseRoute] = RaceMenuStore.GetBool("ReverseRoute", DebugToggles[Options.ReverseRoute]);
