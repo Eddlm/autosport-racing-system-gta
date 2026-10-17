@@ -623,7 +623,7 @@ The checkbox became a list: `Off`, then `0.1` to `1.0` in 0.1 steps, default `0.
 2. **`0.1` is the control** — it reproduces build 614's behaviour exactly, so a car that behaved well there must behave identically at `0.1`. A difference means the rate is not the old slope.
 3. **The ends** — `Off` must leave the climb speed standing, and `1.0` should read as a near-switch, a full lift arriving in about a third of a second, with no crash and no stuttery car.
 
-## Stability owns the throttle cut (dev build 617, compile-verified, drive owed)
+## Stability owns the throttle cut (dev build 617, driver-verified)
 
 The throttle cut was a binary declared by two arms — the chassis riding above its rest height, and yaw demand past the grip tolerance. Both are gone. The cut is a live target from one signal now: `ARS.WheelsOffGround` counts wheels reading exactly zero on the side-slip axis (`wheel+0x1C4`), the target is `1 − 0.25 × off`, and it glides at 2/s in and 1/s out on stability's own rate pair. Four wheels down is full throttle, two down is half, none down is closed.
 
