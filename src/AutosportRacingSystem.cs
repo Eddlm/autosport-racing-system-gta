@@ -636,7 +636,6 @@ namespace ARS
         int _countdownTickMs = 0;
         int _maxCountdown = 7;
         int _countdown = 7;
-        int _nitroTopUpAt = 0;
 
         public static Scaleform InstructionalScaleform = new Scaleform("INSTRUCTIONAL_BUTTONS");
         public static Scaleform Racertext = null;
@@ -1906,22 +1905,8 @@ namespace ARS
                         TrackVisuals.DrawLiveCrestChecks(liveCrestRacer, ARS.TrackPoints);
                 }
 
-                // Nitro: one charge at launch, then a fresh bottle each lap.
-                if (NitrousEnabled && RaceIsRunning && Game.GameTime - _nitroTopUpAt > 1000)
-                {
-                    _nitroTopUpAt = Game.GameTime;
-                    foreach (Racer racer in Racers)
-                    {
-                        if (!CanWeUse(racer.Car) || racer.NitroChargedLap >= racer.Lap) continue;
-                        if (TopUpNitrous(racer.Car))
-                        {
-                            racer.NitroChargedLap = racer.Lap;
-                            if (racer.ControlledByPlayer) Log(LogImportance.Info, "Player bottle charged for lap " + racer.Lap);
-                        }
-                        else if (racer.ControlledByPlayer) Log(LogImportance.Info, "Player bottle not charged (nitro reads active, or the car is unusable)");
-                    }
-                }
-                // Player nitro: fire on key press when a charged bottle is available.
+                // Player nitro: fire on key press, one bottle a lap. The fire charges the bottle itself, so there is
+                // no top-up loop and no state between the press and the burn — the AI's card works the same way.
                 if (NitrousEnabled && PlayerRacer != null && Game.IsKeyPressed(Keys.X))
                     PlayerRacer.TryFireNitrous();
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
@@ -3393,14 +3378,6 @@ namespace ARS
             string[] labels = new string[values.Length];
             for (int i = 0; i < values.Length; i++) labels[i] = EnumLabel((Enum)values.GetValue(i));
             return labels;
-        }
-
-        bool TopUpNitrous(Vehicle car)
-        {
-            if (!CanWeUse(car)) return false;
-            if (Function.Call<bool>((Hash)0x491E822B2C464FE4, car)) return false;
-            Function.Call((Hash)0x1AD0F63A94E10EFF, car, 3.1f);
-            return true;
         }
 
         public static void Log(LogImportance i, string text, bool forced = false)

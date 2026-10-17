@@ -81,7 +81,6 @@ namespace ARS
         public List<TimeSpan> LapTimes = new List<TimeSpan>();
         public int LapStartTime = 0;
         public int Lap = 0;
-        public int NitroChargedLap = -1;
         public int RacePosition = 0;
         // A car whose engine is dead cannot rejoin. It is parked on the shoulder and never races again this race.
         public bool IsDNF = false;
@@ -517,7 +516,6 @@ namespace ARS
             LapStartTime = 0;
             VehicleData.ResetLapPeaks();
             Lap = 0;
-            NitroChargedLap = -1;
             _nitrousLapUsed = -1;
             RacePosition = 0;
             FinalPosition = 0;
@@ -2499,14 +2497,13 @@ namespace ARS
 
         public bool TryFireNitrous()
         {
-            // The player's only route to the burn, so every refusal is logged at Info (once a second while the key
-            // is held): without that line a missing bottle and a missing key press read identically from outside.
+            // The player's only route to the burn, and the AI's card is its twin: the same two gates and no bottle
+            // bookkeeping — StartNitrous charges the bottle itself, so a fire can never be refused for want of one
+            // (that gate was the bug: the player was refused in the second after every start or finish line).
             bool live = Game.GameTime < _nitrousActiveUntil;
             string refusal = live
                 ? "the burn is still live"
-                : NitroChargedLap < Lap
-                    ? "no bottle: charged lap " + NitroChargedLap + ", now lap " + Lap
-                    : Lap <= _nitrousLapUsed ? "the bottle was spent on this lap" : null;
+                : Lap <= _nitrousLapUsed ? "the bottle was spent on this lap" : null;
             if (refusal != null)
             {
                 if (Game.GameTime > _nitroRefusalLoggedAt)
@@ -2516,7 +2513,7 @@ namespace ARS
                 }
                 return false;
             }
-            ARS.Log(ARS.LogImportance.Info, "Player nitrous fired on lap " + Lap + " (bottle charged on lap " + NitroChargedLap + ")");
+            ARS.Log(ARS.LogImportance.Info, "Player nitrous fired on lap " + Lap);
             StartNitrous();
             return true;
         }

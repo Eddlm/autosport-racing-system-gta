@@ -24,6 +24,13 @@ Split from `AGENTS.md` (`8447d75`). Holds the size-trimmed depth and long-form r
 - **Menyoo 2.0 source audit** (cloned `itsjustcurtis/MenyooSP` → `_research\Menyoo2`): declares the full set but **calls none of it** — "Race Boost On Horn" is fake (`SET_VEHICLE_BOOST_ACTIVE` one frame + raw force + hand-rolled NOS PTFX); "Infinite Native Boost" targets the separate rocket-boost family; no vanilla nitrous toggle; its `VehicleMod` enum names slot 17 `Unknown17`.
 - **Ecosystem hash-name conflict**: Menyoo binds `0x465EEA70AF251045` as `SET_NITROUS_IS_ACTIVE` (these notes call it `_SET_NITROUS_IS_VISIBLE`) — trust behaviour over the name.
 
+### What actually pushes the car (leaked-engine read, build 715)
+
+- **The cheat multiplier is the live lever, for every racer including the player.** `CTransmission::ProcessEngine` / `ProcessEngineCvt` consume `GetCheatPowerIncrease()` on the drive force unconditionally; the only reset is at the end of `CVehicle::ProcessPostPhysics`, i.e. after the step, so a once-per-frame script write is in place when the next drive force is computed. The player's task touches it only inside `#if __DEV` (`USE_THROTTLE_LIMITING_FOR_PLAYER = false`), so retail neither fades nor clears it; the AI go-to task *writes* and *fades* it.
+- **The engine's own nitro never activates by itself.** `CTransmission::ProcessNitrous` applies its 1 + 3·power boost only while `GetNitrousActive()`; `SET_OVERRIDE_NITROUS_LEVEL` merely sets `m_scriptOverridesNitrous`, and `m_nitrousActive` has **no true-writer in the engine** — the only setter is the `SET_NITROUS_IS_ACTIVE` native, which ARS never called. So both racers' visible gain today is the cheat 2.5×, not a nitro burn, and mod slot 17 is unnecessary while the override is set.
+- **A real burn is a separate change and must replace, not stack**: the override's power 1.0 is already 4×, so 4× × the 2.5 cheat = 10×. Drop the override power to 0.5 for the window (2.5× total) and call `SET_NITROUS_IS_ACTIVE` to get flames, sound and HUD. Filed as `nitrous-native-burn` in `AGENTS-BACKLOG.md`.
+- **The bottle is self-charged at fire** — `FULLY_CHARGE_NITROUS` inside `StartNitrous`. The old 1 s top-up loop, `NitroChargedLap` and `TopUpNitrous` are removed: the player's charge gate was the bug, refusing the fire in the second after every start or finish line while the AI's card never read the charge.
+
 ## Two-projection route speed (future idea)
 
 - Long-term: replace `followTrackSpd`'s geometric `√(g·grip·r)` with a two-projection system — a *true* ballistic projection (`ProjectAhead`, self-calibrating) and a *pessimistic* reduced-grip projection.
