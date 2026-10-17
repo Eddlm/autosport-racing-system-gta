@@ -1165,7 +1165,11 @@ namespace ARS
             rulesMenu.Add(nitroItem);
 
             NativeListItem<string> aiNitroItem = new NativeListItem<string>("AI Nitrous Power (%)", "The AI's bottle as a percentage of the player's: 100 is the same strength, 200 is twice. The player's own burn is unchanged.", AiNitroValues);
-            aiNitroItem.SelectedIndex = Math.Max(0, aiNitroItem.Items.IndexOf(AiNitroPct.ToString(CultureInfo.InvariantCulture)));
+            // Seeded from the repaired store, not the load-time static: a value the repair snapped must be what both
+            // the item shows and this session runs on, and the static is written to match before the handler lands so
+            // the seed itself changes nothing.
+            aiNitroItem.SelectedIndex = Math.Max(0, aiNitroItem.Items.IndexOf(SettingsMenuStore.GetInt("AiNitroPct", AiNitroPct).ToString(CultureInfo.InvariantCulture)));
+            AiNitroPct = int.Parse(aiNitroItem.Items[aiNitroItem.SelectedIndex], CultureInfo.InvariantCulture);
             aiNitroItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index < 0 || args.Index >= aiNitroItem.Items.Count) return;
@@ -1290,9 +1294,11 @@ namespace ARS
             HookListTextPicker(logLevelItem);
 
             // The corner ceiling, owned by this menu: a change rebuilds the derived table at once, so it can be
-            // judged mid-race. The item is seeded before its handler is attached, or the seed itself would rebuild.
+            // judged mid-race. Seeded from the repaired store, and the static is written to that same value before
+            // the handler lands, so the item, the session and the file agree even when the repair moved the number.
             NativeListItem<string> cornerCeilingItem = new NativeListItem<string>("Corner Ceiling", "What the track table calls a corner: at or under this radius on its tightest node. Anything wider is a bend, driven on route speed alone with no apex entry, braking plan or chevron. A change rebuilds the table at once, mid-race included.", CornerCeilingValues);
-            cornerCeilingItem.SelectedIndex = Math.Max(0, cornerCeilingItem.Items.IndexOf(CornerCeilingMeters.ToString(CultureInfo.InvariantCulture)));
+            cornerCeilingItem.SelectedIndex = Math.Max(0, cornerCeilingItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerCeiling", CornerCeilingMeters).ToString(CultureInfo.InvariantCulture)));
+            CornerCeilingMeters = int.Parse(cornerCeilingItem.Items[cornerCeilingItem.SelectedIndex], CultureInfo.InvariantCulture);
             cornerCeilingItem.ItemChanged += (sender, args) =>
             {
                 if (args.Index < 0 || args.Index >= cornerCeilingItem.Items.Count) return;

@@ -1250,10 +1250,6 @@ namespace ARS
         // The damper's reference: the yaw the aim point requires removes the standing-offset toll, and the zero
         // reference stays one flip away for A/B — the drive that preferred it was confounded by the course error.
         const bool SteerDampingAimReference = true;
-        // The dial is defined at the damping speed the AI setting names: the damper's steer per unit yaw error is the
-        // dial times that speed over the car's, so the term follows the steer a yaw rate actually needs - weaker above
-        // it, and at most the dial below it. The cap is load-bearing: uncapped, a slow car ran many times the dial and
-        // the term vetoed the steering instead of damping it.
         float SteerDampingFor()
         {
             // Grip is the only divisor: the gain used to fall as a reference speed over the car's above that speed,
