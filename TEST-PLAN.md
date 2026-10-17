@@ -674,3 +674,12 @@ Builds 694–699 cut the damper's authority back and moved the blend's band and 
 **The driver's verdict: good enough — the batch is crossed.** What it does not claim: the band and the share are a taste cut rather than a derivation, so a car whose tyres read differently may want a different band; and the damper's scale is a global trade, since the term is load-bearing for holding centre — a car that reads unstable at half authority is answered with the damping dial, not by restoring the scale.
 
 **Revised on a later drive: the damper's scale returned to full authority.** The slides kept their answer, but the field read a smidge unstable at half the term, so `DamperEffectScale` sits at 1 and the batch's keepers are the blend band and the countersteer share, with the crossing overshoot whole.
+
+## The picker looks past an ignored corner (build 704, compile-verified, drive owed)
+
+A wide corner the car passes flat was still taken as the promotion reference for the tight corner behind it: at the sweeper's apex the tight corner was promoted already inside its own window, so the whole approach was skipped and its outside line never ran — every lap, not only the first. Now the requirements scan flags a corner that cannot ask for positioning by its own radius (`DetectedRadius >= CornerTightRadius`) and has not asked for braking by the time the car is inside its 3.95 s window; `RefillApexQueue` gives slot one to the next corner instead, and the flag holds until that apex is behind. The flagged corner's own arming is untouched.
+
+1. **The hairpin behind the sweeper takes its approach, every lap.** On the track that showed it, the tight corner after the fast one must show the outside line for the same number of seconds it has on the laps where it worked.
+2. **The log names the skip.** With `Log.log` at Info, one `Queue skip <name>: corner N ignored (wide R m, no braking asked)` per approach, once — a repeat each scan would be the flag failing to latch.
+3. **No regression late in the approach.** The skipped corner must not become slot one again after its braking flag flips late; if it does, the successor's promotion re-fires inside its window and the approach dies again — that is the same line repeating with a second promotion, worth reading the log for.
+4. **Nothing else moves.** A tight corner behind another tight one keeps the successive-corner suppression exactly as before, and a wide corner that armed braking early is never skipped — it should show its usual braking behaviour.

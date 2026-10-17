@@ -134,6 +134,7 @@
 - `crest-gate` — entry move driver-verified (`27ee097`), gating constants pending
 - `steer-ramp-band` — **driver-verified (`489`, `e59e0a9`)**
 - `side-slip-scale` — **closed (verified)**: the field's only live consumer is the debug spheres' colour landmark, and the parked allowance that also read it is off
+- `picker-skip-ignored-corner` — a wide, unarmed corner inside its window is flagged by the scan and the picker gives slot one to the next, so a flat sweeper cannot kill the tight corner's approach behind it. **BUILT (compile-verified, build 704), drive owed**
 - `ceiling-factor-review` — **closed (`0dfbf53`)**, the outer reference driven
 - `tcs-cap-floor-setting` — **DECIDED (driver): no menu item, the floor is 0.2**; `overspeed-thresholds-setting` is **built (dev build 616)** and drive owed, and `ceiling-factor-range` is **closed (`29b267b`)**
 - `launch-slip-allowance` — **(idea)**; the removed launch ramp last existed in `a6fcf7d`

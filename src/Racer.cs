@@ -253,6 +253,10 @@ namespace ARS
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
         int _promotedApexNode = -1;
+        // Apex nodes the scan has judged worth nothing this approach (wide and unarmed inside their window). The
+        // picker looks past them, so a fast corner the car passes flat no longer makes the tight one behind it
+        // promote inside its own window and lose the approach.
+        readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleSeconds = 0f;      // sampled braking time: the denominator of the full-pedal share
         float _brakeSampleFullSeconds = 0f;  // of which, the time at full pedal: the numerator
         float _brakeSampleMaxSlideDeg = 0f;  // largest slip seen between this apex's entrance and the apex itself
@@ -554,6 +558,7 @@ namespace ARS
             _cornerContexts.Clear();
             _cornersRevisionSeeded = -1;
             _promotedApexNode = -1;
+            _skippedApexes.Clear();
             _brakeCommitApexNode = -1;
 
             Car.Repair();
@@ -3330,6 +3335,7 @@ namespace ARS
                 {
                     context.RequiresPositioning = false;
                     context.ApproachStarted = false;
+                    _skippedApexes.Remove(corner.Node);
                 }
 
                 if (distance <= 0) continue;
@@ -3344,6 +3350,18 @@ namespace ARS
                 float brakingDistance = (speed * speed - intended * intended) / (2f * decel);
                 bool inBrakingRange = distance <= brakingDistance + BrakeHorizonMargin;
                 bool inPositionRange = tight && timeToEntrance <= RequirementLookaheadSeconds;
+
+                // A corner too wide to ask for positioning that has not asked for braking by the time the car is
+                // inside its window is one the car is passing through: it is flagged here, one half-second gate
+                // before the picker would make it the nearest corner, and the picker looks past it so the corner
+                // behind is promoted from further out. The flag rides in the same per-approach state as the flags
+                // above; a late braking arm still reaches the plan through the queue's braking slots.
+                if (!tight && !context.RequiresBraking && timeToEntrance <= RequirementLookaheadSeconds && _skippedApexes.Add(corner.Node))
+                {
+                    ARS.Log(ARS.LogImportance.Info, "Queue skip " + Name + ": corner " + corner.Node + " ignored (wide "
+                        + corner.DetectedRadius.ToString("0") + " m, no braking asked), the picker looks past it");
+                }
+
                 if (!inBrakingRange && !inPositionRange) continue;
 
                 float arrival = speed + forwardGs * Handling.Gravity * timeToEntrance * RequirementExtrapolationScale;
@@ -3381,14 +3399,21 @@ namespace ARS
             }
             upcoming.Sort((left, right) => ForwardNodeDistance(ARS.Corners[left].Node).CompareTo(ForwardNodeDistance(ARS.Corners[right].Node)));
 
-            // Derived fresh every refill and never carried over: slot one must be the nearest corner each time, or
-            // the line, the commit lane and the chevron aim past it the moment the other slots are occupied.
+            // Derived fresh every refill and never carried over: slot one must be the nearest corner the car is not
+            // already passing through, or the line, the commit lane and the chevron aim past it the moment the other
+            // slots are occupied. A corner the scan flagged as worth nothing this approach is looked past, so the one
+            // behind it becomes slot one while the car is still far from it — that is what keeps its approach alive,
+            // since promotion happens on the slot-one change. If nothing ahead is unflagged the nearest still takes it.
+            int first = 0;
+            while (first < upcoming.Count && _skippedApexes.Contains(ARS.Corners[upcoming[first]].Node)) first++;
+            if (first >= upcoming.Count) first = 0;
+
             List<int> selectedNodes = new List<int>();
             List<float> selectedRadii = new List<float>();
-            if (upcoming.Count > 0)
+            if (first < upcoming.Count)
             {
-                selectedNodes.Add(ARS.Corners[upcoming[0]].Node);
-                selectedRadii.Add(ARS.Corners[upcoming[0]].DetectedRadius);
+                selectedNodes.Add(ARS.Corners[upcoming[first]].Node);
+                selectedRadii.Add(ARS.Corners[upcoming[first]].DetectedRadius);
             }
 
             // The remaining slots only feed the braking plan, so they go to the most restrictive corners this car
