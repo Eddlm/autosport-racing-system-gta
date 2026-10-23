@@ -38,7 +38,7 @@ game folder carries the init banner and lap lines.
 ## 1. Off-track throttle ramp (general, every car)
 
 1. Take a car well off the track at speed (past the raw edge).
-   **Expect:** pedal lifted (throttle 0) above 20 mph, ramping back to full at 15 mph — it sits slow but firm.
+   **Expect:** pedal lifted (throttle 0) above 20 mph, ramping back to full at 15 mph — it sits slow but firm — **unless the car is pointed back at the track**, in which case a flat half (`OffTrackRecoverThrottle`) replaces the ramp.
 2. Watch the **white override sphere** on the white steer line while off track (Show Track Analysis).
 3. Put the car half-off (centre still on the track). **Expect: no cap** — the rule is centre-past-edge.
 
@@ -432,7 +432,7 @@ Promotion happens at the previous corner's apex (`UpdateApexLeapfrog`), so the s
 
 The whole session's UI work shipped without a game session: the menu tree, the two copy sweeps, the Reset gate, the named autofix options, the PI deviation limit and the Start Race line. Nothing below has been seen in game.
 
-1. **The tree loads at all.** The root should be seven submenus in frequency order — Race, Rivals, Race Rules, Interface, Controls, Debug, Track Creator — plus Reset To Track as the last row. A constructor fault would have stopped the script loading, so check `Log.log` for a load error and open every menu once.
+1. **The tree loads at all.** The root should be eight submenus in frequency order — Race, Rivals, Race Rules, Interface, Controls, Debug, Development, Track Creator — plus Reset To Track as the last row. The Development row is disabled unless a race is running with the player on the grid and exactly one racer. A constructor fault would have stopped the script loading, so check `Log.log` for a load error and open every menu once.
 2. **Every settings item survives a reload.** The homes all moved and one ini domain changed, so change one item per menu, reload with Insert, and confirm each value came back; `Log.log` must hold no "declares no key" line.
 3. **Racer Autofix reads as names.** The row should offer Off / Damage Resistant / Invincible, and a previously stored `0`/`1`/`2` must have migrated rather than reset. The open question rides this row: under Invincible the player's own car is repaired during a race, because the repair half has no player guard (`Racer.cs:3350`).
 4. **Max PI Deviation actually caps the grid.** Set a target and a window, build a grid, and check the field's PIs sit inside the window and match the log's `PI limit N around X: …` line. A window nothing fits must give the explicit no-vehicles-in-window error rather than a silent solo grid.
@@ -601,7 +601,7 @@ Below the corner line's far clamp — the `ApexLine` phase — the demand is ref
 
 **Parked before the drive**, by the driver's call: neither the TCS percent extremes nor the brake re-scale can be judged on the grip the fleet runs today, because the AI neither spins nor locks on it. Both resume when a lower-grip handling is in use, and the readings below are what that drive picks up.
 
-The slip axis was settled by a live probe (`b889222`, evidence on the ladder item `slip-axis-scale`): `wheel+0x174` is the raw signed slip ratio, so the traction curve peaks at 0.4 in the field and goes flat at 1.0 — every threshold ARS compared against that curve was 2.5× too high. Both TCS knobs are now shares of the peak (`TcsSlipLimitPct`, `TcsTaperSpanPct`: 10 to 200 in tens, default 80 and 80), and the ABS knee moved from 2.5 to the peak, its floor a span later at twice the peak.
+The slip axis was settled by a live probe (`b889222`, evidence on the ladder item `slip-axis-scale`): `wheel+0x174` is the raw signed slip ratio, so the traction curve peaks at 0.4 in the field and goes flat at 1.0 — every threshold ARS compared against that curve was 2.5× too high. Both TCS knobs are now shares of the peak (`TcsSlipLimitPct`, `TcsTaperSpanPct`: 10 to 200 in tens, default 80 and 80), and the ABS left this axis in `7ccaac7` as a wheel-rotation lock guard, so the TCS pair are the only thresholds read here. **Items 4 and 5 below describe the taper that rewrite deleted and are kept as history.**
 
 1. **The file converts itself once.** A `Menu-Settings.ini` holding the old raw pair (0.4 / 0.4 on this install) must come back as 100 / 100 with `TcsSlipThreshold` and `TcsTaperSpan` gone; 0.5 / 0.5 comes back as 120 / 120, because a tie rounds to the lower, tighter offer. `Log.log` must hold no "declares no key" line, and both new values must survive a reload.
 2. **The menu reads in shares.** `TCS Wheelspin Limit (%)` and `TCS Cut Softness (%)` under Rival Traction, and both descriptions name the peak as their reference. The ceiling is the limit plus the softness, so 80 with 80 bottoms the cut at 160% of the peak.
@@ -689,6 +689,8 @@ A wide corner the car passes flat was still taken as the promotion reference for
 6. **Nothing else moves.** A tight corner behind another tight one keeps the successive-corner suppression exactly as before.
 
 ## A corner is anything under 50 m (build 706, compile-verified, drive owed)
+
+**Superseded by `7de3022` (build 739):** the ceiling no longer screens corners. It delimits the corner *region*, and a region that does not open to twice its radius within 60 nodes is dropped as a blur — so the table shrinks rather than grows, and the section below is the history of the radius screen.
 
 The table's ceiling and the region scan both drop from 100 m to 50 m (they already sat equal): a bend wider than 50 m on its tightest node is no longer a corner at all, so it gets no apex entry, no braking plan, no chevron and no card anchor, and route speed is the only law that slows a car for it. At 50 m every corner the table keeps is under `CornerTightRadius`, so the "wide" class the picker skip exists for disappears — the skip stays as the guard for a ceiling that produces one. The cost to watch: bends of 50-100 m lose their braking plan and are driven on route speed alone.
 

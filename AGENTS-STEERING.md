@@ -447,7 +447,7 @@ That regime is no longer switchable (the Route Speed Limit toggle removal is the
   **Recover `CompressBearingAngle` from `879585e`** if extreme bearings ever need a lever — the candidate being an off-track recovery that proves too violent — and put it on the bearing *before* the pursuit law, never on the assembled steer.
 
 ## Speed pipeline — how fast the car goes
-`Intention.Speed` is `min(cornerSpd + ARS.CornerOffsetMph, followTrackSpd + ARS.RouteOffsetMph)`, then clamped by `MaxSpeed` and the off-track projection cap.
+`Intention.Speed` is `min(cornerSpd + ARS.CornerOffsetMph, followTrackSpd + ARS.RouteOffsetMph)`, then clamped by `MaxSpeed` (with the standoff-rival term and artificial rubberbanding on top). The projection cap acts on throttle only and never on `Speed`.
 **The offsets are split, one per authority, and each is applied inside the `min`** — so `CornerOffsetMph` also lifts apex-limited speed while apex speed itself stays pure physics (`Racer.cs:1544`).
 `Brain.CurrentIntention.CorneringSpeedLimit` is computed alongside the offsets and **read nowhere**, not even by the HUD (`Racer.cs`) — a known write-only field, so a plan that expects it to bite is wrong.
 
@@ -469,11 +469,11 @@ The hill/crest grip floors are tuned as one knob; read the code for current valu
 Both pedals then ramp to that target at a fixed slew rate.
 - **Throttle limits are per-reason (`1ebbd2c`)**: every limiter owns a `MaxThrottleFrom<X>` level field in `UpdateThrottleReasonCaps` (`Racer.cs:1672`), and `ComposeThrottleCap` (`Racer.cs:1765`) takes `min(base, reasons)` **pre-slew**, naming the winner into `ThrottleReason` — the standing answer to "why isn't the pedal full".
 The fields cut at the shared rate and recover more slowly (`GlideCap` `Racer.cs:1665`); the brake side mirrors them (`UpdateBrakeReasonCaps` `Racer.cs:1745`, `ComposeBrakeCap` `Racer.cs:1795`), and the composed `MaxThrottle`/`MaxBrake` are no longer drawn.
-Overrides (grid wait, countersteer, stuck recovery, offtrack) re-tag after.
+Overrides (grid wait, countersteer, stuck recovery) re-tag after; offtrack re-tags the throttle side only, since the brake path stopped taking an off-track command in `6a3dfa3`.
 - **The overspeed reason is the incline-boost anti-cheat**: it compares measured forward Gs against the **total** wheel-pushed Gs with a deadband (`OverspeedExcessGs` `Racer.cs:3581`), so it fires whenever the car accelerates harder than its wheels are asking.
 It arms only on a straight line above its speed gate (`Racer.cs:1677`), which deliberately leaves the launch alone — the engine's assist there is exactly the excess it would otherwise read.
-- **Off-track projection cap (`Racer.cs:1214`)** caps the combined input by how far off-centre the projection lands, ramping across the whole half-width to a shallow floor.
-It is applied as a `Min`, so it never cuts braking — but a negative cap **is** a brake command over the plan's own throttle.
+- **Off-track projection cap (`Racer.cs:1611`)** is a **throttle-only** ceiling: 1.0 at the track edge, ramping to 0 across the five metres beyond it, and it fires only when the projection is outside the edge *and* further out than the car already is.
+Applied with `Math.Min` after `ComposeThrottleCap`, it never reaches the brake and has no negative branch; it yields to the full-countersteer floor, because a slide is exactly when the projection is widest.
 - **The throttle/brake avoidance override was REMOVED.** **Asymmetry is by design** — corner is the loose target, route the tight one, so don't "balance" them with flat offsets; on high-grip cars the route term wins.
 
 ## Corner lifecycle (apex table + three held targets)

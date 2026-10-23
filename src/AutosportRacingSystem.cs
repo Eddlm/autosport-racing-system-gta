@@ -1335,7 +1335,7 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            NativeListItem<string> brakeLearnGainItem = new NativeListItem<string>("Brake Learn Gain", "How far a corner's brake factor moves per verdict. The step is (20% - the share of the braking phase spent at full pedal) x this gain, applied multiplicatively to the factor, and a slide costs a flat 0.1 regardless. At 1.0 a corner that never presses hard gains 20% of its factor in one pass; at 0 the learner still samples and announces but never moves.", BrakeLearningGainValues);
+            NativeListItem<string> brakeLearnGainItem = new NativeListItem<string>("Brake Learn Gain", "How far a corner's brake factor moves per verdict. The step is (20% - the share of the braking phase spent at full pedal) x this gain, applied multiplicatively to the factor, and a slide costs a flat 0.1 regardless. At the top rung 0.9 a corner that never presses hard gains 18% of its factor in one pass; at 0.1 it gains 2% and still moves — the ladder cannot reach the old 1.0 and cannot freeze the learner.", BrakeLearningGainValues);
             brakeLearnGainItem.SelectedIndex = Math.Max(0, brakeLearnGainItem.Items.IndexOf(BrakeLearningGain.ToString("0.##", CultureInfo.InvariantCulture)));
             BrakeLearningGain = float.Parse(brakeLearnGainItem.Items[brakeLearnGainItem.SelectedIndex], CultureInfo.InvariantCulture);
             brakeLearnGainItem.ItemChanged += (sender, args) =>
@@ -1348,7 +1348,7 @@ namespace ARS
             developmentMenu.Add(brakeLearnGainItem);
             HookListTextPicker(brakeLearnGainItem);
 
-            NativeCheckboxItem brakeLearnNotifyItem = new NativeCheckboxItem("Brake Learn Notify", "Announce every verdict the brake learner lands, on its own switch rather than the track-analysis visual: (car) adjusted corner N degrees | before + change > after. Off by default, since it prints once per corner per lap.", BrakeLearningNotify);
+            NativeCheckboxItem brakeLearnNotifyItem = new NativeCheckboxItem("Brake Learn Notify", "Announce every verdict the brake learner lands, on its own switch rather than the track-analysis visual: (car) adjusted corner No<node> | before + change > after. Off by default, since it prints once per corner per lap.", BrakeLearningNotify);
             brakeLearnNotifyItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearningNotify = brakeLearnNotifyItem.Checked;
