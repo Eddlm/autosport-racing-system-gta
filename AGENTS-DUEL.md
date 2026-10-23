@@ -1,4 +1,15 @@
 # ARS — Duel model, full deferred design (companion to AGENTS.md)
+> **Recorded idea, not built — the corner is intel (2026-10-23).** Two cars fighting for one corner carry more than
+> geometry: each already computes the speed it *wants* there. `ApexSpeedWithDownforce(DetectedRadius)` is what the car
+> would carry through the apex, `BrakeFactorForApex` is how much it trusts that corner, `BrakingDecelBase` is what it
+> can actually shed, and `NextApexSpeed` is the apex it currently holds. All of it is per racer and `r.RivalRacer`
+> reaches the rival's copy, so the comparison is one access modifier away — `ApexSpeedWithDownforce` is private today.
+> What it would buy: whether a dive is an investment or a lost half-lap on the outside; whether yielding is free when
+> the rival is quicker through the corner and this car is quicker down the next straight; whether defending is worth
+> the tyre when the rival's apex speed is far higher; and, later, the input that lets personality decide to fight or
+> concede. The line it draws: today the cards decide from **geometry** (who reaches the entrance first); this would
+> let them decide from **the likely result** (who wins the corner).
+>
 > **Divebomb gates, 2026-10-23:** the arm now asks *who arrives at the entrance first*, signed. `RouteGapAhead > 0`
 > (he is ahead on the road), `rivalTimeToEntrance < myTimeToEntrance` (he gets there first), the difference no more
 > than `DivebombReachSeconds` **0.75**, and `ForwardSpeedGap > 0` (this car is the one closing). The old absolute
