@@ -3079,21 +3079,6 @@ namespace ARS
             return false;
         }
 
-        // Per-wheel positive (lock-side) slip on the same +0x174 ratio TCS reads: braking slip is positive
-        // (leaked wheel.cpp:5233 the spin branch negative, :5268 the lock branch positive).
-        static public unsafe float MaxWheelLockSlip(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            ulong offset = 0x174;
-            float w = 0f;
-            foreach (var wheel in wheelPtrs)
-            {
-                float pos = (float)Math.Round(*((float*)(wheel + offset)), 2);
-                if (pos > w) w = pos;
-            }
-            return w;
-        }
-
         // Largest per-wheel side-slip angle on the traction curve's own axis, where 1.0 is the peak. Reads every
         // wheel rather than the front pair: the wheel array's order is not something a driving law should depend on.
         static public unsafe float MaxWheelSideSlip(Vehicle handle)
