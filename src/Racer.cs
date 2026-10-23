@@ -2754,8 +2754,11 @@ namespace ARS
             Vector3 origin = Car.Position + Vector3.WorldUp * lift;
             Vector3 half = ProjectAhead(0.5f) + Vector3.WorldUp * lift;
             Vector3 full = ProjectAhead(1f) + Vector3.WorldUp * lift;
-            ARS.DrawLine(origin, half, Color.White);
-            ARS.DrawLine(half, full, Color.Cyan);
+            // Red the moment the projection is the thing holding the throttle, so the cap is visible in the world
+            // instead of only on the pedal bar.
+            bool capping = _offtrackThrottleCap < 1f;
+            ARS.DrawLine(origin, half, capping ? Color.Red : Color.White);
+            ARS.DrawLine(half, full, capping ? Color.Red : Color.Cyan);
         }
 
         void DrawWheelSlip()
