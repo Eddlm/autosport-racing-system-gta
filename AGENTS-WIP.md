@@ -108,3 +108,23 @@ unit at all. Expected effect on the three measured tracks: 4 corners culled of 3
 Residual to know: `CornerCeilingMeters` still feeds `regionRadius` in `BuildApexTable`, so a region is never cut
 where the road is wider than the ceiling. The screen is retired; the region delimiter is not. A 250 m radius bend
 still never forms a region and so never reaches the blur test - worth attacking in the region detector itself.
+
+## Field-verified, 2026-10-23 (builds 732-748)
+
+- **ABS as a lock guard (732)** — driver-verified: the brake is no longer held off by the old slip taper.
+- **Blur gate at 60 nodes (739)** — verified by import on Figureight (1 culled), LSIA (2), By The Highway (1),
+  and a fourth track (apex 511, R 162.7, 154 nodes). The population is consistent: sweeps of 160-185 m radius
+  take 149-165 nodes to open, corners of the same radius take 24-34. Nothing in between was measured.
+- **Projection throttle cap (742-745)** — the descending-Remap bug is why it never fired; it now fires on ~0.75%
+  of ticks, all of them genuine (the logged samples show the car already past the edge when the cap drops).
+- **Off-track recovery throttle (743/748)** — 0.75, not 0.5: half would not pull the car out of the grass from a
+  stop. Verified in the field.
+- **Development gate (747)** — the row must NOT require `PlayerParticipating`: Racers holds the player only when
+  they are on the grid, and the levers exist for a one-AI test with the player spectating.
+
+### Owed: the LSIA 66.3% hard brake
+
+The corner at 66.3% of LSIA was culled by the blur gate and the car now brakes sharply there without leaving the
+road. The suspicion is a step change in the route speed: with no corner over that stretch, `followTrackSpd` is the
+only law, and it may be reading the raw `PreciseCurveRadius` (a +/-4-node circumradius, noisy by construction)
+rather than a smoothed one. Not started.
