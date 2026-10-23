@@ -204,13 +204,9 @@ namespace ARS
         // ramp: braking on it at full authority is what reads as a slam. A corner owns its own ramp and is exempt.
         const float RouteBrakeCap = 0.2f;
 
-        // The projection spends the input at a steady rate while it stays outside — one whole unit per second,
-        // bled every tick rather than in steps — from full throttle down to three quarters of brake: at 0.75 the
-        // tyre still finds sqrt(1 - 0.75^2) = 0.66 of its grip for changing direction, which is why it stops there.
+        // One input unit per second while outside, down to a floor that leaves two thirds of the tyre for steering.
         const float ProjectionInputPerSecond = 1f;
         const float ProjectionBrakeFloor = 0.75f;
-        // Hysteresis: a kerb, a bad node or a half-metre overshoot must not start the clock.
-        const float ProjectionMarginMeters = 0.5f;
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
         // Line discipline belongs to speed: below this the problem is traction, and a cap would hold an off-edge car
@@ -1587,7 +1583,7 @@ namespace ARS
             // laws on one pedal is one too many. Time is the escalation — full throttle, coast, then brake — and
             // full countersteer is the one branch it yields to: the tyre there is already working diagonally, so
             // brake on top saturates the circle instead of sharing it.
-            bool projectionOutside = _projectionWidening && _projectionOutsideMeters > ProjectionMarginMeters;
+            bool projectionOutside = _projectionWidening && _projectionOutsideMeters > 0f;
             _projectionOutsideSeconds = projectionOutside ? _projectionOutsideSeconds + TickScale : 0f;
             float projectionInput = Math.Max(1f - ProjectionInputPerSecond * _projectionOutsideSeconds, -ProjectionBrakeFloor);
             bool projectionBinds = !countersteering && newThrottle > Math.Max(projectionInput, 0f);
