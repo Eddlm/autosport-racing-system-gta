@@ -1,6 +1,8 @@
 # ARS — GTA V Racing Mod
 
-Source: `F:\Archivos Seguros\Mis Archivos\Codigo\GTAV\NewRacingSystem` · Target: C# / .NET Framework 4.8 / ScriptHookVDotNet 2
+Source: `D:\Projects\GTA\NewRacingSystem` · Target: C# / .NET Framework 4.8 / ScriptHookVDotNet 2
+
+> **Canonical.** This tree is the one to work in. The old copy at `F:\...\GTAV\NewRacingSystem` is deprecated and frozen.
 
 ## This file is the agent's long-term memory
 No memory survives between sessions; this is the durable record, so save to it aggressively. Each entry is a note — problem, constraint, anchor, stop — never a retelling. Record the **WHAT** — quirks, non-obvious decisions, invariants, override order — and the **WHY** only where it changes what a reader would do. Never the **HOW**: the code documents itself.
@@ -21,6 +23,7 @@ No memory survives between sessions; this is the durable record, so save to it a
 - `AGENTS-WIP.md` — **first WIP, release, release blocker, test plan, packaging, clean install, artifact, release notes, pre-release verification**: the human acceptance and package gate, and user-facing limitations.
 - `AGENTS-VANILLA-STEERING.md` — **vanilla / reference steering, "how does GTA steer", GTA AI bearing law, `CCarAI` / `FindMaxSteerAngle` / `CVehicleIntelligence`, `CVehControls` / `m_fSteerInput`, `SET_VEHICLE_STEER_BIAS`, driving-style flags, leaked source, "the real GTA V code does X", Franklin's special ability, per-character skills/stats, player-only assists, "does the player get more grip or damping"**: what the leaked engine + script trees do, and that their native hashes are **not** the ones to use.
 - `AGENTS-FLAGS.md` — **vehicle flags, handling.meta flags, `strModelFlags` / `strHandlingFlags` / `strAdvancedFlags` / `strDamageFlags` / `strFlags`, `MF_` / `HF_` / `CF_` / `DF_` / `SF_` / `FLAG_` prefixes, `CAdvancedData` / `CCarHandlingData`, "what does this flag actually do", a car that behaves unlike its handling values**: every flag set the engine has, with a consumer site for each, the parse path out of `handling.meta`, the fleet's own flag profile, and the list of things ARS is blind to. Extracted from the leaked tree — a community flag list is not the authority here.
+- `AGENTS-PERSONALITY.md` — **personality, character, archetypes, per-racer behaviour, "that car drives like it knows what it's doing", timid / reckless, aggression as identity, lane-change rate, apex commitment, braking anticipation, confidence, pressure, frustration, rivalry, giving the field intent**: the per-racer personality spec — the three constants and two variables, the elements ranked simplest-first with their cost, the archetype table, and the four rules that keep it legible. Status: **designed, not built**.
 - `AGENTS-TEAMS.md` — **teammate, Agent Teams, Lead, shared task / task board, write scope, claim / complete, arbitration, dispatch, "discuss or plan a system", parallel writers, subagent vs teammate**: how delegation is routed here, and the write / claim / verify discipline a teammate must keep on this repo.
 
 ## Coding style
