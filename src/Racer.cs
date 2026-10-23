@@ -200,6 +200,10 @@ namespace ARS
         // radius past 7.5 km. The tightest genuine corner on the nine shipped tracks sits at 0.006, three times it.
         const float RouteStraightSagittaShare = 0.002f;
 
+        // How much brake the route's curvature is allowed to ask for. A curvature-driven target is a step, not a
+        // ramp: braking on it at full authority is what reads as a slam. A corner owns its own ramp and is exempt.
+        const float RouteBrakeCap = 0.1f;
+
         const float OffshootRangeMeters = 5f; // the ramp lives beyond the edge: 1.0 at it, 0.0 five metres out
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
@@ -1512,6 +1516,7 @@ namespace ARS
             Control.MaxThrottle = 1f;
             Control.MaxBrake = 1f;
             Control.MaxBrakeFromABS = 1f;
+            Control.MaxBrakeFromRoute = 1f;
             Control.MaxBrakeFromCountersteer = 1f;
             Control.MaxThrottleFromTCS = 1f;
             Control.MaxThrottleFromStability = 1f;
@@ -1944,7 +1949,12 @@ namespace ARS
                 followTrackSpd += chicaneBoost;
             }
 
-            Brain.CurrentIntention.Speed = Math.Min(cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph), followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph));
+            float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
+            float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph);
+            Brain.CurrentIntention.Speed = Math.Min(cornerTerm, routeTerm);
+            // Which of the two is asking for the speed decides whether the pedal may brake on it at all: a corner
+            // plans its own deceleration, the road's curvature does not.
+            Control.MaxBrakeFromRoute = routeTerm <= cornerTerm ? RouteBrakeCap : 1f;
 
             // ChillOut: hold a standoff behind the closest rival ahead.
             if (ActiveManeuver.Type == ManeuverType.ChillOut)
@@ -2240,10 +2250,12 @@ namespace ARS
         float ComposeBrakeCap(float baseBrake, bool countersteering)
         {
             Control.MaxBrake = Math.Min(Control.MaxBrakeFromABS, Control.MaxBrakeFromCountersteer);
+            Control.MaxBrake = Math.Min(Control.MaxBrake, Control.MaxBrakeFromRoute);
 
             float binding = baseBrake;
             BrakeReason reason = BrakeReason.Plan;
             if (Control.MaxBrakeFromABS < binding) { binding = Control.MaxBrakeFromABS; reason = BrakeReason.Abs; }
+            if (Control.MaxBrakeFromRoute < binding) { binding = Control.MaxBrakeFromRoute; reason = BrakeReason.Route; }
             if (Control.MaxBrakeFromCountersteer < binding) { binding = Control.MaxBrakeFromCountersteer; reason = BrakeReason.Countersteer; }
             if (countersteering) reason = BrakeReason.Countersteer;
             if (BaseBehavior == RacerBaseBehavior.GridWait) reason = BrakeReason.GridWait;

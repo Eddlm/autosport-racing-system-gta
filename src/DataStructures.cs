@@ -301,7 +301,8 @@ namespace ARS
         Plan,
         Abs,
         Countersteer,
-        // No Offtrack: the brake path stopped taking an off-track command in the throttle-only rewrite.
+        // Route: the road's curvature is what set the target speed, so its brake ceiling is a candidate.
+        Route,
         GridWait,
         StuckRecovery
     }
@@ -337,6 +338,8 @@ namespace ARS
         public float MaxBrake = 1f;
         public float MaxThrottleFromTCS = 1f;
         public float MaxBrakeFromABS = 1f;
+        // Ceiling on the brake while the road's own curvature, not a corner, is what sets the target speed.
+        public float MaxBrakeFromRoute = 1f;
         public float MaxBrakeFromCountersteer = 1f;
         public float MaxThrottleFromOverspeed = 1f;
         public float MaxThrottleFromRival = 1f;
