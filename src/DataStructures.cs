@@ -362,6 +362,10 @@ namespace ARS
         public Vector3 Direction = Vector3.Zero;
         public float GeneralCurveRadius = 999f;
         public float PreciseCurveRadius = 999f;
+        // Harmonic-mean radius over +/-2 nodes, precomputed at load. The route speed takes a window minimum
+        // over this instead of measuring a circumradius per tick: a minimum cannot step, and one noisy node
+        // cannot tighten a whole approach.
+        public float RouteCurveRadius = 999f;
         public float ExactRadius = 999f;
         public float Elevation = 0f;
         public float TrackHalfWidth = 5f;

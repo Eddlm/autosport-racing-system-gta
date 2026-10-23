@@ -185,6 +185,10 @@ namespace ARS
             int nodeCount = ARS.RouteNodes.Count;
             foreach (TrackPoint point in ARS.TrackPoints) ComputePointGeometry(point, nodeCount);
 
+            // Second pass: the route speed's radius needs its neighbours already measured, so it cannot be
+            // computed inside ComputePointGeometry.
+            foreach (TrackPoint point in ARS.TrackPoints) point.RouteCurveRadius = SmoothedRadius(point.Node, nodeCount, 2);
+
             BuildApexTable();
             ARS.Log(ARS.LogImportance.Info, "Route generated");
         }
