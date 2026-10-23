@@ -1361,7 +1361,7 @@ namespace ARS
         // peak × 0.5 (the slide is just past the traction peak) to peak × 0.8 (the countersteer is at full
         // authority), and the countersteer answers the full slide — the blend is the only modulator.
         const float SlideBlendStartFraction = 0.5f;
-        const float SlideBlendFullFraction = 0.8f;
+        const float SlideBlendFullFraction = 1.5f;
         // The share of the slide the countersteer answers. Half, not all: a wheel as wide as the slide itself
         // (33° of countersteer for 33° of slide) is what snaps the car the other way at the end of the correction.
         const float CountersteerSlideShare = 0.5f;
