@@ -1639,7 +1639,13 @@ namespace ARS
                     // and the comparison below can never fail. Same frame as turnDirection, so the sides compare.
                     carOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction) * turnDirection;
                     if (outsideOffset > carOffset && outsideOffset > halfWidth)
-                        cap = ARS.Remap(outsideOffset, halfWidth, halfWidth + OffshootRangeMeters, 1f, 0f, true);
+                    {
+                        // Clamp the INPUT and remap unclamped: Remap's clamp runs Clamp(r, out_min, out_max), and with
+                        // a descending out-range (1 to 0) that returns out_min for every value below it - it would
+                        // pin the cap at 1.0 forever. A descending remap must never be clamped at the output.
+                        float rampEnd = halfWidth + OffshootRangeMeters;
+                        cap = ARS.Remap(ARS.Clamp(outsideOffset, halfWidth, rampEnd), halfWidth, rampEnd, 1f, 0f);
+                    }
                 }
             }
 
