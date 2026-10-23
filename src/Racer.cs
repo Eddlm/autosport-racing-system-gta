@@ -2468,6 +2468,9 @@ namespace ARS
 
                 if (partnerLost || HasPassedApex(_divebombApexNode))
                 {
+                    ARS.Log(ARS.LogImportance.Info, "Card divebomb: " + Name + " released"
+                        + (HasPassedApex(_divebombApexNode) ? " at apex" : " partner lost")
+                        + " after " + (Game.GameTime - ActiveManeuver.LastEnabled) + " ms", true);
                     ActiveManeuver.Type = ManeuverType.None;
                     ActiveManeuver.Target = null;
                     _divebombApexNode = -1;
@@ -2670,6 +2673,9 @@ namespace ARS
             ActiveManeuver.LastEnabled = Game.GameTime;
             _divebombApexNode = apexNode;
             _divebombBrakeBonus = ARS.GetRandomInt(2, 9) / 100f;
+            ARS.Log(ARS.LogImportance.Info, "Card divebomb: " + Name + " armed on " + diveTarget.RivalRacer.Name
+                + " apex " + apexNode + " bonus +" + _divebombBrakeBonus.ToString("0.00") + " gap " + diveTarget.RouteGapAhead.ToString("0.0")
+                + " dT " + (timeToEntrance - diveTarget.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(diveTarget.Speed, 1f)).ToString("0.00"), true);
             return true;
         }
 
