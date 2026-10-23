@@ -726,21 +726,10 @@ namespace ARS
             // The damper only ever subtracts: a left command never gets more left from it.
             if (damperTermDeg * nonDamperSteerDeg > 0f) damperTermDeg = 0f;
             // Past neutral it is countersteering — the wheel pointing against the car's own rotation rather than
-            // merely less into it. A flat ceiling, not a share of the slide: a share fell to zero with the slide and
-            // took the rate feedback off a car going straight, which set it oscillating.
-            // Aimed straight there is no side to cross from, and the term is countersteer all the same — the wheel is
-            // the only thing pointing anywhere. Its opposite is the side it would cross to, so the same rule applies.
-            float pursuitSign = Math.Sign(nonDamperSteerDeg);
-            if (pursuitSign == 0f) pursuitSign = -Math.Sign(damperTermDeg);
+            // merely less into it. Not a cap tied to the slide: that fell to zero with the slide and took the rate
+            // feedback off a car going straight, which set it oscillating.
             float damperOvershootDeg = Math.Abs(damperTermDeg) - Math.Abs(nonDamperSteerDeg);
-            if (pursuitSign != 0f && damperTermDeg * pursuitSign < 0f && damperOvershootDeg > 0f)
-            {
-                float crossingDeg = damperOvershootDeg * DamperCrossingShare;
-                if (crossingDeg > DamperCrossingFreeDeg)
-                    crossingDeg = DamperCrossingFreeDeg + (crossingDeg - DamperCrossingFreeDeg) / DamperCrossingDivisor;
-                crossingDeg = Math.Min(crossingDeg, DamperCrossingMaxDeg);
-                damperTermDeg = -pursuitSign * (Math.Abs(nonDamperSteerDeg) + crossingDeg);
-            }
+            if (damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f) damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + damperOvershootDeg * DamperCrossingShare);
             _damperTermDeg = damperTermDeg;
             Control.SteerDegrees = nonDamperSteerDeg + damperTermDeg;
 
@@ -1280,12 +1269,6 @@ namespace ARS
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
-        // Countersteer is where the damper forces the snap: fast rotation, a proportional term, and the correction
-        // landing late enough to become the next rotation. Small countersteer is the opposite case — it is what keeps
-        // a car straight — so it keeps full authority, and only the excess past this band pays the divisor.
-        const float DamperCrossingFreeDeg = 2f;
-        const float DamperCrossingDivisor = 2f;
-        const float DamperCrossingMaxDeg = 30f;
         // The damper's authority against the car's own rotation. The slide batch drove it at 0.5 and the slides
         // answered, but that field read a smidge unstable, so the knob sits back at full — the slide response to keep
         // is the blend's band and share, with the crossing overshoot whole.
