@@ -1305,7 +1305,7 @@ namespace ARS
             // The corner ceiling, owned by this menu: a change rebuilds the derived table at once, so it can be
             // judged mid-race. Seeded from the repaired store, and the static is written to that same value before
             // the handler lands, so the item, the session and the file agree even when the repair moved the number.
-            NativeListItem<string> cornerCeilingItem = new NativeListItem<string>("Corner Ceiling", "What the track table calls a corner: at or under this radius on its tightest node. Anything wider is a bend, driven on route speed alone with no apex entry, braking plan or chevron. A change rebuilds the table at once, mid-race included.", CornerCeilingValues);
+            NativeListItem<string> cornerCeilingItem = new NativeListItem<string>("Corner Ceiling", "The radius the detector treats as a straight: regions are cut where the road opens past it. It no longer rejects corners - what exists is decided by whether the road opens to twice the radius within 60 nodes. A change rebuilds the table at once, mid-race included.", CornerCeilingValues);
             cornerCeilingItem.SelectedIndex = Math.Max(0, cornerCeilingItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerCeiling", CornerCeilingMeters).ToString(CultureInfo.InvariantCulture)));
             CornerCeilingMeters = int.Parse(cornerCeilingItem.Items[cornerCeilingItem.SelectedIndex], CultureInfo.InvariantCulture);
             cornerCeilingItem.ItemChanged += (sender, args) =>

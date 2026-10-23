@@ -781,9 +781,6 @@ namespace ARS
             }
 
             if (float.IsNaN(tightestRadius) || float.IsInfinity(tightestRadius)) return;
-            // A wide region is a bend, not a corner: the tightest node reads the precise radius, which the region's
-            // smoothed radius can sit well under, so a region does open without a tight node inside it.
-            if (tightestRadius > ARS.CornerCeilingMeters) return;
 
             int apexNode = scanNodes[apexPosition];
             // A span is capped at a hard node count each way rather than by the corner's own size: offroad the radius
@@ -829,6 +826,15 @@ namespace ARS
             int nodesToDouble = detectedRadius < 999f
                 ? NodesToDoubleRadius(apexNode, detectedRadius, exitMaxStep, count)
                 : exitMaxStep;
+            // A corner is a feature with an end: if the road has not opened to twice its radius within this many
+            // nodes, what we would call an exit is arbitrary and the corner is a bend the route already governs.
+            // The number comes from 32 corners over three tracks, where the distribution splits between 52 and 70
+            // nodes; it is a measured starting point, not a law, and wants re-reading as tracks are added.
+            if (nodesToDouble > SpanBlurNodes)
+            {
+                ARS.Log(ARS.LogImportance.Info, "Corner blur: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " nodesToDouble=" + nodesToDouble + " > " + SpanBlurNodes + "; not a corner");
+                return;
+            }
             ARS.Log(ARS.LogImportance.Info, "Corner open: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " nodesToDouble=" + nodesToDouble + "/" + exitMaxStep + (nodesToDouble >= exitMaxStep ? " (did not double)" : ""));
 
             CornerPoint corner = new CornerPoint
@@ -918,6 +924,9 @@ namespace ARS
         // the raw tightest node, because on a wide corner that minimum is noise and a noisy base makes every sweep
         // look like it opens early. Small is a corner; large is a bend the route already governs on its own.
         const float SpanDoublingMultiple = 2f;
+        // Nodes the road may take to double the apex radius before the corner is called a bend. Measured, not
+        // derived: see the note on the gate in AddCorner.
+        const int SpanBlurNodes = 60;
 
         static int NodesToDoubleRadius(int apexNode, float apexRadius, int maxStep, int count)
         {

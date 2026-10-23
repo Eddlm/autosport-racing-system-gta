@@ -99,6 +99,12 @@ walked to `exitMaxStep` = min(500, nodes left) and **not** clamped to 40. Each c
 
 `Corner open: apex=1487 smoothedR=41.3 tightestR=33.9 nodesToDouble=12/500`
 
-Report only: nothing screens on it yet and the radius ceiling still decides what exists. To replace the ceiling,
-read the distribution across real tracks first - the question is whether corners and long bends form two
-populations or one continuum, because a continuum has no honest threshold.
+**Now a gate (build 739).** `nodesToDouble > SpanBlurNodes (60)` returns before the corner is built, and the
+`CornerCeilingMeters` screen is gone. The 60 comes from 32 corners over FIG, LSIA and a third track, whose
+distribution splits between 52 and 70 nodes; a 40-node cut was tried and rejected because node count mixes distance
+with speed, while seconds mix a road property with the car's grip (1G..3G across mods), so seconds are not a road
+unit at all. Expected effect on the three measured tracks: 4 corners culled of 32.
+
+Residual to know: `CornerCeilingMeters` still feeds `regionRadius` in `BuildApexTable`, so a region is never cut
+where the road is wider than the ceiling. The screen is retired; the region delimiter is not. A 250 m radius bend
+still never forms a region and so never reaches the blur test - worth attacking in the region detector itself.
