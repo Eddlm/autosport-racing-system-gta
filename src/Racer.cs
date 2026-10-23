@@ -389,6 +389,9 @@ namespace ARS
         const int CardCooldownMs = 1000;
         public const float ChillStandoffDistance = 20f;
         const float ChillThrottleCap = 0.5f;
+        // Anti-collision lift: full gas at this bumper gap, this much at contact, linear between.
+        const float RivalLiftMeters = 3f;
+        const float RivalLiftFloor = 0.5f;
         const float ChillStandoffEscapeMargin = 2f;
         const float ChillMinSpeedMph = 30f;
 
@@ -2312,12 +2315,19 @@ namespace ARS
 
             Control.MaxThrottleFromOverspeed = GlideCap(Control.MaxThrottleFromOverspeed, OverspeedThrottleLevel());
 
+            // The lift is a distance, not a countdown: no ramp on time-to-reach, so a closing rival never cuts the throttle
+            // to nothing. Three metres out is full gas and contact is the floor, and the floor is half throttle, not zero —
+            // this term yields the acceleration, it does not stop the car.
+            //
+            // Clamp the INPUT and remap unclamped: Remap's clamp runs Clamp(r, out_min, out_max) and, with a descending
+            // output range, returns out_min for every value below it - the mistake that pinned the projection cap at 1.0
+            // for two builds.
             float rivalLevel = 1f;
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || r.RelativePosition != RelativePos.Ahead) continue;
-                if (ARS.IsBetween(r.TimeToReach, 0f, 3f)) rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.TimeToReach, 0f, 3f, 0f, 1f, true));
-                if (ARS.IsBetween(r.FrontGap, 0f, 1f)) rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.FrontGap, 0f, 1f, 0f, 1f, true));
+                float frontGap = ARS.Clamp(r.FrontGap, 0f, RivalLiftMeters);
+                rivalLevel = Math.Min(rivalLevel, ARS.Remap(frontGap, RivalLiftMeters, 0f, 1f, RivalLiftFloor));
             }
             Control.MaxThrottleFromRival = GlideCap(Control.MaxThrottleFromRival, rivalLevel);
 
