@@ -175,7 +175,7 @@ namespace ARS
         // Flat mph added to the corner plan; Road Curvature Offset is the same knob for the route term.
         public static int CornerOffsetMph = 2;
         public static int RouteOffsetMph = 4;
-        public static float SteerDampingGain = 1f;
+        public static float SteerDampingGain = 0.5f;
         public static float SteerCeilingFactor = 1f;
         // The slip the tyres reach peak traction at, in the field's own units: the curve is indexed from the
         // field at x sfTractionMinAngle with its peak at argument 1.0, and the engine's own below-the-peak test
