@@ -72,6 +72,9 @@ namespace ARS
         // route point instead.)
         public int LiveRouteCrestNode = -1;
         public int LiveRouteCrestFarNode = -1;
+        // The two lookahead nodes RouteRadiusSampled measured this tick, for the route-radius debug lines.
+        public int LiveRouteRadiusNearNode = -1;
+        public int LiveRouteRadiusFarNode = -1;
 
         // Time-based route references used by steering and speed calculations.
         public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
@@ -3322,6 +3325,8 @@ namespace ARS
                 n3 = ((CurrentTrackPoint.Node + o3) % count + count) % count;
             }
 
+            LiveRouteRadiusNearNode = n2;
+            LiveRouteRadiusFarNode = n3;
             float r = ARS.Circumradius3D(ARS.TrackPoints[n1].Position, ARS.TrackPoints[n3].Position, ARS.TrackPoints[n2].Position);
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
             return ARS.Clamp(r, 5f, 999f);

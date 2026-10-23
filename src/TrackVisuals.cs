@@ -194,6 +194,18 @@ namespace ARS
                 DrawTrackCrossingLine(trackPoints, racer.LiveRouteCrestFarNode, Color.FromArgb(220, 255, 60, 60));
         }
 
+        // The two lookahead nodes the route radius is sampled from: near at speed/grip, far at twice that. Magenta
+        // against the crest checks' blue and red, because the two pairs only coincide when grip is 1.0 and reading
+        // the wrong one is how a route-speed step gets misdiagnosed.
+        public static void DrawRouteRadiusChecks(Racer racer, List<TrackPoint> trackPoints)
+        {
+            if (trackPoints.Count == 0) return;
+            if (racer.LiveRouteRadiusNearNode >= 0 && racer.LiveRouteRadiusNearNode < trackPoints.Count)
+                DrawTrackCrossingLine(trackPoints, racer.LiveRouteRadiusNearNode, Color.FromArgb(220, 255, 0, 255));
+            if (racer.LiveRouteRadiusFarNode >= 0 && racer.LiveRouteRadiusFarNode < trackPoints.Count)
+                DrawTrackCrossingLine(trackPoints, racer.LiveRouteRadiusFarNode, Color.FromArgb(220, 255, 160, 255));
+        }
+
         static void DrawTrackCrossingLine(List<TrackPoint> trackPoints, int node, Color color)
         {
             TrackPoint tp = trackPoints[node];

@@ -50,7 +50,7 @@ namespace ARS
     // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius
     }
     public partial class ARS : Script
     {
@@ -222,7 +222,8 @@ namespace ARS
         { Options.ShowBumps, false },
         { Options.ShowWheelSlip, false },
         { Options.ShowGsProjection, false },
-        { Options.ShowGLine, false }
+        { Options.ShowGLine, false },
+        { Options.ShowRouteRadius, false }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -1291,6 +1292,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
             AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the closest AI car's constant-acceleration path from its roof: one line to where it projects at 0.5s, then a second connected from there to the 1s mark, both floating at roof height. The bend at the joint is the acceleration the car is committing to.");
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw one line from your own car's roof along the horizontal acceleration it is pulling, racing or not: the direction is the G vector and the length is its magnitude at one metre per G, with a short cross at the tail so the direction reads.");
+            AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is actually measured from, as crossing lines: the car's own node is where the car stands, the magenta line is the near sample and the pale one the far sample, at speed/grip and twice that ahead. The crest checks (blue and red) only land on the same nodes when grip is 1.0, so these are the ones to read when a route-speed step is suspected.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
@@ -1883,6 +1885,11 @@ namespace ARS
                 {
                     Vehicle gLineCar = player.Character.CurrentVehicle;
                     if (CanWeUse(gLineCar)) UpdatePlayerGLine(gLineCar);
+                }
+                if (DebugToggles[Options.ShowRouteRadius])
+                {
+                    Racer radiusRacer = DebugFocusRacer ?? PlayerRacer;
+                    if (radiusRacer != null) TrackVisuals.DrawRouteRadiusChecks(radiusRacer, ARS.TrackPoints);
                 }
                 if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
                 {
