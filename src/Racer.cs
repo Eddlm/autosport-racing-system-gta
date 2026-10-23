@@ -734,6 +734,10 @@ namespace ARS
                 float crossingDeg = Math.Min(damperOvershootDeg * DamperCrossingShare, DamperCrossingMaxDeg);
                 damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + crossingDeg);
             }
+            // The crossing above only fires when the pursuit has a side to cross from. Aimed straight, the command is
+            // zero and the term would steer with no ceiling at all, so the magnitude is bounded here unconditionally.
+            float damperCeilingDeg = Math.Abs(nonDamperSteerDeg) + DamperCrossingMaxDeg;
+            damperTermDeg = ARS.Clamp(damperTermDeg, -damperCeilingDeg, damperCeilingDeg);
             _damperTermDeg = damperTermDeg;
             Control.SteerDegrees = nonDamperSteerDeg + damperTermDeg;
 
