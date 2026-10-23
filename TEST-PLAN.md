@@ -701,6 +701,8 @@ The table's ceiling and the region scan both drop from 100 m to 50 m (they alrea
 
 **Observed on By The Highway (build 722)**: the 90° left the field expected is absent at 80 m and returns at 100 m, and the widest apex the table kept at 80 m was 70 m — so that stretch is driven on route speed alone with no braking plan, which is exactly the cost this section named. The merge was cleared as the cause in the same run: zero `Corners merged` and zero `Corner skipped` lines, all nine corners logged as `Corner add`.
 
+**The rung, measured by the driver (build 723)**: 80 m breaks the table, 180 m leaves fewer problems, **200 m — the top of the ladder — has every corner the AI needs**. The lesson is a change of philosophy rather than a bigger number: **cribar curvas por radio da más problemas que soluciona; la tabla debe describir la carretera y la IA debe aprender a ignorar las curvas que no necesita**.
+
 ## The G line over the player's own car (build 721, compile-verified, drive owed)
 
 A Debug checkbox, `Show G Line`, draws one line from the player's own car's roof in any state: it samples its own speed because a racer's 20 ms window lives on `Racer`, and it averages 200 ms like every other acceleration read in the mod. Direction is the horizontal acceleration the car is pulling, length is that magnitude at one metre per G with the top clamped, and a perpendicular tick at the tail makes the direction readable — a bare line looks the same in both directions.
