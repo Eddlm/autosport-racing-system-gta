@@ -274,6 +274,12 @@ Any multiple above 1 points the wheels *past* the velocity vector and actively r
 ARS *exposed* it as the `SlideCountersteer` knob for exactly this reason — a taste dial around a derived value, not an arbitrary gain — **but that knob is now gone**: the blend answers a share of the slide angle (`CountersteerShare`), and the limiter raises that side's limit to `min(|SlideAngle| × blend weight, lock)`, so the countersteer can reach the velocity vector but not pass it.
 Two bounds agree with the physics: the share's top at 1, and the grant at the slide angle.
 
+**Driven: 1 is neutral on paper and too much in the car — the shipped share is 0.5.**
+Countersteer as wide as the slide (33° of wheel for 33° of slide) is the exact geometry, and it is also the state where the correction finishes level and the released tyre throws the car back the other way: **snap oversteer**, a full reverse rotation with no warning.
+Half the slide still holds the car and still recovers it; the process is simply slower, which is the trade taken deliberately.
+A higher share buys that speed back, and 1.0 is past the edge — anything between the two is a comfort dial, not a new law.
+The share is a **ceiling only**: the ramp that earns it is untouched, so the blend still engages at the same slip and still reaches its full weight on the same nodes. Scaling the ramp instead (which the first cut did) softens the transition rather than lowering the reach, and that is not the same change.
+
 That is TUM's architecture — a path-tracking controller with a slip-gated countersteer layer on top (`δ += k·(α_f − α_r)`, gated on `|α_r| > |α_f|`).
 **The survey mis-characterised ARS as folding the slide into the path error; it does not.**
 The two terms are not competing for the same job, so their interaction is a *priority* choice (save the car first) — the honest justification for the blend getting the last word.
