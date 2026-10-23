@@ -1362,7 +1362,11 @@ namespace ARS
             _arsMenu.AddSubMenu(interfaceMenu);
             _arsMenu.AddSubMenu(controlsMenu);
             _arsMenu.AddSubMenu(debugMenu);
-            _arsMenu.AddSubMenu(developmentMenu);
+            NativeSubmenuItem developmentEntry = _arsMenu.AddSubMenu(developmentMenu);
+            // A single car on track is the whole point of these levers, so the row is denied outside that: no race,
+            // a spectator with no grid, or a field of two all leave it disabled.
+            developmentEntry.Enabled = false;
+            _arsMenu.Shown += (sender, args) => developmentEntry.Enabled = RaceIsRunning && Racers.Count == 1;
             _arsMenu.AddSubMenu(creatorMenu);
             _arsMenu.Add(resetItem);
 
