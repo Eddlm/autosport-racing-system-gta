@@ -1280,7 +1280,7 @@ namespace ARS
         // Countersteer is where the damper forces the snap: fast rotation, a proportional term, and the correction
         // landing late enough to become the next rotation. So it is deliberately careful there — a third of the
         // magnitude — with a high ceiling that only a genuinely enormous overshoot reaches.
-        const float DamperCrossingDivisor = 3f;
+        const float DamperCrossingDivisor = 2f;
         const float DamperCrossingMaxDeg = 30f;
         // The damper's authority against the car's own rotation. The slide batch drove it at 0.5 and the slides
         // answered, but that field read a smidge unstable, so the knob sits back at full — the slide response to keep
