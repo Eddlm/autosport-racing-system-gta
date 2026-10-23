@@ -1042,6 +1042,44 @@ namespace ARS
             return Circumradius2D(new Vector2(a.X, a.Y), new Vector2(b.X, b.Y), new Vector2(midpoint.X, midpoint.Y));
         }
 
+        // Least-squares circle through four plan-view points: the four-point generalisation of a circumradius, since
+        // four points rarely lie on one circle and no exact radius exists. Kasa's algebraic fit, mean-centred for
+        // conditioning. 999 when the points are collinear or the normal equations are singular - the same sentinel
+        // the exact three-point solve returns, so the caller keeps one convention. Four Vector3 on the stack via a
+        // local array is the only allocation, once per racer per tick.
+        public static float FittedCircleRadius(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+        {
+            float mx = (a.X + b.X + c.X + d.X) * 0.25f;
+            float my = (a.Y + b.Y + c.Y + d.Y) * 0.25f;
+
+            float suu = 0f, svv = 0f, suv = 0f, suuu = 0f, svvv = 0f, suvv = 0f, svuu = 0f;
+            Vector3[] points = { a, b, c, d };
+            for (int i = 0; i < points.Length; i++)
+            {
+                float u = points[i].X - mx;
+                float v = points[i].Y - my;
+                suu += u * u;
+                svv += v * v;
+                suv += u * v;
+                suuu += u * u * u;
+                svvv += v * v * v;
+                suvv += u * v * v;
+                svuu += v * u * u;
+            }
+
+            // Normal equations of the algebraic fit, solved for the centre offset from the mean.
+            float determinant = suu * svv - suv * suv;
+            if (Math.Abs(determinant) < 1e-6f) return 999f;
+
+            float rhsU = 0.5f * (suuu + suvv);
+            float rhsV = 0.5f * (svvv + svuu);
+            float centreU = (rhsU * svv - rhsV * suv) / determinant;
+            float centreV = (suu * rhsV - suv * rhsU) / determinant;
+
+            float radius = (float)Math.Sqrt(centreU * centreU + centreV * centreV + (suu + svv) * 0.25f);
+            return float.IsNaN(radius) || float.IsInfinity(radius) ? 999f : radius;
+        }
+
         public static float Circumradius2D(Vector2 a, Vector2 b, Vector2 midpoint)
         {
             Vector2 midpoint1 = (a + b) / 2;

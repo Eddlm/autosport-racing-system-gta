@@ -74,6 +74,7 @@ namespace ARS
         public int LiveRouteCrestFarNode = -1;
         // The two lookahead nodes RouteRadiusSampled measured this tick, for the route-radius debug lines.
         public int LiveRouteRadiusNearNode = -1;
+        public int LiveRouteRadiusMidNode = -1;
         public int LiveRouteRadiusFarNode = -1;
         // The radius the last sample produced, for the readout over the car.
         public float LiveRouteRadius = -1f;
@@ -3303,36 +3304,55 @@ namespace ARS
         }
 
         // Circumradius through three route-window sample points.
+        // Four points, not three. The exact circumradius is dominated by the angle at its middle point, and near
+        // collinearity that angle makes the radius hypersensitive: one node moving a metre swings it hundreds of
+        // metres, which the route speed turns into a step. Four points fitted by least squares spread that influence,
+        // so the reading moves with the road instead of with one vertex. The car's own node is still the first sample
+        // and the farthest is still twice the per-grip lookahead, as before; the two middles split that span into
+        // thirds so the fit sees the shape of the bend rather than one apex angle.
         float RouteRadiusSampled()
         {
             int count = ARS.TrackPoints.Count;
             if (count < 10) return 999f;
 
             float traction = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
-            int o1 = 0;
-            int o2 = (int)(Car.Velocity.Length() / traction);
-            int o3 = (int)(Car.Velocity.Length() * 2f / traction);
+            int far = (int)(Car.Velocity.Length() * 2f / traction);
+            int middleNear = far / 3;
+            int middleFar = (far * 2) / 3;
 
-            int n1, n2, n3;
-            if (ARS.IsPointToPoint)
-            {
-                n1 = (int)ARS.Clamp(CurrentTrackPoint.Node + o1, 0, count - 1);
-                n2 = (int)ARS.Clamp(CurrentTrackPoint.Node + o2, 0, count - 1);
-                n3 = (int)ARS.Clamp(CurrentTrackPoint.Node + o3, 0, count - 1);
-            }
-            else
-            {
-                n1 = ((CurrentTrackPoint.Node + o1) % count + count) % count;
-                n2 = ((CurrentTrackPoint.Node + o2) % count + count) % count;
-                n3 = ((CurrentTrackPoint.Node + o3) % count + count) % count;
-            }
+            int carNode = CurrentTrackPoint.Node;
+            int n0 = WrappedNode(carNode);
+            int n1 = WrappedNode(carNode + middleNear);
+            int n2 = WrappedNode(carNode + middleFar);
+            int n3 = WrappedNode(carNode + far);
 
-            LiveRouteRadiusNearNode = n2;
+            LiveRouteRadiusNearNode = n1;
+            LiveRouteRadiusMidNode = n2;
             LiveRouteRadiusFarNode = n3;
-            float r = ARS.Circumradius3D(ARS.TrackPoints[n1].Position, ARS.TrackPoints[n3].Position, ARS.TrackPoints[n2].Position);
+
+            float r = TrackLoader.FittedCircleRadius(
+                ARS.TrackPoints[n0].Position,
+                ARS.TrackPoints[n1].Position,
+                ARS.TrackPoints[n2].Position,
+                ARS.TrackPoints[n3].Position);
+
+            // A tight slow corner collapses the thirds onto the same node, and a dead-straight sample is collinear:
+            // both leave the fit singular, and the exact three-point solve over the whole span is the honest fallback
+            // rather than a fabricated number.
+            if (r >= 999f)
+                r = ARS.Circumradius3D(ARS.TrackPoints[n0].Position, ARS.TrackPoints[n3].Position, ARS.TrackPoints[n2].Position);
+
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
             LiveRouteRadius = ARS.Clamp(r, 5f, 999f);
             return LiveRouteRadius;
+        }
+
+        int WrappedNode(int node)
+        {
+            int count = ARS.TrackPoints.Count;
+            return ARS.IsPointToPoint
+                ? (int)ARS.Clamp(node, 0, count - 1)
+                : ((node % count) + count) % count;
         }
 
         // Braking map close-corner filtering and entrance timing.

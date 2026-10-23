@@ -202,8 +202,10 @@ namespace ARS
             if (trackPoints.Count == 0) return;
             if (racer.LiveRouteRadiusNearNode >= 0 && racer.LiveRouteRadiusNearNode < trackPoints.Count)
                 DrawTrackCrossingLine(trackPoints, racer.LiveRouteRadiusNearNode, Color.FromArgb(220, 255, 0, 255));
+            if (racer.LiveRouteRadiusMidNode >= 0 && racer.LiveRouteRadiusMidNode < trackPoints.Count)
+                DrawTrackCrossingLine(trackPoints, racer.LiveRouteRadiusMidNode, Color.FromArgb(220, 255, 110, 255));
             if (racer.LiveRouteRadiusFarNode >= 0 && racer.LiveRouteRadiusFarNode < trackPoints.Count)
-                DrawTrackCrossingLine(trackPoints, racer.LiveRouteRadiusFarNode, Color.FromArgb(220, 255, 160, 255));
+                DrawTrackCrossingLine(trackPoints, racer.LiveRouteRadiusFarNode, Color.FromArgb(220, 255, 180, 255));
         }
 
         static void DrawTrackCrossingLine(List<TrackPoint> trackPoints, int node, Color color)
