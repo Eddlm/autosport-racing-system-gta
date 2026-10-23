@@ -2105,32 +2105,28 @@ namespace ARS
             return 1f - depthShare * (1f - TcsCapFloor);
         }
 
-        // ABS: the brake-side twin, containment where TCS regulates: TCS holds a curve point, ABS guards the
-        // region past the peak where a locking wheel is losing force. The cap leaves the brake untouched
-        // up to slip 0.5 (a quarter past the peak, where the curve is rolling off but the wheel isn't
-        // fully locked). From 0.5 to 1.0 (the engine's 'locked' reading), tanh drops the brake force from
-        // 1.0 to 0.0 -- a fully locked wheel gets no brake, the driver has lost the wheel and easing is
-        // the only recovery. A wheel whose own engine ABS is active has the field forced to +/-5 by the
-        // engine (sfAbsActiveSlipRatio, :5061), so its cap sits at 0 on either constant.
-        const float AbsKneeSlip = 0.5f;
-        const float AbsFloorSlip = 1.0f;
-        const float AbsBrakeFloor = 0.0f;
+        // ABS: a lock guard, not a curve. Any wheel below this angular velocity while the car is above the speed gate
+        // has stopped turning, and that is the one thing worth cutting brake for — the slip-ratio taper it replaces
+        // spent its whole span on the part of the curve where more slip is free, and read the engine's own ±5 clamp
+        // as a real measurement. Rates are symmetric and slow on purpose: the pedal slides, it never steps.
+        const float AbsLockRadPerSecond = 2f;
+        const float AbsMinSpeedMph = 15f;
+        const float AbsBrakeFloor = 0.2f;
+        const float AbsBrakeFallPerSecond = 0.2f;
+        const float AbsBrakeRisePerSecond = 0.2f;
 
         void UpdateBrakeReasonCaps()
         {
             bool countersteering = IsFullCountersteer();
-            Control.MaxBrakeFromABS = GlideCap(Control.MaxBrakeFromABS, AbsCapLevel());
+            Control.MaxBrakeFromABS = Glide(Control.MaxBrakeFromABS, AbsCapLevel(), AbsBrakeFallPerSecond, AbsBrakeRisePerSecond, TickScale);
             Control.MaxBrakeFromCountersteer = GlideCap(Control.MaxBrakeFromCountersteer, countersteering ? 0f : 1f);
         }
 
         float AbsCapLevel()
         {
             if (!ARS.AbsEnabled) return 1f;
-            float lockSlip = ARS.MaxWheelLockSlip(Car);
-
-            float lockDepth = Math.Max(0f, lockSlip - AbsKneeSlip);
-            float depthShare = TaperShare(lockDepth, AbsFloorSlip - AbsKneeSlip);
-            return 1f - depthShare * (1f - AbsBrakeFloor);
+            if (ARS.MpsToMph(Car.Velocity.Length()) < AbsMinSpeedMph) return 1f;
+            return ARS.AnyWheelRotationBelow(Car, AbsLockRadPerSecond) ? AbsBrakeFloor : 1f;
         }
 
         // The one throttle composition: the plan's throttle against every reason field, the argmin named into the

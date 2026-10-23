@@ -3065,6 +3065,20 @@ namespace ARS
             return powers;
         }
 
+        // Per-wheel angular velocity (`m_fRotAngVel`, rad/s, at wheel+0x170) against a floor: zero rotation with the
+        // car moving is a locked wheel, and unlike the ratio at +0x174 this field is not clamped by the engine's own
+        // ABS. The absolute value is what the test wants, since a reversing car spins them negative.
+        static public unsafe bool AnyWheelRotationBelow(Vehicle handle, float minRadPerSecond)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            if (wheelPtrs.Count == 0) return false;
+            foreach (var wheel in wheelPtrs)
+            {
+                if (Math.Abs(*((float*)(wheel + 0x170))) < minRadPerSecond) return true;
+            }
+            return false;
+        }
+
         // Per-wheel positive (lock-side) slip on the same +0x174 ratio TCS reads: braking slip is positive
         // (leaked wheel.cpp:5233 the spin branch negative, :5268 the lock branch positive).
         static public unsafe float MaxWheelLockSlip(Vehicle handle)
