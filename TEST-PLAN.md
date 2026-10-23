@@ -699,6 +699,8 @@ The table's ceiling and the region scan both drop from 100 m to 50 m (they alrea
 
 **Shipped default moved to 80 m.** The ladder ships at 80, not the 50 this section was written at: corners between 50 m (the tightness gate) and 80 m now exist as the "wide" class, so the picker skip is live for them again, while bends wider than 80 m stay off the table and on route speed.
 
+**Observed on By The Highway (build 722)**: the 90° left the field expected is absent at 80 m and returns at 100 m, and the widest apex the table kept at 80 m was 70 m — so that stretch is driven on route speed alone with no braking plan, which is exactly the cost this section named. The merge was cleared as the cause in the same run: zero `Corners merged` and zero `Corner skipped` lines, all nine corners logged as `Corner add`.
+
 ## The G line over the player's own car (build 721, compile-verified, drive owed)
 
 A Debug checkbox, `Show G Line`, draws one line from the player's own car's roof in any state: it samples its own speed because a racer's 20 ms window lives on `Racer`, and it averages 200 ms like every other acceleration read in the mod. Direction is the horizontal acceleration the car is pulling, length is that magnitude at one metre per G with the top clamped, and a perpendicular tick at the tail makes the direction readable — a bare line looks the same in both directions.
