@@ -376,7 +376,7 @@ namespace ARS
         const float NitrousFinishExtraDistance = 100f;
         const float ChillRivalCrowdDistance = 40f;
         const int ChillCrowdCount = 5;
-        const float ChillStandoffDistance = 20f;
+        public const float ChillStandoffDistance = 20f;
         const float ChillThrottleCap = 0.5f;
         const float ChillStandoffEscapeMargin = 2f;
         const float ChillMinSpeedMph = 30f;
@@ -411,6 +411,9 @@ namespace ARS
         const float LaunchThrottleBinarySplit = 0.1f;
 
         public Maneuver ActiveManeuver = new Maneuver();
+
+        // Read by the world card label: the dive's own brake bonus is the only number that card carries.
+        public float DivebombBrakeBonus => _divebombBrakeBonus;
         int _nitrousActiveUntil = 0;
         int _nitrousLapUsed = -1;
         int _nitroRefusalLoggedAt = 0;
@@ -2217,7 +2220,7 @@ namespace ARS
         {
             return ARS.Clamp((float)Math.Tanh(depth / span) * TaperNormaliser, 0f, 1f);
         }
-        const float YieldThrottleLevel = 0.5f;
+        public const float YieldThrottleLevel = 0.5f;
         const float OffTrackThrottleLevel = 0f;
         const float OffTrackSafeSpeedMph = 20f;
         const float OffTrackFullThrottleMph = 15f;
@@ -3576,7 +3579,6 @@ namespace ARS
         const float EntranceBrakeBufferSeconds = 0.25f;
         const float EntranceBrakeExtraDistance = 0f;
         const float SecondaryApexSpeedDifference = 5f;
-        const float BrakingTargetFactor = 0.5f;
 
         // Cheap: drop passed apexes and invalidate stale entries every tick.
         void UpdateApexLeapfrog()
@@ -3846,20 +3848,6 @@ namespace ARS
         }
 
         // Kinematic braking map reaches apex speed at the braking target: a fixed lead before the corner's turn-in.
-        int BrakingTargetNode(CornerPoint corner, float apexSpeed, float factor)
-        {
-            if (corner == null || corner.Node < 0) return -1;
-
-            int targetNode = BrakeTargetBaseNode(corner, -1);
-            if (targetNode < 0) return -1;
-
-            factor = ARS.Clamp(factor, 0f, 1f);
-            int distance = corner.Node - targetNode;
-            if (!ARS.IsPointToPoint && distance < 0) distance += ARS.TrackPoints.Count;
-            if (ARS.IsPointToPoint && distance < 0) distance = 0;
-
-            return OffsetCornerNode(targetNode, (int)Math.Round(distance * factor));
-        }
 
         float ApexBrakingSpeed(int apexNode, float apexSpeed)
         {
@@ -3868,9 +3856,7 @@ namespace ARS
 
             CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
             int fallbackNode = CornerEntranceNode(corner, apexNode);
-            int targetNode = ActiveManeuver.Type == ManeuverType.DiveBomb
-                ? BrakingTargetNode(corner, apexSpeed, BrakingTargetFactor)
-                : BrakeTargetBaseNode(corner, fallbackNode);
+            int targetNode = BrakeTargetBaseNode(corner, fallbackNode);
             if (targetNode < 0) targetNode = fallbackNode;
 
             int targetDistance = ForwardNodeDistance(targetNode);

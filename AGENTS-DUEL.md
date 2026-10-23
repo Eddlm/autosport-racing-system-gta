@@ -1,4 +1,6 @@
 # ARS — Duel model, full deferred design (companion to AGENTS.md)
+> **Divebomb, 2026-10-23:** the card no longer moves the braking target. `BrakingTargetNode` and its 0.5 factor are gone; `ApexBrakingSpeed` uses `BrakeTargetBaseNode` for every card. The card now carries only its brake bonus (+2 % to +8 %, rolled per dive) and the commit lane to the inside of its target, which is the part that still reads on track. The kick card is switched off behind `KickCardEnabled`.
+
 
 **Read this when** the work touches **rivals, overtaking, side-by-side racing, maneuvers/cards (DiveBomb, DefendLane, Yield, ChillOut) or nitro shots**. **Status: designed via Council, not implemented** — the live facts of the shipped cards are below, the design under them.
 

@@ -1894,7 +1894,7 @@ namespace ARS
                     if (cardRacer == null || cardRacer.ControlledByPlayer || !cardRacer.Car.Exists()) continue;
                     if (cardRacer.ActiveManeuver.Type == ManeuverType.None) continue;
                     if (cardRacer.Car.Position.DistanceTo(player.Character.Position) > 100f) continue;
-                    DrawText(cardRacer.Car.Position + Vector3.WorldUp * 2.2f, CardLabel(cardRacer.ActiveManeuver.Type), Color.White, 0.5f);
+                    DrawText(cardRacer.Car.Position + Vector3.WorldUp * 2.2f, CardLabel(cardRacer), Color.White, 0.5f);
                 }
 
                 if (DebugToggles[Options.ShowRouteRadius])
@@ -3599,17 +3599,19 @@ namespace ARS
         // Font IDs are GTA V's own FONT_STYLE enum (src\dev_ng\game\text\text.h); only the members the HUD uses
         // are declared below.
         public enum DrawTextFont { Standard = 0, Cursive = 1, Leaderboard = 3, Condensed = 4, FixedWidthNumbers = 5, Pricedown = 7 }
-        // The card names as they read over a roof: short, upper case, no spaces to break at distance.
-        static string CardLabel(ManeuverType type)
+        // The card as it reads over a roof: short, upper case, and the card's own number on a second line when it has
+        // one worth reading. ~n~ is the break: the text entry is STRING, so a raw newline would not survive.
+        static string CardLabel(Racer racer)
         {
-            switch (type)
-            {
-                case ManeuverType.DiveBomb: return "DIVEBOMB";
-                case ManeuverType.DefendLane: return "DEFEND";
-                case ManeuverType.Yield: return "YIELD";
-                case ManeuverType.ChillOut: return "CHILL";
-                default: return string.Empty;
-            }
+            ManeuverType type = racer.ActiveManeuver.Type;
+            if (type == ManeuverType.DiveBomb)
+                return "DIVEBOMB~n~brake +" + Math.Round(racer.DivebombBrakeBonus * 100f).ToString(CultureInfo.InvariantCulture) + "%";
+            if (type == ManeuverType.DefendLane) return "DEFEND";
+            if (type == ManeuverType.Yield)
+                return "YIELD~n~gas " + Math.Round(Racer.YieldThrottleLevel * 100f).ToString(CultureInfo.InvariantCulture) + "%";
+            if (type == ManeuverType.ChillOut)
+                return "CHILL~n~" + Math.Round(Racer.ChillStandoffDistance).ToString(CultureInfo.InvariantCulture) + " m";
+            return string.Empty;
         }
 
         public static void DrawText(Vector3 pos, string t, Color c, float scale)
