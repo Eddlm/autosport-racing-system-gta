@@ -31,6 +31,30 @@ Split from `AGENTS.md` (`8447d75`). Holds the size-trimmed depth and long-form r
 - **A real burn is a separate change and must replace, not stack**: the override's power 1.0 is already 4×, so 4× × the 2.5 cheat = 10×. Drop the override power to 0.5 for the window (2.5× total) and call `SET_NITROUS_IS_ACTIVE` to get flames, sound and HUD. Filed as `nitrous-native-burn` in `AGENTS-BACKLOG.md`.
 - **The bottle is self-charged at fire** — `FULLY_CHARGE_NITROUS` inside `StartNitrous`. The old 1 s top-up loop, `NitroChargedLap` and `TopUpNitrous` are removed: that gate refused the player's fire in the second after every start or finish line, but removing it did **not** restore the player's burn (driver, build 715), so the remaining fault is upstream of the charge — filed as `player-nitrous-fire` in `AGENTS-BACKLOG.md` with the suspects and the log lines that separate them.
 
+## The two lookaheads — same quantity, two planes, and why they stay two
+
+Two systems read the road ahead every tick and each derives its own governor. They look redundant and they are not.
+
+| | Route curvature (`RouteRadiusSampled`) | Crest / dip (`CrestGripSpeedFactor`) |
+|---|---|---|
+| Plane | horizontal (X, Y) | vertical (horizontal arc length, Z) |
+| Quantity | the route's turn, `R = 1/κ` | the profile's bend, `ΔG = v²·κ/g` |
+| Estimator | least-squares circle through **4** points | **Menger** curvature through **3** points |
+| Span | `2·v/grip` **nodes** | `1 s` and `2 s` of travel, in **metres** |
+| Advance | index arithmetic (`carNode + k`) | metric walk (`NodeAhead`) |
+| Symmetry | left and right alike | **lift only**: `ΔG > 0` (compression) is discarded |
+| Output | a radius, fed to `√(μ·g·R)` | a factor, multiplied into both corner and route speed |
+
+**The span bases differ on purpose.** Curvature is scaled by grip because it stands in for braking distance, which is; a 2 g car stops in half the distance, so it looks half as far. Lift is a **time** phenomenon — how long the wheels stay unloaded — so it must not scale with grip. Merging the spans would either blind a high-grip car to a crest 2 s out or make a low-grip car sample a vertical profile it never reaches.
+
+**The estimators differ for the same reason.** A four-point least-squares circle is stable; Menger divides by `abLen · bcLen · acLen`, so three nearly collinear samples blow the curvature up, and the only guard is `|κ| < 1e-5`. That is the same degeneracy the four-point fit met on a straight and needed a sagitta test for.
+
+**Merging was considered and dropped (driver, 2026-10-23).** The one real gain was density: the elevation side has three points and a single parabola, so two features inside its 2 s window average into one shape the road never had. Sharing the sampler would hand it 4-5 points — but Menger cannot use them; the estimator would have to become a least-squares fit in (s, Z), which moves every `ΔG` and invalidates `MaxCrestLift` until it is driven again. Worth doing only alongside that estimator change, and not before 0.9.
+
+**Two latent faults found while comparing them, neither fixed:**
+- `NodeAhead` stops after **200 steps**, which at 1 m spacing is 200 m. The crest asks for `2 s · v` — exactly 200 m at 360 km/h — and the curvature, converted to metres, asks `2·v/grip`, which is 200 m at 50 m/s with grip 0.5. At the extremes both truncate silently and the drawn node is not the one the law used.
+- `RouteRadiusSampled` advances by **node index** and therefore assumes 1 m spacing. True of generated tracks (`separationDist = 1f`), false of anything hand-authored: on a 0.5 m track the curvature looks half as far as it intends.
+
 ## Two-projection route speed (future idea)
 
 - Long-term: replace `followTrackSpd`'s geometric `√(g·grip·r)` with a two-projection system — a *true* ballistic projection (`ProjectAhead`, self-calibrating) and a *pessimistic* reduced-grip projection.
