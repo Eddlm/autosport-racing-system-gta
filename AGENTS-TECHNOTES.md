@@ -53,7 +53,7 @@ Two systems read the road ahead every tick and each derives its own governor. Th
 
 **Two latent faults found while comparing them, neither fixed:**
 - `NodeAhead` stops after **200 steps**, which at 1 m spacing is 200 m. The crest asks for `2 s · v`, so the cap binds at **360 km/h (223 mph)** — past every stock car and past almost every mod, which is why it has never shown. It is still the first suspect for a report of a car going light at absurd speed: the far sample would sit 200 m out instead of where the law asked, and the drawn node would agree with it. **Only the crest walks**, so the curvature is not exposed today; the figure that matters if it ever moves onto a metric walk is `2·v/grip` = 200 m at 50 m/s with grip 0.5, which is an ordinary speed — that conversion could not ship without lifting the cap.
-- `RouteRadiusSampled` advances by **node index** and therefore assumes 1 m spacing. True of generated tracks (`separationDist = 1f`), false of anything hand-authored: on a 0.5 m track the curvature looks half as far as it intends.
+- `RouteRadiusSampled` advances by **node index** and therefore treats every node as one metre. Every route in the game comes from the editor (`separationDist = 1f`), so the assumption is structural rather than accidental — but measured across the fourteen shipped tracks the spacing runs **0.78 m to 2.45 m with a 1.00 m median**, so the span is right on average and locally off by up to 2.4x on the longest segments. The four-point fit takes the real positions, so a uneven spread along the arc is what it pays, not a wrong circle: the span is the approximate half.
 
 ## Two-projection route speed (future idea)
 
