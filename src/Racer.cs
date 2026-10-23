@@ -204,11 +204,10 @@ namespace ARS
         // ramp: braking on it at full authority is what reads as a slam. A corner owns its own ramp and is exempt.
         const float RouteBrakeCap = 0.2f;
 
-        // The projection escalates in time because the distance ramp is immediate but finite. Half a second per
-        // full input unit, from full throttle down to three quarters of brake: at 0.75 the tyre still finds
-        // sqrt(1 - 0.75^2) = 0.66 of its grip for changing direction, which is the whole point of stopping there.
-        const float ProjectionStepSeconds = 0.5f;
-        const float ProjectionStepInput = 1f;
+        // The projection spends the input at a steady rate while it stays outside — one whole unit per second,
+        // bled every tick rather than in steps — from full throttle down to three quarters of brake: at 0.75 the
+        // tyre still finds sqrt(1 - 0.75^2) = 0.66 of its grip for changing direction, which is why it stops there.
+        const float ProjectionInputPerSecond = 1f;
         const float ProjectionBrakeFloor = 0.75f;
         // Hysteresis: a kerb, a bad node or a half-metre overshoot must not start the clock.
         const float ProjectionMarginMeters = 0.5f;
@@ -1590,7 +1589,7 @@ namespace ARS
             // brake on top saturates the circle instead of sharing it.
             bool projectionOutside = _projectionWidening && _projectionOutsideMeters > ProjectionMarginMeters;
             _projectionOutsideSeconds = projectionOutside ? _projectionOutsideSeconds + TickScale : 0f;
-            float projectionInput = Math.Max(1f - ProjectionStepInput * (float)Math.Floor(_projectionOutsideSeconds / ProjectionStepSeconds), -ProjectionBrakeFloor);
+            float projectionInput = Math.Max(1f - ProjectionInputPerSecond * _projectionOutsideSeconds, -ProjectionBrakeFloor);
             bool projectionBinds = !countersteering && newThrottle > Math.Max(projectionInput, 0f);
             newThrottle = ComposeThrottleCap(newThrottle, projectionBinds, countersteering);
             _offtrackThrottleHeld = projectionBinds;
@@ -1703,7 +1702,7 @@ namespace ARS
             if (ARS.DebugToggles[Options.ShowGsProjection] && ARS.DebugFocusRacer == this && Game.GameTime >= _offshootLogAt)
             {
                 _offshootLogAt = Game.GameTime + 500;
-                ARS.Log(ARS.LogImportance.Info, "Offshoot: override=" + laneOverride + " mph=" + mph.ToString("0") + " turn=" + turnDirection + " signed=" + signedOffset.ToString("0.00") + " car=" + carOffset.ToString("0.00") + " half=" + halfWidth.ToString("0.00") + " outside=" + outsideOffset.ToString("0.00") + " sec=" + _projectionOutsideSeconds.ToString("0.00") + " input=" + (Math.Max(1f - ProjectionStepInput * (float)Math.Floor(_projectionOutsideSeconds / ProjectionStepSeconds), -ProjectionBrakeFloor)).ToString("0.00"));
+                ARS.Log(ARS.LogImportance.Info, "Offshoot: override=" + laneOverride + " mph=" + mph.ToString("0") + " turn=" + turnDirection + " signed=" + signedOffset.ToString("0.00") + " car=" + carOffset.ToString("0.00") + " half=" + halfWidth.ToString("0.00") + " outside=" + outsideOffset.ToString("0.00") + " sec=" + _projectionOutsideSeconds.ToString("0.00") + " input=" + (Math.Max(1f - ProjectionInputPerSecond * _projectionOutsideSeconds, -ProjectionBrakeFloor)).ToString("0.00"));
             }
 
         }
@@ -2964,7 +2963,7 @@ namespace ARS
             AddPedalLimit(Control.MaxBrakeFromABS, GripReasonColor, PedalLimitReasonSize, ref count);
             AddPedalLimit(Control.MaxBrakeFromCountersteer, CountersteerReasonColor, PedalLimitReasonSize, ref count);
             if (IsFullCountersteer()) AddPedalLimit(CountersteerRollThrottle, Color.White, PedalLimitCapSize, ref count);
-            if (_offtrackThrottleHeld) AddPedalLimit(Math.Max(1f - ProjectionStepInput * (float)Math.Floor(_projectionOutsideSeconds / ProjectionStepSeconds), 0f), Color.White, PedalLimitCapSize, ref count);
+            if (_offtrackThrottleHeld) AddPedalLimit(Math.Max(1f - ProjectionInputPerSecond * _projectionOutsideSeconds, 0f), Color.White, PedalLimitCapSize, ref count);
 
             SortPedalLimits(count);
             for (int i = 0; i < count; i++)
