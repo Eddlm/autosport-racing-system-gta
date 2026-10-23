@@ -3198,8 +3198,10 @@ namespace ARS
 
             Vector3 origin = car.Position + Vector3.WorldUp * (car.Model.GetDimensions().Z + 0.2f);
             Vector3 side = Vector3.Cross(Vector3.WorldUp, g).Normalized;
+            Vector3 tip = origin + g * GLineMetresPerG;
             DrawLine(origin - side * 0.3f, origin + side * 0.3f, Color.White);
-            DrawLine(origin, origin + g * GLineMetresPerG, Color.Cyan);
+            DrawLine(origin, tip, Color.Cyan);
+            DrawText(tip + Vector3.WorldUp * 0.15f, magnitude.ToString("0.0", CultureInfo.InvariantCulture) + "Gs", Color.Cyan, 0.45f);
         }
 
         

@@ -699,7 +699,7 @@ The table's ceiling and the region scan both drop from 100 m to 50 m (they alrea
 
 **Shipped default moved to 80 m.** The ladder ships at 80, not the 50 this section was written at: corners between 50 m (the tightness gate) and 80 m now exist as the "wide" class, so the picker skip is live for them again, while bends wider than 80 m stay off the table and on route speed.
 
-## The G line over the player's own car (build 720, compile-verified, drive owed)
+## The G line over the player's own car (build 721, compile-verified, drive owed)
 
 A Debug checkbox, `Show G Line`, draws one line from the player's own car's roof in any state: it samples its own speed because a racer's 20 ms window lives on `Racer`, and it averages 200 ms like every other acceleration read in the mod. Direction is the horizontal acceleration the car is pulling, length is that magnitude at one metre per G with the top clamped, and a perpendicular tick at the tail makes the direction readable — a bare line looks the same in both directions.
 
@@ -708,3 +708,4 @@ A Debug checkbox, `Show G Line`, draws one line from the player's own car's roof
 3. **A hard corner points at the corner's centre.** Through a committed turn the line should stand roughly across the car's heading, not along it; a line that lies down the car's nose through a corner means the lateral term is not reaching the average.
 4. **Length tracks magnitude, and the clamp holds.** A gentle bend reads short, a hard one long, and a crash or a kerb strike must not throw it into a spike — the 200 ms mean and the clamp are what answer that.
 5. **It survives getting out and back in.** Leaving the car and re-entering must restart the window instead of differencing against the old speed, so the line reads nothing for the first 200 ms and then settles. A line that jumps on re-entry is the restart gate failing.
+6. **The tip reads the number.** The label sits at the line's end as `2.5Gs`, one decimal, and it reports the real magnitude even where the line itself is clamped — past 4 G the stroke stops growing and the number keeps climbing.
