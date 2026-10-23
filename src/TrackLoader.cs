@@ -138,6 +138,7 @@ namespace ARS
             // wrap node indices across the start/finish seam; without it, a corner sitting on the finish line is
             // invisible to the apex table on circuits.
             RefreshRouteTopology();
+            DensifyRoute();
 
             GenerateRouteInfo();
 
@@ -495,6 +496,47 @@ namespace ARS
         // or only ease, and either way the curvature launches the car. The run lengths it reports are node-quantised,
         // so a coarse track resolves them to half a node. Scanned on the route line only; the raycast that reads the
         // real surface, and the lane-local case with it, come later.
+        // The step search can miss and leave a two-metre gap, which the curvature law reads as one metre: it advances by
+        // node index. The fix is the metre the file promises - any longer segment is resampled here, before anything
+        // derives an index from it, so the geometry pass, the apex table, the crests and the grid all see one spacing.
+        const float DensifyAboveMeters = 1.5f;
+
+        static void DensifyRoute()
+        {
+            int count = ARS.RouteNodes.Count;
+            if (count < 4) return;
+
+            List<Vector3> points = ARS.RouteNodes;
+            List<Vector3> dense = new List<Vector3>(count + count / 20 + 8);
+            List<float> widths = new List<float>(dense.Capacity);
+            for (int node = 0; node < count; node++)
+            {
+                float width = ARS.NodeHalfWidths.ContainsKey(node) ? ARS.NodeHalfWidths[node] : 5f;
+                dense.Add(points[node]);
+                widths.Add(width);
+                if (node == count - 1) continue;
+
+                float gap = points[node].DistanceTo(points[node + 1]);
+                if (gap <= DensifyAboveMeters) continue;
+                float nextWidth = ARS.NodeHalfWidths.ContainsKey(node + 1) ? ARS.NodeHalfWidths[node + 1] : width;
+                int parts = Math.Max(2, (int)Math.Round(gap));
+                for (int part = 1; part < parts; part++)
+                {
+                    float t = part / (float)parts;
+                    dense.Add(Vector3.Lerp(points[node], points[node + 1], t));
+                    widths.Add(width + (nextWidth - width) * t);
+                }
+            }
+
+            if (dense.Count == count) return;
+
+            ARS.RouteNodes.Clear();
+            ARS.RouteNodes.AddRange(dense);
+            ARS.NodeHalfWidths.Clear();
+            for (int node = 0; node < widths.Count; node++) ARS.NodeHalfWidths.Add(node, widths[node]);
+            ARS.Log(ARS.LogImportance.Info, "Route densified: " + count + " -> " + dense.Count + " nodes");
+        }
+
         static void AssignBumpNodes(int count)
         {
             ARS.Bumps.Clear();
