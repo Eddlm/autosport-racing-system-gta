@@ -2691,7 +2691,7 @@ namespace ARS
             int entranceNode = CornerEntranceNode(Brain.Corner.Point, apexNode);
             if (entranceNode < 0) return false;
             float myTimeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
-            if (!ARS.IsBetween(myTimeToEntrance, 1f, 3f)) return false;
+            if (!ARS.IsBetween(myTimeToEntrance, 3f, 5f)) return false;
 
             Rival defenderTarget = null;
             float nearestDefender = float.MaxValue;
@@ -2702,6 +2702,11 @@ namespace ARS
                 bool closes = r.RelativePosition == RelativePos.Behind && r.Distance <= 30f && r.ForwardSpeedGap < 0f;
                 bool arrivesNoLater = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f) <= myTimeToEntrance;
                 if (!closes || !arrivesNoLater) continue;
+                // How long he takes to catch this car, which is the mirror of TimeToReach: that field is written for a
+                // rival ahead and reads infinity for one behind, and behind is the only case Defend arms on.
+                float catchMps = r.RivalRacer.AlongTrackSpeed - AlongTrackSpeed;
+                float timeToReachMe = catchMps > 0.1f ? -r.RouteGapAhead / catchMps : float.PositiveInfinity;
+                if (!ARS.IsBetween(timeToReachMe, 3f, 6f)) continue;
                 if (r.Distance < nearestDefender) { nearestDefender = r.Distance; defenderTarget = r; }
             }
             if (defenderTarget == null) return false;
