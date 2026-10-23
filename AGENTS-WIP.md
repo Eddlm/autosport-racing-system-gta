@@ -90,3 +90,15 @@ New shape:
 - **Only when the projection lands farther from the centre than the car's own position.** If the car is already wider than where it is heading, nothing fires.
 
 Shipped in build 736 as `OffshootThrottleCap` (`Racer.cs:1607`): the cap is applied with `Math.Min` to `newThrottle` after the throttle composition, so it is a ceiling over every reason. `OffshootBlendBrake`, the brake command and `BrakeReason.Offtrack` are gone from the brake path; the field is `_offtrackThrottleCap` and the pedal bar draws it over the whole 1..0 range. Compile-verified, drive owed.
+
+## WIP — NodesToDoubleRadius, report mode (build 738)
+
+`CornerPoint.NodesToDoubleRadius` (999 = never measured) holds how many nodes the road runs before `IsOpenedFor`
+sees a radius of `2 x` the apex's **smoothed** radius (`SpanDoublingMultiple = 2`, `SpanConsecutiveNodes = 8`),
+walked to `exitMaxStep` = min(500, nodes left) and **not** clamped to 40. Each corner logs:
+
+`Corner open: apex=1487 smoothedR=41.3 tightestR=33.9 nodesToDouble=12/500`
+
+Report only: nothing screens on it yet and the radius ceiling still decides what exists. To replace the ceiling,
+read the distribution across real tracks first - the question is whether corners and long bends form two
+populations or one continuum, because a continuum has no honest threshold.

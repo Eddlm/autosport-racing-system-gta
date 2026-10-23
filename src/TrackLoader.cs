@@ -823,6 +823,14 @@ namespace ARS
                 endPosition = apexPosition + SpanMaxDistanceNodes;
                 ARS.Log(ARS.LogImportance.Info, "Corner add CAP: apex=" + apexNode + " side=exit priorEnd=" + priorEnd + " (distance=" + (priorEnd - apexPosition) + ") clamped to end=" + endPosition + " (distance=" + (endPosition - apexPosition) + "); region=" + regionStart + "-" + regionEnd + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " walkAtCap" : " walkStoppedEarly") + " unclampedEnd=" + unclampedEnd);
             }
+            // Report-only: how far the road runs before it opens to twice the apex's smoothed radius. Measured over
+            // the walk's whole length, not over the 40-node span the corner is placed with, so it can say "never
+            // within 500 nodes" where LengthEnd can only ever say 40.
+            int nodesToDouble = detectedRadius < 999f
+                ? NodesToDoubleRadius(apexNode, detectedRadius, exitMaxStep, count)
+                : exitMaxStep;
+            ARS.Log(ARS.LogImportance.Info, "Corner open: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " nodesToDouble=" + nodesToDouble + "/" + exitMaxStep + (nodesToDouble >= exitMaxStep ? " (did not double)" : ""));
+
             CornerPoint corner = new CornerPoint
             {
                 Node = apexNode,
@@ -831,6 +839,7 @@ namespace ARS
                 EndNode = scanNodes[endPosition],
                 LengthStart = apexPosition - startPosition,
                 LengthEnd = endPosition - apexPosition,
+                NodesToDoubleRadius = nodesToDouble,
                 SupposedRadius = tightestRadius,
                 DetectedRadius = detectedRadius,
                 Speed = (float)Math.Sqrt(9.81f * tightestRadius)
@@ -905,6 +914,20 @@ namespace ARS
         // The walk is capped by the region the detector already found, because a corner whose approach is all
         // tighter than the multiple would otherwise run to the node cap.
         const int SpanConsecutiveNodes = 8;
+        // How far the road runs before its radius doubles the apex's. Counted from the smoothed radius rather than
+        // the raw tightest node, because on a wide corner that minimum is noise and a noisy base makes every sweep
+        // look like it opens early. Small is a corner; large is a bend the route already governs on its own.
+        const float SpanDoublingMultiple = 2f;
+
+        static int NodesToDoubleRadius(int apexNode, float apexRadius, int maxStep, int count)
+        {
+            float threshold = apexRadius * SpanDoublingMultiple;
+            for (int step = 1; step <= maxStep; step++)
+            {
+                if (IsOpenedFor(apexNode, 1, step, SpanConsecutiveNodes, count, threshold)) return step;
+            }
+            return maxStep;
+        }
 
         static int EntranceStep(int apexNode, float apexRadius, int maxStep, int count)
         {

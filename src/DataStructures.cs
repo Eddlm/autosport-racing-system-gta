@@ -376,6 +376,9 @@ namespace ARS
         public int EndNode = -1;
         public int LengthStart = 5;
         public int LengthEnd = 5;
+        // Nodes until the road's radius doubles the apex's, uncapped by SpanMaxDistanceNodes. Small is a corner;
+        // large is a long bend the route already governs. 999 means never measured.
+        public int NodesToDoubleRadius = 999;
         public float Speed = 999;
         public float Elevation = 0f;
         public float ElevationChange = 0f;
