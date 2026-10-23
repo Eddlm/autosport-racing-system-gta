@@ -20,9 +20,13 @@
 > concede. The line it draws: today the cards decide from **geometry** (who reaches the entrance first); this would
 > let them decide from **the likely result** (who wins the corner).
 >
-> **Both fight cards are considered early, 2026-10-23 (driver).** Divebomb moved from 'the last half second before the
-> brakes' to the same **3-5 s** window Defend uses (`DivebombWindowMinSeconds` / `MaxSeconds`); arming in the last half
-> second meant the commitment always arrived after the moment had passed. The brake-point lead and its constant went
+> **Both fight cards share one window, and the window is a count of chances, 2026-10-23 (driver).** `FightWindowMinSeconds`
+> / `FightWindowMaxSeconds` = **2 to 6 s** to the entrance, for divebomb and defend alike. The hand is evaluated on the
+> **half-second beat** (`_rivalInfoTick`), so a window is how many times a card can be considered at all: 3-5 s gave
+> **four** evaluations, and with the stricter gates added the same day that read as "almost never a play"; 2-6 gives
+> eight. Narrowing this window is not free, and widening it is the first lever when cards stop appearing - before
+> touching any individual gate. Divebomb's old window was `brakingTime + 0.5`, which is *wider* than it looked because
+> brakingTime runs to seconds. The brake-point lead and its constant went
 > with it. What still separates the two: Defend needs a chaser closing from behind, Divebomb needs a car ahead that
 > arrives first by no more than 0.75 s with this car closing on it.
 >
