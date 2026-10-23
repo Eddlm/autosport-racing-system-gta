@@ -416,6 +416,8 @@ namespace ARS
         int _nitroRefusalLoggedAt = 0;
         float _powerCounter = 1f;
         float _overspeedPowerLevel = 1f;
+        int _cornerLiftApex = -1;
+        float _cornerLiftMps = 0f;
         float _appliedThrottleLastFrame = 1f;
         int _powerCounterLoggedAt = 0;
 
@@ -1864,6 +1866,11 @@ namespace ARS
         }
 
         const int BrakeTargetLeadMeters = 2;
+        // Past the braking target the plan holds its own number until the car has actually reached it, then lets it
+        // grow: five miles an hour a second, so the arc is driven rather than sat on. The route term still votes
+        // through the min, so a radius that says slower wins anyway.
+        const float CornerLiftMphPerSecond = 5f;
+        const float CornerLiftGraceMph = 5f;
 
         // Where the braking target is anchored: a fixed lead before the corner entrance, which the learned factor moves
         // from there toward the apex.
@@ -1948,9 +1955,26 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5 && Brain.Corner != null) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
-            // The corner's plan ends at its braking target — the entrance — and route speed owns the corner from there;
-            // holding the apex speed all the way to the apex is what build 731 tried, and it was reverted.
-            if (NextApexNode >= 0 && HasPassedBrakingTarget()) cornerSpd = 999f;
+            // The corner holds its own number past the braking target until that number has been achieved — reducing to
+            // within the grace band — and only then starts to grow. Lifting on position alone let a car that arrived
+            // thirty over keep going, and holding the number flat to the apex sat on it through the whole arc.
+            if (NextApexNode != _cornerLiftApex)
+            {
+                _cornerLiftApex = NextApexNode;
+                _cornerLiftMps = 0f;
+            }
+            if (cornerSpd < 999f)
+            {
+                // The gate reads the lifted number: once the plan starts growing, the car has to keep up with it, and
+                // a car that falls behind pauses the growth rather than losing what it already earned.
+                float liftTarget = cornerSpd + _cornerLiftMps;
+                if (HasPassedBrakingTarget()
+                    && ARS.GetForwardSpeed(Car) <= liftTarget + ARS.MphToMps(CornerLiftGraceMph))
+                    _cornerLiftMps += ARS.MphToMps(CornerLiftMphPerSecond) * TickScale;
+                cornerSpd += _cornerLiftMps;
+            }
+            // Past the apex the corner is over and the plan lets go entirely.
+            if (NextApexNode >= 0 && HasPassedApex(NextApexNode)) cornerSpd = 999f;
 
             // A corner inside its braking distance owns the brake: its ramp is a planned deceleration and the route's
             // instantaneous radius must not disarm it. Read before the slope and crest factors, which scale the 999
