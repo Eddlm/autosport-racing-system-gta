@@ -557,7 +557,7 @@ namespace ARS
         // is the first the car meets, so the span has to start before that one. Dips never qualify; they load the
         // tyres instead of unloading them, which is why the no-fly gate ignores them too.
         const int FeatureEntranceBackNodes = 30;
-        const int FeatureEntranceSearchNodes = 60;
+        const int FeatureEntranceSearchNodes = 100;
 
         static void MoveEntrancesForFeatures(int count)
         {
