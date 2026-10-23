@@ -1829,10 +1829,9 @@ namespace ARS
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5 && Brain.Corner != null) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
-            // The corner keeps the car at its apex speed all the way to its own apex: past the braking target
-            // ApexBrakingSpeed holds exactly at apexSpeed, and the queue advancing past the apex is what hands the
-            // car back to route speed. The braking target is not a release any more.
-            if (NextApexNode >= 0 && HasPassedApex(NextApexNode)) cornerSpd = 999f;
+            // The corner's plan ends at its braking target — the entrance — and route speed owns the corner from there;
+            // holding the apex speed all the way to the apex is what build 731 tried, and it was reverted.
+            if (NextApexNode >= 0 && HasPassedBrakingTarget()) cornerSpd = 999f;
 
             // Hill grip loss: exponential model, 15 degrees halves grip.
             {
