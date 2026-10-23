@@ -2621,7 +2621,7 @@ namespace ARS
         const float DivebombEntranceLeadSeconds = 0.5f;
         // A partner reaches that entrance within this of the car: a wider band accepts a car the car will not fight
         // there, a narrower one drops the slower car just ahead, which is the dive worth taking.
-        const float DivebombReachSeconds = 1f;
+        const float DivebombReachSeconds = 0.75f;
         const float DivebombFullThrottle = 0.99f;
 
         // Divebomb card: at full throttle in the last band before the brakes, with an open side to commit into (at
@@ -2648,9 +2648,15 @@ namespace ARS
                 // Arriving together is the question, not who arrives first: a one-sided test drops the slower car just
                 // ahead, which is the dive worth taking. The route band keeps the target on this piece of the road,
                 // and the forward distance wraps past the apex, so another stretch cannot answer for it.
+                // He is the one arriving first, and by no more than the reach: a car this one will beat to the entrance
+                // needs no dive, and one it cannot reach needs no dive either. The window is signed on purpose - the
+                // old absolute difference also armed the car that was going to arrive first anyway.
                 float rivalTimeToEntrance = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f);
-                if (Math.Abs(rivalTimeToEntrance - timeToEntrance) > DivebombReachSeconds) continue;
-                if (!ARS.IsBetween(r.RouteGapAhead, -r.CombinedSize.Y, SameSectionMaxGapMeters)) continue;
+                if (rivalTimeToEntrance >= timeToEntrance) continue;
+                if (timeToEntrance - rivalTimeToEntrance > DivebombReachSeconds) continue;
+                // Ahead on the road, and closing on him: without closure braking later buys nothing.
+                if (r.RouteGapAhead <= 0f) continue;
+                if (r.ForwardSpeedGap <= 0f) continue;
                 // The release tests direction, so the arm has to as well: a target diverging past the gate would otherwise
                 // arm, release and re-arm inside the same tick, re-rolling the dive's brake bonus at the core rate.
                 if (Math.Abs(r.DirectionDiff) > AvoidAngleGateDegrees) continue;

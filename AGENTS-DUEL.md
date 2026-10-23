@@ -1,4 +1,10 @@
 # ARS — Duel model, full deferred design (companion to AGENTS.md)
+> **Divebomb gates, 2026-10-23:** the arm now asks *who arrives at the entrance first*, signed. `RouteGapAhead > 0`
+> (he is ahead on the road), `rivalTimeToEntrance < myTimeToEntrance` (he gets there first), the difference no more
+> than `DivebombReachSeconds` **0.75**, and `ForwardSpeedGap > 0` (this car is the one closing). The old absolute
+> difference armed a car that was going to arrive first anyway, and the old `-CombinedSize.Y .. +30 m` band allowed a
+> dive against a car alongside or behind. The distance band is gone: the time window bounds the gap by itself.
+>
 > **One card per situation, 2026-10-23:** a card may not arm against a target that is already playing *that same*
 > card (`CardFree`) — two cars diving each other, or two cars yielding to each other, reads as a glitch rather than
 > as racecraft. Applied at the three arming sites that pick a target: divebomb, yield, chill-out; defend already
