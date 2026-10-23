@@ -1927,13 +1927,16 @@ namespace ARS
             cornerSpd *= routeCrestFactor;
             apexTargetWithCurrentRouteGrip *= routeCrestFactor;
 
-            // Steer-limited speed: max speed for current steer angle before sliding. Blended into route speed so an outside car (less steering) may carry more speed.
+            // Steer-limited speed: max speed for current steer angle before sliding. Off while the route curvature is
+            // being isolated: the blend made 70 % of the curvature term a function of the car's own steering angle,
+            // which closed a loop — the less it turns, the more speed the radius allows. Kept computed for readout.
+            bool steerLimitedSpeedGovernsRoute = false;
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
             if (steerRad > 0.001f)
             {
                 float turnRadius = VehicleData.WheelBase / (float)Math.Tan(steerRad);
                 Brain.CurrentIntention.SteerLimitedSpeed = (float)Math.Sqrt(Handling.Gravity * VehicleData.CurrentMechanicalGrip * Math.Max(turnRadius, 1f));
-                followTrackSpd = 0.7f * Brain.CurrentIntention.SteerLimitedSpeed + 0.3f * followTrackSpd;
+                if (steerLimitedSpeedGovernsRoute) followTrackSpd = 0.7f * Brain.CurrentIntention.SteerLimitedSpeed + 0.3f * followTrackSpd;
             }
             else
             {
