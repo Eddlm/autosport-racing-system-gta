@@ -2947,7 +2947,10 @@ namespace ARS
         static public float SlidingBoundingBoxWidth(Entity e)
         {
             if (!CanWeUse(e)) return 0f;
-            return ARS.Remap(Vector3.Angle(e.ForwardVector, e.Velocity.Normalized), 0f, 90f, e.Model.GetDimensions().X, e.Model.GetDimensions().Y, true);
+            // A genuinely descending mapping when a model is longer than it is wide - which every car is, and no vehicle has
+            // to be. So the input is clamped and the remap runs unclamped, the form that holds whatever the model measures:
+            // Remap's own clamp would return a constant if the two dimensions ever swapped order.
+            return ARS.Remap(ARS.Clamp(Vector3.Angle(e.ForwardVector, e.Velocity.Normalized), 0f, 90f), 0f, 90f, e.Model.GetDimensions().X, e.Model.GetDimensions().Y);
         }
 
         const float DefaultWheelBase = 2.7f;

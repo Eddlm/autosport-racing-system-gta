@@ -73,6 +73,13 @@ throttle cap at 1.0 for two builds before the log gave it away (`cap=1.00` with 
 "1.0 at three metres, 0.5 at contact" is `Remap(gap, 0, 3, 0.5, 1, true)` — same function, no inversion, clamps
 correctly.
 
+**Audited 2026-10-23: 23 calls, 12 with clamp, none broken.** Every clamped call is written with an ascending output
+range — several have a *descending input* range (`Aggression` 100 to 0, the steer ramp's end-to-start, the off-track
+mph), which is harmless because `Clamp` only ever sees the output. One call's ordering depended on a fact about the
+model rather than on the code (`GetWheelBase`'s dimension heuristic returns width at 0 degrees and length at 90, so it
+needs length > width); it now clamps the input and remaps unclamped, so a vehicle measuring wider than it is long
+cannot collapse it to a constant.
+
 **The exception:** a mapping that is genuinely descending in the world (the projection's cap, 1.0 at the edge falling to
 0.0 beyond it) cannot be written ascending without negating its input. There the rule is the other one: clamp the input
 and remap unclamped — `Remap(Clamp(x, lo, hi), lo, hi, out_hi, out_lo)` — which is what that site does, and its comment
