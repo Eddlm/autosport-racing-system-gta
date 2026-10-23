@@ -417,6 +417,13 @@ then **`ApplyRivalWalls`** (`Racer.cs`) clamps the result between track bounds a
 **The base is load-bearing**: zero is the *centre* lane, not the absence of an answer, so a chain seeded with zero steered every car back to the middle of the road wherever no source had an opinion — which is every straight (`dd484d3`).
 The corner and avoidance sources still report silence as zero, and that is what lets the lean take over inside a corner the car has not asked to position for.
 
+**The inward lead is bounded like the outward one.** The tanh bound was written outward-only because the outside line
+is a preference it can decline; the apex line needs the same shape for the opposite sign, because an aim that runs
+ahead of the car toward the vertex asks for a nose the car cannot place. `LaneInwardLeadMeters` 3 and
+`LaneInwardLeadTaperMeters` 1 mirror the outward pair, and the same tanh is applied through `LeadBounded`, which now
+names the three preference reasons (outside line, avoidance, apex line) instead of two. The request clamp uses the
+cap of the reason it is bounding, so the two directions keep their own numbers.
+
 **The apex line is geometric, and it is pulled toward the apex by half a second of travel.** `IdealLineOffset` walks a
 smoothstep from the outer edge at `t = 1` to the inner edge at `t = 0`, with `t = |distance to apex| / (radius x leadAngle
 x IdealLineLeadMultiple)`. No time enters the profile, so a car arriving fast met the same shape it would have met slowly

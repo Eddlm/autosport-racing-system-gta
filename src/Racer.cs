@@ -947,12 +947,17 @@ namespace ARS
         // full speed and arrives at the cap asymptotically.
         const float LaneOutwardLeadMeters = 3f;
         const float LaneOutwardLeadTaperMeters = 1f;
+        // The same bound inside: the apex line may not run ahead of the car toward the vertex faster than the car can
+        // carry its nose there. The taper is the same shape and the cap is its own, because an inward lead is the
+        // entry the car has to steer into rather than a preference it can decline.
+        const float LaneInwardLeadMeters = 3f;
+        const float LaneInwardLeadTaperMeters = 1f;
 
         // The reasons whose move off the car's own line is a preference. A recovery edge, a commit card's lane and a
         // wall that moved the request are not preferences, and the apex crossing is lane work the corner owns.
-        static bool OutwardLeadBounded(LaneReason reason)
+        static bool LeadBounded(LaneReason reason)
         {
-            return reason == LaneReason.OutsideLine || reason == LaneReason.Avoidance;
+            return reason == LaneReason.OutsideLine || reason == LaneReason.Avoidance || reason == LaneReason.ApexLine;
         }
 
         // Carries the aim onto the request. The rate is bounded by the acceleration, which is what stops a
@@ -990,15 +995,18 @@ namespace ARS
             // the cap the glide approaches. The share normalises against the whole band, so the bite is a smooth
             // fade from the band's own open point and the inward moves are never touched.
             bool steerRefValid = !float.IsNaN(steerRefOffset) && !float.IsInfinity(steerRefOffset);
-            if (steerRefValid && OutwardLeadBounded(_laneRequestReason))
+            if (steerRefValid && LeadBounded(_laneRequestReason))
             {
-                float outwardSign = Math.Sign(_laneRequest - steerRefOffset);
-                float currentLead = outwardSign * (_carriedLane - steerRefOffset);
-                float walking = outwardSign * step;
-                if (currentLead > LaneOutwardLeadTaperMeters && walking > 0f)
+                float leadSign = Math.Sign(_laneRequest - steerRefOffset);
+                float currentLead = leadSign * (_carriedLane - steerRefOffset);
+                float walking = leadSign * step;
+                bool inward = _laneRequestReason == LaneReason.ApexLine;
+                float capMeters = inward ? LaneInwardLeadMeters : LaneOutwardLeadMeters;
+                float taperMeters = inward ? LaneInwardLeadTaperMeters : LaneOutwardLeadTaperMeters;
+                if (currentLead > taperMeters && walking > 0f)
                 {
-                    float remaining = Math.Max(LaneOutwardLeadMeters - currentLead, 0f);
-                    float band = LaneOutwardLeadMeters - LaneOutwardLeadTaperMeters;
+                    float remaining = Math.Max(capMeters - currentLead, 0f);
+                    float band = capMeters - taperMeters;
                     step *= (float)(Math.Tanh(remaining) / Math.Tanh(band));
                 }
             }
@@ -1016,9 +1024,10 @@ namespace ARS
                     _laneRate = 0f;
                 }
 
-                if (OutwardLeadBounded(_laneRequestReason))
+                if (LeadBounded(_laneRequestReason))
                 {
-                    float lead = ARS.Clamp(_laneRequest - steerRefOffset, -LaneOutwardLeadMeters, LaneOutwardLeadMeters);
+                    float leadCap = _laneRequestReason == LaneReason.ApexLine ? LaneInwardLeadMeters : LaneOutwardLeadMeters;
+                    float lead = ARS.Clamp(_laneRequest - steerRefOffset, -leadCap, leadCap);
                     float leadClamped = ARS.Clamp(_carriedLane, Math.Min(steerRefOffset, steerRefOffset + lead), Math.Max(steerRefOffset, steerRefOffset + lead));
                     if (leadClamped != _carriedLane)
                     {
