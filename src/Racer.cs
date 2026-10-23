@@ -795,8 +795,9 @@ namespace ARS
             float slideDeg = VehicleData.SlideAngle;
             bool rotatingIntoSlide = Math.Abs(slideDeg) > CountersteerAssistOnsetDegrees
                 && Math.Sign(slideDeg) == Math.Sign(VehicleData.YawRotationPerSecondDegrees);
+            float assistCeilingDeg = Math.Max(0f, (CountersteerTotalShare - CountersteerSlideShare) * Math.Abs(slideDeg));
             if (rotatingIntoSlide)
-                _countersteerAssistDeg = Math.Min(_countersteerAssistDeg + CountersteerAssistDegreesPerSecond * TickScale, CountersteerAssistMaxDegrees);
+                _countersteerAssistDeg = Math.Min(_countersteerAssistDeg + CountersteerAssistDegreesPerSecond * TickScale, assistCeilingDeg);
             else
                 _countersteerAssistDeg = 0f;
             Control.SteerDegrees -= Math.Sign(slideDeg) * _countersteerAssistDeg;
@@ -1369,7 +1370,10 @@ namespace ARS
         // turns back. The cap is a safety: a long slide must not wind the wheel to lock on a car that is already gone.
         const float CountersteerAssistOnsetDegrees = 10f;
         const float CountersteerAssistDegreesPerSecond = 10f;
-        const float CountersteerAssistMaxDegrees = 20f;
+        // The ceiling is a share of the slide, not an angle: the blend and the assist are two halves of one question -
+        // how much of the slide may the wheel answer. At 1.0 the wheel can reach the velocity vector and no further, which
+        // is the neutral point; anything above it is a deliberate over-correction. 0.8 leaves it short of neutral.
+        const float CountersteerTotalShare = 1f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
         // Full countersteer caps both pedals: the tyre is already spending its grip diagonally, so neither a full
         // brake nor a full throttle belongs in that state - but the plan keeps its own direction, up to this much.
