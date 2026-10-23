@@ -376,6 +376,14 @@ namespace ARS
         const float NitrousFinishExtraDistance = 100f;
         const float ChillRivalCrowdDistance = 40f;
         const int ChillCrowdCount = 5;
+        const float ChillReleaseRadiusMeters = 50f;
+
+        // A card is a decision, and a decision does not change at the core rate. Every release is looser than its
+        // arm, no card may end before it has had time to read, and no card may re-arm straight after ending.
+        const float DivebombReleaseGapMeters = 40f;
+        const float DivebombReleaseAngleDegrees = 25f;
+        const int CardMinDwellMs = 750;
+        const int CardCooldownMs = 1500;
         public const float ChillStandoffDistance = 20f;
         const float ChillThrottleCap = 0.5f;
         const float ChillStandoffEscapeMargin = 2f;
@@ -411,6 +419,17 @@ namespace ARS
         const float LaunchThrottleBinarySplit = 0.1f;
 
         public Maneuver ActiveManeuver = new Maneuver();
+        readonly int[] _cardCooldownUntil = new int[8];
+
+        bool CardCooled(ManeuverType type) => Game.GameTime >= _cardCooldownUntil[(int)type];
+        bool CardMayEnd => Game.GameTime - ActiveManeuver.LastEnabled >= CardMinDwellMs;
+        void EndCard()
+        {
+            // Yield is reactive by nature: it lets a faster car by and has nothing to protect against re-arming.
+            if (ActiveManeuver.Type != ManeuverType.Yield) _cardCooldownUntil[(int)ActiveManeuver.Type] = Game.GameTime + CardCooldownMs;
+            ActiveManeuver.Type = ManeuverType.None;
+            ActiveManeuver.Target = null;
+        }
 
         // Read by the world card label: the dive's own brake bonus is the only number that card carries.
         public float DivebombBrakeBonus => _divebombBrakeBonus;
@@ -2446,8 +2465,7 @@ namespace ARS
             // Force-disable maneuvers armed for more than 8s without firing.
             if (ActiveManeuver.Type != ManeuverType.None && Game.GameTime - ActiveManeuver.LastEnabled > 8000)
             {
-                ActiveManeuver.Type = ManeuverType.None;
-                ActiveManeuver.Target = null;
+                EndCard();
                 _divebombApexNode = -1;
             }
 
@@ -2464,15 +2482,14 @@ namespace ARS
                     divePartner = r;
                     break;
                 }
-                bool partnerLost = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || divePartner == null || Math.Abs(divePartner.RouteGapAhead) > SameSectionMaxGapMeters || Math.Abs(divePartner.DirectionDiff) > AvoidAngleGateDegrees;
+                bool partnerLost = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || divePartner == null || Math.Abs(divePartner.RouteGapAhead) > DivebombReleaseGapMeters || Math.Abs(divePartner.DirectionDiff) > DivebombReleaseAngleDegrees;
 
-                if (partnerLost || HasPassedApex(_divebombApexNode))
+                if ((partnerLost || HasPassedApex(_divebombApexNode)) && CardMayEnd)
                 {
                     ARS.Log(ARS.LogImportance.Info, "Card divebomb: " + Name + " released"
                         + (HasPassedApex(_divebombApexNode) ? " at apex" : " partner lost")
                         + " after " + (Game.GameTime - ActiveManeuver.LastEnabled) + " ms", true);
-                    ActiveManeuver.Type = ManeuverType.None;
-                    ActiveManeuver.Target = null;
+                    EndCard();
                     _divebombApexNode = -1;
                 }
             }
@@ -2489,10 +2506,9 @@ namespace ARS
                 }
                 bool lostTarget = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || !targetTrails;
 
-                if (lostTarget || HasPassedApex(_defendApexNode))
+                if ((lostTarget || HasPassedApex(_defendApexNode)) && CardMayEnd)
                 {
-                    ActiveManeuver.Type = ManeuverType.None;
-                    ActiveManeuver.Target = null;
+                    EndCard();
                     _defendApexNode = -1;
                 }
             }
@@ -2514,10 +2530,9 @@ namespace ARS
             if (ControlledByPlayer || BaseBehavior != RacerBaseBehavior.Race || ARS.Racers.Count < 1) return;
 
             // ChillOut cleanup: off once the pack around us thins out.
-            if (ActiveManeuver.Type == ManeuverType.ChillOut && RivalsWithinDistance(ChillRivalCrowdDistance) < ChillCrowdCount)
+            if (ActiveManeuver.Type == ManeuverType.ChillOut && CardMayEnd && RivalsWithinDistance(ChillReleaseRadiusMeters) < ChillCrowdCount - 1)
             {
-                ActiveManeuver.Type = ManeuverType.None;
-                ActiveManeuver.Target = null;
+                EndCard();
             }
 
             // ChillOut: only when fast enough for bunching to matter, in a dense pack of better-placed cars.
@@ -2632,6 +2647,7 @@ namespace ARS
         // the route.
         bool TryPlayDivebombCard()
         {
+            if (!CardCooled(ManeuverType.DiveBomb)) return false;
             if (Brain.Corner == null) return false;
             if (Control.Throttle < DivebombFullThrottle) return false;
             if (_activeRivalWallCount > 1) return false;
@@ -2685,6 +2701,7 @@ namespace ARS
         // than we do can't dive underneath.
         bool TryPlayDefendLaneCard()
         {
+            if (!CardCooled(ManeuverType.DefendLane)) return false;
             if (Brain.Corner == null) return false;
 
             int apexNode = Brain.Corner.Point.Node;
@@ -2731,6 +2748,7 @@ namespace ARS
         // Yield card: let a faster overlapping rival by when they carry far more pressure into the entrance.
         bool TryPlayYieldCard()
         {
+            if (!CardCooled(ManeuverType.Yield)) return false;
             if (Brain.Corner == null) return false;
 
             Rival closestRival = NearestRival();
@@ -2816,17 +2834,9 @@ namespace ARS
             if (ActiveManeuver.Target != null && ActiveManeuver.Target.Car.Exists())
             {
                 float dist = Car.Position.DistanceTo(ActiveManeuver.Target.Car.Position);
-                if (dist > 10f)
-                {
-                    ActiveManeuver.Type = ManeuverType.None;
-                    ActiveManeuver.Target = null;
-                }
+                if (dist > 10f) EndCard();
             }
-            else
-            {
-                ActiveManeuver.Type = ManeuverType.None;
-                ActiveManeuver.Target = null;
-            }
+            else EndCard();
         }
         public void UpdateTickData()
         {
