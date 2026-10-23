@@ -1892,9 +1892,9 @@ namespace ARS
                     if (radiusRacer != null)
                     {
                         TrackVisuals.DrawRouteRadiusChecks(radiusRacer, ARS.TrackPoints);
-                        if (radiusRacer.LiveRouteTightestRadius > 0f)
+                        if (radiusRacer.LiveRouteRadius > 0f)
                             DrawText(radiusRacer.Car.Position + Vector3.WorldUp * 2.2f,
-                                     Math.Round(radiusRacer.LiveRouteTightestRadius).ToString(CultureInfo.InvariantCulture) + " m",
+                                     Math.Round(radiusRacer.LiveRouteRadius).ToString(CultureInfo.InvariantCulture) + " m",
                                      Color.Magenta, 0.55f);
                     }
                 }

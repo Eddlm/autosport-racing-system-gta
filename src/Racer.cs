@@ -77,8 +77,6 @@ namespace ARS
         public int LiveRouteRadiusFarNode = -1;
         // The radius the last sample produced, for the readout over the car.
         public float LiveRouteRadius = -1f;
-        // The tightest radius inside the anticipation window: the number the route speed is built from.
-        public float LiveRouteTightestRadius = -1f;
 
         // Time-based route references used by steering and speed calculations.
         public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
@@ -196,12 +194,6 @@ namespace ARS
 
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
-
-        // The route speed's anticipation window: the car's own braking distance plus this margin, sampled every
-        // few nodes and capped so a fast car cannot scan the whole lap.
-        const float RouteRadiusAheadMarginMeters = 25f;
-        const float RouteRadiusAheadCapMeters = 400f;
-        const int RouteRadiusAheadStepNodes = 3;
 
         const float OffshootRangeMeters = 5f; // the ramp lives beyond the edge: 1.0 at it, 0.0 five metres out
         // A node deflection below this is a straight, which has no outside to judge.
@@ -1884,7 +1876,7 @@ namespace ARS
             }
 
             // Route speed from the triple-check circumradius window.
-            float followTrackSpd = RouteIdealSpeedForRadius(RouteRadiusAheadMin(Car.Velocity.Length()));
+            float followTrackSpd = RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint);
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
@@ -3704,34 +3696,6 @@ namespace ARS
         }
 
         // Centripetal speed limit for a radius.
-        // The route's radius is the tightest one ahead, not the one under the car. A minimum over the space the car
-        // needs to stop cannot step, so the target speed cannot step either, and the slow-down starts before the bend
-        // instead of on top of it. It reads the per-node radius the load pass precomputed, so no geometry is measured
-        // per tick and the result is a function of fixed data.
-        float RouteRadiusAheadMin(float speedMps)
-        {
-            int count = ARS.TrackPoints.Count;
-            if (count == 0) return 999f;
-
-            float grip = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
-            float brakingDistance = (speedMps * speedMps) / (2f * grip * Handling.Gravity) + RouteRadiusAheadMarginMeters;
-            int span = (int)Math.Min(brakingDistance, RouteRadiusAheadCapMeters);
-
-            float tightest = 999f;
-            int carNode = CurrentTrackPoint.Node;
-            for (int step = 0; step <= span; step += RouteRadiusAheadStepNodes)
-            {
-                int node = ARS.IsPointToPoint
-                    ? (int)ARS.Clamp(carNode + step, 0, count - 1)
-                    : ((carNode + step) % count + count) % count;
-                float r = ARS.TrackPoints[node].RouteCurveRadius;
-                if (r < tightest) tightest = r;
-            }
-
-            LiveRouteTightestRadius = tightest;
-            return tightest;
-        }
-
         float RouteIdealSpeedForRadius(float r)
         {
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
