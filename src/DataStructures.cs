@@ -303,6 +303,8 @@ namespace ARS
         Countersteer,
         // Route: the road's curvature is what set the target speed, so its brake ceiling is a candidate.
         Route,
+        // Projection: the future position left the track for long enough that the pedal, not the target, is the answer.
+        Projection,
         GridWait,
         StuckRecovery
     }

@@ -205,6 +205,14 @@ namespace ARS
         const float RouteBrakeCap = 0.2f;
 
         const float OffshootRangeMeters = 5f; // the ramp lives beyond the edge: 1.0 at it, 0.0 five metres out
+        // The projection escalates in time because the distance ramp is immediate but finite. Half a second per
+        // full input unit, from full throttle down to three quarters of brake: at 0.75 the tyre still finds
+        // sqrt(1 - 0.75^2) = 0.66 of its grip for changing direction, which is the whole point of stopping there.
+        const float ProjectionStepSeconds = 0.5f;
+        const float ProjectionStepInput = 1f;
+        const float ProjectionBrakeFloor = 0.75f;
+        // Hysteresis: a kerb, a bad node or a half-metre overshoot must not start the clock.
+        const float ProjectionMarginMeters = 0.5f;
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
         // Line discipline belongs to speed: below this the problem is traction, and a cap would hold an off-edge car
@@ -245,6 +253,8 @@ namespace ARS
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _offtrackThrottleCap = 1f;
+        float _projectionOutsideMeters = 0f;
+        float _projectionOutsideSeconds = 0f;
         // True only on the tick the projection actually cut the throttle, which is what the red lines report.
         bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
@@ -1576,16 +1586,35 @@ namespace ARS
             }
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
             newThrottle = ComposeThrottleCap(newThrottle, offtrackThrottleCap < 1f, countersteering);
-            // The projection is a ceiling over the plan and over every reason above it, and it never reaches the
-            // brake. Full countersteer is the one floor it yields to: that branch exists to keep the wheels rolling
-            // so the car can recover, and a slide is exactly when the projection is widest, so cutting it there
-            // would starve the recovery it is meant to protect.
+            // The projection escalates in time while it stays outside: it stops asking for less throttle and
+            // starts asking for brake. Full countersteer is the one branch it yields to — the tyre there is already
+            // working diagonally, so brake on top saturates the circle instead of sharing it.
+            bool projectionOutside = _projectionOutsideMeters > ProjectionMarginMeters;
+            _projectionOutsideSeconds = projectionOutside ? _projectionOutsideSeconds + TickScale : 0f;
+            float projectionInput = Math.Max(1f - ProjectionStepInput * (float)Math.Floor(_projectionOutsideSeconds / ProjectionStepSeconds), -ProjectionBrakeFloor);
             bool projectionBinds = !countersteering && newThrottle > offtrackThrottleCap;
             if (projectionBinds) newThrottle = offtrackThrottleCap;
             _offtrackThrottleHeld = projectionBinds;
             // Brake composes here on the raw split target, pre-slew: in the throttle-to-brake transition
             // Control.Throttle slews down slowly and could still read >= 1.0 while the car is already braking.
             newBrake = ComposeBrakeCap(newBrake, countersteering);
+            // The projection outranks the plan and the route: it is the only term that knows the plan has already
+            // failed. It does not outrank the ABS, which is the physical ceiling this brake floor exists to respect,
+            // nor the countersteer release above, which is already spending the tyre in two directions at once.
+            if (!countersteering)
+            {
+                if (projectionInput < 0f)
+                {
+                    float projectionBrake = Math.Min(-projectionInput, Control.MaxBrakeFromABS);
+                    if (projectionBrake > newBrake)
+                    {
+                        newBrake = projectionBrake;
+                        Control.BrakeReason = BrakeReason.Projection;
+                        Control.BrakeReasonLevel = projectionBrake;
+                    }
+                }
+                else if (newThrottle > projectionInput) newThrottle = projectionInput;
+            }
             bool rbFreeZonePedal = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
             if (ARS.RubberbandingPct > 0 && ARS.CurrentRubberbandMode == RubberbandMode.Artificial && newThrottle >= 1.00f && !rbFreeZonePedal)
             {
@@ -1638,6 +1667,7 @@ namespace ARS
             float mph = ARS.MpsToMph(Car.Velocity.Length());
             float cap = 1f;
             float signedOffset = 0f;
+            _projectionOutsideMeters = 0f;
             float halfWidth = 0f;
             float outsideOffset = 0f;
             float carOffset = 0f;
@@ -1658,6 +1688,7 @@ namespace ARS
                 if (Math.Sign(signedOffset) == turnDirection)
                 {
                     outsideOffset = signedOffset * turnDirection;
+                    _projectionOutsideMeters = outsideOffset - halfWidth;
                     // The car's own offset is read in its own node's frame, not the projected one: measured against a
                     // frame tens of nodes ahead, a corner turns the along-track separation into a fake lateral offset
                     // and the comparison below can never fail. Same frame as turnDirection, so the sides compare.
@@ -1678,7 +1709,7 @@ namespace ARS
             if (ARS.DebugToggles[Options.ShowGsProjection] && ARS.DebugFocusRacer == this && Game.GameTime >= _offshootLogAt)
             {
                 _offshootLogAt = Game.GameTime + 500;
-                ARS.Log(ARS.LogImportance.Info, "Offshoot: override=" + laneOverride + " mph=" + mph.ToString("0") + " turn=" + turnDirection + " signed=" + signedOffset.ToString("0.00") + " car=" + carOffset.ToString("0.00") + " half=" + halfWidth.ToString("0.00") + " outside=" + outsideOffset.ToString("0.00") + " cap=" + cap.ToString("0.00"));
+                ARS.Log(ARS.LogImportance.Info, "Offshoot: override=" + laneOverride + " mph=" + mph.ToString("0") + " turn=" + turnDirection + " signed=" + signedOffset.ToString("0.00") + " car=" + carOffset.ToString("0.00") + " half=" + halfWidth.ToString("0.00") + " outside=" + outsideOffset.ToString("0.00") + " cap=" + cap.ToString("0.00") + " sec=" + _projectionOutsideSeconds.ToString("0.00") + " input=" + (Math.Max(1f - ProjectionStepInput * (float)Math.Floor(_projectionOutsideSeconds / ProjectionStepSeconds), -ProjectionBrakeFloor)).ToString("0.00"));
             }
 
             return cap;
