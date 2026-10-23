@@ -1886,6 +1886,17 @@ namespace ARS
                     Vehicle gLineCar = player.Character.CurrentVehicle;
                     if (CanWeUse(gLineCar)) UpdatePlayerGLine(gLineCar);
                 }
+                // Live card read-out: what every nearby rival is playing at this instant, in the world, over its roof.
+                // No toggle: a card lasts about a second, so there is nothing to clutter, and reading the field from the
+                // outside is the whole point of it.
+                foreach (Racer cardRacer in Racers)
+                {
+                    if (cardRacer == null || cardRacer.ControlledByPlayer || !cardRacer.Car.Exists()) continue;
+                    if (cardRacer.ActiveManeuver.Type == ManeuverType.None) continue;
+                    if (cardRacer.Car.Position.DistanceTo(player.Character.Position) > 100f) continue;
+                    DrawText(cardRacer.Car.Position + Vector3.WorldUp * 2.2f, CardLabel(cardRacer.ActiveManeuver.Type), Color.White, 0.5f);
+                }
+
                 if (DebugToggles[Options.ShowRouteRadius])
                 {
                     Racer radiusRacer = DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null);
@@ -3588,6 +3599,19 @@ namespace ARS
         // Font IDs are GTA V's own FONT_STYLE enum (src\dev_ng\game\text\text.h); only the members the HUD uses
         // are declared below.
         public enum DrawTextFont { Standard = 0, Cursive = 1, Leaderboard = 3, Condensed = 4, FixedWidthNumbers = 5, Pricedown = 7 }
+        // The card names as they read over a roof: short, upper case, no spaces to break at distance.
+        static string CardLabel(ManeuverType type)
+        {
+            switch (type)
+            {
+                case ManeuverType.DiveBomb: return "DIVEBOMB";
+                case ManeuverType.DefendLane: return "DEFEND";
+                case ManeuverType.Yield: return "YIELD";
+                case ManeuverType.ChillOut: return "CHILL";
+                default: return string.Empty;
+            }
+        }
+
         public static void DrawText(Vector3 pos, string t, Color c, float scale)
         {
             if (!World3DToScreen2d(pos, out Vector2 screenInfo)) return;

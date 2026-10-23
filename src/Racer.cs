@@ -4324,8 +4324,14 @@ namespace ARS
             return thrustPerWheel > VehicleData.CurrentMechanicalGrip * KickWheelLoadShare * KickGripMargin;
         }
 
+        // Off by decision: the card owns the pedal for its window and pins the TCS, and from the outside the car just
+        // reads as unpredictable. Reviving it is this constant.
+        const bool KickCardEnabled = false;
+
         void UpdateThrottleKick()
         {
+            if (!KickCardEnabled) return;
+
             if (!_kickPlaying)
             {
                 TryArmThrottleKick();
