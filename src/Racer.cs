@@ -2657,8 +2657,10 @@ namespace ARS
                 float rivalTimeToEntrance = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f);
                 if (rivalTimeToEntrance >= timeToEntrance) continue;
                 if (timeToEntrance - rivalTimeToEntrance > DivebombReachSeconds) continue;
-                // Ahead on the road, and closing on him: without closure braking later buys nothing.
-                if (r.RouteGapAhead <= 0f) continue;
+                // Ahead on the road, and closing on him: without closure braking later buys nothing. The upper bound is
+                // the release's own: a card armed beyond it is released on the next tick, which re-rolls the bonus every
+                // frame and reads as a card flickering rather than a move being made.
+                if (r.RouteGapAhead <= 0f || r.RouteGapAhead > SameSectionMaxGapMeters) continue;
                 if (r.ForwardSpeedGap <= 0f) continue;
                 // The release tests direction, so the arm has to as well: a target diverging past the gate would otherwise
                 // arm, release and re-arm inside the same tick, re-rolling the dive's brake bonus at the core rate.

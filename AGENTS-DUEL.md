@@ -10,6 +10,12 @@
 > concede. The line it draws: today the cards decide from **geometry** (who reaches the entrance first); this would
 > let them decide from **the likely result** (who wins the corner).
 >
+> **Arm and release must bound the same thing (driven, 2026-10-23).** The time-window rewrite dropped the `+30 m` band from
+> the arm while the release kept it, so every dive armed beyond thirty metres died on the next tick — the bonus was
+> re-rolled each frame and the card read as flickering. Observed in the log as `armed ... gap 42.0` / `released partner
+> lost after 16 ms` pairs, while every dive inside the band ran 2-3 s. `SameSectionMaxGapMeters` is back on the arm:
+> any release test that is not also an arm test is a re-arm loop with a fresh random in it.
+>
 > **Divebomb gates, 2026-10-23:** the arm now asks *who arrives at the entrance first*, signed. `RouteGapAhead > 0`
 > (he is ahead on the road), `rivalTimeToEntrance < myTimeToEntrance` (he gets there first), the difference no more
 > than `DivebombReachSeconds` **0.75**, and `ForwardSpeedGap > 0` (this car is the one closing). The old absolute
