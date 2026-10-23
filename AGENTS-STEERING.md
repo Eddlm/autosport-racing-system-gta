@@ -419,6 +419,15 @@ then **`ApplyRivalWalls`** (`Racer.cs`) clamps the result between track bounds a
 **The base is load-bearing**: zero is the *centre* lane, not the absence of an answer, so a chain seeded with zero steered every car back to the middle of the road wherever no source had an opinion — which is every straight (`dd484d3`).
 The corner and avoidance sources still report silence as zero, and that is what lets the lean take over inside a corner the car has not asked to position for.
 
+**The damper's countersteer ceiling is a slide-propensity dial, not just an amplitude (driver, 2026-10-23).** The damper
+is the only term that reads **yaw rate**; the blend and the assist read **slip angle**, so they act after the car is
+already crossed. That makes `DamperCountersteerMaxDeg` the car's resistance to *continuing* to rotate: at 10 it cuts the
+rotation early and the slide barely opens, at 0 it can only cancel the command, the rotation keeps going, the slide
+passes the assist's 10-degree onset and the assistance arrives at 10 degrees per second against a car that may be
+rotating at 60 — late by construction, and only decisive if the slide persists. Lowering the ceiling therefore does not
+only reduce the correction: **it increases the occasions**. It is also a personality lever before the personality system
+exists — a tail-happy car is one with this knob low.
+
 **The blend's band is wide on purpose: 0.5 to 1.5 of the authored peak slip.** `SlideBlendStartFraction` 0.5 and
 `SlideBlendFullFraction` 1.5, both against `Handling.LateralTractionCurve` and never `TRLateralAtSpeed`, so the band is
 the same at every speed. For a 22-degree tyre that is **11 to 33 degrees of slide**, and full priority — the point where
