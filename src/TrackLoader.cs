@@ -474,6 +474,7 @@ namespace ARS
 
             AssignCrests(nodeCount);
             AssignBumpNodes(nodeCount);
+            MoveEntrancesForBumps(nodeCount);
 
             ARS.CornersRevision++;
         }
@@ -547,6 +548,53 @@ namespace ARS
 
             if (!seamOk) ARS.Log(ARS.LogImportance.Info, "Bumps: the route seam steps at grade " + seamGrade.ToString("0.000") + ", so no lip is taken within " + BumpMaxRunMeters.ToString("0.0") + "m of it");
             ARS.Log(ARS.LogImportance.Info, "Bumps: " + ARS.Bumps.Count + " lips, minimum departure grade " + BumpMinDepartureGrade.ToString("0.000") + ", run " + BumpMinRunMeters.ToString("0.0") + "-" + BumpMaxRunMeters.ToString("0.0") + "m");
+        }
+
+        // A bump before a corner unloads the tyres exactly where the car wants to brake, so the entrance moves back and
+        // the car reaches the ramp already slow: FeatureEntranceBackNodes, or to the lip when the lip is nearer. The
+        // region the detector found is not a road limit and does not hold it back — the apex cap and the previous
+        // corner's exit do, in that order.
+        const int FeatureEntranceBackNodes = 30;
+        const int FeatureEntranceSearchNodes = 60;
+
+        static void MoveEntrancesForBumps(int count)
+        {
+            for (int i = 0; i < ARS.Corners.Count; i++)
+            {
+                CornerPoint corner = ARS.Corners[i];
+                if (corner.Node < 0 || corner.StartNode < 0) continue;
+
+                int nearestBehind = int.MaxValue;
+                int nearestLip = -1;
+                foreach (Bump bump in ARS.Bumps)
+                {
+                    if (bump.LipNode < 0) continue;
+                    int behind = ARS.IsPointToPoint ? corner.StartNode - bump.LipNode : Wrap(corner.StartNode - bump.LipNode, count);
+                    if (behind <= 0 || behind > FeatureEntranceSearchNodes) continue;
+                    if (behind < nearestBehind) { nearestBehind = behind; nearestLip = bump.LipNode; }
+                }
+                if (nearestLip < 0) continue;
+
+                int back = Math.Min(FeatureEntranceBackNodes, nearestBehind);
+                string bound = nearestBehind < FeatureEntranceBackNodes ? "bump stop" : "30 nodes";
+
+                int apexBehind = ARS.IsPointToPoint ? corner.Node - corner.StartNode : Wrap(corner.Node - corner.StartNode, count);
+                int headroom = SpanMaxDistanceNodes - apexBehind;
+                if (headroom < back) { back = headroom; bound = "apex cap"; }
+
+                if (i > 0 && ARS.Corners[i - 1].EndNode >= 0)
+                {
+                    int previousExit = ARS.Corners[i - 1].EndNode;
+                    int exitBehind = ARS.IsPointToPoint ? corner.StartNode - previousExit : Wrap(corner.StartNode - previousExit, count);
+                    if (exitBehind > 0 && exitBehind - 1 < back) { back = exitBehind - 1; bound = "previous exit"; }
+                }
+                if (back <= 0) continue;
+
+                int from = corner.StartNode;
+                corner.StartNode = ARS.IsPointToPoint ? from - back : Wrap(from - back, count);
+                corner.LengthStart = apexBehind + back;
+                ARS.Log(ARS.LogImportance.Info, "Entrance moved for bump: apex=" + corner.Node + " from=" + from + " to=" + corner.StartNode + " bumpLip=" + nearestLip + " back=" + back + " (" + bound + ")");
+            }
         }
 
         // Walks back from the lip while the surface is still climbing, so the run it returns is the rise itself. The
@@ -624,9 +672,9 @@ namespace ARS
             return (float)Math.Sqrt(dx * dx + dy * dy);
         }
 
-        // A crest before a corner unloads the tyres exactly where the car wants to brake, so the braking plan must know
-        // about it and the entrance moves back to its top. Scanned once here, after the merges, because every rule that
-        // rewrites the entrance has to have settled first. The scan is deliberately boundary-free: a crest that belongs
+        // Scanned once here, after the merges, because every rule that rewrites the entrance has to have settled first.
+        // This table is data only: no entrance moves for a crest, unlike a bump, which MoveEntrancesForBumps acts on.
+        // The scan is deliberately boundary-free, so a crest that belongs to a corner outside the region is still found.
         // Route-wide scan for crests and dips. A crest is where the road is climbing and then descending
         // (top of a hill, the local maximum of altitude); a dip is where it's descending and then
         // climbing (bottom of a valley, the local minimum). The signal is the local grade on each
