@@ -170,6 +170,10 @@ namespace ARS
             settings.Specs.Add(new KeySpec("AiNitroPct", "100", Kind.Number, ARS.AiNitroValues));
             files.Add(settings);
 
+            FileSpec development = Owned("Menu-Development.ini");
+            development.Specs.Add(new KeySpec("BrakeLearningGain", "0.9", Kind.Number, ARS.BrakeLearningGainValues));
+            files.Add(development);
+
             // The debug key set is the toggle table itself: retiring a toggle retires its key.
             FileSpec debug = Owned("Menu-Debug.ini");
             foreach (Options option in ARS.DebugToggles.Keys)

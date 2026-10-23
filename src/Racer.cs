@@ -271,7 +271,8 @@ namespace ARS
         const float BrakeSampleThreshold = 0.25f;   // only pedal above this counts as braking at all
         const float BrakeFullPedalThreshold = 0.9f; // pedal at or above this counts as full brake
         const float BrakeFullFractionTarget = 0.2f; // target share of the braking phase spent at full pedal
-        const float BrakeAdjustGain = 1f;           // step per unit of share error: 0.1 for every 10 points off
+        // Step per unit of share error: ARS.BrakeLearningGain, live from the Development menu, so a test can make the
+        // learner move faster or freeze it. 1.0 means 0.1 for every 10 points off the target.
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
@@ -1716,7 +1717,7 @@ namespace ARS
             if (sampleSeconds <= 0f) return;
             // The error is the *share* of the braking phase spent at full pedal, not the length of the phase:
             // a corner the AI takes without ever pressing hard scores 0, so it asks for the largest correction.
-            float step = (BrakeFullFractionTarget - fullShare) * BrakeAdjustGain;
+            float step = (BrakeFullFractionTarget - fullShare) * ARS.BrakeLearningGain;
             float factor = ARS.Clamp(before * (1f + step), BrakeMinFactor, BrakeMaxFactor);
             CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided

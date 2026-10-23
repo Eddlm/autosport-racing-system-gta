@@ -142,6 +142,7 @@ namespace ARS
         public static MenuSettings RaceMenuStore;
         public static MenuSettings SettingsMenuStore;
         public static MenuSettings DebugMenuStore;
+        public static MenuSettings DevelopmentMenuStore;
 
         public static bool HideHudMode = false;
         // True when the player's own car is on the current race grid.
@@ -161,6 +162,11 @@ namespace ARS
         public static bool SmartTuning = true;
         // Learn the effective braking decel that keeps the car at full brake through a braking phase.
         public static bool BrakeLearning = true;
+        // How hard the learner moves a corner's factor per verdict. Live from the Development menu so one car can be
+        // made to learn faster (or not at all) while a track is being probed. The ladder tops at 0.9, so the shipped
+        // rate sits at its top: the old const was 1.0, which the ladder cannot express.
+        public static float BrakeLearningGain = 0.9f;
+        public static readonly string[] BrakeLearningGainValues = { "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9" };
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = true;
@@ -1321,12 +1327,32 @@ namespace ARS
             _raceMenu.Add(endItem);
 
             // Link Race, Rivals, Race Rules, Interface, Controls, Debug and Track Creator as submenus of root
+            NativeMenu developmentMenu = new NativeMenu("Development", "Development", "Test-only levers, for probing one car on track.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+            NativeListItem<string> brakeLearnGainItem = new NativeListItem<string>("Brake Learn Gain", "How far a corner's brake factor moves per verdict. The step is (20% - the share of the braking phase spent at full pedal) x this gain, applied multiplicatively to the factor, and a slide costs a flat 0.1 regardless. At 1.0 a corner that never presses hard gains 20% of its factor in one pass; at 0 the learner still samples and announces but never moves.", BrakeLearningGainValues);
+            brakeLearnGainItem.SelectedIndex = Math.Max(0, brakeLearnGainItem.Items.IndexOf(BrakeLearningGain.ToString("0.##", CultureInfo.InvariantCulture)));
+            BrakeLearningGain = float.Parse(brakeLearnGainItem.Items[brakeLearnGainItem.SelectedIndex], CultureInfo.InvariantCulture);
+            brakeLearnGainItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index < 0 || args.Index >= brakeLearnGainItem.Items.Count) return;
+                BrakeLearningGain = float.Parse(brakeLearnGainItem.Items[args.Index], CultureInfo.InvariantCulture);
+                DevelopmentMenuStore.Set("BrakeLearningGain", brakeLearnGainItem.Items[args.Index]);
+                Log(LogImportance.Info, "Brake learning gain " + BrakeLearningGain.ToString("0.##", CultureInfo.InvariantCulture));
+            };
+            developmentMenu.Add(brakeLearnGainItem);
+            HookListTextPicker(brakeLearnGainItem);
+
             _arsMenu.AddSubMenu(_raceMenu);
             _arsMenu.AddSubMenu(rivalsMenu);
             _arsMenu.AddSubMenu(rulesMenu);
             _arsMenu.AddSubMenu(interfaceMenu);
             _arsMenu.AddSubMenu(controlsMenu);
             _arsMenu.AddSubMenu(debugMenu);
+            _arsMenu.AddSubMenu(developmentMenu);
             _arsMenu.AddSubMenu(creatorMenu);
             _arsMenu.Add(resetItem);
 
@@ -3291,6 +3317,7 @@ namespace ARS
             RaceMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Race.ini");
             SettingsMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Settings.ini");
             DebugMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Debug.ini");
+            DevelopmentMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Development.ini");
 
             // One-time unit change: a raw slip becomes a share of the peak slip, and only while the new key is
             // absent, so a value chosen after this load is never overwritten.
@@ -3333,6 +3360,7 @@ namespace ARS
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
+            BrakeLearningGain = DevelopmentMenuStore.GetFloat("BrakeLearningGain", BrakeLearningGain);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);

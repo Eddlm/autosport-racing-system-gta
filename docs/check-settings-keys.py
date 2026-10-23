@@ -34,10 +34,11 @@ STORE_FILES = {
     "SettingsMenuStore": "Menu-Settings.ini",
     "RaceMenuStore": "Menu-Race.ini",
     "DebugMenuStore": "Menu-Debug.ini",
+    "DevelopmentMenuStore": "Menu-Development.ini",
 }
 
-READ_RE = re.compile(r"(SettingsMenuStore|RaceMenuStore|DebugMenuStore)\.(Get|GetInt|GetFloat|GetBool|TryGetFloat)\(\"([A-Za-z0-9_]+)\"")
-WRITE_RE = re.compile(r"(SettingsMenuStore|RaceMenuStore|DebugMenuStore)\.(Set|Migrate)\(\"([A-Za-z0-9_]+)\"")
+READ_RE = re.compile(r"(SettingsMenuStore|RaceMenuStore|DebugMenuStore|DevelopmentMenuStore)\.(Get|GetInt|GetFloat|GetBool|TryGetFloat)\(\"([A-Za-z0-9_]+)\"")
+WRITE_RE = re.compile(r"(SettingsMenuStore|RaceMenuStore|DebugMenuStore|DevelopmentMenuStore)\.(Set|Migrate)\(\"([A-Za-z0-9_]+)\"")
 RACER_WRITE_RE = re.compile(r"SaveRacerSetting\(\"([A-Za-z0-9_]+)\"")
 OPTIONS_FOR_RE = re.compile(r"OptionsFor\(\"([A-Za-z0-9_]+)\"\)")
 SPEC_RE = re.compile(r"\.Specs\.Add\(new KeySpec\(\"([^\"]+)\",\s*([^,]+?)\s*(?:,\s*([^;]+?))?\s*\)\);")
