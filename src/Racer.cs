@@ -731,7 +731,7 @@ namespace ARS
                 if (!KickWantsSlide())
                 {
                     float countersteerTarget = (steerKP * sideBySideSteerDeg) - (VehicleData.SlideAngle * CountersteerShare());
-                    Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * (_slidePriority * CountersteerBlendMax);
+                    Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * _slidePriority;
                 }
             }
 
@@ -1247,11 +1247,9 @@ namespace ARS
         // authority), and the countersteer answers the full slide — the blend is the only modulator.
         const float SlideBlendStartFraction = 0.5f;
         const float SlideBlendFullFraction = 0.8f;
-        const float CountersteerSlideShare = 1f;
-        // The blend never reaches full lock: countersteer as wide as the slide itself is what snaps the car the
-        // other way. Half of the earned blend is the ceiling, so 80 % of the peak slip still leaves the wheel short
-        // of the angle that started the slide.
-        const float CountersteerBlendMax = 0.5f;
+        // The share of the slide the countersteer answers. Half, not all: a wheel as wide as the slide itself
+        // (33° of countersteer for 33° of slide) is what snaps the car the other way at the end of the correction.
+        const float CountersteerSlideShare = 0.5f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
@@ -1459,9 +1457,9 @@ namespace ARS
         float CountersteerShare() => CountersteerSlideShare;
 
 
-        // True when the slide has saturated the band at four fifths of the authored peak. The wheel blend is capped
-        // below lock, but the pedals still hand over here: no brake, and only the throttle that keeps the wheels
-        // rolling. Forward speed gates it: reversing reads as a ~180° slide, and a reversed car must never be starved.
+        // True when the slide has saturated the band at four fifths of the authored peak: the wheel blend is at its
+        // full weight and the pedals hand over — no brake, and only the throttle that keeps the wheels rolling.
+        // Forward speed gates it: reversing reads as a ~180° slide, and a reversed car must never be starved.
         bool IsFullCountersteer()
         {
             if (KickWantsSlide()) return false;
