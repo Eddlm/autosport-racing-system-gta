@@ -731,7 +731,7 @@ namespace ARS
                 if (!KickWantsSlide())
                 {
                     float countersteerTarget = (steerKP * sideBySideSteerDeg) - (VehicleData.SlideAngle * CountersteerShare());
-                    Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * _slidePriority;
+                    Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * (_slidePriority * CountersteerBlendMax);
                 }
             }
 
@@ -1248,6 +1248,10 @@ namespace ARS
         const float SlideBlendStartFraction = 0.5f;
         const float SlideBlendFullFraction = 0.8f;
         const float CountersteerSlideShare = 1f;
+        // The blend never reaches full lock: countersteer as wide as the slide itself is what snaps the car the
+        // other way. Half of the earned blend is the ceiling, so 80 % of the peak slip still leaves the wheel short
+        // of the angle that started the slide.
+        const float CountersteerBlendMax = 0.5f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
@@ -1455,8 +1459,9 @@ namespace ARS
         float CountersteerShare() => CountersteerSlideShare;
 
 
-        // True when the blend has reached full authority at half the authored peak slip.
-        // Forward speed gates it: reversing reads as a ~180° slide, and a reversed car must never be starved.
+        // True when the slide has saturated the band at four fifths of the authored peak. The wheel blend is capped
+        // below lock, but the pedals still hand over here: no brake, and only the throttle that keeps the wheels
+        // rolling. Forward speed gates it: reversing reads as a ~180° slide, and a reversed car must never be starved.
         bool IsFullCountersteer()
         {
             if (KickWantsSlide()) return false;
