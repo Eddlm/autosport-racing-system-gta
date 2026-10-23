@@ -1753,6 +1753,9 @@ namespace ARS
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeEntryExcessMps = 0f;
                 _brakeEntryMeasured = false;
+                // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
+                // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
+                // would be a second place the factor is written, judged without the slide and the pedal share.
             }
 
             // The entrance pass is measured once: what the plan wanted there against what the car actually carried.
