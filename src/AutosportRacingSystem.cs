@@ -50,7 +50,7 @@ namespace ARS
     // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine
     }
     public partial class ARS : Script
     {
@@ -213,7 +213,8 @@ namespace ARS
         { Options.LockLaneCentre, false },
         { Options.ShowBumps, false },
         { Options.ShowWheelSlip, false },
-        { Options.ShowGsProjection, false }
+        { Options.ShowGsProjection, false },
+        { Options.ShowGLine, false }
     };
 
         // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
@@ -1281,6 +1282,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere a metre over each wheel of the closest AI car, coloured by that tyre's side-slip angle: white at rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
             AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the closest AI car's constant-acceleration path from its roof: one line to where it projects at 0.5s, then a second connected from there to the 1s mark, both floating at roof height. The bend at the joint is the acceleration the car is committing to.");
+            AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw one line from your own car's roof along the horizontal acceleration it is pulling, racing or not: the direction is the G vector and the length is its magnitude at one metre per G, with a short cross at the tail so the direction reads.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
@@ -1834,6 +1836,11 @@ namespace ARS
                         DrawLine(lip, lip + Vector3.WorldUp * 3f, Color.Cyan);
                         DrawLine(lip - right * 4f, lip + right * 4f, Color.Cyan);
                     }
+                }
+                if (DebugToggles[Options.ShowGLine] && player.Character.IsInVehicle())
+                {
+                    Vehicle gLineCar = player.Character.CurrentVehicle;
+                    if (CanWeUse(gLineCar)) UpdatePlayerGLine(gLineCar);
                 }
                 if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
                 {
@@ -3145,6 +3152,54 @@ namespace ARS
         public static void DrawLine(Vector3 from, Vector3 to, Color color)
         {
             Function.Call(Hash.DRAW_LINE, from.X, from.Y, from.Z, to.X, to.Y, to.Z, color.R, color.G, color.B, color.A);
+        }
+
+        // A racer's 20 ms window needs a Racer, and outside a race there is none, so the player's car samples its own.
+        const float GLineMetresPerG = 1f;
+        const float GLineMaxGs = 4f;
+        const int GLineRestartMs = 200;
+        readonly Vector3[] _playerAccelSamples = new Vector3[VehicleState.AccelWindow];
+        int _playerAccelHead;
+        int _playerAccelCount;
+        int _playerAccelSampleTime;
+        Vector3 _playerLastSpeed;
+
+        // Direction is the horizontal acceleration the car is pulling, so a left-hander points at the apex centre;
+        // the cross at the tail is what makes a bare line a vector.
+        void UpdatePlayerGLine(Vehicle car)
+        {
+            Vector3 speed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, car, false);
+            int now = Game.GameTime;
+            int elapsed = now - _playerAccelSampleTime;
+            if (elapsed > GLineRestartMs)
+            {
+                _playerAccelCount = 0;
+                _playerAccelSampleTime = now;
+                _playerLastSpeed = speed;
+                return;
+            }
+            if (elapsed >= VehicleState.AccelIntervalMs)
+            {
+                float dt = Math.Max(elapsed * 0.001f, 0.001f);
+                _playerAccelSamples[_playerAccelHead] = (speed - _playerLastSpeed) / dt;
+                _playerAccelHead = (_playerAccelHead + 1) % VehicleState.AccelWindow;
+                if (_playerAccelCount < VehicleState.AccelWindow) _playerAccelCount++;
+                _playerLastSpeed = speed;
+                _playerAccelSampleTime = now;
+            }
+            if (_playerAccelCount == 0) return;
+
+            Vector3 sum = Vector3.Zero;
+            for (int i = 0; i < _playerAccelCount; i++) sum += _playerAccelSamples[i];
+            Vector3 g = new Vector3(sum.X, sum.Y, 0f) / (_playerAccelCount * 9.8f);
+            float magnitude = g.Length();
+            if (magnitude < 0.02f) return;
+            if (magnitude > GLineMaxGs) g *= GLineMaxGs / magnitude;
+
+            Vector3 origin = car.Position + Vector3.WorldUp * (car.Model.GetDimensions().Z + 0.2f);
+            Vector3 side = Vector3.Cross(Vector3.WorldUp, g).Normalized;
+            DrawLine(origin - side * 0.3f, origin + side * 0.3f, Color.White);
+            DrawLine(origin, origin + g * GLineMetresPerG, Color.Cyan);
         }
 
         

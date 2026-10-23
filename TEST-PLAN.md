@@ -698,3 +698,13 @@ The table's ceiling and the region scan both drop from 100 m to 50 m (they alrea
 4. **The lap times tell the trade.** Fewer braking plans can read faster (less over-preparation) or slower (more reactive braking); which way this track goes is the judgement.
 
 **Shipped default moved to 80 m.** The ladder ships at 80, not the 50 this section was written at: corners between 50 m (the tightness gate) and 80 m now exist as the "wide" class, so the picker skip is live for them again, while bends wider than 80 m stay off the table and on route speed.
+
+## The G line over the player's own car (build 720, compile-verified, drive owed)
+
+A Debug checkbox, `Show G Line`, draws one line from the player's own car's roof in any state: it samples its own speed because a racer's 20 ms window lives on `Racer`, and it averages 200 ms like every other acceleration read in the mod. Direction is the horizontal acceleration the car is pulling, length is that magnitude at one metre per G with the top clamped, and a perpendicular tick at the tail makes the direction readable — a bare line looks the same in both directions.
+
+1. **It draws outside a race.** In free roam, with no track, no grid and no racers, the line floats at roof height over the player's car and follows it. This is the whole point: the existing Gs Projection needs a race and an AI car.
+2. **Accelerating points forward, braking points back.** The tick marks the tail and the tip the direction, so hard throttle and hard braking must swap the two ends.
+3. **A hard corner points at the corner's centre.** Through a committed turn the line should stand roughly across the car's heading, not along it; a line that lies down the car's nose through a corner means the lateral term is not reaching the average.
+4. **Length tracks magnitude, and the clamp holds.** A gentle bend reads short, a hard one long, and a crash or a kerb strike must not throw it into a spike — the 200 ms mean and the clamp are what answer that.
+5. **It survives getting out and back in.** Leaving the car and re-entering must restart the window instead of differencing against the old speed, so the line reads nothing for the first 200 ms and then settles. A line that jumps on re-entry is the restart gate failing.
