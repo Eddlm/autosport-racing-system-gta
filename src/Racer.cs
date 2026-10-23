@@ -2699,26 +2699,22 @@ namespace ARS
             {
                 if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
                 if (r.RivalRacer.ActiveManeuver.Type == ManeuverType.DiveBomb || r.RivalRacer.ActiveManeuver.Type == ManeuverType.DefendLane) continue;
-                bool closes = r.RelativePosition == RelativePos.Behind && r.Distance <= 30f && r.ForwardSpeedGap < 0f;
+                bool closes = r.RelativePosition == RelativePos.Behind && r.ForwardSpeedGap < 0f;
                 bool arrivesNoLater = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f) <= myTimeToEntrance;
                 if (!closes || !arrivesNoLater) continue;
                 // His own view of this car carries the number directly: from his side this car is the one ahead, so his
                 // TimeToReach is defined where ours reads infinity, and it is measured on his FrontGap - bumper to bumper
                 // - rather than between centres. It only exists while this car is among his three nearest, so the mirror
                 // below is the fallback rather than the rule.
+                // Only his own view answers this: his TimeToReach is measured on his FrontGap, bumper to bumper, and
+                // carries his lane gate. When this car is not among his three nearest there is no number, and no
+                // defend - a fallback measured between centres disagreed with him on the only quantity that matters.
                 float timeToReachMe = float.PositiveInfinity;
-                bool haveHisView = false;
                 foreach (Rival back in r.RivalRacer.Brain.Rivals)
                 {
                     if (back.RivalRacer != this) continue;
                     timeToReachMe = back.TimeToReach;
-                    haveHisView = true;
                     break;
-                }
-                if (!haveHisView)
-                {
-                    float catchMps = r.RivalRacer.AlongTrackSpeed - AlongTrackSpeed;
-                    timeToReachMe = catchMps > 0.1f ? -r.RouteGapAhead / catchMps : float.PositiveInfinity;
                 }
                 if (!ARS.IsBetween(timeToReachMe, 3f, 6f)) continue;
                 if (r.Distance < nearestDefender) { nearestDefender = r.Distance; defenderTarget = r; }
