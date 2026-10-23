@@ -31,7 +31,7 @@
 > **A card is a decision, so its exits are looser than its entries (2026-10-23).** Three rules, all in `Racer`: every
 > continuous release threshold is **wider** than the arm that admitted the card (`DivebombReleaseGapMeters` 40 against
 > the 30 m arm, `DivebombReleaseAngleDegrees` 25 against 20, chill-out releasing at 50 m and one car fewer); no card may
-> end before `CardMinDwellMs` 750; and after ending, that card cannot re-arm for `CardCooldownMs` 1500 through
+> end before `CardMinDwellMs` 1000; and after ending, that card cannot re-arm for `CardCooldownMs` 1000 through
 > `EndCard`. Yield is exempt from the cooldown because it is reactive and has nothing to protect. The point is that a
 > card must read as intent: identical thresholds on both sides make a value hovering at the boundary flicker at the
 > core rate, and every re-arm re-rolls whatever random the card carries.

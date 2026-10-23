@@ -385,8 +385,8 @@ namespace ARS
         // the release must let go once he clearly will not.
         const float DefendThreatMarginSeconds = 0.5f;
         const float DivebombReleaseAngleDegrees = 25f;
-        const int CardMinDwellMs = 750;
-        const int CardCooldownMs = 1500;
+        const int CardMinDwellMs = 1000;
+        const int CardCooldownMs = 1000;
         public const float ChillStandoffDistance = 20f;
         const float ChillThrottleCap = 0.5f;
         const float ChillStandoffEscapeMargin = 2f;
