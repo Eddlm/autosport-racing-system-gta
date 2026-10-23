@@ -302,8 +302,9 @@ namespace ARS
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
         // Arriving at the entrance faster than the plan asked is a verdict on the plan, not on the pedal: the
         // share of full pedal cannot see a car that came in hot and still spent the approach on the brake.
-        const float BrakeEntryExcessMps = 10f;   // ten metres a second over costs...
-        const float BrakeEntryFactorStep = 0.02f; // ...this much factor, with no cap on the total
+        const float BrakeEntryExcessMps = 10f;    // ten metres a second over costs...
+        const float BrakeEntryFactorStep = 0.02f; // ...this much factor at the first ten, and more beyond it:
+        const float BrakeEntryStepExponent = 2f;  // the step scales as (excess / 10) ^ this, uncapped in total
         const float BrakeMaxFactor = 1.5f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
@@ -1807,7 +1808,7 @@ namespace ARS
             float fullShare = sampleSeconds > 0f ? _brakeCommitFullSeconds / sampleSeconds : 0f;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
-            float entryCut = BrakeEntryFactorStep * (_brakeCommitEntryExcessMps / BrakeEntryExcessMps);
+            float entryCut = BrakeEntryFactorStep * (float)Math.Pow(_brakeCommitEntryExcessMps / BrakeEntryExcessMps, BrakeEntryStepExponent);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
             // curve has fallen all the way to fTractionCurveMin, so that is sliding rather than merely cornering at
             // the limit. The factor then takes a flat cut — sample or no sample, the slide is the evidence.
@@ -1844,7 +1845,7 @@ namespace ARS
         // and the result. A cut reads as a minus rather than a plus with a negative behind it.
         void AnnounceBrakeAdjustment(int apexNode, float before, float after)
         {
-            if (!ARS.BrakeLearningNotify) return;
+            if (!ARS.BrakeLearningNotify || !ARS.DebugToggles[Options.ShowTrackAnalysis]) return;
             float change = after - before;
             string sign = change < 0f ? " - " : " + ";
             UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") adjusted corner Nº" + apexNode + " | "
