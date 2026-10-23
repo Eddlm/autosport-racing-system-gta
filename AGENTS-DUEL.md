@@ -20,6 +20,12 @@
 > concede. The line it draws: today the cards decide from **geometry** (who reaches the entrance first); this would
 > let them decide from **the likely result** (who wins the corner).
 >
+> **Both fight cards are considered early, 2026-10-23 (driver).** Divebomb moved from 'the last half second before the
+> brakes' to the same **3-5 s** window Defend uses (`DivebombWindowMinSeconds` / `MaxSeconds`); arming in the last half
+> second meant the commitment always arrived after the moment had passed. The brake-point lead and its constant went
+> with it. What still separates the two: Defend needs a chaser closing from behind, Divebomb needs a car ahead that
+> arrives first by no more than 0.75 s with this car closing on it.
+>
 > **The dwell floor is a settling time, not a taste number (driver, 2026-10-23).** A card that orders a lane change and
 > is released mid-way turns the car one way, loses the request and turns back — instability that reads as a glitch.
 > Simulating `UpdateLaneMover` (14 m/s^2, 12 m/s cap, arrival `sqrt(2·a·gap)`) gives the settling time of the manoeuvre
