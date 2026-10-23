@@ -31,6 +31,24 @@ Split from `AGENTS.md` (`8447d75`). Holds the size-trimmed depth and long-form r
 - **A real burn is a separate change and must replace, not stack**: the override's power 1.0 is already 4×, so 4× × the 2.5 cheat = 10×. Drop the override power to 0.5 for the window (2.5× total) and call `SET_NITROUS_IS_ACTIVE` to get flames, sound and HUD. Filed as `nitrous-native-burn` in `AGENTS-BACKLOG.md`.
 - **The bottle is self-charged at fire** — `FULLY_CHARGE_NITROUS` inside `StartNitrous`. The old 1 s top-up loop, `NitroChargedLap` and `TopUpNitrous` are removed: that gate refused the player's fire in the second after every start or finish line, but removing it did **not** restore the player's burn (driver, build 715), so the remaining fault is upstream of the charge — filed as `player-nitrous-fire` in `AGENTS-BACKLOG.md` with the suspects and the log lines that separate them.
 
+## The Gs correction reaches the player as power, not as pedal
+
+GTA lets an uphill car accelerate beyond what its wheel power should produce, measured as `measuredGs - wheelGs - 0.1`
+(`VehicleData.OverspeedExcessGs`, sampled at ~3 Hz). The AI's answer is a pedal cap — `MaxThrottleFromOverspeed`, glided
+at 3.5/s down and half that back up. **The player's pedal is not ARS's to cap**, so the same glided level is multiplied
+into `CheatPowerIncrease` instead: for an input the engine reads as a full 1.0, cutting the drive force is as close to
+capping the pedal as the mod can get, and it costs the same thing — acceleration, not speed.
+
+Two details that are not the same on both sides, and must not be flattened:
+
+- **The arm test.** The AI arms on its own steer command under 2°, which ARS writes and can read. The player has no such
+  command in ARS, so theirs arms on **lateral gs** under 0.25 — the same "barely turning" the command test allows, read
+  from what the car is actually doing. Using `Control.SteerDegrees` on the player would read a stale zero and arm
+  through every corner.
+- **Both read the same level**, so a future change to the cut rate or the start threshold moves the AI's pedal and the
+  player's power together. The `Player power cut` log line (2 s, only while below 0.99) is the only read-out that the
+  player's side is biting.
+
 ## The two lookaheads — same quantity, two planes, and why they stay two
 
 Two systems read the road ahead every tick and each derives its own governor. They look redundant and they are not.

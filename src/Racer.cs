@@ -414,6 +414,7 @@ namespace ARS
         int _nitrousLapUsed = -1;
         int _nitroRefusalLoggedAt = 0;
         float _powerCounter = 1f;
+        float _overspeedPowerLevel = 1f;
         float _appliedThrottleLastFrame = 1f;
         int _powerCounterLoggedAt = 0;
 
@@ -2149,6 +2150,9 @@ namespace ARS
         const float OverspeedArmMaxSteerDegrees = 2f;
         const float OverspeedArmMaxSlideDegrees = 2f;
         const float OverspeedArmMinSpeedMph = 30f;
+        // The player has no steer command for ARS to read, so their arm test reads what the car is doing: a quarter
+        // of a g of lateral is the same "barely turning" the two-degree command allows an AI car at speed.
+        const float OverspeedArmMaxLateralGs = 0.25f;
 
         // Where the correction starts; how hard it then cuts is the player's rate.
         const float OverspeedCutStartGs = 0.2f;
@@ -2168,6 +2172,24 @@ namespace ARS
             return Glide(current, level, ReasonCapSlewRate, ReasonCapSlewRate * ReasonCapRecoveryScale, TickScale);
         }
 
+        // The Gs correction's target level. GTA lets an uphill car accelerate beyond what its wheel power should
+        // produce; the AI pays that as a pedal cap, and the player's pedal is not ours to cap, so the same level is
+        // spent as drive force instead (UpdatePowerCompensation).
+        float OverspeedThrottleLevel()
+        {
+            bool straight = ControlledByPlayer
+                ? Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) < OverspeedArmMaxLateralGs
+                : Math.Abs(Control.SteerDegrees) < OverspeedArmMaxSteerDegrees;
+            bool armed = straight
+                && Math.Abs(VehicleData.SlideAngle) < OverspeedArmMaxSlideDegrees
+                && Car.Velocity.Length() > ARS.MphToMps(OverspeedArmMinSpeedMph);
+            // A positive accept, not an absence test: Clamp returns its min bound for a NaN, so a non-finite excess
+            // would otherwise command a full cut instead of no cut at all.
+            if (ARS.OverspeedCutPerTenthG <= 0f || !armed || !(VehicleData.OverspeedExcessGs > 0f)) return 1f;
+            float cut = ARS.OverspeedCutPerTenthG * (VehicleData.OverspeedExcessGs - OverspeedCutStartGs) / 0.1f;
+            return ARS.Clamp(1f - cut, 0f, 1f);
+        }
+
         void UpdateThrottleReasonCaps()
         {
             // The kick card plays on exactly the wheelspin this cut moderates: the card owns the pedal for its
@@ -2175,16 +2197,7 @@ namespace ARS
             Control.MaxThrottleFromTCS = _kickPlaying ? 1f : GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
             Control.MaxThrottleFromStability = Glide(Control.MaxThrottleFromStability, StabilityTarget(), StabilityFallPerSecond, StabilityRisePerSecond, TickScale);
 
-            bool overspeedArmed = Math.Abs(Control.SteerDegrees) < OverspeedArmMaxSteerDegrees && Math.Abs(VehicleData.SlideAngle) < OverspeedArmMaxSlideDegrees && Car.Velocity.Length() > ARS.MphToMps(OverspeedArmMinSpeedMph);
-            float overspeedLevel = 1f;
-            // A positive accept, not an absence test: Clamp returns its min bound for a NaN, so a non-finite excess
-            // would otherwise command a full throttle cut instead of no cut at all.
-            if (ARS.OverspeedCutPerTenthG > 0f && overspeedArmed && VehicleData.OverspeedExcessGs > 0f)
-            {
-                float overspeedCut = ARS.OverspeedCutPerTenthG * (VehicleData.OverspeedExcessGs - OverspeedCutStartGs) / 0.1f;
-                overspeedLevel = ARS.Clamp(1f - overspeedCut, 0f, 1f);
-            }
-            Control.MaxThrottleFromOverspeed = GlideCap(Control.MaxThrottleFromOverspeed, overspeedLevel);
+            Control.MaxThrottleFromOverspeed = GlideCap(Control.MaxThrottleFromOverspeed, OverspeedThrottleLevel());
 
             float rivalLevel = 1f;
             foreach (Rival r in Brain.Rivals)
@@ -3127,8 +3140,21 @@ namespace ARS
             float overTopSpeed = ARS.GetForwardSpeed(Car) - Handling.EstimatedTopSpeed * TopSpeedCounterOnsetScale;
             if (overTopSpeed > 0f) counter *= ARS.Remap(overTopSpeed, 0f, TopSpeedCounterBand, 1f, TopSpeedCounterMax, true);
 
+            // The player's side of the Gs correction. Their pedal is theirs, so the same level is taken out of the drive
+            // force instead: for an input the engine reads as 1.0 this is as close to capping it as the mod can get.
+            if (ControlledByPlayer)
+            {
+                _overspeedPowerLevel = GlideCap(_overspeedPowerLevel, OverspeedThrottleLevel());
+                counter *= _overspeedPowerLevel;
+            }
+
             _powerCounter = counter;
 
+            if (ControlledByPlayer && _overspeedPowerLevel < 0.99f && Game.GameTime > _powerCounterLoggedAt)
+            {
+                _powerCounterLoggedAt = Game.GameTime + 2000;
+                ARS.Log(ARS.LogImportance.Info, "Player power cut " + _overspeedPowerLevel.ToString("0.00") + " (excess Gs " + VehicleData.OverspeedExcessGs.ToString("0.00") + ")");
+            }
             if (_powerCounter > 1.001f && Game.GameTime > _powerCounterLoggedAt)
             {
                 _powerCounterLoggedAt = Game.GameTime + 2000;
