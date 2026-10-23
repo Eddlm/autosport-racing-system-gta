@@ -2702,10 +2702,24 @@ namespace ARS
                 bool closes = r.RelativePosition == RelativePos.Behind && r.Distance <= 30f && r.ForwardSpeedGap < 0f;
                 bool arrivesNoLater = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f) <= myTimeToEntrance;
                 if (!closes || !arrivesNoLater) continue;
-                // How long he takes to catch this car, which is the mirror of TimeToReach: that field is written for a
-                // rival ahead and reads infinity for one behind, and behind is the only case Defend arms on.
-                float catchMps = r.RivalRacer.AlongTrackSpeed - AlongTrackSpeed;
-                float timeToReachMe = catchMps > 0.1f ? -r.RouteGapAhead / catchMps : float.PositiveInfinity;
+                // His own view of this car carries the number directly: from his side this car is the one ahead, so his
+                // TimeToReach is defined where ours reads infinity, and it is measured on his FrontGap - bumper to bumper
+                // - rather than between centres. It only exists while this car is among his three nearest, so the mirror
+                // below is the fallback rather than the rule.
+                float timeToReachMe = float.PositiveInfinity;
+                bool haveHisView = false;
+                foreach (Rival back in r.RivalRacer.Brain.Rivals)
+                {
+                    if (back.RivalRacer != this) continue;
+                    timeToReachMe = back.TimeToReach;
+                    haveHisView = true;
+                    break;
+                }
+                if (!haveHisView)
+                {
+                    float catchMps = r.RivalRacer.AlongTrackSpeed - AlongTrackSpeed;
+                    timeToReachMe = catchMps > 0.1f ? -r.RouteGapAhead / catchMps : float.PositiveInfinity;
+                }
                 if (!ARS.IsBetween(timeToReachMe, 3f, 6f)) continue;
                 if (r.Distance < nearestDefender) { nearestDefender = r.Distance; defenderTarget = r; }
             }
