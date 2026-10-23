@@ -735,7 +735,10 @@ namespace ARS
             float damperOvershootDeg = Math.Abs(damperTermDeg) - Math.Abs(nonDamperSteerDeg);
             if (pursuitSign != 0f && damperTermDeg * pursuitSign < 0f && damperOvershootDeg > 0f)
             {
-                float crossingDeg = Math.Min(damperOvershootDeg * DamperCrossingShare / DamperCrossingDivisor, DamperCrossingMaxDeg);
+                float crossingDeg = damperOvershootDeg * DamperCrossingShare;
+                if (crossingDeg > DamperCrossingFreeDeg)
+                    crossingDeg = DamperCrossingFreeDeg + (crossingDeg - DamperCrossingFreeDeg) / DamperCrossingDivisor;
+                crossingDeg = Math.Min(crossingDeg, DamperCrossingMaxDeg);
                 damperTermDeg = -pursuitSign * (Math.Abs(nonDamperSteerDeg) + crossingDeg);
             }
             _damperTermDeg = damperTermDeg;
@@ -1278,8 +1281,9 @@ namespace ARS
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
         // Countersteer is where the damper forces the snap: fast rotation, a proportional term, and the correction
-        // landing late enough to become the next rotation. So it is deliberately careful there — a third of the
-        // magnitude — with a high ceiling that only a genuinely enormous overshoot reaches.
+        // landing late enough to become the next rotation. Small countersteer is the opposite case — it is what keeps
+        // a car straight — so it keeps full authority, and only the excess past this band pays the divisor.
+        const float DamperCrossingFreeDeg = 2f;
         const float DamperCrossingDivisor = 2f;
         const float DamperCrossingMaxDeg = 30f;
         // The damper's authority against the car's own rotation. The slide batch drove it at 0.5 and the slides
