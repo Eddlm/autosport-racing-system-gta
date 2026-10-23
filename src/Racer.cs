@@ -794,7 +794,11 @@ namespace ARS
                 if (rival.RivalRacer == null || !rival.RivalRacer.Car.Exists()) continue;
 
                 Vector3 relativeOffset = ARS.EntityRelativeOffset(Car, rival.RivalRacer.Car);
-                if (Math.Abs(relativeOffset.Y) > rival.CombinedSize.Y) continue;
+                // The bodies, not the boxes: CombinedSize.Y carries the one-metre-ahead buffer, and matching the heading
+                // of a car that is merely following this one turns this car with it. Side-by-side means the bodies
+                // actually overlap along the road, whatever the model's length turns out to be.
+                float bodyHalfSum = (VehicleData.ModelDimensions.Y + rival.RivalRacer.VehicleData.ModelDimensions.Y) * 0.5f;
+                if (Math.Abs(relativeOffset.Y) > bodyHalfSum) continue;
 
                 float lateralDistance = Math.Abs(relativeOffset.X);
 

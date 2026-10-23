@@ -417,6 +417,13 @@ then **`ApplyRivalWalls`** (`Racer.cs`) clamps the result between track bounds a
 **The base is load-bearing**: zero is the *centre* lane, not the absence of an answer, so a chain seeded with zero steered every car back to the middle of the road wherever no source had an opinion — which is every straight (`dd484d3`).
 The corner and avoidance sources still report silence as zero, and that is what lets the lean take over inside a corner the car has not asked to position for.
 
+**Side-by-side means the bodies, not the boxes.** `CombinedSize.Y` carries the reactive buffers (+1 m ahead, +0.25
+behind) because it answers "is this rival near enough to matter"; the heading match used the same number, so a car
+following two metres off another's tail was inside the gate and got its heading matched — turning toward the leader made
+the leader turn with it. The match now measures `ModelDimensions.Y` halves, the real bodies, so it needs an actual
+longitudinal overlap at any model size. The same-line case stays intentional: with no lateral separation there is no
+"away" to close, and matching there is what keeps a nose-to-tail pair on one arc.
+
 **The pass lane has a release, and it is the half that was missing.** `ComputeAvoidAheadLane` returns the offset
 beside a slower rival ahead; the chain drops the request the tick `Brain.AvoidanceTarget` clears, which is the tick the
 overlap ends — and that is precisely when the rear is still beside the car that was passed. The mover's rate keeps the
