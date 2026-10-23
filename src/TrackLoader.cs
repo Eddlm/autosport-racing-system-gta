@@ -816,8 +816,14 @@ namespace ARS
                         return;
                     }
                     CornerPoint survivor = corner.DetectedRadius < previous.DetectedRadius ? corner : previous;
+                    CornerPoint absorbed = survivor == corner ? previous : corner;
                     ExtendMergedCorner(survivor, previous.StartNode, corner.EndNode, count);
                     ARS.Corners[ARS.Corners.Count - 1] = survivor;
+                    ARS.Log(ARS.LogImportance.Info, "Corners merged (" + (gapSeconds < closeCornerSeconds ? "close" : "aligned")
+                        + "): keptApex=" + survivor.Node + " R=" + survivor.DetectedRadius.ToString("0.0")
+                        + " absorbedApex=" + absorbed.Node + " R=" + absorbed.DetectedRadius.ToString("0.0")
+                        + " gap=" + gap + " nodes " + gapSeconds.ToString("0.00") + "s"
+                        + " span=" + survivor.LengthStart + "+" + survivor.LengthEnd + " from node " + survivor.StartNode);
                     return;
                 }
             }
