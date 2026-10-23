@@ -2056,8 +2056,9 @@ namespace ARS
         const float OffTrackThrottleLevel = 0f;
         const float OffTrackSafeSpeedMph = 20f;
         const float OffTrackFullThrottleMph = 15f;
-        // The throttle an off-track car gets while it is pointed back at the track: half, not the limiter.
-        const float OffTrackRecoverThrottle = 0.5f;
+        // The throttle an off-track car gets while it is pointed back at the track: three quarters, not the limiter.
+        // Half was too little to pull away from a stop in the grass.
+        const float OffTrackRecoverThrottle = 0.75f;
 
         // Stability: each wheel out of contact costs a quarter of the throttle, since it cannot use the grip it has.
         // The count is zeroes on the side-slip axis, where a decompressed wheel does not read zero; falling is twice rising.
