@@ -422,8 +422,7 @@ The corner and avoidance sources still report silence as zero, and that is what 
 **The slide gets a careful extra, and its own release is what keeps it safe (driver, 2026-10-23).** Half the slide
 recovers most cars; the ones it does not are the ones still **rotating into** the slide. Past
 `CountersteerAssistOnsetDegrees` 10 and while `sign(slide) == sign(yawRate)`, the command gains
-`CountersteerAssistDegreesPerSecond` **10 degrees per second** — a rate, so it builds rather than jumping, capped at
-`CountersteerAssistMaxDegrees` 20. **The moment the rotation changes sign the degrees disappear**, and that instant
+`CountersteerAssistDegreesPerSecond` **10 degrees per second** — a rate, so it builds rather than jumping. Its ceiling is **a share of the slide, not an angle**: `CountersteerTotalShare` 1.0 is the whole answer the wheel may ever give, the blend already spends `CountersteerSlideShare` 0.5 of it, and the assist may add the difference — so at 33 degrees of slide the wheel can reach 33, which points it along the velocity vector and no further. 0.8 leaves it short of neutral. **The moment the rotation changes sign the degrees disappear**, and that instant
 drop is the whole safety argument: the assist is removed exactly when the car stops turning into the slide, which is
 before the correction can become the next snap. Adding amplitude without that release is what the 5-degree ceiling
 tried to fix and could not.
