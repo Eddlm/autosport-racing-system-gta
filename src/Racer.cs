@@ -1896,6 +1896,11 @@ namespace ARS
             // holding the apex speed all the way to the apex is what build 731 tried, and it was reverted.
             if (NextApexNode >= 0 && HasPassedBrakingTarget()) cornerSpd = 999f;
 
+            // A corner inside its braking distance owns the brake authority: its ramp is a planned deceleration and
+            // the route's instantaneous radius must not disarm it. Captured before the slope and crest factors,
+            // which scale a 999 sentinel down into a number that would otherwise read as a live plan.
+            bool cornerPlansABrake = cornerSpd < 999f;
+
             // Hill grip loss: exponential model, 15 degrees halves grip.
             {
                 float slopeAngleDeg = ARS.RadToDeg(GetFollowPointSlopeAngle());
@@ -1957,7 +1962,7 @@ namespace ARS
             Brain.CurrentIntention.Speed = Math.Min(cornerTerm, routeTerm);
             // Which of the two is asking for the speed decides whether the pedal may brake on it at all: a corner
             // plans its own deceleration, the road's curvature does not.
-            Control.MaxBrakeFromRoute = routeTerm <= cornerTerm ? RouteBrakeCap : 1f;
+            Control.MaxBrakeFromRoute = routeTerm <= cornerTerm && !cornerPlansABrake ? RouteBrakeCap : 1f;
 
             // ChillOut: hold a standoff behind the closest rival ahead.
             if (ActiveManeuver.Type == ManeuverType.ChillOut)
