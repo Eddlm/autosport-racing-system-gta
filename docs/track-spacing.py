@@ -7,6 +7,7 @@ one node as one metre; this measures how true that is.
 Usage:
     python docs/track-spacing.py                       # every track in the game folder
     python docs/track-spacing.py "path/to/Track.xml"   # one file
+    python docs/track-spacing.py --long "path/to/Track.xml"  # list the long steps
 """
 
 import glob
@@ -28,7 +29,7 @@ def route_points(path):
     return [(float(x), float(y)) for x, y in pairs]
 
 
-def report(path):
+def report(path, list_long):
     points = route_points(path)
     if len(points) < 3:
         print(f"{os.path.basename(path)}: no route block")
@@ -41,9 +42,17 @@ def report(path):
           f"nodes={len(points):5} "
           f"min={steps[0]:.4f} p50={steps[n // 2]:.4f} p99={steps[int(n * 0.99)]:.4f} "
           f"max={steps[-1]:.4f}  >1.5m={over:4} ({100 * over / n:.1f}%)  <0.5m={under:3}")
+    if list_long:
+        pairs = [(i, math.dist(points[i], points[i + 1]))
+                 for i in range(len(points) - 1)
+                 if math.dist(points[i], points[i + 1]) > 1.5]
+        print("    long steps (node -> node+1, metres):",
+              ", ".join(f"{i}->{i + 1} ({d:.3f})" for i, d in pairs))
 
 
 if __name__ == "__main__":
-    targets = sys.argv[1:] or sorted(glob.glob(TRACKS))
+    args = sys.argv[1:]
+    list_long = "--long" in args
+    targets = [a for a in args if a != "--long"] or sorted(glob.glob(TRACKS))
     for target in targets:
-        report(target)
+        report(target, list_long)
