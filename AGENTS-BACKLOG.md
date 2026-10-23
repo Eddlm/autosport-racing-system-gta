@@ -51,7 +51,7 @@
 - `downhill-braking-term` — **closed (driver)**: the brake learner covers the grade coupling. The per-node decel profile remains **not** a defect — the mean is the exact quantity — so do not "fix" it. **closed**
 
 **Tier 8 — removed for the WIP, reimplement later**
-- `slide-brake-rampdown` — taken out so the WIP ships a tuned steering/braking pair. **parked**, v0.9 and over; anything reimplemented must respect the pair **instant release, ramped recovery**.
+- `slide-brake-rampdown` — taken out so the WIP ships a tuned steering/braking pair. **parked**, v0.9 and over; anything reimplemented must respect the pair **instant release, ramped recovery**. **Look-at reopened (driver, 2026-10-23), still not scheduled**: the brake has exactly one reaction to a slide and it is binary — `IsFullCountersteer` takes the brake to zero at four fifths of the authored peak slip, and everywhere below that the plan keeps full brake authority. The half-to-four-fifths band therefore has a countersteer and no brake relief, which is the window where the fronts are still loaded while the rear has already let go. The question to answer first is what the reduction is a share of: the plan's brake, or the cap the ABS guard leaves. Any build must stay ramped on the way out and instant on the way in, and must not re-arm the slam the route cap exists to prevent.
 
 **Tier 9 — recorded ideas, not started**
 - `brake-learning` — **dropped (driver)**: the slide-learned ceiling is not relevant anymore. **closed**
