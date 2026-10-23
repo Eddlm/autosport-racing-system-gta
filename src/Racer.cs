@@ -231,6 +231,7 @@ namespace ARS
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _offtrackThrottleCap = 1f;
+        int _offshootLogAt = 0;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
         const float BrakeFactorSeed = 0.75f;
@@ -1609,31 +1610,48 @@ namespace ARS
         // a lane override must have aimed the car, the car must be moving, and the node must actually turn.
         float OffshootThrottleCap(float seconds)
         {
-            if (!_laneOverride) return 1f;
+            bool laneOverride = _laneOverride;
+            float mph = ARS.MpsToMph(Car.Velocity.Length());
+            float cap = 1f;
+            float signedOffset = 0f;
+            float halfWidth = 0f;
+            float outsideOffset = 0f;
+            float carOffset = 0f;
+            float turnDirection = 0f;
 
-            if (ARS.MpsToMph(Car.Velocity.Length()) < OffshootMinSpeedMph) return 1f;
+            if (laneOverride && mph >= OffshootMinSpeedMph)
+            {
+                Vector3 proj = ProjectAhead(seconds);
+                // 1 node ≈ 1 m: the window has to reach the projected node.
+                int projectionWindow = (int)(Car.Velocity.Length() * seconds) + 10;
+                TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node, 0, projectionWindow);
+                signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
+                halfWidth = Math.Max(tp.TrackHalfWidth, 0.1f);
 
-            Vector3 proj = ProjectAhead(seconds);
-            // 1 node ≈ 1 m: the window has to reach the projected node.
-            int projectionWindow = (int)(Car.Velocity.Length() * seconds) + 10;
-            TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node, 0, projectionWindow);
-            float signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
-            float halfWidth = Math.Max(tp.TrackHalfWidth, 0.1f);
+                // Outside is the side the corner the car is in turns away from.
+                turnDirection = Math.Abs(CurrentTrackPoint.Angle) > OffshootMinRouteAngleDeg ? Math.Sign(CurrentTrackPoint.Angle) : 0f;
 
-            // Outside is the side the corner the car is in turns away from.
-            float turnDirection = Math.Abs(CurrentTrackPoint.Angle) > OffshootMinRouteAngleDeg ? Math.Sign(CurrentTrackPoint.Angle) : 0f;
+                if (Math.Sign(signedOffset) == turnDirection)
+                {
+                    outsideOffset = signedOffset * turnDirection;
+                    // The car's own offset is read in its own node's frame, not the projected one: measured against a
+                    // frame tens of nodes ahead, a corner turns the along-track separation into a fake lateral offset
+                    // and the comparison below can never fail. Same frame as turnDirection, so the sides compare.
+                    carOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction) * turnDirection;
+                    if (outsideOffset > carOffset && outsideOffset > halfWidth)
+                        cap = ARS.Remap(outsideOffset, halfWidth, halfWidth + OffshootRangeMeters, 1f, 0f, true);
+                }
+            }
 
-            if (Math.Sign(signedOffset) != turnDirection) return 1f;
+            // Every gate in one line, twice a second while the projection is on screen: guessing which one is shut
+            // has already cost two builds.
+            if (ARS.DebugToggles[Options.ShowGsProjection] && ARS.DebugFocusRacer == this && Game.GameTime >= _offshootLogAt)
+            {
+                _offshootLogAt = Game.GameTime + 500;
+                ARS.Log(ARS.LogImportance.Info, "Offshoot: override=" + laneOverride + " mph=" + mph.ToString("0") + " turn=" + turnDirection + " signed=" + signedOffset.ToString("0.00") + " car=" + carOffset.ToString("0.00") + " half=" + halfWidth.ToString("0.00") + " outside=" + outsideOffset.ToString("0.00") + " cap=" + cap.ToString("0.00"));
+            }
 
-            float outsideOffset = signedOffset * turnDirection;
-            // The car's own offset is read in its own node's frame, not the projected one: measured against a frame
-            // tens of nodes ahead, a corner turns the along-track separation into a fake lateral offset and the
-            // comparison below can never fail. Same frame as turnDirection, so the two sides are comparable.
-            float carOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction) * turnDirection;
-            if (outsideOffset <= carOffset) return 1f;
-
-            if (outsideOffset <= halfWidth) return 1f;
-            return ARS.Remap(outsideOffset, halfWidth, halfWidth + OffshootRangeMeters, 1f, 0f, true);
+            return cap;
         }
 
         // Samples braking quality across the approach to the current apex. The verdict waits: the sample is parked
