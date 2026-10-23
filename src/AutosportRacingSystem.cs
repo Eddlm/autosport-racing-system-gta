@@ -67,7 +67,7 @@ namespace ARS
         // is dropped, so it gets no apex entry, braking plan or chevron and route speed is its only law. The region
         // scan opens at this same number, so the two can never disagree. The Debug menu owns it at runtime and
         // rebuilds the table on a change, mid-race included.
-        public static int CornerCeilingMeters = 80;
+        public static int CornerCeilingMeters = 200;
         // The menu's ladder and the settings repair's domain, from one place: a value stored off this ladder is
         // snapped to its nearest offer on load, so the two lists must not drift.
         public static readonly string[] CornerCeilingValues = { "20", "40", "60", "80", "100", "120", "140", "160", "180", "200" };

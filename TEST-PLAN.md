@@ -697,7 +697,7 @@ The table's ceiling and the region scan both drop from 100 m to 50 m (they alrea
 3. **The tight corners keep their braking and their outside lines.** No corner the table still holds may read slower or miss its approach — that would be the ceiling cutting into the population it should keep.
 4. **The lap times tell the trade.** Fewer braking plans can read faster (less over-preparation) or slower (more reactive braking); which way this track goes is the judgement.
 
-**Shipped default moved to 80 m.** The ladder ships at 80, not the 50 this section was written at: corners between 50 m (the tightness gate) and 80 m now exist as the "wide" class, so the picker skip is live for them again, while bends wider than 80 m stay off the table and on route speed.
+**Shipped default: 200 m (build 724).** The ladder was written at 50, moved to 80, and settled at 200 once the field drove the range: at 80 m real corners were missing, at 180 m fewer problems, and 200 — the top of the ladder — has every corner the AI needs. Corners between `CornerTightRadius` (50 m) and 200 m are the "wide" class the picker skip is live for, and nothing wider than 200 m reaches the table at all.
 
 **Observed on By The Highway (build 722)**: the 90° left the field expected is absent at 80 m and returns at 100 m, and the widest apex the table kept at 80 m was 70 m — so that stretch is driven on route speed alone with no braking plan, which is exactly the cost this section named. The merge was cleared as the cause in the same run: zero `Corners merged` and zero `Corner skipped` lines, all nine corners logged as `Corner add`.
 
