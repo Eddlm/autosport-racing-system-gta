@@ -202,7 +202,7 @@ namespace ARS
 
         // How much brake the route's curvature is allowed to ask for. A curvature-driven target is a step, not a
         // ramp: braking on it at full authority is what reads as a slam. A corner owns its own ramp and is exempt.
-        const float RouteBrakeCap = 0.5f;
+        const float RouteBrakeCap = 0.2f;
 
         const float OffshootRangeMeters = 5f; // the ramp lives beyond the edge: 1.0 at it, 0.0 five metres out
         // A node deflection below this is a straight, which has no outside to judge.
