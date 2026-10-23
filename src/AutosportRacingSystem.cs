@@ -1368,6 +1368,7 @@ namespace ARS
             _menuPool.Add(interfaceMenu);
             _menuPool.Add(controlsMenu);
             _menuPool.Add(debugMenu);
+            _menuPool.Add(developmentMenu);
             _menuPool.Add(creatorMenu);
         }
         void SaveRacerSetting(string key, string value)
