@@ -1926,7 +1926,7 @@ namespace ARS
         // Past the braking target the plan holds its own number until the car has actually reached it, then lets it
         // grow: five miles an hour a second, so the arc is driven rather than sat on. The route term still votes
         // through the min, so a radius that says slower wins anyway.
-        const float CornerLiftMphPerSecond = 20f;
+        const float CornerLiftMphPerSecond = 10f;
         const float CornerLiftGraceMph = 5f;
 
         // Where the braking target is anchored: a fixed lead before the corner entrance, which the learned factor moves
