@@ -417,6 +417,8 @@ namespace ARS
         float _powerCounter = 1f;
         float _overspeedPowerLevel = 1f;
         int _cornerLiftApex = -1;
+        float _avoidHoldLane = 0f;
+        bool _avoidHoldActive = false;
         float _cornerLiftMps = 0f;
         float _appliedThrottleLastFrame = 1f;
         int _powerCounterLoggedAt = 0;
@@ -627,7 +629,7 @@ namespace ARS
             LaneReason cornerReason = LaneReason.OwnLane;
             if (gotActiveCorner) cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, out cornerReason);
             if (cornerLane != 0f) { laneRequest = cornerLane; laneReason = cornerReason; }
-            float avoidAheadLane = ComputeAvoidAheadLane(roadWide);
+            float avoidAheadLane = ComputeAvoidanceLane(roadWide);
             if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
             if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { laneRequest = NearestEdgeLane(steerRefOffset, drivableEdge); laneReason = LaneReason.RecoveryEdge; }
             float walledLane = ApplyRivalWalls(laneRequest, roadWide);
@@ -1125,8 +1127,38 @@ namespace ARS
         // The wall and pass geometry only trust an adjacency when the pair also sits on neighbouring route nodes,
         // so an overlapping car on the far leg of a U is never mistaken for a trackside blockage.
         const float SameSectionMaxGapMeters = 30f;
+        // After a pass the lane must not snap back to the line: the rear is still beside the car that was passed, and
+        // turning in there is what puts it in the other car's nose. The request holds until nothing is left alongside.
+        const float AvoidHoldBehindMeters = 14f;
+        const float AvoidHoldLateralMeters = 1.5f;
 
         // Pick a lane to pass a rival ahead. If two rivals trigger on opposite sides, thread the needle.
+        // The pass lane, plus its release. The release is the half that matters: a car that has just cleared the overlap
+        // still has its rear beside the passed car, so the offset is held until that car is well behind rather than
+        // dropped the tick the target clears.
+        float ComputeAvoidanceLane(float roadWide)
+        {
+            float passLane = ComputeAvoidAheadLane(roadWide);
+            if (passLane != 0f)
+            {
+                _avoidHoldLane = passLane;
+                _avoidHoldActive = true;
+                return passLane;
+            }
+            if (!_avoidHoldActive) return 0f;
+
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
+                if (r.RouteGapAhead > 0f || r.RouteGapAhead < -AvoidHoldBehindMeters) continue;
+                if (Math.Abs(r.NodeOffset - _carriedLane) > r.CombinedWidth + AvoidHoldLateralMeters) continue;
+                return _avoidHoldLane;
+            }
+
+            _avoidHoldActive = false;
+            return 0f;
+        }
+
         float ComputeAvoidAheadLane(float roadWide)
         {
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
