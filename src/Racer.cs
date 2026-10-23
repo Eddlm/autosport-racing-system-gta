@@ -1660,6 +1660,21 @@ namespace ARS
             return cap;
         }
 
+        // True when the one-second projection sits closer to the track's centre line than the car does, each measured
+        // in its own node's frame — both are distances from the centre at their own point, so they compare directly.
+        // It answers "is this car being steered back in", which is the only case where the off-track limiter should
+        // give way to a recovery throttle.
+        bool ProjectionClosingOnCentre()
+        {
+            Vector3 proj = ProjectAhead(1f);
+            // 1 node ≈ 1 m, and the projection is one second out.
+            int projectionWindow = (int)(Car.Velocity.Length()) + 10;
+            TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node, 0, projectionWindow);
+            float carOffset = Math.Abs(ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction));
+            float projectionOffset = Math.Abs(ARS.SignedLaneOffset(proj, tp.Position, tp.Direction));
+            return projectionOffset < carOffset;
+        }
+
         // Samples braking quality across the approach to the current apex. The verdict waits: the sample is parked
         // at the apex pass and only lands a couple of seconds later, once the exit has had its say.
         void UpdateBrakeLearning()
@@ -2035,6 +2050,8 @@ namespace ARS
         const float OffTrackThrottleLevel = 0f;
         const float OffTrackSafeSpeedMph = 20f;
         const float OffTrackFullThrottleMph = 15f;
+        // The throttle an off-track car gets while it is pointed back at the track: half, not the limiter.
+        const float OffTrackRecoverThrottle = 0.5f;
 
         // Stability: each wheel out of contact costs a quarter of the throttle, since it cannot use the grip it has.
         // The count is zeroes on the side-slip axis, where a decompressed wheel does not read zero; falling is twice rising.
@@ -2098,7 +2115,14 @@ namespace ARS
             Control.MaxThrottleFromYield = GlideCap(Control.MaxThrottleFromYield, ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null ? YieldThrottleLevel : 1f);
 
             float offTrackThrottle = 1f;
-            if (OutOfTrackDistance() > 0f) offTrackThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), OffTrackSafeSpeedMph, OffTrackFullThrottleMph, OffTrackThrottleLevel, 1f, true);
+            if (OutOfTrackDistance() > 0f)
+            {
+                offTrackThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), OffTrackSafeSpeedMph, OffTrackFullThrottleMph, OffTrackThrottleLevel, 1f, true);
+                // A car whose projection is closing on the centre line is driving itself back in, not stuck in the
+                // grass: the speed limiter that keeps a lost car from ploughing on is lifted and a flat half takes
+                // its place, so recovery happens under power without a full-throttle launch off a loose surface.
+                if (ProjectionClosingOnCentre()) offTrackThrottle = OffTrackRecoverThrottle;
+            }
             Control.MaxThrottleFromOffTrack = GlideCap(Control.MaxThrottleFromOffTrack, offTrackThrottle);
 
             float recoveryThrottle = 1f;
