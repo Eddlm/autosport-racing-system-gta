@@ -176,6 +176,8 @@ namespace ARS
         public static int CornerOffsetMph = 2;
         public static int RouteOffsetMph = 4;
         public static float SteerDampingGain = 0.5f;
+        // How far past neutral the damper may countersteer, in degrees. 0 means it can only cancel the command.
+        public static float DamperCountersteerMaxDeg = 4f;
         public static float SteerCeilingFactor = 1f;
         // The slip the tyres reach peak traction at, in the field's own units: the curve is indexed from the
         // field at x sfTractionMinAngle with its peak at argument 1.0, and the engine's own below-the-peak test
@@ -1096,6 +1098,16 @@ namespace ARS
             steerKDItem.SelectedIndex = Math.Max(0, steerKDItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain).ToString("0.00", CultureInfo.InvariantCulture)));
             rivalSteeringMenu.Add(steerKDItem);
             HookListTextPicker(steerKDItem);
+
+            NativeListItem<string> damperCounterItem = new NativeListItem<string>("Damper Countersteer", "How far past neutral the yaw damper may turn the wheel against the car's own rotation, in degrees. 0 lets it cancel the command and no more, which is the whole stabiliser with none of the opposite lock.", SettingsRepair.OptionsFor("DamperCountersteerMaxDeg"));
+            damperCounterItem.ItemChanged += (sender, args) =>
+            {
+                DamperCountersteerMaxDeg = float.Parse(damperCounterItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("DamperCountersteerMaxDeg", damperCounterItem.Items[args.Index]);
+            };
+            damperCounterItem.SelectedIndex = Math.Max(0, damperCounterItem.Items.IndexOf(SettingsMenuStore.GetFloat("DamperCountersteerMaxDeg", DamperCountersteerMaxDeg).ToString("0.00", CultureInfo.InvariantCulture)));
+            rivalSteeringMenu.Add(damperCounterItem);
+            HookListTextPicker(damperCounterItem);
 
             NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Limit At Speed", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 puts the outer front wheel — the loaded wheel in a corner — on that peak slip angle, lower holds the wheel tighter at speed, and above 1.00 asks past the peak, which is how a rival is made to slide. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
             steerCeilingFactorItem.ItemChanged += (sender, args) =>
@@ -3399,6 +3411,7 @@ namespace ARS
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
+            DamperCountersteerMaxDeg = SettingsMenuStore.GetFloat("DamperCountersteerMaxDeg", DamperCountersteerMaxDeg);
             SteerCeilingFactor = SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
