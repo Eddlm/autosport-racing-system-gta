@@ -196,6 +196,10 @@ namespace ARS
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
 
+        // Sagitta below this share of the chord means the sample is a straight: at 121 m it is 0.24 m, which needs a
+        // radius past 7.5 km. The tightest genuine corner on the nine shipped tracks sits at 0.006, three times it.
+        const float RouteStraightSagittaShare = 0.002f;
+
         const float OffshootRangeMeters = 5f; // the ramp lives beyond the edge: 1.0 at it, 0.0 five metres out
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
@@ -3316,7 +3320,10 @@ namespace ARS
             if (count < 10) return 999f;
 
             float traction = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
-            int far = (int)(Car.Velocity.Length() * 2f / traction);
+            // Grip is floored at 0.1, so an unclamped span can be twenty times the speed in nodes and wrap past the
+            // start line on a short track - the four samples then stop being monotone in road order, which the
+            // thirds-split assumption needs. Clamp to the route.
+            int far = Math.Min((int)(Car.Velocity.Length() * 2f / traction), count - 1);
             int middleNear = far / 3;
             int middleFar = (far * 2) / 3;
 
@@ -3330,21 +3337,48 @@ namespace ARS
             LiveRouteRadiusMidNode = n2;
             LiveRouteRadiusFarNode = n3;
 
-            float r = TrackLoader.FittedCircleRadius(
-                ARS.TrackPoints[n0].Position,
-                ARS.TrackPoints[n1].Position,
-                ARS.TrackPoints[n2].Position,
-                ARS.TrackPoints[n3].Position);
+            Vector3 p0 = ARS.TrackPoints[n0].Position;
+            Vector3 p1 = ARS.TrackPoints[n1].Position;
+            Vector3 p2 = ARS.TrackPoints[n2].Position;
+            Vector3 p3 = ARS.TrackPoints[n3].Position;
 
-            // A tight slow corner collapses the thirds onto the same node, and a dead-straight sample is collinear:
-            // both leave the fit singular, and the exact three-point solve over the whole span is the honest fallback
-            // rather than a fabricated number.
-            if (r >= 999f)
-                r = ARS.Circumradius3D(ARS.TrackPoints[n0].Position, ARS.TrackPoints[n3].Position, ARS.TrackPoints[n2].Position);
+            float r;
+            float chord = Vector2.Distance(new Vector2(p0.X, p0.Y), new Vector2(p3.X, p3.Y));
+            if (middleNear == 0 || middleFar == middleNear || chord < 1f)
+            {
+                // A slow car collapses the thirds onto its own node and leaves a duplicated vertex; the span is too
+                // short to say anything, and the exact solve over it is just as singular. Straight is the honest read.
+                r = 999f;
+            }
+            else if (Sagitta(p0, p1, p2, p3, chord) < RouteStraightSagittaShare * chord)
+            {
+                // Four points this close to their own chord describe no circle a car can turn on: the fit's answer
+                // would be the RMS size of the sampling window, not a radius. Below this share a straight (999) is
+                // the only honest number, and it is above any car's top speed once clamped.
+                r = 999f;
+            }
+            else
+            {
+                r = TrackLoader.FittedCircleRadius(p0, p1, p2, p3);
+                if (r >= 999f) r = ARS.Circumradius3D(p0, p3, p2);
+            }
 
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
             LiveRouteRadius = ARS.Clamp(r, 5f, 999f);
             return LiveRouteRadius;
+        }
+
+        // How far the two middle samples sit off the chord joining the outer two, normalised by that chord. It is the
+        // geometric test for "these four points describe a straight", and it is deliberately not a test on the fit
+        // residual or on the normal equations: on a uniform node spacing the samples are centrally symmetric and the
+        // algebraic fit's curvature terms cancel exactly, while the matrix stays perfectly conditioned.
+        float Sagitta(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float chord)
+        {
+            float dx = (p3.X - p0.X) / chord;
+            float dy = (p3.Y - p0.Y) / chord;
+            float near = Math.Abs((p1.X - p0.X) * dy - (p1.Y - p0.Y) * dx);
+            float far = Math.Abs((p2.X - p0.X) * dy - (p2.Y - p0.Y) * dx);
+            return Math.Max(near, far);
         }
 
         int WrappedNode(int node)
