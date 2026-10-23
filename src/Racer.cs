@@ -1348,7 +1348,7 @@ namespace ARS
         // Below the ramp's end speed the ceiling eases back to the car's full lock, so a slow car can steer in
         // fully; above it the ceiling is the law's own. The band is in mph because that is how it is judged.
         const float SteerLimitRampStartMph = 5f;
-        const float SteerLimitRampEndMph = 15f;
+        const float SteerLimitRampEndMph = 30f;
 
         // Live ceiling coefficient: the useful steer angle at speed is ~ grip × g × wheelbase / v², so grip
         // belongs in that numerator and the cap loosens as √grip — the same √grip the speed maths uses.
