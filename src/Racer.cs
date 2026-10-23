@@ -252,6 +252,7 @@ namespace ARS
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _projectionOutsideMeters = 0f;
+        bool _projectionWidening = false;
         float _projectionOutsideSeconds = 0f;
         // True only on the tick the projection actually cut the throttle, which is what the red lines report.
         bool _offtrackThrottleHeld = false;
@@ -1587,7 +1588,7 @@ namespace ARS
             // laws on one pedal is one too many. Time is the escalation — full throttle, coast, then brake — and
             // full countersteer is the one branch it yields to: the tyre there is already working diagonally, so
             // brake on top saturates the circle instead of sharing it.
-            bool projectionOutside = _projectionOutsideMeters > ProjectionMarginMeters;
+            bool projectionOutside = _projectionWidening && _projectionOutsideMeters > ProjectionMarginMeters;
             _projectionOutsideSeconds = projectionOutside ? _projectionOutsideSeconds + TickScale : 0f;
             float projectionInput = Math.Max(1f - ProjectionStepInput * (float)Math.Floor(_projectionOutsideSeconds / ProjectionStepSeconds), -ProjectionBrakeFloor);
             bool projectionBinds = !countersteering && newThrottle > Math.Max(projectionInput, 0f);
@@ -1665,6 +1666,7 @@ namespace ARS
             float mph = ARS.MpsToMph(Car.Velocity.Length());
             float signedOffset = 0f;
             _projectionOutsideMeters = 0f;
+            _projectionWidening = false;
             float halfWidth = 0f;
             float outsideOffset = 0f;
             float carOffset = 0f;
@@ -1689,9 +1691,10 @@ namespace ARS
                     // frame tens of nodes ahead, a corner turns the along-track separation into a fake lateral offset
                     // and the comparison below can never fail. Same frame as turnDirection, so the sides compare.
                     carOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction) * turnDirection;
-                    // Widening, not merely wide: a projection closer to the centre than the car means the car is on its way
-                    // back, and braking for that would fight the recovery.
-                    if (outsideOffset > carOffset) _projectionOutsideMeters = outsideOffset - halfWidth;
+                    // The distance is a fact and the colour reads it; the clock is the thing that must not fire on a
+                    // car already coming back, so widening is tracked beside it rather than folded into it.
+                    _projectionOutsideMeters = outsideOffset - halfWidth;
+                    _projectionWidening = outsideOffset > carOffset;
                 }
             }
 
@@ -2861,11 +2864,11 @@ namespace ARS
             Vector3 origin = Car.Position + Vector3.WorldUp * lift;
             Vector3 half = ProjectAhead(0.5f) + Vector3.WorldUp * lift;
             Vector3 full = ProjectAhead(1f) + Vector3.WorldUp * lift;
-            // Red the moment the projection is the thing holding the throttle, so the cap is visible in the world
-            // instead of only on the pedal bar.
-            bool capping = _offtrackThrottleHeld;
-            ARS.DrawLine(origin, half, capping ? Color.Red : Color.White);
-            ARS.DrawLine(half, full, capping ? Color.Red : Color.Cyan);
+            // Red the moment the projection leaves the track, which is a fact about where the car is going — not about
+            // how much pedal the clock has taken. Tying it to the cap made it wait two steps to say what it knew at once.
+            bool outside = _projectionOutsideMeters > 0f;
+            ARS.DrawLine(origin, half, outside ? Color.Red : Color.White);
+            ARS.DrawLine(half, full, outside ? Color.Red : Color.Cyan);
         }
 
         void DrawWheelSlip()
