@@ -713,3 +713,13 @@ A Debug checkbox, `Show G Line`, draws one line from the player's own car's roof
 4. **Length tracks magnitude, and the clamp holds.** A gentle bend reads short, a hard one long, and a crash or a kerb strike must not throw it into a spike — the 200 ms mean and the clamp are what answer that.
 5. **It survives getting out and back in.** Leaving the car and re-entering must restart the window instead of differencing against the old speed, so the line reads nothing for the first 200 ms and then settles. A line that jumps on re-entry is the restart gate failing.
 6. **The tip reads the number.** The label sits at the line's end as `2.5Gs`, one decimal, and it reports the real magnitude even where the line itself is clamped — past 4 G the stroke stops growing and the number keeps climbing.
+
+## The entrance pull, bumps and crests (build 727, compile-verified, drive owed)
+
+One pass moves a corner's entrance back for a qualifying feature: a bump lip or a `Crest` (never a dip) inside 100 nodes behind the entrance, the one farthest from the apex winning. The pull is 100 nodes provisionally, which the 40-node apex cap then clips on nearly every corner, so the expected reading is an entrance **exactly 40 nodes before the apex** wherever a feature qualifies — that cap, not the pull, is the dial for going further back.
+
+1. **A crest that was invisible now moves the entrance.** The corner from the crest screenshots must log `Entrance moved for crest: …` and the green line must sit behind the orange one. No line at all means the crest is not in the table, which is a different fault from the window being too small.
+2. **The log names what bound it.** Most lines should end `(apex cap)`; a line ending `30 nodes` means nothing clipped it; `crest stop` / `bump stop` means the feature itself was nearer than the cap.
+3. **The span actually covers the feature.** The point of the pull is that braking starts before the crest, not on it. A car that still crests at full speed is the failure, whatever the green line says.
+4. **A dip never moves anything**, and two features on one corner produce one line, not two.
+5. **Corners with no feature read exactly as before.** The pass must leave them alone.
