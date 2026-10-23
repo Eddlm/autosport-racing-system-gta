@@ -1626,7 +1626,10 @@ namespace ARS
             if (Math.Sign(signedOffset) != turnDirection) return 1f;
 
             float outsideOffset = signedOffset * turnDirection;
-            float carOffset = ARS.SignedLaneOffset(Car.Position, tp.Position, tp.Direction) * turnDirection;
+            // The car's own offset is read in its own node's frame, not the projected one: measured against a frame
+            // tens of nodes ahead, a corner turns the along-track separation into a fake lateral offset and the
+            // comparison below can never fail. Same frame as turnDirection, so the two sides are comparable.
+            float carOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction) * turnDirection;
             if (outsideOffset <= carOffset) return 1f;
 
             if (outsideOffset <= halfWidth) return 1f;
