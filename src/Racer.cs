@@ -726,10 +726,14 @@ namespace ARS
             // The damper only ever subtracts: a left command never gets more left from it.
             if (damperTermDeg * nonDamperSteerDeg > 0f) damperTermDeg = 0f;
             // Past neutral it is countersteering — the wheel pointing against the car's own rotation rather than
-            // merely less into it. Not a cap tied to the slide: that fell to zero with the slide and took the rate
-            // feedback off a car going straight, which set it oscillating.
+            // merely less into it. A flat ceiling, not a share of the slide: a share fell to zero with the slide and
+            // took the rate feedback off a car going straight, which set it oscillating.
             float damperOvershootDeg = Math.Abs(damperTermDeg) - Math.Abs(nonDamperSteerDeg);
-            if (damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f) damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + damperOvershootDeg * DamperCrossingShare);
+            if (damperTermDeg * nonDamperSteerDeg < 0f && damperOvershootDeg > 0f)
+            {
+                float crossingDeg = Math.Min(damperOvershootDeg * DamperCrossingShare, DamperCrossingMaxDeg);
+                damperTermDeg = -Math.Sign(nonDamperSteerDeg) * (Math.Abs(nonDamperSteerDeg) + crossingDeg);
+            }
             _damperTermDeg = damperTermDeg;
             Control.SteerDegrees = nonDamperSteerDeg + damperTermDeg;
 
@@ -1269,6 +1273,10 @@ namespace ARS
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
+        // The damper's countersteer ceiling, in degrees past neutral. The term had no bound of its own and the
+        // limiter opens its side to full lock while it pushes against the rotation, so it could cross further than
+        // the blend ever can now — the remaining road to a snap.
+        const float DamperCrossingMaxDeg = 5f;
         // The damper's authority against the car's own rotation. The slide batch drove it at 0.5 and the slides
         // answered, but that field read a smidge unstable, so the knob sits back at full — the slide response to keep
         // is the blend's band and share, with the crossing overshoot whole.
