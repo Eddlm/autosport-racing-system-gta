@@ -1046,18 +1046,23 @@ namespace ARS
         // the blend is stretched past the geometric lead: the endpoints stay where the chord put them, the rate of
         // change falls as one over the multiple, and the path's curvature as one over its square.
         const float IdealLineLeadMultiple = 2f;
+        // The profile is geometric - no time in it - but the car arrives late to it, so the whole line is pulled this
+        // far toward the apex in travel: half a second at the car's own speed, which is what the steering needs to
+        // actually reach the inside before the apex passes.
+        const float IdealLineLeadSeconds = 0.5f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
         // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
         // which puts a corner in the target exactly where the car is settling onto it. So the chord supplies the two
         // ends - the outside edge a lead before the apex, the inside edge at it - and the blend between them leaves and
         // meets both edges flat, which is the part a car at speed can actually follow.
-        float IdealLineOffset(int distanceFromApex, float apexRadius, float safeBound)
+        float IdealLineOffset(int distanceFromApex, float apexRadius, float safeBound, float speedMps)
         {
             float innerRadius = apexRadius - safeBound;
             if (!(innerRadius > 0f) || apexRadius >= 999f) return 0f;
             float leadAngle = (float)Math.Acos(ARS.Clamp(innerRadius / (apexRadius + safeBound), -1f, 1f));
-            float t = ARS.Clamp(Math.Abs(distanceFromApex) / Math.Max(apexRadius * leadAngle * IdealLineLeadMultiple, 1f), 0f, 1f);
+            float leadMeters = speedMps * IdealLineLeadSeconds;
+            float t = ARS.Clamp((Math.Abs(distanceFromApex) - leadMeters) / Math.Max(apexRadius * leadAngle * IdealLineLeadMultiple, 1f), 0f, 1f);
             return safeBound * (2f * t * t * (3f - 2f * t) - 1f);
         }
 
@@ -1101,7 +1106,7 @@ namespace ARS
             bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
             bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.DetectedRadius) - ARS.MphToMps(20f);
             bool entryActive = wantsPosition && aboveApexSpeed;
-            float offset = entryActive ? IdealLineOffset(fwdToApex, c.DetectedRadius, safeBound) : 0f;
+            float offset = entryActive ? IdealLineOffset(fwdToApex, c.DetectedRadius, safeBound, speedMps) : 0f;
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
             // outside line, and everything below it is the blend toward the apex.
             if (entryActive) reason = offset >= safeBound ? LaneReason.OutsideLine : LaneReason.ApexLine;
