@@ -1,4 +1,14 @@
 # ARS — Duel model, full deferred design (companion to AGENTS.md)
+> **Recorded idea, not built — the dive is the last option, not the first (2026-10-23, driver).** The next corners are
+> already known (`NextApexNode2` / `NextApexNode3`), each car's top speed is known (`Handling.EstimatedTopSpeed`), and
+> the straight between two corners is a `CumulativeDistance` difference. That is enough to ask whether the pass is
+> *already bought*: ground gained on the next straight is roughly `(myTop - hisTop) x (straightLength / meanSpeed)`, and
+> if that exceeds the gap to him, a dive adds nothing but the chance of going off. It also reads the other way — a small
+> advantage or a short straight is exactly when the dive is worth it, because the road ahead will not give the place
+> back. What makes this better than the current gates is that they decide from what is true **now** (who reaches this
+> entrance first) while this decides from what happens **next**, which is how a driver reasons: not here, because I have
+> him on the straight.
+>
 > **Recorded idea, not built — the corner is intel (2026-10-23).** Two cars fighting for one corner carry more than
 > geometry: each already computes the speed it *wants* there. `ApexSpeedWithDownforce(DetectedRadius)` is what the car
 > would carry through the apex, `BrakeFactorForApex` is how much it trusts that corner, `BrakingDecelBase` is what it
