@@ -152,3 +152,13 @@ Four systems decide how fast a car goes. They were built one at a time and never
 - `CornerCeilingMeters` survives only as the region delimiter (200 m); the blur gate at 60 nodes decides what exists.
 **Probe state.** `RouteBrakeCap` 0.2, applied whenever the route term is the lower of the two — inside a corner's ramp too — so the corner has full brake only while it is the one asking for the lower speed, and `steerLimitedSpeedGovernsRoute` false: the steer-limited speed is still computed for readout but no longer replaces 70 % of the curvature term, so the route speed is the track's radius alone. Both are one-line switches.
 **The projection is a time escalation, and the clock is its only form.** The five-metre distance ramp is gone — it answered the same question from the other direction, and two laws on one pedal is one too many. While the one-second projection is outside the edge **and widening**, the clock runs, and it spends the input at two units per second, bled every tick rather than in steps: full throttle at 0 s, level at 0.5 s, the 0.75 brake floor at 0.875 s — the level where `sqrt(1 - 0.75^2) = 0.66` of the tyre is still free to change direction. Back inside, the clock resets instantly; the pedal's own slew is what stops that from snapping. The projection outranks the plan and the route cap, because it is the only term that knows the plan has already failed, but it does not outrank the ABS (the physical ceiling the floor respects) nor full countersteer (the tyre is already working diagonally, so brake there saturates the circle instead of sharing it).
+## Drive owed — 2026-10-23 evening (builds 763-779)
+
+**Driven and accepted in the car:** the curvature brake cap at 0.2 with the corner owning full authority while it asks for the lower speed; the steer-limited blend switched off (no observable effect, which is itself the finding that the route term rarely binds); the countersteer share at half; the damper's plain crossing with `SteerDampingGain` at 0.5.
+
+**Compile-verified, drive owed:**
+- The projection clock at 2/s, with the lane gate, the distance ramp and the hysteresis all removed. Driven once at 1/s with the ramp still in place, never in this shape.
+- The brake learner's entrance cut (0.02 per 10 m/s over, uncapped) and the factor range widened to 0.5–1.5.
+- `SteerDampingGain` shipping at 0.5 instead of 1.0 — the value the plain crossing was driven at, now the default.
+
+**Known untested interaction:** the entrance cut is uncapped and the share step still runs beside it, so a corner can rebound between two factors. The notice feed is the place it shows; there is no log line behind it.
