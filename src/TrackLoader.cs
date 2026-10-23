@@ -474,7 +474,7 @@ namespace ARS
 
             AssignCrests(nodeCount);
             AssignBumpNodes(nodeCount);
-            MoveEntrancesForBumps(nodeCount);
+            MoveEntrancesForFeatures(nodeCount);
 
             ARS.CornersRevision++;
         }
@@ -550,33 +550,43 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Info, "Bumps: " + ARS.Bumps.Count + " lips, minimum departure grade " + BumpMinDepartureGrade.ToString("0.000") + ", run " + BumpMinRunMeters.ToString("0.0") + "-" + BumpMaxRunMeters.ToString("0.0") + "m");
         }
 
-        // A bump before a corner unloads the tyres exactly where the car wants to brake, so the entrance moves back and
-        // the car reaches the ramp already slow: FeatureEntranceBackNodes, or to the lip when the lip is nearer. The
-        // region the detector found is not a road limit and does not hold it back — the apex cap and the previous
-        // corner's exit do, in that order.
+        // A bump or a crest before a corner unloads the tyres exactly where the car wants to brake, so the entrance
+        // moves back and the car reaches the feature already slow: FeatureEntranceBackNodes, or onto the feature when
+        // it is nearer. The region the detector found is not a road limit and does not hold it back — the apex cap and
+        // the previous corner's exit do, in that order. When several qualify, the one farthest from the apex wins: it
+        // is the first the car meets, so the span has to start before that one. Dips never qualify; they load the
+        // tyres instead of unloading them, which is why the no-fly gate ignores them too.
         const int FeatureEntranceBackNodes = 30;
         const int FeatureEntranceSearchNodes = 60;
 
-        static void MoveEntrancesForBumps(int count)
+        static void MoveEntrancesForFeatures(int count)
         {
             for (int i = 0; i < ARS.Corners.Count; i++)
             {
                 CornerPoint corner = ARS.Corners[i];
                 if (corner.Node < 0 || corner.StartNode < 0) continue;
 
-                int nearestBehind = int.MaxValue;
-                int nearestLip = -1;
+                int farthestBehind = 0;
+                int featureNode = -1;
+                string featureKind = "";
                 foreach (Bump bump in ARS.Bumps)
                 {
                     if (bump.LipNode < 0) continue;
                     int behind = ARS.IsPointToPoint ? corner.StartNode - bump.LipNode : Wrap(corner.StartNode - bump.LipNode, count);
                     if (behind <= 0 || behind > FeatureEntranceSearchNodes) continue;
-                    if (behind < nearestBehind) { nearestBehind = behind; nearestLip = bump.LipNode; }
+                    if (behind > farthestBehind) { farthestBehind = behind; featureNode = bump.LipNode; featureKind = "bump"; }
                 }
-                if (nearestLip < 0) continue;
+                foreach (Crest crest in ARS.Crests)
+                {
+                    if (crest.Type != CrestType.Crest || crest.Node < 0) continue;
+                    int behind = ARS.IsPointToPoint ? corner.StartNode - crest.Node : Wrap(corner.StartNode - crest.Node, count);
+                    if (behind <= 0 || behind > FeatureEntranceSearchNodes) continue;
+                    if (behind > farthestBehind) { farthestBehind = behind; featureNode = crest.Node; featureKind = "crest"; }
+                }
+                if (featureNode < 0) continue;
 
-                int back = Math.Min(FeatureEntranceBackNodes, nearestBehind);
-                string bound = nearestBehind < FeatureEntranceBackNodes ? "bump stop" : "30 nodes";
+                int back = Math.Min(FeatureEntranceBackNodes, farthestBehind);
+                string bound = farthestBehind < FeatureEntranceBackNodes ? featureKind + " stop" : "30 nodes";
 
                 int apexBehind = ARS.IsPointToPoint ? corner.Node - corner.StartNode : Wrap(corner.Node - corner.StartNode, count);
                 int headroom = SpanMaxDistanceNodes - apexBehind;
@@ -593,7 +603,7 @@ namespace ARS
                 int from = corner.StartNode;
                 corner.StartNode = ARS.IsPointToPoint ? from - back : Wrap(from - back, count);
                 corner.LengthStart = apexBehind + back;
-                ARS.Log(ARS.LogImportance.Info, "Entrance moved for bump: apex=" + corner.Node + " from=" + from + " to=" + corner.StartNode + " bumpLip=" + nearestLip + " back=" + back + " (" + bound + ")");
+                ARS.Log(ARS.LogImportance.Info, "Entrance moved for " + featureKind + ": apex=" + corner.Node + " from=" + from + " to=" + corner.StartNode + " featureNode=" + featureNode + " back=" + back + " (" + bound + ")");
             }
         }
 
