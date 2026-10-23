@@ -1888,8 +1888,15 @@ namespace ARS
                 }
                 if (DebugToggles[Options.ShowRouteRadius])
                 {
-                    Racer radiusRacer = DebugFocusRacer ?? PlayerRacer;
-                    if (radiusRacer != null) TrackVisuals.DrawRouteRadiusChecks(radiusRacer, ARS.TrackPoints);
+                    Racer radiusRacer = DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null);
+                    if (radiusRacer != null)
+                    {
+                        TrackVisuals.DrawRouteRadiusChecks(radiusRacer, ARS.TrackPoints);
+                        if (radiusRacer.LiveRouteRadius > 0f)
+                            DrawText(radiusRacer.Car.Position + Vector3.WorldUp * 2.2f,
+                                     Math.Round(radiusRacer.LiveRouteRadius).ToString(CultureInfo.InvariantCulture) + " m",
+                                     Color.Magenta, 0.55f);
+                    }
                 }
                 if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
                 {
