@@ -2494,8 +2494,8 @@ namespace ARS
         // is the game's own GET_IS_VEHICLE_ELECTRIC; cacheFlag is the old flag, kept for comparison.
         void DumpPaceIndex()
         {
-            List<string> rows = new List<string>();
-            rows.Add("model\telectricNative\tcacheFlag\tclass\taccelRaw\ttopMph\tgrip\tpiCurrent\tpiNoCorrection\tname");
+            List<string[]> rows = new List<string[]>();
+            rows.Add(new[] { "model", "electricNative", "cacheFlag", "class", "accelRaw", "topMph", "grip", "piCurrent", "piNoCorrection", "name" });
             int electricCount = 0;
             int probeErrors = 0;
             foreach (KeyValuePair<string, float> entry in ModelPaceIndexCache)
@@ -2525,7 +2525,7 @@ namespace ARS
                         if (probeErrors == 1) Log(LogImportance.Error, "GET_IS_VEHICLE_ELECTRIC probe failed: " + ex.Message, true);
                     }
                 }
-                rows.Add(string.Join("\t", new[]
+                rows.Add(new[]
                 {
                     entry.Key,
                     electricNative,
@@ -2537,9 +2537,32 @@ namespace ARS
                     entry.Value.ToString("0.##", CultureInfo.InvariantCulture),
                     ComputePaceIndex(topMph, grip, accel, false).ToString("0.##", CultureInfo.InvariantCulture),
                     name
-                }));
+                });
             }
-            File.WriteAllLines(ScriptsFolder + @"\pidump.txt", rows.ToArray());
+            int[] widths = new int[rows[0].Length];
+            for (int r = 0; r < rows.Count; r++)
+            {
+                for (int i = 0; i < widths.Length; i++)
+                {
+                    if (rows[r][i].Length > widths[i]) widths[i] = rows[r][i].Length;
+                }
+            }
+            bool[] rightAligned = { false, true, false, true, true, true, true, true, true, false };
+            // The header is the schema line and stays unpadded: Import-Csv takes a padded cell as the column's name,
+            // so a padded "model" stops resolving as model.
+            List<string> lines = new List<string>();
+            lines.Add(string.Join("\t", rows[0]));
+            for (int r = 1; r < rows.Count; r++)
+            {
+                string[] cells = new string[rows[r].Length];
+                for (int i = 0; i < cells.Length; i++)
+                {
+                    if (i == cells.Length - 1) cells[i] = rows[r][i];
+                    else cells[i] = rightAligned[i] ? rows[r][i].PadLeft(widths[i]) : rows[r][i].PadRight(widths[i]);
+                }
+                lines.Add(string.Join("\t", cells));
+            }
+            File.WriteAllLines(ScriptsFolder + @"\pidump.txt", lines.ToArray());
             UI.Notify("~b~[ARS]:~w~ pidump.txt - " + (rows.Count - 1) + " models, " + electricCount + " electric by GET_IS_VEHICLE_ELECTRIC" + (probeErrors > 0 ? ", " + probeErrors + " probe errors" : ""));
         }
 
