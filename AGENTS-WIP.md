@@ -74,3 +74,19 @@ The track creator is live — a root Track Creator submenu records a route and S
 4. **Clean install before flipping**: download the attached zip, extract into a clean `Scripts\` beside the matched SHVDN pair, and run the race-loop gate above.
 5. Flip the prerelease off — that is what moves `releases/latest` and lets the in-game update notice fire.
 6. Close what the release answers, one line each: **#8** (a build the mod cannot drive on now logs a forced error instead of crashing) and **#3** (the downforce toggle — the reporter confirmed it works). **#1** and **#7** are old and unrelated: close as stale or leave, the owner's call rather than the release's.
+
+## WIP — projection throttle rule (spec, user-stated 2026-10-23)
+
+`OffshootInputCap` is being simplified. Keep gates 1, 2, 3 exactly as they are:
+
+1. `_laneOverride` must be set (a car holding its own line is exempt).
+2. Speed >= `OffshootMinSpeedMph` (20).
+3. `Math.Abs(CurrentTrackPoint.Angle) > OffshootMinRouteAngleDeg` (2).
+
+New shape:
+
+- **Throttle only.** The path no longer brakes and no longer caps the combined input; `offtrackBrakeCommand` becomes always false and the `BrakeReason.Offtrack` tag goes with it.
+- **Ramp 1 -> 0 from the track edge out to 5 m beyond it** (`OffshootRangeMeters` 2 -> 5; inside the edge the cap is 1.0, so the old centre-line ramp and `OffshootBlendBrake` are gone).
+- **Only when the projection lands farther from the centre than the car's own position.** If the car is already wider than where it is heading, nothing fires.
+
+Shipped in build 736 as `OffshootThrottleCap` (`Racer.cs:1607`): the cap is applied with `Math.Min` to `newThrottle` after the throttle composition, so it is a ceiling over every reason. `OffshootBlendBrake`, the brake command and `BrakeReason.Offtrack` are gone from the brake path; the field is `_offtrackThrottleCap` and the pedal bar draws it over the whole 1..0 range. Compile-verified, drive owed.

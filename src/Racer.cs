@@ -190,8 +190,7 @@ namespace ARS
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
 
-        const float OffshootRangeMeters = 2f;
-        const float OffshootBlendBrake = 0.25f; // brake floor at the outer limit
+        const float OffshootRangeMeters = 5f; // the ramp lives beyond the edge: 1.0 at it, 0.0 five metres out
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
         // Line discipline belongs to speed: below this the problem is traction, and a cap would hold an off-edge car
@@ -231,7 +230,7 @@ namespace ARS
         float _steerPreLimitDegrees = 0f;
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
-        float _offtrackInputCap = 1f;
+        float _offtrackThrottleCap = 1f;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
         const float BrakeFactorSeed = 0.75f;
@@ -1545,11 +1544,8 @@ namespace ARS
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
-            float preBlendInput = combinedInput;
-            _offtrackInputCap = OffshootInputCap(1f);
-            combinedInput = Math.Min(combinedInput, _offtrackInputCap);
-            bool offtrackLimited = combinedInput < preBlendInput;
-            bool offtrackBrakeCommand = offtrackLimited && combinedInput < 0f;
+            float offtrackThrottleCap = OffshootThrottleCap(1f);
+            _offtrackThrottleCap = offtrackThrottleCap;
             // Full countersteer: no brake, just enough throttle to keep the wheels rolling. The reason caps still
             // apply on top; the release is instant.
             bool countersteering = IsFullCountersteer();
@@ -1558,10 +1554,13 @@ namespace ARS
                 combinedInput = CountersteerRollThrottle;
             }
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
-            newThrottle = ComposeThrottleCap(newThrottle, offtrackLimited, countersteering);
+            newThrottle = ComposeThrottleCap(newThrottle, offtrackThrottleCap < 1f, countersteering);
+            // The projection has the last word on throttle: it is a ceiling over everything the plan and the
+            // reasons above asked for, and it never reaches the brake.
+            newThrottle = Math.Min(newThrottle, offtrackThrottleCap);
             // Brake composes here on the raw split target, pre-slew: in the throttle-to-brake transition
             // Control.Throttle slews down slowly and could still read >= 1.0 while the car is already braking.
-            newBrake = ComposeBrakeCap(newBrake, offtrackBrakeCommand, countersteering);
+            newBrake = ComposeBrakeCap(newBrake, countersteering);
             bool rbFreeZonePedal = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
             if (ARS.RubberbandingPct > 0 && ARS.CurrentRubberbandMode == RubberbandMode.Artificial && newThrottle >= 1.00f && !rbFreeZonePedal)
             {
@@ -1604,12 +1603,12 @@ namespace ARS
             }
         }
 
-        // Projection response: on a corner's outside, cap the maximum combined input by how far off-centre
-        // the projection lands — full throttle on the centre line, none at the track edge, light brake beyond.
-        float OffshootInputCap(float seconds)
+        // Projection response: a throttle ceiling, never a brake. It ramps 1.0 at the track edge to 0.0 five metres
+        // beyond it, and it only fires when the projection is heading further from the centre than the car already
+        // is — a car coming back in gets no cap, however wide it currently sits. The gates are the original three:
+        // a lane override must have aimed the car, the car must be moving, and the node must actually turn.
+        float OffshootThrottleCap(float seconds)
         {
-            // Only meaningful when an override has aimed the car at a lane; a car holding its own line has no
-            // hug-inside expectation to enforce, so the outside sanity check must not fire.
             if (!_laneOverride) return 1f;
 
             if (ARS.MpsToMph(Car.Velocity.Length()) < OffshootMinSpeedMph) return 1f;
@@ -1626,11 +1625,12 @@ namespace ARS
 
             if (Math.Sign(signedOffset) != turnDirection) return 1f;
 
-            // Inside half keeps full throttle; the cap ramps from the centre line to the edge, then brakes.
             float outsideOffset = signedOffset * turnDirection;
-            if (outsideOffset > halfWidth) return -OffshootBlendBrake * Math.Min((outsideOffset - halfWidth) / OffshootRangeMeters, 1f);
-            if (outsideOffset > 0f) return 1f - outsideOffset / halfWidth;
-            return 1f;
+            float carOffset = ARS.SignedLaneOffset(Car.Position, tp.Position, tp.Direction) * turnDirection;
+            if (outsideOffset <= carOffset) return 1f;
+
+            if (outsideOffset <= halfWidth) return 1f;
+            return ARS.Remap(outsideOffset, halfWidth, halfWidth + OffshootRangeMeters, 1f, 0f, true);
         }
 
         // Samples braking quality across the approach to the current apex. The verdict waits: the sample is parked
@@ -2168,8 +2168,8 @@ namespace ARS
         }
 
         // The brake-side composition: the plan's braking against the ABS and countersteer caps, the argmin named
-        // into the tag; offtrack's brake command pre-empts and grid wait owns the tag while waiting.
-        float ComposeBrakeCap(float baseBrake, bool offtrackBrakeCommand, bool countersteering)
+        // into the tag; grid wait owns the tag while waiting.
+        float ComposeBrakeCap(float baseBrake, bool countersteering)
         {
             Control.MaxBrake = Math.Min(Control.MaxBrakeFromABS, Control.MaxBrakeFromCountersteer);
 
@@ -2177,7 +2177,6 @@ namespace ARS
             BrakeReason reason = BrakeReason.Plan;
             if (Control.MaxBrakeFromABS < binding) { binding = Control.MaxBrakeFromABS; reason = BrakeReason.Abs; }
             if (Control.MaxBrakeFromCountersteer < binding) { binding = Control.MaxBrakeFromCountersteer; reason = BrakeReason.Countersteer; }
-            if (offtrackBrakeCommand) reason = BrakeReason.Offtrack;
             if (countersteering) reason = BrakeReason.Countersteer;
             if (BaseBehavior == RacerBaseBehavior.GridWait) reason = BrakeReason.GridWait;
 
@@ -2852,8 +2851,7 @@ namespace ARS
             AddPedalLimit(Control.MaxBrakeFromABS, GripReasonColor, PedalLimitReasonSize, ref count);
             AddPedalLimit(Control.MaxBrakeFromCountersteer, CountersteerReasonColor, PedalLimitReasonSize, ref count);
             if (IsFullCountersteer()) AddPedalLimit(CountersteerRollThrottle, Color.White, PedalLimitCapSize, ref count);
-            if (_offtrackInputCap < 0f) AddPedalLimit(-_offtrackInputCap, Color.White, PedalLimitCapSize, ref count);
-            else if (_offtrackInputCap < 1f) AddPedalLimit(_offtrackInputCap, Color.White, PedalLimitCapSize, ref count);
+            if (_offtrackThrottleCap < 1f) AddPedalLimit(_offtrackThrottleCap, Color.White, PedalLimitCapSize, ref count);
 
             SortPedalLimits(count);
             for (int i = 0; i < count; i++)
