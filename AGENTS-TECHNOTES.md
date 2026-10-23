@@ -57,6 +57,17 @@ Two systems read the road ahead every tick and each derives its own governor. Th
 
 **Fixed at load (`DensifyRoute`, build 780).** The route is resampled to the metre the file promises: any segment longer than 1.5 m gets evenly spaced midpoints inserted, widths interpolated, and the pass runs after `RefreshRouteTopology` and before `GenerateRouteInfo`, so geometry, apex table, crests and grid all see one spacing. Simulated on the shipped files: F8 2350 -> 2405 nodes with the worst gap 2.001 -> 1.001 m, Figureight 2316 -> 2363 and 2.446 -> 1.389, LSIA 1944 -> 1972 and 2.005 -> 1.011, Highway 2884 -> 2953 and 2.353 -> 1.361. No gap over 1.5 m survives. **Consequence: node indices shift, so a corner's `Nº` in a log or notice is not comparable across this build** — the learned brake factors are in memory per session, not on disk, so nothing is left pointing at a stale index.
 
+**The radius readout is honest, and the radius is an authoring property (verified 2026-10-23).** An independent
+circumradius over a +/-5 m window on the raw polylines reproduces what the game reports to within 1.1 m on every corner
+checked (33.6 against 33.6, 9.6 against 9.5, 14.8 against 14.9, 26.1 against 26.0, 120.0 against 118.9), so
+`SmoothedRadius` is measuring the road and nothing else. What the same check found beside it matters more: Figureight and
+the F8 rebuild trace the **same layout to 0.1 % of length** and their corners differ by **13 % to 39 %** in radius
+(39 % wider at one, 26 % tighter at another, 29 % wider at a third). That difference is in the XML, not in the estimator,
+so two generations of one circuit yield corner speeds that disagree by roughly a third and neither is "the" answer. Two
+consequences: never compare radii across a regenerated track, and when a car enters a corner badly the trace is the first
+suspect, not the curvature maths. The corner **count** is stable across the rebuild (ten corners and one blur cull each,
+with the cull landing at R 162.0 and 162.8), which is what a screening rule that reads shape rather than size should do.
+
 **Measured A/B on one layout (driver, 2026-10-23).** Figureight rebuilt as F8 by the current editor: same circuit to 0.1 % (2379.0 m against 2381.5 m), 2350 nodes against 2316. What the newer editor fixed is **precision**: the median step goes 1.0034 -> 0.9999, the shortest 0.8202 -> 0.9174, and the worst **2.4462 -> 2.0014**, so a miss is now exactly one skipped step rather than an irregular one. What it did not fix is the miss itself: steps over 1.5 m stay at 2.0-2.3 %, so the skip lives in the step search, not in the stored decimals. The old track was not a bad outlier - it was the same circuit with looser arithmetic.
 
 ## Two-projection route speed (future idea)
