@@ -20,6 +20,14 @@
 > concede. The line it draws: today the cards decide from **geometry** (who reaches the entrance first); this would
 > let them decide from **the likely result** (who wins the corner).
 >
+> **Defend watches its own threat, 2026-10-23 (driver).** The card armed on "he is closing and will arrive no later",
+> and its release never looked at either: a chaser who lifted stayed covered until the apex, holding the inside for
+> a fight that had ended. The release now also ends the card when the threat is gone — his own `TimeToReach` reads
+> infinite (he stopped closing) or his time to the entrance exceeds this car's by `DefendThreatMarginSeconds` 0.5.
+> The entrance node is stored at arm (`_defendEntranceNode`) because the release runs outside the block that computed
+> it. Margin rather than a bare comparison: an early release costs the card its 1.5 s cooldown, so the wrong one is
+> the expensive one.
+>
 > **A card is a decision, so its exits are looser than its entries (2026-10-23).** Three rules, all in `Racer`: every
 > continuous release threshold is **wider** than the arm that admitted the card (`DivebombReleaseGapMeters` 40 against
 > the 30 m arm, `DivebombReleaseAngleDegrees` 25 against 20, chill-out releasing at 50 m and one car fewer); no card may

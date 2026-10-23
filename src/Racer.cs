@@ -381,6 +381,9 @@ namespace ARS
         // A card is a decision, and a decision does not change at the core rate. Every release is looser than its
         // arm, no card may end before it has had time to read, and no card may re-arm straight after ending.
         const float DivebombReleaseGapMeters = 40f;
+        // How late the chaser may become before the threat is gone: the arm admitted him because he arrived no later, so
+        // the release must let go once he clearly will not.
+        const float DefendThreatMarginSeconds = 0.5f;
         const float DivebombReleaseAngleDegrees = 25f;
         const int CardMinDwellMs = 750;
         const int CardCooldownMs = 1500;
@@ -439,6 +442,7 @@ namespace ARS
         float _powerCounter = 1f;
         float _overspeedPowerLevel = 1f;
         int _cornerLiftApex = -1;
+        int _defendEntranceNode = -1;
         float _avoidHoldLane = 0f;
         bool _avoidHoldActive = false;
         float _cornerLiftMps = 0f;
@@ -2498,18 +2502,33 @@ namespace ARS
             if (ActiveManeuver.Type == ManeuverType.DefendLane)
             {
                 bool targetTrails = false;
+                bool threatGone = false;
                 foreach (Rival r in Brain.Rivals)
                 {
                     if (r.RivalRacer != ActiveManeuver.Target) continue;
                     targetTrails = r.RelativePosition != RelativePos.Ahead;
+                    // The threat is over when he stops coming: his own time to reach this car reads infinite once he is no
+                    // longer closing, or he will now arrive at the entrance clearly after it does. Read with a margin, because
+                    // a release costs the card its cooldown and a wrong one is expensive.
+                    float hisTimeToReachMe = float.PositiveInfinity;
+                    foreach (Rival back in r.RivalRacer.Brain.Rivals)
+                    {
+                        if (back.RivalRacer != this) continue;
+                        hisTimeToReachMe = back.TimeToReach;
+                        break;
+                    }
+                    float myTime = _defendEntranceNode >= 0 ? ForwardNodeDistance(_defendEntranceNode) / Math.Max(Car.Velocity.Length(), 1f) : 0f;
+                    float hisTime = _defendEntranceNode >= 0 ? r.RivalRacer.ForwardNodeDistance(_defendEntranceNode) / Math.Max(r.Speed, 1f) : 0f;
+                    threatGone = float.IsPositiveInfinity(hisTimeToReachMe) || hisTime > myTime + DefendThreatMarginSeconds;
                     break;
                 }
                 bool lostTarget = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || !targetTrails;
 
-                if ((lostTarget || HasPassedApex(_defendApexNode)) && CardMayEnd)
+                if ((lostTarget || threatGone || HasPassedApex(_defendApexNode)) && CardMayEnd)
                 {
                     EndCard();
                     _defendApexNode = -1;
+                    _defendEntranceNode = -1;
                 }
             }
 
@@ -2742,6 +2761,7 @@ namespace ARS
             ActiveManeuver.Target = defenderTarget.RivalRacer;
             ActiveManeuver.LastEnabled = Game.GameTime;
             _defendApexNode = apexNode;
+            _defendEntranceNode = entranceNode;
             return true;
         }
 
