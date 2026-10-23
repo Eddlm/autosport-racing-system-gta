@@ -444,6 +444,7 @@ namespace ARS
         int _nitroRefusalLoggedAt = 0;
         float _powerCounter = 1f;
         float _overspeedPowerLevel = 1f;
+        float _countersteerAssistDeg = 0f;
         int _cornerLiftApex = -1;
         int _defendEntranceNode = -1;
         float _avoidHoldLane = 0f;
@@ -787,6 +788,18 @@ namespace ARS
                     Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * _slidePriority;
                 }
             }
+
+            // The careful extra: only while the slide is past its onset AND the car is still rotating into it, at a rate,
+            // so it builds instead of jumping. The moment the rotation changes sign the catch is over and the degrees go —
+            // that instant drop is what keeps the assist from becoming the next snap.
+            float slideDeg = VehicleData.SlideAngle;
+            bool rotatingIntoSlide = Math.Abs(slideDeg) > CountersteerAssistOnsetDegrees
+                && Math.Sign(slideDeg) == Math.Sign(VehicleData.YawRotationPerSecondDegrees);
+            if (rotatingIntoSlide)
+                _countersteerAssistDeg = Math.Min(_countersteerAssistDeg + CountersteerAssistDegreesPerSecond * TickScale, CountersteerAssistMaxDegrees);
+            else
+                _countersteerAssistDeg = 0f;
+            Control.SteerDegrees -= Math.Sign(slideDeg) * _countersteerAssistDeg;
 
             // On its aim to within the noise the command has nothing to correct and only flips sign from tick to
             // tick, so the wheel is left still — unless a slide is steering it, which must not be zeroed. Contact
@@ -1351,6 +1364,12 @@ namespace ARS
         // The share of the slide the countersteer answers. Half, not all: a wheel as wide as the slide itself
         // (33° of countersteer for 33° of slide) is what snaps the car the other way at the end of the correction.
         const float CountersteerSlideShare = 0.5f;
+        // Half the slide recovers most cars; the ones it does not are the ones still rotating into the slide, so the
+        // extra is a rate that only grows while the car keeps turning that way and is dropped the instant the rotation
+        // turns back. The cap is a safety: a long slide must not wind the wheel to lock on a car that is already gone.
+        const float CountersteerAssistOnsetDegrees = 10f;
+        const float CountersteerAssistDegreesPerSecond = 10f;
+        const float CountersteerAssistMaxDegrees = 20f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
         const float CountersteerRollThrottle = 0.05f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.

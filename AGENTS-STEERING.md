@@ -417,6 +417,15 @@ then **`ApplyRivalWalls`** (`Racer.cs`) clamps the result between track bounds a
 **The base is load-bearing**: zero is the *centre* lane, not the absence of an answer, so a chain seeded with zero steered every car back to the middle of the road wherever no source had an opinion — which is every straight (`dd484d3`).
 The corner and avoidance sources still report silence as zero, and that is what lets the lean take over inside a corner the car has not asked to position for.
 
+**The slide gets a careful extra, and its own release is what keeps it safe (driver, 2026-10-23).** Half the slide
+recovers most cars; the ones it does not are the ones still **rotating into** the slide. Past
+`CountersteerAssistOnsetDegrees` 10 and while `sign(slide) == sign(yawRate)`, the command gains
+`CountersteerAssistDegreesPerSecond` **10 degrees per second** — a rate, so it builds rather than jumping, capped at
+`CountersteerAssistMaxDegrees` 20. **The moment the rotation changes sign the degrees disappear**, and that instant
+drop is the whole safety argument: the assist is removed exactly when the car stops turning into the slide, which is
+before the correction can become the next snap. Adding amplitude without that release is what the 5-degree ceiling
+tried to fix and could not.
+
 **The inward lead is bounded like the outward one.** The tanh bound was written outward-only because the outside line
 is a preference it can decline; the apex line needs the same shape for the opposite sign, because an aim that runs
 ahead of the car toward the vertex asks for a nose the car cannot place. `LaneInwardLeadMeters` 3 and
