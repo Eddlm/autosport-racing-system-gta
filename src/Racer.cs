@@ -2521,7 +2521,7 @@ namespace ARS
             if (ActiveManeuver.Type == ManeuverType.None && ARS.MpsToMph(Car.Velocity.Length()) >= ChillMinSpeedMph && RivalsWithinDistance(ChillRivalCrowdDistance) >= ChillCrowdCount)
             {
                 Rival closestRival = NearestRival();
-                if (closestRival != null)
+                if (closestRival != null && CardFree(closestRival.RivalRacer, ManeuverType.ChillOut))
                 {
                     ActiveManeuver.Type = ManeuverType.ChillOut;
                     ActiveManeuver.Target = closestRival.RivalRacer;
@@ -2563,6 +2563,14 @@ namespace ARS
 
         // Valid when a shot is available and the straight is long enough; appropriate when contested, defended,
         // lonely, or spent near the finish with a rival close.
+        // Two cars reading the same situation must not both commit to it: a dive answered by a dive, or two cars
+        // yielding to each other, reads as a glitch rather than as racecraft. A card may not arm against a target
+        // that is already playing that same card.
+        static bool CardFree(Racer target, ManeuverType type)
+        {
+            return target == null || target.ActiveManeuver.Type != type;
+        }
+
         bool TryPlayNitrousCard()
         {
             if (!ARS.NitrousEnabled || Lap <= _nitrousLapUsed) return false;
@@ -2646,6 +2654,7 @@ namespace ARS
                 // The release tests direction, so the arm has to as well: a target diverging past the gate would otherwise
                 // arm, release and re-arm inside the same tick, re-rolling the dive's brake bonus at the core rate.
                 if (Math.Abs(r.DirectionDiff) > AvoidAngleGateDegrees) continue;
+                if (!CardFree(r.RivalRacer, ManeuverType.DiveBomb)) continue;
                 if (r.Distance < nearestDive) { nearestDive = r.Distance; diveTarget = r; }
             }
             if (diveTarget == null) return false;
@@ -2704,7 +2713,8 @@ namespace ARS
             float timeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
             if (pressureDiff <= 30f || !inOverlap || !ARS.IsBetween(timeToEntrance, 0.5f, 2f)
                 || closestRival.Distance > 20f
-                || closestRival.Speed <= Car.Velocity.Length()) return false;
+                || closestRival.Speed <= Car.Velocity.Length()
+                || !CardFree(closestRival.RivalRacer, ManeuverType.Yield)) return false;
 
             ActiveManeuver.Type = ManeuverType.Yield;
             ActiveManeuver.Target = closestRival.RivalRacer;

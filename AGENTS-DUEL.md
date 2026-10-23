@@ -1,4 +1,9 @@
 # ARS — Duel model, full deferred design (companion to AGENTS.md)
+> **One card per situation, 2026-10-23:** a card may not arm against a target that is already playing *that same*
+> card (`CardFree`) — two cars diving each other, or two cars yielding to each other, reads as a glitch rather than
+> as racecraft. Applied at the three arming sites that pick a target: divebomb, yield, chill-out; defend already
+> excluded both dive and defend targets before this rule existed.
+>
 > **Divebomb, 2026-10-23:** the card no longer moves the braking target. `BrakingTargetNode` and its 0.5 factor are gone; `ApexBrakingSpeed` uses `BrakeTargetBaseNode` for every card. The card now carries only its brake bonus (+2 % to +8 %, rolled per dive) and the commit lane to the inside of its target, which is the part that still reads on track. The kick card is switched off behind `KickCardEnabled`.
 
 
