@@ -1363,10 +1363,11 @@ namespace ARS
             _arsMenu.AddSubMenu(controlsMenu);
             _arsMenu.AddSubMenu(debugMenu);
             NativeSubmenuItem developmentEntry = _arsMenu.AddSubMenu(developmentMenu);
-            // A single car on track is the whole point of these levers, so the row is denied outside that: no race,
-            // a spectator with no grid, or a field of two all leave it disabled.
+            // A single car on track is the whole point of these levers, and that is usually one AI while the player
+            // watches, so the gate counts racers and does not look at PlayerParticipating: the player is only in
+            // Racers when they are on the grid, and requiring them there would lock the menu out of its own test.
             developmentEntry.Enabled = false;
-            _arsMenu.Shown += (sender, args) => developmentEntry.Enabled = RaceIsRunning && PlayerParticipating && Racers.Count == 1;
+            _arsMenu.Shown += (sender, args) => developmentEntry.Enabled = RaceIsRunning && Racers.Count == 1;
             _arsMenu.AddSubMenu(creatorMenu);
             _arsMenu.Add(resetItem);
 
