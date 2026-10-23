@@ -2661,10 +2661,10 @@ namespace ARS
             return true;
         }
 
-        // The card is considered early, like Defend: three to five seconds from the entrance. Arming in the last half
-        // second before the brakes meant the commitment always arrived after the moment had passed.
-        const float DivebombWindowMinSeconds = 3f;
-        const float DivebombWindowMaxSeconds = 5f;
+        // Both fight cards are considered over the same span to the entrance. The hand is evaluated on the half-second
+        // beat, so this window is the number of chances a card gets: four at 3-5 s, eight at 2-6. Narrowing it is not free.
+        const float FightWindowMinSeconds = 2f;
+        const float FightWindowMaxSeconds = 6f;
         // A partner reaches that entrance within this of the car: a wider band accepts a car the car will not fight
         // there, a narrower one drops the slower car just ahead, which is the dive worth taking.
         const float DivebombReachSeconds = 0.75f;
@@ -2684,7 +2684,7 @@ namespace ARS
             int entranceNode = CornerEntranceNode(Brain.Corner.Point, apexNode);
             if (entranceNode < 0) return false;
             float timeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
-            if (!ARS.IsBetween(timeToEntrance, DivebombWindowMinSeconds, DivebombWindowMaxSeconds)) return false;
+            if (!ARS.IsBetween(timeToEntrance, FightWindowMinSeconds, FightWindowMaxSeconds)) return false;
 
             Rival diveTarget = null;
             float nearestDive = float.MaxValue;
@@ -2735,7 +2735,7 @@ namespace ARS
             int entranceNode = CornerEntranceNode(Brain.Corner.Point, apexNode);
             if (entranceNode < 0) return false;
             float myTimeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
-            if (!ARS.IsBetween(myTimeToEntrance, 3f, 5f)) return false;
+            if (!ARS.IsBetween(myTimeToEntrance, FightWindowMinSeconds, FightWindowMaxSeconds)) return false;
 
             Rival defenderTarget = null;
             float nearestDefender = float.MaxValue;
