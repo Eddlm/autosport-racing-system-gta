@@ -280,6 +280,8 @@ namespace ARS
         float _brakeSampleFullSeconds = 0f;  // of which, the time at full pedal: the numerator
         float _brakeSampleMaxSlideDeg = 0f;  // largest slip seen between this apex's entrance and the apex itself
         int _brakeSampleApexNode = -1;
+        float _brakeEntryExcessMps = 0f;     // speed over the plan's at the entrance pass, this corner
+        bool _brakeEntryMeasured = false;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
         // BrakeCommitDelaySeconds gathering the exit's slide before it is allowed to teach anything.
@@ -288,6 +290,7 @@ namespace ARS
         float _brakeCommitSampleSeconds = 0f;
         float _brakeCommitFullSeconds = 0f;
         float _brakeCommitMaxSlideDeg = 0f;
+        float _brakeCommitEntryExcessMps = 0f;
         const float BrakeSampleThreshold = 0.25f;   // only pedal above this counts as braking at all
         const float BrakeFullPedalThreshold = 0.9f; // pedal at or above this counts as full brake
         const float BrakeFullFractionTarget = 0.2f; // target share of the braking phase spent at full pedal
@@ -297,7 +300,11 @@ namespace ARS
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
-        const float BrakeMaxFactor = 1.2f;
+        // Arriving at the entrance faster than the plan asked is a verdict on the plan, not on the pedal: the
+        // share of full pedal cannot see a car that came in hot and still spent the approach on the brake.
+        const float BrakeEntryExcessMps = 10f;   // ten metres a second over costs...
+        const float BrakeEntryFactorStep = 0.02f; // ...this much factor, with no cap on the total
+        const float BrakeMaxFactor = 1.5f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
 
@@ -1744,6 +1751,16 @@ namespace ARS
                 _brakeSampleSeconds = 0f;
                 _brakeSampleFullSeconds = 0f;
                 _brakeSampleMaxSlideDeg = 0f;
+                _brakeEntryExcessMps = 0f;
+                _brakeEntryMeasured = false;
+            }
+
+            // The entrance pass is measured once: what the plan wanted there against what the car actually carried.
+            if (!_brakeEntryMeasured && _brakeSampleApexNode >= 0 && HasPassedBrakingTarget())
+            {
+                _brakeEntryMeasured = true;
+                float expected = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed);
+                _brakeEntryExcessMps = Math.Max(0f, ARS.GetForwardSpeed(Car) - expected);
             }
 
             // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. A car that slid on
@@ -1774,6 +1791,7 @@ namespace ARS
             _brakeCommitSampleSeconds = _brakeSampleSeconds;
             _brakeCommitFullSeconds = _brakeSampleFullSeconds;
             _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
+            _brakeCommitEntryExcessMps = _brakeEntryExcessMps;
         }
 
         void CommitBrakeLearning()
@@ -1785,22 +1803,33 @@ namespace ARS
             float fullShare = sampleSeconds > 0f ? _brakeCommitFullSeconds / sampleSeconds : 0f;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
+            float entryCut = BrakeEntryFactorStep * (_brakeCommitEntryExcessMps / BrakeEntryExcessMps);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
             // curve has fallen all the way to fTractionCurveMin, so that is sliding rather than merely cornering at
             // the limit. The factor then takes a flat cut — sample or no sample, the slide is the evidence.
             if (TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple)
             {
-                float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
+                float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep - entryCut, BrakeMinFactor, BrakeMaxFactor);
                 CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
                 AnnounceBrakeAdjustment(apexNode, before, skidFactor);
                 return;
             }
-            // Nothing to score: the car never braked above the sample threshold on the way in.
-            if (sampleSeconds <= 0f) return;
+            // Nothing to score from the pedal: the car never braked above the sample threshold on the way in. The
+            // entrance cut still stands — arriving hot without braking is exactly what that rule exists to catch.
+            if (sampleSeconds <= 0f)
+            {
+                if (entryCut > 0f)
+                {
+                    float cutOnly = ARS.Clamp(before - entryCut, BrakeMinFactor, BrakeMaxFactor);
+                    CornerContextForWrite(apexNode).BrakeFactor = cutOnly;
+                    AnnounceBrakeAdjustment(apexNode, before, cutOnly);
+                }
+                return;
+            }
             // The error is the *share* of the braking phase spent at full pedal, not the length of the phase:
             // a corner the AI takes without ever pressing hard scores 0, so it asks for the largest correction.
             float step = (BrakeFullFractionTarget - fullShare) * ARS.BrakeLearningGain;
-            float factor = ARS.Clamp(before * (1f + step), BrakeMinFactor, BrakeMaxFactor);
+            float factor = ARS.Clamp(before * (1f + step) - entryCut, BrakeMinFactor, BrakeMaxFactor);
             CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
             // braking that corner costs.
