@@ -204,8 +204,8 @@ namespace ARS
         // ramp: braking on it at full authority is what reads as a slam. A corner owns its own ramp and is exempt.
         const float RouteBrakeCap = 0.2f;
 
-        // One input unit per second while outside, down to a floor that leaves two thirds of the tyre for steering.
-        const float ProjectionInputPerSecond = 1f;
+        // Two input units per second while outside, down to a floor that leaves two thirds of the tyre for steering.
+        const float ProjectionInputPerSecond = 2f;
         const float ProjectionBrakeFloor = 0.75f;
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
@@ -1653,8 +1653,8 @@ namespace ARS
 
         // How far the one-second projection has left the track, in metres beyond the edge, for the clock that decides
         // how much pedal to take. Zero unless the projection is heading further from the centre than the car already
-        // is: a car coming back in gets no response however wide it currently sits. The gates are the original three
-        // — a lane override must have aimed the car, the car must be moving, and the node must actually turn.
+        // is: a car coming back in gets no response however wide it currently sits. It needs the car moving and the
+        // node actually turning; it does not need a carried lane, because the projection is pure kinematics.
         void MeasureProjectionOutside(float seconds)
         {
             bool laneOverride = _laneOverride;
@@ -1667,7 +1667,7 @@ namespace ARS
             float carOffset = 0f;
             float turnDirection = 0f;
 
-            if (laneOverride && mph >= OffshootMinSpeedMph)
+            if (mph >= OffshootMinSpeedMph)
             {
                 Vector3 proj = ProjectAhead(seconds);
                 // 1 node ≈ 1 m: the window has to reach the projected node.
