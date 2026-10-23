@@ -2319,15 +2319,14 @@ namespace ARS
             // to nothing. Three metres out is full gas and contact is the floor, and the floor is half throttle, not zero —
             // this term yields the acceleration, it does not stop the car.
             //
-            // Clamp the INPUT and remap unclamped: Remap's clamp runs Clamp(r, out_min, out_max) and, with a descending
-            // output range, returns out_min for every value below it - the mistake that pinned the projection cap at 1.0
-            // for two builds.
+            // Written ascending on both sides on purpose: Remap's clamp runs Clamp(r, out_min, out_max) and Clamp tests the
+            // minimum first, so a descending output range returns out_min for everything. Ascending in and out, and the
+            // clamp is honest.
             float rivalLevel = 1f;
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || r.RelativePosition != RelativePos.Ahead) continue;
-                float frontGap = ARS.Clamp(r.FrontGap, 0f, RivalLiftMeters);
-                rivalLevel = Math.Min(rivalLevel, ARS.Remap(frontGap, RivalLiftMeters, 0f, 1f, RivalLiftFloor));
+                rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.FrontGap, 0f, RivalLiftMeters, RivalLiftFloor, 1f, true));
             }
             Control.MaxThrottleFromRival = GlideCap(Control.MaxThrottleFromRival, rivalLevel);
 

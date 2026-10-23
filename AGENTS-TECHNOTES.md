@@ -62,6 +62,22 @@ rivals **ahead** — a rival behind is the rival's problem, and the behind case 
 closing speed is deliberate: two cars at the same speed have zero closing, and the same-speed case is the one where the
 leader drifts over without ever approaching.
 
+## `Remap` and the descending-range trap
+
+`ARS.Remap(x, in_min, in_max, out_min, out_max, clamp)` computes the line and then, when `clamp` is set, runs
+`Clamp(r, out_min, out_max)`. `Clamp` tests the **minimum first**, so a descending output range (`out_min` > `out_max`)
+returns `out_min` for every value below it — the result is a constant, and a silent one. This pinned the projection's
+throttle cap at 1.0 for two builds before the log gave it away (`cap=1.00` with `outside > half`).
+
+**The rule: write the remap ascending on both sides, then `clamp` is honest.** A mapping that reads naturally as
+"1.0 at three metres, 0.5 at contact" is `Remap(gap, 0, 3, 0.5, 1, true)` — same function, no inversion, clamps
+correctly.
+
+**The exception:** a mapping that is genuinely descending in the world (the projection's cap, 1.0 at the edge falling to
+0.0 beyond it) cannot be written ascending without negating its input. There the rule is the other one: clamp the input
+and remap unclamped — `Remap(Clamp(x, lo, hi), lo, hi, out_hi, out_lo)` — which is what that site does, and its comment
+says why. Prefer the ascending form wherever the physics allows it.
+
 ## The two lookaheads — same quantity, two planes, and why they stay two
 
 Two systems read the road ahead every tick and each derives its own governor. They look redundant and they are not.
