@@ -63,10 +63,10 @@ namespace ARS
         public static List<CornerPoint> Corners = new List<CornerPoint>();
         // Bumped on every apex-table rebuild so each racer's corner contexts know to re-sync.
         public static int CornersRevision = 0;
-        // What the table calls a corner: at or under this radius on its tightest node; anything wider is a bend and
-        // is dropped, so it gets no apex entry, braking plan or chevron and route speed is its only law. The region
-        // scan opens at this same number, so the two can never disagree. The Debug menu owns it at runtime and
-        // rebuilds the table on a change, mid-race included.
+        // The detector's region delimiter: a corner region opens and closes where the road's radius crosses this
+        // number, and the circuit scan starts on a node at or above it. It does not decide what counts as a corner -
+        // the 60-node doubling test does - but no region, and so no corner, forms where the road is wider. The Debug
+        // menu owns it at runtime and rebuilds the table on a change, mid-race included.
         public static int CornerCeilingMeters = 200;
         // The menu's ladder and the settings repair's domain, from one place: a value stored off this ladder is
         // snapped to its nearest offer on load, so the two lists must not drift.
@@ -1078,7 +1078,7 @@ namespace ARS
             rivalTractionMenu.Add(tcsSpanItem);
             HookListTextPicker(tcsSpanItem);
 
-            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "Cap AI brake against a wheel-lock target, the TCS mirror on the brake side. Off lets AI brake go unlimited - plain brake force, engine-side ABS only.", AbsEnabled);
+            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "Cut AI brake to a fifth while a wheel has stopped turning above 15 mph, gliding back at 0.2 per second. Off lets AI brake go unlimited - plain brake force, engine-side ABS only.", AbsEnabled);
             absItem.CheckboxChanged += (sender, args) =>
             {
                 AbsEnabled = absItem.Checked;
@@ -1366,7 +1366,7 @@ namespace ARS
             // A single car on track is the whole point of these levers, so the row is denied outside that: no race,
             // a spectator with no grid, or a field of two all leave it disabled.
             developmentEntry.Enabled = false;
-            _arsMenu.Shown += (sender, args) => developmentEntry.Enabled = RaceIsRunning && Racers.Count == 1;
+            _arsMenu.Shown += (sender, args) => developmentEntry.Enabled = RaceIsRunning && PlayerParticipating && Racers.Count == 1;
             _arsMenu.AddSubMenu(creatorMenu);
             _arsMenu.Add(resetItem);
 

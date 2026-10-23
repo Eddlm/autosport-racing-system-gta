@@ -820,12 +820,16 @@ namespace ARS
                 endPosition = apexPosition + SpanMaxDistanceNodes;
                 ARS.Log(ARS.LogImportance.Info, "Corner add CAP: apex=" + apexNode + " side=exit priorEnd=" + priorEnd + " (distance=" + (priorEnd - apexPosition) + ") clamped to end=" + endPosition + " (distance=" + (endPosition - apexPosition) + "); region=" + regionStart + "-" + regionEnd + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " walkAtCap" : " walkStoppedEarly") + " unclampedEnd=" + unclampedEnd);
             }
-            // Report-only: how far the road runs before it opens to twice the apex's smoothed radius. Measured over
-            // the walk's whole length, not over the 40-node span the corner is placed with, so it can say "never
+            // Gates the corner: how far the road runs before it opens to twice the apex's smoothed radius. Measured
+            // over the walk's whole length, not over the 40-node span the corner is placed with, so it can say "never
             // within 500 nodes" where LengthEnd can only ever say 40.
+            // The blur walk is bounded by the road, not by the scan list. On a circuit IsOpenedFor wraps, so an apex
+            // near the end of the rotated list can still be judged over the full span; using exitMaxStep here would
+            // admit every corner landing within 60 nodes of the list end, one per circuit, without a measurement.
+            int blurMaxStep = ARS.IsPointToPoint ? exitMaxStep : Math.Min(SpanNodeLimit, count - 1);
             int nodesToDouble = detectedRadius < 999f
-                ? NodesToDoubleRadius(apexNode, detectedRadius, exitMaxStep, count)
-                : exitMaxStep;
+                ? NodesToDoubleRadius(apexNode, detectedRadius, blurMaxStep, count)
+                : blurMaxStep;
             // A corner is a feature with an end: if the road has not opened to twice its radius within this many
             // nodes, what we would call an exit is arbitrary and the corner is a bend the route already governs.
             // The number comes from 32 corners over three tracks, where the distribution splits between 52 and 70
@@ -845,7 +849,6 @@ namespace ARS
                 EndNode = scanNodes[endPosition],
                 LengthStart = apexPosition - startPosition,
                 LengthEnd = endPosition - apexPosition,
-                NodesToDoubleRadius = nodesToDouble,
                 SupposedRadius = tightestRadius,
                 DetectedRadius = detectedRadius,
                 Speed = (float)Math.Sqrt(9.81f * tightestRadius)

@@ -231,6 +231,8 @@ namespace ARS
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _offtrackThrottleCap = 1f;
+        // True only on the tick the projection actually cut the throttle, which is what the red lines report.
+        bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
 
         // Brake learning (Phase 1): learn the effective decel factor per corner apex.
@@ -272,7 +274,7 @@ namespace ARS
         const float BrakeFullPedalThreshold = 0.9f; // pedal at or above this counts as full brake
         const float BrakeFullFractionTarget = 0.2f; // target share of the braking phase spent at full pedal
         // Step per unit of share error: ARS.BrakeLearningGain, live from the Development menu, so a test can make the
-        // learner move faster or freeze it. 1.0 means 0.1 for every 10 points off the target.
+        // learner slower; the ladder tops at 0.9 and never freezes it. 1.0 means 0.1 for every 10 points off target.
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
@@ -1556,9 +1558,13 @@ namespace ARS
             }
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
             newThrottle = ComposeThrottleCap(newThrottle, offtrackThrottleCap < 1f, countersteering);
-            // The projection has the last word on throttle: it is a ceiling over everything the plan and the
-            // reasons above asked for, and it never reaches the brake.
-            newThrottle = Math.Min(newThrottle, offtrackThrottleCap);
+            // The projection is a ceiling over the plan and over every reason above it, and it never reaches the
+            // brake. Full countersteer is the one floor it yields to: that branch exists to keep the wheels rolling
+            // so the car can recover, and a slide is exactly when the projection is widest, so cutting it there
+            // would starve the recovery it is meant to protect.
+            bool projectionBinds = !countersteering && newThrottle > offtrackThrottleCap;
+            if (projectionBinds) newThrottle = offtrackThrottleCap;
+            _offtrackThrottleHeld = projectionBinds;
             // Brake composes here on the raw split target, pre-slew: in the throttle-to-brake transition
             // Control.Throttle slews down slowly and could still read >= 1.0 while the car is already braking.
             newBrake = ComposeBrakeCap(newBrake, countersteering);
@@ -2037,7 +2043,7 @@ namespace ARS
         const float ReasonCapSlewRate = 3.5f;
         const float TcsCapFloor = 0.2f;
 
-        // The taper both reason caps cut on: nothing at the threshold, the cap's floor one span of slip past it, tanh
+        // The taper the TCS cap cuts on: nothing at the threshold, the cap's floor one span of slip past it, tanh
         // between so the onset has no slope step, normalised so the floor lands where the span says it does. A tanh
         // runs above its own chord, so the cut leads a straight ramp through the middle of the span.
         static readonly float TaperNormaliser = (float)(1.0 / Math.Tanh(1.0));
@@ -2118,9 +2124,9 @@ namespace ARS
             if (OutOfTrackDistance() > 0f)
             {
                 offTrackThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), OffTrackSafeSpeedMph, OffTrackFullThrottleMph, OffTrackThrottleLevel, 1f, true);
-                // A car whose projection is closing on the centre line is driving itself back in, not stuck in the
-                // grass: the speed limiter that keeps a lost car from ploughing on is lifted and a flat half takes
-                // its place, so recovery happens under power without a full-throttle launch off a loose surface.
+                // A car whose projection is closing on the centre line is driving itself back in, so the speed
+                // limiter is replaced by a flat half. That is looser than the limiter above 17.5 mph and tighter
+                // below it: recovery happens under power, but never a full-throttle launch off a loose surface.
                 if (ProjectionClosingOnCentre()) offTrackThrottle = OffTrackRecoverThrottle;
             }
             Control.MaxThrottleFromOffTrack = GlideCap(Control.MaxThrottleFromOffTrack, offTrackThrottle);
@@ -2807,7 +2813,7 @@ namespace ARS
             Vector3 full = ProjectAhead(1f) + Vector3.WorldUp * lift;
             // Red the moment the projection is the thing holding the throttle, so the cap is visible in the world
             // instead of only on the pedal bar.
-            bool capping = _offtrackThrottleCap < 1f;
+            bool capping = _offtrackThrottleHeld;
             ARS.DrawLine(origin, half, capping ? Color.Red : Color.White);
             ARS.DrawLine(half, full, capping ? Color.Red : Color.Cyan);
         }
