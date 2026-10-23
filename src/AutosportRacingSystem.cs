@@ -167,6 +167,8 @@ namespace ARS
         // rate sits at its top: the old const was 1.0, which the ladder cannot express.
         public static float BrakeLearningGain = 0.9f;
         public static readonly string[] BrakeLearningGainValues = { "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9" };
+        // Independent of the track-analysis visual: the learner's own read-out, one line per verdict a corner takes.
+        public static bool BrakeLearningNotify = false;
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = true;
@@ -1345,6 +1347,14 @@ namespace ARS
             };
             developmentMenu.Add(brakeLearnGainItem);
             HookListTextPicker(brakeLearnGainItem);
+
+            NativeCheckboxItem brakeLearnNotifyItem = new NativeCheckboxItem("Brake Learn Notify", "Announce every verdict the brake learner lands, on its own switch rather than the track-analysis visual: (car) adjusted corner N degrees | before + change > after. Off by default, since it prints once per corner per lap.", BrakeLearningNotify);
+            brakeLearnNotifyItem.CheckboxChanged += (sender, args) =>
+            {
+                BrakeLearningNotify = brakeLearnNotifyItem.Checked;
+                DevelopmentMenuStore.Set("BrakeLearningNotify", BrakeLearningNotify.ToString());
+            };
+            developmentMenu.Add(brakeLearnNotifyItem);
 
             _arsMenu.AddSubMenu(_raceMenu);
             _arsMenu.AddSubMenu(rivalsMenu);
@@ -3362,6 +3372,7 @@ namespace ARS
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             BrakeLearningGain = DevelopmentMenuStore.GetFloat("BrakeLearningGain", BrakeLearningGain);
+            BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);

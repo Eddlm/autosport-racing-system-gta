@@ -1699,9 +1699,6 @@ namespace ARS
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
             float fullShare = sampleSeconds > 0f ? _brakeCommitFullSeconds / sampleSeconds : 0f;
             _brakeCommitApexNode = -1;
-            // The notices ride the track-analysis debug view, so a normal race is quiet.
-            bool announce = ARS.DebugToggles[Options.ShowTrackAnalysis];
-
             float before = BrakeFactorForApex(apexNode);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
             // curve has fallen all the way to fTractionCurveMin, so that is sliding rather than merely cornering at
@@ -1710,7 +1707,7 @@ namespace ARS
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
                 CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                if (announce) UI.Notify("~b~[ARS]~w~ skid detected > " + skidFactor.ToString("0.00"));
+                AnnounceBrakeAdjustment(apexNode, before, skidFactor);
                 return;
             }
             // Nothing to score: the car never braked above the sample threshold on the way in.
@@ -1722,7 +1719,18 @@ namespace ARS
             CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
             // braking that corner costs.
-            if (announce) UI.Notify("~b~[ARS]~w~ " + (int)Math.Round(fullShare * 100f) + "% brake > " + factor.ToString("0.00"));
+            AnnounceBrakeAdjustment(apexNode, before, factor);
+        }
+
+        // One line per verdict, on its own switch: the car, the corner's node, the factor it had, the move it took
+        // and the result. A cut reads as a minus rather than a plus with a negative behind it.
+        void AnnounceBrakeAdjustment(int apexNode, float before, float after)
+        {
+            if (!ARS.BrakeLearningNotify) return;
+            float change = after - before;
+            string sign = change < 0f ? " - " : " + ";
+            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") adjusted corner Nº" + apexNode + " | "
+                + before.ToString("0.00") + sign + Math.Abs(change).ToString("0.00") + " > " + after.ToString("0.00"));
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
