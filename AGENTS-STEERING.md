@@ -285,6 +285,8 @@ That is TUM's architecture — a path-tracking controller with a slip-gated coun
 The two terms are not competing for the same job, so their interaction is a *priority* choice (save the car first) — the honest justification for the blend getting the last word.
 Two consequences to keep in mind: while the blend holds full priority, **course tracking is suspended**; and a slide that never develops enough slip to trip the ramp is invisible to the blend, so only the PD chain's indirect response to it exists.
 
+**At full priority the pedals are capped, not cut.** `CountersteerPedalCap` 0.5 limits **both** throttle and brake while `IsFullCountersteer` holds, and the plan keeps its own direction up to that cap: the tyre is already spending its grip diagonally, so neither a full brake nor a full throttle belongs in that state, but coasting at 0.05 was the other extreme and left the car unable to keep the wheels rolling or to settle its speed.
+
 ## Slides: the field mostly does nothing; ARS is ahead of it
 
 **The survey's strongest negative result.** Of ~20 implementations, **17 do nothing about slides at all**; only **three** control them:

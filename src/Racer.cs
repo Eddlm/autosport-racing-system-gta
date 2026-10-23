@@ -1371,7 +1371,9 @@ namespace ARS
         const float CountersteerAssistDegreesPerSecond = 10f;
         const float CountersteerAssistMaxDegrees = 20f;
         // Pedal level held at full countersteer: enough throttle to keep the wheels rolling and no brake.
-        const float CountersteerRollThrottle = 0.05f;
+        // Full countersteer caps both pedals: the tyre is already spending its grip diagonally, so neither a full
+        // brake nor a full throttle belongs in that state - but the plan keeps its own direction, up to this much.
+        const float CountersteerPedalCap = 0.5f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
         const float SteerSlewRate = 180f;
@@ -1689,11 +1691,12 @@ namespace ARS
             // Full countersteer: no brake, just enough throttle to keep the wheels rolling. The reason caps still
             // apply on top; the release is instant.
             bool countersteering = IsFullCountersteer();
+            SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
             if (countersteering)
             {
-                combinedInput = CountersteerRollThrottle;
+                newThrottle = Math.Min(newThrottle, CountersteerPedalCap);
+                newBrake = Math.Min(newBrake, CountersteerPedalCap);
             }
-            SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
             // The projection is the only thing that slows the car while it is still on the track: the distance
             // ramp that used to sit beside this clock asked for the same pedal from the other direction, and two
             // laws on one pedal is one too many. Time is the escalation — full throttle, coast, then brake — and
@@ -2407,7 +2410,7 @@ namespace ARS
         {
             bool countersteering = IsFullCountersteer();
             Control.MaxBrakeFromABS = Glide(Control.MaxBrakeFromABS, AbsCapLevel(), AbsBrakeFallPerSecond, AbsBrakeRisePerSecond, TickScale);
-            Control.MaxBrakeFromCountersteer = GlideCap(Control.MaxBrakeFromCountersteer, countersteering ? 0f : 1f);
+            Control.MaxBrakeFromCountersteer = GlideCap(Control.MaxBrakeFromCountersteer, countersteering ? CountersteerPedalCap : 1f);
         }
 
         float AbsCapLevel()
@@ -3189,7 +3192,7 @@ namespace ARS
             AddPedalLimit(Control.MaxThrottleFromRecovery, RecoveryReasonColor, PedalLimitReasonSize, ref count);
             AddPedalLimit(Control.MaxBrakeFromABS, GripReasonColor, PedalLimitReasonSize, ref count);
             AddPedalLimit(Control.MaxBrakeFromCountersteer, CountersteerReasonColor, PedalLimitReasonSize, ref count);
-            if (IsFullCountersteer()) AddPedalLimit(CountersteerRollThrottle, Color.White, PedalLimitCapSize, ref count);
+            if (IsFullCountersteer()) AddPedalLimit(CountersteerPedalCap, Color.White, PedalLimitCapSize, ref count);
             if (_offtrackThrottleHeld) AddPedalLimit(Math.Max(1f - ProjectionInputPerSecond * _projectionOutsideSeconds, 0f), Color.White, PedalLimitCapSize, ref count);
 
             SortPedalLimits(count);
