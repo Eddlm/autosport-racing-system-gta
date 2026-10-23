@@ -49,6 +49,19 @@ Two details that are not the same on both sides, and must not be flattened:
   player's power together. The `Player power cut` log line (2 s, only while below 0.99) is the only read-out that the
   player's side is biting.
 
+## Contact avoidance reaches past the boxes
+
+`Rival.CombinedSize.Y` — half of each car's length plus a metre ahead, a quarter behind — is what **touching** means, and
+it is the right number for classifying a relative position and for the side-by-side match. It is the wrong number for the
+steer-away term, which used the same half-sum plus a metre: the moment a rival left the box, the push stopped looking at
+it, and that is exactly when a car that has just been passed starts moving across the nose. The box answers "are we in
+each other"; the push needs "can he be in my way", and those are different distances.
+
+The reach is now the box **plus `ContactPushReachSeconds` 0.3 of the car's own travel**, capped at 20 m, applied only to
+rivals **ahead** — a rival behind is the rival's problem, and the behind case keeps the bare box. Own speed rather than
+closing speed is deliberate: two cars at the same speed have zero closing, and the same-speed case is the one where the
+leader drifts over without ever approaching.
+
 ## The two lookaheads — same quantity, two planes, and why they stay two
 
 Two systems read the road ahead every tick and each derives its own governor. They look redundant and they are not.

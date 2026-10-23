@@ -678,6 +678,11 @@ namespace ARS
             // angle's sign mean "away" — a separating rival turns it into a push toward the rival, which is the slide
             // blend's job to answer and not this term's.
             const float ContactPushOuterGapMeters = 5f;
+            // How far ahead of the boxes the push still looks, as a share of a second of the car's own travel. The box
+            // is what touching means; a rival that has just left it is still the one that can be crossed by, and the
+            // gap to react in is distance, not overlap. Ahead only: a rival behind is the rival's problem.
+            const float ContactPushReachSeconds = 0.3f;
+            const float ContactPushReachMaxMeters = 20f;
             const float ContactPushMinSpeedMps = 1f;
             float contactSteerDeg = 0f;
             Vector3 velDir = speedMps > 0.5f ? Car.Velocity / speedMps : courseDir;
@@ -691,6 +696,8 @@ namespace ARS
                 float longDist = Math.Abs(Vector3.Dot(delta, velDir));
                 float latDist = Math.Abs(Vector3.Dot(delta, velRight));
                 float longGate = (VehicleData.ModelDimensions.Y + r.RivalRacer.VehicleData.ModelDimensions.Y) * 0.5f + 1f;
+                if (Vector3.Dot(delta, velDir) > 0f)
+                    longGate += Math.Min(speedMps * ContactPushReachSeconds, ContactPushReachMaxMeters);
                 // Read live rather than off the half-second publish, because the touching point anchors the ramp below.
                 float combinedHalfWidth = (VehicleData.BoundingBox + r.RivalRacer.VehicleData.BoundingBox) * 0.5f;
                 if (longDist > longGate || latDist > combinedHalfWidth + ContactPushOuterGapMeters) continue;
