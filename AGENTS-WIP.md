@@ -128,3 +128,25 @@ The corner at 66.3% of LSIA was culled by the blur gate and the car now brakes s
 road. The suspicion is a step change in the route speed: with no corner over that stretch, `followTrackSpd` is the
 only law, and it may be reading the raw `PreciseCurveRadius` (a +/-4-node circumradius, noisy by construction)
 rather than a smoothed one. Not started.
+
+## Handoff — harmonising the speed governors
+
+Four systems decide how fast a car goes. They were built one at a time and never composed, which is the next job.
+
+1. **Corner** — `ApexBrakingSpeed` builds a ramp from the braking target to the apex and releases at the braking target (build 734, reverting 731). It knows the distance left, so its deceleration is planned. Full brake authority.
+2. **Curvature** — `RouteRadiusSampled` (three-node plan-view circumradius at the car, speed/grip and twice that) through `RouteIdealSpeedForRadius` = sqrt(grip * g * R). It is a level, not a transition: no memory, no lookahead, no time. While it is the term setting the speed, the brake is capped at `RouteBrakeCap` 0.1 (build 755, a probe).
+3. **Crest and slope** — `CrestGripSpeedFactor` (the no-fly gate, samples 1 s and 2 s ahead, drawn blue and red) and `slopeSpeedFactor`. These multiply **both** the corner and the route speed, so they are the only pair that already composes.
+4. **Projection** — `OffshootThrottleCap`: throttle only, 1.0 at the track edge ramping to 0 over the five metres beyond it, and it fires only when the projection is outside the edge **and** wider than the car. Applied with `Math.Min` after `ComposeThrottleCap`, so it outranks every reason field.
+
+**Where they meet.** `Intention.Speed = min(cornerTerm, routeTerm)`, then slope and crest multiply, then the error `Speed - currentSpeed` is divided by 3 m/s for throttle and 6 m/s for brake. Those two numbers are the amplifier: at R = 150 m, 23 m of radius is the whole throttle range and 47 m the whole brake range, so any residual step in a radius reading becomes a saturated pedal. It is a proportional law with a band, and outside that band it is bang-bang.
+
+**Measured, not assumed.** On the real LSIA route a three-point sample steps up to 12.84 km/h of target speed in one node, which is 59% of the brake range in ~26 ms. A least-squares four-point fit halves that inside the governed regime (R < 200 m) but is unusable unguarded: on a uniform node spacing the samples are centrally symmetric, the algebraic fit's curvature terms cancel to ~1e-9, and it returns the RMS size of the sampling window as a "radius" (45 m on a road whose real radius is 5-9 km). The sagitta guard (`RouteStraightSagittaShare` 0.002) fixes it; the fit still under-reads tight corners by ~16%.
+
+**Field-verified.** Trails show red only where a corner brakes, and green-yellow with no red at all through a curve without an apex: the two systems are visibly separate. Radius readout 15 m at an apex, 182 m through a wide junction, 999 m on a viaduct.
+
+**Open defects to harmonise, in order of what they cost:**
+- The pedal law is proportional on a speed error with no deceleration term: a car 1 m/s over at 200 m out and one 1 m/s over at 10 m out get the same pedal.
+- The curvature term has no time dimension while the corner does. Rate-limiting its fall to a grip-consistent deceleration is the cheap fix; a feed-forward from the required deceleration is the correct one.
+- `999` is the sentinel for both "huge radius" and "degenerate solve", so the route can be blind in a curve and say so with a number that looks like a straight. Suspected at a viaduct; needs the estimator checked in a genuinely tight curve.
+- The brake learner measures `share` of full pedal. The 0.1 cap makes share 0, so it raises the factor by 18% every pass and teaches the car to brake even less. It should measure relative to the cap.
+- `CornerCeilingMeters` survives only as the region delimiter (200 m); the blur gate at 60 nodes decides what exists.
