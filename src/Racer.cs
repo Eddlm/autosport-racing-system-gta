@@ -1046,18 +1046,24 @@ namespace ARS
             }
 
             float dt = Math.Min(TickScale, LaneMoverMaxStepSeconds);
-            float requestRate = ARS.Clamp((request - _laneRequestPrev) / dt, -LaneMoverSpeedCapMps, LaneMoverSpeedCapMps);
+            // The move OUT to the plateau is half the speed and half the acceleration of everything else: opening the line to the
+            // outer edge is a positioning choice the car makes with room to spare, and at the full rate it arrived as a sideways
+            // lunge. The apex side keeps the full pair, because there the car is being placed for a corner it is already turning into.
+            bool toOutside = _laneRequestReason == LaneReason.OutsideLine;
+            float moverAccel = toOutside ? LaneMoverAccelMps2 * 0.5f : LaneMoverAccelMps2;
+            float moverSpeedCap = toOutside ? LaneMoverSpeedCapMps * 0.5f : LaneMoverSpeedCapMps;
+            float requestRate = ARS.Clamp((request - _laneRequestPrev) / dt, -moverSpeedCap, moverSpeedCap);
             _laneRequestPrev = request;
 
             // The two terms are clamped apart: the arrival never exceeds the cap, but a request already moving at the
             // cap must not lose the arrival's headroom, or the gap can never close while the line keeps moving.
-            float arrivalRate = Math.Sign(gap) * Math.Min(LaneMoverSpeedCapMps, (float)Math.Sqrt(2f * LaneMoverAccelMps2 * Math.Abs(gap)));
+            float arrivalRate = Math.Sign(gap) * Math.Min(moverSpeedCap, (float)Math.Sqrt(2f * moverAccel * Math.Abs(gap)));
             float desiredRate = requestRate + arrivalRate;
 
             // A reversal drops the momentum instead of spending it: carrying speed one way while the line asks for the other
             // is the lag that reads as the lane taking a moment to change direction, and there is nothing worth keeping.
             if (desiredRate * _laneRate < 0f) _laneRate = 0f;
-            float rateStep = LaneMoverAccelMps2 * dt;
+            float rateStep = moverAccel * dt;
             _laneRate += ARS.Clamp(desiredRate - _laneRate, -rateStep, rateStep);
             float step = _laneRate * dt;
 
