@@ -178,6 +178,9 @@ namespace ARS
         // The carried lane and the sources' request for it are separate: the mover carries one onto the other with
         // lateral inertia, so a request that is valid for half a second cannot step the lane.
         float _carriedLane = 0f;
+        // Set by the mover when the aim has overshot the demand on the same side of the car: the car stops following it and it
+        // returns at twice the acceleration until it is back on the segment.
+        bool _laneOvershoot;
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
         float _laneRequestPrev = 0f;
@@ -684,7 +687,10 @@ namespace ARS
             // instead of reacting to it; shifting a real point keeps the pursuit's chord real. Always on.
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
             float offsetAtProjection = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), steerRefPoint.Position, steerRefPoint.Direction);
-            float aimPointOffset = _carriedLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset);
+            // While the aim has overshot the demand the car keeps its own lane: following an aim that is on its way back
+            // would drive the car past the goal and back again, which is the wiggle this state exists to avoid.
+            float aimLane = _laneOvershoot ? steerRefOffset : _carriedLane;
+            float aimPointOffset = aimLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset);
             // The aim targets the car's centre, so it locks to the drivable edge; the rival walls bound to the raw edge.
             aimPointOffset = ARS.Clamp(aimPointOffset, -drivableEdge, drivableEdge);
             Vector3 aimPoint = steerRefPoint.Position + steerRight * aimPointOffset;
@@ -1045,6 +1051,7 @@ namespace ARS
                 _carriedLane = request;
                 _laneRequestPrev = request;
                 _laneRate = 0f;
+                _laneOvershoot = false;
                 return;
             }
 
@@ -1061,12 +1068,22 @@ namespace ARS
                 _laneRate = 0f;
             }
 
+            // Same side of the car, but the demand already inside the aim: the aim has overshot the goal, so the car would be
+            // steered past it and back again. It returns at twice the acceleration - the speed cap is untouched - and the car
+            // stops following the lane at all until the aim is back on the segment.
+            aimFromCar = _carriedLane - steerRefOffset;
+            askFromCar = request - steerRefOffset;
+            _laneOvershoot = aimFromCar * askFromCar > 0f && Math.Abs(aimFromCar) > Math.Abs(askFromCar) + LaneCrossMinMeters;
+
             float dt = Math.Min(TickScale, LaneMoverMaxStepSeconds);
             // The move OUT to the plateau is half the speed and half the acceleration of everything else: opening the line to the
             // outer edge is a positioning choice the car makes with room to spare, and at the full rate it arrived as a sideways
             // lunge. The apex side keeps the full pair, because there the car is being placed for a corner it is already turning into.
             bool toOutside = _laneRequestReason == LaneReason.OutsideLine;
             float moverAccel = toOutside ? LaneMoverAccelMps2 * 0.5f : LaneMoverAccelMps2;
+            // Half the inertia on the way back, and only the acceleration: the cap is what bounds the visible lunge, so an
+            // overshoot returns twice as promptly without ever moving faster than any other request.
+            if (_laneOvershoot) moverAccel *= 2f;
             float moverSpeedCap = toOutside ? LaneMoverSpeedCapMps * 0.5f : LaneMoverSpeedCapMps;
             float requestRate = ARS.Clamp((request - _laneRequestPrev) / dt, -moverSpeedCap, moverSpeedCap);
             _laneRequestPrev = request;

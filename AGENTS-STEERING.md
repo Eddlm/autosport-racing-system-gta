@@ -393,6 +393,11 @@ Moved whole out of the project `AGENTS.md` to keep the instruction chain inside 
    **Every lane reason passes through it** — `CurveLean`, `OutsideLine`, `ApexLine`, `CommitCard`, `Avoidance`, `RecoveryEdge` — so
    inertia is a property of the mover, not of any producer. The two escapes are `_laneSnap` (one tick, `SnapToTrack` and the per-car
    reset) and `ClampLaneToWalls`, which bounds the **request** only while the aim still rides the rate.
+   **The aim lives on the segment [car lane, demand]** - two violations, two rules. Crossing (aim and demand on opposite sides
+   of the car lane) is the teleport above. **Overshoot** (same side, but the demand already inside the aim) sets `_laneOvershoot`:
+   the mover's acceleration doubles - the speed cap is untouched, so it returns twice as promptly without ever moving faster than
+   any other request - and the car stops following the lane, keeping its own (`aimLane = steerRefOffset`), because following an aim
+   on its way back drives the car past the goal and back again. Build 887.
    **A request on the far side of the car is placed ON the car, rate zeroed** (`build 886`, `LaneCrossMinMeters 0.1`): the stretch
    between the aim and the car's own lane is ground the car already occupies, so sweeping it is invisible work that costs a full
    reversal — which is what made a curve changing handedness read as half a second of frozen lane. What remains visible, and keeps
