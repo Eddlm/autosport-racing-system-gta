@@ -196,3 +196,21 @@ carried - is what a proper investigation needs next.
 **Editing note**: `Racer.cs` had accumulated mixed line endings from patches that did not convert LF to CRLF; it is uniform again. A
 pattern that fails to match text that visibly exists is almost always that. `vscode_replace_text` matches literally, normalises the
 EOL and refuses an ambiguous search instead of guessing.
+
+
+## Session close 2026-10-24 (afternoon) — deployed build 885
+
+**Driven and reported good**: the apex line in metres of route (outside 250 m, ramp 50→5 m, raw half width, latch to the apex, nearest
+unpassed apex, corners under 50 m radius), the lean standing down only while the line is active, and the four audit fixes.
+
+**Compile-verified, drive owed**: the line's speed floor at **15 mph** under the apex speed (build 885); the outside leg of the lane mover
+at half rate (13 m/s2, 12 m/s, build 880); the 8 s `AvoidHoldTimeoutMs` backstop; and the ABS taper itself, which is now **off behind a
+greyed switch** - `AbsEnabled` forced false at load, so nothing of it is in play until the STATUS_PLAYER question is settled.
+
+**Two documents added today**: `AGENTS-VEHICLE-STATUS.md` (all 117 engine sites that branch on STATUS_PLAYER vs STATUS_PHYSICS) and
+`docs/KNOWN-BUGS.md` (defects understood and deliberately not fixed; first entry `first-corner-eagerness`).
+
+**The open decision of the day**: GTA re-grants `WF_ABS` to every non-player-driven car each tick (`Automobile.cpp:3775`), so an AI car
+cannot be made ABS-free from `strModelFlags`. The engine's own clamp holds slip at 0.6 and our taper's knee is 0.5, i.e. 0.1 of room.
+Either ARS writes `STATUS_PLAYER` into an AI car - which drags in air control, damage thresholds, population culling and collision
+response, all catalogued in `AGENTS-VEHICLE-STATUS.md` - or the ABS stays a player-only feature.
