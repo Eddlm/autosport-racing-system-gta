@@ -1162,11 +1162,12 @@ namespace ARS
                 }
             }
 
-            // The car decides: a corner it has not asked to position for keeps the inside line, and so does one it
-            // arrives at far below its own apex speed.
+            // The line lives for the whole approach and stops at the apex, nothing else. It used to end twenty miles an
+            // hour above the apex speed, which dropped it exactly while the car was still closing: the entry went out to
+            // the clamp, reached the inside and then let go twenty short, so the car stopped turning toward the apex with
+            // its speed still to lose.
             bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
-            bool aboveApexSpeed = speedMps > ApexSpeedWithDownforce(c.DetectedRadius) - ARS.MphToMps(20f);
-            bool entryActive = wantsPosition && aboveApexSpeed;
+            bool entryActive = wantsPosition && !HasPassedApex(apexNode);
             float offset = entryActive ? IdealLineOffset(fwdToApex, c.DetectedRadius, safeBound, speedMps) : 0f;
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
             // outside line, and everything below it is the blend toward the apex.
