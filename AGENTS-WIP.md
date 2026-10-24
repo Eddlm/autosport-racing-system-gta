@@ -238,3 +238,9 @@ What was wrong, in the order it was found (each one produced the same class of s
 
 **Still open, unchanged**: audit findings 4, 5, 7, 8, 9 from `deleg_7fee6020`; `apex-stays-referenced` and `first-corner-eagerness` in
 `docs/KNOWN-BUGS.md`.
+
+## 2026-10-24 late - corner entry/exit floor, VERIFIED
+
+Build 932: `AddCornerRegion` walks the green entry and the red exit out to at least one track width (in track nodes) from the apex.
+Driver on F8: **the cars take the corners better, with more corner to manoeuvre in.** It binds on most corners rather than rarely - the
+logged walks were returning 6 to 64 list positions - which is exactly the class of strange apex it was meant to remove.

@@ -432,7 +432,9 @@ green entry and the red exit are walked outward until they are at least `2 x Tra
 metres here), after the region clamp and before the corner is built. A corner whose entry sat a few metres from its own apex describes a
 bend the car is already inside, and every distance the manoeuvre later measures against that apex inherited the shrink. This is the
 corner table's rule, not the blend's - an earlier attempt to floor the BLEND in metres was reverted (builds 930/931) because the wrong
-end of the chain was being constrained.
+end of the chain was being constrained. **VERIFIED on F8 (driver): the cars take the corners better - there is more corner to
+manoeuvre in.** Note that it binds broadly, not rarely: the logged walks returned 6, 9, 11, 13, 19, 64 list positions, so most F8 corners
+had their entry pushed outward. That is the point - those entries were the strange apexes.
 
 **The clock leans on the car's own braking (driver, 2026-10-24, build 927).** `LineClockBrakeMphPerG 2` adds two miles an hour of clock per g
 (build 928, doubled from 1), clamped to `LineClockBrakeCapMph 10` (raised from 1 at build 929 to see the effect uncapped), measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
