@@ -106,6 +106,16 @@ same strip of road, so where two offsets agree the colours bleed into one. The h
 the 0.5 where `DrawTrackCrossingLine` puts the corner, crest and radius checks. The edge chevrons, the one drawing that sat at a lane height (0.2, over the green line where a car runs
 wide), moved to 0.6.
 
+**`fTractionCurveMax` and `fTractionCurveLateral` are a PAIR and move together (driver, measured, 2026-10-24).** The first is peak
+longitudinal grip in G, the second is peak slip **angle** in degrees, and the two are not independent in practice even though the
+meta declares them separately: the reference point where a car feels right is **2 G with 22 degrees**, and the pairing scales
+about **1:1** - roughly **11 degrees per G**. Drop the grip and leave the angle and the tyre is too *flexible laterally*: the car
+does not grip less in a straight line, it slides constantly, because 22 degrees of peak slip angle is a long way round for a tyre
+that only makes 1 G. Measured case: **1 G with 22 degrees slides on its own**; the same 1 G with about 11 degrees behaves.
+Authoring rule: halve the grip, halve the angle; raise one, raise the other. ARS reads the angle as `LateralTractionCurve` (degrees)
+and the grip as G, so a car authored outside this pairing also invalidates every threshold ARS compares against the curve - the
+slide blend's band, `SlidingFraction`, the steer ceiling and now the ABS taper all assume a peak at the authored angle.
+
 **The ABS guard is instrumented, and its response rate is the open question (2026-10-24).** `ARS.MinWheelRotation` publishes the
 smallest per-wheel `m_fRotAngVel` (`wheel+0x170`, rad/s, absolute value) and `UpdateBrakeReasonCaps` logs
 `ABS <car>: locked=.. minWheel=.. rad/s cap=.. pedal=.. mph=..` at the moment a wheel crosses `AbsLockRadPerSecond` 2, rate-limited
