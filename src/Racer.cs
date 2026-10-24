@@ -1146,7 +1146,7 @@ namespace ARS
         // Moving from the outside to the inside is a time decision: 3 s to the apex the car starts coming in, 1 s it is on the
         // inside. In metres that stretch would be 20 m at 25 km/h and 80 m at 100, which is why the distance blend arrived
         // early when slow and late when fast.
-        const float IdealLineBlendStartSeconds = 3f;
+        const float IdealLineBlendStartSeconds = 2f;
         const float IdealLineBlendEndSeconds = 1f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
