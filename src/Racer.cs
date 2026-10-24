@@ -1403,7 +1403,11 @@ namespace ARS
             // the only thing that ends the inside line is passing its apex.
             if (reason == LaneReason.ApexLine)
             {
-                bool demandInside = cornerDir * offset <= cornerDir * ownLane;
+                // Inside, measured in the corner's own frame: -cornerDir points at the apex side on either hand. Comparing
+                // cornerDir*offset with cornerDir*ownLane only means "inside" on a LEFT corner - on a right one it means the
+                // opposite, so the guard never armed and the whole inside mode was left-hand only. Running a track backwards
+                // swapped the corners that misbehaved, which is exactly what that asymmetry looks like from the seat.
+                bool demandInside = (cornerDir * offset - ownLane) * -cornerDir > 0f;
                 if (demandInside)
                 {
                     _apexLineInsideNode = apexNode;
