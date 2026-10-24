@@ -1079,8 +1079,9 @@ namespace ARS
         // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
         // needs to get out there and hold it.
         // The two halves need room, and room on this road is measured in nodes: the line exists inside two hundred of them
-        // and the outside plateaus there. The ramp takes ten half widths of nodes.
-        const float IdealLineWindowNodes = 600f;
+        // and the outside plateaus for those 600 plus the ramp. The ramp takes ten half widths of nodes.
+        const float IdealLineOutsideNodes = 600f;
+        const float IdealLineRampHalfWidths = 10f;
         const float IdealLineMaxRadiusMeters = 50f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
@@ -1184,10 +1185,11 @@ namespace ARS
             // the first half of the line, and a corner asks for it because it is a corner.
             // Only corners with a real apex get a line: past this radius the bend is a kink the car takes without moving
             // off its lane, and asking for an outside there was noise.
-            bool wantsPosition = fwdToApex >= 0 && fwdToApex <= IdealLineWindowNodes
+            float rampNodes = Math.Max(steerRefPoint.TrackHalfWidth * IdealLineRampHalfWidths, 1f);
+            bool wantsPosition = fwdToApex >= 0 && fwdToApex <= IdealLineOutsideNodes + rampNodes
                 && c.DetectedRadius < IdealLineMaxRadiusMeters;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, Math.Max(steerRefPoint.TrackHalfWidth * 10f, 1f)) : 0f;
+            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, rampNodes) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)
