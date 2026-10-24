@@ -428,7 +428,7 @@ is what let the sweep be read at all. The lesson: **the entry-speed latch is the
 If the crossing still reads as too quick, the knob is `IdealLineBlendStartSeconds`, whose steps are whole seconds.
 
 **The clock leans on the car's own braking (driver, 2026-10-24, build 927).** `LineClockBrakeMphPerG 2` adds two miles an hour of clock per g
-(build 928, doubled from 1), clamped to `LineClockBrakeCapMph 1`, measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
+(build 928, doubled from 1), clamped to `LineClockBrakeCapMph 10` (raised from 1 at build 929 to see the effect uncapped), measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
 reaches the apex later than the cached entry speed says, so the line is allowed to slow with it - by a mile an hour at most, which is
 the whole point of the cap. Reading fixed up front: the driver said 0.1 per g, and at 0.1 mph/g the cap could never bind, so the law is
 0.1 mph per 0.1 g. `Corner line` logs the effective clock and `br=` in g.

@@ -196,7 +196,7 @@ namespace ARS
         // The clock follows the car's own braking, a little: a car that is shedding speed will reach the apex later than the cached entry
         // speed says, so the line is allowed to slow with it. 0.1 mph per 0.1 g, and never more than a mile an hour either way.
         const float LineClockBrakeMphPerG = 2f;
-        const float LineClockBrakeCapMph = 1f;
+        const float LineClockBrakeCapMph = 10f;
         float _lineAlongPrev;
         float _lineDecelG;
         float _lineClockMps;
