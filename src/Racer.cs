@@ -1102,6 +1102,9 @@ namespace ARS
         const float IdealLineRampStartMeters = 50f;
         const float IdealLineApexMeters = 5f;
         const float IdealLineMaxRadiusMeters = 50f;
+        // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
+        // the point: they crawl to the first corner instead of diving for the outer edge.
+        const float IdealLineSpeedMarginMph = 20f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
         // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
@@ -1204,8 +1207,13 @@ namespace ARS
             // the first half of the line, and a corner asks for it because it is a corner.
             // Only corners with a real apex get a line: past this radius the bend is a kink the car takes without moving
             // off its lane, and asking for an outside there was noise.
+            // A car that is not going to reach the corner fast enough to need an outside does not get one. Without this, an apex
+            // near the start line has every car diving for the outer edge off the grid: the window is metres, and a car at 30 km/h
+            // is inside it for ten seconds. The margin is measured under the apex speed, so a car already slowed for the corner
+            // keeps the line it is committed to.
+            bool fastEnoughForLine = speedMps > ApexSpeedWithDownforce(c.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph);
             bool wantsPosition = metresToApex >= 0 && metresToApex <= IdealLineOutsideMeters + IdealLineRampStartMeters
-                && c.DetectedRadius < IdealLineMaxRadiusMeters;
+                && c.DetectedRadius < IdealLineMaxRadiusMeters && fastEnoughForLine;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
             lineActive = wantsPosition;
             // The extreme is the raw half width, not the half width less half a car: the line is where the car's CENTRE

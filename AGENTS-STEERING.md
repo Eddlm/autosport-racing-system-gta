@@ -582,6 +582,11 @@ asked for the outside, a reversal that read as the lane's inertia. Now the neare
 threshold the lean is the only opinion there is, exactly as before. `NearestApexAhead` is computed once in the chain and passed
 into `ComputeCornerLane`, so both halves read the same corner.
 
+**The line has a speed floor (driver, 2026-10-24).** `wantsPosition` also requires `speedMps > ApexSpeedWithDownforce(radius) -
+IdealLineSpeedMarginMph` (**20 mph**). Without it the window, being metres, keeps an apex near the start line inside it for ten
+seconds at grid speed and every car dives for the outer edge off the line. The margin is measured UNDER the apex speed, so a car
+that has already slowed for the corner keeps the line it committed to; a car crawling is simply not asked for one.
+
 **The outside is asked for by TIME to the apex, not by being overspeed (driver, 2026-10-23).** The whole `RequiresPositioning` machinery used to
 gate the corner line and it armed only on a corner that was **tight** (`R < 50`) and where the car arrived **10 mph over**
 the apex speed. It is gone: the field, `ApproachStarted`, the promotion pass that set it, `inPositionRange` and
