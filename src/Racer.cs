@@ -1069,7 +1069,7 @@ namespace ARS
         // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
         // needs to get out there and hold it.
         const float IdealLineWindowSeconds = 6f;
-        const float IdealLineMaxRadiusMeters = 150f;
+        const float IdealLineMaxRadiusMeters = 50f;
         const float IdealLineOutsideSeconds = 1.5f;
         const float IdealLineApexSeconds = 0f;
 
