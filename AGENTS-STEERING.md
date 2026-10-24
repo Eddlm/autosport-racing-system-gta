@@ -407,6 +407,14 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**The adopted corner owns the line until its apex is passed (driver, 2026-10-24, build 909).** `NearestApexAhead` now keeps returning
+`_lineCornerNode` while it is still ahead and no other corner is more than `LineApexStickyMeters 30` nearer. Without it, two apexes a
+few metres apart - a chicane, a bend detected twice - swapped identity tick after tick, and every swap reset the blend: the magenta
+line reverted to the outside mid-manoeuvre on the last two apexes of F8. The ratchet's `else`-clear is **gone**: it ran whenever the
+blend window flickered, and that window contains the speed floor, which moves with mechanical grip and downforce - i.e. it flickered
+exactly when the car was unsettled. The latch is released on adoption of a different corner (always from the outside, whatever its
+handedness) and in `Launch`. **A line, once started, is never interrupted; only a passed apex ends it.**
+
 **Edge clearances and the per-car outside bias (driver, 2026-10-24, build 907).** The outside line now sits `LaneOutsideGapMeters
 0.5` inside the guard and the lean sits `LaneInsideGapMeters 1.0` inside it, so neither names the very edge of the tarmac. On top of the
 outside gap each car rolls its own pull-in of `0..LaneBiasMaxMeters 4` metres, **once per corner** (`_lineBiasNode`) and held until it

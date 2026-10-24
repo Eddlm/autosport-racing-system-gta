@@ -187,6 +187,9 @@ namespace ARS
         // This car's own pull-in for the outside line, rolled once per corner and held until the car passes it.
         int _lineBiasNode = -1;
         float _lineBiasMeters;
+        // The corner that owns the apex line until its apex is passed. NearestApexAhead keeps handing this back while it is the
+        // nearest, which is what stops two close apexes from taking the line off each other mid-manoeuvre.
+        int _lineCornerNode = -1;
         // The direction the latched phase belongs to: a second apex in the same bend keeps the latch, a bend the other way starts
         // again from the outside.
         float _linePhaseDir;
@@ -1167,6 +1170,9 @@ namespace ARS
         const float LaneOutsideGapMeters = 0.5f;
         const float LaneInsideGapMeters = 1f;
         const float LaneBiasMaxMeters = 4f;
+        // How much nearer another corner must be before it takes the line away from the one already adopted. A few metres of
+        // hysteresis is enough: two apexes that swap places tick after tick do so by less than that.
+        const float LineApexStickyMeters = 30f;
         // Moving from the outside to the inside is a time decision: 3 s to the apex the car starts coming in, 1 s it is on the
         // inside. In metres that stretch would be 20 m at 25 km/h and 80 m at 100, which is why the distance blend arrived
         // early when slow and late when fast.
@@ -1197,16 +1203,22 @@ namespace ARS
             // corner was still two hundred metres away.
             CornerPoint best = null;
             float bestMeters = float.MaxValue;
+            CornerPoint adopted = null;
+            float adoptedMeters = float.MaxValue;
             foreach (CornerPoint corner in ARS.Corners)
             {
                 if (corner.DetectedRadius >= IdealLineMaxRadiusMeters) continue;
                 float metres = ARS.TrackPoints[corner.Node].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
                 if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metres) > ARS.RouteLengthMeters * 0.5f)
                     metres -= Math.Sign(metres) * ARS.RouteLengthMeters;
+                if (corner.Node == _lineCornerNode && metres >= 0f) { adopted = corner; adoptedMeters = metres; }
                 if (metres < 0f || metres >= bestMeters) continue;
                 bestMeters = metres;
                 best = corner;
             }
+            // The corner the line is already working on keeps it until another is this much nearer. Without it a pair of apexes a
+            // few metres apart - a chicane, a bend detected twice - swap identity tick after tick, and a swap resets the blend.
+            if (adopted != null && adoptedMeters <= bestMeters + LineApexStickyMeters) return adopted;
             return best;
         }
 
@@ -1296,6 +1308,7 @@ namespace ARS
                 && c.DetectedRadius < IdealLineMaxRadiusMeters && fastEnoughForLine;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
             lineActive = wantsPosition;
+            if (wantsPosition) _lineCornerNode = apexNode;
             // The inside guard ends with its apex - including on the tick the car passes it, when this corner stops being the nearest
             // one ahead and the ApexLine branch below no longer runs. Clearing it there alone was unreachable, so the field survived
             // the race and armed lap 2's guard before lap 2's demand had gone inside.
@@ -1319,24 +1332,24 @@ namespace ARS
                 && secondsToApex <= IdealLineBlendStartSeconds;
             if (inBlendWindow)
             {
+                // A different corner always starts from the outside. The old rule kept the latch when the handedness matched, so
+                // that two apexes of the same bend could not reset each other - NearestApexAhead's hysteresis does that now, and it
+                // does it before the identity can change, so keeping the phase here would only make a real next corner start inside.
                 if (_linePhaseNode != apexNode)
                 {
                     _linePhaseNode = apexNode;
-                    if (cornerDir != _linePhaseDir) { _linePhaseLatched = 0f; _linePhaseDir = cornerDir; }
+                    _linePhaseLatched = 0f;
+                    _linePhaseDir = cornerDir;
                 }
-                else if (_linePhaseDir == 0f) _linePhaseDir = cornerDir;
                 _linePhaseLatched = Math.Max(_linePhaseLatched, linePhase);
                 linePhase = _linePhaseLatched;
                 // Closer to the apex only: a sign that flips - a second corner of the other handedness adopted for a tick, an angle
                 // read on the wrong node - cannot throw the demand to the far side of the road once the blend has started.
                 cornerDir = _linePhaseDir != 0f ? _linePhaseDir : cornerDir;
             }
-            else
-            {
-                _linePhaseNode = -1;
-                _linePhaseLatched = 0f;
-                _linePhaseDir = 0f;
-            }
+            // No else-clear: the ratchet is released when a DIFFERENT corner is adopted, or in Launch. Clearing it whenever the
+            // blend window flickered was how the line reset mid-manoeuvre - and the window contains the speed floor, which moves
+            // with grip, so it flickers precisely when the car is unsettled.
             float offset = entryActive ? outsideBound - (outsideBound + safeBound) * linePhase : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
@@ -1899,6 +1912,7 @@ namespace ARS
             _linePhaseDir = 0f;
             // The outside bias is rolled per corner, so a restart must not inherit the previous race's pull-in.
             _lineBiasNode = -1;
+            _lineCornerNode = -1;
             Control.ThrottleReasonLevel = 1f;
             Control.BrakeReason = BrakeReason.Plan;
             Control.BrakeReasonLevel = 1f;
