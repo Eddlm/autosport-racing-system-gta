@@ -188,6 +188,7 @@ namespace ARS
         int _apexLineInsideNode = -1;
         float _apexLineInsideCornerDir = 0f;
         bool _apexInsideNow = false;
+        int _cornerLineLoggedAt = 0;
         float _cornerRefusalLoggedAt = 0f;
         bool _laneSnap = false;
         bool _laneOverride = false;
@@ -1218,6 +1219,16 @@ namespace ARS
             bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
             float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound) : 0f;
+            // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
+            if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
+                && Game.GameTime > _cornerLineLoggedAt)
+            {
+                _cornerLineLoggedAt = Game.GameTime + 1000;
+                ARS.Log(ARS.LogImportance.Info, "Corner line " + Name + ": R " + c.DetectedRadius.ToString("0.0") + (c.DetectedRadius < CornerTightRadius ? " tight" : " WIDE")
+                    + " armed=" + apexContext.RequiresPositioning + " started=" + apexContext.ApproachStarted
+                    + " entry=" + entryActive + " d=" + fwdToApex + " demand=" + (cornerDir * offset).ToString("0.00")
+                    + " own=" + ownLane.ToString("0.00") + " bound=" + safeBound.ToString("0.00"));
+            }
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
             // outside line, and everything below it is the blend toward the apex.
             if (entryActive) reason = offset >= safeBound ? LaneReason.OutsideLine : LaneReason.ApexLine;
