@@ -505,11 +505,12 @@ tethered to the car, so a geometric line could not run ahead of it and every req
 What is left is the acceleration limit (`LaneMoverAccelMps2` 14) and the speed cap (`LaneMoverSpeedCapMps` 12) - inertia,
 not distance - and the inside-mode guard, which is a direction test and not a leash.
 
-**The blend is one straight ramp over the last twenty nodes, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
-`t = clamp(1 - d / 20)` against the signed node distance to the apex, `offset = safeBound * (1 - 2t)`: the outer clamp at
-twenty nodes out, the inside clamp at the apex, linear between. `IdealLineLeadSeconds`, `IdealLineLeadMultiple`, the
-`leadAngle` geometry and the radius/speed arguments are **gone** - three of them moved the transition with the car, so the
-same corner started its blend at a different place on every approach. The distance is now **signed** (`+-count/2` on a
+**The blend is one straight ramp in TIME to the apex, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
+`t = clamp((2.5 - secondsToApex) / 2.0)`, `offset = safeBound * (1 - 2t)`: the outer clamp at **2.5 s** out, the inside clamp
+at **0.5 s**, linear between, and it holds the inside below 0.5 s and past the apex. `secondsToApex = d / max(speed, 1)` off the
+signed node distance. Time is what makes one corner read the same at any speed; a fixed node count is a different number of
+seconds at 40 km/h and at 200, so the line arrived early when slow and late when fast. `IdealLineLeadSeconds`,
+`IdealLineLeadMultiple`, the `leadAngle` geometry and `IdealLineBlendNodes` are **gone**. The distance is now **signed** (`+-count/2` on a
 circuit, negative once the apex is behind): the old fallback swapped a passed apex for a wrapped forward distance, which read
 as a near-full lap of "nodes to go" and opened the line outward on the exit.
 

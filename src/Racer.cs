@@ -1062,7 +1062,8 @@ namespace ARS
         // The profile is geometric - no time in it - but the car arrives late to it, so the whole line is pulled this
         // far toward the apex in travel: half a second at the car's own speed, which is what the steering needs to
         // actually reach the inside before the apex passes.
-        const float IdealLineBlendNodes = 20f;
+        const float IdealLineOutsideSeconds = 2.5f;
+        const float IdealLineApexSeconds = 0.5f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
         // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
@@ -1096,12 +1097,15 @@ namespace ARS
             return best;
         }
 
-        // The blend is one straight ramp over the last twenty nodes before the apex and nothing else: the outer clamp at
-        // twenty nodes out, the inside clamp at the apex, linear between. No lead time, no radius, no speed - the three
-        // that used to move the transition with the car made it start at a different place on every approach.
-        float IdealLineOffset(int distanceFromApex, float safeBound)
+        // The blend is one straight ramp in TIME to the apex: the outer clamp at 2.5 s out, the inside clamp at 0.5 s,
+        // linear between. Time rather than distance is what makes one corner read the same at any speed - a fixed node
+        // count is a different number of seconds at 40 km/h and at 200, so the line arrived early when slow and late
+        // when fast. Below 0.5 s the blend is finished and holds the inside; past the apex the distance is negative and
+        // it holds there too.
+        float IdealLineOffset(int distanceFromApex, float safeBound, float speedMps)
         {
-            float t = ARS.Clamp(1f - distanceFromApex / IdealLineBlendNodes, 0f, 1f);
+            float secondsToApex = distanceFromApex / Math.Max(speedMps, 1f);
+            float t = ARS.Clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds), 0f, 1f);
             return safeBound * (1f - 2f * t);
         }
 
@@ -1154,7 +1158,7 @@ namespace ARS
             // its speed still to lose.
             bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound) : 0f;
+            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, speedMps) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)
