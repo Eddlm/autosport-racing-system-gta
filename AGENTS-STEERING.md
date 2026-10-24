@@ -536,6 +536,14 @@ forty-five degrees on any track and there is nothing to tune. Every time clock i
 the latched approach speed that replaced both - with `IdealLineOutsideSeconds`, `IdealLineApexSeconds`, `_blendRefNode` and
 `_blendRefMps`. Time was the wrong axis: room for an outside is room on the road, and the road is nodes.
 
+**The avoidance hold is a pass in progress, not a lane the car owns (driver, 2026-10-23).** `_avoidHoldLane`/`_avoidHoldActive`
+were written only inside `ComputeAvoidanceLane` and released only by a geometric test that needs a rival still alongside - all
+of it from the 500 ms rival snapshot. Nothing cleared them in `Initialize`, so a hold from a previous race outranked the corner
+line on the next one's first corners, and a rival that despawned or a snapshot that still said "alongside" for a car already
+behind kept the held lane alive indefinitely. Now: a hard `AvoidHoldTimeoutMs` **8000** backstop, a drop when the held lane is
+outside the current road, a clear in `Initialize` (with the inside guard, which had the same problem) and a clear in
+`FinishStuckRecovery`.
+
 **Four fixes from the audit (2026-10-23).** (1) `ClampLaneToWalls` added `carHalfWidth` to **both** walls, so with no rival
 the corridor was `+- (roadWide - halfCar)` while the plateau demand is `+- roadWide`: every plateau tick the request was
 trimmed ~0.95 m and relabelled `WallClamp`, which is why the outside looked like it never fired. The inset now applies only

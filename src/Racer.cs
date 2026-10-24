@@ -450,6 +450,7 @@ namespace ARS
         int _defendEntranceNode = -1;
         float _avoidHoldLane = 0f;
         bool _avoidHoldActive = false;
+        int _avoidHoldUntil = 0;
         float _cornerLiftMps = 0f;
         float _appliedThrottleLastFrame = 1f;
         int _powerCounterLoggedAt = 0;
@@ -1270,6 +1271,8 @@ namespace ARS
         // turning in there is what puts it in the other car's nose. The request holds until nothing is left alongside.
         const float AvoidHoldBehindMeters = 14f;
         const float AvoidHoldLateralMeters = 1.5f;
+        // A pass that has taken longer than this is not a pass any more: the hold dies and the corner line gets the lane back.
+        const int AvoidHoldTimeoutMs = 8000;
 
         // Pick a lane to pass a rival ahead. If two rivals trigger on opposite sides, thread the needle.
         // The pass lane, plus its release. The release is the half that matters: a car that has just cleared the overlap
@@ -1282,9 +1285,19 @@ namespace ARS
             {
                 _avoidHoldLane = passLane;
                 _avoidHoldActive = true;
+                _avoidHoldUntil = Game.GameTime + AvoidHoldTimeoutMs;
                 return passLane;
             }
             if (!_avoidHoldActive) return 0f;
+            // The hold is a pass in progress, not a lane the car owns: it dies with the pass. The geometric release below
+            // needs a rival still alongside, and when there is none - a car that despawned, a race restarted, a snapshot
+            // that says "alongside" for a rival already behind - nothing released it and the held lane outranked the corner
+            // line for the rest of the race. This is the backstop, and Initialize/Launch clear it too.
+            if (Game.GameTime > _avoidHoldUntil || Math.Abs(_avoidHoldLane) > roadWide)
+            {
+                _avoidHoldActive = false;
+                return 0f;
+            }
 
             foreach (Rival r in Brain.Rivals)
             {
@@ -1743,6 +1756,13 @@ namespace ARS
             Control.MaxThrottleFromOffTrack = 1f;
             Control.MaxThrottleFromRecovery = 1f;
             Control.ThrottleReason = ThrottleReason.Plan;
+            // Nothing survives a re-initialise: a held pass lane and an armed inside guard both belong to a corner that is
+            // not on this track any more, and read from the next race they override its first corners.
+            _avoidHoldActive = false;
+            _avoidHoldLane = 0f;
+            _avoidHoldUntil = 0;
+            _apexInsideNow = false;
+            _apexLineInsideNode = -1;
             Control.ThrottleReasonLevel = 1f;
             Control.BrakeReason = BrakeReason.Plan;
             Control.BrakeReasonLevel = 1f;
@@ -4548,6 +4568,8 @@ namespace ARS
             _stuckPhaseEndTime = 0;
             _stuckRecoveryStartTime = 0;
             _stuckAgainSince = 0;
+            _avoidHoldActive = false;
+            _avoidHoldLane = 0f;
             _stuckExitSince = 0;
             _stuckRecoveryCooldownEndTime = Game.GameTime + StuckRecoveryCooldownMs;
         }
