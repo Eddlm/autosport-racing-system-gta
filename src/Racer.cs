@@ -1064,12 +1064,12 @@ namespace ARS
         // The profile is geometric - no time in it - but the car arrives late to it, so the whole line is pulled this
         // far toward the apex in travel: half a second at the car's own speed, which is what the steering needs to
         // actually reach the inside before the apex passes.
-        // The blend ends where it works - half a second from the apex - and starts early enough to HOLD the outside first:
-        // the corner's own entry ceiling plus four and a half seconds of positioning, because reaching the outer clamp is a
-        // lateral move the car has to make at its own pace and a short window ate the outside before it could get there.
-        const float IdealLinePositionSeconds = 4.5f;
-        const float IdealLineOutsideSeconds = RequirementLookaheadSeconds + IdealLinePositionSeconds;
-        const float IdealLineApexSeconds = 0.5f;
+        // Apex at T0, the outside-inside movement at T-2. That is the whole shape: the ramp runs from two seconds out to
+        // the apex, and the outside needs no constant of its own because everything beyond the ramp's start is already the
+        // outer clamp - the platform IS the clamp. It was being eaten because the clock ran on the apex's speed, which
+        // measures a slow corner's window in metres too short for a fast car to reach the clamp in time.
+        const float IdealLineOutsideSeconds = 2f;
+        const float IdealLineApexSeconds = 0f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
         // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
