@@ -427,6 +427,12 @@ how a car happens to enter. The constant and its term are deleted rather than le
 is what let the sweep be read at all. The lesson: **the entry-speed latch is the mando that matters; the cushion around it is not a mando.**
 If the crossing still reads as too quick, the knob is `IdealLineBlendStartSeconds`, whose steps are whole seconds.
 
+**Both ends of the manoeuvre are floored at one track width (driver, 2026-10-24, build 930).** `blendStartMeters` and
+`blendEndMeters` are `seconds x clock` raised to `2 x halfWidth`; on a slow corner the exit was 2.8 m from the apex, which a car cannot
+drive. The phase and the commitment are now computed in METRES from those two bounds (`metresToApex <= blendStartMeters` for the window,
+`<= blendEndMeters` for the commitment), with `secondsToApex` kept only for the log. Floor in metres is the only unit in which "the width
+of the road" means anything.
+
 **The clock leans on the car's own braking (driver, 2026-10-24, build 927).** `LineClockBrakeMphPerG 2` adds two miles an hour of clock per g
 (build 928, doubled from 1), clamped to `LineClockBrakeCapMph 10` (raised from 1 at build 929 to see the effect uncapped), measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
 reaches the apex later than the cached entry speed says, so the line is allowed to slow with it - by a mile an hour at most, which is
