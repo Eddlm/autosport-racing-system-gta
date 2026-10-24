@@ -1330,7 +1330,12 @@ namespace ARS
             // the mover's own guard (roadWide - carHalfWidth) is what finally places the car's CENTRE, so the body may still
             // overhang the white line at the apex - which is the point of an apex. The inside extreme is reached ONE SECOND
             // before the apex, so the car is already at the inside when it gets there instead of arriving on the way out.
-            float secondsToApex = metresToApex / Math.Max(speedMps, 1f);
+            // The clock runs on the speed the corner is TAKEN at, not on the speed the car happens to carry: braking, traffic and a
+            // throttle cut all move the live number, and the blend then opens at a different distance every lap. Distance is unchanged -
+            // only the denominator is. The price is that 2 s of apex-speed is a shorter stretch of tarmac than 2 s of approach speed, so
+            // the manoeuvre is quicker in real time than the number says.
+            float apexClockMps = Math.Max(ApexSpeedWithDownforce(c.DetectedRadius), 1f);
+            float secondsToApex = metresToApex / apexClockMps;
             float linePhase = ARS.Clamp((IdealLineBlendStartSeconds - secondsToApex)
                 / Math.Max(IdealLineBlendStartSeconds - IdealLineBlendEndSeconds, 0.01f), 0f, 1f);
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
