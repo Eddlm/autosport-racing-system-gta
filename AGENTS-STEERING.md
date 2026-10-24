@@ -407,6 +407,16 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**The entry-latched clock still depends on how the car enters (driver, 2026-10-24, build 917).** One frozen number cannot be right for
+two different approaches: a car that enters slow and accelerates keeps a low clock, so `2 × v_entry` metres arrive almost immediately
+once it is up to speed; a car that enters fast and brakes hard keeps a high clock, so the same 2 s of clock stretch over more real time
+than intended. The latch point is the window (300 m), which is a *distance* and therefore already late or early depending on speed.
+
+**The candidate fix, not applied**: latch at the moment the blend OPENS rather than at the window, with the trigger itself in live
+speed - `metresToApex <= IdealLineBlendStartSeconds * Math.Max(speedMps, 1f)` - and freeze the clock at that tick. The blend then always
+begins ~2 s of actual driving before the apex, whatever the speed, and freezing stops it reopening under braking. Cost: the trigger
+moves with speed, so the opening distance is not identical between laps - only the time is.
+
 **`cornerDir * x` is not a side-neutral coordinate (driver, 2026-10-24, build 915).** `demandInside` compared `cornerDir * offset` with
 `cornerDir * ownLane`, and that product grows toward the OUTSIDE on a left-hand corner and toward the INSIDE on a right-hand one. So the
 test could only ever read *inside* on lefts: `_apexLineInsideNode` and `_apexLineInsideCornerDir` were never set on a right, the inside
