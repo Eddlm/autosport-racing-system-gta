@@ -1370,7 +1370,8 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Corner line " + Name + ": R " + c.DetectedRadius.ToString("0.0") + (c.DetectedRadius < CornerTightRadius ? " tight" : " WIDE")
                     + " wants=" + wantsPosition
                     + " entry=" + entryActive + " t=" + secondsToApex.ToString("0.0") + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
-                    + " own=" + ownLane.ToString("0.00") + " bound=" + safeBound.ToString("0.00")
+                    + " own=" + ownLane.ToString("0.00") + " out=" + outsideBound.ToString("0.00")
+                    + " bias=" + _lineBiasMeters.ToString("0.00") + " in=" + safeBound.ToString("0.00")
                     + " apex=" + apexNode + " dir=" + cornerDir.ToString("0"));
             }
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
