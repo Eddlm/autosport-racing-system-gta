@@ -2302,10 +2302,11 @@ namespace ARS
         const float OffTrackRecoverThrottle = 0.75f;
 
         // Stability: each wheel out of contact costs a quarter of the throttle, since it cannot use the grip it has.
-        // The count is zeroes on the side-slip axis, where a decompressed wheel does not read zero; falling is twice rising.
-        const float StabilityPerWheelOff = 0.25f;
-        const float StabilityFallPerSecond = 2f;
-        const float StabilityRisePerSecond = 1f;
+        // A wheel out of contact costs a quarter of the throttle cap per second, additive - four wheels is the whole cap in
+        // one second. Recovery is one flat rate and deliberately slower than the fall: an airborne car should not be handed
+        // full throttle the instant it lands.
+        const float StabilityFallPerWheelPerSecond = 0.25f;
+        const float StabilityRisePerSecond = 0.2f;
 
         // The overspeed correction only arms while the car is going straight and up to speed: steering or slide of
         // its own puts lateral work and bump transients into the longitudinal read, and below the speed gate the
@@ -2358,7 +2359,12 @@ namespace ARS
             // The kick card plays on exactly the wheelspin this cut moderates: the card owns the pedal for its
             // window, so the field is pinned for the window rather than glided back.
             Control.MaxThrottleFromTCS = _kickPlaying ? 1f : GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
-            Control.MaxThrottleFromStability = Glide(Control.MaxThrottleFromStability, StabilityTarget(), StabilityFallPerSecond, StabilityRisePerSecond, TickScale);
+            int wheelsOffGround = ARS.WheelsOffGround(Car);
+            if (wheelsOffGround > 0)
+                Control.MaxThrottleFromStability -= StabilityFallPerWheelPerSecond * wheelsOffGround * TickScale;
+            else
+                Control.MaxThrottleFromStability += StabilityRisePerSecond * TickScale;
+            Control.MaxThrottleFromStability = ARS.Clamp(Control.MaxThrottleFromStability, 0f, 1f);
 
             Control.MaxThrottleFromOverspeed = GlideCap(Control.MaxThrottleFromOverspeed, OverspeedThrottleLevel());
 
@@ -2399,11 +2405,6 @@ namespace ARS
         // Both signals are read every tick: the old system latched them at 3 Hz and missed crests shorter than the
         // sample period. Riding above the at-rest height means the chassis is unloaded, bouncing or airborne;
         // demanding more lateral acceleration than the grip allows means the car is rotating, not cornering.
-        float StabilityTarget()
-        {
-            return Math.Max(0f, 1f - StabilityPerWheelOff * ARS.WheelsOffGround(Car));
-        }
-
         // Both TCS knobs are shares of the peak slip; the field the wheels publish is the peak times that share.
         static float SlipForShare(int sharePercent)
         {
