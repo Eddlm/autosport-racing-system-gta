@@ -498,7 +498,15 @@ The consequence is worth knowing before it reads as a fault: for one lane offset
 Its lead is the geometric one stretched by a constant multiple.
 - **The corner line is entry-only (`d5a643f`)** — the exit half and the passed/active-apex bookkeeping are deleted, so past the apex the lane comes from the next corner's entry profile or the lean, and its offset applies only while the car has asked to position and is above apex speed.
 Adjacent profiles still merge by taking the further-in of the two, and an opposite-direction pair is still excluded as a chicane.
-  **A demand behind the car's own lane holds the lane, it does not drop the line (driver, 2026-10-23).** The refusal used to
+  **The line may open the car outward, but only until the demand crosses to its inside (driver, 2026-10-23).** Two halves, one
+latch. While the demand is still **outside** the car the pull is allowed - that is the approach, the half of the outside-inside
+line that puts the car wide. The first tick the demand is **inside** the car, `_apexLineInsideNode` latches that apex, and from
+then on a demand that reads outward only holds the car where it is: no later re-read of a corner, wrapped distance or profile
+step may drag it back out, which is what reads from the seat as the line snapping the car outward mid-corner. The latch is
+keyed by apex node, so a new corner starts with the approach it is owed, and passing the apex is still the only thing that
+ends the inside line.
+
+**A demand behind the car's own lane holds the lane, it does not drop the line (driver, 2026-10-23).** The refusal used to
 `return 0f`, which reads to the caller as "this branch has no opinion": `cornerLane != 0f` failed, the chain fell through to
 `TryComputeCurveLean` and the apex line was replaced by the lean's yellow mid-corner. Measured in the log: 92 refusals in one
 session, all of them near the apex (`demand 4.13, own -3.92, 18m to apex`), because the profile can still be sitting on its

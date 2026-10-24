@@ -183,6 +183,9 @@ namespace ARS
         float _laneRequestPrev = 0f;
         float _laneRate = 0f;
         float _laneMoverLoggedAt = 0f;
+        // The apex whose demand has already crossed to the inside of the car: from then on it may hold but never pull
+        // outward. Keyed by node rather than reset, so a new corner starts with the approach it is owed.
+        int _apexLineInsideNode = -1;
         float _cornerRefusalLoggedAt = 0f;
         bool _laneSnap = false;
         bool _laneOverride = false;
@@ -1200,17 +1203,24 @@ namespace ARS
             // off the road, whose way back is this line. The comparison is made against the car's own lane rather than
             // the reference frame's, which reads inward by the bend's sagitta and would refuse the line outright on the
             // fast tight corners it exists for.
-            if (reason == LaneReason.ApexLine && cornerDir * offset > cornerDir * ownLane && OutOfTrackDistance() <= 0f)
+            // The pull may open the car outward only while the demand is still outside it: that is the approach, the
+            // half of the line that puts the car wide. The moment the demand crosses to the inside of the car, the
+            // apex side is where it lives, and no later demand may drag the car back out - which is what a re-read of
+            // a corner, a wrapped distance or a profile step up can produce, and what reads from the seat as the line
+            // snapping the car outward mid-corner. The latch is keyed by apex node, so a new corner starts clean and
+            // the only thing that ends the inside line is passing its apex.
+            if (reason == LaneReason.ApexLine)
             {
-                if (Game.GameTime > _cornerRefusalLoggedAt)
+                if (cornerDir * offset <= cornerDir * ownLane) _apexLineInsideNode = apexNode;
+                else if (_apexLineInsideNode == apexNode && OutOfTrackDistance() <= 0f)
                 {
-                    _cornerRefusalLoggedAt = Game.GameTime + 1000;
-                    ARS.Log(ARS.LogImportance.Info, "Corner line held " + Name + ": demand " + (cornerDir * offset).ToString("0.00") + ", own " + ownLane.ToString("0.00") + ", " + fwdToApex + "m to apex, R " + c.DetectedRadius.ToString("0.0") + ", " + ARS.MpsToMph(speedMps).ToString("0") + " mph");
+                    if (Game.GameTime > _cornerRefusalLoggedAt)
+                    {
+                        _cornerRefusalLoggedAt = Game.GameTime + 1000;
+                        ARS.Log(ARS.LogImportance.Info, "Corner line held " + Name + ": demand " + (cornerDir * offset).ToString("0.00") + ", own " + ownLane.ToString("0.00") + ", " + fwdToApex + "m to apex, R " + c.DetectedRadius.ToString("0.0") + ", " + ARS.MpsToMph(speedMps).ToString("0") + " mph");
+                    }
+                    return ownLane;
                 }
-                // The demand is behind the car's own lane, so following it would open the line outward. Hold the lane the
-                // car already has and KEEP THE REASON: returning zero here dropped the request, the chain fell through to
-                // the curve lean and the apex line vanished mid-corner while its apex was still ahead.
-                return ownLane;
             }
 
             return cornerDir * offset;
