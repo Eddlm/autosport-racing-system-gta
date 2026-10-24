@@ -502,7 +502,9 @@ Adjacent profiles still merge by taking the further-in of the two, and an opposi
 traversal is `2 * safeBound` - **18 m** on a wide track - and it has to fit inside the blend's 1.5 s, which needs
 `4 * 18 / 1.5^2 = 32 m/s^2` just to start and stop in the window. It ran at **14**, so the aim could not follow the ramp at
 all, and a direction change first had to spend `24 / 14 = 1.7 s` killing its own speed - longer than the whole blend. That is
-the "inertia" the driver felt. Now `LaneMoverAccelMps2` **26** and `LaneMoverSpeedCapMps` **24** (45/25 was the first, deliberately over-sized cut; 26 covers 18 m from rest in 1.66 s against a 1.5 s window, and the window does not start from rest), and when the desired rate
+the "inertia" the driver felt. Now `LaneMoverAccelMps2` **26** and `LaneMoverSpeedCapMps` **24** — **halved to 13 and 12 while the reason is `OutsideLine`**,
+because opening the line to the outer edge is a positioning choice made with room to spare and at the full rate it arrived as a
+sideways lunge; the apex side keeps the full pair (45/25 was the first, deliberately over-sized cut; 26 covers 18 m from rest in 1.66 s against a 1.5 s window, and the window does not start from rest), and when the desired rate
 reverses sign `_laneRate` is zeroed instead of being carried across: momentum the other way is a lag with nothing worth
 keeping.
 
