@@ -536,6 +536,12 @@ forty-five degrees on any track and there is nothing to tune. Every time clock i
 the latched approach speed that replaced both - with `IdealLineOutsideSeconds`, `IdealLineApexSeconds`, `_blendRefNode` and
 `_blendRefMps`. Time was the wrong axis: room for an outside is room on the road, and the road is nodes.
 
+**The line picks its own corner, and the lean is out whenever one exists (driver, 2026-10-23).** The picker used to return the
+**nearest** apex, which is usually a wide one, so `lineOwnsLane` went false between corners and the lean took the lane back -
+the yellow line on top of a stretch that was supposed to be holding the outside. `NearestApexAhead` now only considers corners
+under `IdealLineMaxRadiusMeters`, measures with `CumulativeDistance` (metres, wrapped) and requires a positive forward distance,
+and `lineOwnsLane` is simply "one was found": if a tight corner is ahead, the line owns the lane and the lean does not run.
+
 **The two protocols travel together: without an outside there is no outside-inside (driver, 2026-10-23).** `CurveLean` pulls
 **inward** from the car's own lane on any bend under `CurveLeanRadiusMeters` **500** by up to `CurveLeanPullMeters` 1, and it is
 relative, so it can never ask for the outer edge: the inside half of the protocol with the outside half missing. Worse, it ran

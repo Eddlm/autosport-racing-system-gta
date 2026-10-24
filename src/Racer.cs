@@ -656,7 +656,7 @@ namespace ARS
             // the nearest apex, so the lean must not pull the car inside first and hand the corner a reversal to make when
             // its window opens. Without an outside there is no outside-inside, and with one the lean has nothing to add.
             CornerPoint lineCorner = NearestApexAhead();
-            bool lineOwnsLane = lineCorner != null && lineCorner.DetectedRadius < IdealLineMaxRadiusMeters;
+            bool lineOwnsLane = lineCorner != null;
             if (!lineOwnsLane && TryComputeCurveLean(roadWide, speedMps, steerRefOffset, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
             bool gotActiveCorner = lineCorner != null && Lap > 0;
             float cornerLane = 0f;
@@ -1100,29 +1100,23 @@ namespace ARS
         {
             int count = ARS.TrackPoints.Count;
             if (count < 10) return null;
+            // Only the corners the line owns are candidates: past IdealLineMaxRadiusMeters the bend is a kink the car takes
+            // without leaving its lane, and picking one of those here handed the lane to the lean (yellow) while a tight
+            // corner was still two hundred metres away.
             CornerPoint best = null;
-            int bestDistance = int.MaxValue;
+            float bestMeters = float.MaxValue;
             foreach (CornerPoint corner in ARS.Corners)
             {
-                int signed = corner.Node - CurrentTrackPoint.Node;
-                if (!ARS.IsPointToPoint)
-                {
-                    signed = ((signed + count / 2) % count + count) % count - count / 2;
-                }
-                int distance = Math.Abs(signed);
-                if (distance >= bestDistance) continue;
-                bestDistance = distance;
+                if (corner.DetectedRadius >= IdealLineMaxRadiusMeters) continue;
+                float metres = ARS.TrackPoints[corner.Node].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
+                if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metres) > ARS.RouteLengthMeters * 0.5f)
+                    metres -= Math.Sign(metres) * ARS.RouteLengthMeters;
+                if (metres < 0f || metres >= bestMeters) continue;
+                bestMeters = metres;
                 best = corner;
             }
             return best;
         }
-
-        // The blend is one straight ramp in TIME to the apex: the outer clamp at 2.5 s out, the inside clamp at 0.5 s,
-        // linear between. Time rather than distance is what makes one corner read the same at any speed - a fixed node
-        // count is a different number of seconds at 40 km/h and at 200, so the line arrived early when slow and late
-        // when fast. Below 0.5 s the blend is finished and holds the inside; past the apex the distance is negative and
-        // it holds there too.
-        //
 
         float ComputeCornerLane(TrackPoint steerRefPoint, float speedMps, float ownLane, CornerPoint lineCorner, out LaneReason reason)
         {
