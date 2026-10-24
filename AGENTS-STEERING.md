@@ -407,6 +407,18 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**`cornerDir * x` is not a side-neutral coordinate (driver, 2026-10-24, build 915).** `demandInside` compared `cornerDir * offset` with
+`cornerDir * ownLane`, and that product grows toward the OUTSIDE on a left-hand corner and toward the INSIDE on a right-hand one. So the
+test could only ever read *inside* on lefts: `_apexLineInsideNode` and `_apexLineInsideCornerDir` were never set on a right, the inside
+mode never armed there, and the whole guard chain was left-hand only. The driver found it by running the same circuit **backwards** - the
+corners that misbehaved swapped sides, which is the signature of a sign asymmetry, not of a timing one. The side-neutral form is
+`(demand - ownLane) * -cornerDir > 0`, because `-cornerDir` points at the apex side on either hand. Every other use of `cornerDir` is a
+multiplication by a positive magnitude and is correct: `lane = -cornerDir * (laneEdge - gap)`,
+`commitLane = target.NodeOffset + (-cornerDir) * gap`, `inward = -_apexLineInsideCornerDir`.
+
+**Rule**: a comparison between two lane values must be made in a frame that does not depend on the corner's handedness. Multiplying
+both sides by `cornerDir` does not neutralise the sides - it mirrors one and not the other.
+
 **The last second is a commitment (driver, 2026-10-24, build 914).** Once `secondsToApex <= IdealLineBlendEndSeconds 1`, `linePhase`
 is forced to 1 and `lineActive` to true whatever the blend managed: the target IS the inside extreme. It closes every way the line could
 arrive short - a 2 s window at speed, a lean contesting the lane, a speed floor that dropped out under braking - and it is what the
