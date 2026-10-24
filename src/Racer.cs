@@ -321,15 +321,15 @@ namespace ARS
         int _brakeCommitAtGameTime = 0;
         float _brakeCommitMaxSlideDeg = 0f;
         float _brakeCommitEntryExcessMps = 0f;
-        const float BrakeGoodArrivalStep = 0.05f;   // arriving at the speed the corner asks for earns this, flat
+        const float BrakeGoodArrivalStep = 0.025f;  // arriving at the speed the corner asks for earns this, flat
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
         // Arriving at the entrance faster than the plan asked is a verdict on the plan, not on the pedal: the
         // share of full pedal cannot see a car that came in hot and still spent the approach on the brake.
-        const float BrakeEntryExcessMps = 8.9408f;  // twenty miles an hour over costs...
-        const float BrakeEntryFactorStep = 0.05f;   // ...a twentieth of the factor (0.0125 per 5 mph); linear beyond, uncapped in total
+        const float BrakeEntryExcessMps = 2.2352f;  // five miles an hour over costs...
+        const float BrakeEntryFactorStep = 0.1f;    // ...a tenth of the factor; linear beyond, uncapped in total
         const float BrakeEntryDeadbandMps = 0.89408f; // the first two mph are measurement noise, not a verdict
         const float BrakeMaxFactor = 1.5f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;

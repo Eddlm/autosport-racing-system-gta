@@ -407,11 +407,12 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
-**The brake learner was too sharp (driver, 2026-10-24, build 918).** `BrakeEntryDeadbandMps` 5 mph -> **2 mph**, and
-`BrakeEntryFactorStep` 0.2 per 20 mph -> **0.05 per 20 mph**, i.e. 0.05 per 5 mph became 0.0125 per 5 mph. At the old rates a single
-20 mph overshoot took a fifth of the factor in one lap. Now: 2 mph nothing, 5 mph -0.0075, 10 mph -0.020, 20 mph -0.045, 40 mph -0.095.
-The good-arrival step is still +0.05 flat, so the asymmetry now leans further toward braking later - deliberate, and the reason to
-watch that a corner does not creep its factor to `BrakeMaxFactor 1.5` and start missing the apex.
+**The brake learner, after three passes (driver, 2026-10-24, build 921).** `BrakeEntryDeadbandMps` **2 mph**,
+`BrakeEntryExcessMps` **5 mph**, `BrakeEntryFactorStep` **0.1** per five miles an hour over, `BrakeGoodArrivalStep` **0.025** flat. So:
+2 mph nothing, 5 mph -0.06, 10 mph -0.16, 20 mph -0.36 (clamps to `BrakeMinFactor 0.5` from a 0.75 seed), 40 mph -0.76 (clamped hard).
+The learner is sharp again by choice: a corner that is badly over-driven must be corrected in one lap, not twenty. The cost is that a
+single 20+ mph overshoot saturates the floor and recovery is ten clean laps at +0.025, so a corner can sit at 0.5 for a while after one
+bad lap - watch for that as "brakes far too early" on a corner the AI has just got wrong once.
 
 **The entry-latched clock still depends on how the car enters (driver, 2026-10-24, build 917).** One frozen number cannot be right for
 two different approaches: a car that enters slow and accelerates keeps a low clock, so `2 × v_entry` metres arrive almost immediately
