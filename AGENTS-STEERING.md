@@ -393,6 +393,10 @@ Moved whole out of the project `AGENTS.md` to keep the instruction chain inside 
    **Every lane reason passes through it** — `CurveLean`, `OutsideLine`, `ApexLine`, `CommitCard`, `Avoidance`, `RecoveryEdge` — so
    inertia is a property of the mover, not of any producer. The two escapes are `_laneSnap` (one tick, `SnapToTrack` and the per-car
    reset) and `ClampLaneToWalls`, which bounds the **request** only while the aim still rides the rate.
+   **The aim is leashed to the car** (`build 889`, `LaneTaperNearMeters 2`, `LaneTaperFarMeters 4`): the speed cap is full up to
+   2 m from the car lane and falls linearly to **zero** at 4 m, on top of the reason-based halving. Beyond the leash the lane is not
+   somewhere the car could follow it to, so moving there would only store a lunge for later; the aim leads, the car closes, the aim
+   advances again. Cap by distance: 2 m 24 m/s, 3 m 12, 3.5 m 6, 4 m and beyond 0.
    **The aim lives on the segment [car lane, demand]** - two violations, two rules. Crossing (aim and demand on opposite sides
    of the car lane) is the teleport above. **Overshoot** (same side, but the demand already inside the aim) sets `_laneOvershoot`:
    the mover's acceleration doubles - the speed cap is untouched, so it returns twice as promptly without ever moving faster than
