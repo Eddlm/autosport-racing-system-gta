@@ -1133,16 +1133,27 @@ namespace ARS
         // which puts a corner in the target exactly where the car is settling onto it. So the chord supplies the two
         // ends - the outside edge a lead before the apex, the inside edge at it - and the blend between them leaves and
         // meets both edges flat, which is the part a car at speed can actually follow.
-        // Nearest corner whose apex is still ahead of the car. All of them are candidates, flagged or not: the skip is a
-        // statement about the braking plan, and it must not take the line away from the corner being driven.
+        // Nearest corner by absolute distance, passed or not. The profile is symmetric in the distance to the apex, so it
+        // opens back outward by itself on the way out - which is the exit half of the outside-inside line. Choosing only
+        // corners still ahead cut that half off at the apex and handed the request straight to the next corner, whose
+        // demand at that distance is the outer clamp: a step from the inside edge to the outside edge, taken at the one
+        // moment the car is loading the tyre hardest. The crossover is where the two are equidistant, so the blend is
+        // continuous across the whole corner instead of resetting on it.
         CornerPoint NearestApexAhead()
         {
+            int count = ARS.TrackPoints.Count;
+            if (count < 10) return null;
             CornerPoint best = null;
             int bestDistance = int.MaxValue;
             foreach (CornerPoint corner in ARS.Corners)
             {
-                int distance = ForwardNodeDistance(corner.Node);
-                if (distance <= 0 || distance >= bestDistance) continue;
+                int signed = corner.Node - CurrentTrackPoint.Node;
+                if (!ARS.IsPointToPoint)
+                {
+                    signed = ((signed + count / 2) % count + count) % count - count / 2;
+                }
+                int distance = Math.Abs(signed);
+                if (distance >= bestDistance) continue;
                 bestDistance = distance;
                 best = corner;
             }
@@ -1230,7 +1241,9 @@ namespace ARS
                     _apexLineInsideNode = apexNode;
                     _apexLineInsideCornerDir = cornerDir;
                 }
-                _apexInsideNow = _apexLineInsideNode == apexNode;
+                // The guard ends with the apex, and must: past it the same profile opens back outward, which is the
+                // exit half of the line. Holding the guard there would pin the car to the inside all the way out.
+                _apexInsideNow = _apexLineInsideNode == apexNode && !HasPassedApex(apexNode);
                 if (!demandInside && _apexInsideNow && OutOfTrackDistance() <= 0f)
                 {
                     if (Game.GameTime > _cornerRefusalLoggedAt)

@@ -498,7 +498,16 @@ The consequence is worth knowing before it reads as a fault: for one lane offset
 Its lead is the geometric one stretched by a constant multiple.
 - **The corner line is entry-only (`d5a643f`)** — the exit half and the passed/active-apex bookkeeping are deleted, so past the apex the lane comes from the next corner's entry profile or the lean, and its offset applies only while the car has asked to position and is above apex speed.
 Adjacent profiles still merge by taking the further-in of the two, and an opposite-direction pair is still excluded as a chicane.
-  **The direction guard lives at the mover, not only in the chain (driver, 2026-10-23).** The demand-side latch was not enough:
+  **The apex is chosen by absolute distance, so the blend has an exit half (driver, 2026-10-23).** `NearestApexAhead` kept only
+corners with a positive forward distance, so the tick after the apex the request jumped from the inside clamp of that corner to
+the **outer** clamp of the next - a step from -safeBound to +safeBound at the moment the tyre is loaded hardest, which is the
+"outside-inside is not blending" the driver reported. `IdealLineOffset` is symmetric in `|d|`, so the exit half already existed:
+it was being cut off at the apex. The pick is now the corner with the smallest **absolute** distance, passed or not (wrapped to
+`+-count/2` on a circuit), so the profile opens back outward through the exit and the hand-over happens where the two corners
+are equidistant. `_apexInsideNow` therefore also carries `!HasPassedApex(apexNode)`: the inside guard has to end exactly at the
+apex, or it would pin the car to the inside through the exit that the same profile is now asking it to open out of.
+
+**The direction guard lives at the mover, not only in the chain (driver, 2026-10-23).** The demand-side latch was not enough:
 the request is rebuilt every tick, so any reason along the chain can hand the mover a value the corner would never have asked
 for - a re-read corner, a wrapped distance, another reason taking the chain for one pass. `UpdateLaneMover` therefore reads the
 request, and in inside mode asks the only question that matters before anything moves: **is this ask toward the apex or away
