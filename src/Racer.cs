@@ -186,6 +186,8 @@ namespace ARS
         // The apex whose demand has already crossed to the inside of the car: from then on it may hold but never pull
         // outward. Keyed by node rather than reset, so a new corner starts with the approach it is owed.
         int _apexLineInsideNode = -1;
+        float _apexLineInsideCornerDir = 0f;
+        bool _apexInsideNow = false;
         float _cornerRefusalLoggedAt = 0f;
         bool _laneSnap = false;
         bool _laneOverride = false;
@@ -1021,21 +1023,32 @@ namespace ARS
         // smoothly is tracked without the v^2/2a lag a pure arrival law would leave (2 m at 5 m/s).
         void UpdateLaneMover(float steerRefOffset)
         {
-            float gap = _laneRequest - _carriedLane;
+            // Inside mode, applied at the last point before the car moves: once the demand has crossed to the apex side
+            // of the car, a request that points outward is not applied - whatever produced it. That is the guard the
+            // chain cannot give, because every tick the request is rebuilt and any reason along the way can hand over a
+            // value the corner would not have asked for.
+            float request = _laneRequest;
+            if (_apexInsideNow && _apexLineInsideCornerDir != 0f && OutOfTrackDistance() <= 0f)
+            {
+                float inward = -_apexLineInsideCornerDir;
+                if ((request - steerRefOffset) * inward < 0f) request = steerRefOffset;
+            }
+
+            float gap = request - _carriedLane;
             if (float.IsNaN(gap) || float.IsInfinity(gap)) return;
 
             if (_laneSnap)
             {
                 _laneSnap = false;
-                _carriedLane = _laneRequest;
-                _laneRequestPrev = _laneRequest;
+                _carriedLane = request;
+                _laneRequestPrev = request;
                 _laneRate = 0f;
                 return;
             }
 
             float dt = Math.Min(TickScale, LaneMoverMaxStepSeconds);
-            float requestRate = ARS.Clamp((_laneRequest - _laneRequestPrev) / dt, -LaneMoverSpeedCapMps, LaneMoverSpeedCapMps);
-            _laneRequestPrev = _laneRequest;
+            float requestRate = ARS.Clamp((request - _laneRequestPrev) / dt, -LaneMoverSpeedCapMps, LaneMoverSpeedCapMps);
+            _laneRequestPrev = request;
 
             // The two terms are clamped apart: the arrival never exceeds the cap, but a request already moving at the
             // cap must not lose the arrival's headroom, or the gap can never close while the line keeps moving.
@@ -1052,7 +1065,7 @@ namespace ARS
             bool steerRefValid = !float.IsNaN(steerRefOffset) && !float.IsInfinity(steerRefOffset);
             if (steerRefValid && LeadBounded(_laneRequestReason))
             {
-                float leadSign = Math.Sign(_laneRequest - steerRefOffset);
+                float leadSign = Math.Sign(request - steerRefOffset);
                 float currentLead = leadSign * (_carriedLane - steerRefOffset);
                 float walking = leadSign * step;
                 bool inward = _laneRequestReason == LaneReason.ApexLine;
@@ -1072,7 +1085,7 @@ namespace ARS
             // lag the mover gave it — a lagged aim is a target that moves with the car, which is a limit cycle.
             if (steerRefValid)
             {
-                float intervalClamped = ARS.Clamp(_carriedLane, Math.Min(steerRefOffset, _laneRequest), Math.Max(steerRefOffset, _laneRequest));
+                float intervalClamped = ARS.Clamp(_carriedLane, Math.Min(steerRefOffset, request), Math.Max(steerRefOffset, request));
                 if (intervalClamped != _carriedLane)
                 {
                     _carriedLane = intervalClamped;
@@ -1082,7 +1095,7 @@ namespace ARS
                 if (LeadBounded(_laneRequestReason))
                 {
                     float leadCap = _laneRequestReason == LaneReason.ApexLine ? LaneInwardLeadMeters : LaneOutwardLeadMeters;
-                    float lead = ARS.Clamp(_laneRequest - steerRefOffset, -leadCap, leadCap);
+                    float lead = ARS.Clamp(request - steerRefOffset, -leadCap, leadCap);
                     float leadClamped = ARS.Clamp(_carriedLane, Math.Min(steerRefOffset, steerRefOffset + lead), Math.Max(steerRefOffset, steerRefOffset + lead));
                     if (leadClamped != _carriedLane)
                     {
@@ -1211,8 +1224,14 @@ namespace ARS
             // the only thing that ends the inside line is passing its apex.
             if (reason == LaneReason.ApexLine)
             {
-                if (cornerDir * offset <= cornerDir * ownLane) _apexLineInsideNode = apexNode;
-                else if (_apexLineInsideNode == apexNode && OutOfTrackDistance() <= 0f)
+                bool demandInside = cornerDir * offset <= cornerDir * ownLane;
+                if (demandInside)
+                {
+                    _apexLineInsideNode = apexNode;
+                    _apexLineInsideCornerDir = cornerDir;
+                }
+                _apexInsideNow = _apexLineInsideNode == apexNode;
+                if (!demandInside && _apexInsideNow && OutOfTrackDistance() <= 0f)
                 {
                     if (Game.GameTime > _cornerRefusalLoggedAt)
                     {

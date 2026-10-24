@@ -498,7 +498,15 @@ The consequence is worth knowing before it reads as a fault: for one lane offset
 Its lead is the geometric one stretched by a constant multiple.
 - **The corner line is entry-only (`d5a643f`)** — the exit half and the passed/active-apex bookkeeping are deleted, so past the apex the lane comes from the next corner's entry profile or the lean, and its offset applies only while the car has asked to position and is above apex speed.
 Adjacent profiles still merge by taking the further-in of the two, and an opposite-direction pair is still excluded as a chicane.
-  **The line may open the car outward, but only until the demand crosses to its inside (driver, 2026-10-23).** Two halves, one
+  **The direction guard lives at the mover, not only in the chain (driver, 2026-10-23).** The demand-side latch was not enough:
+the request is rebuilt every tick, so any reason along the chain can hand the mover a value the corner would never have asked
+for - a re-read corner, a wrapped distance, another reason taking the chain for one pass. `UpdateLaneMover` therefore reads the
+request, and in inside mode asks the only question that matters before anything moves: **is this ask toward the apex or away
+from it?** Away, and it is not applied - the request is replaced by the car's own lane, so the step, the feed-forward and both
+interval clamps all see a value that cannot widen the line. `_apexInsideNow` is republished by `ComputeCornerLane` every pass
+and keyed to the apex node, so a new corner starts clean and passing the apex still ends the inside line.
+
+**The line may open the car outward, but only until the demand crosses to its inside (driver, 2026-10-23).** Two halves, one
 latch. While the demand is still **outside** the car the pull is allowed - that is the approach, the half of the outside-inside
 line that puts the car wide. The first tick the demand is **inside** the car, `_apexLineInsideNode` latches that apex, and from
 then on a demand that reads outward only holds the car where it is: no later re-read of a corner, wrapped distance or profile
