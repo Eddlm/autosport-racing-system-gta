@@ -427,6 +427,12 @@ how a car happens to enter. The constant and its term are deleted rather than le
 is what let the sweep be read at all. The lesson: **the entry-speed latch is the mando that matters; the cushion around it is not a mando.**
 If the crossing still reads as too quick, the knob is `IdealLineBlendStartSeconds`, whose steps are whole seconds.
 
+**The clock leans on the car's own braking (driver, 2026-10-24, build 927).** `LineClockBrakeMphPerG 1` adds one mile an hour of clock
+per g of deceleration, clamped to `LineClockBrakeCapMph 1`, measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
+reaches the apex later than the cached entry speed says, so the line is allowed to slow with it - by a mile an hour at most, which is
+the whole point of the cap. Reading fixed up front: the driver said 0.1 per g, and at 0.1 mph/g the cap could never bind, so the law is
+0.1 mph per 0.1 g. `Corner line` logs the effective clock and `br=` in g.
+
 **The entry-latched clock still depends on how the car enters (driver, 2026-10-24, build 917).** One frozen number cannot be right for
 two different approaches: a car that enters slow and accelerates keeps a low clock, so `2 × v_entry` metres arrive almost immediately
 once it is up to speed; a car that enters fast and brakes hard keeps a high clock, so the same 2 s of clock stretch over more real time

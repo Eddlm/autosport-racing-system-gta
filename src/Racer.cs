@@ -193,6 +193,12 @@ namespace ARS
         // The speed the car carried when it entered this corner's out-in window, frozen for the whole manoeuvre: the clock then says the
         // same thing every lap, and braking, traffic or a throttle cut can no longer move where the blend opens.
         int _lineClockNode = -1;
+        // The clock follows the car's own braking, a little: a car that is shedding speed will reach the apex later than the cached entry
+        // speed says, so the line is allowed to slow with it. 0.1 mph per 0.1 g, and never more than a mile an hour either way.
+        const float LineClockBrakeMphPerG = 1f;
+        const float LineClockBrakeCapMph = 1f;
+        float _lineAlongPrev;
+        float _lineDecelG;
         float _lineClockMps;
         // One log a second at most, so a rule that fires rarely does not flood the file when it does.
         int _laneCrossLoggedAt;
@@ -1250,6 +1256,9 @@ namespace ARS
             // looks past a corner it has flagged as trivial, which swapped the head for the next apex while the car was
             // still inside the flagged one's window: the profile then read as "far away" and the line went back to the
             // outer clamp, so the car stopped turning in with the apex still ahead. Only passing the apex ends a line.
+            float alongNow = AlongTrackSpeed;
+            if (TickScale > 0.0001f) _lineDecelG = Math.Max(0f, (_lineAlongPrev - alongNow) / TickScale / 9.81f);
+            _lineAlongPrev = alongNow;
             CornerPoint c = lineCorner;
             if (c == null) return 0f;
             int apexNode = c.Node;
@@ -1340,7 +1349,8 @@ namespace ARS
             if (_lineClockNode != apexNode) { _lineClockNode = apexNode; _lineClockMps = 0f; }
             if (_lineClockMps <= 0f && metresToApex >= 0f && metresToApex <= IdealLineWindowMeters)
                 _lineClockMps = Math.Max(speedMps, 1f);
-            float secondsToApex = metresToApex / Math.Max(_lineClockMps, 1f);
+            float clockBoostMph = ARS.Clamp(_lineDecelG * LineClockBrakeMphPerG, -LineClockBrakeCapMph, LineClockBrakeCapMph);
+            float secondsToApex = metresToApex / Math.Max(_lineClockMps + ARS.MphToMps(clockBoostMph), 1f);
             float linePhase = ARS.Clamp((IdealLineBlendStartSeconds - secondsToApex)
                 / Math.Max(IdealLineBlendStartSeconds - IdealLineBlendEndSeconds, 0.01f), 0f, 1f);
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
@@ -1393,7 +1403,8 @@ namespace ARS
                     + " entry=" + entryActive + " t=" + secondsToApex.ToString("0.0") + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
                     + " own=" + ownLane.ToString("0.00") + " out=" + outsideBound.ToString("0.00")
                     + " bias=" + _lineBiasMeters.ToString("0.00") + " in=" + safeBound.ToString("0.00")
-                    + " clock=" + ARS.MpsToMph(_lineClockMps).ToString("0") + "mph"
+                    + " clock=" + ARS.MpsToMph(_lineClockMps + ARS.MphToMps(clockBoostMph)).ToString("0") + "mph"
+                    + " br=" + _lineDecelG.ToString("0.00") + "g"
                     + " apex=" + apexNode + " dir=" + cornerDir.ToString("0"));
             }
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
