@@ -485,11 +485,12 @@ asked for one metre.
 **The apex blend is a TIME law; the outside is a distance law (driver, 2026-10-24, build 896).** `IdealLineWindowMeters 300` still says
 where the line begins to be asked for, because placing the car on the outer edge is done with room to spare and does not change with
 speed. The outside-inside blend is `IdealLineBlendStartSeconds 2` to `IdealLineBlendEndSeconds 1` (three-to-one was tried first and was too early; build 897), phase computed from
-`metresToApex / apexClockMps`, where the denominator is **the speed the corner is taken at** (`ApexSpeedWithDownforce`), not the car's
-live speed (build 916, driver's call). Live speed moved with braking, traffic and throttle cuts, so the blend opened at a different
-distance every lap. The same manoeuvre in metres was 20 m at 25 km/h and 80 m at 100, so the original distance blend arrived early when
-slow and late when fast. **The known price**: 2 s of apex-speed is a shorter stretch of tarmac than 2 s of approach speed - 22 m and
-0.67 s of real time on a 40 km/h apex reached at 120 km/h - so the manoeuvre is quicker in real time than its number says. The inside extreme is now reached ONE SECOND before the apex instead of five metres. `Corner line` logs `t=` beside `d=`.
+`metresToApex / _lineClockMps`, where `_lineClockMps` is **the speed the car carried when it entered the window**, latched once per
+corner (`_lineClockNode`, build 917, driver's call). Three variants were tried and each failed for its own reason: the **live speed**
+moved the blend opening with braking, traffic and throttle cuts, so the line behaved differently every lap; the **apex speed**
+(`ApexSpeedWithDownforce`, build 916) was too slow - 2 s of a 40 km/h apex reached at 120 km/h is 22 m and 0.67 s of real time, a third
+of the intended duration; and the **distance blend** before them arrived early when slow and late when fast. The entry speed is honest
+about the approach and frozen for the corner. The inside extreme is now reached ONE SECOND before the apex instead of five metres. `Corner line` logs `t=` beside `d=`.
 The clock runs on `speedMps`, which braking lengthens, so the phase is **ratcheted per apex** (`_linePhaseNode` /
 `_linePhaseLatched`, build 898), the corner's direction latched with it (`_linePhaseDir`, build 902), and both **gated on the blend
 itself** (build 903): outside `secondsToApex <= IdealLineBlendStartSeconds` the latch is cleared, because before the blend the line
