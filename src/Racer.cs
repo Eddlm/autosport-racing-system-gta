@@ -797,17 +797,22 @@ namespace ARS
                 }
             }
 
-            // The careful extra: only while the slide is past its onset AND the car is still rotating into it, at a rate,
-            // so it builds instead of jumping. The moment the rotation changes sign the catch is over and the degrees go —
-            // that instant drop is what keeps the assist from becoming the next snap.
+            // The careful extra: it grows while the blend is committed, at a rate, so it builds instead of jumping. The
+            // reset is its own gate and a much narrower one - the rotation turning back against the slide - and that instant
+            // drop is what keeps the assist from becoming the next snap. A car sliding steadily has no rotation to reverse,
+            // so it accumulates; a car being caught is dropped to zero at once.
             float slideDeg = VehicleData.SlideAngle;
-            bool rotatingIntoSlide = Math.Abs(slideDeg) > CountersteerAssistOnsetDegrees
-                && Math.Sign(slideDeg) == Math.Sign(VehicleData.YawRotationPerSecondDegrees);
-            float assistCeilingDeg = Math.Max(0f, (CountersteerTotalShare - CountersteerSlideShare) * Math.Abs(slideDeg));
-            if (rotatingIntoSlide)
-                _countersteerAssistDeg = Math.Min(_countersteerAssistDeg + CountersteerAssistDegreesPerSecond * TickScale, assistCeilingDeg);
-            else
+            bool blendCommitted = _slidePriority > 0f;
+            bool rotationReversed = VehicleData.YawRotationPerSecondDegrees * Math.Sign(slideDeg) < 0f;
+            if (!blendCommitted || rotationReversed)
+            {
                 _countersteerAssistDeg = 0f;
+            }
+            else
+            {
+                float assistCeilingDeg = Math.Max(0f, (CountersteerTotalShare - CountersteerSlideShare) * Math.Abs(slideDeg));
+                _countersteerAssistDeg = Math.Min(_countersteerAssistDeg + CountersteerAssistDegreesPerSecond * TickScale, assistCeilingDeg);
+            }
             Control.SteerDegrees -= Math.Sign(slideDeg) * _countersteerAssistDeg;
 
             // On its aim to within the noise the command has nothing to correct and only flips sign from tick to
@@ -1376,7 +1381,9 @@ namespace ARS
         // Half the slide recovers most cars; the ones it does not are the ones still rotating into the slide, so the
         // extra is a rate that only grows while the car keeps turning that way and is dropped the instant the rotation
         // turns back. The cap is a safety: a long slide must not wind the wheel to lock on a car that is already gone.
-        const float CountersteerAssistOnsetDegrees = 10f;
+        // Two gates, not one: the extra grows whenever the blend is committed, and is reset only when the rotation turns
+        // back. Reading the same test for both left a car sliding steadily - no rotation, so no growth - with less than
+        // half the correction its slide asked for, indefinitely.
         const float CountersteerAssistDegreesPerSecond = 10f;
         // The ceiling is a share of the slide, not an angle: the blend and the assist are two halves of one question -
         // how much of the slide may the wheel answer. At 1.0 the wheel can reach the velocity vector and no further, which
