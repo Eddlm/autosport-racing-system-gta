@@ -498,7 +498,14 @@ The consequence is worth knowing before it reads as a fault: for one lane offset
 Its lead is the geometric one stretched by a constant multiple.
 - **The corner line is entry-only (`d5a643f`)** — the exit half and the passed/active-apex bookkeeping are deleted, so past the apex the lane comes from the next corner's entry profile or the lean, and its offset applies only while the car has asked to position and is above apex speed.
 Adjacent profiles still merge by taking the further-in of the two, and an opposite-direction pair is still excluded as a chicane.
-  **The blend is one straight ramp over the last twenty nodes, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
+  **The lane mover has no lateral leash to the car (driver, 2026-10-23).** `LaneInwardLeadMeters` and `LaneOutwardLeadMeters`
+(3 m each) capped how far the aim could sit from `steerRefOffset`, with a tanh taper from 1 m and two interval clamps that
+pinned `_carriedLane` between the car's own lane and the request. All of it is gone, together with `LeadBounded`: the aim was
+tethered to the car, so a geometric line could not run ahead of it and every request read as a follower rather than a target.
+What is left is the acceleration limit (`LaneMoverAccelMps2` 14) and the speed cap (`LaneMoverSpeedCapMps` 12) - inertia,
+not distance - and the inside-mode guard, which is a direction test and not a leash.
+
+**The blend is one straight ramp over the last twenty nodes, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
 `t = clamp(1 - d / 20)` against the signed node distance to the apex, `offset = safeBound * (1 - 2t)`: the outer clamp at
 twenty nodes out, the inside clamp at the apex, linear between. `IdealLineLeadSeconds`, `IdealLineLeadMultiple`, the
 `leadAngle` geometry and the radius/speed arguments are **gone** - three of them moved the transition with the car, so the

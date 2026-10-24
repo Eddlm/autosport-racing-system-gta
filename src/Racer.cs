@@ -997,27 +997,6 @@ namespace ARS
         // and walks back: the pedal path bounds its own step for the same reason.
         const float LaneMoverMaxStepSeconds = 0.1f;
 
-        // A move off the car's own line is a preference, so the aim runs at full send until this much lead past the
-        // car's own lane, then glides on a tanh toward the cap — the closer the aim rides to it, the more of its
-        // outward move is kept back, instead of a hard stop that freezes it at the wall. Measured from the car's own
-        // lane, so it travels out with the car and no lane change is cut short — only its bite is. The cap is 3 m and
-        // the taper opens at 1 m; the band length is the tanh's normaliser, so the glide leaves the open point at
-        // full speed and arrives at the cap asymptotically.
-        const float LaneOutwardLeadMeters = 3f;
-        const float LaneOutwardLeadTaperMeters = 1f;
-        // The same bound inside: the apex line may not run ahead of the car toward the vertex faster than the car can
-        // carry its nose there. The taper is the same shape and the cap is its own, because an inward lead is the
-        // entry the car has to steer into rather than a preference it can decline.
-        const float LaneInwardLeadMeters = 3f;
-        const float LaneInwardLeadTaperMeters = 1f;
-
-        // The reasons whose move off the car's own line is a preference. A recovery edge, a commit card's lane and a
-        // wall that moved the request are not preferences, and the apex crossing is lane work the corner owns.
-        static bool LeadBounded(LaneReason reason)
-        {
-            return reason == LaneReason.OutsideLine || reason == LaneReason.Avoidance || reason == LaneReason.ApexLine;
-        }
-
         // Carries the aim onto the request. The rate is bounded by the acceleration, which is what stops a
         // request that flips inside half a second from stepping the lane; the arrival term decelerates on the rate
         // that just stops in the distance left; and the request's own rate feeds forward, so a line that moves
@@ -1060,55 +1039,12 @@ namespace ARS
             _laneRate += ARS.Clamp(desiredRate - _laneRate, -rateStep, rateStep);
             float step = _laneRate * dt;
 
-            // The outward lead bound: full send below the band, a tanh share across it, and the clamp below holds
-            // the cap the glide approaches. The share normalises against the whole band, so the bite is a smooth
-            // fade from the band's own open point and the inward moves are never touched.
-            bool steerRefValid = !float.IsNaN(steerRefOffset) && !float.IsInfinity(steerRefOffset);
-            if (steerRefValid && LeadBounded(_laneRequestReason))
-            {
-                float leadSign = Math.Sign(request - steerRefOffset);
-                float currentLead = leadSign * (_carriedLane - steerRefOffset);
-                float walking = leadSign * step;
-                bool inward = _laneRequestReason == LaneReason.ApexLine;
-                float capMeters = inward ? LaneInwardLeadMeters : LaneOutwardLeadMeters;
-                float taperMeters = inward ? LaneInwardLeadTaperMeters : LaneOutwardLeadTaperMeters;
-                if (currentLead > taperMeters && walking > 0f)
-                {
-                    float remaining = Math.Max(capMeters - currentLead, 0f);
-                    float band = capMeters - taperMeters;
-                    step *= (float)(Math.Tanh(remaining) / Math.Tanh(band));
-                }
-            }
             _carriedLane += step;
-
-            // The aim may lag the request outward, but never beyond it and never across the car. With the car's own lane
-            // requested the interval is a point on the car, so the aim tracks it exactly and the car cannot chase the
-            // lag the mover gave it — a lagged aim is a target that moves with the car, which is a limit cycle.
-            if (steerRefValid)
-            {
-                float intervalClamped = ARS.Clamp(_carriedLane, Math.Min(steerRefOffset, request), Math.Max(steerRefOffset, request));
-                if (intervalClamped != _carriedLane)
-                {
-                    _carriedLane = intervalClamped;
-                    _laneRate = 0f;
-                }
-
-                if (LeadBounded(_laneRequestReason))
-                {
-                    float leadCap = _laneRequestReason == LaneReason.ApexLine ? LaneInwardLeadMeters : LaneOutwardLeadMeters;
-                    float lead = ARS.Clamp(request - steerRefOffset, -leadCap, leadCap);
-                    float leadClamped = ARS.Clamp(_carriedLane, Math.Min(steerRefOffset, steerRefOffset + lead), Math.Max(steerRefOffset, steerRefOffset + lead));
-                    if (leadClamped != _carriedLane)
-                    {
-                        _carriedLane = leadClamped;
-                        _laneRate = 0f;
-                    }
-                }
-            }
 
             // The walls bound the request alone. A bound laid on the aim is placed in one tick rather than carried
             // onto, which is the step this mover exists to remove, so a corridor that closes is carried onto like any
-            // other request and nothing below the interval and the outward lead can move the aim without inertia.
+            // other request. Nothing below this line can move the aim without inertia: the acceleration and the speed
+            // cap are the whole law, and the aim answers the geometry rather than the car's own position.
 
             if (Math.Abs(_laneRate) > 0.2f && Game.GameTime > _laneMoverLoggedAt)
             {
