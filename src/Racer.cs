@@ -1363,7 +1363,16 @@ namespace ARS
             // No else-clear: the ratchet is released when a DIFFERENT corner is adopted, or in Launch. Clearing it whenever the
             // blend window flickered was how the line reset mid-manoeuvre - and the window contains the speed floor, which moves
             // with grip, so it flickers precisely when the car is unsettled.
-            float offset = entryActive ? outsideBound - (outsideBound + safeBound) * linePhase : 0f;
+            // The last second is a commitment, not a preference. Whatever the blend managed by now - a short window at speed, a lean
+            // contesting the lane, a speed floor that dropped out under braking - inside the final second the target IS the inside
+            // extreme, and the line is active so that nothing else can claim the lane from it.
+            bool apexCommitted = secondsToApex <= IdealLineBlendEndSeconds && !HasPassedApex(apexNode);
+            if (apexCommitted)
+            {
+                linePhase = 1f;
+                lineActive = true;
+            }
+            float offset = (entryActive || apexCommitted) ? outsideBound - (outsideBound + safeBound) * linePhase : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)

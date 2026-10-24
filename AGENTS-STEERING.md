@@ -407,6 +407,12 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**The last second is a commitment (driver, 2026-10-24, build 914).** Once `secondsToApex <= IdealLineBlendEndSeconds 1`, `linePhase`
+is forced to 1 and `lineActive` to true whatever the blend managed: the target IS the inside extreme. It closes every way the line could
+arrive short - a 2 s window at speed, a lean contesting the lane, a speed floor that dropped out under braking - and it is what the
+magenta line could not do on F8, where it reached the centre and hovered without ever committing to the inside. `entryActive` still
+gates the plateau and the exit; the commitment overrides only the final second.
+
 **The adopted apex is drawn (build 913).** `ShowTrackAnalysis` now draws a white diagonal from the car to the **centre of the node**
 of the corner the lane has adopted (`Racer.LineCornerNode`), at `ApexMarkHeight 1.6` so it flies above every lane line and chevron, with
 the node number beside it. The lane's own geometry is gradual and hard to read; the identity is not - a diagonal that jumps to a distant
