@@ -282,7 +282,6 @@ namespace ARS
         float _brakeConfidenceBias;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
-        int _promotedApexNode = -1;
         // Apex nodes the scan has judged worth nothing this approach (wide and unarmed inside their window). The
         // picker looks past them, so a fast corner the car passes flat no longer makes the tight one behind it
         // promote inside its own window and lose the approach.
@@ -620,7 +619,6 @@ namespace ARS
 
             _cornerContexts.Clear();
             _cornersRevisionSeeded = -1;
-            _promotedApexNode = -1;
             _skippedApexes.Clear();
             _brakeCommitApexNode = -1;
 
@@ -3778,30 +3776,16 @@ namespace ARS
             float forwardGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
             bool flipped = false;
 
-            // A corner promoted while it is already inside the arming window has no approach left to drive, so it is
-            // skipped: the approach is judged once, here, and the outside line is never re-asked for that approach.
-            if (NextApexNode != _promotedApexNode)
-            {
-                _promotedApexNode = NextApexNode;
-                if (NextApexNode >= 0 && TryGetCornerContext(NextApexNode, out CornerContext promoted))
-                {
-                    int promotedEntrance = CornerEntranceNode(_nextApexCorner, NextApexNode);
-                    promoted.ApproachStarted = ForwardNodeDistance(promotedEntrance) / speed > RequirementLookaheadSeconds;
-                }
-            }
-
             foreach (CornerPoint corner in ARS.Corners)
             {
                 int entranceNode = corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(corner.Node, -corner.LengthStart);
                 int distance = ForwardNodeDistance(entranceNode);
                 if (!TryGetCornerContext(corner.Node, out CornerContext context)) continue;
 
-                // Positioning is armed per approach and clears once the apex is behind; braking is not cleared,
-                // because its range is measured to the entrance and the flag must outlive it to hold the plan.
+                // The skip flag clears once the apex is behind; braking is not cleared, because its range is measured to the
+                // entrance and the flag must outlive it to hold the plan.
                 if (HasPassedApex(corner.Node))
                 {
-                    context.RequiresPositioning = false;
-                    context.ApproachStarted = false;
                     _skippedApexes.Remove(corner.Node);
                 }
 
@@ -3816,7 +3800,6 @@ namespace ARS
                 float decel = Math.Max(BrakingDecelBase(corner.Node), 0.1f);
                 float brakingDistance = (speed * speed - intended * intended) / (2f * decel);
                 bool inBrakingRange = distance <= brakingDistance + BrakeHorizonMargin;
-                bool inPositionRange = tight && timeToEntrance <= RequirementLookaheadSeconds;
 
                 // A corner too wide to ask for positioning that has not asked for braking by the time the car is
                 // inside its window is one the car is passing through: it is flagged here and the picker looks past
@@ -3833,7 +3816,7 @@ namespace ARS
                     }
                 }
 
-                if (!inBrakingRange && !inPositionRange) continue;
+                if (!inBrakingRange) continue;
 
                 float arrival = speed + forwardGs * Handling.Gravity * timeToEntrance * RequirementExtrapolationScale;
                 float excess = arrival - intended;
@@ -3844,11 +3827,6 @@ namespace ARS
                 {
                     context.RequiresBraking = true;
                     _skippedApexes.Remove(corner.Node);
-                    flipped = true;
-                }
-                if (!context.RequiresPositioning && context.ApproachStarted && inPositionRange && excess > ARS.MphToMps(PositionExcessMph))
-                {
-                    context.RequiresPositioning = true;
                     flipped = true;
                 }
             }

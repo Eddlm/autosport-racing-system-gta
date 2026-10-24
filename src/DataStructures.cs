@@ -443,8 +443,6 @@ namespace ARS
         public CornerPoint Point;
         public float BrakeFactor = 0f;
         public bool RequiresBraking = false;
-        public bool RequiresPositioning = false;
-        public bool ApproachStarted = false;
     }
     public class TrackStartInfo
     {
