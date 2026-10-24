@@ -498,7 +498,15 @@ The consequence is worth knowing before it reads as a fault: for one lane offset
 Its lead is the geometric one stretched by a constant multiple.
 - **The corner line is entry-only (`d5a643f`)** — the exit half and the passed/active-apex bookkeeping are deleted, so past the apex the lane comes from the next corner's entry profile or the lean, and its offset applies only while the car has asked to position and is above apex speed.
 Adjacent profiles still merge by taking the further-in of the two, and an opposite-direction pair is still excluded as a chicane.
-  **The lane mover has no lateral leash to the car (driver, 2026-10-23).** `LaneInwardLeadMeters` and `LaneOutwardLeadMeters`
+  **The mover's acceleration is sized from the line, and a reversal drops its momentum (driver, 2026-10-23).** The outside-inside
+traversal is `2 * safeBound` - **18 m** on a wide track - and it has to fit inside the blend's 1.5 s, which needs
+`4 * 18 / 1.5^2 = 32 m/s^2` just to start and stop in the window. It ran at **14**, so the aim could not follow the ramp at
+all, and a direction change first had to spend `24 / 14 = 1.7 s` killing its own speed - longer than the whole blend. That is
+the "inertia" the driver felt. Now `LaneMoverAccelMps2` **45** and `LaneMoverSpeedCapMps` **25**, and when the desired rate
+reverses sign `_laneRate` is zeroed instead of being carried across: momentum the other way is a lag with nothing worth
+keeping.
+
+**The lane mover has no lateral leash to the car (driver, 2026-10-23).** `LaneInwardLeadMeters` and `LaneOutwardLeadMeters`
 (3 m each) capped how far the aim could sit from `steerRefOffset`, with a tanh taper from 1 m and two interval clamps that
 pinned `_carriedLane` between the car's own lane and the request. All of it is gone, together with `LeadBounded`: the aim was
 tethered to the car, so a geometric line could not run ahead of it and every request read as a follower rather than a target.

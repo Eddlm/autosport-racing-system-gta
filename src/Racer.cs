@@ -991,8 +991,12 @@ namespace ARS
         // corner at its own limit — so the cap has to sit above the line's own rate and the acceleration is the only
         // lunge knob. At 14 the aim tracks the line to 0.27 m, and a 6 m request valid for half a second moves 3.4 m
         // where it used to step the whole way.
-        const float LaneMoverAccelMps2 = 14f;
-        const float LaneMoverSpeedCapMps = 12f;
+        // Sized from the line's own geometry, not by feel: the outside-inside traversal is 2 * safeBound - 18 m on a wide
+        // track - and it has to happen inside the blend's 1.5 s, which needs 4 * 18 / 1.5^2 = 32 m/s^2 to start and stop
+        // within it. At 14 the aim could not follow the ramp at all, and a reversal first had to spend 24 / 14 = 1.7 s
+        // killing its own speed, longer than the whole window.
+        const float LaneMoverAccelMps2 = 45f;
+        const float LaneMoverSpeedCapMps = 25f;
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
         // and walks back: the pedal path bounds its own step for the same reason.
         const float LaneMoverMaxStepSeconds = 0.1f;
@@ -1035,6 +1039,9 @@ namespace ARS
             float arrivalRate = Math.Sign(gap) * Math.Min(LaneMoverSpeedCapMps, (float)Math.Sqrt(2f * LaneMoverAccelMps2 * Math.Abs(gap)));
             float desiredRate = requestRate + arrivalRate;
 
+            // A reversal drops the momentum instead of spending it: carrying speed one way while the line asks for the other
+            // is the lag that reads as the lane taking a moment to change direction, and there is nothing worth keeping.
+            if (desiredRate * _laneRate < 0f) _laneRate = 0f;
             float rateStep = LaneMoverAccelMps2 * dt;
             _laneRate += ARS.Clamp(desiredRate - _laneRate, -rateStep, rateStep);
             float step = _laneRate * dt;
