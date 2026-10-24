@@ -169,7 +169,7 @@ namespace ARS
         public static bool BrakeLearningNotify = false;
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
-        public static bool AbsEnabled = true;
+        public static bool AbsEnabled = false;
         // Flat mph added to the corner plan; Road Curvature Offset is the same knob for the route term.
         public static int CornerOffsetMph = 2;
         public static int RouteOffsetMph = 4;
@@ -1079,7 +1079,11 @@ namespace ARS
             rivalTractionMenu.Add(tcsSpanItem);
             HookListTextPicker(tcsSpanItem);
 
-            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "Cut AI brake to a fifth while a wheel has stopped turning above 15 mph, gliding back at 0.2 per second. Off lets AI brake go unlimited - plain brake force, engine-side ABS only.", AbsEnabled);
+            // Off and greyed while the native ABS question is open: GTA re-grants WF_ABS to every non-player-driven car each tick,
+            // so on an AI car this switch cannot out-brake the engine's own clamp (0.6 of slip) by more than 0.1. It stays built
+            // and one line from live, so the day STATUS_PLAYER can be put on an AI car this becomes the only ABS in play.
+            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "GTA forces native ABS on non-player driven cars. I'm working on undoing that.", false);
+            absItem.Enabled = false;
             absItem.CheckboxChanged += (sender, args) =>
             {
                 AbsEnabled = absItem.Checked;
@@ -3441,7 +3445,9 @@ namespace ARS
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
-            AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
+            // Forced off while the native-ABS question is open, whatever the stored key says: the checkbox is greyed, so a value
+            // restored from a previous session would be a switch the user cannot see or change and the car would still obey it.
+            AbsEnabled = false;
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);
             TcsTaperSpanPct = SettingsMenuStore.GetInt("TcsTaperSpanPct", TcsTaperSpanPct);
             DNFUnderTrack = SettingsMenuStore.GetBool("DNFUnderTrack", DNFUnderTrack);

@@ -116,6 +116,13 @@ Authoring rule: halve the grip, halve the angle; raise one, raise the other. ARS
 and the grip as G, so a car authored outside this pairing also invalidates every threshold ARS compares against the curve - the
 slide blend's band, `SlidingFraction`, the steer ceiling and now the ABS taper all assume a peak at the authored angle.
 
+**The ABS switch is OFF and greyed, and the taper is behind it (build 883, 2026-10-24).** `AbsEnabled` now defaults false and the
+reader forces false whatever the stored key says, because the checkbox is greyed: a restored value would be a switch the user cannot
+see and the car would still obey it. The menu copy is "GTA forces native ABS on non-player driven cars. I'm working on undoing that."
+The taper itself is unchanged behind the flag and comes back with one line. Why it is off: `AGENTS-FLAGS.md` and
+`AGENTS-VEHICLE-STATUS.md` - `Automobile.cpp:3775` re-grants `WF_ABS` to every `STATUS_PHYSICS` car each tick, and the engine's own
+clamp holds slip at 0.6, so on an AI car our 0.5 knee has 0.1 of slip to work in.
+
 **The ABS guard is instrumented, and its response rate is the open question (2026-10-24).** `ARS.MinWheelRotation` publishes the
 smallest per-wheel `m_fRotAngVel` (`wheel+0x170`, rad/s, absolute value) and `UpdateBrakeReasonCaps` logs
 `ABS <car>: locked=.. minWheel=.. rad/s cap=.. pedal=.. mph=..` at the moment a wheel crosses `AbsLockRadPerSecond` 2, rate-limited
