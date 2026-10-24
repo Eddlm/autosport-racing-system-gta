@@ -505,6 +505,14 @@ tethered to the car, so a geometric line could not run ahead of it and every req
 What is left is the acceleration limit (`LaneMoverAccelMps2` 14) and the speed cap (`LaneMoverSpeedCapMps` 12) - inertia,
 not distance - and the inside-mode guard, which is a direction test and not a leash.
 
+**The outside is asked for by TIME to the apex, not by being overspeed (driver, 2026-10-23).** `RequiresPositioning` used to
+gate the whole corner line and it armed only on a corner that was **tight** (`R < 50`) and where the car arrived **10 mph
+over** the apex speed. Once the braking plan got good enough to arrive on speed, `excess` never crossed the threshold and the
+line stopped existing: measured in one session, **65 % of samples read `armed=False`, `started=False`** and only 14 % had the
+line at all. The outside is the first half of the line, not a correction for overspeed. The gate is now
+`secondsToApex <= IdealLineWindowSeconds` (6 s = the 1.5 s ramp plus the 4.5 s the car needs to reach the clamp and hold it),
+measured on the same latched approach speed as the blend, plus `!HasPassedApex`.
+
 **The blend is one straight ramp in TIME to the apex, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
 `t = clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds))`, `offset = safeBound * (1 - 2t)`: the outer clamp at **1.5 s** out, the inside clamp
 at the apex (**0 s**), linear between, and it holds the inside below 0.5 s and past the apex. `secondsToApex = d / max(approachSpeed, 1)` off the

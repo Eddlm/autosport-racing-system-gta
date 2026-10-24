@@ -1068,6 +1068,9 @@ namespace ARS
         // the apex, and the outside needs no constant of its own because everything beyond the ramp's start is already the
         // outer clamp - the platform IS the clamp. It was being eaten because the clock ran on the apex's speed, which
         // measures a slow corner's window in metres too short for a fast car to reach the clamp in time.
+        // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
+        // needs to get out there and hold it.
+        const float IdealLineWindowSeconds = 6f;
         const float IdealLineOutsideSeconds = 1.5f;
         const float IdealLineApexSeconds = 0f;
 
@@ -1169,22 +1172,28 @@ namespace ARS
             // hour above the apex speed, which dropped it exactly while the car was still closing: the entry went out to
             // the clamp, reached the inside and then let go twenty short, so the car stopped turning toward the apex with
             // its speed still to lose.
-            bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
-            bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-                        if (_blendRefNode != apexNode)
+            // The window is TIME to the apex, and the only thing that opens it is being inside it. `RequiresPositioning` used
+            // to gate this as well and it armed only on a corner that was TIGHT and where the car arrived ten miles an hour
+            // over - so once the braking plan got good enough to arrive on speed, the line stopped existing: 65 % of the
+            // samples in one session read armed=False, started=False. The outside is not a correction for overspeed, it is
+            // the first half of the line, and a corner asks for it because it is a corner.
+            if (_blendRefNode != apexNode)
             {
                 _blendRefNode = apexNode;
                 _blendRefMps = 0f;
             }
             _blendRefMps = Math.Max(_blendRefMps, speedMps);
-            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, _blendRefMps) : 0f;
+            float secondsToApex = fwdToApex / Math.Max(_blendRefMps, 1f);
+            bool wantsPosition = fwdToApex >= 0 && secondsToApex <= IdealLineWindowSeconds;
+            bool entryActive = wantsPosition && !HasPassedApex(apexNode);
+                        float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, _blendRefMps) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)
             {
                 _cornerLineLoggedAt = Game.GameTime + 1000;
                 ARS.Log(ARS.LogImportance.Info, "Corner line " + Name + ": R " + c.DetectedRadius.ToString("0.0") + (c.DetectedRadius < CornerTightRadius ? " tight" : " WIDE")
-                    + " armed=" + apexContext.RequiresPositioning + " started=" + apexContext.ApproachStarted
+                    + " t=" + secondsToApex.ToString("0.00") + " wants=" + wantsPosition
                     + " entry=" + entryActive + " d=" + fwdToApex + " demand=" + (cornerDir * offset).ToString("0.00")
                     + " own=" + ownLane.ToString("0.00") + " bound=" + safeBound.ToString("0.00"));
             }
