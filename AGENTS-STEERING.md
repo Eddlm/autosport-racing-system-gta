@@ -407,6 +407,19 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**The car's lane is measured in the car's own node frame (build 905, audit `deleg_7fee6020`).** `steerRefOffset` used to be
+`SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction)` against the steer reference, which sits up to 30 m
+ahead: the car's position then picks up the sagitta of that chord, `L^2/2R` - 9 m on a 50 m corner, sign following the corner, so a
+car dead centre read as being at the outer edge. Every same-side test in the mover (cross, overshoot, leash, the inside guard's hold
+value) is made against this number. It is now measured against `CurrentTrackPoint`.
+
+**Three pieces of latch state ended a race and could start the next one (build 905).** `_linePhaseNode/_linePhaseLatched/_linePhaseDir`
+are cleared in `Launch` (they are keyed by node INDEX, which means nothing across tracks); `_apexLineInsideNode` is now cleared whenever
+its apex is behind the car, outside the `ApexLine` branch - the clear inside that branch was unreachable, because the branch only runs
+while the apex is still ahead, which is how lap 2 armed the guard before its own demand had gone inside; and the blend's armour is gated
+on `inBlendWindow` (window, radius, apex ahead, time) and NOT on the speed floor, because that floor moves with mechanical grip and one
+tick under it swept the ratchet away mid-corner.
+
 **The lean names the inside; the curvature sets the approach rate (driver, 2026-10-24, build 899).** `TryComputeCurveLean` used to
 return `steerRefOffset - cornerDir * pull` with `pull` up to 1 m: a RELATIVE target, so the line followed the car's own drift - a hug,
 not a correction - and the sampled-node sign made it move erratically. Now it returns the inside LANE, `-cornerDir * laneEdge`

@@ -660,7 +660,10 @@ namespace ARS
 
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float drivableEdge = Math.Max(roadWide - carHalfWidth, 0f);
-            float steerRefOffset = ARS.SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction);
+            // Measured in the CAR's own node frame. Against the steer reference - up to thirty metres ahead - the car's position
+            // picks up the sagitta of that chord, L^2/2R: nine metres on a fifty-metre corner, and its sign follows the corner,
+            // so a car dead centre read as being at the outer edge. Every same-side test in the mover is made against this value.
+            float steerRefOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
             // A lane nobody defines holds the one the car is already in. Zero is the centre lane, not the absence of
             // an answer, so seeding the chain with it would steer every car back to the middle of the road on a
             // straight, where neither the lean nor a corner line has an opinion.
@@ -1276,6 +1279,10 @@ namespace ARS
                 && c.DetectedRadius < IdealLineMaxRadiusMeters && fastEnoughForLine;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
             lineActive = wantsPosition;
+            // The inside guard ends with its apex - including on the tick the car passes it, when this corner stops being the nearest
+            // one ahead and the ApexLine branch below no longer runs. Clearing it there alone was unreachable, so the field survived
+            // the race and armed lap 2's guard before lap 2's demand had gone inside.
+            if (_apexLineInsideNode >= 0 && HasPassedApex(_apexLineInsideNode)) _apexLineInsideNode = -1;
             // The phase names the offset: +halfWidth is the outer edge, -halfWidth the inner one. Both are the RAW half width;
             // the mover's own guard (roadWide - carHalfWidth) is what finally places the car's CENTRE, so the body may still
             // overhang the white line at the apex - which is the point of an apex. The inside extreme is reached ONE SECOND
@@ -1288,8 +1295,12 @@ namespace ARS
             // a new corner starts from the outside.
             // The armour exists only where the blend exists: inside the last IdealLineBlendStartSeconds before the apex. Before that
             // the line is asking for the outside and there is nothing to ratchet, and a direction latched 300 m out would follow the
-            // car into situations the corner knows nothing about.
-            if (entryActive && secondsToApex <= IdealLineBlendStartSeconds)
+            // car into situations the corner knows nothing about. The SPEED floor is deliberately not part of this test: it moves with
+            // mechanical grip and downforce, and one tick under it used to sweep the ratchet away mid-corner.
+            bool inBlendWindow = metresToApex >= 0 && metresToApex <= IdealLineWindowMeters
+                && c.DetectedRadius < IdealLineMaxRadiusMeters && !HasPassedApex(apexNode)
+                && secondsToApex <= IdealLineBlendStartSeconds;
+            if (inBlendWindow)
             {
                 if (_linePhaseNode != apexNode)
                 {
@@ -1347,10 +1358,7 @@ namespace ARS
                 }
                 // The guard ends with the apex, and must: past it the same profile opens back outward, which is the
                 // exit half of the line. Holding the guard there would pin the car to the inside all the way out.
-                // The latch itself is dropped at the apex: kept, it made lap 2 start with the guard already armed at a
-                // corner lap 1 had driven normally, which is a lap-1-versus-lap-N difference at an identical corner.
-                if (HasPassedApex(apexNode)) _apexLineInsideNode = -1;
-                _apexInsideNow = _apexLineInsideNode == apexNode && !HasPassedApex(apexNode);
+                _apexInsideNow = _apexLineInsideNode == apexNode;
                 if (!demandInside && _apexInsideNow && OutOfTrackDistance() <= 0f)
                 {
                     if (Game.GameTime > _cornerRefusalLoggedAt)
@@ -1867,6 +1875,11 @@ namespace ARS
             _avoidHoldUntil = 0;
             _apexInsideNow = false;
             _apexLineInsideNode = -1;
+            // The blend's ratchet is state too, and it is keyed by node INDEX: kept across a restart it can arm the inside extreme
+            // on the first corner of the next race from an index that belongs to a different track.
+            _linePhaseNode = -1;
+            _linePhaseLatched = 0f;
+            _linePhaseDir = 0f;
             Control.ThrottleReasonLevel = 1f;
             Control.BrakeReason = BrakeReason.Plan;
             Control.BrakeReasonLevel = 1f;
