@@ -3216,13 +3216,13 @@ namespace ARS
             return _random.Next(min, max);
         }
 
-        // The lane chain draws four lines over the same strip of road, so each one sits at its own height or two colours
-        // bleed into one where the offsets agree. Every step is at least 0.05, and the whole ladder stays under 0.5,
-        // which is where DrawTrackCrossingLine puts the corner, crest and radius checks.
-        const float LaneHeightCentre = 0.10f;
-        const float LaneHeightCurrent = 0.20f;
-        const float LaneHeightCarried = 0.32f;
-        const float LaneHeightRequest = 0.44f;
+        // The lane chain draws four lines over the same strip of road, so each colour gets its own height or two of them
+        // bleed into one where the offsets agree. One step of 0.025 per lane, in chain order, and the whole ladder stays
+        // low: these lines are read against the road, not stacked above it.
+        const float LaneHeightCentre = 0.075f;
+        const float LaneHeightCurrent = 0.100f;
+        const float LaneHeightCarried = 0.125f;
+        const float LaneHeightRequest = 0.150f;
 
         public static void DrawLine(Vector3 from, Vector3 to, Color color)
         {

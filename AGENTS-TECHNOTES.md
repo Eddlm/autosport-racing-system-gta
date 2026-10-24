@@ -101,9 +101,9 @@ Two systems read the road ahead every tick and each derives its own governor. Th
 
 **Every lane colour has its own height, and the ladder is named (driver, 2026-10-23).** The lane chain draws four lines over the
 same strip of road, so where two offsets agree the colours bleed into one. The heights are now four constants in
-`AutosportRacingSystem.cs` - `LaneHeightCentre` 0.10, `LaneHeightCurrent` 0.20, `LaneHeightCarried` 0.32, `LaneHeightRequest`
-0.44 - each step at least 0.05 and the whole ladder under 0.5, which is where `DrawTrackCrossingLine` puts the corner, crest
-and radius checks. The edge chevrons, the one drawing that sat at a lane height (0.2, over the green line where a car runs
+`AutosportRacingSystem.cs` - `LaneHeightCentre` **0.075**, `LaneHeightCurrent` **0.100**, `LaneHeightCarried` **0.125**,
+`LaneHeightRequest` **0.150** - one step of 0.025 per lane in chain order, low enough to be read against the road, and clear of
+the 0.5 where `DrawTrackCrossingLine` puts the corner, crest and radius checks. The edge chevrons, the one drawing that sat at a lane height (0.2, over the green line where a car runs
 wide), moved to 0.6.
 
 **The brake learner's verdict is the arrival speed, not the pedal (driver, 2026-10-23).** The old law scored the *share
