@@ -536,6 +536,15 @@ forty-five degrees on any track and there is nothing to tune. Every time clock i
 the latched approach speed that replaced both - with `IdealLineOutsideSeconds`, `IdealLineApexSeconds`, `_blendRefNode` and
 `_blendRefMps`. Time was the wrong axis: room for an outside is room on the road, and the road is nodes.
 
+**The inside guard is re-armed every pass, and its firing is logged (driver, 2026-10-23).** `_apexInsideNow` is READ
+unconditionally by `UpdateLaneMover` but was only WRITTEN inside `ComputeCornerLane`'s `ApexLine` branch - so a value latched
+at one corner survived the apex (where the reason is no longer `ApexLine`, so the branch never runs), survived the gap to the
+next corner, and then refused that corner's outward request using the PREVIOUS corner's direction. That is the intermittent
+"the outside never fires", never the same corner because it depends on which corner last latched and which way the next one
+turns. The flag is now cleared at the top of `ComputeCornerLane` and again in the chain when no corner is evaluated, and the
+guard logs `Lane guard <car>: held at X, request was Y, inside dir Z, carrier W` once a second so the next session proves
+whether it is still firing.
+
 **The line picks its own corner, and the lean is out whenever one exists (driver, 2026-10-23).** The picker used to return the
 **nearest** apex, which is usually a wide one, so `lineOwnsLane` went false between corners and the lean took the lane back -
 the yellow line on top of a stretch that was supposed to be holding the outside. `NearestApexAhead` now only considers corners

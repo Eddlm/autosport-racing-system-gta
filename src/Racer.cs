@@ -188,6 +188,7 @@ namespace ARS
         int _apexLineInsideNode = -1;
         float _apexLineInsideCornerDir = 0f;
         bool _apexInsideNow = false;
+        int _laneGuardLoggedAt = 0;
         int _cornerLineLoggedAt = 0;
         float _cornerRefusalLoggedAt = 0f;
         bool _laneSnap = false;
@@ -662,6 +663,7 @@ namespace ARS
             bool cornerLineActive = false;
             if (lineCorner != null && Lap > 0)
                 cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, lineCorner, out cornerReason, out cornerLineActive);
+            else _apexInsideNow = false;   // no corner is being evaluated, so nothing may keep the inside guard armed
             if (!cornerLineActive && TryComputeCurveLean(roadWide, speedMps, steerRefOffset, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
             if (cornerLane != 0f) { laneRequest = cornerLane; laneReason = cornerReason; }
             float avoidAheadLane = ComputeAvoidanceLane(roadWide);
@@ -1019,7 +1021,15 @@ namespace ARS
             if (_apexInsideNow && _apexLineInsideCornerDir != 0f && OutOfTrackDistance() <= 0f)
             {
                 float inward = -_apexLineInsideCornerDir;
-                if ((request - steerRefOffset) * inward < 0f) request = steerRefOffset;
+                if ((request - steerRefOffset) * inward < 0f)
+                {
+                    if (Game.GameTime > _laneGuardLoggedAt)
+                    {
+                        _laneGuardLoggedAt = Game.GameTime + 1000;
+                        ARS.Log(ARS.LogImportance.Info, "Lane guard " + Name + ": held at " + steerRefOffset.ToString("0.00") + ", request was " + request.ToString("0.00") + ", inside dir " + inward.ToString("0") + ", carrier " + _carriedLane.ToString("0.00"));
+                    }
+                    request = steerRefOffset;
+                }
             }
 
             float gap = request - _carriedLane;
@@ -1123,6 +1133,9 @@ namespace ARS
         {
             reason = LaneReason.OwnLane;
             lineActive = false;
+            // Reset every pass, then let the inside branch set it again. The flag is READ unconditionally by the mover, so a
+            // value left over from the last corner kept refusing outward asks on a corner the car had not even reached yet.
+            _apexInsideNow = false;
             // The lane belongs to the corner the car is approaching, never to the head of the plan's queue. That queue
             // looks past a corner it has flagged as trivial, which swapped the head for the next apex while the car was
             // still inside the flagged one's window: the profile then read as "far away" and the line went back to the
