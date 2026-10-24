@@ -862,6 +862,15 @@ namespace ARS
                 endPosition = apexPosition + SpanMaxDistanceNodes;
                 ARS.Log(ARS.LogImportance.Info, "Corner add CAP: apex=" + apexNode + " side=exit priorEnd=" + priorEnd + " (distance=" + (priorEnd - apexPosition) + ") clamped to end=" + endPosition + " (distance=" + (endPosition - apexPosition) + "); region=" + regionStart + "-" + regionEnd + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " walkAtCap" : " walkStoppedEarly") + " unclampedEnd=" + unclampedEnd);
             }
+            // The entry and the exit may not sit closer to the apex than the road is WIDE there. A corner whose green entry is a few
+            // metres from its own apex describes a bend the car is already inside, and the manoeuvre built on it opens and closes inside
+            // a car's length. Measured in track nodes, which is what the distances between nodes are: metres.
+            int widthNodes = (int)Math.Ceiling(2f * ARS.TrackPoints[apexNode].TrackHalfWidth);
+            while (startPosition > 0 && apexNode - scanNodes[startPosition] < widthNodes) startPosition--;
+            while (endPosition < scanNodes.Count - 1 && scanNodes[endPosition] - apexNode < widthNodes) endPosition++;
+            startPosition = Math.Max(0, Math.Min(startPosition, apexPosition));
+            endPosition = Math.Min(scanNodes.Count - 1, Math.Max(endPosition, apexPosition));
+
             // Gates the corner: how far the road runs before it opens to twice the apex's smoothed radius. Measured
             // over the walk's whole length, not over the 40-node span the corner is placed with, so it can say "never
             // within 500 nodes" where LengthEnd can only ever say 40.
