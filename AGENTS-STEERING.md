@@ -408,7 +408,9 @@ the `roadWide` clamp it used to end with was the aim point's own clamp repeated 
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
 **The brake learner, after three passes (driver, 2026-10-24, build 921).** `BrakeEntryDeadbandMps` **2 mph**,
-`BrakeEntryExcessMps` **5 mph**, `BrakeEntryFactorStep` **0.1** per five miles an hour over, `BrakeGoodArrivalStep` **0.025** flat. So:
+`BrakeEntryExcessMps` **5 mph**, `BrakeEntryFactorStep` **0.1** per five miles an hour over, `BrakeGoodArrivalStep` **0.025** flat. Both steps
+are **absolute** in the factor's own units (`BrakeMinFactor 0.5` .. `BrakeMaxFactor 1.5`), never a percentage of it - the driver asked for
+absolute and the law must stay additive. So:
 2 mph nothing, 5 mph -0.06, 10 mph -0.16, 20 mph -0.36 (clamps to `BrakeMinFactor 0.5` from a 0.75 seed), 40 mph -0.76 (clamped hard).
 The learner is sharp again by choice: a corner that is badly over-driven must be corrected in one lap, not twenty. The cost is that a
 single 20+ mph overshoot saturates the floor and recovery is ten clean laps at +0.025, so a corner can sit at 0.5 for a while after one
