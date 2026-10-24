@@ -189,6 +189,8 @@ namespace ARS
         float _apexLineInsideCornerDir = 0f;
         bool _apexInsideNow = false;
         int _cornerLineLoggedAt = 0;
+        int _blendRefNode = -1;
+        float _blendRefMps = 0f;
         float _cornerRefusalLoggedAt = 0f;
         bool _laneSnap = false;
         bool _laneOverride = false;
@@ -1103,12 +1105,15 @@ namespace ARS
         // when fast. Below 0.5 s the blend is finished and holds the inside; past the apex the distance is negative and
         // it holds there too.
         //
-        // The clock is the APEX's own speed, not the car's: a live speed makes `d / v` grow every time the car brakes,
-        // so the countdown expanded under a braking car and the line reopened outward mid-corner. The apex speed is a
-        // property of the corner, constant for the whole approach, so the countdown can only shrink.
-        float IdealLineOffset(int distanceFromApex, float safeBound, float apexSpeedMps)
+        // The clock is the fastest the car has been on this approach, latched per apex. The live speed makes `d / v` grow
+        // every time the car brakes, so the countdown would expand under a braking car and the line would reopen outward
+        // mid-corner; the apex speed fixes that but measures the window at the speed the car will LEAVE with, which is far
+        // too short in metres for a slow corner reached fast - at 200 km/h the whole two seconds fit in under one, and the
+        // car never reaches the outside before the line starts closing. Entry speed is the honest one: wide enough to
+        // open, and it can only ratchet up, never down.
+        float IdealLineOffset(int distanceFromApex, float safeBound, float approachSpeedMps)
         {
-            float secondsToApex = distanceFromApex / Math.Max(apexSpeedMps, 1f);
+            float secondsToApex = distanceFromApex / Math.Max(approachSpeedMps, 1f);
             float t = ARS.Clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds), 0f, 1f);
             return safeBound * (1f - 2f * t);
         }
@@ -1162,7 +1167,13 @@ namespace ARS
             // its speed still to lose.
             bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, ApexSpeedWithDownforce(c.DetectedRadius)) : 0f;
+                        if (_blendRefNode != apexNode)
+            {
+                _blendRefNode = apexNode;
+                _blendRefMps = 0f;
+            }
+            _blendRefMps = Math.Max(_blendRefMps, speedMps);
+            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, _blendRefMps) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)
