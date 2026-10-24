@@ -513,8 +513,8 @@ tethered to the car, so a geometric line could not run ahead of it and every req
 What is left is the acceleration limit (`LaneMoverAccelMps2` 14) and the speed cap (`LaneMoverSpeedCapMps` 12) - inertia,
 not distance - and the inside-mode guard, which is a direction test and not a leash.
 
-**The line is pure node geometry now (driver, 2026-10-23).** `fwdToApex <= IdealLineWindowNodes` 200 opens the line, and inside
-it `IdealLineOffset` is `t = clamp((ramp - d) / ramp)` with `ramp = 2 * TrackHalfWidth`: the outer clamp at the ramp's start,
+**The line is pure node geometry now (driver, 2026-10-23).** `fwdToApex <= IdealLineWindowNodes` **600** opens the line, and inside
+it `IdealLineOffset` is `t = clamp((ramp - d) / ramp)` with `ramp = 4 * TrackHalfWidth`: the outer clamp at the ramp's start,
 the inside clamp on the apex, straight between. The ramp length is the traversal itself, so the line crosses the road at
 forty-five degrees on any track and there is nothing to tune. Every time clock is gone - the live speed, the apex speed and
 the latched approach speed that replaced both - with `IdealLineOutsideSeconds`, `IdealLineApexSeconds`, `_blendRefNode` and

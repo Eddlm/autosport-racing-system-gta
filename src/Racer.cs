@@ -1079,8 +1079,8 @@ namespace ARS
         // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
         // needs to get out there and hold it.
         // The two halves need room, and room on this road is measured in nodes: the line exists inside two hundred of them
-        // and the outside plateaus there.
-        const float IdealLineWindowNodes = 200f;
+        // and the outside plateaus there. The ramp takes four half widths of nodes.
+        const float IdealLineWindowNodes = 600f;
         const float IdealLineMaxRadiusMeters = 50f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
@@ -1187,7 +1187,7 @@ namespace ARS
             bool wantsPosition = fwdToApex >= 0 && fwdToApex <= IdealLineWindowNodes
                 && c.DetectedRadius < IdealLineMaxRadiusMeters;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, Math.Max(steerRefPoint.TrackHalfWidth * 2f, 1f)) : 0f;
+            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, Math.Max(steerRefPoint.TrackHalfWidth * 4f, 1f)) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)
