@@ -539,8 +539,11 @@ the latched approach speed that replaced both - with `IdealLineOutsideSeconds`, 
 **The line picks its own corner, and the lean is out whenever one exists (driver, 2026-10-23).** The picker used to return the
 **nearest** apex, which is usually a wide one, so `lineOwnsLane` went false between corners and the lean took the lane back -
 the yellow line on top of a stretch that was supposed to be holding the outside. `NearestApexAhead` now only considers corners
-under `IdealLineMaxRadiusMeters`, measures with `CumulativeDistance` (metres, wrapped) and requires a positive forward distance,
-and `lineOwnsLane` is simply "one was found": if a tight corner is ahead, the line owns the lane and the lean does not run.
+under `IdealLineMaxRadiusMeters`, measures with `CumulativeDistance` (metres, wrapped) and requires a positive forward distance.
+The lean's gate is the line's **activity**, not its existence: `ComputeCornerLane` returns `lineActive = wantsPosition` (inside
+the window, apex still ahead) and the chain skips `CurveLean` exactly then. Gating on "a tight corner exists somewhere ahead"
+had switched the lean off for most of a lap; the rule is with an outside there is no hug-inside, and outside that window the
+lean is free.
 
 **The two protocols travel together: without an outside there is no outside-inside (driver, 2026-10-23).** `CurveLean` pulls
 **inward** from the car's own lane on any bend under `CurveLeanRadiusMeters` **500** by up to `CurveLeanPullMeters` 1, and it is
