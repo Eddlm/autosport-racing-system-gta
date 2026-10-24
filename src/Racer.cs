@@ -753,11 +753,12 @@ namespace ARS
             // Damp the excess over the yaw the aim point requires, not over zero which taxes every steady corner; the
             // slide blend keeps the zero reference, since its wanted rotation is the countersteer's.
             float fwdSpeed = ARS.GetForwardSpeed(Car);
-            // The blend's weight: the slide is answered from half of the authored peak slip and at full weight by
-            // four-fifths of it, so a slide is caught before the tyres' limit is gone. Both bands read the car's own
-            // tyres, not the speed-scaled peak, so the response is the same at every speed.
-            if (Handling.LateralTractionCurve > 0.01f && fwdSpeed >= 2f)
-                _slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), Handling.LateralTractionCurve * SlideBlendStartFraction, Handling.LateralTractionCurve * SlideBlendFullFraction, 0f, 1f, true);
+            // The blend's weight: the slide is answered from half the tyre's peak slip angle and at full weight by one
+            // and a half times it. The reference is the peak **at the current speed**, because GTA scales the lateral
+            // curve by speed: a tyre peaking at 11.6 degrees at 20 mph peaks at 3.7 at 200, so a fixed angle measures a
+            // different part of the curve at every speed.
+            if (TRLateralAtSpeed > 0.01f && fwdSpeed >= 2f)
+                _slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), TRLateralAtSpeed * SlideBlendStartFraction, TRLateralAtSpeed * SlideBlendFullFraction, 0f, 1f, true);
             else
                 _slidePriority = 0f;
             float yawTarget = 0f;
@@ -4463,7 +4464,7 @@ namespace ARS
             if (ControlledByPlayer || ARS.GetForwardSpeed(Car) <= 0f
                 || VehicleMemory.GetDriveBiasFront(Car) > KickMaxDriveBiasFront
                 || Game.GameTime < _kickCooldownUntil || !GearCanKick()
-                || Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * SlideBlendStartFraction)
+                || Math.Abs(VehicleData.SlideAngle) >= TRLateralAtSpeed * SlideBlendStartFraction)
             {
                 _kickArmSince = 0;
                 return;

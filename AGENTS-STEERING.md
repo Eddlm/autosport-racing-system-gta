@@ -429,8 +429,15 @@ only reduce the correction: **it increases the occasions**. It is also a persona
 exists — a tail-happy car is one with this knob low.
 
 **The blend's band is wide on purpose: 0.5 to 1.5 of the authored peak slip.** `SlideBlendStartFraction` 0.5 and
-`SlideBlendFullFraction` 1.5, both against `Handling.LateralTractionCurve` and never `TRLateralAtSpeed`, so the band is
-the same at every speed. For a 22-degree tyre that is **11 to 33 degrees of slide**, and full priority — the point where
+`SlideBlendFullFraction` 1.5.
+
+**Both bands read `TRLateralAtSpeed`, the peak at the current speed (driver, 2026-10-23).** They used to read the authored
+`Handling.LateralTractionCurve` so the response was the same at every speed, and that was wrong for the reason the engine
+itself imposes: GTA scales the lateral curve by speed, so a tyre peaking at 11.6 degrees at 20 mph peaks at 3.7 at 200.
+A fixed angle therefore measured a different part of the curve at every speed — at 200 mph the tyre was already at the
+floor of its curve from four degrees while the blend did not commit until eleven. The band is now a fraction of the live
+peak, so it narrows as the speed rises and the same slide fraction is answered at both ends. The throttle-kick gate reads
+the same reference. For a 22-degree tyre that is **11 to 33 degrees of slide**, and full priority — the point where
 the blend answers the whole of `CountersteerSlideShare` — is only reached at 33. What that changes: `IsFullCountersteer`
 needs priority 1, so the pedal handover and the projection's yield now begin at 33 degrees rather than 17.6; and the
 assist's own onset of 10 degrees now **precedes** the blend in the early part of every slide, which is the intended
