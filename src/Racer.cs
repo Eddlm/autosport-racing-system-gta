@@ -189,8 +189,6 @@ namespace ARS
         float _apexLineInsideCornerDir = 0f;
         bool _apexInsideNow = false;
         int _cornerLineLoggedAt = 0;
-        int _blendRefNode = -1;
-        float _blendRefMps = 0f;
         float _cornerRefusalLoggedAt = 0f;
         bool _laneSnap = false;
         bool _laneOverride = false;
@@ -1080,10 +1078,10 @@ namespace ARS
         // measures a slow corner's window in metres too short for a fast car to reach the clamp in time.
         // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
         // needs to get out there and hold it.
-        const float IdealLineWindowSeconds = 6f;
+        // The two halves need room, and room on this road is measured in nodes: the line exists inside two hundred of them
+        // and the outside plateaus there.
+        const float IdealLineWindowNodes = 200f;
         const float IdealLineMaxRadiusMeters = 50f;
-        const float IdealLineOutsideSeconds = 1.5f;
-        const float IdealLineApexSeconds = 0f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
         // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
@@ -1123,16 +1121,12 @@ namespace ARS
         // when fast. Below 0.5 s the blend is finished and holds the inside; past the apex the distance is negative and
         // it holds there too.
         //
-        // The clock is the fastest the car has been on this approach, latched per apex. The live speed makes `d / v` grow
-        // every time the car brakes, so the countdown would expand under a braking car and the line would reopen outward
-        // mid-corner; the apex speed fixes that but measures the window at the speed the car will LEAVE with, which is far
-        // too short in metres for a slow corner reached fast - at 200 km/h the whole two seconds fit in under one, and the
-        // car never reaches the outside before the line starts closing. Entry speed is the honest one: wide enough to
-        // open, and it can only ratchet up, never down.
-        float IdealLineOffset(int distanceFromApex, float safeBound, float approachSpeedMps)
+        // One straight ramp, in NODES, from the outer clamp to the inside clamp, ending on the apex. Its length is the
+        // traversal itself - twice the half width - so the line crosses the road at forty-five degrees whatever the track:
+        // a wide track gets a long ramp, a narrow one a short ramp, and neither is a number anyone has to tune.
+        float IdealLineOffset(int distanceFromApex, float safeBound, float rampNodes)
         {
-            float secondsToApex = distanceFromApex / Math.Max(approachSpeedMps, 1f);
-            float t = ARS.Clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds), 0f, 1f);
+            float t = ARS.Clamp((rampNodes - distanceFromApex) / rampNodes, 0f, 1f);
             return safeBound * (1f - 2f * t);
         }
 
@@ -1145,7 +1139,6 @@ namespace ARS
             // outer clamp, so the car stopped turning in with the apex still ahead. Only passing the apex ends a line.
             CornerPoint c = lineCorner;
             if (c == null) return 0f;
-            if (c.DetectedRadius >= IdealLineMaxRadiusMeters) return 0f;
             int apexNode = c.Node;
 
             // The line is a function of the distance to the apex, so no time enters the geometry - and it is measured
@@ -1189,26 +1182,19 @@ namespace ARS
             // over - so once the braking plan got good enough to arrive on speed, the line stopped existing: 65 % of the
             // samples in one session read armed=False, started=False. The outside is not a correction for overspeed, it is
             // the first half of the line, and a corner asks for it because it is a corner.
-            if (_blendRefNode != apexNode)
-            {
-                _blendRefNode = apexNode;
-                _blendRefMps = 0f;
-            }
-            _blendRefMps = Math.Max(_blendRefMps, speedMps);
-            float secondsToApex = fwdToApex / Math.Max(_blendRefMps, 1f);
             // Only corners with a real apex get a line: past this radius the bend is a kink the car takes without moving
             // off its lane, and asking for an outside there was noise.
-            bool wantsPosition = fwdToApex >= 0 && secondsToApex <= IdealLineWindowSeconds
+            bool wantsPosition = fwdToApex >= 0 && fwdToApex <= IdealLineWindowNodes
                 && c.DetectedRadius < IdealLineMaxRadiusMeters;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-                        float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, _blendRefMps) : 0f;
+            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, Math.Max(steerRefPoint.TrackHalfWidth * 2f, 1f)) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)
             {
                 _cornerLineLoggedAt = Game.GameTime + 1000;
                 ARS.Log(ARS.LogImportance.Info, "Corner line " + Name + ": R " + c.DetectedRadius.ToString("0.0") + (c.DetectedRadius < CornerTightRadius ? " tight" : " WIDE")
-                    + " t=" + secondsToApex.ToString("0.00") + " wants=" + wantsPosition
+                    + " wants=" + wantsPosition
                     + " entry=" + entryActive + " d=" + fwdToApex + " demand=" + (cornerDir * offset).ToString("0.00")
                     + " own=" + ownLane.ToString("0.00") + " bound=" + safeBound.ToString("0.00"));
             }

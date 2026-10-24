@@ -513,6 +513,13 @@ tethered to the car, so a geometric line could not run ahead of it and every req
 What is left is the acceleration limit (`LaneMoverAccelMps2` 14) and the speed cap (`LaneMoverSpeedCapMps` 12) - inertia,
 not distance - and the inside-mode guard, which is a direction test and not a leash.
 
+**The line is pure node geometry now (driver, 2026-10-23).** `fwdToApex <= IdealLineWindowNodes` 200 opens the line, and inside
+it `IdealLineOffset` is `t = clamp((ramp - d) / ramp)` with `ramp = 2 * TrackHalfWidth`: the outer clamp at the ramp's start,
+the inside clamp on the apex, straight between. The ramp length is the traversal itself, so the line crosses the road at
+forty-five degrees on any track and there is nothing to tune. Every time clock is gone - the live speed, the apex speed and
+the latched approach speed that replaced both - with `IdealLineOutsideSeconds`, `IdealLineApexSeconds`, `_blendRefNode` and
+`_blendRefMps`. Time was the wrong axis: room for an outside is room on the road, and the road is nodes.
+
 **The two protocols travel together: without an outside there is no outside-inside (driver, 2026-10-23).** `CurveLean` pulls
 **inward** from the car's own lane on any bend under `CurveLeanRadiusMeters` **500** by up to `CurveLeanPullMeters` 1, and it is
 relative, so it can never ask for the outer edge: the inside half of the protocol with the outside half missing. Worse, it ran
@@ -528,16 +535,14 @@ the apex speed. It is gone: the field, `ApproachStarted`, the promotion pass tha
 `_promotedApexNode` all deleted with it. Once the braking plan got good enough to arrive on speed, `excess` never crossed the threshold and the
 line stopped existing: measured in one session, **65 % of samples read `armed=False`, `started=False`** and only 14 % had the
 line at all. The outside is the first half of the line, not a correction for overspeed. The gate is now
-`secondsToApex <= IdealLineWindowSeconds` (6 s = the 1.5 s ramp plus the 4.5 s the car needs to reach the clamp and hold it),
-measured on the same latched approach speed as the blend, plus `DetectedRadius < IdealLineMaxRadiusMeters` (**50**, the same bound as `CornerTightRadius` but its own constant) and
+`fwdToApex <= IdealLineWindowNodes` (**200 nodes**, which is both halves' room: the outside plateau plus the ramp),
+measured in nodes, plus `DetectedRadius < IdealLineMaxRadiusMeters` (**50**, the same bound as `CornerTightRadius` but its own constant) and
 `!HasPassedApex`. The radius gate replaces what the excess gate was really doing: deciding which bends are corners the car
 positions for at all. Past that the bend is a kink the car takes without leaving its lane, and an outside line there was noise.
 
 **The blend is one straight ramp in TIME to the apex, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
 `t = clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds))`, `offset = safeBound * (1 - 2t)`: the outer clamp at **1.5 s** out, the inside clamp
-at the apex (**0 s**), linear between, and it holds the inside below 0.5 s and past the apex. `secondsToApex = d / max(approachSpeed, 1)` off the
-signed node distance, where the approach speed is **the fastest the car has been on this approach**, latched per apex
-(`_blendRefMps`, ratcheted with `Math.Max` and reset when `_blendRefNode` changes). Both obvious choices fail: the **live** speed
+at the apex (**0 s**), linear between, and it holds the inside below 0.5 s and past the apex.  Both obvious choices fail: the **live** speed
 makes `d / v` grow every time the car brakes, so the countdown expands under a braking car and the line reopens outward
 mid-corner; the **apex** speed fixes that but measures the window with the speed the car will leave with, so in a slow corner
 reached fast the whole two seconds fit inside one real second and the car never reaches the outside - the outside phase was
