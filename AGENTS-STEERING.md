@@ -428,7 +428,7 @@ rotating at 60 — late by construction, and only decisive if the slide persists
 only reduce the correction: **it increases the occasions**. It is also a personality lever before the personality system
 exists — a tail-happy car is one with this knob low.
 
-**The blend's band is wide on purpose: 0.5 to 1.5 of the authored peak slip.** `SlideBlendStartFraction` 0.5 and
+**The blend's band starts at the peak and ends past it: 1.0 to 2.5 of the live peak slip.** `SlideBlendStartFraction` 1.0 and
 `SlideBlendFullFraction` 1.5.
 
 **Both bands read `TRLateralAtSpeed`, the peak at the current speed (driver, 2026-10-23).** They used to read the authored
@@ -437,8 +437,10 @@ itself imposes: GTA scales the lateral curve by speed, so a tyre peaking at 11.6
 A fixed angle therefore measured a different part of the curve at every speed — at 200 mph the tyre was already at the
 floor of its curve from four degrees while the blend did not commit until eleven. The band is now a fraction of the live
 peak, so it narrows as the speed rises and the same slide fraction is answered at both ends. The throttle-kick gate reads
-the same reference. For a 22-degree tyre that is **11 to 33 degrees of slide**, and full priority — the point where
-the blend answers the whole of `CountersteerSlideShare` — is only reached at 33. What that changes: `IsFullCountersteer`
+the same reference. The start is the peak itself, which is the physical boundary between gripping and
+sliding — correcting at half the peak, as it does at 0.5, is correcting while the tyre still grips, and with the reference
+live that was 2.1 degrees at 200 km/h, a car that never slides at all. At 200 km/h the band is **4.2 to 10.5 degrees**; at
+20 mph, **11.6 to 29**. What that changes: `IsFullCountersteer`
 needs priority 1, so the pedal handover and the projection's yield now begin at 33 degrees rather than 17.6; and the
 assist's own onset of 10 degrees now **precedes** the blend in the early part of every slide, which is the intended
 shape — the gentle response first, the earned authority later.
