@@ -513,6 +513,15 @@ tethered to the car, so a geometric line could not run ahead of it and every req
 What is left is the acceleration limit (`LaneMoverAccelMps2` 14) and the speed cap (`LaneMoverSpeedCapMps` 12) - inertia,
 not distance - and the inside-mode guard, which is a direction test and not a leash.
 
+**The extreme is the raw half width, and the line reaches it five nodes early (driver, 2026-10-23).** `safeBound` is the track
+half width **less half a car**, which is the right bound for a car that must stay inside the paint but the wrong one for a
+line: the line is where the car's CENTRE goes, and the body overhanging the white line is the point of an apex - it was
+stopping a metre short of the inside on every corner and reading as "the line never reaches the extreme". `IdealLineOffset`
+is gone with it: the caller computes `linePhase = clamp((rampNodes + 5 - fwdToApex) / rampNodes)`, `offset = halfWidth *
+(1 - 2 * linePhase)`, and the phase also names the reason (`<= 0` is `OutsideLine`, anything above is `ApexLine`) - one law
+and one place. The five-node lead (`IdealLineApexLeadNodes`) puts the car ON the inside before the apex instead of arriving
+at it on the way out. `safeBound` stays for the commit lane, which really does need the car's width.
+
 **The line is pure node geometry now (driver, 2026-10-23).** `fwdToApex <= IdealLineOutsideNodes + rampNodes` (**250 plus the ramp**) opens the line, and inside
 it `IdealLineOffset` is `t = clamp((ramp - d) / ramp)` with `ramp = 10 * TrackHalfWidth`: the outer clamp at the ramp's start,
 the inside clamp on the apex, straight between. The ramp length is the traversal itself, so the line crosses the road at

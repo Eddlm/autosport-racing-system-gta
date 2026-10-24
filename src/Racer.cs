@@ -1083,6 +1083,7 @@ namespace ARS
         const float IdealLineOutsideNodes = 250f;
         const float IdealLineRampHalfWidths = 10f;
         const float IdealLineMaxRadiusMeters = 50f;
+        const float IdealLineApexLeadNodes = 5f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
         // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
@@ -1122,14 +1123,6 @@ namespace ARS
         // when fast. Below 0.5 s the blend is finished and holds the inside; past the apex the distance is negative and
         // it holds there too.
         //
-        // One straight ramp, in NODES, from the outer clamp to the inside clamp, ending on the apex. Its length is the
-        // traversal itself - twice the half width - so the line crosses the road at forty-five degrees whatever the track:
-        // a wide track gets a long ramp, a narrow one a short ramp, and neither is a number anyone has to tune.
-        float IdealLineOffset(int distanceFromApex, float safeBound, float rampNodes)
-        {
-            float t = ARS.Clamp((rampNodes - distanceFromApex) / rampNodes, 0f, 1f);
-            return safeBound * (1f - 2f * t);
-        }
 
         float ComputeCornerLane(TrackPoint steerRefPoint, float speedMps, float ownLane, CornerPoint lineCorner, out LaneReason reason)
         {
@@ -1189,7 +1182,12 @@ namespace ARS
             bool wantsPosition = fwdToApex >= 0 && fwdToApex <= IdealLineOutsideNodes + rampNodes
                 && c.DetectedRadius < IdealLineMaxRadiusMeters;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, rampNodes) : 0f;
+            // The extreme is the raw half width, not the half width less half a car: the line is where the car's CENTRE
+            // goes, and the body overhanging the white line is the point of an apex. It is reached five nodes before the
+            // apex, so the car is already at the inside when it gets there instead of arriving on the way out.
+            float apexLeadNodes = Math.Min(IdealLineApexLeadNodes, rampNodes);
+            float linePhase = ARS.Clamp((rampNodes + apexLeadNodes - fwdToApex) / Math.Max(rampNodes, 1f), 0f, 1f);
+            float offset = entryActive ? halfWidth * (1f - 2f * linePhase) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)
@@ -1202,7 +1200,7 @@ namespace ARS
             }
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
             // outside line, and everything below it is the blend toward the apex.
-            if (entryActive) reason = offset >= safeBound ? LaneReason.OutsideLine : LaneReason.ApexLine;
+            if (entryActive) reason = linePhase <= 0f ? LaneReason.OutsideLine : LaneReason.ApexLine;
 
             // The blend may only pull toward the apex: a car already inside the demand is never sent back out to meet it,
             // or the entry reads as out and then in. Three things are exempt by design - the hold at the clamp, because
