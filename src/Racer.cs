@@ -1205,9 +1205,12 @@ namespace ARS
                 if (Game.GameTime > _cornerRefusalLoggedAt)
                 {
                     _cornerRefusalLoggedAt = Game.GameTime + 1000;
-                    ARS.Log(ARS.LogImportance.Info, "Corner line refused " + Name + ": demand " + (cornerDir * offset).ToString("0.00") + ", own " + ownLane.ToString("0.00") + ", " + fwdToApex + "m to apex");
+                    ARS.Log(ARS.LogImportance.Info, "Corner line held " + Name + ": demand " + (cornerDir * offset).ToString("0.00") + ", own " + ownLane.ToString("0.00") + ", " + fwdToApex + "m to apex, R " + c.DetectedRadius.ToString("0.0") + ", " + ARS.MpsToMph(speedMps).ToString("0") + " mph");
                 }
-                return 0f;
+                // The demand is behind the car's own lane, so following it would open the line outward. Hold the lane the
+                // car already has and KEEP THE REASON: returning zero here dropped the request, the chain fell through to
+                // the curve lean and the apex line vanished mid-corner while its apex was still ahead.
+                return ownLane;
             }
 
             return cornerDir * offset;

@@ -498,7 +498,16 @@ The consequence is worth knowing before it reads as a fault: for one lane offset
 Its lead is the geometric one stretched by a constant multiple.
 - **The corner line is entry-only (`d5a643f`)** — the exit half and the passed/active-apex bookkeeping are deleted, so past the apex the lane comes from the next corner's entry profile or the lean, and its offset applies only while the car has asked to position and is above apex speed.
 Adjacent profiles still merge by taking the further-in of the two, and an opposite-direction pair is still excluded as a chicane.
-  **The apex line belongs to the nearest unpassed apex, not to `Brain.Corner` (driver, 2026-10-23).** `Brain.Corner` is the head of
+  **A demand behind the car's own lane holds the lane, it does not drop the line (driver, 2026-10-23).** The refusal used to
+`return 0f`, which reads to the caller as "this branch has no opinion": `cornerLane != 0f` failed, the chain fell through to
+`TryComputeCurveLean` and the apex line was replaced by the lean's yellow mid-corner. Measured in the log: 92 refusals in one
+session, all of them near the apex (`demand 4.13, own -3.92, 18m to apex`), because the profile can still be sitting on its
+outer clamp while the car is already inside. The branch now returns `ownLane` - the request becomes exactly where the car
+already is, so nothing pulls outward - and keeps `LaneReason.ApexLine`, so the line lives until the apex as the only end.
+The log line was renamed `Corner line held` and now carries the radius and the speed, which are the two numbers that decide
+how far out the profile still is: `t = (|d| - v*0.5) / (R * leadAngle * 2)`.
+
+**The apex line belongs to the nearest unpassed apex, not to `Brain.Corner` (driver, 2026-10-23).** `Brain.Corner` is the head of
 the **plan's** queue, and `RefillApexQueue` deliberately looks past a corner it has flagged in `_skippedApexes` - a wide corner
 with no braking plan, once the car is inside its window - so the head swaps to the next apex while the car is still inside the
 flagged one's window. `ComputeCornerLane` read that head, so the profile suddenly measured a corner far down the road: `t` went to
