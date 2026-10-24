@@ -184,6 +184,9 @@ namespace ARS
         // The apex blend only ever closes: the latched phase of the corner currently being approached, and which corner it belongs to.
         int _linePhaseNode = -1;
         float _linePhaseLatched;
+        // The direction the latched phase belongs to: a second apex in the same bend keeps the latch, a bend the other way starts
+        // again from the outside.
+        float _linePhaseDir;
         // The lean's approach rate, set from the sampled curvature: 0 in a 500 m bend, 1 at 250 m or tighter.
         // The lean's approach speed in m/s, set from the sampled curvature: near zero at the 500 m gate, at most CurveLeanApproachMps.
         float _leanApproachMps;
@@ -1282,9 +1285,18 @@ namespace ARS
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
             // would reopen a blend that has already closed; the phase is ratcheted per apex, so the demand can only move inward and
             // a new corner starts from the outside.
-            if (_linePhaseNode != apexNode) { _linePhaseNode = apexNode; _linePhaseLatched = 0f; }
+            if (_linePhaseNode != apexNode)
+            {
+                _linePhaseNode = apexNode;
+                if (cornerDir != _linePhaseDir) { _linePhaseLatched = 0f; _linePhaseDir = cornerDir; }
+            }
+            else if (_linePhaseDir == 0f) _linePhaseDir = cornerDir;
             _linePhaseLatched = Math.Max(_linePhaseLatched, linePhase);
             linePhase = _linePhaseLatched;
+            // The corner's own direction is latched with its apex, so a sign that flips - a second corner of the other handedness
+            // adopted for a tick, an angle read on the wrong node - cannot throw the demand to the far side of the road. Moving away
+            // from the apex is the one thing this line is not allowed to do.
+            cornerDir = _linePhaseDir != 0f ? _linePhaseDir : cornerDir;
             float offset = entryActive ? halfWidth * (1f - 2f * linePhase) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
@@ -1294,7 +1306,8 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Corner line " + Name + ": R " + c.DetectedRadius.ToString("0.0") + (c.DetectedRadius < CornerTightRadius ? " tight" : " WIDE")
                     + " wants=" + wantsPosition
                     + " entry=" + entryActive + " t=" + secondsToApex.ToString("0.0") + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
-                    + " own=" + ownLane.ToString("0.00") + " bound=" + safeBound.ToString("0.00"));
+                    + " own=" + ownLane.ToString("0.00") + " bound=" + safeBound.ToString("0.00")
+                    + " apex=" + apexNode + " dir=" + cornerDir.ToString("0"));
             }
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
             // outside line, and everything below it is the blend toward the apex.
