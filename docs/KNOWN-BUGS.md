@@ -23,3 +23,23 @@
 1. Whether the offending cars are below their apex speed on the gate or just above it — the `Corner line` log line prints `wants` and `d`, not the speed, so the first job is to add the speed to that line.
 2. Whether it is the *line* asking or the **lean** (yellow): with `lineActive` false the lean takes the lane, and the lean has no speed floor at all.
 3. Whether the first corner is special only because the field is bunched, in which case the real gripe is the avoidance lane fighting the apex lane rather than the apex lane itself.
+
+## `apex-stays-referenced` — the adopted apex keeps being named after the car passes it
+
+**Noted 2026-10-24 by the driver, not fixed, not to be changed yet.**
+
+**The shape**: `_lineCornerNode` is only replaced when a *new* corner is adopted. `NearestApexAhead` only offers corners with
+`DetectedRadius < 50 m` and `metres >= 0`, so when there is no valid corner ahead — the last tight corner of a lap followed by a long
+section without one — it returns `null`, nothing replaces the node, and everything that reads `LineCornerNode` keeps naming an apex that
+is already behind the car.
+
+**Why it has not hurt yet**: the lane itself is unaffected. A null corner makes `ComputeCornerLane` return 0 and the chain falls through to
+the lean, so no demand is built from the stale reference. What is stale is the *reference*, not the driving — the white debug diagonal still
+points at the passed apex, which is how it was noticed.
+
+**When it starts to matter**: the moment anything trusts `LineCornerNode` for more than drawing — a card, a brake point, a
+commit decision. Then a stale node is a wrong corner.
+
+**How to attack it**: either clear `_lineCornerNode` when its apex is passed *and* `NearestApexAhead` returns null, or give
+`NearestApexAhead` an explicit release so the stickiness ends with the pass rather than with the next adoption. Falsify with the white
+diagonal after the last apex of a lap: it should vanish, and today it does not.
