@@ -1942,27 +1942,27 @@ namespace ARS
                             Vector3 right = Vector3.Cross(dir, Vector3.WorldUp).Normalized;
 
                             // White: center of road
-                            Vector3 whiteFrom = pos + new Vector3(0, 0, 0.1f);
-                            Vector3 whiteTo = nextPos + new Vector3(0, 0, 0.1f);
+                            Vector3 whiteFrom = pos + new Vector3(0, 0, LaneHeightCentre);
+                            Vector3 whiteTo = nextPos + new Vector3(0, 0, LaneHeightCentre);
                             DrawLine(whiteFrom, whiteTo, Color.White);
 
                             // Green: current lane deviation
-                            Vector3 greenFrom = pos + right * nodeOffset + new Vector3(0, 0, 0.2f);
-                            Vector3 greenTo = nextPos + right * nodeOffset + new Vector3(0, 0, 0.2f);
+                            Vector3 greenFrom = pos + right * nodeOffset + new Vector3(0, 0, LaneHeightCurrent);
+                            Vector3 greenTo = nextPos + right * nodeOffset + new Vector3(0, 0, LaneHeightCurrent);
                             DrawLine(greenFrom, greenTo, Color.Green);
 
                             // Black when there is no aim at all; otherwise the colour names why the lane is where it is.
                             Color carriedColor = Math.Abs(carriedOffset) < 0.01f ? Color.Black : Racer.LaneReasonColor(racer.LaneRequestReason);
-                            Vector3 intendedFrom = pos + right * carriedOffset + new Vector3(0, 0, 0.3f);
-                            Vector3 intendedTo = nextPos + right * carriedOffset + new Vector3(0, 0, 0.3f);
+                            Vector3 intendedFrom = pos + right * carriedOffset + new Vector3(0, 0, LaneHeightCarried);
+                            Vector3 intendedTo = nextPos + right * carriedOffset + new Vector3(0, 0, LaneHeightCarried);
                             DrawLine(intendedFrom, intendedTo, carriedColor);
 
                             // Dashed and dimmed, so the ask cannot be mistaken for the aim it is carried onto: this is what
                             // the chain answered this tick, and the solid line is where the mover has got to so far.
                             if (i % 2 == 0)
                             {
-                                Vector3 requestFrom = pos + right * requestOffset + new Vector3(0, 0, 0.4f);
-                                Vector3 requestTo = nextPos + right * requestOffset + new Vector3(0, 0, 0.4f);
+                                Vector3 requestFrom = pos + right * requestOffset + new Vector3(0, 0, LaneHeightRequest);
+                                Vector3 requestTo = nextPos + right * requestOffset + new Vector3(0, 0, LaneHeightRequest);
                                 DrawLine(requestFrom, requestTo, requestColor);
                             }
                         }
@@ -3215,6 +3215,14 @@ namespace ARS
         {
             return _random.Next(min, max);
         }
+
+        // The lane chain draws four lines over the same strip of road, so each one sits at its own height or two colours
+        // bleed into one where the offsets agree. Every step is at least 0.05, and the whole ladder stays under 0.5,
+        // which is where DrawTrackCrossingLine puts the corner, crest and radius checks.
+        const float LaneHeightCentre = 0.10f;
+        const float LaneHeightCurrent = 0.20f;
+        const float LaneHeightCarried = 0.32f;
+        const float LaneHeightRequest = 0.44f;
 
         public static void DrawLine(Vector3 from, Vector3 to, Color color)
         {

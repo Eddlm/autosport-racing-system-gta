@@ -256,7 +256,7 @@ namespace ARS
                 Vector3 edgeRight = Vector3.Cross(direction, Vector3.WorldUp).Normalized;
                 for (int side = -1; side <= 1; side += 2)
                 {
-                    Vector3 pos = tp.Position + edgeRight * (tp.TrackHalfWidth * side) + new Vector3(0f, 0f, 0.2f);
+                    Vector3 pos = tp.Position + edgeRight * (tp.TrackHalfWidth * side) + new Vector3(0f, 0f, 0.6f);
                     World.DrawMarker((MarkerType)20, pos, direction, new Vector3(89f, 0f, -90f), new Vector3(1f, 1f, 1f), color, false, false, 2, false, "", "", false);
                 }
             }
