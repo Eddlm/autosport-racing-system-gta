@@ -415,6 +415,12 @@ test took four laps to settle at the gentler settings; this is one lap for anyth
 floor and every clean lap buys back only 0.025, so a corner can sit at 0.5 for ten laps after one mistake - the symptom is brakes far too
 early on a corner the AI got wrong once.
 
+**The brake learner is calibrated and VERIFIED (driver, 2026-10-24, build 922).** One lap to learn a corner - a single pass through
+the apex - and once settled the factor moves at most **+/-0.02 per lap**. The driver's verdict: *"este balance esta bien"*. That closes
+the thread; the numbers in the paragraph above are the calibrated set and should not be nudged without a fresh on-track reason. The
+two earlier tunings are kept in the log because each failing one says what the next needed: 0.2/20 mph took four laps to settle, 0.05/20
+mph was a trim that could not correct at all.
+
 **The entry-latched clock still depends on how the car enters (driver, 2026-10-24, build 917).** One frozen number cannot be right for
 two different approaches: a car that enters slow and accelerates keeps a low clock, so `2 × v_entry` metres arrive almost immediately
 once it is up to speed; a car that enters fast and brakes hard keeps a high clock, so the same 2 s of clock stretch over more real time
