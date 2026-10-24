@@ -385,6 +385,18 @@ Moved whole out of the project `AGENTS.md` to keep the instruction chain inside 
    Yaw rate also cannot tell a clean turn-in from a stepped-out rear, and the slide's sign can.
    The **slip-balance knee is deleted** (`d434b86`); `d434b86` added the second governor, and `cd6efea` removed it.
    **A steering writer added below it is a silent bypass** — the bug class this shape removes.
+4b. `UpdateLaneMover` (`Racer.cs` `UpdateLaneMover`) — carries the aim onto the lane request under one law: `LaneMoverAccelMps2 26`
+   and `LaneMoverSpeedCapMps 24`, both **halved while the reason is `OutsideLine`** (positioning outwards is a choice made with room;
+   the apex side is where the car is already turning in), an arrival term `sqrt(2·a·gap)` that decelerates onto the request, the
+   request's own rate as feed-forward, a rate reset whenever the desired rate reverses sign, and `dt` capped at
+   `LaneMoverMaxStepSeconds 0.1` so a stalled tick cannot integrate a whole gap.
+   **Every lane reason passes through it** — `CurveLean`, `OutsideLine`, `ApexLine`, `CommitCard`, `Avoidance`, `RecoveryEdge` — so
+   inertia is a property of the mover, not of any producer. The two escapes are `_laneSnap` (one tick, `SnapToTrack` and the per-car
+   reset) and `ClampLaneToWalls`, which bounds the **request** only while the aim still rides the rate.
+   **A request on the far side of the car is placed ON the car, rate zeroed** (`build 886`, `LaneCrossMinMeters 0.1`): the stretch
+   between the aim and the car's own lane is ground the car already occupies, so sweeping it is invisible work that costs a full
+   reversal — which is what made a curve changing handedness read as half a second of frozen lane. What remains visible, and keeps
+   its own rate, is the outbound leg from the car onto the new side.
 5. `ConvertSpeedToPedals` (`Racer.cs:1375`) — one `[-1,1]` combined input, split, then the **reason-cap compose** (also pre-slew) and the slew.
    **GridWait lives in three places** (`ComputeTargetSpeed`, `ProcessAI` handbrake pulses, `ComputeSteering` hold-straight) — keep them in sync.
 6. `TranslateSteerToInput` (`Racer.cs:1609`) — slews steer toward target at `SteerSlewRate`, then remaps degrees → −1..1.
