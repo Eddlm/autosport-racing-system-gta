@@ -1007,6 +1007,9 @@ namespace ARS
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
         // and walks back: the pedal path bounds its own step for the same reason.
         const float LaneMoverMaxStepSeconds = 0.1f;
+        // Under this a request is too close to the car's own lane for "the other side" to mean anything, and the aim would be
+        // flipped to the car on noise.
+        const float LaneCrossMinMeters = 0.1f;
 
         // Carries the aim onto the request. The rate is bounded by the acceleration, which is what stops a
         // request that flips inside half a second from stepping the lane; the arrival term decelerates on the rate
@@ -1043,6 +1046,19 @@ namespace ARS
                 _laneRequestPrev = request;
                 _laneRate = 0f;
                 return;
+            }
+
+            // A request on the far side of the car is placed ON the car instead of being swept across it. The stretch between
+            // the aim and the car's own lane is ground the car already occupies: none of it can be seen to move, and paying for
+            // it costs a full reversal - which is what made a curve changing handedness read as half a second of frozen lane.
+            // Teleporting to the car and starting from rest keeps the two movements that ARE visible: away from the car, onto
+            // the new side.
+            float aimFromCar = _carriedLane - steerRefOffset;
+            float askFromCar = request - steerRefOffset;
+            if (aimFromCar * askFromCar < 0f && Math.Abs(aimFromCar) > LaneCrossMinMeters && Math.Abs(askFromCar) > LaneCrossMinMeters)
+            {
+                _carriedLane = steerRefOffset;
+                _laneRate = 0f;
             }
 
             float dt = Math.Min(TickScale, LaneMoverMaxStepSeconds);
