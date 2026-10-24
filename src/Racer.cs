@@ -1069,6 +1069,7 @@ namespace ARS
         // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
         // needs to get out there and hold it.
         const float IdealLineWindowSeconds = 6f;
+        const float IdealLineMaxRadiusMeters = 150f;
         const float IdealLineOutsideSeconds = 1.5f;
         const float IdealLineApexSeconds = 0f;
 
@@ -1182,7 +1183,10 @@ namespace ARS
             }
             _blendRefMps = Math.Max(_blendRefMps, speedMps);
             float secondsToApex = fwdToApex / Math.Max(_blendRefMps, 1f);
-            bool wantsPosition = fwdToApex >= 0 && secondsToApex <= IdealLineWindowSeconds;
+            // Only corners with a real apex get a line: past this radius the bend is a kink the car takes without moving
+            // off its lane, and asking for an outside there was noise.
+            bool wantsPosition = fwdToApex >= 0 && secondsToApex <= IdealLineWindowSeconds
+                && c.DetectedRadius < IdealLineMaxRadiusMeters;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
                         float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, _blendRefMps) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.

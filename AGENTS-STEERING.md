@@ -512,7 +512,9 @@ the apex speed. It is gone: the field, `ApproachStarted`, the promotion pass tha
 line stopped existing: measured in one session, **65 % of samples read `armed=False`, `started=False`** and only 14 % had the
 line at all. The outside is the first half of the line, not a correction for overspeed. The gate is now
 `secondsToApex <= IdealLineWindowSeconds` (6 s = the 1.5 s ramp plus the 4.5 s the car needs to reach the clamp and hold it),
-measured on the same latched approach speed as the blend, plus `!HasPassedApex`.
+measured on the same latched approach speed as the blend, plus `DetectedRadius < IdealLineMaxRadiusMeters` (150) and
+`!HasPassedApex`. The radius gate replaces what the excess gate was really doing: deciding which bends are corners the car
+positions for at all. Past 150 m the bend is a kink it takes without leaving its lane, and an outside line there was noise.
 
 **The blend is one straight ramp in TIME to the apex, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
 `t = clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds))`, `offset = safeBound * (1 - 2t)`: the outer clamp at **1.5 s** out, the inside clamp
