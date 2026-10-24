@@ -506,7 +506,7 @@ What is left is the acceleration limit (`LaneMoverAccelMps2` 14) and the speed c
 not distance - and the inside-mode guard, which is a direction test and not a leash.
 
 **The blend is one straight ramp in TIME to the apex, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
-`t = clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds))`, `offset = safeBound * (1 - 2t)`: the outer clamp at **2 s** out, the inside clamp
+`t = clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds))`, `offset = safeBound * (1 - 2t)`: the outer clamp at **1.5 s** out, the inside clamp
 at the apex (**0 s**), linear between, and it holds the inside below 0.5 s and past the apex. `secondsToApex = d / max(approachSpeed, 1)` off the
 signed node distance, where the approach speed is **the fastest the car has been on this approach**, latched per apex
 (`_blendRefMps`, ratcheted with `Math.Max` and reset when `_blendRefNode` changes). Both obvious choices fail: the **live** speed
@@ -514,7 +514,7 @@ makes `d / v` grow every time the car brakes, so the countdown expands under a b
 mid-corner; the **apex** speed fixes that but measures the window with the speed the car will leave with, so in a slow corner
 reached fast the whole two seconds fit inside one real second and the car never reaches the outside - the outside phase was
 eaten. Entry speed is the honest clock: wide enough to open, and it can only ratchet up, never down. Time is what makes one corner read the same at any speed; a fixed node count is a different number of
-seconds at 40 km/h and at 200, so the line arrived early when slow and late when fast. Shape: **apex T0, movement T-2 to T0**. The outside needs no constant of its own - everything beyond the ramp's start is
+seconds at 40 km/h and at 200, so the line arrived early when slow and late when fast. Shape: **apex T0, movement T-1.5 to T0**. The outside needs no constant of its own - everything beyond the ramp's start is
 already the outer clamp, so the platform IS the clamp, and it holds for as long as the car is further out than two seconds. `IdealLineLeadSeconds`,
 `IdealLineLeadMultiple`, the `leadAngle` geometry and `IdealLineBlendNodes` are **gone**. The distance is now **signed** (`+-count/2` on a
 circuit, negative once the apex is behind): the old fallback swapped a passed apex for a wrapped forward distance, which read
