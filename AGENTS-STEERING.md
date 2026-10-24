@@ -421,6 +421,12 @@ the thread; the numbers in the paragraph above are the calibrated set and should
 two earlier tunings are kept in the log because each failing one says what the next needed: 0.2/20 mph took four laps to settle, 0.05/20
 mph was a trim that could not correct at all.
 
+**The clock carries a five mile an hour cushion (driver, 2026-10-24, build 923).** `LineClockBoostMph 5` is added to the speed latched
+at window entry, and the phase advances at `v_car / v_clock`, so a higher clock both opens the blend further out and makes it take a
+little longer in real time: at 120 km/h the blend opens at 71 m instead of 67 and lasts 2.13 s instead of 2.00. The driver's words were a
+subtraction - "restemos 5 mph ... tendra mas paciencia" - but the sign is the other way; `d(phase)/dt = v_car / v_clock`, so lowering
+the clock shortens the blend in both metres and seconds. Flagged before building, and the boost is what was built.
+
 **The entry-latched clock still depends on how the car enters (driver, 2026-10-24, build 917).** One frozen number cannot be right for
 two different approaches: a car that enters slow and accelerates keeps a low clock, so `2 × v_entry` metres arrive almost immediately
 once it is up to speed; a car that enters fast and brakes hard keeps a high clock, so the same 2 s of clock stretch over more real time

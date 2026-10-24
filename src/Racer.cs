@@ -192,6 +192,9 @@ namespace ARS
         int _lineCornerNode = -1;
         // The speed the car carried when it entered this corner's out-in window, frozen for the whole manoeuvre: the clock then says the
         // same thing every lap, and braking, traffic or a throttle cut can no longer move where the blend opens.
+        // Added to the latched entry speed. The clock is the denominator of the time to the apex, so a higher one opens the blend further
+        // out and makes the phase advance more slowly - the car is given a little more room than its own entry speed would allow.
+        const float LineClockBoostMph = 5f;
         int _lineClockNode = -1;
         float _lineClockMps;
         // One log a second at most, so a rule that fires rarely does not flood the file when it does.
@@ -1339,7 +1342,7 @@ namespace ARS
             // The entry speed is the one number that is both honest about the approach and stable for the whole corner.
             if (_lineClockNode != apexNode) { _lineClockNode = apexNode; _lineClockMps = 0f; }
             if (_lineClockMps <= 0f && metresToApex >= 0f && metresToApex <= IdealLineWindowMeters)
-                _lineClockMps = Math.Max(speedMps, 1f);
+                _lineClockMps = Math.Max(speedMps + ARS.MphToMps(LineClockBoostMph), 1f);
             float secondsToApex = metresToApex / Math.Max(_lineClockMps, 1f);
             float linePhase = ARS.Clamp((IdealLineBlendStartSeconds - secondsToApex)
                 / Math.Max(IdealLineBlendStartSeconds - IdealLineBlendEndSeconds, 0.01f), 0f, 1f);
@@ -1393,6 +1396,7 @@ namespace ARS
                     + " entry=" + entryActive + " t=" + secondsToApex.ToString("0.0") + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
                     + " own=" + ownLane.ToString("0.00") + " out=" + outsideBound.ToString("0.00")
                     + " bias=" + _lineBiasMeters.ToString("0.00") + " in=" + safeBound.ToString("0.00")
+                    + " clock=" + ARS.MpsToMph(_lineClockMps).ToString("0") + "mph"
                     + " apex=" + apexNode + " dir=" + cornerDir.ToString("0"));
             }
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
