@@ -214,3 +214,27 @@ greyed switch** - `AbsEnabled` forced false at load, so nothing of it is in play
 cannot be made ABS-free from `strModelFlags`. The engine's own clamp holds slip at 0.6 and our taper's knee is 0.5, i.e. 0.1 of room.
 Either ARS writes `STATUS_PLAYER` into an AI car - which drags in air control, damage thresholds, population culling and collision
 response, all catalogued in `AGENTS-VEHICLE-STATUS.md` - or the ABS stays a player-only feature.
+
+## 2026-10-24 late — LANE CHAIN DRIVEN AND VERIFIED, build 915
+
+**Driver, after running F8 in both directions: every apex on every direction works.** That closes the long lane investigation.
+
+What was wrong, in the order it was found (each one produced the same class of symptom, which is why they had to be peeled):
+
+1. **`demandInside` inverted on right-hand corners** (build 915). `cornerDir * offset` grows outward on a left and inward on a right, so
+   comparing it with `cornerDir * ownLane` read "inside" only on lefts. `_apexLineInsideNode`, `_apexLineInsideCornerDir` and therefore the
+   whole inside mode existed on lefts only. Found by running the same circuit backwards: the misbehaving apexes swapped sides, which is the
+   signature of a sign asymmetry rather than a timing one. Side-neutral form: `(demand - ownLane) * -cornerDir > 0`.
+2. **The cross teleport needed a reversal** (build 910). Comparing aim and demand against the car's lane alone pinned the aim to the car's
+   lane every tick of an out-in, so the line reached the centre and hovered. It now also needs `gap * _laneRate < 0`.
+3. **The adopted corner owns the line** (build 909) — `NearestApexAhead` hysteresis of 30 m, and the ratchet is no longer wiped when the
+   blend window flickers (it contains the speed floor, which moves with grip).
+4. **`steerRefOffset` measured in the car's own node frame** (build 905) — against the steer reference up to 30 m ahead it carried the
+   sagitta `L^2/2R`, up to 9 m on a 50 m corner, with the sign following the corner.
+5. **The last second is a commitment** (build 914): `secondsToApex <= 1` forces the inside extreme whatever the blend managed.
+
+**Tools left in place**: the white diagonal from the car to the adopted apex node (build 913, `ShowTrackAnalysis`), and `Lane cross` /
+`Corner line` (`t=`, `apex=`, `dir=`, `out=`, `bias=`, `in=`) in the log.
+
+**Still open, unchanged**: audit findings 4, 5, 7, 8, 9 from `deleg_7fee6020`; `apex-stays-referenced` and `first-corner-eagerness` in
+`docs/KNOWN-BUGS.md`.
