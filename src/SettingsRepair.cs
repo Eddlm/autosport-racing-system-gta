@@ -172,7 +172,6 @@ namespace ARS
             files.Add(settings);
 
             FileSpec development = Owned("Menu-Development.ini");
-            development.Specs.Add(new KeySpec("BrakeLearningGain", "0.9", Kind.Number, ARS.BrakeLearningGainValues));
             development.Specs.Add(new KeySpec("BrakeLearningNotify", "False", Kind.Bool));
             files.Add(development);
 

@@ -165,8 +165,6 @@ namespace ARS
         // How hard the learner moves a corner's factor per verdict. Live from the Development menu so one car can be
         // made to learn faster (or not at all) while a track is being probed. The ladder tops at 0.9, so the shipped
         // rate sits at its top: the old const was 1.0, which the ladder cannot express.
-        public static float BrakeLearningGain = 0.9f;
-        public static readonly string[] BrakeLearningGainValues = { "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9" };
         // Independent of the track-analysis visual: the learner's own read-out, one line per verdict a corner takes.
         public static bool BrakeLearningNotify = false;
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
@@ -1349,18 +1347,6 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            NativeListItem<string> brakeLearnGainItem = new NativeListItem<string>("Brake Learn Gain", "How far a corner's brake factor moves per verdict. The step is (20% - the share of the braking phase spent at full pedal) x this gain, applied multiplicatively to the factor, and a slide costs a flat 0.1 regardless. At the top rung 0.9 a corner that never presses hard gains 18% of its factor in one pass; at 0.1 it gains 2% and still moves — the ladder cannot reach the old 1.0 and cannot freeze the learner.", BrakeLearningGainValues);
-            brakeLearnGainItem.SelectedIndex = Math.Max(0, brakeLearnGainItem.Items.IndexOf(BrakeLearningGain.ToString("0.##", CultureInfo.InvariantCulture)));
-            BrakeLearningGain = float.Parse(brakeLearnGainItem.Items[brakeLearnGainItem.SelectedIndex], CultureInfo.InvariantCulture);
-            brakeLearnGainItem.ItemChanged += (sender, args) =>
-            {
-                if (args.Index < 0 || args.Index >= brakeLearnGainItem.Items.Count) return;
-                BrakeLearningGain = float.Parse(brakeLearnGainItem.Items[args.Index], CultureInfo.InvariantCulture);
-                DevelopmentMenuStore.Set("BrakeLearningGain", brakeLearnGainItem.Items[args.Index]);
-                Log(LogImportance.Info, "Brake learning gain " + BrakeLearningGain.ToString("0.##", CultureInfo.InvariantCulture));
-            };
-            developmentMenu.Add(brakeLearnGainItem);
-            HookListTextPicker(brakeLearnGainItem);
 
             NativeCheckboxItem brakeLearnNotifyItem = new NativeCheckboxItem("Brake Learn Notify", "Announce every verdict the brake learner lands, on its own switch rather than the track-analysis visual: (car) adjusted corner No<node> | before + change > after. Off by default, since it prints once per corner per lap.", BrakeLearningNotify);
             brakeLearnNotifyItem.CheckboxChanged += (sender, args) =>
@@ -3416,7 +3402,6 @@ namespace ARS
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
-            BrakeLearningGain = DevelopmentMenuStore.GetFloat("BrakeLearningGain", BrakeLearningGain);
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);

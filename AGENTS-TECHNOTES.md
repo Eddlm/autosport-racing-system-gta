@@ -99,6 +99,19 @@ Two systems read the road ahead every tick and each derives its own governor. Th
 | Symmetry | left and right alike | **lift only**: `ΔG > 0` (compression) is discarded |
 | Output | a radius, fed to `√(μ·g·R)` | a factor, multiplied into both corner and route speed |
 
+**The brake learner's verdict is the arrival speed, not the pedal (driver, 2026-10-23).** The old law scored the *share
+of the braking phase spent above 0.9 of pedal* against a 20 % target and multiplied the factor by the error. That asked
+the factor to reproduce a braking **style** rather than a braking **point**: a corner taken exactly right with a gentle
+pedal scored zero and kept inflating the factor every lap, and the route brake cap meant the pedal could not reach the
+share the target wanted even when the corner was perfect. Now there are two verdicts and they are the ones already
+measured: **inside `BrakeEntryDeadbandMps` (5 mph) of the speed the corner asks for at the entrance, the factor gains a
+flat `BrakeGoodArrivalStep` 0.05**; above the deadband the existing deducer applies its cut, `BrakeEntryFactorStep` 0.2 for
+20 mph over, linear beyond. The skid verdict is untouched. The whole full-pedal machinery went with it - `_brakeSampleSeconds`,
+`_brakeSampleFullSeconds` and their commit copies, `BrakeSampleThreshold` 0.25, `BrakeFullPedalThreshold` 0.9,
+`BrakeFullFractionTarget` 0.2 - and so did the **Brake Learn Gain** setting, which stepped the old share error and has no
+meaning now; the step is a constant in one place. The learner therefore searches: credit until the arrival goes hot, cut
+until it comes back inside the band.
+
 **The corner plan carries no terrain factor, and the route carries all of it (driver, 2026-10-23).** `cornerSpd` is
 multiplied by neither the slope's `sqrt(hill grip)` nor the crest's `routeCrestFactor`; `followTrackSpd` is multiplied by
 both. The reason is where each factor is **sampled**: the hill angle is the mean grade over the 1.0-2.0 s window ahead of
