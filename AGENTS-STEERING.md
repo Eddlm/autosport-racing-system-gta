@@ -408,9 +408,8 @@ the `roadWide` clamp it used to end with was the aim point's own clamp repeated 
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
 **The brake learner was too sharp (driver, 2026-10-24, build 918).** `BrakeEntryDeadbandMps` 5 mph -> **2 mph**, and
-`BrakeEntryFactorStep` 0.2 per 20 mph -> **0.01 per 20 mph**, i.e. a 40x gentler cut than the original: 0.05 per 5 mph became 0.0025 per 5 mph. At the old rates a single
-20 mph overshoot took a fifth of the factor in one lap. Now: 2 mph nothing, 5 mph -0.0015, 10 mph -0.004, 20 mph -0.009, 40 mph -0.019, 80 mph -0.039. The cut is deliberately a
-fine trim rather than a correction: the learner may now take many laps to find a corner, and the +0.05 good-arrival step dominates it.
+`BrakeEntryFactorStep` 0.2 per 20 mph -> **0.05 per 20 mph**, i.e. 0.05 per 5 mph became 0.0125 per 5 mph. At the old rates a single
+20 mph overshoot took a fifth of the factor in one lap. Now: 2 mph nothing, 5 mph -0.0075, 10 mph -0.020, 20 mph -0.045, 40 mph -0.095.
 The good-arrival step is still +0.05 flat, so the asymmetry now leans further toward braking later - deliberate, and the reason to
 watch that a corner does not creep its factor to `BrakeMaxFactor 1.5` and start missing the apex.
 
