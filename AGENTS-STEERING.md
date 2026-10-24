@@ -393,7 +393,15 @@ Moved whole out of the project `AGENTS.md` to keep the instruction chain inside 
    **Every lane reason passes through it** — `CurveLean`, `OutsideLine`, `ApexLine`, `CommitCard`, `Avoidance`, `RecoveryEdge` — so
    inertia is a property of the mover, not of any producer. The two escapes are `_laneSnap` (one tick, `SnapToTrack` and the per-car
    reset) and `ClampLaneToWalls`, which bounds the **request** only while the aim still rides the rate.
-   **The lean carries no bound of its own (driver, 2026-10-24, build 891).** `lane = steerRefOffset - cornerDir * pull` and nothing else:
+   **The guard lives on the objective, not on the aim point (driver, 2026-10-24, build 893).** `UpdateLaneMover` takes `laneEdge`
+(`roadWide - carHalfWidth`) and clamps `_laneRequest` to it before anything else, so a lane can never name the track's very edge - only
+where the car's CENTRE may sit. Every path that writes the aim writes a guarded value: the snap writes the clamped request, the
+cross-through teleport writes `Clamp(steerRefOffset)`, and the inside-mode guard's substitution is clamped too. The `aimPointOffset`
+clamp against `drivableEdge` stays, because the Gs preview correction can push the POINT outside what the aim itself may reach.
+Before this the outside line asked for `+-roadWide` in its plateau, which `drivableEdge` then trimmed by half a car every tick - the
+same unsatisfiable-demand defect the audit found in the rival walls.
+
+**The lean carries no bound of its own (driver, 2026-10-24, build 891).** `lane = steerRefOffset - cornerDir * pull` and nothing else:
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 

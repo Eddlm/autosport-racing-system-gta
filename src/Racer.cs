@@ -679,7 +679,7 @@ namespace ARS
             if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneReason = LaneReason.DebugLock; }
             _laneRequest = laneRequest;
             _laneRequestReason = laneReason;
-            UpdateLaneMover(steerRefOffset);
+            UpdateLaneMover(steerRefOffset, drivableEdge);
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
             // Aim at the lookahead distance, offset by the carried lane. The Gs preview shifts
@@ -1024,13 +1024,15 @@ namespace ARS
         // request that flips inside half a second from stepping the lane; the arrival term decelerates on the rate
         // that just stops in the distance left; and the request's own rate feeds forward, so a line that moves
         // smoothly is tracked without the v^2/2a lag a pure arrival law would leave (2 m at 5 m/s).
-        void UpdateLaneMover(float steerRefOffset)
+        void UpdateLaneMover(float steerRefOffset, float laneEdge)
         {
             // Inside mode, applied at the last point before the car moves: once the demand has crossed to the apex side
             // of the car, a request that points outward is not applied - whatever produced it. That is the guard the
             // chain cannot give, because every tick the request is rebuilt and any reason along the way can hand over a
             // value the corner would not have asked for.
-            float request = _laneRequest;
+            // The objective carries the guard: a lane may never name the track's very edge, only where the car's CENTRE can
+            // sit, so the demand handed to the mover is already roadWide - carHalfWidth and every step toward it is legal.
+            float request = ARS.Clamp(_laneRequest, -laneEdge, laneEdge);
             if (_apexInsideNow && _apexLineInsideCornerDir != 0f && OutOfTrackDistance() <= 0f)
             {
                 float inward = -_apexLineInsideCornerDir;
@@ -1041,7 +1043,7 @@ namespace ARS
                         _laneGuardLoggedAt = Game.GameTime + 1000;
                         ARS.Log(ARS.LogImportance.Info, "Lane guard " + Name + ": held at " + steerRefOffset.ToString("0.00") + ", request was " + request.ToString("0.00") + ", inside dir " + inward.ToString("0") + ", carrier " + _carriedLane.ToString("0.00"));
                     }
-                    request = steerRefOffset;
+                    request = ARS.Clamp(steerRefOffset, -laneEdge, laneEdge);
                 }
             }
 
@@ -1067,7 +1069,7 @@ namespace ARS
             float askFromCar = request - steerRefOffset;
             if (aimFromCar * askFromCar < 0f && Math.Abs(aimFromCar) > LaneCrossMinMeters && Math.Abs(askFromCar) > LaneCrossMinMeters)
             {
-                _carriedLane = steerRefOffset;
+                _carriedLane = ARS.Clamp(steerRefOffset, -laneEdge, laneEdge);
                 _laneRate = 0f;
             }
 
