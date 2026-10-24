@@ -397,7 +397,9 @@ Moved whole out of the project `AGENTS.md` to keep the instruction chain inside 
 (`roadWide - carHalfWidth`) and clamps `_laneRequest` to it before anything else, so a lane can never name the track's very edge - only
 where the car's CENTRE may sit. Every path that writes the aim writes a guarded value: the snap writes the clamped request, the
 cross-through teleport writes `Clamp(steerRefOffset)`, and the inside-mode guard's substitution is clamped too. The `aimPointOffset`
-clamp against `drivableEdge` stays, because the Gs preview correction can push the POINT outside what the aim itself may reach.
+clamp against `drivableEdge` **went too** (build 894): a bound on the point anchors the pursuit at a maximum distance and pulls it
+back inside, when all that is wanted is for the lane to stop there. The objective's own clamp is the only bound, so the preview
+correction is free to lead the point past the aim without moving the aim itself.
 Before this the outside line asked for `+-roadWide` in its plateau, which `drivableEdge` then trimmed by half a car every tick - the
 same unsatisfiable-demand defect the audit found in the rival walls.
 

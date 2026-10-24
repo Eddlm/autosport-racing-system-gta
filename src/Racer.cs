@@ -691,8 +691,6 @@ namespace ARS
             // would drive the car past the goal and back again, which is the wiggle this state exists to avoid.
             float aimLane = _laneOvershoot ? steerRefOffset : _carriedLane;
             float aimPointOffset = aimLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset);
-            // The aim targets the car's centre, so it locks to the drivable edge; the rival walls bound to the raw edge.
-            aimPointOffset = ARS.Clamp(aimPointOffset, -drivableEdge, drivableEdge);
             Vector3 aimPoint = steerRefPoint.Position + steerRight * aimPointOffset;
 
             // --- Lane steer: pure pursuit toward the carried lane ---
