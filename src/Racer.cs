@@ -1079,8 +1079,8 @@ namespace ARS
         // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
         // needs to get out there and hold it.
         // The two halves need room, and room on this road is measured in nodes: the line exists inside two hundred of them
-        // and the outside plateaus for those 600 plus the ramp. The ramp takes ten half widths of nodes.
-        const float IdealLineOutsideNodes = 600f;
+        // and the outside plateaus for those 250 plus the ramp. The ramp takes ten half widths of nodes.
+        const float IdealLineOutsideNodes = 250f;
         const float IdealLineRampHalfWidths = 10f;
         const float IdealLineMaxRadiusMeters = 50f;
 
