@@ -1276,9 +1276,10 @@ namespace ARS
                 && c.DetectedRadius < IdealLineMaxRadiusMeters && fastEnoughForLine;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
             lineActive = wantsPosition;
-            // The extreme is the raw half width, not the half width less half a car: the line is where the car's CENTRE
-            // goes, and the body overhanging the white line is the point of an apex. It is reached ONE SECOND before the apex,
-            // so the car is already at the inside when it gets there instead of arriving on the way out.
+            // The phase names the offset: +halfWidth is the outer edge, -halfWidth the inner one. Both are the RAW half width;
+            // the mover's own guard (roadWide - carHalfWidth) is what finally places the car's CENTRE, so the body may still
+            // overhang the white line at the apex - which is the point of an apex. The inside extreme is reached ONE SECOND
+            // before the apex, so the car is already at the inside when it gets there instead of arriving on the way out.
             float secondsToApex = metresToApex / Math.Max(speedMps, 1f);
             float linePhase = ARS.Clamp((IdealLineBlendStartSeconds - secondsToApex)
                 / Math.Max(IdealLineBlendStartSeconds - IdealLineBlendEndSeconds, 0.01f), 0f, 1f);
