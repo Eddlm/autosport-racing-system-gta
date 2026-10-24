@@ -3048,6 +3048,20 @@ namespace ARS
 
         
 
+        // Largest per-wheel slip ratio in the BRAKING direction: spin reads negative and a locked wheel positive, so the
+        // max across wheels - not the max magnitude - is the wheel that is closest to locking. 0 when nothing is dragging.
+        static public unsafe float BrakeLockSlip(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            float w = 0f;
+            foreach (var wheel in wheelPtrs)
+            {
+                float slip = *((float*)(wheel + 0x174));
+                if (slip > w) w = slip;
+            }
+            return w;
+        }
+
         static public unsafe float MaxWheelSlip(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);

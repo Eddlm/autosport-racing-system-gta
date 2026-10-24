@@ -2497,22 +2497,25 @@ namespace ARS
             return 1f - depthShare * (1f - TcsCapFloor);
         }
 
-        // ABS: a lock guard, not a curve. Any wheel below this angular velocity while the car is above the speed gate
-        // has stopped turning, and that is the one thing worth cutting brake for — the slip-ratio taper it replaces
-        // spent its whole span on the part of the curve where more slip is free, and read the engine's own ±5 clamp
-        // as a real measurement. Rates are symmetric and slow on purpose: the pedal slides, it never steps.
+        // ABS: a proportional taper on the slip-ratio axis, with the rotation guard as its backstop. The field runs 0 free
+        // rolling, 0.4 at the traction peak, 1.0 locked; full brake to the knee at 0.5, then a straight line to nothing at
+        // the lock point, so the wheel is never allowed to stay locked and the answer is immediate - no glide, no state.
         const float AbsLockRadPerSecond = 2f;
         const float AbsMinSpeedMph = 15f;
-        const float AbsBrakeFloor = 0.2f;
-        const float AbsBrakeFallPerSecond = 0.2f;
-        const float AbsBrakeRisePerSecond = 0.2f;
+        // The taper, on the slip-ratio axis the curve is drawn on: 0 free rolling, 0.4 the peak, 1.0 locked. Full brake to
+        // the knee, then a straight line to nothing at the lock point - proportional, so the wheel is never allowed to stay
+        // locked and there is no glide to wait for. The knee sits past the peak on purpose (0.5 against 0.4): the criterion
+        // is keeping the wheel turning with margin, not extracting the last newton.
+        const float AbsKneeSlip = 0.5f;
+        const float AbsLockSlip = 1f;
+        const float AbsBrakeFloor = 0f;
         int _absLoggedAt = 0;
         bool _absWasLocked = false;
 
         void UpdateBrakeReasonCaps()
         {
             bool countersteering = IsFullCountersteer();
-            Control.MaxBrakeFromABS = Glide(Control.MaxBrakeFromABS, AbsCapLevel(), AbsBrakeFallPerSecond, AbsBrakeRisePerSecond, TickScale);
+            Control.MaxBrakeFromABS = AbsCapLevel();
             Control.MaxBrakeFromCountersteer = GlideCap(Control.MaxBrakeFromCountersteer, countersteering ? CountersteerPedalCap : 1f);
             // The ABS guard is otherwise invisible: its only sign is the pedal bar. Log the moment a wheel crosses the lock
             // floor and the reading that proves it, with the cap the glide has actually reached - the difference between the
@@ -2523,7 +2526,7 @@ namespace ARS
                 if (locked || locked != _absWasLocked)
                 {
                     _absLoggedAt = Game.GameTime + 500;
-                    ARS.Log(ARS.LogImportance.Info, "ABS " + Name + ": locked=" + locked + " minWheel=" + ARS.MinWheelRotation(Car).ToString("0.00") + " rad/s cap=" + Control.MaxBrakeFromABS.ToString("0.00") + " pedal=" + Control.Brake.ToString("0.00") + " mph=" + ARS.MpsToMph(Car.Velocity.Length()).ToString("0"));
+                    ARS.Log(ARS.LogImportance.Info, "ABS " + Name + ": locked=" + locked + " slip=" + ARS.BrakeLockSlip(Car).ToString("0.00") + " minWheel=" + ARS.MinWheelRotation(Car).ToString("0.00") + " rad/s cap=" + Control.MaxBrakeFromABS.ToString("0.00") + " pedal=" + Control.Brake.ToString("0.00") + " mph=" + ARS.MpsToMph(Car.Velocity.Length()).ToString("0"));
                 }
                 _absWasLocked = locked;
             }
@@ -2533,7 +2536,13 @@ namespace ARS
         {
             if (!ARS.AbsEnabled) return 1f;
             if (ARS.MpsToMph(Car.Velocity.Length()) < AbsMinSpeedMph) return 1f;
-            return ARS.AnyWheelRotationBelow(Car, AbsLockRadPerSecond) ? AbsBrakeFloor : 1f;
+            // Backstop, below the taper: a wheel that has actually stopped turning is past the curve altogether, whatever
+            // the slip axis says, so the brake goes to the floor outright.
+            if (ARS.AnyWheelRotationBelow(Car, AbsLockRadPerSecond)) return AbsBrakeFloor;
+            float slip = ARS.BrakeLockSlip(Car);
+            if (slip <= AbsKneeSlip) return 1f;
+            float overKnee = (slip - AbsKneeSlip) / Math.Max(AbsLockSlip - AbsKneeSlip, 0.01f);
+            return Math.Max(AbsBrakeFloor, 1f - overKnee);
         }
 
         // The one throttle composition: the plan's throttle against every reason field, the argmin named into the
