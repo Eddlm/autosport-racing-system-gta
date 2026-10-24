@@ -410,9 +410,11 @@ the `roadWide` clamp it used to end with was the aim point's own clamp repeated 
 **The lean names the inside; the curvature sets the approach rate (driver, 2026-10-24, build 899).** `TryComputeCurveLean` used to
 return `steerRefOffset - cornerDir * pull` with `pull` up to 1 m: a RELATIVE target, so the line followed the car's own drift - a hug,
 not a correction - and the sampled-node sign made it move erratically. Now it returns the inside LANE, `-cornerDir * laneEdge`
-(`roadWide - carHalfWidth`), and publishes `_leanApproachShare = clamp((500 - R)/(500 - 250))`, which the mover applies as a speed-cap
-share while the reason is `CurveLean`. A 500 m bend does not move the aim at all, a 250 m one pulls at the full cap. The gate and the
-full-rate radius are the same two numbers as before; `CurveLeanPullMeters` and `CurveLeanPullReportMeters` are gone.
+(`roadWide - carHalfWidth`), and publishes an **absolute approach speed**, `_leanApproachMps = 5 * exp(-max(R - 200, 0)/100)`, which the mover applies as
+`min(cap, _leanApproachMps)` while the reason is `CurveLean`. The linear share it replaced was still too eager (a 499 m bend moved as
+fast as a 250 m one at 9.6 m/s); an exponential in m/s is what the driver asked for. Speed by radius: 499 m 0.25 m/s, 400 m 0.68,
+300 m 1.84, 250 m 3.03, 200 m and tighter 5.00 - the cap of 5 m/s is the mover's, not the car's. `CurveLeanPullMeters`,
+`CurveLeanPullReportMeters` and `CurveLeanFullRateRadiusMeters` are gone.
 Cost: the lean is no longer self-limiting - a bend inside 500 m now walks the car all the way to the inside lane, where before it
 asked for one metre.
 

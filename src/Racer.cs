@@ -185,7 +185,8 @@ namespace ARS
         int _linePhaseNode = -1;
         float _linePhaseLatched;
         // The lean's approach rate, set from the sampled curvature: 0 in a 500 m bend, 1 at 250 m or tighter.
-        float _leanApproachShare;
+        // The lean's approach speed in m/s, set from the sampled curvature: near zero at the 500 m gate, at most CurveLeanApproachMps.
+        float _leanApproachMps;
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
         float _laneRequestPrev = 0f;
@@ -898,12 +899,16 @@ namespace ARS
             return correction;
         }
 
-        // Lane Control System 2: positions the car on the inside of the track curvature. The lean names the inside LANE and the
-        // curvature decides how fast the car may get there: CurveLeanRadiusMeters is where the approach stops entirely and
-        // CurveLeanFullRateRadiusMeters is where it runs at the mover's own cap.
+        // Lane Control System 2: positions the car on the inside of the track curvature. The lean names the inside LANE; the curvature
+        // decides SPEED, exponentially in metres per second, because how fast a car may be placed is not linear in radius: a 499 m
+        // bend must barely move the aim and a 200 m one gets CurveLeanApproachMps and no more, whatever the mover's own cap is.
         const float CurveLeanRadiusMeters = 500f;
         const float CurveLeanChordSeconds = 1.01f;
-        const float CurveLeanFullRateRadiusMeters = 250f;
+        const float CurveLeanApproachMps = 5f;
+        const float CurveLeanApproachFullRadiusMeters = 200f;
+        // E-folding distance: every tau of extra radius multiplies the approach speed by 1/e. At 100 the 500 m gate lands near
+        // 0.25 m/s and the 250 m bend near 3 m/s.
+        const float CurveLeanApproachTauMeters = 100f;
 
         // Debug lock for the centring test: a near-centre aim offset, pinned for every racer.
         const float LaneLockTestOffsetMeters = 0.1f;
@@ -985,13 +990,12 @@ namespace ARS
             // Clamp answers a NaN with its min bound, so an unreadable car lane would ask for the wrong edge.
             if (float.IsNaN(steerRefOffset) || float.IsInfinity(steerRefOffset)) return false;
 
-            // The inside LANE, named absolutely: the lean says where the car should be, and the curvature sets how fast it may get
-            // there - a 500 m bend barely moves the aim, a 250 m one pulls at the mover's full cap. Relative to the car instead, the
-            // target followed the car's own drift, which is a hug and not a correction.
-            _leanApproachShare = ARS.Clamp((CurveLeanRadiusMeters - ahead.PreciseCurveRadius)
-                / Math.Max(CurveLeanRadiusMeters - CurveLeanFullRateRadiusMeters, 1f), 0f, 1f);
+            // The inside LANE, named absolutely, with the approach speed falling off exponentially with radius: full
+            // CurveLeanApproachMps at 200 m and tighter, 1/e per extra tau of radius, effectively nothing at the 500 m gate.
+            float overFullRadius = Math.Max(ahead.PreciseCurveRadius - CurveLeanApproachFullRadiusMeters, 0f);
+            _leanApproachMps = CurveLeanApproachMps * (float)Math.Exp(-overFullRadius / CurveLeanApproachTauMeters);
             lane = -cornerDir * laneEdge;
-            return _leanApproachShare > 0f;
+            return true;
         }
 
         // The aim carries an override until it has come back this close to the car's own lane, so a consumer gated on
@@ -1093,7 +1097,8 @@ namespace ARS
             if (_laneOvershoot) moverAccel *= 2f;
             float moverSpeedCap = toOutside ? LaneMoverSpeedCapMps * 0.5f : LaneMoverSpeedCapMps;
             // The lean's approach rate is the bend's own: share 0 in a 500 m curve, the full cap at 250 m or tighter.
-            if (_laneRequestReason == LaneReason.CurveLean) moverSpeedCap *= _leanApproachShare;
+            // The lean's approach rate is its own absolute speed, not a share of the mover's cap: 5 m/s at 200 m and tighter.
+            if (_laneRequestReason == LaneReason.CurveLean) moverSpeedCap = Math.Min(moverSpeedCap, _leanApproachMps);
             // Full cap within the leash's near end, falling to nothing at its far end: the lane leads the car, it does not run
             // away from it.
             float awayFromCar = Math.Abs(_carriedLane - steerRefOffset);
