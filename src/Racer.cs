@@ -1152,10 +1152,11 @@ namespace ARS
             // Signed, and negative once the apex is behind: the blend reads it as "nodes to go", so a wrapped forward
             // distance would hand it a near-full lap and open the line outward on the exit half.
             int count = ARS.TrackPoints.Count;
-            // Metres along the route, not nodes: on a bend a node is more path than the straight line it stands for, so a
-            // node count measures a different corner at every radius. `CumulativeDistance` is metres and is rebuilt with the
-            // route, and the wrap is the same shortest-way-round the rival gap uses.
-            float metresToApex = ARS.TrackPoints[apexNode].CumulativeDistance - steerRefPoint.CumulativeDistance;
+            // Metres along the route, not nodes, and measured from the CAR: the reference point sits a lookahead ahead, so
+            // reading the window there opened it early and killed it a lookahead before the apex - a distance that moved with
+            // speed, which is the one thing this window must not do. `CumulativeDistance` is metres and is rebuilt with the
+            // route; the wrap is the same shortest-way-round the rival gap uses.
+            float metresToApex = ARS.TrackPoints[apexNode].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
             if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metresToApex) > ARS.RouteLengthMeters * 0.5f)
                 metresToApex -= Math.Sign(metresToApex) * ARS.RouteLengthMeters;
 
@@ -1166,8 +1167,13 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = Math.Max(halfWidth - carHalfWidth, 0f);
 
-            // Corner-commit: hold the defend/dive line for the card's whole life, not just the outside phase.
-            bool isCornerCommit = ActiveManeuver.Target != null && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb);
+            // Corner-commit: hold the defend/dive line for the card's whole life, but only on the corner the card was armed
+            // for. Without the window test EVERY corner came back as CommitCard while any card was alive, because the branch
+            // returns before the apex line is ever computed - three to four seconds of no outside on whatever corner the car
+            // happened to reach, which is exactly the intermittent blackout the driver reported.
+            bool isCornerCommit = ActiveManeuver.Target != null
+                && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb)
+                && metresToApex >= 0f && metresToApex <= IdealLineOutsideMeters + IdealLineRampStartMeters;
             if (isCornerCommit)
             {
                 Rival target = Brain.Rivals.FirstOrDefault(r => r.RivalRacer == ActiveManeuver.Target);
@@ -1236,6 +1242,9 @@ namespace ARS
                 }
                 // The guard ends with the apex, and must: past it the same profile opens back outward, which is the
                 // exit half of the line. Holding the guard there would pin the car to the inside all the way out.
+                // The latch itself is dropped at the apex: kept, it made lap 2 start with the guard already armed at a
+                // corner lap 1 had driven normally, which is a lap-1-versus-lap-N difference at an identical corner.
+                if (HasPassedApex(apexNode)) _apexLineInsideNode = -1;
                 _apexInsideNow = _apexLineInsideNode == apexNode && !HasPassedApex(apexNode);
                 if (!demandInside && _apexInsideNow && OutOfTrackDistance() <= 0f)
                 {
@@ -1357,12 +1366,16 @@ namespace ARS
 
         // One clamp site for the rival walls, and it bounds the request alone: the mover carries the aim onto the
         // request rather than placing it, so a wall that closes on the car cannot step the lane.
-        float ClampLaneToWalls(float lane, float roadWide)
+        float ClampLaneToWalls(float lane, float roadWide, bool leftConstrained, bool rightConstrained)
         {
+            // The car's half width is the inset a RIVAL's wall needs; the track edge needs none, because the lane request is
+            // already where the car's CENTRE may go. Adding it to an unconstrained wall made the plateau demand (+-halfWidth)
+            // unsatisfiable by half a car on every tick, so the clamp rewrote the request and relabelled it WallClamp - which
+            // then read in the log as the outside never firing.
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float trackBound = roadWide;
-            float clampLeft = Math.Max(_avoidLeftWall + carHalfWidth, -trackBound);
-            float clampRight = Math.Min(_avoidRightWall - carHalfWidth, trackBound);
+            float clampLeft = leftConstrained ? Math.Max(_avoidLeftWall + carHalfWidth, -trackBound) : Math.Max(_avoidLeftWall, -trackBound);
+            float clampRight = rightConstrained ? Math.Min(_avoidRightWall - carHalfWidth, trackBound) : Math.Min(_avoidRightWall, trackBound);
             if (clampLeft > clampRight) return ARS.Clamp(lane, -trackBound, trackBound);
             return ARS.Clamp(lane, clampLeft, clampRight);
         }
@@ -1421,7 +1434,7 @@ namespace ARS
                 _avoidRightWall = mid + 1f;
             }
 
-            return ClampLaneToWalls(requestLane, roadWide);
+            return ClampLaneToWalls(requestLane, roadWide, leftConstrained, rightConstrained);
         }
 
         // Above the authored peak slip × this the car counts as sliding, so the damper drops its aim reference.

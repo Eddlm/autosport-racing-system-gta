@@ -536,6 +536,15 @@ forty-five degrees on any track and there is nothing to tune. Every time clock i
 the latched approach speed that replaced both - with `IdealLineOutsideSeconds`, `IdealLineApexSeconds`, `_blendRefNode` and
 `_blendRefMps`. Time was the wrong axis: room for an outside is room on the road, and the road is nodes.
 
+**Four fixes from the audit (2026-10-23).** (1) `ClampLaneToWalls` added `carHalfWidth` to **both** walls, so with no rival
+the corridor was `+- (roadWide - halfCar)` while the plateau demand is `+- roadWide`: every plateau tick the request was
+trimmed ~0.95 m and relabelled `WallClamp`, which is why the outside looked like it never fired. The inset now applies only
+to a side a rival constrains. (2) `metresToApex` is measured from the **car**, not the steering reference - the reference sits
+a lookahead ahead, so the window opened early and died early by a distance that moved with speed. (3) The card's commit lane
+required only that a Defend/Dive card be alive, so **every** corner returned `CommitCard` before the apex line was computed:
+it now also requires the corner to be inside the line's window. (4) `_apexLineInsideNode` is dropped when its apex is passed,
+so lap 2 no longer starts with the inside guard pre-armed at a corner lap 1 drove normally.
+
 **The inside guard is re-armed every pass, and its firing is logged (driver, 2026-10-23).** `_apexInsideNow` is READ
 unconditionally by `UpdateLaneMover` but was only WRITTEN inside `ComputeCornerLane`'s `ApexLine` branch - so a value latched
 at one corner survived the apex (where the reason is no longer `ApexLine`, so the branch never runs), survived the gap to the
