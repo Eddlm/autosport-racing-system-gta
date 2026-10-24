@@ -184,6 +184,8 @@ namespace ARS
         // The apex blend only ever closes: the latched phase of the corner currently being approached, and which corner it belongs to.
         int _linePhaseNode = -1;
         float _linePhaseLatched;
+        // The lean's approach rate, set from the sampled curvature: 0 in a 500 m bend, 1 at 250 m or tighter.
+        float _leanApproachShare;
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
         float _laneRequestPrev = 0f;
@@ -671,7 +673,7 @@ namespace ARS
             if (lineCorner != null && Lap > 0)
                 cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, lineCorner, out cornerReason, out cornerLineActive);
             else _apexInsideNow = false;   // no corner is being evaluated, so nothing may keep the inside guard armed
-            if (!cornerLineActive && TryComputeCurveLean(speedMps, steerRefOffset, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
+            if (!cornerLineActive && TryComputeCurveLean(speedMps, steerRefOffset, drivableEdge, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
             if (cornerLane != 0f) { laneRequest = cornerLane; laneReason = cornerReason; }
             float avoidAheadLane = ComputeAvoidanceLane(roadWide);
             if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
@@ -896,16 +898,12 @@ namespace ARS
             return correction;
         }
 
-        // Lane Control System 2: positions the car on the inside edge of the track curvature.
+        // Lane Control System 2: positions the car on the inside of the track curvature. The lean names the inside LANE and the
+        // curvature decides how fast the car may get there: CurveLeanRadiusMeters is where the approach stops entirely and
+        // CurveLeanFullRateRadiusMeters is where it runs at the mover's own cap.
         const float CurveLeanRadiusMeters = 500f;
         const float CurveLeanChordSeconds = 1.01f;
-        // The pull a bend answers with and the radius at which it is full; the fade runs from nothing at the gate to
-        // that radius, and the edge is the only bound past it.
-        const float CurveLeanPullMeters = 1f;
-        const float CurveLeanFullPullRadiusMeters = 250f;
-        // Under this the pull is too small to report as an opinion. Not the aim-release distance, which is its own
-        // threshold measured on the carried lane, so neither can move the other from 250 lines away.
-        const float CurveLeanPullReportMeters = 0.1f;
+        const float CurveLeanFullRateRadiusMeters = 250f;
 
         // Debug lock for the centring test: a near-centre aim offset, pinned for every racer.
         const float LaneLockTestOffsetMeters = 0.1f;
@@ -968,7 +966,7 @@ namespace ARS
             return PursuitSteerFromBearing(bearing, distance);
         }
 
-        bool TryComputeCurveLean(float speedMps, float steerRefOffset, out float lane)
+        bool TryComputeCurveLean(float speedMps, float steerRefOffset, float laneEdge, out float lane)
         {
             lane = 0f;
             int count = ARS.TrackPoints.Count;
@@ -987,11 +985,13 @@ namespace ARS
             // Clamp answers a NaN with its min bound, so an unreadable car lane would ask for the wrong edge.
             if (float.IsNaN(steerRefOffset) || float.IsInfinity(steerRefOffset)) return false;
 
-            // A relative pull rather than the edge: the target tracks the car, so the crossing stays alive for as long
-            // as the bend lasts and only the bound ends it — the asymmetry a reader would otherwise "fix" back to an edge.
-            float pull = ARS.Clamp((CurveLeanRadiusMeters - ahead.PreciseCurveRadius) / Math.Max(CurveLeanRadiusMeters - CurveLeanFullPullRadiusMeters, 1f), 0f, 1f) * CurveLeanPullMeters;
-            lane = steerRefOffset - cornerDir * pull;
-            return pull > CurveLeanPullReportMeters;
+            // The inside LANE, named absolutely: the lean says where the car should be, and the curvature sets how fast it may get
+            // there - a 500 m bend barely moves the aim, a 250 m one pulls at the mover's full cap. Relative to the car instead, the
+            // target followed the car's own drift, which is a hug and not a correction.
+            _leanApproachShare = ARS.Clamp((CurveLeanRadiusMeters - ahead.PreciseCurveRadius)
+                / Math.Max(CurveLeanRadiusMeters - CurveLeanFullRateRadiusMeters, 1f), 0f, 1f);
+            lane = -cornerDir * laneEdge;
+            return _leanApproachShare > 0f;
         }
 
         // The aim carries an override until it has come back this close to the car's own lane, so a consumer gated on
@@ -1092,6 +1092,8 @@ namespace ARS
             // overshoot returns twice as promptly without ever moving faster than any other request.
             if (_laneOvershoot) moverAccel *= 2f;
             float moverSpeedCap = toOutside ? LaneMoverSpeedCapMps * 0.5f : LaneMoverSpeedCapMps;
+            // The lean's approach rate is the bend's own: share 0 in a 500 m curve, the full cap at 250 m or tighter.
+            if (_laneRequestReason == LaneReason.CurveLean) moverSpeedCap *= _leanApproachShare;
             // Full cap within the leash's near end, falling to nothing at its far end: the lane leads the car, it does not run
             // away from it.
             float awayFromCar = Math.Abs(_carriedLane - steerRefOffset);

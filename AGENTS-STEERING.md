@@ -407,6 +407,15 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**The lean names the inside; the curvature sets the approach rate (driver, 2026-10-24, build 899).** `TryComputeCurveLean` used to
+return `steerRefOffset - cornerDir * pull` with `pull` up to 1 m: a RELATIVE target, so the line followed the car's own drift - a hug,
+not a correction - and the sampled-node sign made it move erratically. Now it returns the inside LANE, `-cornerDir * laneEdge`
+(`roadWide - carHalfWidth`), and publishes `_leanApproachShare = clamp((500 - R)/(500 - 250))`, which the mover applies as a speed-cap
+share while the reason is `CurveLean`. A 500 m bend does not move the aim at all, a 250 m one pulls at the full cap. The gate and the
+full-rate radius are the same two numbers as before; `CurveLeanPullMeters` and `CurveLeanPullReportMeters` are gone.
+Cost: the lean is no longer self-limiting - a bend inside 500 m now walks the car all the way to the inside lane, where before it
+asked for one metre.
+
 **The apex blend is a TIME law; the outside is a distance law (driver, 2026-10-24, build 896).** `IdealLineWindowMeters 300` still says
 where the line begins to be asked for, because placing the car on the outer edge is done with room to spare and does not change with
 speed. The outside-inside blend is `IdealLineBlendStartSeconds 2` to `IdealLineBlendEndSeconds 1` (three-to-one was tried first and was too early; build 897), phase computed from
