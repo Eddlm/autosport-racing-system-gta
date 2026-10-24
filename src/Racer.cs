@@ -1285,18 +1285,29 @@ namespace ARS
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
             // would reopen a blend that has already closed; the phase is ratcheted per apex, so the demand can only move inward and
             // a new corner starts from the outside.
-            if (_linePhaseNode != apexNode)
+            // The armour exists only where the blend exists: inside the last IdealLineBlendStartSeconds before the apex. Before that
+            // the line is asking for the outside and there is nothing to ratchet, and a direction latched 300 m out would follow the
+            // car into situations the corner knows nothing about.
+            if (entryActive && secondsToApex <= IdealLineBlendStartSeconds)
             {
-                _linePhaseNode = apexNode;
-                if (cornerDir != _linePhaseDir) { _linePhaseLatched = 0f; _linePhaseDir = cornerDir; }
+                if (_linePhaseNode != apexNode)
+                {
+                    _linePhaseNode = apexNode;
+                    if (cornerDir != _linePhaseDir) { _linePhaseLatched = 0f; _linePhaseDir = cornerDir; }
+                }
+                else if (_linePhaseDir == 0f) _linePhaseDir = cornerDir;
+                _linePhaseLatched = Math.Max(_linePhaseLatched, linePhase);
+                linePhase = _linePhaseLatched;
+                // Closer to the apex only: a sign that flips - a second corner of the other handedness adopted for a tick, an angle
+                // read on the wrong node - cannot throw the demand to the far side of the road once the blend has started.
+                cornerDir = _linePhaseDir != 0f ? _linePhaseDir : cornerDir;
             }
-            else if (_linePhaseDir == 0f) _linePhaseDir = cornerDir;
-            _linePhaseLatched = Math.Max(_linePhaseLatched, linePhase);
-            linePhase = _linePhaseLatched;
-            // The corner's own direction is latched with its apex, so a sign that flips - a second corner of the other handedness
-            // adopted for a tick, an angle read on the wrong node - cannot throw the demand to the far side of the road. Moving away
-            // from the apex is the one thing this line is not allowed to do.
-            cornerDir = _linePhaseDir != 0f ? _linePhaseDir : cornerDir;
+            else
+            {
+                _linePhaseNode = -1;
+                _linePhaseLatched = 0f;
+                _linePhaseDir = 0f;
+            }
             float offset = entryActive ? halfWidth * (1f - 2f * linePhase) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
