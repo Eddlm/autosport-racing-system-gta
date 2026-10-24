@@ -668,7 +668,7 @@ namespace ARS
             if (lineCorner != null && Lap > 0)
                 cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, lineCorner, out cornerReason, out cornerLineActive);
             else _apexInsideNow = false;   // no corner is being evaluated, so nothing may keep the inside guard armed
-            if (!cornerLineActive && TryComputeCurveLean(roadWide, speedMps, steerRefOffset, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
+            if (!cornerLineActive && TryComputeCurveLean(speedMps, steerRefOffset, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
             if (cornerLane != 0f) { laneRequest = cornerLane; laneReason = cornerReason; }
             float avoidAheadLane = ComputeAvoidanceLane(roadWide);
             if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
@@ -967,7 +967,7 @@ namespace ARS
             return PursuitSteerFromBearing(bearing, distance);
         }
 
-        bool TryComputeCurveLean(float roadWide, float speedMps, float steerRefOffset, out float lane)
+        bool TryComputeCurveLean(float speedMps, float steerRefOffset, out float lane)
         {
             lane = 0f;
             int count = ARS.TrackPoints.Count;
@@ -989,8 +989,7 @@ namespace ARS
             // A relative pull rather than the edge: the target tracks the car, so the crossing stays alive for as long
             // as the bend lasts and only the bound ends it — the asymmetry a reader would otherwise "fix" back to an edge.
             float pull = ARS.Clamp((CurveLeanRadiusMeters - ahead.PreciseCurveRadius) / Math.Max(CurveLeanRadiusMeters - CurveLeanFullPullRadiusMeters, 1f), 0f, 1f) * CurveLeanPullMeters;
-            float insideBound = Math.Max(roadWide - VehicleData.BoundingBox * 0.5f, 0f);
-            lane = ARS.Clamp(steerRefOffset - cornerDir * pull, -insideBound, insideBound);
+            lane = steerRefOffset - cornerDir * pull;
             return pull > CurveLeanPullReportMeters;
         }
 
