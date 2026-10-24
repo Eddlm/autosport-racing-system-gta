@@ -1104,7 +1104,7 @@ namespace ARS
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
         // the point: they crawl to the first corner instead of diving for the outer edge.
-        const float IdealLineSpeedMarginMph = 20f;
+        const float IdealLineSpeedMarginMph = 15f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
         // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
