@@ -1079,11 +1079,11 @@ namespace ARS
         // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
         // needs to get out there and hold it.
         // The two halves need room, and room on this road is measured in nodes: the line exists inside two hundred of them
-        // and the outside plateaus for those 250 plus the ramp. The ramp takes ten half widths of nodes.
-        const float IdealLineOutsideNodes = 250f;
-        const float IdealLineRampHalfWidths = 10f;
+        // and the outside plateaus for those 250 metres. The ramp runs from 50 m out to 5 m out.
+        const float IdealLineOutsideMeters = 250f;
+        const float IdealLineRampStartMeters = 50f;
+        const float IdealLineApexMeters = 5f;
         const float IdealLineMaxRadiusMeters = 50f;
-        const float IdealLineApexLeadNodes = 5f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
         // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
@@ -1143,8 +1143,12 @@ namespace ARS
             // Signed, and negative once the apex is behind: the blend reads it as "nodes to go", so a wrapped forward
             // distance would hand it a near-full lap and open the line outward on the exit half.
             int count = ARS.TrackPoints.Count;
-            int fwdToApex = apexNode - steerRefPoint.Node;
-            if (!ARS.IsPointToPoint) fwdToApex = ((fwdToApex + count / 2) % count + count) % count - count / 2;
+            // Metres along the route, not nodes: on a bend a node is more path than the straight line it stands for, so a
+            // node count measures a different corner at every radius. `CumulativeDistance` is metres and is rebuilt with the
+            // route, and the wrap is the same shortest-way-round the rival gap uses.
+            float metresToApex = ARS.TrackPoints[apexNode].CumulativeDistance - steerRefPoint.CumulativeDistance;
+            if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metresToApex) > ARS.RouteLengthMeters * 0.5f)
+                metresToApex -= Math.Sign(metresToApex) * ARS.RouteLengthMeters;
 
             float cornerDir = Math.Sign(c.Angle);
             if (cornerDir == 0f) return 0f;
@@ -1178,15 +1182,13 @@ namespace ARS
             // the first half of the line, and a corner asks for it because it is a corner.
             // Only corners with a real apex get a line: past this radius the bend is a kink the car takes without moving
             // off its lane, and asking for an outside there was noise.
-            float rampNodes = Math.Max(steerRefPoint.TrackHalfWidth * IdealLineRampHalfWidths, 1f);
-            bool wantsPosition = fwdToApex >= 0 && fwdToApex <= IdealLineOutsideNodes + rampNodes
+            bool wantsPosition = metresToApex >= 0 && metresToApex <= IdealLineOutsideMeters + IdealLineRampStartMeters
                 && c.DetectedRadius < IdealLineMaxRadiusMeters;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
             // The extreme is the raw half width, not the half width less half a car: the line is where the car's CENTRE
-            // goes, and the body overhanging the white line is the point of an apex. It is reached five nodes before the
+            // goes, and the body overhanging the white line is the point of an apex. It is reached five METRES before the
             // apex, so the car is already at the inside when it gets there instead of arriving on the way out.
-            float apexLeadNodes = Math.Min(IdealLineApexLeadNodes, rampNodes);
-            float linePhase = ARS.Clamp((rampNodes + apexLeadNodes - fwdToApex) / Math.Max(rampNodes, 1f), 0f, 1f);
+            float linePhase = ARS.Clamp((IdealLineRampStartMeters - metresToApex) / Math.Max(IdealLineRampStartMeters - IdealLineApexMeters, 1f), 0f, 1f);
             float offset = entryActive ? halfWidth * (1f - 2f * linePhase) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
@@ -1195,7 +1197,7 @@ namespace ARS
                 _cornerLineLoggedAt = Game.GameTime + 1000;
                 ARS.Log(ARS.LogImportance.Info, "Corner line " + Name + ": R " + c.DetectedRadius.ToString("0.0") + (c.DetectedRadius < CornerTightRadius ? " tight" : " WIDE")
                     + " wants=" + wantsPosition
-                    + " entry=" + entryActive + " d=" + fwdToApex + " demand=" + (cornerDir * offset).ToString("0.00")
+                    + " entry=" + entryActive + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
                     + " own=" + ownLane.ToString("0.00") + " bound=" + safeBound.ToString("0.00"));
             }
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
@@ -1230,7 +1232,7 @@ namespace ARS
                     if (Game.GameTime > _cornerRefusalLoggedAt)
                     {
                         _cornerRefusalLoggedAt = Game.GameTime + 1000;
-                        ARS.Log(ARS.LogImportance.Info, "Corner line held " + Name + ": demand " + (cornerDir * offset).ToString("0.00") + ", own " + ownLane.ToString("0.00") + ", " + fwdToApex + "m to apex, R " + c.DetectedRadius.ToString("0.0") + ", " + ARS.MpsToMph(speedMps).ToString("0") + " mph");
+                        ARS.Log(ARS.LogImportance.Info, "Corner line held " + Name + ": demand " + (cornerDir * offset).ToString("0.00") + ", own " + ownLane.ToString("0.00") + ", " + metresToApex.ToString("0.0") + "m to apex, R " + c.DetectedRadius.ToString("0.0") + ", " + ARS.MpsToMph(speedMps).ToString("0") + " mph");
                     }
                     return ownLane;
                 }

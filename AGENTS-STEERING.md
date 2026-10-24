@@ -513,7 +513,14 @@ tethered to the car, so a geometric line could not run ahead of it and every req
 What is left is the acceleration limit (`LaneMoverAccelMps2` 14) and the speed cap (`LaneMoverSpeedCapMps` 12) - inertia,
 not distance - and the inside-mode guard, which is a direction test and not a leash.
 
-**The extreme is the raw half width, and the line reaches it five nodes early (driver, 2026-10-23).** `safeBound` is the track
+**The line is measured in METRES of route, and reaches the extreme five metres early (driver, 2026-10-23).** On a bend a node is
+more path than the straight line it stands for, so a node count measures a different corner at every radius. `metresToApex`
+is `TrackPoints[apex].CumulativeDistance - reference.CumulativeDistance`, wrapped shortest-way-round with `RouteLengthMeters`
+(the same pattern as the rival gap); `CumulativeDistance` is already metres and is rebuilt with the route. The stations are
+`IdealLineOutsideMeters` **250**, `IdealLineRampStartMeters` **50** and `IdealLineApexMeters` **5**: the line opens 300 m out,
+the ramp runs from 50 m to 5 m, and `linePhase` is `clamp((50 - d) / 45)`.
+
+**The extreme is the raw half width, and the line reaches it five metres early.** `safeBound` is the track
 half width **less half a car**, which is the right bound for a car that must stay inside the paint but the wrong one for a
 line: the line is where the car's CENTRE goes, and the body overhanging the white line is the point of an apex - it was
 stopping a metre short of the inside on every corner and reading as "the line never reaches the extreme". `IdealLineOffset`
