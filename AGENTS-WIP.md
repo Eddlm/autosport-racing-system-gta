@@ -244,3 +244,25 @@ What was wrong, in the order it was found (each one produced the same class of s
 Build 932: `AddCornerRegion` walks the green entry and the red exit out to at least one track width (in track nodes) from the apex.
 Driver on F8: **the cars take the corners better, with more corner to manoeuvre in.** It binds on most corners rather than rarely - the
 logged walks were returning 6 to 64 list positions - which is exactly the class of strange apex it was meant to remove.
+## Session close 2026-10-24 (night) — build 932 deployed, NOT pushed
+
+**Where the tree is**: everything committed locally; the last pushed commit is `749157c`. The only dirty entries are the driver's own
+untracked track files (`Dist/AutosportRacingSystem/Tracks/F8.xml`, `TestOct.xml`, `Tracks/testing/`) - theirs, untouched. Deployed build is
+**932** (`4db8ff93...`).
+
+**Verified on track today, all by the driver**:
+- Every apex, in both directions, on F8 - after the `demandInside` sign fix (915).
+- The brake learner: one lap to learn a corner, +/-0.02 per lap once settled (922).
+- The corner entry/exit floor at one track width (932): *"los coches toman las curvas mejor - tienen mas espacio considerado corner"*.
+
+**Changed but not driven**:
+- The apex blend's clock now runs on the entry speed latched at the window, with no cushion (917/926).
+- The blend ends and pins the inside at 0.25 s (928).
+- The braking modulation of the clock, cap raised to 10 mph for a feel test (927/929) - **this one is an experiment**: at 10 mph the
+  adjustment is live and proportionally larger on slow entries, which is the opposite of what such a system usually wants.
+
+**Filed, not fixed**: `docs/KNOWN-BUGS.md` - `apex-stays-referenced`, `first-corner-eagerness`.
+**Audit findings still open** (`deleg_7fee6020`): the overshoot deadband at 0.1 m against overshoots of metres; the lean sampling a single
+node; `lineActive` vs `entryActive`; the needle-thread averaging two rivals' lanes; the turn-in exempted on a 1 Hz queue.
+
+**First thing next session**: the audit's finding 4 (overshoot deadband) - it is the one the driver would feel.
