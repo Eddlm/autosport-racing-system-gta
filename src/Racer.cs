@@ -1350,16 +1350,9 @@ namespace ARS
             if (_lineClockMps <= 0f && metresToApex >= 0f && metresToApex <= IdealLineWindowMeters)
                 _lineClockMps = Math.Max(speedMps, 1f);
             float clockBoostMph = ARS.Clamp(_lineDecelG * LineClockBrakeMphPerG, -LineClockBrakeCapMph, LineClockBrakeCapMph);
-            float clockMps = Math.Max(_lineClockMps + ARS.MphToMps(clockBoostMph), 1f);
-            float secondsToApex = metresToApex / clockMps;
-            // The manoeuvre's entry and exit may not sit closer to the apex than the track is wide: on a slow or narrow corner the time
-            // window collapses to a handful of metres, and a phase that opens and closes inside a car's own length cannot be driven. Both
-            // ends are floored in METRES, which is the only unit in which "the width of the road" means anything.
-            float trackWidthMeters = 2f * halfWidth;
-            float blendStartMeters = Math.Max(IdealLineBlendStartSeconds * clockMps, trackWidthMeters);
-            float blendEndMeters = Math.Max(IdealLineBlendEndSeconds * clockMps, trackWidthMeters);
-            if (blendStartMeters <= blendEndMeters) blendStartMeters = blendEndMeters + 1f;
-            float linePhase = ARS.Clamp((blendStartMeters - metresToApex) / (blendStartMeters - blendEndMeters), 0f, 1f);
+            float secondsToApex = metresToApex / Math.Max(_lineClockMps + ARS.MphToMps(clockBoostMph), 1f);
+            float linePhase = ARS.Clamp((IdealLineBlendStartSeconds - secondsToApex)
+                / Math.Max(IdealLineBlendStartSeconds - IdealLineBlendEndSeconds, 0.01f), 0f, 1f);
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
             // would reopen a blend that has already closed; the phase is ratcheted per apex, so the demand can only move inward and
             // a new corner starts from the outside.
@@ -1369,7 +1362,7 @@ namespace ARS
             // mechanical grip and downforce, and one tick under it used to sweep the ratchet away mid-corner.
             bool inBlendWindow = metresToApex >= 0 && metresToApex <= IdealLineWindowMeters
                 && c.DetectedRadius < IdealLineMaxRadiusMeters && !HasPassedApex(apexNode)
-                && metresToApex <= blendStartMeters;
+                && secondsToApex <= IdealLineBlendStartSeconds;
             if (inBlendWindow)
             {
                 // A different corner always starts from the outside. The old rule kept the latch when the handedness matched, so
@@ -1393,7 +1386,7 @@ namespace ARS
             // The last second is a commitment, not a preference. Whatever the blend managed by now - a short window at speed, a lean
             // contesting the lane, a speed floor that dropped out under braking - inside the final second the target IS the inside
             // extreme, and the line is active so that nothing else can claim the lane from it.
-            bool apexCommitted = metresToApex <= blendEndMeters && !HasPassedApex(apexNode);
+            bool apexCommitted = secondsToApex <= IdealLineBlendEndSeconds && !HasPassedApex(apexNode);
             if (apexCommitted)
             {
                 linePhase = 1f;
