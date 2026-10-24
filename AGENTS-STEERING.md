@@ -513,6 +513,15 @@ tethered to the car, so a geometric line could not run ahead of it and every req
 What is left is the acceleration limit (`LaneMoverAccelMps2` 14) and the speed cap (`LaneMoverSpeedCapMps` 12) - inertia,
 not distance - and the inside-mode guard, which is a direction test and not a leash.
 
+**The two protocols travel together: without an outside there is no outside-inside (driver, 2026-10-23).** `CurveLean` pulls
+**inward** from the car's own lane on any bend under `CurveLeanRadiusMeters` **500** by up to `CurveLeanPullMeters` 1, and it is
+relative, so it can never ask for the outer edge: the inside half of the protocol with the outside half missing. Worse, it ran
+BEFORE the apex window opened - so a car under 50 m of apex radius was pulled inside by the lean, and six seconds out the corner
+asked for the outside, a reversal that read as the lane's inertia. Now the nearest apex decides first: if its radius is under
+`IdealLineMaxRadiusMeters`, the corner owns the lane and the lean is skipped entirely, neutral until the window opens. Above the
+threshold the lean is the only opinion there is, exactly as before. `NearestApexAhead` is computed once in the chain and passed
+into `ComputeCornerLane`, so both halves read the same corner.
+
 **The outside is asked for by TIME to the apex, not by being overspeed (driver, 2026-10-23).** The whole `RequiresPositioning` machinery used to
 gate the corner line and it armed only on a corner that was **tight** (`R < 50`) and where the car arrived **10 mph over**
 the apex speed. It is gone: the field, `ApproachStarted`, the promotion pass that set it, `inPositionRange` and

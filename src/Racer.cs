@@ -654,11 +654,16 @@ namespace ARS
             // straight, where neither the lean nor a corner line has an opinion.
             float laneRequest = steerRefOffset;
             LaneReason laneReason = LaneReason.OwnLane;
-            if (TryComputeCurveLean(roadWide, speedMps, steerRefOffset, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
-            bool gotActiveCorner = ARS.Corners.Count > 0 && Lap > 0;
+            // The two protocols travel together: a corner that will ask for the outside owns the lane from the moment it is
+            // the nearest apex, so the lean must not pull the car inside first and hand the corner a reversal to make when
+            // its window opens. Without an outside there is no outside-inside, and with one the lean has nothing to add.
+            CornerPoint lineCorner = NearestApexAhead();
+            bool lineOwnsLane = lineCorner != null && lineCorner.DetectedRadius < IdealLineMaxRadiusMeters;
+            if (!lineOwnsLane && TryComputeCurveLean(roadWide, speedMps, steerRefOffset, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
+            bool gotActiveCorner = lineCorner != null && Lap > 0;
             float cornerLane = 0f;
             LaneReason cornerReason = LaneReason.OwnLane;
-            if (gotActiveCorner) cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, out cornerReason);
+            if (gotActiveCorner) cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, lineCorner, out cornerReason);
             if (cornerLane != 0f) { laneRequest = cornerLane; laneReason = cornerReason; }
             float avoidAheadLane = ComputeAvoidanceLane(roadWide);
             if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
@@ -1131,15 +1136,16 @@ namespace ARS
             return safeBound * (1f - 2f * t);
         }
 
-        float ComputeCornerLane(TrackPoint steerRefPoint, float speedMps, float ownLane, out LaneReason reason)
+        float ComputeCornerLane(TrackPoint steerRefPoint, float speedMps, float ownLane, CornerPoint lineCorner, out LaneReason reason)
         {
             reason = LaneReason.OwnLane;
             // The lane belongs to the corner the car is approaching, never to the head of the plan's queue. That queue
             // looks past a corner it has flagged as trivial, which swapped the head for the next apex while the car was
             // still inside the flagged one's window: the profile then read as "far away" and the line went back to the
             // outer clamp, so the car stopped turning in with the apex still ahead. Only passing the apex ends a line.
-            CornerPoint c = NearestApexAhead();
+            CornerPoint c = lineCorner;
             if (c == null) return 0f;
+            if (c.DetectedRadius >= IdealLineMaxRadiusMeters) return 0f;
             int apexNode = c.Node;
 
             // The line is a function of the distance to the apex, so no time enters the geometry - and it is measured
