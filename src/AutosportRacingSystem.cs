@@ -1970,6 +1970,17 @@ namespace ARS
                                 DrawLine(requestFrom, requestTo, requestColor);
                             }
                         }
+                        // A white diagonal from the car to the centre of the apex node the line has adopted. The lane geometry is
+                        // gradual and hard to read on its own; the identity is not, and a diagonal that jumps to a far corner is the
+                        // whole bug in one glance.
+                        int adoptedNode = racer.LineCornerNode;
+                        if (adoptedNode >= 0 && adoptedNode < ARS.TrackPoints.Count)
+                        {
+                            Vector3 apexPos = ARS.TrackPoints[adoptedNode].Position + Vector3.WorldUp * ApexMarkHeight;
+                            DrawLine(racer.Car.Position + Vector3.WorldUp * 1.0f, apexPos, Color.White);
+                            DrawText(apexPos + Vector3.WorldUp * 0.5f, "apex " + adoptedNode, Color.White, 0.5f);
+                        }
+
                     }
 
                     // The no-fly gate is per-racer (it's a Racer.cs function on the racer being
@@ -3253,6 +3264,8 @@ namespace ARS
         // bleed into one where the offsets agree. One step of 0.025 per lane, in chain order, and the whole ladder stays
         // low: these lines are read against the road, not stacked above it.
         const float LaneHeightCentre = 0.075f;
+        // The debug diagonal flies above every lane line and every chevron, so it is never confused with a lane.
+        const float ApexMarkHeight = 1.6f;
         const float LaneHeightCurrent = 0.100f;
         const float LaneHeightCarried = 0.125f;
         const float LaneHeightRequest = 0.150f;

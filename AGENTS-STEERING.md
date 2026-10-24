@@ -407,6 +407,11 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**The adopted apex is drawn (build 913).** `ShowTrackAnalysis` now draws a white diagonal from the car to the **centre of the node**
+of the corner the lane has adopted (`Racer.LineCornerNode`), at `ApexMarkHeight 1.6` so it flies above every lane line and chevron, with
+the node number beside it. The lane's own geometry is gradual and hard to read; the identity is not - a diagonal that jumps to a distant
+corner is the whole class of bug in one glance.
+
 **The cross rule only fires on a reversal (build 910).** Comparing aim and demand against the CAR's lane alone teleported the aim
 onto the car's lane every tick of an out-in: with the car mid-track, the demand is already inside while the aim still leads on the
 outside of it, so the two straddled the centre and the line reached the middle and stopped - it could never cross to the inner half.

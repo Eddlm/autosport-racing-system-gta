@@ -213,6 +213,8 @@ namespace ARS
         bool _laneSnap = false;
         bool _laneOverride = false;
         public float CarriedLane { get { return _carriedLane; } }
+        // The corner that owns the apex line right now: the debug diagonal is drawn to its node, so a swap of identity is visible.
+        public int LineCornerNode { get { return _lineCornerNode; } }
         public LaneReason LaneRequestReason { get { return _laneRequestReason; } }
         public float LaneRequest { get { return _laneRequest; } }
         public float LaneRate { get { return _laneRate; } }
