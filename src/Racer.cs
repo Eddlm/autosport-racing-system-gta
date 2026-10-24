@@ -1102,9 +1102,13 @@ namespace ARS
         // count is a different number of seconds at 40 km/h and at 200, so the line arrived early when slow and late
         // when fast. Below 0.5 s the blend is finished and holds the inside; past the apex the distance is negative and
         // it holds there too.
-        float IdealLineOffset(int distanceFromApex, float safeBound, float speedMps)
+        //
+        // The clock is the APEX's own speed, not the car's: a live speed makes `d / v` grow every time the car brakes,
+        // so the countdown expanded under a braking car and the line reopened outward mid-corner. The apex speed is a
+        // property of the corner, constant for the whole approach, so the countdown can only shrink.
+        float IdealLineOffset(int distanceFromApex, float safeBound, float apexSpeedMps)
         {
-            float secondsToApex = distanceFromApex / Math.Max(speedMps, 1f);
+            float secondsToApex = distanceFromApex / Math.Max(apexSpeedMps, 1f);
             float t = ARS.Clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds), 0f, 1f);
             return safeBound * (1f - 2f * t);
         }
@@ -1158,7 +1162,7 @@ namespace ARS
             // its speed still to lose.
             bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, speedMps) : 0f;
+            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound, ApexSpeedWithDownforce(c.DetectedRadius)) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)

@@ -507,8 +507,10 @@ not distance - and the inside-mode guard, which is a direction test and not a le
 
 **The blend is one straight ramp in TIME to the apex, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
 `t = clamp((2.5 - secondsToApex) / 2.0)`, `offset = safeBound * (1 - 2t)`: the outer clamp at **2.5 s** out, the inside clamp
-at **0.5 s**, linear between, and it holds the inside below 0.5 s and past the apex. `secondsToApex = d / max(speed, 1)` off the
-signed node distance. Time is what makes one corner read the same at any speed; a fixed node count is a different number of
+at **0.5 s**, linear between, and it holds the inside below 0.5 s and past the apex. `secondsToApex = d / max(apexSpeed, 1)` off the
+signed node distance, where the speed is **the apex's own** (`ApexSpeedWithDownforce(radius)`) and never the car's live one: a
+live speed makes `d / v` grow every time the car brakes, so the countdown expanded under a braking car and the line reopened
+outward mid-corner. The apex speed is a property of the corner, constant for the whole approach, so the countdown can only shrink. Time is what makes one corner read the same at any speed; a fixed node count is a different number of
 seconds at 40 km/h and at 200, so the line arrived early when slow and late when fast. `IdealLineLeadSeconds`,
 `IdealLineLeadMultiple`, the `leadAngle` geometry and `IdealLineBlendNodes` are **gone**. The distance is now **signed** (`+-count/2` on a
 circuit, negative once the apex is behind): the old fallback swapped a passed apex for a wrapped forward distance, which read
