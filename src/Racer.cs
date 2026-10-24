@@ -184,10 +184,12 @@ namespace ARS
         // The apex blend only ever closes: the latched phase of the corner currently being approached, and which corner it belongs to.
         int _linePhaseNode = -1;
         float _linePhaseLatched;
+        // This car's own pull-in for the outside line, rolled once per corner and held until the car passes it.
+        int _lineBiasNode = -1;
+        float _lineBiasMeters;
         // The direction the latched phase belongs to: a second apex in the same bend keeps the latch, a bend the other way starts
         // again from the outside.
         float _linePhaseDir;
-        // The lean's approach rate, set from the sampled curvature: 0 in a 500 m bend, 1 at 250 m or tighter.
         // The lean's approach speed in m/s, set from the sampled curvature: near zero at the 500 m gate, at most CurveLeanApproachMps.
         float _leanApproachMps;
         float _laneRequest = 0f;
@@ -1000,7 +1002,7 @@ namespace ARS
             // CurveLeanApproachMps at 200 m and tighter, 1/e per extra tau of radius, effectively nothing at the 500 m gate.
             float overFullRadius = Math.Max(ahead.PreciseCurveRadius - CurveLeanApproachFullRadiusMeters, 0f);
             _leanApproachMps = CurveLeanApproachMps * (float)Math.Exp(-overFullRadius / CurveLeanApproachTauMeters);
-            lane = -cornerDir * laneEdge;
+            lane = -cornerDir * Math.Max(laneEdge - LaneInsideGapMeters, 0f);
             return true;
         }
 
@@ -1159,6 +1161,12 @@ namespace ARS
         // The outside is a distance decision and the apex is not. Placing the car on the outer edge is done with room to spare
         // and does not change with speed, so the window and the plateau stay in metres of route.
         const float IdealLineWindowMeters = 300f;
+        // Clearance from the edges, and the personal bias. The outside line keeps half a metre from the outer edge; the lean keeps a
+        // full metre from the inner one. Each car also rolls its own pull-in of 0..LaneBiasMaxMeters, once per corner and held until
+        // it passes, so a field does not stack itself on one line - and never enough to reach the centre, which the clamp guarantees.
+        const float LaneOutsideGapMeters = 0.5f;
+        const float LaneInsideGapMeters = 1f;
+        const float LaneBiasMaxMeters = 4f;
         // Moving from the outside to the inside is a time decision: 3 s to the apex the car starts coming in, 1 s it is on the
         // inside. In metres that stretch would be 20 m at 25 km/h and 80 m at 100, which is why the distance blend arrived
         // early when slow and late when fast.
@@ -1240,6 +1248,15 @@ namespace ARS
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = Math.Max(halfWidth - carHalfWidth, 0f);
 
+            // The car's own line for this corner: a pull-in rolled once when the corner is adopted and held until the car passes its
+            // apex. The outside bound keeps the half-metre gap and the bias; floored at zero so the bias can reach the centre of the
+            // road but never cross it.
+            if (_lineBiasNode != apexNode)
+            {
+                _lineBiasNode = apexNode;
+                _lineBiasMeters = ARS.GetRandomInt(0, (int)(LaneBiasMaxMeters * 100f) + 1) / 100f;
+            }
+            float outsideBound = Math.Max(safeBound - LaneOutsideGapMeters - _lineBiasMeters, 0f);
             // Corner-commit: hold the defend/dive line for the card's whole life, but only on the corner the card was armed
             // for. Without the window test EVERY corner came back as CommitCard while any card was alive, because the branch
             // returns before the apex line is ever computed - three to four seconds of no outside on whatever corner the car
@@ -1320,7 +1337,7 @@ namespace ARS
                 _linePhaseLatched = 0f;
                 _linePhaseDir = 0f;
             }
-            float offset = entryActive ? halfWidth * (1f - 2f * linePhase) : 0f;
+            float offset = entryActive ? outsideBound - (outsideBound + safeBound) * linePhase : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)
@@ -1880,6 +1897,8 @@ namespace ARS
             _linePhaseNode = -1;
             _linePhaseLatched = 0f;
             _linePhaseDir = 0f;
+            // The outside bias is rolled per corner, so a restart must not inherit the previous race's pull-in.
+            _lineBiasNode = -1;
             Control.ThrottleReasonLevel = 1f;
             Control.BrakeReason = BrakeReason.Plan;
             Control.BrakeReasonLevel = 1f;

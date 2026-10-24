@@ -407,6 +407,13 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**Edge clearances and the per-car outside bias (driver, 2026-10-24, build 907).** The outside line now sits `LaneOutsideGapMeters
+0.5` inside the guard and the lean sits `LaneInsideGapMeters 1.0` inside it, so neither names the very edge of the tarmac. On top of the
+outside gap each car rolls its own pull-in of `0..LaneBiasMaxMeters 4` metres, **once per corner** (`_lineBiasNode`) and held until it
+passes the apex, so a field does not stack itself on one line; the bound is floored at zero, so the bias can reach the centre of the road
+and never cross it. The inside extreme of the apex line keeps the raw guard - it is the one place the car is meant to use the whole
+width. The bias is cleared in `Launch`: a restart must not inherit the previous race's pull-in.
+
 **The car's lane is measured in the car's own node frame (build 905, audit `deleg_7fee6020`).** `steerRefOffset` used to be
 `SignedLaneOffset(Car.Position, steerRefPoint.Position, steerRefPoint.Direction)` against the steer reference, which sits up to 30 m
 ahead: the car's position then picks up the sagitta of that chord, `L^2/2R` - 9 m on a 50 m corner, sign following the corner, so a
