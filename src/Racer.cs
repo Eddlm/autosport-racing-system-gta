@@ -1013,10 +1013,11 @@ namespace ARS
         // Under this a request is too close to the car's own lane for "the other side" to mean anything, and the aim would be
         // flipped to the car on noise.
         const float LaneCrossMinMeters = 0.1f;
-        // The aim is leashed to the car: full speed up to LaneTaperNearMeters away, nothing at all past LaneTaperFarMeters. Beyond
-        // the leash the lane is not somewhere the car could follow it to, so moving there only stores a lunge for later.
+        // The aim is leashed to the car: full speed up to LaneTaperNearMeters away, slowing to LaneTaperCapShare by LaneTaperFarMeters.
+        // The leash slows the lane down as it leaves the car; it never stops it, or the car could not be led anywhere at all.
         const float LaneTaperNearMeters = 2f;
         const float LaneTaperFarMeters = 4f;
+        const float LaneTaperCapShare = 0.5f;
 
         // Carries the aim onto the request. The rate is bounded by the acceleration, which is what stops a
         // request that flips inside half a second from stepping the lane; the arrival term decelerates on the rate
@@ -1092,7 +1093,7 @@ namespace ARS
             // away from it.
             float awayFromCar = Math.Abs(_carriedLane - steerRefOffset);
             float leash = ARS.Clamp((awayFromCar - LaneTaperNearMeters) / (LaneTaperFarMeters - LaneTaperNearMeters), 0f, 1f);
-            moverSpeedCap *= 1f - leash;
+            moverSpeedCap *= 1f + leash * (LaneTaperCapShare - 1f);
             float requestRate = ARS.Clamp((request - _laneRequestPrev) / dt, -moverSpeedCap, moverSpeedCap);
             _laneRequestPrev = request;
 

@@ -408,9 +408,9 @@ the `roadWide` clamp it used to end with was the aim point's own clamp repeated 
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
 **The aim is leashed to the car** (`build 889`, `LaneTaperNearMeters 2`, `LaneTaperFarMeters 4`): the speed cap is full up to
-   2 m from the car lane and falls linearly to **zero** at 4 m, on top of the reason-based halving. Beyond the leash the lane is not
-   somewhere the car could follow it to, so moving there would only store a lunge for later; the aim leads, the car closes, the aim
-   advances again. Cap by distance: 2 m 24 m/s, 3 m 12, 3.5 m 6, 4 m and beyond 0.
+   2 m from the car lane and falls linearly to **half** (`LaneTaperCapShare 0.5`) at 4 m, on top of the reason-based halving, and
+   stays at half beyond. It slows the lane as it leaves the car; it never stops it, or the car could not be led anywhere at all
+   (builds 889 stop, 895 half). Cap by distance, inward / outward: 2 m 24/12, 3 m 18/9, 3.5 m 15/7.5, 4 m and beyond 12/6.
    **The aim lives on the segment [car lane, demand]** - two violations, two rules. Crossing (aim and demand on opposite sides
    of the car lane) is the teleport above. **Overshoot** (same side, but the demand already inside the aim) sets `_laneOvershoot`:
    the mover's acceleration doubles - the speed cap is untouched, so it returns twice as promptly without ever moving faster than
