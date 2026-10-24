@@ -190,6 +190,8 @@ namespace ARS
         // The corner that owns the apex line until its apex is passed. NearestApexAhead keeps handing this back while it is the
         // nearest, which is what stops two close apexes from taking the line off each other mid-manoeuvre.
         int _lineCornerNode = -1;
+        // One log a second at most, so a rule that fires rarely does not flood the file when it does.
+        int _laneCrossLoggedAt;
         // The direction the latched phase belongs to: a second apex in the same bend keeps the latch, a bend the other way starts
         // again from the outside.
         float _linePhaseDir;
@@ -1084,8 +1086,17 @@ namespace ARS
             // the new side.
             float aimFromCar = _carriedLane - steerRefOffset;
             float askFromCar = request - steerRefOffset;
-            if (aimFromCar * askFromCar < 0f && Math.Abs(aimFromCar) > LaneCrossMinMeters && Math.Abs(askFromCar) > LaneCrossMinMeters)
+            // Only a REVERSAL crosses to the car: the request is on the far side of the car AND behind the aim's own motion. Requiring just
+            // the far side pinned the aim to the car's lane during every out-in - the demand is inside while the aim still leads on the
+            // outside of a car sitting mid-track, so the two straddled the centre every tick and the line could never cross it.
+            bool reversing = gap * _laneRate < 0f;
+            if (reversing && aimFromCar * askFromCar < 0f && Math.Abs(aimFromCar) > LaneCrossMinMeters && Math.Abs(askFromCar) > LaneCrossMinMeters)
             {
+                if (Game.GameTime > _laneCrossLoggedAt)
+                {
+                    _laneCrossLoggedAt = Game.GameTime + 1000;
+                    ARS.Log(ARS.LogImportance.Info, "Lane cross " + Name + ": aim " + _carriedLane.ToString("0.00") + " to car " + steerRefOffset.ToString("0.00") + ", request " + request.ToString("0.00") + " (" + _laneRequestReason + "), rate " + _laneRate.ToString("0.00"));
+                }
                 _carriedLane = ARS.Clamp(steerRefOffset, -laneEdge, laneEdge);
                 _laneRate = 0f;
             }

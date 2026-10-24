@@ -407,6 +407,13 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**The cross rule only fires on a reversal (build 910).** Comparing aim and demand against the CAR's lane alone teleported the aim
+onto the car's lane every tick of an out-in: with the car mid-track, the demand is already inside while the aim still leads on the
+outside of it, so the two straddled the centre and the line reached the middle and stopped - it could never cross to the inner half.
+A teleport now also needs `gap * _laneRate < 0`, i.e. the request behind the aim's own motion - a genuine reversal, which is what the
+rule exists for (a lean flipping handedness). Normal chasing, including crossing the centre, is left to the mover's own law.
+`Lane cross` logs the event once a second.
+
 **The adopted corner owns the line until its apex is passed (driver, 2026-10-24, build 909).** `NearestApexAhead` now keeps returning
 `_lineCornerNode` while it is still ahead and no other corner is more than `LineApexStickyMeters 30` nearer. Without it, two apexes a
 few metres apart - a chicane, a bend detected twice - swapped identity tick after tick, and every swap reset the blend: the magenta
