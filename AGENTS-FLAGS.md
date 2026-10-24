@@ -84,6 +84,12 @@ The legacy `.dat` path (`:1398`, compiled only under `VERIFY_OLD_HANDLING_DAT` /
 
 ## `strModelFlags` — `VehModelFlags` (`MF_*`), `handlingMgr.h:41-82`
 
+**But the ABS bits are not the last word, and the status decides.** `Vehicle.cpp:4061` turns `MF_ABS_STD` into
+`SetCheatFlag(VEH_SET_ABS)`, and `Automobile.cpp:3768-3775` then grants `WF_ABS` per tick from a three-way chain whose last arm is
+**`else if (GetStatus() == STATUS_PHYSICS) nWheelCheatFlags |= WF_ABS`**. A vehicle is `STATUS_PHYSICS` from construction and
+becomes `STATUS_PLAYER` only when a player takes the driver's seat, so: on **an AI car clearing the ABS bits changes nothing**, and on
+**the player's car it really removes ABS**. The full site-by-site comparison of the two statuses is `AGENTS-VEHICLE-STATUS.md`.
+
 **The naming trap, and it is a real one**: handling.meta's `strModelFlags` element is **not** the `CVehicleModelInfoFlags` set described in the next section. It is a separate 32-bit legacy enum, `MF_*`, parsed by `sscanf(m_strModelFlags.TryGetCStr(), "%x", &mFlags)` (`handlingMgr.cpp:1698`) into `CHandlingData::mFlags` ("model option flags", `handlingMgr.h:971`) and read as `pHandling->mFlags & MF_...` (e.g. `MF_HAS_TRACKS` at `VehicleFactory.cpp:3039`). Two different sets, both called "model flags".
 
 | bit | engine name | what it is |
