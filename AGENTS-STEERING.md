@@ -427,6 +427,13 @@ how a car happens to enter. The constant and its term are deleted rather than le
 is what let the sweep be read at all. The lesson: **the entry-speed latch is the mando that matters; the cushion around it is not a mando.**
 If the crossing still reads as too quick, the knob is `IdealLineBlendStartSeconds`, whose steps are whole seconds.
 
+**A corner's entry and exit are floored at one track width from its apex (driver, 2026-10-24, build 932).** In `AddCornerRegion` the
+green entry and the red exit are walked outward until they are at least `2 x TrackHalfWidth` TRACK NODES from the apex (nodes are
+metres here), after the region clamp and before the corner is built. A corner whose entry sat a few metres from its own apex describes a
+bend the car is already inside, and every distance the manoeuvre later measures against that apex inherited the shrink. This is the
+corner table's rule, not the blend's - an earlier attempt to floor the BLEND in metres was reverted (builds 930/931) because the wrong
+end of the chain was being constrained.
+
 **The clock leans on the car's own braking (driver, 2026-10-24, build 927).** `LineClockBrakeMphPerG 2` adds two miles an hour of clock per g
 (build 928, doubled from 1), clamped to `LineClockBrakeCapMph 10` (raised from 1 at build 929 to see the effect uncapped), measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
 reaches the apex later than the cached entry speed says, so the line is allowed to slow with it - by a mile an hour at most, which is
