@@ -181,6 +181,9 @@ namespace ARS
         // Set by the mover when the aim has overshot the demand on the same side of the car: the car stops following it and it
         // returns at twice the acceleration until it is back on the segment.
         bool _laneOvershoot;
+        // The apex blend only ever closes: the latched phase of the corner currently being approached, and which corner it belongs to.
+        int _linePhaseNode = -1;
+        float _linePhaseLatched;
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
         float _laneRequestPrev = 0f;
@@ -1269,6 +1272,12 @@ namespace ARS
             float secondsToApex = metresToApex / Math.Max(speedMps, 1f);
             float linePhase = ARS.Clamp((IdealLineBlendStartSeconds - secondsToApex)
                 / Math.Max(IdealLineBlendStartSeconds - IdealLineBlendEndSeconds, 0.01f), 0f, 1f);
+            // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
+            // would reopen a blend that has already closed; the phase is ratcheted per apex, so the demand can only move inward and
+            // a new corner starts from the outside.
+            if (_linePhaseNode != apexNode) { _linePhaseNode = apexNode; _linePhaseLatched = 0f; }
+            _linePhaseLatched = Math.Max(_linePhaseLatched, linePhase);
+            linePhase = _linePhaseLatched;
             float offset = entryActive ? halfWidth * (1f - 2f * linePhase) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f

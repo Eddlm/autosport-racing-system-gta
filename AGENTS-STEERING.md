@@ -412,8 +412,9 @@ where the line begins to be asked for, because placing the car on the outer edge
 speed. The outside-inside blend is `IdealLineBlendStartSeconds 2` to `IdealLineBlendEndSeconds 1` (three-to-one was tried first and was too early; build 897), phase computed from
 `metresToApex / speedMps`: the same manoeuvre in metres was 20 m at 25 km/h and 80 m at 100, so it arrived early when slow and late when
 fast. The inside extreme is now reached ONE SECOND before the apex instead of five metres. `Corner line` logs `t=` beside `d=`.
-Caveat: `speedMps` is the live speed, so hard braking can make the clock run backwards for a tick and reopen the blend slightly; the
-fix, if it reads badly, is to floor the clock at the corner's own apex speed.
+The clock runs on `speedMps`, which braking lengthens, so the phase is **ratcheted per apex** (`_linePhaseNode` /
+`_linePhaseLatched`, build 898): the demand can only move inward, and a new apex starts the latch from the outside. Without it a hard
+brake reopened a blend that had already closed.
 
 **The aim is leashed to the car** (`build 889`, `LaneTaperNearMeters 2`, `LaneTaperFarMeters 4`): the speed cap is full up to
    2 m from the car lane and falls linearly to **half** (`LaneTaperCapShare 0.5`) at 4 m, on top of the reason-based halving, and
