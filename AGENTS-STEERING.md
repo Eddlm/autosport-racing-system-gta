@@ -415,6 +415,12 @@ blend window flickered, and that window contains the speed floor, which moves wi
 exactly when the car was unsettled. The latch is released on adoption of a different corner (always from the outside, whatever its
 handedness) and in `Launch`. **A line, once started, is never interrupted; only a passed apex ends it.**
 
+**Two apexes closer together than the out-in window (F8, driver, 2026-10-24).** When the next apex is born already inside
+`IdealLineBlendStartSeconds`, there is no room for an outside leg between the two corners and there is no point asking for one. The
+adoption reset handles it without a special case: the latch goes to 0 and the same tick's `linePhase` immediately lifts it to the
+value its own clock gives (0.8 at 1.2 s), so the demand crosses from the first apex's inside extreme to the second's remaining blend
+instead of jumping outwards first. A pair like that should read as one continuous inside line across both apexes.
+
 **Edge clearances and the per-car outside bias (driver, 2026-10-24, build 907).** The outside line now sits `LaneOutsideGapMeters
 0.5` inside the guard and the lean sits `LaneInsideGapMeters 1.0` inside it, so neither names the very edge of the tarmac. On top of the
 outside gap each car rolls its own pull-in of `0..LaneBiasMaxMeters 4` metres, **once per corner** (`_lineBiasNode`) and held until it
