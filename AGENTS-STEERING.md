@@ -407,6 +407,14 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
+**The apex blend is a TIME law; the outside is a distance law (driver, 2026-10-24, build 896).** `IdealLineWindowMeters 300` still says
+where the line begins to be asked for, because placing the car on the outer edge is done with room to spare and does not change with
+speed. The outside-inside blend is `IdealLineBlendStartSeconds 3` to `IdealLineBlendEndSeconds 1`, phase computed from
+`metresToApex / speedMps`: the same manoeuvre in metres was 20 m at 25 km/h and 80 m at 100, so it arrived early when slow and late when
+fast. The inside extreme is now reached ONE SECOND before the apex instead of five metres. `Corner line` logs `t=` beside `d=`.
+Caveat: `speedMps` is the live speed, so hard braking can make the clock run backwards for a tick and reopen the blend slightly; the
+fix, if it reads badly, is to floor the clock at the corner's own apex speed.
+
 **The aim is leashed to the car** (`build 889`, `LaneTaperNearMeters 2`, `LaneTaperFarMeters 4`): the speed cap is full up to
    2 m from the car lane and falls linearly to **half** (`LaneTaperCapShare 0.5`) at 4 m, on top of the reason-based halving, and
    stays at half beyond. It slows the lane as it leaves the car; it never stops it, or the car could not be led anywhere at all

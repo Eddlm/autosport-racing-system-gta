@@ -1140,9 +1140,14 @@ namespace ARS
         // needs to get out there and hold it.
         // The two halves need room, and room on this road is measured in nodes: the line exists inside two hundred of them
         // and the outside plateaus for those 250 metres. The ramp runs from 50 m out to 5 m out.
-        const float IdealLineOutsideMeters = 250f;
-        const float IdealLineRampStartMeters = 50f;
-        const float IdealLineApexMeters = 5f;
+        // The outside is a distance decision and the apex is not. Placing the car on the outer edge is done with room to spare
+        // and does not change with speed, so the window and the plateau stay in metres of route.
+        const float IdealLineWindowMeters = 300f;
+        // Moving from the outside to the inside is a time decision: 3 s to the apex the car starts coming in, 1 s it is on the
+        // inside. In metres that stretch would be 20 m at 25 km/h and 80 m at 100, which is why the distance blend arrived
+        // early when slow and late when fast.
+        const float IdealLineBlendStartSeconds = 3f;
+        const float IdealLineBlendEndSeconds = 1f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
         // the point: they crawl to the first corner instead of diving for the outer edge.
@@ -1225,7 +1230,7 @@ namespace ARS
             // happened to reach, which is exactly the intermittent blackout the driver reported.
             bool isCornerCommit = ActiveManeuver.Target != null
                 && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb)
-                && metresToApex >= 0f && metresToApex <= IdealLineOutsideMeters + IdealLineRampStartMeters;
+                && metresToApex >= 0f && metresToApex <= IdealLineWindowMeters;
             if (isCornerCommit)
             {
                 Rival target = Brain.Rivals.FirstOrDefault(r => r.RivalRacer == ActiveManeuver.Target);
@@ -1254,14 +1259,16 @@ namespace ARS
             // is inside it for ten seconds. The margin is measured under the apex speed, so a car already slowed for the corner
             // keeps the line it is committed to.
             bool fastEnoughForLine = speedMps > ApexSpeedWithDownforce(c.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph);
-            bool wantsPosition = metresToApex >= 0 && metresToApex <= IdealLineOutsideMeters + IdealLineRampStartMeters
+            bool wantsPosition = metresToApex >= 0 && metresToApex <= IdealLineWindowMeters
                 && c.DetectedRadius < IdealLineMaxRadiusMeters && fastEnoughForLine;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
             lineActive = wantsPosition;
             // The extreme is the raw half width, not the half width less half a car: the line is where the car's CENTRE
-            // goes, and the body overhanging the white line is the point of an apex. It is reached five METRES before the
-            // apex, so the car is already at the inside when it gets there instead of arriving on the way out.
-            float linePhase = ARS.Clamp((IdealLineRampStartMeters - metresToApex) / Math.Max(IdealLineRampStartMeters - IdealLineApexMeters, 1f), 0f, 1f);
+            // goes, and the body overhanging the white line is the point of an apex. It is reached ONE SECOND before the apex,
+            // so the car is already at the inside when it gets there instead of arriving on the way out.
+            float secondsToApex = metresToApex / Math.Max(speedMps, 1f);
+            float linePhase = ARS.Clamp((IdealLineBlendStartSeconds - secondsToApex)
+                / Math.Max(IdealLineBlendStartSeconds - IdealLineBlendEndSeconds, 0.01f), 0f, 1f);
             float offset = entryActive ? halfWidth * (1f - 2f * linePhase) : 0f;
             // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
@@ -1270,7 +1277,7 @@ namespace ARS
                 _cornerLineLoggedAt = Game.GameTime + 1000;
                 ARS.Log(ARS.LogImportance.Info, "Corner line " + Name + ": R " + c.DetectedRadius.ToString("0.0") + (c.DetectedRadius < CornerTightRadius ? " tight" : " WIDE")
                     + " wants=" + wantsPosition
-                    + " entry=" + entryActive + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
+                    + " entry=" + entryActive + " t=" + secondsToApex.ToString("0.0") + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
                     + " own=" + ownLane.ToString("0.00") + " bound=" + safeBound.ToString("0.00"));
             }
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
