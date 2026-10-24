@@ -2117,13 +2117,14 @@ namespace ARS
             // sentinel down into a number that would otherwise look like a live plan.
             bool cornerPlansABrake = cornerSpd < 999f;
 
-            // Hill grip loss: exponential model, 15 degrees halves grip.
+            // Hill grip loss: exponential model, 15 degrees halves grip. It is read ahead of the car and it applies to the
+            // route speed, which is a statement about this moment - never to the corner plan, whose apex is a property of
+            // its own geometry. Inheriting it made a corner two hundred metres away rise and fall with the road under the
+            // wheels, and a crest sampled on the way in sank a target that had nothing to do with it.
             {
                 float slopeAngleDeg = ARS.RadToDeg(GetFollowPointSlopeAngle());
                 float slopeGripFactor = ARS.HillGripFactorFromPitchAngle(slopeAngleDeg, this);
-                float slopeSpeedFactor = TerrainSpeedCut ? (float)Math.Sqrt(slopeGripFactor) : 1f;
-                cornerSpd *= slopeSpeedFactor;
-                followTrackSpd *= slopeSpeedFactor;
+                followTrackSpd *= (float)Math.Sqrt(slopeGripFactor);
             }
 
             // Vertical-curvature no-fly gate: a single sample of the road centred on the car, with
@@ -2133,21 +2134,16 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             int carNode = CurrentTrackPoint.Node;
             float routeCrestFactor = CrestGripSpeedFactor(carNode, count, out int routeNear, out int routeFar, out _);
-            if (!TerrainSpeedCut) routeCrestFactor = 1f;   // still sampled, so the lookahead lines keep drawing
             // Visualise the two lookahead nodes the live system just sampled: routeNear (1.0s ahead)
             // and routeFar (2.0s ahead). The car itself is at carNode, implicit.
             LiveRouteCrestNode = routeNear;
             LiveRouteCrestFarNode = routeFar;
             followTrackSpd *= routeCrestFactor;
 
-            // The apex speed before vertical grip, and the only input the corner's crest call takes as its entry speed.
+            // The apex speed before vertical grip, and the only input the corner's crest call takes as its entry speed. The
+            // corner plan takes no terrain factor, for the same reason the slope does not: the crest is measured under the
+            // car.
             _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
-            // Not "with vertical grip at the apex" -- the route factor is read at the car's current
-            // position, not at the apex. The factor projects the current gate onto the apex target,
-            // and the brake has already started. The rename makes the dataflow explicit.
-            float apexTargetWithCurrentRouteGrip = _cornerSpd;
-            cornerSpd *= routeCrestFactor;
-            apexTargetWithCurrentRouteGrip *= routeCrestFactor;
 
             // Steer-limited speed: max speed for current steer angle before sliding. Off while the route curvature is
             // being isolated: the blend made 70 % of the curvature term a function of the car's own steering angle,
@@ -2214,10 +2210,6 @@ namespace ARS
         // tyres, not unload, so they're ignored. The function takes the live car speed as the probe
         // velocity, so a faster car sees a longer sample arc and a slower one a shorter one -- the
         // same 1.0s/2.0s time window expressed in metres.
-        // TEMPORARY (driver, 2026-10-23): one corner reads as strangely slow, and the slope and crest speed cuts are the
-        // suspects. False multiplies neither; the crest is still sampled so the lookahead lines keep drawing. Set true to
-        // restore both.
-        const bool TerrainSpeedCut = false;
         const float nearSeconds = 1.0f;
         const float farSeconds = 2.0f;
         float CrestGripSpeedFactor(int carNode, int count, out int nearNode, out int farNode, out float rawDeltaGs)

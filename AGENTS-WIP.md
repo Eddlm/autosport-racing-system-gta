@@ -164,11 +164,12 @@ Four systems decide how fast a car goes. They were built one at a time and never
 **Known untested interaction:** the entrance cut is uncapped and the share step still runs beside it, so a corner can rebound between two factors. The notice feed is the place it shows; there is no log line behind it.
 **The corner keeps the arc, and grows through it.** The plan no longer lets go at its braking target: it holds its own number until the car has actually reached it — forward speed within `CornerLiftGraceMph` 5 mph of the target — and only then starts lifting at `CornerLiftMphPerSecond` 5 mph/s, so the car builds speed through the arc instead of sitting on the apex number until the apex. The gate reads the lifted number, so a car that falls behind pauses the growth without losing what it earned. Past the apex the plan releases outright. The route term still votes through `min`, so a radius that says slower is still the ceiling — the two are meant to work together, not to hand over.
 
-## TEMPORARY - terrain speed cuts off (2026-10-23)
+## Terrain speed cuts apply to the route and only the route (2026-10-23)
 
-`const bool TerrainSpeedCut = false` in `Racer.cs`. Neither the slope's `sqrt(hill grip)` nor the crest's
-`routeCrestFactor` multiplies `cornerSpd` or `followTrackSpd`, so the plan's speed is pure geometry. The crest is still
-**sampled** every tick, so the two lookahead lines keep drawing; only the multiplication is skipped. Reason: one corner
-reads as strangely slow and these are the suspects. **The brake solve's grade term is still live** - `BrakingDecel` adds
-the span's mean grade, which moves the braking point but not the target speed, so a downhill still brakes early.
-Restore by setting the flag true; nothing else changed.
+The slope's `sqrt(hill grip)` and the crest's `routeCrestFactor` multiply **`followTrackSpd` alone**. The corner plan
+(`cornerSpd`) takes neither, and `apexTargetWithCurrentRouteGrip` - an unused copy of it - is gone. Why: both factors are
+sampled **ahead of the car** (slope over the 1.0-2.0 s window, crest at the 1.0 s and 2.0 s nodes), so multiplying a corner
+target by them made an apex two hundred metres away rise and fall with the road under the wheels. Found from a corner that
+read as strangely slow on every lap; with the corner cut removed it took its authored speed again while the route term went
+on protecting the crests where the car actually is. `MaxCrestLift` (0.1-2.0 g, default 1.0) is the crest tolerance and it is
+live again, because the multiplier is back on the route.
