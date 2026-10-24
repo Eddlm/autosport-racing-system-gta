@@ -995,8 +995,8 @@ namespace ARS
         // track - and it has to happen inside the blend's 1.5 s, which needs 4 * 18 / 1.5^2 = 32 m/s^2 to start and stop
         // within it. At 14 the aim could not follow the ramp at all, and a reversal first had to spend 24 / 14 = 1.7 s
         // killing its own speed, longer than the whole window.
-        const float LaneMoverAccelMps2 = 45f;
-        const float LaneMoverSpeedCapMps = 25f;
+        const float LaneMoverAccelMps2 = 26f;
+        const float LaneMoverSpeedCapMps = 24f;
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
         // and walks back: the pedal path bounds its own step for the same reason.
         const float LaneMoverMaxStepSeconds = 0.1f;
