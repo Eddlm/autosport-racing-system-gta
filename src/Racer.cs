@@ -206,7 +206,10 @@ namespace ARS
 
         // Two input units per second while outside, down to a floor that leaves two thirds of the tyre for steering.
         const float ProjectionInputPerSecond = 2f;
-        const float ProjectionBrakeFloor = 0.75f;
+        const float ProjectionBrakeFloor = 0.5f;
+        // Off the line the car does not need to stop, only to be slow enough to turn back: the projection's escalation stops
+        // once the car is this far under the speed its own curvature asks for, and the plan drives from there.
+        const float OffTrackSpeedSlackMph = 10f;
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
         // Line discipline belongs to speed: below this the problem is traction, and a cap would hold an off-edge car
@@ -1725,7 +1728,9 @@ namespace ARS
             // laws on one pedal is one too many. Time is the escalation — full throttle, coast, then brake — and
             // full countersteer is the one branch it yields to: the tyre there is already working diagonally, so
             // brake on top saturates the circle instead of sharing it.
-            bool projectionOutside = _projectionWidening && _projectionOutsideMeters > 0f;
+            float projectionSpeedMph = ARS.MpsToMph(Car.Velocity.Length());
+            float projectionTargetMph = Math.Max(0f, ARS.MpsToMph(RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint)) - OffTrackSpeedSlackMph);
+            bool projectionOutside = _projectionWidening && _projectionOutsideMeters > 0f && projectionSpeedMph > projectionTargetMph;
             _projectionOutsideSeconds = projectionOutside ? _projectionOutsideSeconds + TickScale : 0f;
             float projectionInput = Math.Max(1f - ProjectionInputPerSecond * _projectionOutsideSeconds, -ProjectionBrakeFloor);
             bool projectionBinds = !countersteering && newThrottle > Math.Max(projectionInput, 0f);
