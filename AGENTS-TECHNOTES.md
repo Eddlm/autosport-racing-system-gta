@@ -106,6 +106,15 @@ same strip of road, so where two offsets agree the colours bleed into one. The h
 the 0.5 where `DrawTrackCrossingLine` puts the corner, crest and radius checks. The edge chevrons, the one drawing that sat at a lane height (0.2, over the green line where a car runs
 wide), moved to 0.6.
 
+**The ABS guard is instrumented, and its response rate is the open question (2026-10-24).** `ARS.MinWheelRotation` publishes the
+smallest per-wheel `m_fRotAngVel` (`wheel+0x170`, rad/s, absolute value) and `UpdateBrakeReasonCaps` logs
+`ABS <car>: locked=.. minWheel=.. rad/s cap=.. pedal=.. mph=..` at the moment a wheel crosses `AbsLockRadPerSecond` 2, rate-limited
+to twice a second. Why it matters: the detector is instant, but `Control.MaxBrakeFromABS` **glides** at
+`AbsBrakeFallPerSecond` **0.2/s**, so from 1.0 to the `AbsBrakeFloor` 0.2 takes **four seconds** - the wheel is locked long
+before the pedal lets go. A car with no ABS of its own is the first case where that shows, because the engine does not clamp
+`+0x174` for it. Numbers for the decision: 0.2/s is 4 s; 2/s is 0.4 s; 6/s is 0.13 s, which is ABS-shaped. The rise is a
+separate question - slow reapplication is the point of ABS.
+
 **The brake learner's verdict is the arrival speed, not the pedal (driver, 2026-10-23).** The old law scored the *share
 of the braking phase spent above 0.9 of pedal* against a 20 % target and multiplied the factor by the error. That asked
 the factor to reproduce a braking **style** rather than a braking **point**: a corner taken exactly right with a gentle

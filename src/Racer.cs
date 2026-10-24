@@ -2506,12 +2506,27 @@ namespace ARS
         const float AbsBrakeFloor = 0.2f;
         const float AbsBrakeFallPerSecond = 0.2f;
         const float AbsBrakeRisePerSecond = 0.2f;
+        int _absLoggedAt = 0;
+        bool _absWasLocked = false;
 
         void UpdateBrakeReasonCaps()
         {
             bool countersteering = IsFullCountersteer();
             Control.MaxBrakeFromABS = Glide(Control.MaxBrakeFromABS, AbsCapLevel(), AbsBrakeFallPerSecond, AbsBrakeRisePerSecond, TickScale);
             Control.MaxBrakeFromCountersteer = GlideCap(Control.MaxBrakeFromCountersteer, countersteering ? CountersteerPedalCap : 1f);
+            // The ABS guard is otherwise invisible: its only sign is the pedal bar. Log the moment a wheel crosses the lock
+            // floor and the reading that proves it, with the cap the glide has actually reached - the difference between the
+            // detector firing and the pedal letting go is the whole question on a car that has no ABS of its own.
+            if (ARS.AbsEnabled && Math.Abs(Control.Brake) > 0.2f && Game.GameTime > _absLoggedAt)
+            {
+                bool locked = ARS.MpsToMph(Car.Velocity.Length()) >= AbsMinSpeedMph && ARS.AnyWheelRotationBelow(Car, AbsLockRadPerSecond);
+                if (locked || locked != _absWasLocked)
+                {
+                    _absLoggedAt = Game.GameTime + 500;
+                    ARS.Log(ARS.LogImportance.Info, "ABS " + Name + ": locked=" + locked + " minWheel=" + ARS.MinWheelRotation(Car).ToString("0.00") + " rad/s cap=" + Control.MaxBrakeFromABS.ToString("0.00") + " pedal=" + Control.Brake.ToString("0.00") + " mph=" + ARS.MpsToMph(Car.Velocity.Length()).ToString("0"));
+                }
+                _absWasLocked = locked;
+            }
         }
 
         float AbsCapLevel()

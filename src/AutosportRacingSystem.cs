@@ -3110,6 +3110,21 @@ namespace ARS
             return false;
         }
 
+        // Smallest per-wheel angular velocity in rad/s, and +inf when the wheel list is empty. The absolute value, since a
+        // reversing car spins them negative. This is the reading the lock guard acts on, published so the log can say HOW
+        // locked a wheel was rather than only that it crossed the floor.
+        static public unsafe float MinWheelRotation(Vehicle handle)
+        {
+            List<ulong> wheelPtrs = GetWheelPtrs(handle);
+            float min = float.MaxValue;
+            foreach (var wheel in wheelPtrs)
+            {
+                float spin = Math.Abs(*((float*)(wheel + 0x170)));
+                if (spin < min) min = spin;
+            }
+            return min;
+        }
+
         // Largest per-wheel side-slip angle on the traction curve's own axis, where 1.0 is the peak. Reads every
         // wheel rather than the front pair: the wheel array's order is not something a driving law should depend on.
         static public unsafe float MaxWheelSideSlip(Vehicle handle)
