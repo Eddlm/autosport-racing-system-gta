@@ -173,3 +173,26 @@ target by them made an apex two hundred metres away rise and fall with the road 
 read as strangely slow on every lap; with the corner cut removed it took its authored speed again while the route term went
 on protecting the crests where the car actually is. `MaxCrestLift` (0.1-2.0 g, default 1.0) is the crest tolerance and it is
 live again, because the multiplier is back on the route.
+
+
+## Session close 2026-10-23/24 — builds 816-880 (deployed: 880)
+
+**Driven and reported good by the driver this session**: the outside apex line measured in metres (250 plateau + 50 ramp to 5 m, raw
+half width), the lean standing down while the line is active, the stability rate, and the four audit fixes. Everything earlier in the
+range was driven at some point unless stated.
+
+**Not driven yet** (compile-verified only, deployed in 880): the outside leg of the lane mover at **half rate** (13 m/s2 and 12 m/s
+while the reason is `OutsideLine`), and the eight-second `AvoidHoldTimeoutMs` backstop.
+
+**Open, filed in `AGENTS-BACKLOG.md`, deliberately not fixed**: `rival-walls-500ms-snapshot` (the wall corridor reads a 500 ms rival
+snapshot and reopens at 10 m/s - the next one to attack, and the most likely remaining cause of "never the same corner, never the same
+lap"), `track-point-resnap` (a whole-route re-snap with no heading test), `lane-two-frames` (`ownLane` and `steerRefOffset` compared
+across two reference frames, ~2.3 m of sagitta at R 50), `stability-speed-scaling`.
+
+**Instrument this analysis is missing**: the log has second resolution and every lane line is 1 Hz, so lane findings can only be
+falsified by same-second correlation. A per-tick lane record for one car - node, metres to apex, wants, entry, reason, request,
+carried - is what a proper investigation needs next.
+
+**Editing note**: `Racer.cs` had accumulated mixed line endings from patches that did not convert LF to CRLF; it is uniform again. A
+pattern that fails to match text that visibly exists is almost always that. `vscode_replace_text` matches literally, normalises the
+EOL and refuses an ambiguous search instead of guessing.
