@@ -427,8 +427,8 @@ how a car happens to enter. The constant and its term are deleted rather than le
 is what let the sweep be read at all. The lesson: **the entry-speed latch is the mando that matters; the cushion around it is not a mando.**
 If the crossing still reads as too quick, the knob is `IdealLineBlendStartSeconds`, whose steps are whole seconds.
 
-**The clock leans on the car's own braking (driver, 2026-10-24, build 927).** `LineClockBrakeMphPerG 1` adds one mile an hour of clock
-per g of deceleration, clamped to `LineClockBrakeCapMph 1`, measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
+**The clock leans on the car's own braking (driver, 2026-10-24, build 927).** `LineClockBrakeMphPerG 2` adds two miles an hour of clock per g
+(build 928, doubled from 1), clamped to `LineClockBrakeCapMph 1`, measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
 reaches the apex later than the cached entry speed says, so the line is allowed to slow with it - by a mile an hour at most, which is
 the whole point of the cap. Reading fixed up front: the driver said 0.1 per g, and at 0.1 mph/g the cap could never bind, so the law is
 0.1 mph per 0.1 g. `Corner line` logs the effective clock and `br=` in g.
@@ -520,7 +520,8 @@ asked for one metre.
 
 **The apex blend is a TIME law; the outside is a distance law (driver, 2026-10-24, build 896).** `IdealLineWindowMeters 300` still says
 where the line begins to be asked for, because placing the car on the outer edge is done with room to spare and does not change with
-speed. The outside-inside blend is `IdealLineBlendStartSeconds 2` to `IdealLineBlendEndSeconds 1` (three-to-one was tried first and was too early; build 897), phase computed from
+speed. The outside-inside blend is `IdealLineBlendStartSeconds 2` to `IdealLineBlendEndSeconds 0.25` (three-to-one was tried first and was too early, build 897; the end moved
+from 1 s to 0.25 s at build 928 so the manoeuvre has 1.75 s of clock and the inside is pinned only at the last quarter second), phase computed from
 `metresToApex / _lineClockMps`, where `_lineClockMps` is **the speed the car carried when it entered the window**, latched once per
 corner (`_lineClockNode`, build 917, driver's call). Three variants were tried and each failed for its own reason: the **live speed**
 moved the blend opening with braking, traffic and throttle cuts, so the line behaved differently every lap; the **apex speed**

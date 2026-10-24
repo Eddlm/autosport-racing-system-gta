@@ -195,7 +195,7 @@ namespace ARS
         int _lineClockNode = -1;
         // The clock follows the car's own braking, a little: a car that is shedding speed will reach the apex later than the cached entry
         // speed says, so the line is allowed to slow with it. 0.1 mph per 0.1 g, and never more than a mile an hour either way.
-        const float LineClockBrakeMphPerG = 1f;
+        const float LineClockBrakeMphPerG = 2f;
         const float LineClockBrakeCapMph = 1f;
         float _lineAlongPrev;
         float _lineDecelG;
@@ -1200,7 +1200,7 @@ namespace ARS
         // inside. In metres that stretch would be 20 m at 25 km/h and 80 m at 100, which is why the distance blend arrived
         // early when slow and late when fast.
         const float IdealLineBlendStartSeconds = 2f;
-        const float IdealLineBlendEndSeconds = 1f;
+        const float IdealLineBlendEndSeconds = 0.25f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
         // the point: they crawl to the first corner instead of diving for the outer edge.
