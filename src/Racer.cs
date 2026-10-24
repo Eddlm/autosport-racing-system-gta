@@ -329,9 +329,9 @@ namespace ARS
         // Arriving at the entrance faster than the plan asked is a verdict on the plan, not on the pedal: the
         // share of full pedal cannot see a car that came in hot and still spent the approach on the brake.
         const float BrakeEntryExcessMps = 2.2352f;  // five miles an hour over costs...
-        const float BrakeEntryFactorStep = 0.1f;    // ...a tenth of the factor; linear beyond, uncapped in total
+        const float BrakeEntryFactorStep = 0.2f;    // ...a fifth of the factor; linear beyond, uncapped in total
         const float BrakeEntryDeadbandMps = 0.89408f; // the first two mph are measurement noise, not a verdict
-        const float BrakeMaxFactor = 1.5f;
+        const float BrakeMaxFactor = 1f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
 

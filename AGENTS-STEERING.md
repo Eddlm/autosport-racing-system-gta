@@ -407,14 +407,13 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
-**The brake learner, after three passes (driver, 2026-10-24, build 921).** `BrakeEntryDeadbandMps` **2 mph**,
-`BrakeEntryExcessMps` **5 mph**, `BrakeEntryFactorStep` **0.1** per five miles an hour over, `BrakeGoodArrivalStep` **0.025** flat. Both steps
-are **absolute** in the factor's own units (`BrakeMinFactor 0.5` .. `BrakeMaxFactor 1.5`), never a percentage of it - the driver asked for
-absolute and the law must stay additive. So:
-2 mph nothing, 5 mph -0.06, 10 mph -0.16, 20 mph -0.36 (clamps to `BrakeMinFactor 0.5` from a 0.75 seed), 40 mph -0.76 (clamped hard).
-The learner is sharp again by choice: a corner that is badly over-driven must be corrected in one lap, not twenty. The cost is that a
-single 20+ mph overshoot saturates the floor and recovery is ten clean laps at +0.025, so a corner can sit at 0.5 for a while after one
-bad lap - watch for that as "brakes far too early" on a corner the AI has just got wrong once.
+**The brake learner, tuned by driving (driver, 2026-10-24, build 922).** `BrakeEntryDeadbandMps` **2 mph**,
+`BrakeEntryExcessMps` **5 mph**, `BrakeEntryFactorStep` **0.2** per five miles an hour over, `BrakeGoodArrivalStep` **0.025** flat,
+`BrakeMinFactor 0.5`, and the ceiling moved from 1.5 to **1.0** - no step above the nominal brake point. Both steps are absolute in the
+factor's own units, never a percentage. By overshoot: 2 mph nothing, 5 mph -0.12, 10 mph -0.32 (floor), 20 mph -0.72 (floor). The car under
+test took four laps to settle at the gentler settings; this is one lap for anything past ~10 mph. Cost: a single overshoot saturates the
+floor and every clean lap buys back only 0.025, so a corner can sit at 0.5 for ten laps after one mistake - the symptom is brakes far too
+early on a corner the AI got wrong once.
 
 **The entry-latched clock still depends on how the car enters (driver, 2026-10-24, build 917).** One frozen number cannot be right for
 two different approaches: a car that enters slow and accelerates keeps a low clock, so `2 × v_entry` metres arrive almost immediately
