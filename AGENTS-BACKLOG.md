@@ -55,6 +55,26 @@
 
 **Tier 9 — recorded ideas, not started**
 - `brake-learning` — **dropped (driver)**: the slide-learned ceiling is not relevant anymore. **closed**
+- `rival-walls-500ms-snapshot` — **filed 2026-10-23 from an independent audit, not fixed.** `ApplyRivalWalls` keys the corridor off
+  `Rival.NodeOffset`, `RouteGapAhead`, `LongitudinalGap` and `DirectionDiff`, all refreshed only in `UpdateRivalInfo` on the **500 ms**
+  beat, while the walls run every core tick. After a pass the corridor keeps a rival that is already behind, and an unconstrained wall
+  creeps back at `10 x TickScale`, so a corridor 3 m narrow needs 0.3 s to reopen — and is re-pinned while the stale snapshot still
+  says "alongside". Effect: the outside request is clipped for up to half a second after any pass, on corners that have nothing to do
+  with it. This is the most likely remaining cause of "never the same corner, never the same lap". Falsify by correlating each
+  `asked X (WallClamp)` second against the nearest rival's `RouteGapAhead`/`NodeOffset`: expect the corridor constrained while the gap
+  is already negative or over 30 m. The fix is either to run the wall inputs on the core beat or to stop lerping the reopening.
+- `track-point-resnap` — **filed 2026-10-23, not fixed.** `UpdateTrackPosition` searches +-6 nodes and, when the nearest is over 25 m
+  away, re-scans the **whole route** and takes the nearest point with no heading test. `NearestApexAhead` and `HasPassedApex` both key
+  off that node, so one mis-snap on an overlapping leg (hairpin, chicane, self-crossing street circuit) or after an off-track
+  excursion makes the approached corner read as behind, the picker jumps to the next corner — possibly a lap away — and the outside
+  request disappears until it snaps back. A step change, not a drift: falsify by watching `d=` jump from tens of metres to hundreds
+  with the radius changing to another corner's in the same second.
+- `lane-two-frames` — **filed 2026-10-23, not fixed.** `ownLane` is `Brain.CurrentPerception.CurrentNodeOffset` (car frame) while
+  `steerRefOffset` is `SignedLaneOffset` against `steerRefPoint` (reference frame). On a 50 m radius with a 30 m reference the
+  sagitta between them is ~2.3 m, more than the `LaneOverrideHoldMeters` 0.1 release band, so the inside latch can arm on one and the
+  mover guard read "outside" on the next and flip tick to tick. Falsify with `Lane guard ... held at X, request was Y` where `Y - X`
+  is 1-2 m and its sign flips within a few ticks at constant steer. The fix is to compare both against the same frame.
+
 - `stability-speed-scaling` — **recorded (driver, 2026-10-23: "buena idea, pero no para hoy"), not started.** The stability cap falls at `StabilityFallPerWheelPerSecond` 1.0 per wheel per second, additive, and recovers at 0.25/s only with all four down — a shape built for an emergency. But it reads the **symptom** (a wheel reading zero side slip) and not the **risk**: a wheel lifted by a bump at 20 km/h in a field costs exactly as much as one lifted on a crest at 200 km/h. Cross-country is where that bites: with one or two wheels losing contact every second the net is -0.375 to -0.875 per second, so the cap sits oscillating between 0.05 and 0.15 and the car has effectively no throttle — and because `PlanWantsToMove()` keeps reading true, the off-track recovery escalates to `Reverse` and then to `SnapToTrack()`. The proposal is to scale the fall by speed, one line: `fall = StabilityFallPerWheelPerSecond * wheelsOff * Remap(mph, 20, 80, 0.2, 1.0)`, which keeps the penalty whole where it matters and leaves rough ground as what it is — uneven terrain, not an emergency. The cheaper alternative, if a speed gate reads as too much machinery: count a wheel only after it has been off for **100-150 ms**, which filters the bump and keeps the crest, since a bump lifts for a frame and a crest for half a second. Either way the 4:1 asymmetry between falling and rising stays: the expensive error is the crash, and lost time is recoverable.
 
 **Relocated open items — ranked on entry**
