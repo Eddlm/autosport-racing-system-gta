@@ -2121,7 +2121,7 @@ namespace ARS
             {
                 float slopeAngleDeg = ARS.RadToDeg(GetFollowPointSlopeAngle());
                 float slopeGripFactor = ARS.HillGripFactorFromPitchAngle(slopeAngleDeg, this);
-                float slopeSpeedFactor = (float)Math.Sqrt(slopeGripFactor);
+                float slopeSpeedFactor = TerrainSpeedCut ? (float)Math.Sqrt(slopeGripFactor) : 1f;
                 cornerSpd *= slopeSpeedFactor;
                 followTrackSpd *= slopeSpeedFactor;
             }
@@ -2133,6 +2133,7 @@ namespace ARS
             int count = ARS.TrackPoints.Count;
             int carNode = CurrentTrackPoint.Node;
             float routeCrestFactor = CrestGripSpeedFactor(carNode, count, out int routeNear, out int routeFar, out _);
+            if (!TerrainSpeedCut) routeCrestFactor = 1f;   // still sampled, so the lookahead lines keep drawing
             // Visualise the two lookahead nodes the live system just sampled: routeNear (1.0s ahead)
             // and routeFar (2.0s ahead). The car itself is at carNode, implicit.
             LiveRouteCrestNode = routeNear;
@@ -2213,6 +2214,10 @@ namespace ARS
         // tyres, not unload, so they're ignored. The function takes the live car speed as the probe
         // velocity, so a faster car sees a longer sample arc and a slower one a shorter one -- the
         // same 1.0s/2.0s time window expressed in metres.
+        // TEMPORARY (driver, 2026-10-23): one corner reads as strangely slow, and the slope and crest speed cuts are the
+        // suspects. False multiplies neither; the crest is still sampled so the lookahead lines keep drawing. Set true to
+        // restore both.
+        const bool TerrainSpeedCut = false;
         const float nearSeconds = 1.0f;
         const float farSeconds = 2.0f;
         float CrestGripSpeedFactor(int carNode, int count, out int nearNode, out int farNode, out float rawDeltaGs)
