@@ -1122,11 +1122,10 @@ namespace ARS
         // The chord meets the outside edge at the lead, and a car cannot change heading at the rate that implies, so
         // the blend is stretched past the geometric lead: the endpoints stay where the chord put them, the rate of
         // change falls as one over the multiple, and the path's curvature as one over its square.
-        const float IdealLineLeadMultiple = 2f;
         // The profile is geometric - no time in it - but the car arrives late to it, so the whole line is pulled this
         // far toward the apex in travel: half a second at the car's own speed, which is what the steering needs to
         // actually reach the inside before the apex passes.
-        const float IdealLineLeadSeconds = 0.5f;
+        const float IdealLineBlendNodes = 20f;
 
         // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
         // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
@@ -1160,14 +1159,13 @@ namespace ARS
             return best;
         }
 
-        float IdealLineOffset(int distanceFromApex, float apexRadius, float safeBound, float speedMps)
+        // The blend is one straight ramp over the last twenty nodes before the apex and nothing else: the outer clamp at
+        // twenty nodes out, the inside clamp at the apex, linear between. No lead time, no radius, no speed - the three
+        // that used to move the transition with the car made it start at a different place on every approach.
+        float IdealLineOffset(int distanceFromApex, float safeBound)
         {
-            float innerRadius = apexRadius - safeBound;
-            if (!(innerRadius > 0f) || apexRadius >= 999f) return 0f;
-            float leadAngle = (float)Math.Acos(ARS.Clamp(innerRadius / (apexRadius + safeBound), -1f, 1f));
-            float leadMeters = speedMps * IdealLineLeadSeconds;
-            float t = ARS.Clamp((Math.Abs(distanceFromApex) - leadMeters) / Math.Max(apexRadius * leadAngle * IdealLineLeadMultiple, 1f), 0f, 1f);
-            return safeBound * (2f * t * t * (3f - 2f * t) - 1f);
+            float t = ARS.Clamp(1f - distanceFromApex / IdealLineBlendNodes, 0f, 1f);
+            return safeBound * (1f - 2f * t);
         }
 
         float ComputeCornerLane(TrackPoint steerRefPoint, float speedMps, float ownLane, out LaneReason reason)
@@ -1186,8 +1184,11 @@ namespace ARS
             // of the car, though, so in the last lookahead before an apex it is already past one while the car is
             // not: falling back to the car's own distance there keeps the entry branch driving to the inside, where
             // reading the reference would open the profile outward at the apex.
+            // Signed, and negative once the apex is behind: the blend reads it as "nodes to go", so a wrapped forward
+            // distance would hand it a near-full lap and open the line outward on the exit half.
+            int count = ARS.TrackPoints.Count;
             int fwdToApex = apexNode - steerRefPoint.Node;
-            if (fwdToApex < 0) fwdToApex = ForwardNodeDistance(apexNode);
+            if (!ARS.IsPointToPoint) fwdToApex = ((fwdToApex + count / 2) % count + count) % count - count / 2;
 
             float cornerDir = Math.Sign(c.Angle);
             if (cornerDir == 0f) return 0f;
@@ -1216,7 +1217,7 @@ namespace ARS
             // its speed still to lose.
             bool wantsPosition = TryGetCornerContext(apexNode, out CornerContext apexContext) && apexContext.RequiresPositioning;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-            float offset = entryActive ? IdealLineOffset(fwdToApex, c.DetectedRadius, safeBound, speedMps) : 0f;
+            float offset = entryActive ? IdealLineOffset(fwdToApex, safeBound) : 0f;
             // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
             // outside line, and everything below it is the blend toward the apex.
             if (entryActive) reason = offset >= safeBound ? LaneReason.OutsideLine : LaneReason.ApexLine;

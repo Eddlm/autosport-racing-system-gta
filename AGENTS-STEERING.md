@@ -498,7 +498,15 @@ The consequence is worth knowing before it reads as a fault: for one lane offset
 Its lead is the geometric one stretched by a constant multiple.
 - **The corner line is entry-only (`d5a643f`)** — the exit half and the passed/active-apex bookkeeping are deleted, so past the apex the lane comes from the next corner's entry profile or the lean, and its offset applies only while the car has asked to position and is above apex speed.
 Adjacent profiles still merge by taking the further-in of the two, and an opposite-direction pair is still excluded as a chicane.
-  **The apex is chosen by absolute distance, so the blend has an exit half (driver, 2026-10-23).** `NearestApexAhead` kept only
+  **The blend is one straight ramp over the last twenty nodes, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
+`t = clamp(1 - d / 20)` against the signed node distance to the apex, `offset = safeBound * (1 - 2t)`: the outer clamp at
+twenty nodes out, the inside clamp at the apex, linear between. `IdealLineLeadSeconds`, `IdealLineLeadMultiple`, the
+`leadAngle` geometry and the radius/speed arguments are **gone** - three of them moved the transition with the car, so the
+same corner started its blend at a different place on every approach. The distance is now **signed** (`+-count/2` on a
+circuit, negative once the apex is behind): the old fallback swapped a passed apex for a wrapped forward distance, which read
+as a near-full lap of "nodes to go" and opened the line outward on the exit.
+
+**The apex is chosen by absolute distance, so the blend has an exit half (driver, 2026-10-23).** `NearestApexAhead` kept only
 corners with a positive forward distance, so the tick after the apex the request jumped from the inside clamp of that corner to
 the **outer** clamp of the next - a step from -safeBound to +safeBound at the moment the tyre is loaded hardest, which is the
 "outside-inside is not blending" the driver reported. `IdealLineOffset` is symmetric in `|d|`, so the exit half already existed:
