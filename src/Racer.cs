@@ -2302,11 +2302,11 @@ namespace ARS
         const float OffTrackRecoverThrottle = 0.75f;
 
         // Stability: each wheel out of contact costs a quarter of the throttle, since it cannot use the grip it has.
-        // A wheel out of contact costs the whole throttle cap per second, additive - one wheel empties it in a second, four in
-        // a quarter of one. Recovery only runs with every wheel down, at a flat quarter per second, four times slower than a
-        // single lost wheel: being out of contact is the emergency, and coming back is the thing to be careful about.
-        const float StabilityFallPerWheelPerSecond = 1f;
-        const float StabilityRisePerSecond = 0.25f;
+        // Half the throttle cap per wheel per second, additive: four wheels empty it in exactly half a second, one in two.
+        // Recovery only runs with every wheel down and takes the cap from zero to whole in two seconds - slower than the
+        // worst-case fall by four, because being out of contact is the emergency and coming back is what to be careful with.
+        const float StabilityFallPerWheelPerSecond = 0.5f;
+        const float StabilityRisePerSecond = 0.5f;
 
         // The overspeed correction only arms while the car is going straight and up to speed: steering or slide of
         // its own puts lateral work and bump transients into the longitudinal read, and below the speed gate the
