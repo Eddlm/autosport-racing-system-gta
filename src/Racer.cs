@@ -649,7 +649,7 @@ namespace ARS
             float laneRequest = steerRefOffset;
             LaneReason laneReason = LaneReason.OwnLane;
             if (TryComputeCurveLean(roadWide, speedMps, steerRefOffset, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
-            bool gotActiveCorner = Brain.Corner != null && Lap > 0;
+            bool gotActiveCorner = ARS.Corners.Count > 0 && Lap > 0;
             float cornerLane = 0f;
             LaneReason cornerReason = LaneReason.OwnLane;
             if (gotActiveCorner) cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, out cornerReason);
@@ -1117,6 +1117,22 @@ namespace ARS
         // which puts a corner in the target exactly where the car is settling onto it. So the chord supplies the two
         // ends - the outside edge a lead before the apex, the inside edge at it - and the blend between them leaves and
         // meets both edges flat, which is the part a car at speed can actually follow.
+        // Nearest corner whose apex is still ahead of the car. All of them are candidates, flagged or not: the skip is a
+        // statement about the braking plan, and it must not take the line away from the corner being driven.
+        CornerPoint NearestApexAhead()
+        {
+            CornerPoint best = null;
+            int bestDistance = int.MaxValue;
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                int distance = ForwardNodeDistance(corner.Node);
+                if (distance <= 0 || distance >= bestDistance) continue;
+                bestDistance = distance;
+                best = corner;
+            }
+            return best;
+        }
+
         float IdealLineOffset(int distanceFromApex, float apexRadius, float safeBound, float speedMps)
         {
             float innerRadius = apexRadius - safeBound;
@@ -1130,7 +1146,12 @@ namespace ARS
         float ComputeCornerLane(TrackPoint steerRefPoint, float speedMps, float ownLane, out LaneReason reason)
         {
             reason = LaneReason.OwnLane;
-            CornerPoint c = Brain.Corner.Point;
+            // The lane belongs to the corner the car is approaching, never to the head of the plan's queue. That queue
+            // looks past a corner it has flagged as trivial, which swapped the head for the next apex while the car was
+            // still inside the flagged one's window: the profile then read as "far away" and the line went back to the
+            // outer clamp, so the car stopped turning in with the apex still ahead. Only passing the apex ends a line.
+            CornerPoint c = NearestApexAhead();
+            if (c == null) return 0f;
             int apexNode = c.Node;
 
             // The line is a function of the distance to the apex, so no time enters the geometry - and it is measured

@@ -498,7 +498,16 @@ The consequence is worth knowing before it reads as a fault: for one lane offset
 Its lead is the geometric one stretched by a constant multiple.
 - **The corner line is entry-only (`d5a643f`)** — the exit half and the passed/active-apex bookkeeping are deleted, so past the apex the lane comes from the next corner's entry profile or the lean, and its offset applies only while the car has asked to position and is above apex speed.
 Adjacent profiles still merge by taking the further-in of the two, and an opposite-direction pair is still excluded as a chicane.
-  **The line ends at the apex and nowhere earlier (driver, 2026-10-23).** `entryActive` is `RequiresPositioning && !HasPassedApex`; the
+  **The apex line belongs to the nearest unpassed apex, not to `Brain.Corner` (driver, 2026-10-23).** `Brain.Corner` is the head of
+the **plan's** queue, and `RefillApexQueue` deliberately looks past a corner it has flagged in `_skippedApexes` - a wide corner
+with no braking plan, once the car is inside its window - so the head swaps to the next apex while the car is still inside the
+flagged one's window. `ComputeCornerLane` read that head, so the profile suddenly measured a corner far down the road: `t` went to
+1, the offset returned to the outer clamp and the reason became `OutsideLine`, which is the orange line. The magenta line did not
+fade - it was replaced, and the car kept holding the outside through the corner it was actually driving. `NearestApexAhead()`
+walks every corner and takes the smallest positive `ForwardNodeDistance`, flagged or not: the skip is a statement about the
+braking plan and has no business taking the line away.
+
+**The line ends at the apex and nowhere earlier (driver, 2026-10-23).** `entryActive` is `RequiresPositioning && !HasPassedApex`; the
 old second term was `speed > ApexSpeedWithDownforce(radius) - 20 mph`, which dropped the inside line twenty miles an hour before the
 apex speed was reached — that is, while the car was still closing. The symptom was the car giving up the outside-inside turn-in
 early: the offset went to zero and the lane returned to the centre, so the car stopped steering for the apex with its speed still to
