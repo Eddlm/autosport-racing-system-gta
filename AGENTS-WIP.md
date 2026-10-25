@@ -493,3 +493,24 @@ leaderboard.
 
 **Owed a drive**: the AI without the pedal-gap padding (a car may now fall short where it used to be propped up), and the
 artificial rubberbanding as explicit power.
+
+## Nitro, closed 2026-10-25 — builds 989-993
+
+The burn is now one law and nothing else. `StartNitrous` no longer touches `SET_ENTITY_MAX_SPEED`; the burn sets
+CheatPower outright at `NitrousPowerMultiplier` (x `AiNitroPct`), the packing trim and the anti-overspeed cap are
+both exempt while it lasts, and the AI's plan is therefore the road's plan for those three seconds.
+
+**Measured, same car (F620), both at 2.50:** 64 -> 99 mph takes ~1.8 s for the player and ~1.8 s for the AI. There is
+no asymmetry to fix; the perceived gap is felt-vs-watched, plus different PI. If it reappears, the readout is the
+`Burn` line, not an opinion.
+
+Settings the driver runs (worth knowing before reading any report): `TcsEnabled = False`, `OverspeedCut = Off`,
+`AiNitroPct = 100`, `Rubberbanding = 100` in Natural. With TCS off the burn lights the tyres early
+(`slip -3.04`) and grip only recovers after ~1 s of the 3 the bottle buys.
+
+**Diagnostics left in place** (`Info`): `Burn <car> (player|AI), power, throttle, caps, plan, speed, slip` every 500 ms
+during a burn; `AI nitrous: <car> lap N, plan X mph, packing xF`; `Nitro Gs: measured, wheel, excess` inside the
+overspeed sampling block (only when `OverspeedCutPerTenthG > 0`).
+
+**Still open:** the 13 audit reports in `docs/audit/` remain uncommitted, and ~38 of their blockers are unverified
+claims. Owed a drive: the AI without the deleted pedal-gap compensation, artificial rubberbanding as explicit power.
