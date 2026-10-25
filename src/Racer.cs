@@ -1650,13 +1650,18 @@ namespace ARS
             _leftWallHeld = leftConstrained;
             _rightWallHeld = rightConstrained;
             _wallRoadWide = roadWide;
-            // Both directions move at the same rate. Closing used to be instant, which stepped the corridor sideways in one tick
-            // and showed up as a jump in the Show Rivalry lines; the wall now walks to its target from either side.
-            float wallRate = 5f * TickScale;
+            // Two rates, one per direction. Closing is the safety half - a rival that has just appeared must be answered
+            // quickly, so it runs at 10 m/s. Opening is the comfort half and stays at 5, which is slower than the car can
+            // unwind and keeps a wall that has just let go as the limit while the corner line starts asking.
+            float wallCloseRate = 10f * TickScale;
+            float wallOpenRate = 5f * TickScale;
             float leftTarget = leftConstrained ? targetLeftWall : -trackBound;
             float rightTarget = rightConstrained ? targetRightWall : trackBound;
-            _avoidLeftWall = ARS.Clamp(leftTarget, _avoidLeftWall - wallRate, _avoidLeftWall + wallRate);
-            _avoidRightWall = ARS.Clamp(rightTarget, _avoidRightWall - wallRate, _avoidRightWall + wallRate);
+            // The left wall closes by moving right (target above the wall), the right wall by moving left (target below it).
+            float leftStep = leftTarget > _avoidLeftWall ? wallCloseRate : wallOpenRate;
+            float rightStep = rightTarget < _avoidRightWall ? wallCloseRate : wallOpenRate;
+            _avoidLeftWall = ARS.Clamp(leftTarget, _avoidLeftWall - leftStep, _avoidLeftWall + leftStep);
+            _avoidRightWall = ARS.Clamp(rightTarget, _avoidRightWall - rightStep, _avoidRightWall + rightStep);
             _activeRivalWallCount = (_avoidLeftWall > -trackBound ? 1 : 0) + (_avoidRightWall < trackBound ? 1 : 0);
 
             // Rival walls must remain ordered; collapse overlap to a narrow centered corridor.
