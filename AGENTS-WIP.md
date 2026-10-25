@@ -350,3 +350,19 @@ so the corridor reads as a cone opening from the car instead of two floating lin
 
 **Drive owed**: whether the wider overlap window (arc ≥ chord through a corner) holds the wall too long, and whether the route
 gap wraps correctly at the start line — a wrong wrap would flicker the wall once a lap.
+
+### Build 947 — two rules against changing sides, and why they are two
+
+Both live in the pass picker, and they answer different geometry:
+
+1. **Within a metre nose to tail, no flip** (`SideFlipMinClearanceMeters` 1): the crossing itself is the risk — the rear of the
+   car ahead is still in the way while this one goes round. Further back the flip stays free.
+2. **Side by side, the side is latched** (`|NodeOffset − its NodeOffset| < CombinedWidth`): once the two bodies are abreast
+   there is no room to cross over, so the lane the pass began on is the lane it finishes on. The geometry is not asked again
+   until the lateral overlap ends, and the latch is per target, so a different rival starts a fresh decision.
+
+They had to be split: written both as longitudinal arc, the 1 m rule lands **inside** the overlap window (`CombinedSize.Y` ≈ a
+body and a bit) and would never fire. The narrow one is longitudinal, the committed one is lateral — one car behind you does not
+pin you, only one alongside.
+
+**Drive owed**: a pass where the rival moves across the centreline mid-overtake — the old behaviour flipped the lane with it.

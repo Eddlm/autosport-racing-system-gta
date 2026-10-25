@@ -491,6 +491,10 @@ namespace ARS
         int _defendEntranceNode = -1;
         float _avoidHoldLane = 0f;
         bool _avoidHoldActive = false;
+        // The pass lane the car committed to, and the rival it committed to it for. Held while the bodies overlap.
+        float _passLaneValue;
+        bool _passLaneLatched;
+        Racer _passLaneTarget;
         int _avoidHoldUntil = 0;
         float _cornerLiftMps = 0f;
         float _appliedThrottleLastFrame = 1f;
@@ -1527,10 +1531,20 @@ namespace ARS
             float nodeOffset = Brain.CurrentPerception.CurrentNodeOffset;
 
             Rival target = Brain.AvoidanceTarget;
-            if (target == null || target.RivalRacer == null) return 0f;
+            if (target == null || target.RivalRacer == null) { _passLaneLatched = false; return 0f; }
+
+            // RULE 2 - once the two bodies are side by side the side is committed: there is no room to cross over without
+            // touching, so the lane the pass began on is the lane it finishes on and the geometry is not asked again until
+            // the lateral overlap ends. Latched per target: a different rival ahead starts a fresh decision. The lateral test
+            // is deliberate - a car behind this one does not pin it, only one alongside.
+            bool bodiesSideBySide = Math.Abs(target.NodeOffset - nodeOffset) < target.CombinedWidth;
+            if (bodiesSideBySide && _passLaneLatched && _passLaneTarget == target.RivalRacer) return _passLaneValue;
 
             if (!TryPickAvoidanceSide(target, trackBound, aggroBuffer, carHalfWidth, nodeOffset, out float avoidanceLane, out bool targetGoLeft))
+            {
+                _passLaneLatched = false;
                 return 0f;
+            }
 
             foreach (Rival r in Brain.Rivals)
             {
@@ -1544,10 +1558,16 @@ namespace ARS
                     continue;
 
                 if (secondGoLeft == targetGoLeft) continue;
-                return (avoidanceLane + secondTarget) * 0.5f;
+                _passLaneValue = (avoidanceLane + secondTarget) * 0.5f;
+                _passLaneLatched = true;
+                _passLaneTarget = target.RivalRacer;
+                return _passLaneValue;
             }
 
-            return avoidanceLane;
+            _passLaneValue = avoidanceLane;
+            _passLaneLatched = true;
+            _passLaneTarget = target.RivalRacer;
+            return _passLaneValue;
         }
 
         bool TryPickAvoidanceSide(Rival rival, float trackBound, float aggroBuffer, float carHalfWidth, float nodeOffset, out float passLane, out bool passLeft)
@@ -1573,8 +1593,12 @@ namespace ARS
             passLane = passLeft ? rivalLane - buffer - carHalfWidth : rivalLane + buffer + carHalfWidth;
 
             // Side flip only on near-straights: route radius above the floor, never inside corners.
+            // RULE 1 - no side change within a metre nose to tail: the crossing itself is the risk, because the rear of
+            // the car ahead is still in the way while this one goes round. Further back the flip is free.
             const float SideFlipRadiusFloor = 200f;
-            if (Math.Abs(passLane) > trackBound && Brain.CurrentPerception.CurveRadiusToFollowPoint > SideFlipRadiusFloor)
+            const float SideFlipMinClearanceMeters = 1f;
+            bool canChangeSide = Math.Abs(rival.RouteGapAhead) >= SideFlipMinClearanceMeters;
+            if (canChangeSide && Math.Abs(passLane) > trackBound && Brain.CurrentPerception.CurveRadiusToFollowPoint > SideFlipRadiusFloor)
             {
                 passLane = passLeft ? rivalLane + buffer + carHalfWidth : rivalLane - buffer - carHalfWidth;
                 passLeft = !passLeft;
