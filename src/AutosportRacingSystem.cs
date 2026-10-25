@@ -615,7 +615,12 @@ namespace ARS
 
         public static float EngineTopSpeed(Vehicle v)
         {
-            return Function.Call<float>(Hash._0x53AF99BAA671CA47, v) / 0.75f;
+            // GET_VEHICLE_ESTIMATED_MAX_SPEED (0x53AF...) returns, for a ground vehicle, the handling's
+            // fInitialDriveMaxFlatVel converted to m/s - commands_vehicle.cpp: CommandGetVehicleEstimatedMaxSpeed hands
+            // back m_Transmission.GetDriveMaxFlatVelocity, and that is the geared ceiling before any drag. No car reaches
+            // it. The model flavour below runs the game's own drag quadratic (CVehicleModelInfo::CalculateMaxFlatVelocityEstimate)
+            // and returns the speed the car actually settles at, which is the number "how much room is left" wants.
+            return Function.Call<float>((Hash)0xF417C2502FFFED43, Function.Call<int>(Hash.GET_ENTITY_MODEL, v));
         }
 
 
