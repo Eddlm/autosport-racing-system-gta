@@ -2028,6 +2028,12 @@ namespace ARS
 
                     DrawLine(startPos + startRight * racer.AvoidLeftWall + lift, endPos + endRight * racer.AvoidLeftWall + lift, leftColor);
                     DrawLine(startPos + startRight * racer.AvoidRightWall + lift, endPos + endRight * racer.AvoidRightWall + lift, rightColor);
+
+                    // The car sits at the near end and the walls at the far one: this pair is the "\./" of the shape, so the
+                    // corridor reads as an opening cone from the car rather than two floating lines.
+                    Vector3 carPos = racer.Car.Position + lift;
+                    DrawLine(carPos, endPos + endRight * racer.AvoidLeftWall + lift, leftColor);
+                    DrawLine(carPos, endPos + endRight * racer.AvoidRightWall + lift, rightColor);
                 }
 
                 // Player nitro: fire on key press, one bottle a lap. The fire charges the bottle itself, so there is

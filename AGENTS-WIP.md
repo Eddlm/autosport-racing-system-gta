@@ -338,3 +338,15 @@ as a trackside blockage when it is physically close.
 **Known inconsistency, next**: the test still reads `LongitudinalGap`, which is measured **in my car's own frame** — so a rival
 at 45° has a small longitudinal component and can fall out of overlap while it is close. See the proposal in the session that
 follows.
+
+### Build 945 — the overlap moves to the route axis, and the shape gains its cone
+
+`overlaps` now reads `|RouteGapAhead| < CombinedSize.Y`: the same axis `0623276` gave rival detection, so the gap no longer
+shrinks for a rival at an angle, a sliding car stops toggling it, and corners stop under-reading it. The 30 m same-section
+guard went with it — an arc shorter than a body cannot reach the far leg of a U — so the wall gate is one condition on one axis.
+
+The Show Rivalry drawing gains the `\./`: two lines from the car's own position to each wall's far end, in the wall's own colour,
+so the corridor reads as a cone opening from the car instead of two floating lines.
+
+**Drive owed**: whether the wider overlap window (arc ≥ chord through a corner) holds the wall too long, and whether the route
+gap wraps correctly at the start line — a wrong wrap would flicker the wall once a lap.
