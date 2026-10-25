@@ -113,9 +113,12 @@
        set). Excludes runtime cruft: zip, log, and crash-backup files. Settings is excluded as a whole:
        the release ships the folder EMPTY and the mod fills it on first run, so a refresh must never
        copy the developer's session values in (they would be the shipped defaults otherwise). -->
+  <!-- The Dist tree mirrors what is installed, so it must not carry the driver's scratch files: back-ups (*.bak) and the
+         Tracks\testing folder are excluded by name. The published zip comes from a fresh CI checkout, which holds tracked
+         files only - this mirror exists so a local pack cannot ship more than the install holds. -->
   <Target Name="RefreshDist" AfterTargets="Build" Condition="Exists('$(GtaArsScriptsDir)')">
     <MakeDir Directories="$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem" />
-    <Exec Command="robocopy &quot;$(GtaArsScriptsDir)&quot; &quot;$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem&quot; /E /XD &quot;$(GtaArsScriptsDir)\Settings&quot; /XF *.zip *.log *.bak-crash pidump.txt build-number.txt /NFL /NDL /NJH /NJS" IgnoreExitCode="true" />
+    <Exec Command="robocopy &quot;$(GtaArsScriptsDir)&quot; &quot;$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem&quot; /E /XD &quot;$(GtaArsScriptsDir)\Settings&quot; /XD "$(GtaArsScriptsDir)\Settings" "$(GtaArsScriptsDir)\Tracks\testing" /XF *.zip *.log *.bak *.bak-crash pidump.txt build-number.txt /NFL /NDL /NJH /NJS" IgnoreExitCode="true" />
   </Target>
   <!-- Development build counter. This is deliberately NOT the assembly version: 0.8.6.0 in
        src\Properties\AssemblyInfo.cs is the release identity and only moves by hand. The counter is a
