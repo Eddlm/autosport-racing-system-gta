@@ -119,6 +119,11 @@
 
 ## Agenda — the workstreams named for the coming days
 
+- `rival-record-lag` — **parked for 0.11.0 (owner, 2026-10-25)**: `UpdateRivalInfo` publishes on a `250 + phase` ms
+  beat (250-749 ms), while the wall gate needs the alongside tick; at 10 m/s closure the tested gap moves 2.5-7.5 m per
+  beat against a 10.05 m window. Audit B5 (`docs/audit/200-audit-0.9.0.md`). Accepted as shipped for 0.9.0: either the
+  record beats faster or the gate widens to its period — the choice is not made yet.
+
 **A through E are the 0.11.0 plan (driver)**, with A and its aftermath upstream of C and D; F stays deferred to its own session.
 - **A. Corner context, from the ground up** — one context-generation system naming brake point, turn-in and apex; diagnosed, partly shipped.
 - **B. TCS and ABS as smooth curves** — the driver suspects `tanh` is simpler than the current remaps; independent of A.
