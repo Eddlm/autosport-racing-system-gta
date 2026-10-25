@@ -303,14 +303,14 @@ namespace ARS
         float _steerPreLimitDegrees = 0f;
         // The ceiling actually in force after every limit, and the wheel angle granted, both for the readout.
         float _finalCeilingDeg = 0f;
-        // The slip ceiling as it stands, in command degrees: closes at SlipCeilingDropDegPerSec, opens at
-        // SlipCeilingRiseDegPerSec. Starts wide open so the first tick clamps nothing.
+        // The slip ceiling as it stands, in command degrees: closes at SlipCeilingDegPerSec, opens at
+        // SlipCeilingDegPerSec. Starts wide open so the first tick clamps nothing.
         float _slipCeilingDeg = float.PositiveInfinity;
         // The ceiling lives on the scale of the corner, not of the steering wheel: at speed it is already 5-6 deg, and the
         // slip rarely runs more than 10-20 deg past its target, so the whole correction is a handful of degrees. 6 closes
-        // 10 deg in 1.7 s and 20 in 3.3 s - slow enough to be felt, quick enough to arrive inside a long corner.
-        const float SlipCeilingDropDegPerSec = 6f;
-        const float SlipCeilingRiseDegPerSec = 8f;
+        // 10 deg in 1.7 s and 20 in 3.3 s - slow enough to be felt, quick enough to arrive inside a long corner. One rate for
+        // both directions: the ceiling recovers in exactly the time it takes to bite, and an asymmetric pair pumps.
+        const float SlipCeilingDegPerSec = 6f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
         SlipState _slip;
         // Below this command there is no inside of the corner, so the pair is averaged instead of picked.
@@ -2069,14 +2069,14 @@ namespace ARS
             // The ceiling exists only when the field is readable, the tyre is past its target and the peak is usable to map
             // degrees onto a wheel angle. Any of the three missing leaves the limiter out of the way rather than guessing.
             // The ceiling is a state, not a fresh function of this tick: it closes towards what the tyre asks at
-            // SlipCeilingDropDegPerSec and opens back at SlipCeilingRiseDegPerSec, so a step in the measurement never
+            // SlipCeilingDegPerSec and opens back at SlipCeilingDegPerSec, so a step in the measurement never
             // becomes a step at the wheel. Only the closing side is slow; opening fast would let the guard outrun the tyre.
             if (_slip.Readable)
             {
                 if (_slip.InnerPct > 100f && _slip.CeilingDeg > 0.01f)
-                    _slipCeilingDeg = Math.Max(_slip.CeilingDeg, _slipCeilingDeg - SlipCeilingDropDegPerSec * TickScale);
+                    _slipCeilingDeg = Math.Max(_slip.CeilingDeg, _slipCeilingDeg - SlipCeilingDegPerSec * TickScale);
                 else
-                    _slipCeilingDeg = Math.Min(VehicleData.SteeringLock, _slipCeilingDeg + SlipCeilingRiseDegPerSec * TickScale);
+                    _slipCeilingDeg = Math.Min(VehicleData.SteeringLock, _slipCeilingDeg + SlipCeilingDegPerSec * TickScale);
                 speedCeiling = Math.Min(speedCeiling, _slipCeilingDeg);
             }
             _finalCeilingDeg = speedCeiling;
