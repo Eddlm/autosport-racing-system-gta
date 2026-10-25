@@ -375,10 +375,13 @@ namespace ARS
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
+        // One approach may not take the whole factor: an entry 5 m/s hot used to earn 0.367, which is the entire distance from the
+        // seed to the floor, so one bad arrival ruined that corner for the rest of the race - fourteen clean arrivals to undo.
+        const float BrakeMaxCutPerEvent = 0.15f;
         // Arriving at the entrance faster than the plan asked is a verdict on the plan, not on the pedal: the
         // share of full pedal cannot see a car that came in hot and still spent the approach on the brake.
         const float BrakeEntryExcessMps = 2.2352f;  // five miles an hour over costs...
-        const float BrakeEntryFactorStep = 0.2f;    // ...a fifth of the factor; linear beyond, uncapped in total
+        const float BrakeEntryFactorStep = 0.2f;    // ...a fifth of the factor; linear beyond, capped per event below
         const float BrakeEntryDeadbandMps = 0.89408f; // the first two mph are measurement noise, not a verdict
         const float BrakeMaxFactor = 1f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
@@ -2516,12 +2519,14 @@ namespace ARS
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
             float entryCut = BrakeEntryFactorStep * (Math.Max(0f, _brakeCommitEntryExcessMps - BrakeEntryDeadbandMps) / BrakeEntryExcessMps);
+            entryCut = Math.Min(entryCut, BrakeMaxCutPerEvent);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
             // curve has fallen all the way to fTractionCurveMin, so that is sliding rather than merely cornering at
             // the limit. The factor then takes a flat cut — sample or no sample, the slide is the evidence.
             if (TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple)
             {
-                float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep - entryCut, BrakeMinFactor, BrakeMaxFactor);
+                float skidCut = Math.Min(BrakeSkidFactorStep + entryCut, BrakeMaxCutPerEvent);
+                float skidFactor = ARS.Clamp(before - skidCut, BrakeMinFactor, BrakeMaxFactor);
                 CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
                 AnnounceBrakeAdjustment(apexNode, before, skidFactor);
                 return;
