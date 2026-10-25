@@ -1812,7 +1812,7 @@ namespace ARS
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
         const float FrontSlipCapPeakShare = 0.50f;
-        const float FrontSlipFactorFloor = 0.25f;
+        const float FrontSlipFactorFloor = 0.05f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -1913,10 +1913,12 @@ namespace ARS
                 right = Math.Abs(slips[1]) * basePeak;
             }
 
-            float worst = Math.Max(left, right);
-            _frontSlipFactor = worst <= 0.01f || limitDeg <= 0.01f
+            // The average of the two fronts, not the worst: a single wheel clipping a kerb should not scale the whole
+            // command, and the pair is the axis the car actually turns on.
+            float slip = 0.5f * (left + right);
+            _frontSlipFactor = slip <= 0.01f || limitDeg <= 0.01f
                 ? 1f
-                : ARS.Clamp(limitDeg / worst, FrontSlipFactorFloor, 1f);
+                : ARS.Clamp(limitDeg / slip, FrontSlipFactorFloor, 1f);
 
             _frontSlipLeftDeg = left;
             _frontSlipRightDeg = right;
@@ -3610,7 +3612,7 @@ namespace ARS
         {
             string limit = _frontSlipLimitDeg.ToString("0.0");
             string text = "L " + _frontSlipLeftDeg.ToString("0.0") + "/" + limit + "deg     R "
-                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     f " + _frontSlipFactor.ToString("0.00");
+                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     f " + (_frontSlipFactor * 100f).ToString("0") + "%";
             UI.ShowSubtitle(text, 50);
         }
 
