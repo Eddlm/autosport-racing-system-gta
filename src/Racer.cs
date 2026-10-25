@@ -305,6 +305,8 @@ namespace ARS
         float _frontSlipFactor = 1f;
         // The same quantity as a share of the limit, for the readout: it climbs where the factor falls.
         float _frontSlipPct = 0f;
+        // The steer ceiling the measured slip holds the wheel to, in degrees. Starts wide and is cut only while over.
+        float _frontSlipCeilingDeg = 999f;
         // The slip limit itself, in degrees of side slip: this is the number that falls at 2 deg/s and climbs at 4.
         float _frontSlipLimitDeg = 0f;
         // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
@@ -1815,6 +1817,7 @@ namespace ARS
         // a cap that reached zero would drive the car straight out of the corner.
         const float FrontSlipCapPeakShare = 1.00f;
         const float FrontSlipFactorFloor = 0.50f;
+        const float FrontSlipCeilingReleaseDegPerSec = 8f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -2025,10 +2028,21 @@ namespace ARS
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             _planCeilingDeg = speedCeiling;
-            // The measured slip scales the request itself, as a ratio of limit to slip. Skipped while countersteering:
-            // the wheel there is answering a slide, and scaling it down is scaling down the correction.
+            // The measured slip is a ceiling on the wheel, not a scale on the request: while the front tyres are past their
+            // limit the ceiling drops to the angle that produced the limit (achieved x factor, so no more than half is ever
+            // taken), and it is released at 8 deg/s once they are back under. A request smaller than the ceiling passes
+            // untouched, which a multiplicative factor could never allow.
             UpdateFrontSlipFactor();
-            if (!countersteering) requestedSteer *= _frontSlipFactor;
+            if (_frontSlipPct > 100f)
+            {
+                float achieved = Math.Abs(Control.SteerDegrees);
+                _frontSlipCeilingDeg = Math.Min(_frontSlipCeilingDeg, achieved * _frontSlipFactor);
+            }
+            else
+            {
+                _frontSlipCeilingDeg = Math.Min(VehicleData.SteeringLock, _frontSlipCeilingDeg + FrontSlipCeilingReleaseDegPerSec * TickScale);
+            }
+            speedCeiling = Math.Min(speedCeiling, _frontSlipCeilingDeg);
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
