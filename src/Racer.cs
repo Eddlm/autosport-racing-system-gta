@@ -1839,8 +1839,8 @@ namespace ARS
         // Where the cut stops deepening: the same 2.5x at which sfTractionMinAngle flattens the tyre's curve.
         const float FrontSlipFactorSaturatePct = 250f;
         // From this speed down the slip allowance starts doubling, and it is fully doubled at the second one.
-        const float SlowCornerSlipFullMph = 30f;
-        const float SlowCornerSlipDoubleMph = 10f;
+        const float SlowCornerSlipFullMph = 60f;
+        const float SlowCornerSlipDoubleMph = 30f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -1956,8 +1956,8 @@ namespace ARS
         // The measured source: the tyres' own side slip, in the field's units, whose peak is 1.0. No handling peak is needed to
         // compare them, which is the 1:1 fallback - without a readable peak the guard still knows where the limit is and only
         // the steered-angle ceiling is lost.
-        // Slow corners: below 30 mph the car is asked to turn tighter than the peak allows, and holding the wheel down there just
-        // makes it push wide. The allowance doubles by 10 mph, where the geometry needs the lock and the slip is harmless.
+        // Slow corners: below 60 mph the car is asked to turn tighter than the peak allows, and holding the wheel down there just
+        // makes it push wide. The allowance doubles by 30 mph, where the geometry needs the lock and the slip is harmless.
         float SlowCornerSlipShare(float fwdSpeed)
         {
             float mph = ARS.MpsToMph(fwdSpeed);
