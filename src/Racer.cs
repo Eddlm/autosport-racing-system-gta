@@ -1475,6 +1475,9 @@ namespace ARS
         // A rival this many seconds away puts its wall up now, so the car has moved over before it arrives. The walls are
         // what starts an overtake, not only what survives one.
         const float WallApproachSeconds = 3f;
+        // How far off the centreline a rival must sit before its wall takes the right side. A body width sent rivals that were
+        // clearly to the right onto the left wall, which pushed the left target past the far edge on a narrow road.
+        const float WallSideDeadbandMeters = 0.3f;
         // After a pass the lane must not snap back to the line: the rear is still beside the car that was passed, and
         // turning in there is what puts it in the other car's nose. The request holds until nothing is left alongside.
         // ZOMBIE (2026-10-25): unused while avoidHoldEnabled is false - see ComputeAvoidanceLane.
@@ -1673,9 +1676,10 @@ namespace ARS
 
                 // Which side of THIS car the rival is on, read in the car's own frame (+ is right). The track-centre sign
                 // let a rival drifting across the road's midpoint swap walls in one tick, and a remembered side made the
-                // answer depend on where the car had been. A body width of deadband covers the whole abreast window, so two
-                // cars side by side never swap: the rival is straight ahead and takes the same side every tick.
-                bool rivalOnRight = r.LateralGap > r.CombinedWidth;
+                // answer depend on where the car had been. The deadband is deliberately narrow - only a rival on the
+                // centreline counts as straight ahead - because a wide one sent rivals that were clearly to the right onto the
+                // left wall, and that target then pushed past the far edge on a narrow road.
+                bool rivalOnRight = r.LateralGap > WallSideDeadbandMeters;
 
                 if (!rivalOnRight)
                 {
@@ -1695,6 +1699,17 @@ namespace ARS
             // back: the one-tick spike the Show Rivalry lines showed.
             targetLeftWall = Math.Min(targetLeftWall, trackBound);
             targetRightWall = Math.Max(targetRightWall, -trackBound);
+
+            // The ordering guard belongs on the TARGETS. Writing a collapsed corridor into the state is what made the pair
+            // oscillate: the guard jumped both walls 1.6 m out in one tick, the mover pulled them back at its rate, the targets
+            // re-crossed a few ticks later, and the whole thing repeated forever. A guard on the targets is a fixed point.
+            if (targetLeftWall > targetRightWall)
+            {
+                float corridorHalf = Math.Min(1f, trackBound);
+                float mid = ARS.Clamp((targetLeftWall + targetRightWall) * 0.5f, -trackBound + corridorHalf, trackBound - corridorHalf);
+                targetLeftWall = mid - corridorHalf;
+                targetRightWall = mid + corridorHalf;
+            }
 
             _leftWallHeld = leftConstrained;
             _rightWallHeld = rightConstrained;
@@ -1717,23 +1732,16 @@ namespace ARS
             // Closing only, and only when the gap is wider than a car: the wall jumps to a car width from its target and
             // walks the rest. A wall that is opening is never teleported - that half has no urgency and its smoothness is
             // the whole point.
-            if (leftTarget > _avoidLeftWall + wallSnapMeters) _avoidLeftWall = leftTarget - wallSnapMeters;
-            if (rightTarget < _avoidRightWall - wallSnapMeters) _avoidRightWall = rightTarget + wallSnapMeters;
+            if (leftTarget > _avoidLeftWall + wallSnapMeters)
+                _avoidLeftWall = Math.Max(leftTarget - wallSnapMeters, -trackBound);
+            if (rightTarget < _avoidRightWall - wallSnapMeters)
+                _avoidRightWall = Math.Min(rightTarget + wallSnapMeters, trackBound);
             // The left wall closes by moving right (target above the wall), the right wall by moving left (target below it).
             float leftStep = leftTarget > _avoidLeftWall ? wallCloseRate : wallOpenRate;
             float rightStep = rightTarget < _avoidRightWall ? wallCloseRate : wallOpenRate;
             _avoidLeftWall = ARS.Clamp(leftTarget, _avoidLeftWall - leftStep, _avoidLeftWall + leftStep);
             _avoidRightWall = ARS.Clamp(rightTarget, _avoidRightWall - rightStep, _avoidRightWall + rightStep);
             _activeRivalWallCount = (_avoidLeftWall > -trackBound ? 1 : 0) + (_avoidRightWall < trackBound ? 1 : 0);
-
-            // Rival walls must remain ordered; collapse overlap to a narrow centered corridor.
-            if (_avoidLeftWall > _avoidRightWall)
-            {
-                float corridorHalf = Math.Min(1f, trackBound);
-                float mid = ARS.Clamp((_avoidLeftWall + _avoidRightWall) * 0.5f, -trackBound + corridorHalf, trackBound - corridorHalf);
-                _avoidLeftWall = mid - corridorHalf;
-                _avoidRightWall = mid + corridorHalf;
-            }
 
             return ClampLaneToWalls(requestLane, roadWide, leftConstrained, rightConstrained);
         }
