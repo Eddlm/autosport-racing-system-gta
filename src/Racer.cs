@@ -312,6 +312,8 @@ namespace ARS
         // 10 deg in 1.7 s and 20 in 3.3 s - slow enough to be felt, quick enough to arrive inside a long corner. One rate for
         // both directions: the ceiling recovers in exactly the time it takes to bite, and an asymmetric pair pumps.
         const float SlipCeilingDegPerSec = 6f;
+        // The chase opens at this multiple of its closing rate.
+        const float SlipCeilingOpenShare = 2f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
         SlipState _slip;
         // Below this command there is no inside of the corner, so the pair is averaged instead of picked.
@@ -2065,12 +2067,16 @@ namespace ARS
             {
                 float factor = ARS.Clamp(100f / _slip.InnerPct, FrontSlipFactorFloor, 1f);
                 float clampTarget = Math.Abs(requestedSteer) * factor;
-                // A cap above the angle being asked for says nothing, and opening the chase only at the rate would delay
-                // steering-in: the CUT is rate-limited, the opening is free up to the request, which the steering slew smooths.
+                // A cap above the angle being asked for says nothing, so the chase never sits above the request.
                 float chase = float.IsNaN(_chasingClampDeg)
                     ? clampTarget
                     : Math.Min(_chasingClampDeg, Math.Abs(requestedSteer));
-                _chasingClampDeg = Math.Max(clampTarget, chase - SlipCeilingDegPerSec * TickScale);
+                // Closing at SlipCeilingDegPerSec, opening at twice that: slow enough to feel on the way in, quick enough that
+                // the car is not left holding a shut gate once the tyre has recovered.
+                float closeStep = SlipCeilingDegPerSec * TickScale;
+                _chasingClampDeg = clampTarget >= chase
+                    ? Math.Min(clampTarget, chase + closeStep * SlipCeilingOpenShare)
+                    : Math.Max(clampTarget, chase - closeStep);
                 speedCeiling = Math.Min(speedCeiling, _chasingClampDeg);
             }
             _finalCeilingDeg = speedCeiling;
