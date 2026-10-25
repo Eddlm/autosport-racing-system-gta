@@ -3588,10 +3588,8 @@ namespace ARS
             ARS.DrawLine(half, full, outside ? Color.Red : Color.Cyan);
         }
 
-        // The two front wheels' measured side slip, each against the share the cap enforces, printed where the game prints
-        // its own subtitles (bottom centre) rather than floating over the car. BEGIN_TEXT_COMMAND_PRINT (0xCD015E5BB0D96A57)
-        // and END_TEXT_COMMAND_PRINT (0x1D12A56FC95BE92E) are the subtitle pair; a 50 ms duration redrawn every tick keeps
-        // it live without the game stacking copies.
+        // The two front wheels' measured side slip, each against the share the cap enforces, printed as a subtitle (SHVDN's
+        // UI.ShowSubtitle, the same call the track editor uses). 50 ms redrawn every tick keeps it live without stacking.
         void DrawFrontSlipReadout()
         {
             List<float> slips = ARS.WheelSideSlipAngles(Car);
@@ -3599,9 +3597,7 @@ namespace ARS
             string share = FrontSlipCapShare.ToString("0.00");
             string text = "L " + Math.Abs(slips[0]).ToString("0.00") + "/" + share
                 + "     R " + Math.Abs(slips[1]).ToString("0.00") + "/" + share;
-            Function.Call((Hash)0xCD015E5BB0D96A57, "STRING");
-            Function.Call((Hash)0x6C188BE134E074AA, text);
-            Function.Call((Hash)0x1D12A56FC95BE92E, 50, true);
+            UI.ShowSubtitle(text, 50);
         }
 
         void DrawWheelSlip()
