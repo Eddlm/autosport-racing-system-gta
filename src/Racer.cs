@@ -303,6 +303,8 @@ namespace ARS
         float _steerPreLimitDegrees = 0f;
         // The scale the steer command is multiplied by this tick. 1.0 leaves the request alone.
         float _frontSlipFactor = 1f;
+        // The same quantity as a share of the limit, for the readout: it climbs where the factor falls.
+        float _frontSlipPct = 0f;
         // The slip limit itself, in degrees of side slip: this is the number that falls at 2 deg/s and climbs at 4.
         float _frontSlipLimitDeg = 0f;
         // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
@@ -1923,6 +1925,9 @@ namespace ARS
             _frontSlipLeftDeg = left;
             _frontSlipRightDeg = right;
             _frontSlipLimitDeg = limitDeg;
+            // Shown as a share of the limit, so the number rises with the slip: 100% is at the cap, 200% is twice it.
+            // The applied multiplier is this ratio inverted, which is why the factor falls while this climbs.
+            _frontSlipPct = limitDeg > 0.01f ? 100f * slip / limitDeg : 0f;
         }
 
         float GeometrySteerCeiling(float fwdSpeed)
@@ -3612,7 +3617,7 @@ namespace ARS
         {
             string limit = _frontSlipLimitDeg.ToString("0.0");
             string text = "L " + _frontSlipLeftDeg.ToString("0.0") + "/" + limit + "deg     R "
-                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     f " + (_frontSlipFactor * 100f).ToString("0") + "%";
+                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     slip " + _frontSlipPct.ToString("0") + "%";
             UI.ShowSubtitle(text, 50);
         }
 
