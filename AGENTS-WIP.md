@@ -396,6 +396,18 @@ and no rival can open a wall another closed.
 **Drive owed**: the case that started this — a car constrained against a rival further away than the nearest one — and a pinch
 where two rivals sit one each side.
 
+### Build 955 — the angle gate leaves target selection too
+
+`isAvoidanceCandidate` (`Racer.cs:3811`) no longer tests `DirectionDiff`: whether a car is in the way is a question about its
+body, not about where it points. A spun rival inside this car's lateral corridor is now a legitimate target to go round,
+which is the case the gate was quietly refusing.
+
+The corridor test that does protect survives inside `TimeToReach`, which returns infinity for a rival outside `CombinedSize.X`
+of this car's offset — so a car angled away but in another lane still cannot become a target.
+
+`AvoidAngleGateDegrees` remains in use by the second-rival (needle) filter of the pass lane; it is no longer load-bearing for
+the walls or for target selection.
+
 ### Build 951 — the approach half comes back; 943 took both halves, not just the broken one
 
 **Correction to 943**: deleting the `aheadAndClose` branch also removed the only rule that put a wall up for a car that is

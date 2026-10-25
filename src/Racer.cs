@@ -3809,7 +3809,10 @@ namespace ARS
             foreach (Rival r in Brain.Rivals)
             {
                 r.Update(this);
-                bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead && ARS.IsBetween(r.RouteGapAhead, 0f, SameSectionMaxGapMeters) && (ARS.IsBetween(r.FrontGap, 0f, 3f) || ARS.IsBetween(r.TimeToReach, 0f, 5f)) && ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, AvoidAngleGateDegrees);
+                // No heading test: whether a car is in the way is a question about its body, not about where it points. A spun
+                // rival in this car's corridor is exactly the thing to go round, and TimeToReach already refuses any rival that
+                // is outside that corridor, so the gate was filtering out targets without protecting anything.
+                bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead && ARS.IsBetween(r.RouteGapAhead, 0f, SameSectionMaxGapMeters) && (ARS.IsBetween(r.FrontGap, 0f, 3f) || ARS.IsBetween(r.TimeToReach, 0f, 5f));
                 if (Brain.AvoidanceTarget == null && isAvoidanceCandidate)
                 {
                     Brain.AvoidanceTarget = r;
