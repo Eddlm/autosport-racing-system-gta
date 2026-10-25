@@ -3639,9 +3639,14 @@ namespace ARS
             // The raw field values go alongside: if they read around 0.1-0.3 the axis is normalised and multiplying by the
             // peak angle is right; if they read 5-20 the field is already in degrees and this conversion inflates it.
             List<float> raw = ARS.WheelSideSlipAngles(Car);
-            string rawText = raw.Count >= 2
-                ? "   raw " + Math.Abs(raw[0]).ToString("0.00") + "/" + Math.Abs(raw[1]).ToString("0.00")
-                : "";
+            string rawText = "";
+            if (raw.Count >= 4)
+            {
+                // All four, in the order the array hands them over: in a corner the pair carrying the lateral load is the
+                // front, and this is what says whether indices 0-1 really are that pair.
+                rawText = "   raw " + Math.Abs(raw[0]).ToString("0.00") + "/" + Math.Abs(raw[1]).ToString("0.00")
+                    + "/" + Math.Abs(raw[2]).ToString("0.00") + "/" + Math.Abs(raw[3]).ToString("0.00");
+            }
             string text = "L " + _frontSlipLeftDeg.ToString("0.0") + "/" + limit + "deg     R "
                 + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     slip " + _frontSlipPct.ToString("0") + "%"
                 + rawText;
