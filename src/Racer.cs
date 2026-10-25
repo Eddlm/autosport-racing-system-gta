@@ -1647,7 +1647,7 @@ namespace ARS
             _wallRoadWide = roadWide;
             // Both directions move at the same rate. Closing used to be instant, which stepped the corridor sideways in one tick
             // and showed up as a jump in the Show Rivalry lines; the wall now walks to its target from either side.
-            float wallRate = 4f * TickScale;
+            float wallRate = 5f * TickScale;
             float leftTarget = leftConstrained ? targetLeftWall : -trackBound;
             float rightTarget = rightConstrained ? targetRightWall : trackBound;
             _avoidLeftWall = ARS.Clamp(leftTarget, _avoidLeftWall - wallRate, _avoidLeftWall + wallRate);
