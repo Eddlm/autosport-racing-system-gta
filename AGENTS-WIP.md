@@ -308,6 +308,6 @@ lane snapping back and the car turning in on the car it just passed, does not re
 it on its own: the wall holds while `|LongitudinalGap| < CombinedSize.Y` (body half-sum + 0.25 m behind, +1 m ahead) and then
 opens at 10 m/s, which is enough for the car to unwind clear of the passed car.
 
-**Owed: the deletion, not a fix.** `ComputeAvoidanceLane`, `_avoidHoldLane`, `_avoidHoldActive`, `_avoidHoldUntil` and
-`AvoidHoldTimeoutMs` go at the next rebuild rather than mid-session, so the driver keeps 934 in the car until then. The
-`avoidHoldEnabled` switch stays where it is until that happens, since it is what makes the current build's behaviour explicit.
+**Kept as zombie code, driver's decision (2026-10-25)**: the fields, `ComputeAvoidanceLane` and `AvoidHoldTimeoutMs` stay in
+the source, unused, marked `ZOMBIE` at the switch and at the constants — *due to be revisited and removed if it truly is of no
+use*. Nothing is rebuilt for the annotation: 934 stays in the car.

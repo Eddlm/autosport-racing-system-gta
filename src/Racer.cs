@@ -1460,9 +1460,11 @@ namespace ARS
         const float SameSectionMaxGapMeters = 30f;
         // After a pass the lane must not snap back to the line: the rear is still beside the car that was passed, and
         // turning in there is what puts it in the other car's nose. The request holds until nothing is left alongside.
+        // ZOMBIE (2026-10-25): unused while avoidHoldEnabled is false - see ComputeAvoidanceLane.
         const float AvoidHoldBehindMeters = 14f;
         const float AvoidHoldLateralMeters = 1.5f;
         // A pass that has taken longer than this is not a pass any more: the hold dies and the corner line gets the lane back.
+        // ZOMBIE (2026-10-25): unused while avoidHoldEnabled is false - see ComputeAvoidanceLane.
         const int AvoidHoldTimeoutMs = 8000;
 
         // Pick a lane to pass a rival ahead. If two rivals trigger on opposite sides, thread the needle.
@@ -1471,8 +1473,9 @@ namespace ARS
         // dropped the tick the target clears.
         float ComputeAvoidanceLane(float roadWide)
         {
-            // TEMPORARY (2026-10-25): the hold is off while we check whether ApplyRivalWalls already covers the nose
-            // clip it was written for. False = the pass lane lives only while the target does (pre-54fc02a behaviour).
+            // ZOMBIE (2026-10-25): the hold below is kept, not used. Its claim - that the lane snapped back and the car
+            // turned in on the car it had just passed - was invalidated by build 934, driven with the hold off: ApplyRivalWalls
+            // covers the nose clip on its own. Due to be revisited and removed if it truly is of no use.
             bool avoidHoldEnabled = false;
             float passLane = ComputeAvoidAheadLane(roadWide);
             if (!avoidHoldEnabled) return passLane;
