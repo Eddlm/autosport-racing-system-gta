@@ -3718,7 +3718,9 @@ namespace ARS
             // touching, 2.00 means the request was twice the allowed angle, and the value falls below 1 once it stops biting.
             float clamp = float.IsNaN(_chasingClampDeg) ? _finalCeilingDeg : _chasingClampDeg;
             float asked = Math.Abs(_steerPreLimitDegrees);
-            UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.00") + "   " + _slipFactor.ToString("0.00"), 50);
+            float mph = ARS.MpsToMph(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
+            UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.00") + "   "
+                + _slipFactor.ToString("0.00") + "   " + mph.ToString("0") + "mph", 50);
         }
 
         void DrawWheelSlip()
