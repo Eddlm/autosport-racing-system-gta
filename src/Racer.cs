@@ -1924,8 +1924,7 @@ namespace ARS
             float slip = 0.5f * (left + right);
             _frontSlipLeftDeg = left;
             _frontSlipRightDeg = right;
-            _frontSlipLimitDeg = limitDeg;
-            // Shown as a share of the limit, so the number rises with the slip: 100% is at the cap, 200% is twice it.
+            _frontSlipLimitDeg = limitDeg;            // Shown as a share of the limit, so the number rises with the slip: 100% is at the cap, 200% is twice it.
             // The applied multiplier is this ratio inverted, which is why the factor falls while this climbs.
             _frontSlipPct = limitDeg > 0.01f ? 100f * slip / limitDeg : 0f;
         }
@@ -3617,20 +3616,15 @@ namespace ARS
         // this tick. 1.00 leaves the steering alone; 0.60 removes two fifths of it.
         void DrawFrontSlipReadout()
         {
-            // The final numbers, in the order they act: each front wheel's slip in degrees, the live peak those degrees are
-            // measured against, the ceiling actually in force, the wheel angle granted, and the slip as a share of the limit.
-            List<float> raw = ARS.WheelSideSlipAngles(Car);
-            string rawText = "";
-            if (raw.Count >= 4)
-            {
-                rawText = "   raw " + Math.Abs(raw[0]).ToString("0.00") + "/" + Math.Abs(raw[1]).ToString("0.00")
-                    + "/" + Math.Abs(raw[2]).ToString("0.00") + "/" + Math.Abs(raw[3]).ToString("0.00");
-            }
-            float peak = LateralPeakAtSpeed(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
-            string text = "L " + _frontSlipLeftDeg.ToString("0.0") + " R " + _frontSlipRightDeg.ToString("0.0")
-                + " | peak " + peak.ToString("0.0") + " | cap " + _finalCeilingDeg.ToString("0.0")
-                + " | steer " + Control.SteerDegrees.ToString("0.0")
-                + " | " + _frontSlipPct.ToString("0") + "%" + rawText;
+            // Three proportions and nothing else: each front wheel's slip as a share of the limit, and how much of the wheel
+            // allowance the car is actually using. 100% on a slip means that tyre is at its limit; 100% on the wheel means
+            // it has been granted everything the ceiling allows.
+            float limit = _frontSlipLimitDeg > 0.01f ? _frontSlipLimitDeg : 1f;
+            float wheel = _finalCeilingDeg > 0.01f
+                ? 100f * Math.Abs(Control.SteerDegrees) / _finalCeilingDeg
+                : 0f;
+            string text = "L " + (100f * _frontSlipLeftDeg / limit).ToString("0") + "%   R "
+                + (100f * _frontSlipRightDeg / limit).ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
             UI.ShowSubtitle(text, 50);
         }
 
