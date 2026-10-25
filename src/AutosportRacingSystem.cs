@@ -780,7 +780,7 @@ namespace ARS
 
             NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", SettingsRepair.OptionsFor("Laps"));
             lapsItem.ItemChanged += (sender, args) => RaceMenuStore.Set("Laps", lapsItem.Items[args.Index]);
-            int laps = RaceMenuStore.GetInt("Laps", 10);
+            int laps = RaceMenuStore.GetInt("Laps", 6);
             lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(laps.ToString()));
             _raceMenu.Add(lapsItem);
             HookListTextPicker(lapsItem);
@@ -2239,7 +2239,7 @@ namespace ARS
                     DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
                 }
                 else DebugFocusRacer = null;
-                int raceLaps = RaceMenuStore.GetInt("Laps", 10);
+                int raceLaps = RaceMenuStore.GetInt("Laps", 6);
                 foreach (Racer racer in Racers)
                 {
                     racer.ProcessTick();
@@ -2607,7 +2607,7 @@ namespace ARS
                 Log(LogImportance.Info, "Placing cars");
                 PlaceCars();
                 Racer mostPower = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList()[0];
-                int r = ((RouteNodes.Count / 3) * RaceMenuStore.GetInt("Laps", 10)) + (Racers.Count * 100) + (int)Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, mostPower.Car) * 400, 0);
+                int r = ((RouteNodes.Count / 3) * RaceMenuStore.GetInt("Laps", 6)) + (Racers.Count * 100) + (int)Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, mostPower.Car) * 400, 0);
                 RaceReward = (int)(Math.Round((float)r / 100)) * 100;
             }
 
