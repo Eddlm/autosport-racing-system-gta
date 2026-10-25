@@ -2094,7 +2094,11 @@ namespace ARS
 
                 // Player nitro: fire on key press, one bottle a lap. The fire charges the bottle itself, so there is
                 // no top-up loop and no state between the press and the burn — the AI's card works the same way.
-                if (NitrousEnabled && PlayerRacer != null && Game.IsKeyPressed(Keys.X))
+                // The pad has no binding of its own here: X is a keyboard key, so a gamepad player could not fire at all.
+                // The horn doubles as the trigger on a pad (index 2 = gamepad only), which is the button the game itself
+                // uses for nitrous when it owns the system.
+                if (NitrousEnabled && PlayerRacer != null
+                    && (Game.IsKeyPressed(Keys.X) || Game.IsControlJustPressed(2, GTA.Control.VehicleHorn)))
                     PlayerRacer.TryFireNitrous();
                 if (_raceTimedFinishMs != 0 && _raceTimedFinishMs > Game.GameTime) DisplayHelpText("~y~" + (_raceTimedFinishMs - Game.GameTime) / 1000 + "s~w~ to end the race.");
                 if (RaceIsRunning) DrawRaceHud();
