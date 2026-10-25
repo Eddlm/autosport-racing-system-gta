@@ -708,12 +708,13 @@ namespace ARS
         // Most recent valid player-vehicle pace reading; relative-mode fallback when the player has no vehicle.
         float _lastKnownPlayerPace = float.NaN;
 
-        // A submenu's own title carries its trail (Rivals > Rival Pace): the row that opens it stays short in the parent,
-        // and the header is where the text has room. The root contributes nothing, since the menu already sits inside ARS.
+        // The trail goes in the SUBTITLE, the black bar under the banner: that is the row LemonUI draws in capitals and
+        // the one that names where you are. The banner keeps the short name, and the row that opens the submenu in its
+        // parent stays short too. The root contributes nothing, since the menu already sits inside ARS.
         NativeSubmenuItem AddSub(NativeMenu parent, NativeMenu child)
         {
             NativeSubmenuItem item = parent.AddSubMenu(child);
-            child.Title.Text = (parent == _arsMenu ? string.Empty : parent.Title.Text + " > ") + child.Title.Text;
+            child.Subtitle = (parent == _arsMenu ? string.Empty : parent.Subtitle + " > ") + child.Subtitle;
             return item;
         }
 
