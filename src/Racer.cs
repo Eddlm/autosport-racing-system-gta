@@ -3829,7 +3829,8 @@ namespace ARS
                     + " caps TCS " + Control.MaxThrottleFromTCS.ToString("0.00")
                     + " stab " + Control.MaxThrottleFromStability.ToString("0.00")
                     + " over " + Control.MaxThrottleFromOverspeed.ToString("0.00")
-                    + ", plan " + planMph + " mph, speed " + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + " mph");
+                    + ", plan " + planMph + " mph, speed " + ARS.MpsToMph(Car.Velocity.Length()).ToString("0")
+                    + " mph, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"));
             }
 
             Function.Call((Hash)CheatPowerIncreaseHash, Car, multiplier);
