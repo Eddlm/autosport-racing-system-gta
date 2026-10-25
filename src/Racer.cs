@@ -411,10 +411,6 @@ namespace ARS
         // Feature gate for nitrous (ARS.NitrousEnabled). Both sides burn the same multiplier; the AI's share of it
         // is the Race Rules setting ARS.AiNitroPct, which ships at 100 so the two are equal until tuned.
         const float NitrousPowerMultiplier = 2.5f;
-        // The burn lifts the entity's speed cap as well as its power. Without it the multiplier drives the car into the
-        // model's own top speed and stops showing: that is why the player's nitrous read as broken while the AI's, rarely
-        // pinned against its ceiling, seemed to work. Same figure the open trainer uses.
-        const float NitrousMaxSpeedMps = 50000f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
         const float NitrousCornerLookaheadSeconds = 8f;
@@ -3280,7 +3276,6 @@ namespace ARS
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, NitrousPtfxAsset);
             Function.Call((Hash)FullyChargeNitrousHash, Car);
             Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 1.0f, 100.0f, false);
-            Function.Call(Hash.SET_ENTITY_MAX_SPEED, Car, NitrousMaxSpeedMps);
             _nitrousActiveUntil = Game.GameTime + NitrousDurationMs;
             _nitrousLapUsed = Lap;
         }
@@ -3311,9 +3306,6 @@ namespace ARS
         void StopNitrous()
         {
             Function.Call((Hash)OverrideNitrousLevelHash, Car, false, 10.0f, 0.0f, 100.0f, true);
-            // 0 puts the model's own top speed back; the entity cap stays high on purpose, because with the power
-            // multiplier gone the engine cannot reach it anyway.
-            Function.Call((Hash)0x93A3996368C94158, Car, 0f);   // MODIFY_VEHICLE_TOP_SPEED, not in SHVDN's enum
             _nitrousActiveUntil = 0;
         }
 
