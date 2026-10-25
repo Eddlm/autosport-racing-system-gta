@@ -303,6 +303,8 @@ namespace ARS
         float _steerPreLimitDegrees = 0f;
         // The measured-slip steer cap, in degrees. Starts wide and clamps to the lock on the first tick.
         float _frontSlipCapDeg = 999f;
+        // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
+        float _planCeilingDeg = 0f;
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _projectionOutsideMeters = 0f;
@@ -1998,6 +2000,7 @@ namespace ARS
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
+            _planCeilingDeg = speedCeiling;
             // The measured front-slip cap sits under the plan's ceiling: whichever is lower keeps the front tyres out of
             // their own peak while the throttle is down. The raises below can still open past it, which is right - a
             // countersteer is answering a slide, not asking for more lock.
@@ -3592,9 +3595,15 @@ namespace ARS
         {
             List<float> slips = ARS.WheelSideSlipAngles(Car);
             if (slips.Count < 2) return;
-            string text = "slip L " + Math.Abs(slips[0]).ToString("0.00") + " R " + Math.Abs(slips[1]).ToString("0.00")
-                + "~n~cap " + _frontSlipCapDeg.ToString("0.0") + "deg of " + FrontSlipCapShare.ToString("0.00") + " peak";
-            ARS.DrawText(Car.Position + Vector3.WorldUp * 2.6f, text, Color.Yellow, 0.4f);
+            Vector3 roof = Car.Position + Vector3.WorldUp * 2.6f;
+            // Title: the two numbers the cap acts on. Subtitle: which ceiling actually binds, because the measured cap sits
+            // at full lock until the fronts pass the share and reading it alone makes the limit look enormous.
+            ARS.DrawText(roof, "slip L " + Math.Abs(slips[0]).ToString("0.00") + " R " + Math.Abs(slips[1]).ToString("0.00"), Color.Yellow, 0.4f);
+            bool measuredBinds = _frontSlipCapDeg < _planCeilingDeg;
+            string subtitle = "cap " + _steerGrantedCeiling.ToString("0.0") + "deg - "
+                + (measuredBinds ? "slip" : "plan") + " binds (plan " + _planCeilingDeg.ToString("0.0")
+                + ", slip " + _frontSlipCapDeg.ToString("0.0") + ")";
+            ARS.DrawText(roof - Vector3.WorldUp * 0.22f, subtitle, Color.FromArgb(200, 255, 255, 255), 0.3f);
         }
 
         void DrawWheelSlip()
