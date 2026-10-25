@@ -430,6 +430,28 @@ Three clamps, one rule — a wall is a lane offset inside the road:
 
 **Drive owed**: the same narrowing straight and the edge-hugging rival, with Show Rivalry visible.
 
+### Build 957/958 — the subagent's report was right, and 956 only bounded the symptom
+
+956 clamped the values, so nothing left the road — but the **oscillator survived**: the ordering guard wrote `mid ± 1` into
+the *state*, the mover dragged both walls back at its rate, the targets re-crossed 4-6 ticks later, and it repeated. A
+relaxation oscillator with the period set by `wallCloseRate`.
+
+The read-only subagent reproduced it numerically (a Python copy of the block, not a drive): one rival at `NodeOffset +5.6`
+against a 6.0 m half-width, `rivalBuffer` 1.65, target 7.25 → guard 5.625/7.625 → 1.6 m outside the edge, jumping 0.84-1.0 m
+every tick, identical at 20/30/60/120 fps. It also named the trigger: `LateralGap > CombinedWidth` is a **one-sided threshold**,
+not the deadband its comment claimed, so a rival 1.5 m to the right was sent to the left wall — the collapse then fired on one
+rival in ordinary two-wide running, not only on a pinch.
+
+Three changes now in:
+
+- **the guard runs on the targets**, not the state (`if (targetLeftWall > targetRightWall)`, corridor half a metre clamped
+  inside the edges); the state write-back is deleted, so there is nothing left to undo — a fixed point instead of a cycle;
+- **the teleport writes are clamped** to `±trackBound`, so a jump can never land outside;
+- **`WallSideDeadbandMeters` 0.3** replaces the body-width deadband: only a rival on the centreline counts as straight ahead.
+
+**Drive owed**: the same two situations. The subagent left a discriminator — a **blue** wall leaving the track could only be the
+collapse, a **red** one resting exactly one `BoundingBox` short of its target is the teleport. After 958 neither should occur.
+
 ### Build 951 — the approach half comes back; 943 took both halves, not just the broken one
 
 **Correction to 943**: deleting the `aheadAndClose` branch also removed the only rule that put a wall up for a car that is
