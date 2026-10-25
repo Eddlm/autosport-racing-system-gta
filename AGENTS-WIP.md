@@ -366,3 +366,16 @@ body and a bit) and would never fire. The narrow one is longitudinal, the commit
 pin you, only one alongside.
 
 **Drive owed**: a pass where the rival moves across the centreline mid-overtake — the old behaviour flipped the lane with it.
+
+### Build 949 — the wall's side is relative to the car, not to the road's centre
+
+The root of "the wall crosses the rival and drags me to the other side of it": the side was keyed on `r.NodeOffset <= 0f` —
+the rival's offset from the **track centreline**. On a two-lane road the midpoint runs between the two cars, so a rival
+drifting by a few centimetres across it swapped walls in a single tick, and the corridor went with it.
+
+- The side is now `sideGap = r.NodeOffset - myNodeOffset`, so **my own lane** sets which side of me the rival is on.
+- `WallSideLockMeters` 1: within a metre nose to tail the side is not re-decided — crossing there clips its rear.
+- `abreast` (`|sideGap| < CombinedWidth`): the side is latched outright; alongside there is no room to cross over, so the wall
+  stays where the pass began. The latch is per slot **and per rival**, so a different car in the same slot decides fresh.
+
+**Drive owed**: a rival that crosses the centreline mid-overtake, and a three-wide pinch where two slots latch opposite sides.

@@ -174,6 +174,12 @@ namespace ARS
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
         float _wallRoadWide = 0f;
+        // Which side of each rival slot its wall sits on, and the rival that decision was made for. Held while the two
+        // bodies are close or abreast, so the wall cannot cross the rival and drag this car over to the other side of it.
+        const float WallSideLockMeters = 1f;
+        readonly bool[] _wallSideKnown = new bool[3];
+        readonly bool[] _wallSideRight = new bool[3];
+        readonly Racer[] _wallSideRacer = new Racer[3];
         // Read by the Show Rivalry debug lines: the corridor the car is allowed to aim into.
         public float AvoidLeftWall => _avoidLeftWall;
         public float AvoidRightWall => _avoidRightWall;
@@ -1645,10 +1651,12 @@ namespace ARS
             float targetRightWall = trackBound;
             bool leftConstrained = false;
             bool rightConstrained = false;
+            float myNodeOffset = Brain.CurrentPerception.CurrentNodeOffset;
 
-            foreach (Rival r in Brain.Rivals)
+            for (int slot = 0; slot < Brain.Rivals.Count; slot++)
             {
-                if (r.RivalRacer == null) continue;
+                Rival r = Brain.Rivals[slot];
+                if (r.RivalRacer == null) { _wallSideKnown[slot] = false; continue; }
 
                 // Only a body that is actually alongside constrains a wall, and the overlap is read on the ROUTE axis, the
                 // same one rival detection uses: the car's own frame under-reads the gap for a rival at an angle and for every
@@ -1662,7 +1670,28 @@ namespace ARS
                 // the wall carries the rival's half width alone and puts the car's body edge at the rival's edge.
                 float rivalBuffer = r.RivalRacer.VehicleData.BoundingBox * 0.5f + aggroBuffer;
 
-                if (r.NodeOffset <= 0f)
+                // The wall's side is relative to THIS car, not to the track centre. Keyed on the centre, a rival that
+                // drifted across the road's midpoint swapped walls in a single tick and dragged this car across with it.
+                float sideGap = r.NodeOffset - myNodeOffset;
+                bool noseToTail = Math.Abs(r.RouteGapAhead) < WallSideLockMeters;
+                bool abreast = Math.Abs(sideGap) < r.CombinedWidth;
+                bool rivalOnRight;
+                // Two locks on changing side: within a metre nose to tail the crossing clips its rear, and abreast there
+                // is no room at all - the side the wall began on is the side it keeps. A different car in the slot starts
+                // a fresh decision.
+                if ((noseToTail || abreast) && _wallSideKnown[slot] && _wallSideRacer[slot] == r.RivalRacer)
+                {
+                    rivalOnRight = _wallSideRight[slot];
+                }
+                else
+                {
+                    rivalOnRight = sideGap > 0f;
+                    _wallSideRight[slot] = rivalOnRight;
+                    _wallSideRacer[slot] = r.RivalRacer;
+                    _wallSideKnown[slot] = true;
+                }
+
+                if (!rivalOnRight)
                 {
                     targetLeftWall = Math.Max(targetLeftWall, r.NodeOffset + rivalBuffer);
                     leftConstrained = true;
