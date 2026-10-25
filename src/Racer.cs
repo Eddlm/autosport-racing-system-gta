@@ -417,7 +417,7 @@ namespace ARS
         // The player's own factor. Measured on track: their 1.0 and the rivals' 2.5 produced the same shove, because the player's
         // burn rides GTA's own nitrous force (1 + 3.0 x powerMod) while the rivals only get this one. The pair is doubled here
         // instead of bridged: 2 for the player, 5 for a rival at AiNitroPct 100, which keeps the observed 1:2.5.
-        const float PlayerNitrousPowerMultiplier = 2f;
+        const float PlayerNitrousPowerMultiplier = 1f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
         // The card may not fire inside the first six seconds of the race: at the launch the field is still bunched, so a
