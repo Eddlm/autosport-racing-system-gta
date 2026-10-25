@@ -1692,14 +1692,22 @@ namespace ARS
             _leftWallHeld = leftConstrained;
             _rightWallHeld = rightConstrained;
             _wallRoadWide = roadWide;
-            // Two rates, one per direction. Closing is the safety half and runs at 100 m/s, all but instant: a rival that has
-            // just appeared is answered within a tick or two (2 m in ~20 ms at 60 fps), and nothing is gained by arriving
-            // late to a guard. Opening is the comfort half at 5 m/s, slower than the car can unwind, so a wall that has just
-            // let go is still the limit while the corner line starts asking.
-            float wallCloseRate = 100f * TickScale;
+            // Two rates, one per direction. Opening is the comfort half at 5 m/s: slower than the car can unwind, so a wall
+            // that has just let go is still the limit while the corner line starts asking. Closing runs at 20 m/s, but with a
+            // jump: a wall further than one car width from where it belongs is teleported to a car width short of it first.
+            // The guard is then immediate - it is never a car width late - while the only stretch the car can feel, the last
+            // one, is always travelled at the rate instead of arriving in a single tick and snapping the aim.
+            float wallCloseRate = 20f * TickScale;
             float wallOpenRate = 5f * TickScale;
+            float wallSnapMeters = VehicleData.BoundingBox;
             float leftTarget = leftConstrained ? targetLeftWall : -trackBound;
             float rightTarget = rightConstrained ? targetRightWall : trackBound;
+
+            // Closing only, and only when the gap is wider than a car: the wall jumps to a car width from its target and
+            // walks the rest. A wall that is opening is never teleported - that half has no urgency and its smoothness is
+            // the whole point.
+            if (leftTarget > _avoidLeftWall + wallSnapMeters) _avoidLeftWall = leftTarget - wallSnapMeters;
+            if (rightTarget < _avoidRightWall - wallSnapMeters) _avoidRightWall = rightTarget + wallSnapMeters;
             // The left wall closes by moving right (target above the wall), the right wall by moving left (target below it).
             float leftStep = leftTarget > _avoidLeftWall ? wallCloseRate : wallOpenRate;
             float rightStep = rightTarget < _avoidRightWall ? wallCloseRate : wallOpenRate;
