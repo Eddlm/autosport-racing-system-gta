@@ -1626,9 +1626,12 @@ namespace ARS
             {
                 if (r.RivalRacer == null) continue;
 
+                // Only a body that is actually alongside constrains a wall. The predictive "ahead and close" branch is gone:
+                // it carried the relative-angle gate, the three-second reach and the RelativePos classification into a
+                // mechanism that answers one question - is there a car next to me right now. Every wall it added for a car
+                // that was merely approaching moved the corridor with nothing visible to explain it.
                 bool overlaps = Math.Abs(r.LongitudinalGap) < r.CombinedSize.Y && Math.Abs(r.RouteGapAhead) <= SameSectionMaxGapMeters;
-                bool aheadAndClose = r.RelativePosition == RelativePos.Ahead && r.TimeToReach < 3f && ARS.IsBetween(r.RouteGapAhead, 0f, SameSectionMaxGapMeters) && Math.Abs(r.DirectionDiff) <= AvoidAngleGateDegrees;
-                if (!overlaps && !aheadAndClose) continue;
+                if (!overlaps) continue;
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
                 // Same rule as the pass lane: ClampLaneToWalls adds the car's own half width on a constrained side, so

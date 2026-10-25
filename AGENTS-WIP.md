@@ -324,3 +324,17 @@ car's **body edge** on the rival's edge, which is what `ClampLaneToWalls` was wr
 ~0.95 m, walls that visibly sit on the rival's flank, and — with a fixed 5 m/s rate — a shorter distance to travel either way.
 
 **Drive owed**: whether the tighter corridor still passes without contact, at both ends of the aggression range.
+
+### Build 943 — the predictive branch of the wall gate is gone
+
+The wall now constrains only for a car whose **body is alongside**: `|LongitudinalGap| < CombinedSize.Y` and the same
+30 m of route. The `aheadAndClose` branch — `RelativePos.Ahead`, `TimeToReach < 3 s`, `|DirectionDiff| ≤ 20°` — is deleted.
+It put walls up for cars that were merely approaching, so the corridor moved with nothing on screen to explain it, and the
+angle gate made the wall appear and vanish with the rival's heading.
+
+What survives, and why: the same-section 30 m test stays, because it is what keeps a car on the far leg of a U from counting
+as a trackside blockage when it is physically close.
+
+**Known inconsistency, next**: the test still reads `LongitudinalGap`, which is measured **in my car's own frame** — so a rival
+at 45° has a small longitudinal component and can fall out of overlap while it is close. See the proposal in the session that
+follows.
