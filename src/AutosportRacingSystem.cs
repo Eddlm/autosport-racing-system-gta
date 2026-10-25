@@ -147,8 +147,6 @@ namespace ARS
         public static bool HideHudMode = false;
         // True when the player's own car is on the current race grid.
         public static bool PlayerParticipating = false;
-        public static bool PlayerModulatesThrottle = false;
-        public static bool PlayerLaunchTestActive = false;
 
         // Player-facing AI/grid options (Settings\Menu-Settings.ini).
         public static bool NitrousEnabled = true;

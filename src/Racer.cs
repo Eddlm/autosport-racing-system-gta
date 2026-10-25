@@ -471,9 +471,7 @@ namespace ARS
         const float TopSpeedCounterMax = 1.35f;
         const float LaunchShapeMaxSpeed = 12f;
         const float ModulatedThrottleCap = 0.99f;
-        const float ModulatedThrottleLow = 0.05f;
-        const float ModulatedThrottleHigh = 0.95f;
-        const float LaunchThrottleBinarySplit = 0.1f;
+
 
         public Maneuver ActiveManeuver = new Maneuver();
         readonly int[] _cardCooldownUntil = new int[8];
@@ -641,7 +639,6 @@ namespace ARS
             Control.Throttle = 0f;
             _powerCounter = 1f;
             _appliedThrottleLastFrame = 1f;
-            if (ControlledByPlayer) ARS.PlayerModulatesThrottle = false;
             Function.Call((Hash)CheatPowerIncreaseHash, Car, 1.0f);
 
             LapTimes.Clear();
@@ -2025,9 +2022,6 @@ namespace ARS
 
         public void Launch()
         {
-            // Open the launch window at the green: the player's input is judged during the launch itself.
-            if (ControlledByPlayer) ARS.PlayerLaunchTestActive = true;
-
             Brain.Corner = null;
             _nextApexCorner = null;
             ActiveManeuver.Type = ManeuverType.None;
@@ -3451,25 +3445,7 @@ namespace ARS
             if (ARS.DebugToggles[Options.ShowInputs] && !ControlledByPlayer && ARS.DebugFocusRacer == this) SampleInputTrail();
             DrawDebug();
 
-            _appliedThrottleLastFrame = VehicleMemory.GetThrottle(Car);
-
-            // Judge the player's launch input once per race: sample while the window is open (a keyboard pedal is a
-            // hard 0/1, a gamepad is not), then freeze the verdict so the AI's shaping cannot change mid-race.
-            if (ControlledByPlayer && ARS.PlayerLaunchTestActive)
-            {
-                float playerThrottle = Math.Abs(_appliedThrottleLastFrame);
-                if (playerThrottle > ModulatedThrottleLow && playerThrottle < ModulatedThrottleHigh) ARS.PlayerModulatesThrottle = true;
-
-                if (ARS.GetForwardSpeed(Car) > LaunchShapeMaxSpeed)
-                {
-                    ARS.PlayerLaunchTestActive = false;
-                    ARS.Log(ARS.LogImportance.Info, ARS.PlayerModulatesThrottle
-                        ? "Player launch input: modulatable — AI launch throttle capped at " + ModulatedThrottleCap
-                        : "Player launch input: binary 0/1 — AI launch throttle quantised");
-                }
-            }
-
-            if (!ControlledByPlayer)
+            _appliedThrottleLastFrame = VehicleMemory.GetThrottle(Car);            if (!ControlledByPlayer)
             {
                 ApplyInputs();
             }
@@ -3855,13 +3831,13 @@ namespace ARS
         // Match the player's launch capability: a keyboard pedal is a hard 0/1 and 1.0 is exactly what sets the
         // engine's full-throttle grip loss, so a binary player's cars are quantised the same way, while a player who
         // can modulate gets a cap that stays under it. Reverse, braking and the post-fade speed stay unshaped.
+        // Below LaunchShapeMaxSpeed the pedal is capped, not quantised. The relay that answered 0 under a tenth and 1
+        // above it existed so the AI could not out-modulate a keyboard player's 0/1 launch; it was also a dead zone that
+        // swallowed every partial pedal under 27 mph, which is exactly where a 1 m/s gas band lives.
         float ShapeLaunchThrottle(float throttle)
         {
             if (throttle <= 0f || ARS.GetForwardSpeed(Car) > LaunchShapeMaxSpeed) return throttle;
-
-            bool modulates = ARS.PlayerModulatesThrottle || !ARS.PlayerParticipating;
-            if (modulates) return Math.Min(throttle, ModulatedThrottleCap);
-            return throttle > LaunchThrottleBinarySplit ? 1f : 0f;
+            return Math.Min(throttle, ModulatedThrottleCap);
         }
 
         bool IsAwd()
