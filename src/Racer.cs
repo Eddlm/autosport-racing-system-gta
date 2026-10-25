@@ -1693,11 +1693,11 @@ namespace ARS
             _rightWallHeld = rightConstrained;
             _wallRoadWide = roadWide;
             // Two rates, one per direction. Opening is the comfort half at 5 m/s: slower than the car can unwind, so a wall
-            // that has just let go is still the limit while the corner line starts asking. Closing runs at 20 m/s, but with a
+            // that has just let go is still the limit while the corner line starts asking. Closing runs at 10 m/s, but with a
             // jump: a wall further than one car width from where it belongs is teleported to a car width short of it first.
             // The guard is then immediate - it is never a car width late - while the only stretch the car can feel, the last
             // one, is always travelled at the rate instead of arriving in a single tick and snapping the aim.
-            float wallCloseRate = 20f * TickScale;
+            float wallCloseRate = 10f * TickScale;
             float wallOpenRate = 5f * TickScale;
             float wallSnapMeters = VehicleData.BoundingBox;
             float leftTarget = leftConstrained ? targetLeftWall : -trackBound;
