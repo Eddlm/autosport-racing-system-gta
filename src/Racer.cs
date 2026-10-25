@@ -1836,8 +1836,6 @@ namespace ARS
         // How much of the request the cut may leave: 0.05 lets the guard take the wheel down to a twentieth, which is the
         // extreme end of the range and is here to be felt, not shipped.
         const float FrontSlipFactorFloor = 0.05f;
-        // The pedal's own floor: the front slip may trim the throttle, but never to a full lift unless the situation is extreme.
-        const float ThrottleFromSlipFloor = 0.25f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -2258,6 +2256,14 @@ namespace ARS
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
+            // The front tyre's overshoot caps the PEDAL AS A WHOLE, not the throttle: x1 of the target leaves full throttle, x3
+            // demands full brake, and the band between is linear. Braking is the point - it loads the front axle, which is the
+            // grip the sliding tyre is missing, and it is the one thing a throttle-only cap could never ask for.
+            if (_slip.Readable && _slip.InnerPct > 100f)
+            {
+                float over = ARS.Clamp((_slip.InnerPct - 100f) / 200f, 0f, 1f);
+                combinedInput = Math.Min(combinedInput, 1f - 2f * over);
+            }
             MeasureProjectionOutside(1f);
             // Full countersteer: no brake, just enough throttle to keep the wheels rolling. The reason caps still
             // apply on top; the release is instant.
@@ -2919,13 +2925,6 @@ namespace ARS
             }
             Control.MaxThrottleFromRival = GlideCap(Control.MaxThrottleFromRival, rivalLevel);
 
-            // Power understeer: clamping the steering alone turns understeer into no steering, because the pedal keeps asking for
-            // the grip the front tyre is already out of. The same factor that trims the wheel trims the pedal, never below its floor.
-            float frontSlipThrottle = 1f;
-            if (_slip.Readable && _slip.InnerPct > 100f)
-                frontSlipThrottle = ARS.Clamp(100f / _slip.InnerPct, ThrottleFromSlipFloor, 1f);
-            Control.MaxThrottleFromFrontSlip = GlideCap(Control.MaxThrottleFromFrontSlip, frontSlipThrottle);
-
             Control.MaxThrottleFromChillOut = GlideCap(Control.MaxThrottleFromChillOut, ActiveManeuver.Type == ManeuverType.ChillOut ? ChillThrottleCap : 1f);
             Control.MaxThrottleFromYield = GlideCap(Control.MaxThrottleFromYield, ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null ? YieldThrottleLevel : 1f);
 
@@ -3030,7 +3029,6 @@ namespace ARS
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromYield);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOffTrack);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRecovery);
-            ceiling = Math.Min(ceiling, Control.MaxThrottleFromFrontSlip);
             Control.MaxThrottle = ceiling;
 
             float binding = baseThrottle;
@@ -3043,7 +3041,6 @@ namespace ARS
             if (Control.MaxThrottleFromYield < binding) { binding = Control.MaxThrottleFromYield; reason = ThrottleReason.Yield; }
             if (Control.MaxThrottleFromOffTrack < binding) { binding = Control.MaxThrottleFromOffTrack; reason = ThrottleReason.Offtrack; }
             if (Control.MaxThrottleFromRecovery < binding) { binding = Control.MaxThrottleFromRecovery; reason = ThrottleReason.StuckRecovery; }
-            if (Control.MaxThrottleFromFrontSlip < binding) { binding = Control.MaxThrottleFromFrontSlip; reason = ThrottleReason.FrontSlip; }
             if (offtrackLimited) reason = ThrottleReason.Offtrack;
             if (countersteering) reason = ThrottleReason.Countersteer;
             if (BaseBehavior == RacerBaseBehavior.GridWait) reason = ThrottleReason.GridWait;
