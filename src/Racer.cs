@@ -1831,8 +1831,9 @@ namespace ARS
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
         const float FrontSlipCapPeakShare = 1.00f;
-        // The proportional cut never takes more than half the request: below that the car stops turning at all.
-        const float FrontSlipFactorFloor = 0.50f;
+        // How much of the request the cut may leave: 0.05 lets the guard take the wheel down to a twentieth, which is the
+        // extreme end of the range and is here to be felt, not shipped.
+        const float FrontSlipFactorFloor = 0.05f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
