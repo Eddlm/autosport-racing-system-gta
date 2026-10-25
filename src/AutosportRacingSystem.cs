@@ -166,31 +166,31 @@ namespace ARS
         // made to learn faster (or not at all) while a track is being probed. The ladder tops at 0.9, so the shipped
         // rate sits at its top: the old const was 1.0, which the ladder cannot express.
         // Independent of the track-analysis visual: the learner's own read-out, one line per verdict a corner takes.
-        public static bool BrakeLearningNotify = false;
+        public static bool BrakeLearningNotify = true;
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = false;
         // Flat mph added to the corner plan; Road Curvature Offset is the same knob for the route term.
-        public static int CornerOffsetMph = 2;
-        public static int RouteOffsetMph = 4;
+        public static int CornerOffsetMph = 4;
+        public static int RouteOffsetMph = 2;
         public static float SteerDampingGain = 0.5f;
         // How far past neutral the damper may countersteer, in degrees. 0 means it can only cancel the command.
-        public static float DamperCountersteerMaxDeg = 4f;
-        public static float SteerCeilingFactor = 1f;
+        public static float DamperCountersteerMaxDeg = 2f;
+        public static float SteerCeilingFactor = 0.9f;
         // The slip the tyres reach peak traction at, in the field's own units: the curve is indexed from the
         // field at x sfTractionMinAngle with its peak at argument 1.0, and the engine's own below-the-peak test
         // compares the field against sfTractionPeakAngle x sfTractionMinAngleInv = 0.4 (wheel.cpp:4465, :4497).
         public const float SlipPeakRatio = 0.4f;
         // The TCS pair as a share of that peak: the limit is where the cut begins, the span how much further
         // past it the throttle takes to reach its floor.
-        public static int TcsSlipLimitPct = 80;
-        public static int TcsTaperSpanPct = 80;
+        public static int TcsSlipLimitPct = 100;
+        public static int TcsTaperSpanPct = 50;
         // The maximum crest lift (gs reading at the 1.0s-ahead sample) the car is allowed to feel
         // before the no-fly gate forces a slow-down. The speed factor is sqrt(MaxCrestLift / |gs|),
         // so 1.0g means the car always slows until the gs at the sample is 1.0g or less. 0.1g is
         // very conservative; 2.0g only fires for the sharpest crests. Dips are ignored -- they load
         // the tyres, not unload.
-        public static float MaxCrestLift = 1.0f;
+        public static float MaxCrestLift = 0.4f;
         public static float HillGripEffect = 1f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
@@ -742,7 +742,7 @@ namespace ARS
 
             NativeListItem<string> lapsItem = new NativeListItem<string>("Laps", "Number of laps before the race is considered finished.", SettingsRepair.OptionsFor("Laps"));
             lapsItem.ItemChanged += (sender, args) => RaceMenuStore.Set("Laps", lapsItem.Items[args.Index]);
-            int laps = RaceMenuStore.GetInt("Laps", 6);
+            int laps = RaceMenuStore.GetInt("Laps", 10);
             lapsItem.SelectedIndex = Math.Max(0, lapsItem.Items.IndexOf(laps.ToString()));
             _raceMenu.Add(lapsItem);
             HookListTextPicker(lapsItem);
@@ -767,7 +767,7 @@ namespace ARS
                 _intendedOpponents = GridSizeChoices[args.Index];
                 RaceMenuStore.Set("GridSize", _intendedOpponents);
             };
-            _intendedOpponents = NearestGridSize(RaceMenuStore.GetInt("GridSize", 8));
+            _intendedOpponents = NearestGridSize(RaceMenuStore.GetInt("GridSize", 14));
             _gridSizeItem.SelectedIndex = Array.IndexOf(GridSizeChoices, _intendedOpponents);
             _raceMenu.Add(_gridSizeItem);
             HookListTextPicker(_gridSizeItem);
@@ -1038,7 +1038,7 @@ namespace ARS
                 MaxCrestLift = float.Parse(maxCrestLiftItem.Items[args.Index], CultureInfo.InvariantCulture);
                 SaveRacerSetting("MaxCrestLift", maxCrestLiftItem.Items[args.Index]);
             };
-            maxCrestLiftItem.SelectedIndex = Math.Max(0, maxCrestLiftItem.Items.IndexOf(SettingsMenuStore.GetFloat("MaxCrestLift", 1.0f).ToString("0.0", CultureInfo.InvariantCulture)));
+            maxCrestLiftItem.SelectedIndex = Math.Max(0, maxCrestLiftItem.Items.IndexOf(SettingsMenuStore.GetFloat("MaxCrestLift", 0.4f).ToString("0.0", CultureInfo.InvariantCulture)));
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
 
@@ -1142,7 +1142,7 @@ namespace ARS
 
             NativeListItem<string> timeoutItem = new NativeListItem<string>("Timeout (s)", "Grace period after the first racer crosses the line.", SettingsRepair.OptionsFor("TimeoutSeconds"));
             timeoutItem.ItemChanged += (sender, args) => SaveRacerSetting("TimeoutSeconds", timeoutItem.Items[args.Index]);
-            timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(SettingsMenuStore.GetInt("TimeoutSeconds", 60).ToString()));
+            timeoutItem.SelectedIndex = Math.Max(0, timeoutItem.Items.IndexOf(SettingsMenuStore.GetInt("TimeoutSeconds", 30).ToString()));
             rulesMenu.Add(timeoutItem);
             HookListTextPicker(timeoutItem);
 
@@ -1166,7 +1166,7 @@ namespace ARS
                 RubberbandingPct = int.Parse(rubberbandItem.Items[args.Index], CultureInfo.InvariantCulture);
                 SaveRacerSetting("Rubberbanding", rubberbandItem.Items[args.Index]);
             };
-            rubberbandItem.SelectedIndex = Math.Max(0, rubberbandItem.Items.IndexOf(SettingsMenuStore.GetInt("Rubberbanding", 0).ToString(CultureInfo.InvariantCulture)));
+            rubberbandItem.SelectedIndex = Math.Max(0, rubberbandItem.Items.IndexOf(SettingsMenuStore.GetInt("Rubberbanding", 100).ToString(CultureInfo.InvariantCulture)));
             rulesMenu.Add(rubberbandItem);
             HookListTextPicker(rubberbandItem);
 
@@ -2194,7 +2194,7 @@ namespace ARS
                     DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
                 }
                 else DebugFocusRacer = null;
-                int raceLaps = RaceMenuStore.GetInt("Laps", 6);
+                int raceLaps = RaceMenuStore.GetInt("Laps", 10);
                 foreach (Racer racer in Racers)
                 {
                     racer.ProcessTick();
@@ -2209,7 +2209,7 @@ namespace ARS
                         LeaderboardFinish.Add(racer);
                         racer.BaseBehavior = RacerBaseBehavior.FinishedRace;
                         if (IsPointToPoint) racer.BaseBehavior = RacerBaseBehavior.FinishedStandStill;
-                        if (_raceTimedFinishMs == 0) _raceTimedFinishMs = Game.GameTime + (SettingsMenuStore.GetInt("TimeoutSeconds", 60) * 1000);
+                        if (_raceTimedFinishMs == 0) _raceTimedFinishMs = Game.GameTime + (SettingsMenuStore.GetInt("TimeoutSeconds", 30) * 1000);
                     }
                 }
 
@@ -2562,7 +2562,7 @@ namespace ARS
                 Log(LogImportance.Info, "Placing cars");
                 PlaceCars();
                 Racer mostPower = Racers.OrderBy(v => Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, v.Car)).ToList()[0];
-                int r = ((RouteNodes.Count / 3) * RaceMenuStore.GetInt("Laps", 6)) + (Racers.Count * 100) + (int)Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, mostPower.Car) * 400, 0);
+                int r = ((RouteNodes.Count / 3) * RaceMenuStore.GetInt("Laps", 10)) + (Racers.Count * 100) + (int)Math.Round(Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, mostPower.Car) * 400, 0);
                 RaceReward = (int)(Math.Round((float)r / 100)) * 100;
             }
 
@@ -3549,7 +3549,7 @@ namespace ARS
                 MaxCrestLift = SettingsMenuStore.GetFloat("MaxCrestLift", MaxCrestLift);
             }
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
-            RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 0);
+            RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 100);
             CurrentRubberbandMode = ParseEnum(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString()), CurrentRubberbandMode);
             StagedSpawns = SettingsMenuStore.GetBool("StagedSpawns", StagedSpawns);
             TipRate = ParseEnum(SettingsMenuStore.Get("TipRate", TipRate.ToString()), TipRate);

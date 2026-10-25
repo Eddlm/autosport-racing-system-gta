@@ -123,8 +123,8 @@ namespace ARS
 
             FileSpec race = Owned("Menu-Race.ini");
             race.Specs.Add(new KeySpec("Track", null));                     // optional: absent = no track chosen yet
-            race.Specs.Add(new KeySpec("Laps", "6", Kind.Number, new[] { "2", "4", "6", "8", "10" }));   // numeric: a retired lap count snaps to the nearest offer instead of resetting
-            race.Specs.Add(new KeySpec("GridSize", "8", Kind.Number, Array.ConvertAll(ARS.GridSizeChoices, v => v.ToString()), 0f, ARS.GridSizeChoices[ARS.GridSizeChoices.Length - 1]));
+            race.Specs.Add(new KeySpec("Laps", "10", Kind.Number, new[] { "2", "4", "6", "8", "10" }));   // numeric: a retired lap count snaps to the nearest offer instead of resetting
+            race.Specs.Add(new KeySpec("GridSize", "14", Kind.Number, Array.ConvertAll(ARS.GridSizeChoices, v => v.ToString()), 0f, ARS.GridSizeChoices[ARS.GridSizeChoices.Length - 1]));
             race.Specs.Add(new KeySpec("PaceMode", PaceMode.RelativeToMine.ToString(), Kind.Text, Enum.GetNames(typeof(PaceMode))));
             race.Specs.Add(new KeySpec("PaceOffset", "0", Kind.Number, new[] { "-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }));
             race.Specs.Add(new KeySpec("PaceTarget", null, Kind.Number));   // optional: absent triggers the fleet-span middle autoselect
@@ -135,10 +135,10 @@ namespace ARS
             FileSpec settings = Owned("Menu-Settings.ini");
             settings.Specs.Add(new KeySpec("GridSorting", GridSort.Random.ToString(), Kind.Text, Enum.GetNames(typeof(GridSort))));
             settings.Specs.Add(new KeySpec("VehiclePool", "cars.txt"));   // any Vehicles\*.txt; free text by design (the file list is dynamic)
-            settings.Specs.Add(new KeySpec("TimeoutSeconds", "60", Kind.Number, new[] { "15", "30", "45", "60" }));
+            settings.Specs.Add(new KeySpec("TimeoutSeconds", "30", Kind.Number, new[] { "15", "30", "45", "60" }));
             settings.Specs.Add(new KeySpec("AIRacerAutofix", AutofixMode.Invincible.ToString(), Kind.Text, Enum.GetNames(typeof(AutofixMode))));
-            settings.Specs.Add(new KeySpec("CornerOffset", "2", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
-            settings.Specs.Add(new KeySpec("RouteOffset", "4", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
+            settings.Specs.Add(new KeySpec("CornerOffset", "4", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
+            settings.Specs.Add(new KeySpec("RouteOffset", "2", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
             settings.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("NitrousEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TipRate", TipFrequency.Medium.ToString(), Kind.Text, Enum.GetNames(typeof(TipFrequency))));
@@ -147,20 +147,20 @@ namespace ARS
             settings.Specs.Add(new KeySpec("OverspeedCut", "0.2", Kind.Text, new[] { "Off", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" }));   // text so the off state reads Off rather than 0
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TcsEnabled", "True", Kind.Bool));
-            settings.Specs.Add(new KeySpec("AbsEnabled", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("AbsEnabled", "False", Kind.Bool));
             // The TCS pair is a share of the slip the tyres reach peak traction at, not a raw slip: the peak is
             // 0.4 in the field the car reads (wheel.cpp:4465), so 100% is the peak and 200% is twice it. One
             // ladder serves both knobs.
-            settings.Specs.Add(new KeySpec("TcsSlipLimitPct", "80", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
-            settings.Specs.Add(new KeySpec("TcsTaperSpanPct", "80", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
+            settings.Specs.Add(new KeySpec("TcsSlipLimitPct", "100", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
+            settings.Specs.Add(new KeySpec("TcsTaperSpanPct", "50", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
             settings.Specs.Add(new KeySpec("DNFUnderTrack", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("NoCollision", "False", Kind.Bool));
             settings.Specs.Add(new KeySpec("SteerDampingGain", "0.50", Kind.Number, new[] { "0.00", "0.10", "0.20", "0.30", "0.40", "0.50", "0.60", "0.70", "0.80", "0.90", "1.00", "1.10", "1.20", "1.30", "1.40", "1.50", "1.60", "1.70", "1.80", "1.90", "2.00" }));
-            settings.Specs.Add(new KeySpec("DamperCountersteerMaxDeg", "4.00", Kind.Number, new[] { "0.00", "2.00", "4.00", "6.00", "8.00", "10.00" }));
-            settings.Specs.Add(new KeySpec("SteerCeilingFactor", "1.00", Kind.Number, new[] { "0.05", "0.10", "0.15", "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90", "0.95", "1.00", "1.05", "1.10", "1.15", "1.20", "1.25" }));
-            settings.Specs.Add(new KeySpec("MaxCrestLift", "1.0", Kind.Number, new[] { "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0" }));
+            settings.Specs.Add(new KeySpec("DamperCountersteerMaxDeg", "2.00", Kind.Number, new[] { "0.00", "2.00", "4.00", "6.00", "8.00", "10.00" }));
+            settings.Specs.Add(new KeySpec("SteerCeilingFactor", "0.90", Kind.Number, new[] { "0.05", "0.10", "0.15", "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90", "0.95", "1.00", "1.05", "1.10", "1.15", "1.20", "1.25" }));
+            settings.Specs.Add(new KeySpec("MaxCrestLift", "0.4", Kind.Number, new[] { "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0" }));
             settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
-            settings.Specs.Add(new KeySpec("Rubberbanding", "0", Kind.Number, new[] { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" }));
+            settings.Specs.Add(new KeySpec("Rubberbanding", "100", Kind.Number, new[] { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" }));
             settings.Specs.Add(new KeySpec("RubberbandMode", RubberbandMode.Natural.ToString(), Kind.Text, Enum.GetNames(typeof(RubberbandMode))));
             settings.Specs.Add(new KeySpec("StagedSpawns", "False", Kind.Bool));
             settings.Specs.Add(new KeySpec("Hotkeys", "True", Kind.Bool));
@@ -172,7 +172,7 @@ namespace ARS
             files.Add(settings);
 
             FileSpec development = Owned("Menu-Development.ini");
-            development.Specs.Add(new KeySpec("BrakeLearningNotify", "False", Kind.Bool));
+            development.Specs.Add(new KeySpec("BrakeLearningNotify", "True", Kind.Bool));
             files.Add(development);
 
             // The debug key set is the toggle table itself: retiring a toggle retires its key.
