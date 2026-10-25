@@ -301,18 +301,14 @@ namespace ARS
         // The limiter's before-and-after: the ask it was handed and the granted ceiling it enforced, one core
         // tick old when the kick card reads them, so the over-the-limiter test is the delivery's own.
         float _steerPreLimitDegrees = 0f;
-        // The same quantity as a share of the limit, for the readout: it climbs where the factor falls.
-        // The same quantity as a share of the limit, for the readout: it climbs where the factor falls.
-        float _frontSlipPct = 0f;
-        // The slip limit itself, in degrees of side slip: this is the number that falls at 2 deg/s and climbs at 4.
-        float _frontSlipLimitDeg = 0f;
         // The ceiling actually in force after every limit, and the wheel angle granted, both for the readout.
         float _finalCeilingDeg = 0f;
+        // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
+        SlipState _slip;
+        // Below this command there is no inside of the corner, so the pair is averaged instead of picked.
+        const float FrontSlipNeutralSteerDeg = 0.5f;
         // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
         float _planCeilingDeg = 0f;
-        // Last tick's front side slip in degrees and the ceiling it is being held to, for the subtitle readout only.
-        float _frontSlipLeftDeg = 0f;
-        float _frontSlipRightDeg = 0f;
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _projectionOutsideMeters = 0f;
@@ -1898,42 +1894,47 @@ namespace ARS
             return lat <= 0.01f ? 0f : lat / (1f + Math.Min(5f, 0.1f * speed));
         }
 
-        // The measured front slip as a ceiling on the command: while the tyres are past the limit, the command is capped at the
-        // slip the limit allows, mapped through the same outer-wheel share the plan uses (slip x 1/0.75). No ratio and no
-        // state: the cap is the same number every tick the slip is over, and it disappears the tick it is not.
-        void UpdateFrontSlipLimit(float fwdSpeed)
+        // One measurement of the front axle, filled once per tick and read by both the limiter and the readout, so the two can
+        // never disagree about what the tyres are doing. The percentages are taken in the tyre's own units, whose peak is 1.0:
+        // that is the 1:1 fallback - with no handling peak to convert through, the guard still knows where the limit is, and
+        // only the steered-angle ceiling is lost (the limiter then stays out of the way, as it does when the field itself is
+        // unreadable).
+        public struct SlipState
         {
-            float livePeak = LateralPeakAtSpeed(fwdSpeed);
-            float limitDeg = FrontSlipCapPeakShare * livePeak;
+            public float LeftPct;    // left front tyre, as a share of the target
+            public float RightPct;   // right front tyre
+            public float InnerPct;   // the inner front tyre: the signal the limit acts on
+            public float TargetDeg;  // the target on the wheel axis, for the command ceiling
+            public float PeakDeg;    // the live peak this tick, zero when the handling could not be read
+            public bool Readable;    // false when the wheel memory did not answer
+        }
 
-            float left = 0f, right = 0f;
-            float rawLeft = 0f, rawRight = 0f;
+        SlipState MeasureFrontSlip(float fwdSpeed)
+        {
+            SlipState s = new SlipState();
+            s.PeakDeg = LateralPeakAtSpeed(fwdSpeed);
+
             List<float> slips = ARS.WheelSideSlipAngles(Car);
-            if (slips.Count >= 2)
-            {
-                rawLeft = Math.Abs(slips[0]);
-                rawRight = Math.Abs(slips[1]);
-                // Measured and limit share one reference. Converting the field with the base peak inflated the reading by
-                // base/livePeak = 1 + 0.1 v - a steady corner at 60 mph read 400% while the tyre had not even squealed.
-                // The field reads on the command axis the ceiling is built on, and the outer wheel only gets
-                // EngineSteerWheelOuterShare (0.75) of that command - the same share PeakSlipOuterCommandShare inverts when the
-                // limit is mapped into a ceiling. Without it the pair disagreed by 1/0.75 and a tyre sitting exactly on its
-                // limit read 133%.
-                left = rawLeft * livePeak * EngineSteerWheelOuterShare;
-                right = rawRight * livePeak * EngineSteerWheelOuterShare;
-            }
-            // The INNER wheel is the signal. Ackermann steers it to the full command while the outer only takes
+            if (slips.Count < 2) return s;
+            s.Readable = true;
+
+            // The field reads on the command axis, whose peak is 1.0; the target is expressed in that same unit, so no peak is
+            // needed to compare them. Converting through one (base or live) is what made a tyre sitting on its limit read 133%.
+            float rawLeft = Math.Abs(slips[0]);
+            float rawRight = Math.Abs(slips[1]);
+
+            // The INNER wheel is the signal: Ackermann steers it to the full command while the outer only takes
             // EngineSteerWheelOuterShare of it, so the inner reaches its peak first and is the tyre that warns. With the wheel
-            // neutral there is no inside, so the pair is averaged; positive command steers left, so in a left turn the inside
-            // is wheel 0.
-            float slip;
-            if (Math.Abs(Control.SteerDegrees) < 0.5f) slip = 0.5f * (left + right);
-            else slip = Control.SteerDegrees > 0f ? left : right;
-            _frontSlipLeftDeg = left;
-            _frontSlipRightDeg = right;
-            _frontSlipLimitDeg = limitDeg;            // Shown as a share of the limit, so the number rises with the slip: 100% is at the cap, 200% is twice it.
-            // The applied multiplier is this ratio inverted, which is why the factor falls while this climbs.
-            _frontSlipPct = limitDeg > 0.01f ? 100f * slip / limitDeg : 0f;
+            // neutral there is no inside, so the pair is averaged; a positive command steers left, so a left turn's inside is 0.
+            float rawInner = Math.Abs(Control.SteerDegrees) < FrontSlipNeutralSteerDeg
+                ? 0.5f * (rawLeft + rawRight)
+                : (Control.SteerDegrees > 0f ? rawLeft : rawRight);
+
+            s.LeftPct = 100f * rawLeft / FrontSlipCapPeakShare;
+            s.RightPct = 100f * rawRight / FrontSlipCapPeakShare;
+            s.InnerPct = 100f * rawInner / FrontSlipCapPeakShare;
+            s.TargetDeg = FrontSlipCapPeakShare * s.PeakDeg;
+            return s;
         }
 
         float GeometrySteerCeiling(float fwdSpeed)
@@ -1959,48 +1960,20 @@ namespace ARS
             // only steering law, and the only way to judge the new one is to let it work alone. The law stays compiled, so
             // reviving it is this one flag. Full lock means the tyre is the limit, not a precomputed angle.
             if (!SpeedSteerCeiling) return VehicleData.SteeringLock;
-            float ceiling = TRLateralAtSpeed > 0.01f ? Math.Min(PeakSlipCeilingAt(TRLateralAtSpeed) * ARS.SteerCeilingFactor, SlipAllowanceCeilingAt(TRLateralAtSpeed)) : GeometrySteerCeiling(fwdSpeed);
+            float ceiling = TRLateralAtSpeed > 0.01f ? PeakSlipCeilingAt(TRLateralAtSpeed) * ARS.SteerCeilingFactor : GeometrySteerCeiling(fwdSpeed);
             float speedMph = ARS.MpsToMph(fwdSpeed);
             if (speedMph >= SteerLimitRampEndMph) return ceiling;
 
             float endSpeed = ARS.MphToMps(SteerLimitRampEndMph);
             float endPeak = LateralPeakAtSpeed(endSpeed);
-            float endCeiling = endPeak > 0.01f ? Math.Min(PeakSlipCeilingAt(endPeak) * ARS.SteerCeilingFactor, SlipAllowanceCeilingAt(endPeak)) : GeometrySteerCeiling(endSpeed);
+            float endCeiling = endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) * ARS.SteerCeilingFactor : GeometrySteerCeiling(endSpeed);
             // max() keeps the ramp a raise only: the straight line sits a degree under the curved law near 25 mph.
             return Math.Max(ceiling, ManeuverRamp(speedMph, endCeiling));
         }
 
-        // The measured-slip allowance, in fractions of the tyre's peak: the wheel may lead the slip it is already
-        // carrying by this share, and the allowance climbs to the whole peak over the climb time while the command
-        // keeps asking for more than it grants, falling at the same rate once it stops. A lower SteerCeilingFactor
-        // truncates what the allowance buys without changing when it arrives; at the whole peak the two are equal.
-        const float SteerSlipLeadShare = 0.10f;
-        const float SteerSlipAllowanceBase = 0.10f;
-        const float SteerSlipClimbSeconds = 1f;
-        const float SteerSlipClimbPerSecond = (1f - SteerSlipAllowanceBase) / SteerSlipClimbSeconds;
-        // Parked off by decision: the law stays compiled, so reviving it is this one flag.
-        static readonly bool SlipPeakCeiling = false;
         // The speed-derived steer ceiling (peak slip angle at speed, scaled by the menu's SteerCeilingFactor). Off while the
         // measured-slip factor is on trial; with it off, nothing but the tyre's own slip limits the wheel.
         static readonly bool SpeedSteerCeiling = false;
-        float _slipPeakAllowance = SteerSlipAllowanceBase;
-
-        float SlipAllowanceCeilingAt(float peakSlipDeg)
-        {
-            return SlipPeakCeiling ? PeakSlipCeilingAt(peakSlipDeg * _slipPeakAllowance) : VehicleData.SteeringLock;
-        }
-
-        // One update per core tick, from the limiter alone: the debug draw reads ResolveSteerCeiling and must not
-        // advance the allowance. A slide sends it to the whole peak, which is the model ceiling the code had before.
-        void UpdateSlipPeakAllowance(float requestedSteer, float allowanceCeiling)
-        {
-            if (!SlipPeakCeiling) return;
-            bool sliding = Handling.LateralTractionCurve > 0.01f && Math.Abs(VehicleData.SlideAngle) >= Handling.LateralTractionCurve * SlidingFraction;
-            float slip = sliding ? 1f : ARS.MaxWheelSideSlip(Car) + SteerSlipLeadShare;
-            float target = Math.Abs(requestedSteer) > allowanceCeiling ? 1f : Math.Min(1f, slip);
-            float step = SteerSlipClimbPerSecond * TickScale;
-            _slipPeakAllowance = ARS.Clamp(_slipPeakAllowance + ARS.Clamp(target - _slipPeakAllowance, -step, step), SteerSlipAllowanceBase, 1f);
-        }
 
         // Between the ramp's start and end speeds the ceiling eases up to the car's own lock, so a slow car can place
         // itself; at or above the end speed the law's own ceiling stands. A raise only, never a cut.
@@ -2022,7 +1995,6 @@ namespace ARS
 
             float requestedSteer = Control.SteerDegrees;
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
-            UpdateSlipPeakAllowance(requestedSteer, SlipAllowanceCeilingAt(TRLateralAtSpeed));
 
             // Two limits, one per side, closed by one clamp: the ceiling is granted and then raised on the answering
             // side rather than the clamp being skipped — except for the stabiliser below. Reverse is always the full
@@ -2033,9 +2005,11 @@ namespace ARS
             _planCeilingDeg = speedCeiling;
             // The measured slip is a ceiling on the command, derived from the slip the limit allows rather than from a ratio
             // against the current wheel: past the peak the slip grows faster than the wheel, so a proportional bite overshot.
-            UpdateFrontSlipLimit(fwdSpeed);
-            if (_frontSlipPct > 100f)
-                speedCeiling = Math.Min(speedCeiling, PeakSlipCeilingAt(_frontSlipLimitDeg));
+            _slip = MeasureFrontSlip(fwdSpeed);
+            // The ceiling exists only when the field is readable, the tyre is past its target and the peak is usable to map
+            // degrees onto a wheel angle. Any of the three missing leaves the limiter out of the way rather than guessing.
+            if (_slip.Readable && _slip.InnerPct > 100f && _slip.PeakDeg > 0.01f)
+                speedCeiling = Math.Min(speedCeiling, PeakSlipCeilingAt(_slip.TargetDeg));
             _finalCeilingDeg = speedCeiling;
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
@@ -3627,12 +3601,11 @@ namespace ARS
             // request the car was actually granted. 100% on a slip means that tyre is at its limit; below 100% on the wheel
             // means the command is being clipped. Measured against the ceiling instead, any ordinary request read a few
             // percent, because the lock dwarfs a normal steering angle.
-            float limit = _frontSlipLimitDeg > 0.01f ? _frontSlipLimitDeg : 1f;
             float wheel = Math.Abs(_steerPreLimitDegrees) > 0.01f
                 ? Math.Min(100f, 100f * Math.Abs(Control.SteerDegrees) / Math.Abs(_steerPreLimitDegrees))
                 : 100f;
-            string text = "L " + (100f * _frontSlipLeftDeg / limit).ToString("0") + "%   R "
-                + (100f * _frontSlipRightDeg / limit).ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
+            string text = "L " + _slip.LeftPct.ToString("0") + "%   R "
+                + _slip.RightPct.ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
             // The raw field follows the three proportions, for calibrating the scale by eye: it is what the tyre reports, before
             // any peak is chosen for it.
             List<float> raw = ARS.WheelSideSlipAngles(Car);
