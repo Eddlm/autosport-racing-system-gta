@@ -1190,7 +1190,7 @@ namespace ARS
             rulesMenu.Add(noCollisionItem);
 
             // ── Nitrous ──
-            NativeCheckboxItem nitroItem = new NativeCheckboxItem("Nitrous", "A fresh nitrous bottle each lap. Rivals fire on straights; the player fires manually.", NitrousEnabled);
+            NativeCheckboxItem nitroItem = new NativeCheckboxItem("Nitrous", "A fresh nitrous bottle each lap. Rivals fire on straights; you fire manually.", NitrousEnabled);
             nitroItem.CheckboxChanged += (sender, args) =>
             {
                 NitrousEnabled = nitroItem.Checked;
@@ -1198,7 +1198,7 @@ namespace ARS
             };
             rulesMenu.Add(nitroItem);
 
-            NativeListItem<string> aiNitroItem = new NativeListItem<string>("AI Nitrous Power (%)", "The AI's bottle as a percentage of the player's: 100 the same, 200 twice. Your own burn is unchanged.", AiNitroValues);
+            NativeListItem<string> aiNitroItem = new NativeListItem<string>("AI Nitrous Power (%)", "The AI's bottle as a percentage of yours: 100 the same, 200 twice. Your own burn is unchanged.", AiNitroValues);
             // Seeded from the repaired store, not the load-time static: a value the repair snapped must be what both
             // the item shows and this session runs on, and the static is written to match before the handler lands so
             // the seed itself changes nothing.
@@ -1234,12 +1234,15 @@ namespace ARS
             interfaceMenu.Add(tipRateItem);
             HookListTextPicker(tipRateItem);
 
-            AddDebugCheckbox(interfaceMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
-            AddDebugCheckbox(interfaceMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
-            AddDebugCheckbox(interfaceMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
+            AddDebugCheckbox(interfaceMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so you can see where the track goes.");
+            AddDebugCheckbox(interfaceMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so you can read the track limits.");
+            AddDebugCheckbox(interfaceMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when you are not on the grid.");
             AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show Rival Lap Times", "Announce each AI lap time as it crosses the line. One per racer per lap, so a full grid is a lot of them.");
 
-            NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Show Track & Grid Rows", "Show or hide Load Track and Build Grid in the Race menu.", StagedSpawns);
+            // Greyed out: Load Track and Build Grid are part of the Race menu and no longer something the driver switches
+            // off. The stored key is ignored at load for the same reason the ABS row ignores its own.
+            NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Show Track & Grid Rows", "Load Track and Build Grid in the Race menu. Always on now, so the row cannot be changed.", true);
+            stagedSpawnsItem.Enabled = false;
             stagedSpawnsItem.CheckboxChanged += (sender, args) =>
             {
                 StagedSpawns = stagedSpawnsItem.Checked;
@@ -3554,7 +3557,9 @@ namespace ARS
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 100);
             CurrentRubberbandMode = ParseEnum(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString()), CurrentRubberbandMode);
-            StagedSpawns = SettingsMenuStore.GetBool("StagedSpawns", StagedSpawns);
+            // Forced on: the checkbox is greyed, so a stored false would hide two Race-menu rows behind a switch nobody
+            // can reach.
+            StagedSpawns = true;
             TipRate = ParseEnum(SettingsMenuStore.Get("TipRate", TipRate.ToString()), TipRate);
             RaceMenuStore.Migrate("PaceMode", legacyPaceMode);
             // The mode's option was relabelled and then re-spelled as an enum name; rewrite either older
