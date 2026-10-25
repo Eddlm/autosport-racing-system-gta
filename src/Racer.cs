@@ -3600,12 +3600,15 @@ namespace ARS
             ARS.DrawLine(half, full, outside ? Color.Red : Color.Cyan);
         }
 
-        // Both front wheels' measured side slip in degrees, against the limit that is gliding right now.
+        // Both front wheels' measured side slip in degrees against the limit that is gliding, plus the degrees the limiter
+        // actually removed from the command this tick. A zero cut with a slip at the limit says the car is not asking for
+        // more lock than it is allowed - the wheel is not the thing holding the tyre there.
         void DrawFrontSlipReadout()
         {
             string limit = _frontSlipLimitDeg.ToString("0.0");
+            float cut = Math.Max(0f, Math.Abs(_steerPreLimitDegrees) - Math.Abs(Control.SteerDegrees));
             string text = "L " + _frontSlipLeftDeg.ToString("0.0") + "/" + limit + "deg     R "
-                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg";
+                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     cut " + cut.ToString("0.0") + "deg";
             UI.ShowSubtitle(text, 50);
         }
 
