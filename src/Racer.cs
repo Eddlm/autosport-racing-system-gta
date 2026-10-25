@@ -2256,12 +2256,12 @@ namespace ARS
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
-            // The front tyre's overshoot caps the throttle only, and only once the corner is already twice the target: x2 leaves it
-            // wide open because that is the normal working band, x3 closes it to nothing, and it never goes below zero, so the
-            // brake stays the plan's to ask for.
-            if (_slip.Readable && _slip.InnerPct > 200f)
+            // The throttle follows the tyre's own curve, whose useful band is x1 to x2.5: the game's traction coefficient peaks at
+            // 1.0 of the slip angle and reaches its floor at 2.5 (sfTractionPeakAngle / sfTractionMinAngle, wheel.cpp), after which
+            // more slip changes nothing. So the pedal closes across that band and never below zero: the brake stays the plan's.
+            if (_slip.Readable && _slip.InnerPct > 100f)
             {
-                float over = ARS.Clamp((_slip.InnerPct - 200f) / 100f, 0f, 1f);
+                float over = ARS.Clamp((_slip.InnerPct - 100f) / 150f, 0f, 1f);
                 combinedInput = Math.Min(combinedInput, Math.Max(0f, 1f - over));
             }
             MeasureProjectionOutside(1f);
