@@ -296,7 +296,8 @@ namespace ARS
         Countersteer,
         StuckRecovery,
         Stability,
-        Kick
+        Kick,
+        FrontSlip
     }
 
     public enum BrakeReason
@@ -350,6 +351,9 @@ namespace ARS
         public float MaxThrottleFromRival = 1f;
         public float MaxThrottleFromChillOut = 1f;
         public float MaxThrottleFromYield = 1f;
+        // Power understeer: the front tyre's slip and the pedal are asking for the same grip, so the slip trims the pedal with
+        // the same factor it trims the steering.
+        public float MaxThrottleFromFrontSlip = 1f;
         public float MaxThrottleFromStability = 1f;
         public float MaxThrottleFromOffTrack = 1f;
         public float MaxThrottleFromRecovery = 1f;
