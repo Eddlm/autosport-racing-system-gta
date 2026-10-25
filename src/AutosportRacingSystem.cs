@@ -217,7 +217,7 @@ namespace ARS
         { Options.HighDownforceOnline, false },
         { Options.ShowCheckpoints, false },
         { Options.ShowEdgeChevrons, false },
-        { Options.ShowLeaderboard, false },
+        { Options.ShowLeaderboard, true },
         { Options.ShowAiLapTimes, false },
         { Options.LockLaneCentre, false },
         { Options.ShowBumps, false },
