@@ -303,6 +303,10 @@ namespace ARS
         float _steerPreLimitDegrees = 0f;
         // The ceiling actually in force after every limit, and the wheel angle granted, both for the readout.
         float _finalCeilingDeg = 0f;
+        // The chase that is actually applied: follows clampTarget at one rate in both directions, and is born at whatever the
+        // target is the first time the guard can speak. NaN until then.
+        float _chasingClampDeg = float.NaN;
+
         // The ceiling lives on the scale of the corner, not of the steering wheel: at speed it is already 5-6 deg, and the
         // slip rarely runs more than 10-20 deg past its target, so the whole correction is a handful of degrees. 6 closes
         // 10 deg in 1.7 s and 20 in 3.3 s - slow enough to be felt, quick enough to arrive inside a long corner. One rate for
@@ -2068,17 +2072,22 @@ namespace ARS
             // The ceiling is a state, not a fresh function of this tick: it closes towards what the tyre asks at
             // SlipCeilingDegPerSec and opens back at SlipCeilingDegPerSec, so a step in the measurement never
             // becomes a step at the wheel. Only the closing side is slow; opening fast would let the guard outrun the tyre.
-            // The rate belongs to the CUT, not to a stored ceiling, and it is measured from the angle actually applied last
-            // tick - never from the request, which the plan or the pad regenerates every tick, so 'the request minus 6 deg/s'
-            // never accumulates and the clamp looks like it is doing nothing. No new state: the steering slew already keeps
-            // that number, so there is one writer for it and nothing to seed, drift or release.
-            if (_slip.Readable && _slip.InnerPct > 100f && _slip.CeilingDeg > 0.01f)
+            // clampTarget is a fact about the tyre, so it moves instantly; chasingClamp is the actuator that follows it at
+            // SlipCeilingDegPerSec in both directions, and chasingClamp is what the command is held under. It is born at the
+            // target rather than at the lock: a chase that starts 30 deg away needs five seconds to arrive, and never does.
+            if (_slip.Readable && _slip.CeilingDeg > 0.01f)
             {
-                float held = Math.Abs(Control.LastAppliedSteerDegrees);
-                bool sameSide = Math.Sign(requestedSteer) == Math.Sign(Control.LastAppliedSteerDegrees);
-                // Crossing the centre there is no continuity to keep, and the answering side has its own allowance.
-                float slowestCut = sameSide ? held - SlipCeilingDegPerSec * TickScale : 0f;
-                speedCeiling = Math.Min(speedCeiling, Math.Max(_slip.CeilingDeg, slowestCut));
+                float clampTarget = _slip.CeilingDeg;
+                if (float.IsNaN(_chasingClampDeg))
+                {
+                    _chasingClampDeg = clampTarget;
+                }
+                else
+                {
+                    float step = SlipCeilingDegPerSec * TickScale;
+                    _chasingClampDeg += ARS.Clamp(clampTarget - _chasingClampDeg, -step, step);
+                }
+                speedCeiling = Math.Min(speedCeiling, _chasingClampDeg);
             }
             _finalCeilingDeg = speedCeiling;
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
