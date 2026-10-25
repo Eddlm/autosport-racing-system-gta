@@ -3615,17 +3615,14 @@ namespace ARS
         // this tick. 1.00 leaves the steering alone; 0.60 removes two fifths of it.
         void DrawFrontSlipReadout()
         {
-            // Three proportions and nothing else: each front wheel's slip as a share of the limit, and how much of the wheel
-            // allowance the car is actually using. 100% on a slip means that tyre is at its limit; 100% on the wheel means
-            // it has been granted everything the ceiling allows.
-            // Three proportions and nothing else: each front wheel's slip as a share of the limit, and the wheel the car is
-            // ASKING for as a share of the ceiling. 100% on a slip means that tyre is at its limit; above 100% on the wheel
-            // means the request was clipped. Reading the granted angle instead read backwards: it sat at 100% precisely when
-            // the cap was binding and fell as soon as the car was free.
+            // Three proportions and nothing else: each front wheel's slip as a share of the limit, and how much of its own
+            // request the car was actually granted. 100% on a slip means that tyre is at its limit; below 100% on the wheel
+            // means the command is being clipped. Measured against the ceiling instead, any ordinary request read a few
+            // percent, because the lock dwarfs a normal steering angle.
             float limit = _frontSlipLimitDeg > 0.01f ? _frontSlipLimitDeg : 1f;
-            float wheel = _finalCeilingDeg > 0.01f
-                ? 100f * Math.Abs(_steerPreLimitDegrees) / _finalCeilingDeg
-                : 0f;
+            float wheel = Math.Abs(_steerPreLimitDegrees) > 0.01f
+                ? Math.Min(100f, 100f * Math.Abs(Control.SteerDegrees) / Math.Abs(_steerPreLimitDegrees))
+                : 100f;
             string text = "L " + (100f * _frontSlipLeftDeg / limit).ToString("0") + "%   R "
                 + (100f * _frontSlipRightDeg / limit).ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
             UI.ShowSubtitle(text, 50);
