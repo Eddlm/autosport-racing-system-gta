@@ -3465,7 +3465,11 @@ namespace ARS
         
         void OnAbort(object sourc, EventArgs e)
         {
-
+            // A reload (SHVDN's Insert) tears the script down while a tick may still be running: the roster walk yields inside
+            // its own enumeration and a throw here has no caller to catch it. The teardown is therefore best-effort and cannot
+            // throw out, and it ENDS the race rather than leaving a half-reset state for the next load to resume.
+            try
+            {
             World.RenderingCamera = null;
             Function.Call(Hash._STOP_ALL_SCREEN_EFFECTS);
             if (_freeCam.IsActive)
@@ -3499,7 +3503,20 @@ namespace ARS
             InstructionalScaleform = null;   // the freecam re-creates it on demand
             Function.Call(Hash._0x10D373323E5B9C0D);
             Game.Player.Character.HasGravity = true;
-            
+
+            // The race is over, not paused: nothing of it may survive into the next load, or a reload resumes a race on a
+            // half-reset state and that race can no longer be timed out.
+            RaceStatus = RaceState.None;
+            PlayerParticipating = false;
+            LeaderboardFinish.Clear();
+            _raceTimedFinishMs = 0;
+            _routeEditorActive = false;
+            }
+            catch (Exception abortError)
+            {
+                // Logging can itself fail during an abort; a swallowed teardown error is better than a dead game.
+                try { Log(LogImportance.Error, "Abort teardown failed: " + abortError.Message); } catch { }
+            }
         }
         
 
