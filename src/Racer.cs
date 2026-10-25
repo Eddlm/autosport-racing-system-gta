@@ -1836,6 +1836,11 @@ namespace ARS
         // How much of the request the cut may leave: 0.05 lets the guard take the wheel down to a twentieth, which is the
         // extreme end of the range and is here to be felt, not shipped.
         const float FrontSlipFactorFloor = 0.05f;
+        // Where the cut stops deepening: the same 2.5x at which sfTractionMinAngle flattens the tyre's curve.
+        const float FrontSlipFactorSaturatePct = 250f;
+        // From this speed down the slip allowance starts doubling, and it is fully doubled at the second one.
+        const float SlowCornerSlipFullMph = 30f;
+        const float SlowCornerSlipDoubleMph = 10f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -1951,6 +1956,15 @@ namespace ARS
         // The measured source: the tyres' own side slip, in the field's units, whose peak is 1.0. No handling peak is needed to
         // compare them, which is the 1:1 fallback - without a readable peak the guard still knows where the limit is and only
         // the steered-angle ceiling is lost.
+        // Slow corners: below 30 mph the car is asked to turn tighter than the peak allows, and holding the wheel down there just
+        // makes it push wide. The allowance doubles by 10 mph, where the geometry needs the lock and the slip is harmless.
+        float SlowCornerSlipShare(float fwdSpeed)
+        {
+            float mph = ARS.MpsToMph(fwdSpeed);
+            float slow = ARS.Clamp((SlowCornerSlipFullMph - mph) / (SlowCornerSlipFullMph - SlowCornerSlipDoubleMph), 0f, 1f);
+            return 1f + slow;
+        }
+
         SlipState MeasureSlipFromMemory(float fwdSpeed)
         {
             SlipState s = new SlipState();
@@ -1970,9 +1984,10 @@ namespace ARS
                 ? 0.5f * (rawLeft + rawRight)
                 : (Control.SteerDegrees > 0f ? rawLeft : rawRight);
 
-            s.LeftPct = 100f * rawLeft / FrontSlipCapPeakShare;
-            s.RightPct = 100f * rawRight / FrontSlipCapPeakShare;
-            s.InnerPct = 100f * rawInner / FrontSlipCapPeakShare;
+            float capShare = FrontSlipCapPeakShare * SlowCornerSlipShare(fwdSpeed);
+            s.LeftPct = 100f * rawLeft / capShare;
+            s.RightPct = 100f * rawRight / capShare;
+            s.InnerPct = 100f * rawInner / capShare;
             return s;
         }
 
@@ -1991,7 +2006,7 @@ namespace ARS
             if (speed < FrontSlipTheoryMinSpeedMps || gripGs <= 0.01f || wheelBase <= 0.5f) return s;
 
             s.Readable = true;
-            float available = gripGs * FrontSlipGravity * FrontSlipCapPeakShare;
+            float available = gripGs * FrontSlipGravity * FrontSlipCapPeakShare * SlowCornerSlipShare(fwdSpeed);
 
             // The inner wheel is the signal, as in the measured source, and its angle IS the command: the file's own convention
             // gives the outer wheel 0.75 of it (EngineSteerWheelOuterShare), so the inner turns more and takes the tighter line.
@@ -2081,7 +2096,9 @@ namespace ARS
             // tick. chasingClamp is the value actually applied and the only state in the system.
             if (_slip.Readable && _slip.InnerPct > 0.01f)
             {
-                float factor = ARS.Clamp(100f / _slip.InnerPct, FrontSlipFactorFloor, 1f);
+                // The factor saturates where the tyre's curve does: past 2.5x the peak the lateral force is flat, so a deeper cut
+                // buys no grip and only takes the wheel away. The floor still applies below that.
+                float factor = ARS.Clamp(100f / Math.Min(_slip.InnerPct, FrontSlipFactorSaturatePct), FrontSlipFactorFloor, 1f);
                 float clampTarget = Math.Abs(requestedSteer) * factor;
                 // A cap above the angle being asked for says nothing, so the chase never sits above the request.
                 float chase = float.IsNaN(_chasingClampDeg)
