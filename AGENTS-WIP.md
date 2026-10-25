@@ -514,3 +514,16 @@ overspeed sampling block (only when `OverspeedCutPerTenthG > 0`).
 
 **Still open:** the 13 audit reports in `docs/audit/` remain uncommitted, and ~38 of their blockers are unverified
 claims. Owed a drive: the AI without the deleted pedal-gap compensation, artificial rubberbanding as explicit power.
+
+### Throttle cap removed, 2026-10-25 (build 1005)
+
+`ModulatedThrottleCap = 0.99` is gone, and with it `ShapeLaunchThrottle`: the throttle now goes to the game whole,
+1.00 included. **Why it existed (driver's note, keep this):** at a literal full throttle GTA applies its own
+full-throttle behaviour and *takes grip away*, so the 0.99 cap kept the launch out of that range instead of fighting
+it. It is disabled on purpose — dodging a native behaviour is not the same as not having it, and the driver wants to
+see what the car does with the whole pedal.
+
+Consequence to watch: the launch and every full-throttle exit now run through the game's grip loss. With `TcsEnabled
+False` on this machine there is nothing modulating it, so wheelspin off the line is expected. The pedal chain itself
+is clean end to end: `Speed -> IntendedSpeedChange -> combined input -> throttle/brake` has no dead zone, verified
+stage by stage (the launch relay was the only one, removed in 1004).

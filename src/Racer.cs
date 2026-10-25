@@ -469,8 +469,7 @@ namespace ARS
         const float TopSpeedCounterOnsetScale = 1f;
         const float TopSpeedCounterBand = 15f;
         const float TopSpeedCounterMax = 1.35f;
-        const float LaunchShapeMaxSpeed = 12f;
-        const float ModulatedThrottleCap = 0.99f;
+
 
 
         public Maneuver ActiveManeuver = new Maneuver();
@@ -3749,7 +3748,11 @@ namespace ARS
 
                 Car.HandbrakeOn = Control.HandBrakeTime > Game.GameTime;
 
-                VehicleMemory.SetThrottle(Car, ShapeLaunchThrottle(ARS.Clamp(Control.Throttle, -1, 1)));
+                // The pedal goes out whole, 1.00 included, and that is deliberate. GTA trims grip at a literal full
+                // throttle - the engine's own launch behaviour - and a 0.99 cap used to sit here to keep the car out of
+                // that range. It is disabled: the cap was also the last thing between the law and the tyre, and the
+                // driver wants the native behaviour gone rather than dodged.
+                VehicleMemory.SetThrottle(Car, ARS.Clamp(Control.Throttle, -1, 1));
                 VehicleMemory.SetBrakes(Car, ARS.Clamp(Control.Brake, 0f, 1f));
                 VehicleMemory.SetSteerAngle(Car, Control.SteerInput);
 
@@ -3826,18 +3829,6 @@ namespace ARS
             }
 
             Function.Call((Hash)CheatPowerIncreaseHash, Car, multiplier);
-        }
-
-        // Match the player's launch capability: a keyboard pedal is a hard 0/1 and 1.0 is exactly what sets the
-        // engine's full-throttle grip loss, so a binary player's cars are quantised the same way, while a player who
-        // can modulate gets a cap that stays under it. Reverse, braking and the post-fade speed stay unshaped.
-        // Below LaunchShapeMaxSpeed the pedal is capped, not quantised. The relay that answered 0 under a tenth and 1
-        // above it existed so the AI could not out-modulate a keyboard player's 0/1 launch; it was also a dead zone that
-        // swallowed every partial pedal under 27 mph, which is exactly where a 1 m/s gas band lives.
-        float ShapeLaunchThrottle(float throttle)
-        {
-            if (throttle <= 0f || ARS.GetForwardSpeed(Car) > LaunchShapeMaxSpeed) return throttle;
-            return Math.Min(throttle, ModulatedThrottleCap);
         }
 
         bool IsAwd()
