@@ -1101,7 +1101,7 @@ namespace ARS
         // crosses two bounds over 2R·leadAngle metres, which asks about 8 m/s and 21 m/s^2 at a supercar's own apex
         // speed and 6.4 m/s and 13.6 m/s^2 at a vanilla car's — self-similar across radii, because a car takes each
         // corner at its own limit — so the cap has to sit above the line's own rate and the acceleration is the only
-        // lunge knob. At 14 the aim tracks the line to 0.27 m, and a 6 m request valid for half a second moves 3.4 m
+        // lunge knob. At the shipped 26 the aim tracks the line inside a centimetre, and a 6 m request valid for half a second moves 3.4 m
         // where it used to step the whole way.
         // Sized from the line's own geometry, not by feel: the outside-inside traversal is 2 * safeBound - 18 m on a wide
         // track - and it has to happen inside the blend's 1.5 s, which needs 4 * 18 / 1.5^2 = 32 m/s^2 to start and stop

@@ -32,7 +32,7 @@
 >
 > **The dwell floor is a settling time, not a taste number (driver, 2026-10-23).** A card that orders a lane change and
 > is released mid-way turns the car one way, loses the request and turns back — instability that reads as a glitch.
-> Simulating `UpdateLaneMover` (14 m/s^2, 12 m/s cap, arrival `sqrt(2·a·gap)`) gives the settling time of the manoeuvre
+> Simulating `UpdateLaneMover` (26 m/s^2, 24 m/s cap, arrival `sqrt(2·a·gap)`) gives the settling time of the manoeuvre
 > the card actually asks for: 2.5 m — the Defend commit, `combinedWidth + 0.6` — completes in **0.77 s**, and 3 m — the
 > lead cap — in **0.83 s**. At a 750 ms floor the car is at 99.6 % and 95 % of the way when the card ends, which is the
 > cancellation the driver described; at 1000 ms both are complete with about a fifth of margin. **Any future change to
