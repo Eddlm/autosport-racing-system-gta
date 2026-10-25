@@ -1836,6 +1836,7 @@ namespace ARS
         // Where the cut stops deepening: the same 2.5x at which sfTractionMinAngle flattens the tyre's curve.
         const float FrontSlipFactorSaturatePct = 250f;
         // From this speed down the slip allowance starts doubling, and it is fully doubled at the second one.
+        static readonly bool SlowCornerSlipAllowance = false;
         const float SlowCornerSlipFullMph = 15f;
         const float SlowCornerSlipDoubleMph = 5f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
@@ -1955,6 +1956,9 @@ namespace ARS
         // makes it push wide. The allowance doubles by 5 mph, where the geometry needs the lock and the slip is harmless.
         float SlowCornerSlipShare(float fwdSpeed)
         {
+            // Parked: with the pedal and the ceiling fixes in place the allowance stopped mattering, and it was the only part of the
+            // law that moved with speed. Reviving it is this one flag; the numbers below stay as they were.
+            if (!SlowCornerSlipAllowance) return 1f;
             float mph = ARS.MpsToMph(fwdSpeed);
             float slow = ARS.Clamp((SlowCornerSlipFullMph - mph) / (SlowCornerSlipFullMph - SlowCornerSlipDoubleMph), 0f, 1f);
             return 1f + slow;
