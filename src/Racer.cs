@@ -3618,9 +3618,13 @@ namespace ARS
             // Three proportions and nothing else: each front wheel's slip as a share of the limit, and how much of the wheel
             // allowance the car is actually using. 100% on a slip means that tyre is at its limit; 100% on the wheel means
             // it has been granted everything the ceiling allows.
+            // Three proportions and nothing else: each front wheel's slip as a share of the limit, and the wheel the car is
+            // ASKING for as a share of the ceiling. 100% on a slip means that tyre is at its limit; above 100% on the wheel
+            // means the request was clipped. Reading the granted angle instead read backwards: it sat at 100% precisely when
+            // the cap was binding and fell as soon as the car was free.
             float limit = _frontSlipLimitDeg > 0.01f ? _frontSlipLimitDeg : 1f;
             float wheel = _finalCeilingDeg > 0.01f
-                ? 100f * Math.Abs(Control.SteerDegrees) / _finalCeilingDeg
+                ? 100f * Math.Abs(_steerPreLimitDegrees) / _finalCeilingDeg
                 : 0f;
             string text = "L " + (100f * _frontSlipLeftDeg / limit).ToString("0") + "%   R "
                 + (100f * _frontSlipRightDeg / limit).ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
