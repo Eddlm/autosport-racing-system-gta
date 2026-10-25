@@ -309,11 +309,8 @@ namespace ARS
         // The share of the request the cut is leaving this tick, 1 when it is not cutting. Written here so the readout can show it.
         float _slipFactor = 1f;
 
-        // The ceiling lives on the scale of the corner, not of the steering wheel: at speed it is already 5-6 deg, and the
-        // slip rarely runs more than 10-20 deg past its target, so the whole correction is a handful of degrees. 6 closes
-        // 10 deg in 1.7 s and 20 in 3.3 s - slow enough to be felt, quick enough to arrive inside a long corner. One rate for
-        // both directions: the ceiling recovers in exactly the time it takes to bite, and an asymmetric pair pumps.
-        const float SlipCeilingDegPerSec = 6f;
+        // The ceiling lives on the scale of the corner, not of the steering wheel: at speed it is already 5-6 deg, so the whole
+        // correction is a handful of degrees and the rate is what makes it felt rather than stepped.
         // The closing rate runs from the resting value at the target to the full one at SlipCeilingCloseSpanPct over it, on a tanh
         // so both ends ease in; the opening is one flat rate, careful by design.
         const float SlipCeilingSlowDegPerSec = 1f;
@@ -331,8 +328,6 @@ namespace ARS
         // Below this command the radius is a straight line and its inverse is noise.
         const float FrontSlipTheoryMinCommandDeg = 0.05f;
         const float FrontSlipGravity = 9.81f;
-        // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
-        float _planCeilingDeg = 0f;
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _projectionOutsideMeters = 0f;
@@ -1931,11 +1926,8 @@ namespace ARS
         // own geometry against its grip (theoretical demand). Both speak the same 100 = at the target scale.
         public struct SlipState
         {
-            public float LeftPct;    // left front tyre, as a share of the target
-            public float RightPct;   // right front tyre
             public float InnerPct;   // the inner front tyre: the signal the limit acts on
             public float RearPct;    // the worse rear tyre, same scale: tells an understeer from a slide the front cannot see
-            public float PeakDeg;    // measured source only: the live peak, for the display
             public bool Readable;    // false when this source could not answer this tick
         }
 
@@ -1971,8 +1963,6 @@ namespace ARS
         SlipState MeasureSlipFromMemory(float fwdSpeed)
         {
             SlipState s = new SlipState();
-            s.PeakDeg = LateralPeakAtSpeed(fwdSpeed);
-
             List<float> slips = ARS.WheelSideSlipAngles(Car);
             if (slips.Count < 2) return s;
             s.Readable = true;
@@ -1991,8 +1981,6 @@ namespace ARS
                 : Math.Max(rawLeft, rawRight);
 
             float capShare = FrontSlipCapPeakShare * SlowCornerSlipShare(fwdSpeed);
-            s.LeftPct = 100f * rawLeft / capShare;
-            s.RightPct = 100f * rawRight / capShare;
             s.InnerPct = 100f * rawInner / capShare;
             s.RearPct = slips.Count >= 4
                 ? 100f * Math.Max(Math.Abs(slips[2]), Math.Abs(slips[3])) / capShare
@@ -2028,8 +2016,6 @@ namespace ARS
             float demand = speed * speed / Math.Max(innerRadius, 0.5f);
 
             s.InnerPct = 100f * demand / available;
-            s.LeftPct = s.InnerPct;
-            s.RightPct = s.InnerPct;
             return s;
         }
 
@@ -2098,7 +2084,6 @@ namespace ARS
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
-            _planCeilingDeg = speedCeiling;
             _slip = MeasureFrontSlip(fwdSpeed);
             _slipFactor = 1f;
             // maxSlip is the peak at this speed and it is the only thing that moves with speed. clampTarget is the old proportional

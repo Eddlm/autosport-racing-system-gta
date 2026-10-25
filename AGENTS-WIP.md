@@ -578,3 +578,20 @@ Audited by two subagents (plumbing and mathematics). Their findings, re-checked 
 (NaN floors, reverse off, ceiling clamped to the lock, raw readout only from the memory source, the Development store wired into
 `CompleteOwnedKeys`, docs synced); the geometry batch as build 1059. Open, deliberately: the two laws are not comparable, and
 `LeftPct`/`RightPct` are duplicated from `InnerPct` in theory mode because the model has one axle and no sides.
+
+### Front-slip guard, session closed 2026-10-25 (builds 1050-1089)
+
+The steering limiter is now: `maxSlip` (peak at speed x share x slow-corner allowance) -> `clampTarget` (lock when
+there is no overshoot, `request x factor` when there is, saturating at 2.5x where the tyre's curve flattens) ->
+`chasingClamp` (the only state; shuts at 1-10 deg/s by severity, opens at 4). The pedal follows the same band,
+throttle only, closed between x1 and x2.5 and never below zero. Full design note, game-source evidence
+(`sfTractionPeakAngle` 1.0, `sfTractionMinAngle` 2.5), the on-track capture and the open items:
+`docs/steering-and-pedals.md`.
+
+Two things the session established that are easy to lose:
+
+- **The whole guard is AI-only.** `ApplySteerLimits` sits inside `if (!ControlledByPlayer)`, and the readout only
+  draws for `DebugFocusRacer`, so the numbers on screen always belong to a rival. The player's steering is never
+  written by ARS.
+- **A four-wheel slide is not an understeer.** `F` and `R` near each other in `docs/steering-and-pedals.md`'s
+  capture means both axles are past the peak, where cutting the wheel buys nothing; speed is the only lever.
