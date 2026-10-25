@@ -1471,7 +1471,11 @@ namespace ARS
         // dropped the tick the target clears.
         float ComputeAvoidanceLane(float roadWide)
         {
+            // TEMPORARY (2026-10-25): the hold is off while we check whether ApplyRivalWalls already covers the nose
+            // clip it was written for. False = the pass lane lives only while the target does (pre-54fc02a behaviour).
+            bool avoidHoldEnabled = false;
             float passLane = ComputeAvoidAheadLane(roadWide);
+            if (!avoidHoldEnabled) return passLane;
             if (passLane != 0f)
             {
                 _avoidHoldLane = passLane;
