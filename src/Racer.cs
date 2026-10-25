@@ -303,9 +303,6 @@ namespace ARS
         float _steerPreLimitDegrees = 0f;
         // The ceiling actually in force after every limit, and the wheel angle granted, both for the readout.
         float _finalCeilingDeg = 0f;
-        // The slip ceiling as it stands, in command degrees: closes at SlipCeilingDegPerSec, opens at
-        // SlipCeilingDegPerSec. Starts wide open so the first tick clamps nothing.
-        float _slipCeilingDeg = float.PositiveInfinity;
         // The ceiling lives on the scale of the corner, not of the steering wheel: at speed it is already 5-6 deg, and the
         // slip rarely runs more than 10-20 deg past its target, so the whole correction is a handful of degrees. 6 closes
         // 10 deg in 1.7 s and 20 in 3.3 s - slow enough to be felt, quick enough to arrive inside a long corner. One rate for
@@ -2071,22 +2068,13 @@ namespace ARS
             // The ceiling is a state, not a fresh function of this tick: it closes towards what the tyre asks at
             // SlipCeilingDegPerSec and opens back at SlipCeilingDegPerSec, so a step in the measurement never
             // becomes a step at the wheel. Only the closing side is slow; opening fast would let the guard outrun the tyre.
-            // A ceiling above the angle being asked for says nothing, and starting it at the lock made the state march down
-            // from 38 deg: at 6 deg/s that is five seconds of continuous bite before it reached a 7 deg target, so it never left.
-            // Seeding it to the request each tick leaves the rate to cover only the gap between the wheel and the target.
-            _slipCeilingDeg = Math.Min(_slipCeilingDeg, Math.Abs(requestedSteer));
-            if (_slip.Readable)
+            // The rate belongs to the CUT, not to a stored ceiling: each tick the command may fall by SlipCeilingDegPerSec
+            // at most, until it meets the angle the tyre allows. No state, so nothing to seed and nothing to drift: a 
+            // small request cannot drag the limit down, and a target that rises never has to be waited out.
+            if (_slip.Readable && _slip.InnerPct > 100f && _slip.CeilingDeg > 0.01f)
             {
-                if (_slip.InnerPct > 100f && _slip.CeilingDeg > 0.01f)
-                {
-                    float target = Math.Min(_slip.CeilingDeg, Math.Abs(requestedSteer));
-                    // Down only: the opening side is the branch below, so a target that rises cannot snap the state up.
-                    if (target < _slipCeilingDeg)
-                        _slipCeilingDeg = Math.Max(target, _slipCeilingDeg - SlipCeilingDegPerSec * TickScale);
-                }
-                else
-                    _slipCeilingDeg = Math.Min(VehicleData.SteeringLock, _slipCeilingDeg + SlipCeilingDegPerSec * TickScale);
-                speedCeiling = Math.Min(speedCeiling, _slipCeilingDeg);
+                float slowestCut = Math.Abs(requestedSteer) - SlipCeilingDegPerSec * TickScale;
+                speedCeiling = Math.Min(speedCeiling, Math.Max(_slip.CeilingDeg, slowestCut));
             }
             _finalCeilingDeg = speedCeiling;
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
@@ -3686,7 +3674,7 @@ namespace ARS
                 + _slip.RightPct.ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
             // The ceiling the command is actually held under, state included: the one number that shows the ramp
             // moving, which the three proportions above cannot (they only say where the tyre and the wheel are now).
-            float ceiling = float.IsPositiveInfinity(_slipCeilingDeg) ? VehicleData.SteeringLock : Math.Min(_slipCeilingDeg, VehicleData.SteeringLock);
+            float ceiling = Math.Min(_finalCeilingDeg, VehicleData.SteeringLock);
             text += "   cap " + ceiling.ToString("0") + "deg";
             // The raw field follows the three proportions, for calibrating the scale by eye: it is what the tyre reports, before
             // any peak is chosen for it.
