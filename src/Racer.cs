@@ -1825,6 +1825,8 @@ namespace ARS
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
         const float FrontSlipCapPeakShare = 1.00f;
+        // The proportional cut never takes more than half the request: below that the car stops turning at all.
+        const float FrontSlipFactorFloor = 0.50f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -1916,7 +1918,6 @@ namespace ARS
             public float LeftPct;    // left front tyre, as a share of the target
             public float RightPct;   // right front tyre
             public float InnerPct;   // the inner front tyre: the signal the limit acts on
-            public float CeilingDeg; // the command ceiling this source asks for, 0 when it has none to give
             public float PeakDeg;    // measured source only: the live peak, for the display
             public bool Readable;    // false when this source could not answer this tick
         }
@@ -1954,7 +1955,6 @@ namespace ARS
             s.LeftPct = 100f * rawLeft / FrontSlipCapPeakShare;
             s.RightPct = 100f * rawRight / FrontSlipCapPeakShare;
             s.InnerPct = 100f * rawInner / FrontSlipCapPeakShare;
-            s.CeilingDeg = s.PeakDeg > 0.01f ? PeakSlipCeilingAt(FrontSlipCapPeakShare * s.PeakDeg) : 0f;
             return s;
         }
 
@@ -1988,13 +1988,6 @@ namespace ARS
             s.InnerPct = 100f * demand / available;
             s.LeftPct = s.InnerPct;
             s.RightPct = s.InnerPct;
-
-            // The ceiling is the same question inverted, on the same radius the gate uses: the inner command whose demand lands
-            // exactly on the allowance. No outer-wheel share here - the command IS the inner angle under this convention.
-            float radiusAtLimit = speed * speed / available;
-            if (radiusAtLimit <= wheelBase) return s;
-            float commandAtLimit = (float)Math.Atan(wheelBase / radiusAtLimit) * 180f / (float)Math.PI;
-            s.CeilingDeg = ARS.Clamp(commandAtLimit, 0f, VehicleData.SteeringLock);
             return s;
         }
 
@@ -2064,29 +2057,20 @@ namespace ARS
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             _planCeilingDeg = speedCeiling;
-            // The measured slip is a ceiling on the command, derived from the slip the limit allows rather than from a ratio
-            // against the current wheel: past the peak the slip grows faster than the wheel, so a proportional bite overshot.
             _slip = MeasureFrontSlip(fwdSpeed);
-            // The ceiling exists only when the field is readable, the tyre is past its target and the peak is usable to map
-            // degrees onto a wheel angle. Any of the three missing leaves the limiter out of the way rather than guessing.
-            // The ceiling is a state, not a fresh function of this tick: it closes towards what the tyre asks at
-            // SlipCeilingDegPerSec and opens back at SlipCeilingDegPerSec, so a step in the measurement never
-            // becomes a step at the wheel. Only the closing side is slow; opening fast would let the guard outrun the tyre.
-            // clampTarget is a fact about the tyre, so it moves instantly; chasingClamp is the actuator that follows it at
-            // SlipCeilingDegPerSec in both directions, and chasingClamp is what the command is held under. It is born at the
-            // target rather than at the lock: a chase that starts 30 deg away needs five seconds to arrive, and never does.
-            if (_slip.Readable && _slip.CeilingDeg > 0.01f)
+            // maxSlip is the peak at this speed and it is the only thing that moves with speed. clampTarget is the old proportional
+            // law - the request scaled by maxSlip/slip - so it carries the percentage of reduction, and it is recomputed every
+            // tick. chasingClamp is the value actually applied and the only state in the system.
+            if (_slip.Readable && _slip.InnerPct > 0.01f)
             {
-                float clampTarget = _slip.CeilingDeg;
-                if (float.IsNaN(_chasingClampDeg))
-                {
-                    _chasingClampDeg = clampTarget;
-                }
-                else
-                {
-                    float step = SlipCeilingDegPerSec * TickScale;
-                    _chasingClampDeg += ARS.Clamp(clampTarget - _chasingClampDeg, -step, step);
-                }
+                float factor = ARS.Clamp(100f / _slip.InnerPct, FrontSlipFactorFloor, 1f);
+                float clampTarget = Math.Abs(requestedSteer) * factor;
+                // A cap above the angle being asked for says nothing, and opening the chase only at the rate would delay
+                // steering-in: the CUT is rate-limited, the opening is free up to the request, which the steering slew smooths.
+                float chase = float.IsNaN(_chasingClampDeg)
+                    ? clampTarget
+                    : Math.Min(_chasingClampDeg, Math.Abs(requestedSteer));
+                _chasingClampDeg = Math.Max(clampTarget, chase - SlipCeilingDegPerSec * TickScale);
                 speedCeiling = Math.Min(speedCeiling, _chasingClampDeg);
             }
             _finalCeilingDeg = speedCeiling;
