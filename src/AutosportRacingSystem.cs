@@ -1239,9 +1239,9 @@ namespace ARS
             AddDebugCheckbox(interfaceMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when you are not on the grid.");
             AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show Rival Lap Times", "Announce each AI lap time as it crosses the line. One per racer per lap, so a full grid is a lot of them.");
 
-            // Greyed out: Load Track and Build Grid are part of the Race menu and no longer something the driver switches
-            // off. The stored key is ignored at load for the same reason the ABS row ignores its own.
-            NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Show Track & Grid Rows", "Load Track and Build Grid in the Race menu. Always on now, so the row cannot be changed.", true);
+            // Off and greyed: Load Track and Build Grid stay out of the Race menu, and the row cannot be turned back on.
+            // The stored key is ignored at load for the same reason the ABS row ignores its own.
+            NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Show Track & Grid Rows", "Load Track and Build Grid in the Race menu. Off and not changeable.", false);
             stagedSpawnsItem.Enabled = false;
             stagedSpawnsItem.CheckboxChanged += (sender, args) =>
             {
@@ -3557,9 +3557,8 @@ namespace ARS
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 100);
             CurrentRubberbandMode = ParseEnum(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString()), CurrentRubberbandMode);
-            // Forced on: the checkbox is greyed, so a stored false would hide two Race-menu rows behind a switch nobody
-            // can reach.
-            StagedSpawns = true;
+            // Forced off: the checkbox is greyed, so a stored true would restore two rows behind a switch nobody can reach.
+            StagedSpawns = false;
             TipRate = ParseEnum(SettingsMenuStore.Get("TipRate", TipRate.ToString()), TipRate);
             RaceMenuStore.Migrate("PaceMode", legacyPaceMode);
             // The mode's option was relabelled and then re-spelled as an enum name; rewrite either older
