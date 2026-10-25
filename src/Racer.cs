@@ -1903,9 +1903,6 @@ namespace ARS
         // state: the cap is the same number every tick the slip is over, and it disappears the tick it is not.
         void UpdateFrontSlipLimit(float fwdSpeed)
         {
-            float basePeak = Handling.LateralTractionCurve;
-            // The live peak at the speed the car has right now, not the round-robin copy: TRlatAtSpeed steps once per core
-            // beat, so reading it here left the limit lagging a frame or two behind. The half is taken from this value.
             float livePeak = LateralPeakAtSpeed(fwdSpeed);
             float limitDeg = FrontSlipCapPeakShare * livePeak;
 
@@ -1916,8 +1913,10 @@ namespace ARS
             {
                 rawLeft = Math.Abs(slips[0]);
                 rawRight = Math.Abs(slips[1]);
-                left = rawLeft * basePeak;
-                right = rawRight * basePeak;
+                // Measured and limit share one reference. Converting the field with the base peak inflated the reading by
+                // base/livePeak = 1 + 0.1 v - a steady corner at 60 mph read 400% while the tyre had not even squealed.
+                left = rawLeft * livePeak;
+                right = rawRight * livePeak;
             }
             // The average of the two fronts, not the worst: a single wheel clipping a kerb should not scale the whole
             // command, and the pair is the axis the car actually turns on.
