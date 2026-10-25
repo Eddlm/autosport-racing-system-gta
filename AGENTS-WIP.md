@@ -293,3 +293,15 @@ untracked track files (`Dist/AutosportRacingSystem/Tracks/F8.xml`, `TestOct.xml`
 node; `lineActive` vs `entryActive`; the needle-thread averaging two rivals' lanes; the turn-in exempted on a 1 Hz queue.
 
 **First thing next session**: the audit's finding 4 (overshoot deadband) - it is the one the driver would feel.
+
+## 2026-10-25 — the avoidance hold is off (build 934, deployed)
+
+`ComputeAvoidanceLane` carries `bool avoidHoldEnabled = false`: the pass lane now lives only while the target does, i.e. the
+pre-`54fc02a` behaviour. The fields stay, unused, so it can be turned back on without re-writing it.
+
+**Why**: `ApplyRivalWalls` already constrains every lane request - corner line, lean, avoidance, recovery - against a rival
+beside the car, closing instantly and opening at 10 m/s. The hold may therefore be a second law for the same nose clip, and
+the 8 s ceiling made it the dangerous one: a stuck geometric release would hold a pass line for up to 480 m.
+
+**Drive owed**: a pass, and whether the car turns in on the car it just passed. If it does not, the hold is deleted; if it
+does, the fix belongs in the wall's release, not in a separate mechanism.
