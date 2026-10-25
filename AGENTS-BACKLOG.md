@@ -119,6 +119,13 @@
 
 ## Agenda — the workstreams named for the coming days
 
+- `leaderboard-per-frame` — **parked for 0.11.0 (owner, 2026-10-25)**: `DrawLeaderboard` runs every frame and re-formats
+  every row, which is ~1,092 heap allocations per frame at 20 cars (~1.5 MB/s). Audit R12 claimed a 5 Hz rebuild removes
+  ~98 % of the cost; **that figure does not hold** — the 672 natives per frame are *draw* calls, and GTA's HUD is
+  immediate-mode, so the rows must be drawn every frame or they vanish. What a 5 Hz rebuild removes is the formatting and
+  the sort, not the draws. Cutting the native count means drawing fewer elements (near rows only), and that is an
+  interface decision, not a fix.
+
 - `rival-record-lag` — **parked for 0.11.0 (owner, 2026-10-25)**: `UpdateRivalInfo` publishes on a `250 + phase` ms
   beat (250-749 ms), while the wall gate needs the alongside tick; at 10 m/s closure the tested gap moves 2.5-7.5 m per
   beat against a 10.05 m window. Audit B5 (`docs/audit/200-audit-0.9.0.md`). Accepted as shipped for 0.9.0: either the
