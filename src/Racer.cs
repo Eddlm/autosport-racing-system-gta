@@ -1915,8 +1915,12 @@ namespace ARS
                 rawRight = Math.Abs(slips[1]);
                 // Measured and limit share one reference. Converting the field with the base peak inflated the reading by
                 // base/livePeak = 1 + 0.1 v - a steady corner at 60 mph read 400% while the tyre had not even squealed.
-                left = rawLeft * livePeak;
-                right = rawRight * livePeak;
+                // The field reads on the command axis the ceiling is built on, and the outer wheel only gets
+                // EngineSteerWheelOuterShare (0.75) of that command - the same share PeakSlipOuterCommandShare inverts when the
+                // limit is mapped into a ceiling. Without it the pair disagreed by 1/0.75 and a tyre sitting exactly on its
+                // limit read 133%.
+                left = rawLeft * livePeak * EngineSteerWheelOuterShare;
+                right = rawRight * livePeak * EngineSteerWheelOuterShare;
             }
             // The average of the two fronts, not the worst: a single wheel clipping a kerb should not scale the whole
             // command, and the pair is the axis the car actually turns on.
