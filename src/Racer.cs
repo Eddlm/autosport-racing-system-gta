@@ -306,9 +306,10 @@ namespace ARS
         // The slip ceiling as it stands, in command degrees: closes at SlipCeilingDropDegPerSec, opens at
         // SlipCeilingRiseDegPerSec. Starts wide open so the first tick clamps nothing.
         float _slipCeilingDeg = float.PositiveInfinity;
-        // 40 closes 10 deg in 250 ms - the same order as the pedal's full-range slew (167 ms) and well under the steering
-        // slew's 180 deg/s, so the bite reads as a ramp rather than a step. 20 arrives late in a quick corner, 90 is the wall again.
-        const float SlipCeilingDropDegPerSec = 40f;
+        // The ceiling lives on the scale of the corner, not of the steering wheel: at speed it is already 5-6 deg, and the
+        // slip rarely runs more than 10-20 deg past its target, so the whole correction is a handful of degrees. 6 closes
+        // 10 deg in 1.7 s and 20 in 3.3 s - slow enough to be felt, quick enough to arrive inside a long corner.
+        const float SlipCeilingDropDegPerSec = 6f;
         const float SlipCeilingRiseDegPerSec = 8f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
         SlipState _slip;
