@@ -1818,7 +1818,7 @@ namespace ARS
         const float FrontSlipCapPeakShare = 0.50f;
         const float FrontSlipFactorFloor = 0.50f;
         const float FrontSlipCeilingReleaseDegPerSec = 8f;
-        const float FrontSlipCeilingFloorShare = 0.50f;
+        const float FrontSlipCeilingFloorShare = 0.05f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
