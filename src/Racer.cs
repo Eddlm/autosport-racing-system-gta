@@ -1815,12 +1815,9 @@ namespace ARS
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
-        const float FrontSlipCapPeakShare = 0.75f;
+        const float FrontSlipCapPeakShare = 2.00f;
         const float FrontSlipFactorFloor = 0.50f;
         const float FrontSlipCeilingFloorShare = 0.05f;
-        // The slip ceiling is eased out towards the lock between these two speeds: full relief at the low one.
-        const float SlipCeilingRelieveStartMph = 40f;
-        const float SlipCeilingRelieveEndMph = 5f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -2051,10 +2048,6 @@ namespace ARS
             // ceiling towards zero one halving at a time. Half the lock is the floor, mirrored from the factor's own floor.
             _frontSlipCeilingDeg = ARS.Clamp(_frontSlipCeilingDeg, FrontSlipCeilingFloorShare * VehicleData.SteeringLock, VehicleData.SteeringLock);
             speedCeiling = Math.Min(speedCeiling, _frontSlipCeilingDeg);
-            // Below 40 mph the slip ceiling is eased out towards the steering lock, reaching it at 5 mph: at walking pace the
-            // tyre makes no slip worth judging, and a cap there only removes the wheel the car needs to place itself.
-            float relieve = ARS.Remap(ARS.MpsToMph(fwdSpeed), SlipCeilingRelieveStartMph, SlipCeilingRelieveEndMph, 0f, 1f, true);
-            if (relieve > 0f) speedCeiling += (VehicleData.SteeringLock - speedCeiling) * relieve;
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
