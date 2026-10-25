@@ -303,5 +303,11 @@ pre-`54fc02a` behaviour. The fields stay, unused, so it can be turned back on wi
 beside the car, closing instantly and opening at 10 m/s. The hold may therefore be a second law for the same nose clip, and
 the 8 s ceiling made it the dangerous one: a stuck geometric release would hold a pass line for up to 480 m.
 
-**Drive owed**: a pass, and whether the car turns in on the car it just passed. If it does not, the hold is deleted; if it
-does, the fix belongs in the wall's release, not in a separate mechanism.
+**Driven, 2026-10-25 (build 934): no cross after a pass — the claim is invalid.** The behaviour the hold was written for, the
+lane snapping back and the car turning in on the car it just passed, does not reproduce with it off. `ApplyRivalWalls` covers
+it on its own: the wall holds while `|LongitudinalGap| < CombinedSize.Y` (body half-sum + 0.25 m behind, +1 m ahead) and then
+opens at 10 m/s, which is enough for the car to unwind clear of the passed car.
+
+**Owed: the deletion, not a fix.** `ComputeAvoidanceLane`, `_avoidHoldLane`, `_avoidHoldActive`, `_avoidHoldUntil` and
+`AvoidHoldTimeoutMs` go at the next rebuild rather than mid-session, so the driver keeps 934 in the car until then. The
+`avoidHoldEnabled` switch stays where it is until that happens, since it is what makes the current build's behaviour explicit.
