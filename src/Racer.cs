@@ -1904,10 +1904,12 @@ namespace ARS
         // The measured front slip as a multiplicative factor on the steer command: the request is scaled by limit / slip,
         // a ratio, so it needs no gain and means the same thing on a 12-degree car as on a 22-degree one. A floor keeps a
         // kerb strike from taking the wheel away, and the caller exempts a countersteer, which is answering a slide.
-        void UpdateFrontSlipFactor()
+        void UpdateFrontSlipFactor(float fwdSpeed)
         {
             float basePeak = Handling.LateralTractionCurve;
-            float livePeak = TRLateralAtSpeed > 0.01f ? Math.Min(basePeak, TRLateralAtSpeed) : basePeak;
+            // The live peak at the speed the car has right now, not the round-robin copy: TRlatAtSpeed steps once per core
+            // beat, so reading it here left the limit lagging a frame or two behind. The half is taken from this value.
+            float livePeak = LateralPeakAtSpeed(fwdSpeed);
             float limitDeg = FrontSlipCapPeakShare * livePeak;
 
             float left = 0f, right = 0f;
@@ -2032,7 +2034,7 @@ namespace ARS
             // limit the ceiling drops to the angle that produced the limit (achieved x factor, so no more than half is ever
             // taken), and it is released at 8 deg/s once they are back under. A request smaller than the ceiling passes
             // untouched, which a multiplicative factor could never allow.
-            UpdateFrontSlipFactor();
+            UpdateFrontSlipFactor(fwdSpeed);
             if (_frontSlipPct > 100f)
             {
                 float achieved = Math.Abs(Control.SteerDegrees);
