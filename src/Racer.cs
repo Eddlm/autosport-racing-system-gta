@@ -271,7 +271,7 @@ namespace ARS
         // full brake only when it is six over.
         const float FullPedalSpeedErrorMps = 1f;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
-        const float BrakeErrorMultiplier = 6f;
+        const float BrakeErrorMultiplier = 3f;
 
         // Applied pedal input sampled every half metre of travel, for the debug trail: the cap holds 40 m.
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
