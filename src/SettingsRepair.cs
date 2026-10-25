@@ -363,8 +363,8 @@ namespace ARS
             return trimmed.Substring(1, trimmed.Length - 2).Trim();
         }
 
-        // Never leave a half-written settings file behind: the rewrite lands in one move.
-        static void WriteAtomic(string path, List<string> lines)
+        // The one atomic writer, for the repair pass and for every menu save: a settings file is never left half-written.
+        public static void WriteAtomic(string path, List<string> lines)
         {
             string temporary = path + ".repair";
             File.WriteAllLines(temporary, lines);

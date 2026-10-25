@@ -1,4 +1,6 @@
 using GTA;
+using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 
@@ -69,12 +71,34 @@ namespace ARS
             return text != null && float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
         }
 
+        // ScriptSettings.Save truncates and rewrites and both callers discarded its result, so a torn file was accepted and
+        // the only symptom was a setting reverting. The store already knows every key it owns, so the file is rendered from
+        // the schema and written through the atomic replace the repair pass uses.
+        void Save()
+        {
+            List<string> lines = new List<string>();
+            lines.Add("[MENU]");
+            foreach (string key in SettingsRepair.DeclaredKeys(_fileName))
+            {
+                string value = File.GetValue<string>("MENU", key, null);
+                if (value != null) lines.Add(key + "=" + value);
+            }
+            try
+            {
+                SettingsRepair.WriteAtomic(_path, lines);
+            }
+            catch (Exception ex)
+            {
+                ARS.Log(ARS.LogImportance.Error, "Settings: could not write " + _fileName + " - " + ex.Message, true);
+            }
+        }
+
         // Seed-on-read: the ini mirrors the live key set after the first load.
         void SeedIfMissing(string key, string value)
         {
             if (value == null || File.GetValue<string>("MENU", key, null) != null) return;
             File.SetValue("MENU", key, value);
-            File.Save();
+            Save();
         }
 
         public void Set(string key, string value)
@@ -82,7 +106,7 @@ namespace ARS
             if (!Declared(key, "write")) return;
             if (File.GetValue<string>("MENU", key, null) == value) return;
             File.SetValue("MENU", key, value);
-            File.Save();
+            Save();
         }
 
         public void Set(string key, int value)
