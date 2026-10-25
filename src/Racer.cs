@@ -3588,22 +3588,20 @@ namespace ARS
             ARS.DrawLine(half, full, outside ? Color.Red : Color.Cyan);
         }
 
-        // The measured front slip, over the focus car's roof: each wheel's side slip on the tyre's own axis (peak 1.0),
-        // the share the cap holds, and the steer ceiling it has glided to in degrees. This is the readout of the real
-        // field, not of a model - the same number the cap itself acts on.
+        // The two front wheels' measured side slip, each against the share the cap enforces, printed where the game prints
+        // its own subtitles (bottom centre) rather than floating over the car. BEGIN_TEXT_COMMAND_PRINT (0xCD015E5BB0D96A57)
+        // and END_TEXT_COMMAND_PRINT (0x1D12A56FC95BE92E) are the subtitle pair; a 50 ms duration redrawn every tick keeps
+        // it live without the game stacking copies.
         void DrawFrontSlipReadout()
         {
             List<float> slips = ARS.WheelSideSlipAngles(Car);
             if (slips.Count < 2) return;
-            Vector3 roof = Car.Position + Vector3.WorldUp * 2.6f;
-            // Title: the two numbers the cap acts on. Subtitle: which ceiling actually binds, because the measured cap sits
-            // at full lock until the fronts pass the share and reading it alone makes the limit look enormous.
-            ARS.DrawText(roof, "slip L " + Math.Abs(slips[0]).ToString("0.00") + " R " + Math.Abs(slips[1]).ToString("0.00"), Color.Yellow, 0.4f);
-            bool measuredBinds = _frontSlipCapDeg < _planCeilingDeg;
-            string subtitle = "cap " + _steerGrantedCeiling.ToString("0.0") + "deg - "
-                + (measuredBinds ? "slip" : "plan") + " binds (plan " + _planCeilingDeg.ToString("0.0")
-                + ", slip " + _frontSlipCapDeg.ToString("0.0") + ")";
-            ARS.DrawText(roof - Vector3.WorldUp * 0.22f, subtitle, Color.FromArgb(200, 255, 255, 255), 0.3f);
+            string share = FrontSlipCapShare.ToString("0.00");
+            string text = "L " + Math.Abs(slips[0]).ToString("0.00") + "/" + share
+                + "     R " + Math.Abs(slips[1]).ToString("0.00") + "/" + share;
+            Function.Call((Hash)0xCD015E5BB0D96A57, "STRING");
+            Function.Call((Hash)0x6C188BE134E074AA, text);
+            Function.Call((Hash)0x1D12A56FC95BE92E, 50, true);
         }
 
         void DrawWheelSlip()
