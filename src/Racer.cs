@@ -3804,8 +3804,12 @@ namespace ARS
 
         void ApplyPowerMultiplier()
         {
-            float multiplier = _powerCounter;
-            if (Game.GameTime < _nitrousActiveUntil) multiplier *= NitrousPowerMultiplier * (ControlledByPlayer ? 1f : ARS.AiNitroPct * 0.01f);
+            // One law at a time. The burn is its own multiplier - exactly the nitro factor - and the power compensation does
+            // not ride on top of it. It used to multiply: an AI car with a pedal gap and past its top speed turned 2.5 into 5,
+            // and the burn stopped being a known quantity.
+            float multiplier = Game.GameTime < _nitrousActiveUntil
+                ? NitrousPowerMultiplier * (ControlledByPlayer ? 1f : ARS.AiNitroPct * 0.01f)
+                : _powerCounter;
 
             if (float.IsNaN(multiplier) || float.IsInfinity(multiplier) || multiplier < 0f || multiplier > 10f) multiplier = 1f;
 
