@@ -2579,7 +2579,12 @@ namespace ARS
             float rbFactor = ComputeRubberBandFactor();
             bool rbNearbyRival = Brain.Rivals.Any(r => r.RivalRacer != null && r.Distance < 100f);
             bool rbFreeZone = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
-            if (rbFactor < 1f && !rbFreeZone && !(ARS.CurrentRubberbandMode == RubberbandMode.Natural && rbNearbyRival))
+            // The burn outranks the packing. Rubberbanding trims a lonely leader's plan to 0.67 - and the nitro card
+            // fires precisely when the car is lonely, so the burn used to push the car into its own trimmed target and
+            // the controller braked against it. Spending the bottle is a decision: while it lasts, the plan is the
+            // road's, not the field's.
+            bool burning = Game.GameTime < _nitrousActiveUntil;
+            if (!burning && rbFactor < 1f && !rbFreeZone && !(ARS.CurrentRubberbandMode == RubberbandMode.Natural && rbNearbyRival))
                 Brain.CurrentIntention.Speed *= rbFactor;
         }
 
@@ -3278,6 +3283,13 @@ namespace ARS
             Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 1.0f, 100.0f, false);
             _nitrousActiveUntil = Game.GameTime + NitrousDurationMs;
             _nitrousLapUsed = Lap;
+            // The AI's half of the story is invisible without this: the plan it is about to be pushed past, and the
+            // packing factor it is escaping. Raise LogLevel to Info to read it.
+            if (!ControlledByPlayer)
+            {
+                float planMph = Brain.CurrentIntention.Speed >= 0f ? ARS.MpsToMph(Brain.CurrentIntention.Speed) : -1f;
+                ARS.Log(ARS.LogImportance.Info, "AI nitrous: " + Car.DisplayName + " lap " + Lap + ", plan " + planMph.ToString("0") + " mph, packing x" + ComputeRubberBandFactor().ToString("0.00"));
+            }
         }
 
         public bool TryFireNitrous()
