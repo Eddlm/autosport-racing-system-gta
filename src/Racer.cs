@@ -414,6 +414,9 @@ namespace ARS
         // Feature gate for nitrous (ARS.NitrousEnabled). Both sides burn the same multiplier; the AI's share of it
         // is the Race Rules setting ARS.AiNitroPct, which ships at 100 so the two are equal until tuned.
         const float NitrousPowerMultiplier = 2.5f;
+        // The player's own factor, and it is neutral on purpose: the bottle currently gives them the native nitrous and
+        // its FX and no power at all. The rivals keep NitrousPowerMultiplier x AiNitroPct.
+        const float PlayerNitrousPowerMultiplier = 1f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
         // The card may not fire inside the first six seconds of the race: at the launch the field is still bunched, so a
@@ -3802,7 +3805,9 @@ namespace ARS
             float multiplier = _powerCounter;
             if (Game.GameTime < _nitrousActiveUntil)
             {
-                multiplier = NitrousPowerMultiplier * (ControlledByPlayer ? 1f : ARS.AiNitroPct * 0.01f);
+                multiplier = ControlledByPlayer
+                    ? PlayerNitrousPowerMultiplier
+                    : NitrousPowerMultiplier * ARS.AiNitroPct * 0.01f;
             }
             else if (!ControlledByPlayer && ARS.RubberbandingPct > 0 && ARS.CurrentRubberbandMode == RubberbandMode.Artificial)
             {
