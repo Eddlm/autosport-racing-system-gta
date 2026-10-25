@@ -2256,13 +2256,12 @@ namespace ARS
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
-            // The front tyre's overshoot caps the PEDAL AS A WHOLE, not the throttle: x1 of the target leaves full throttle, x3
-            // demands full brake, and the band between is linear. Braking is the point - it loads the front axle, which is the
-            // grip the sliding tyre is missing, and it is the one thing a throttle-only cap could never ask for.
+            // The front tyre's overshoot caps the throttle only: x1 of the target leaves it wide open and x2 closes it to nothing,
+            // linear between and never below zero, so the brake is never taken from the driver - it is only ever the plan's to ask for.
             if (_slip.Readable && _slip.InnerPct > 100f)
             {
-                float over = ARS.Clamp((_slip.InnerPct - 100f) / 200f, 0f, 1f);
-                combinedInput = Math.Min(combinedInput, 1f - 2f * over);
+                float over = ARS.Clamp((_slip.InnerPct - 100f) / 100f, 0f, 1f);
+                combinedInput = Math.Min(combinedInput, Math.Max(0f, 1f - over));
             }
             MeasureProjectionOutside(1f);
             // Full countersteer: no brake, just enough throttle to keep the wheels rolling. The reason caps still
