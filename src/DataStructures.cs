@@ -6,8 +6,11 @@ namespace ARS
 {
     public static class AiConstants
     {
-        public static float MaxSpeed = ARS.MphToMps(300f);
-        public static float MinSpeed = ARS.MphToMps(15f);
+        // The plan's own bounds, and nothing else's. Max is the "no plan" value the route asks for on a straight: it must
+        // be far above any car so the plan never becomes the ceiling - the car's motor is. It used to read 300 mph, which
+        // is reachable-looking and invited the belief that the mod capped speed.
+        public static float MaxSpeed = ARS.MphToMps(999f);
+        public static float MinSpeed = ARS.MphToMps(10f);
     }
     public class VehicleState
     {
