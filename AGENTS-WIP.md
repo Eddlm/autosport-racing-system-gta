@@ -557,3 +557,24 @@ start line ~55 m earlier); everything else â€” name, tags, 19 props, trackside â
 
 **Settings.** Laps default 6. The legacy migrations now seed only from a key that really exists, so a fresh install
 takes its defaults from `KeySpec` and not from a number copied into a `GetValue<int>(..., 60)` fallback.
+
+### Slip source toggle, closed 2026-10-25 (builds 1056-1059)
+
+The Development submenu carries `Slip From Memory` (persisted in `Menu-Development.ini`): **on** reads the front tyres' side slip
+from the wheel memory, **off** derives the demand from the inner wheel's radius against the grip the car has.
+
+**Decision taken: the two sources are two laws, not two sensors.** The memory source reports how much of its peak slip the inner
+tyre is using; the theory source reports how much of the grip the inner command is asking for. At 60 mph they put the ceiling at
+7.97 deg and 2.81 deg respectively, so switching changes the behaviour and not merely where the number comes from. Normalising
+them would mean turning the lateral demand back into an equivalent slip angle, i.e. reintroducing the tyre model the theory source
+exists to avoid. That is left as a "later, if it can be done cheaply" item.
+
+**The theory source, as built:** `innerRadius = L / tan(command)` (the command IS the inner wheel's angle; the outer takes 0.75
+of it), `demand = v^2 / innerRadius`, `available = grip x 9.81 x share`, and the ceiling is the same question inverted on the
+same radius. Guards: no answer below 3 m/s, on a NaN grip/speed/wheelbase, when the radius at the limit falls inside the
+wheelbase, or in reverse (neither source answers backwards - the file's own contract is that reverse keeps the full lock).
+
+Audited by two subagents (plumbing and mathematics). Their findings, re-checked here: the safe batch went in as build 1058
+(NaN floors, reverse off, ceiling clamped to the lock, raw readout only from the memory source, the Development store wired into
+`CompleteOwnedKeys`, docs synced); the geometry batch as build 1059. Open, deliberately: the two laws are not comparable, and
+`LeftPct`/`RightPct` are duplicated from `InnerPct` in theory mode because the model has one axle and no sides.
