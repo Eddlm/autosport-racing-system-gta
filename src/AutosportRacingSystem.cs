@@ -3546,7 +3546,9 @@ namespace ARS
                 DebugMenuStore.Migrate(option.ToString(), legacyDebug.GetValue<string>("MENU", option.ToString(), null));
             ScriptSettings legacyRacers = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
             SettingsMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", "Random"));
-            SettingsMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<int>("RACERS", "TimeoutSeconds", 60).ToString());
+            // Read as a string with a null fallback: Migrate seeds only when the legacy key is really there. With an int and
+            // a 60 fallback it seeded 60 on a machine that never had the old file, and that beat the spec's 30.
+            SettingsMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<string>("RACERS", "TimeoutSeconds", null));
             SettingsMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString());
             // The option was a number before it was named; rewrite it so the repair pass cannot reset a stored choice.
             string storedAutofix = SettingsMenuStore.Get("AIRacerAutofix", null);
