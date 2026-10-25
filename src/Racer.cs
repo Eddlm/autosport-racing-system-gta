@@ -1912,6 +1912,9 @@ namespace ARS
 
         SlipState MeasureFrontSlip(float fwdSpeed)
         {
+            // Reverse is always the full lock, as the speed ceiling above already states: neither source answers going backwards,
+            // where the inside of the corner is not even defined the same way.
+            if (fwdSpeed <= 0f) return new SlipState();
             return ARS.SlipFromMemory ? MeasureSlipFromMemory(fwdSpeed) : MeasureSlipFromTheory(fwdSpeed);
         }
 
@@ -1955,6 +1958,8 @@ namespace ARS
             float speed = Math.Abs(fwdSpeed);
             float wheelBase = Math.Max(VehicleData.WheelBase, 0.5f);
             float track = Math.Max(VehicleData.ModelDimensions.X, 0.5f);
+            // NaN fails every comparison, so the floors alone would let it through and poison the ceiling: test it first.
+            if (float.IsNaN(speed) || float.IsNaN(gripGs) || float.IsNaN(wheelBase)) return s;
             if (speed < FrontSlipTheoryMinSpeedMps || gripGs <= 0.01f || wheelBase <= 0.5f) return s;
 
             s.Readable = true;
@@ -1974,7 +1979,7 @@ namespace ARS
             float radiusAtLimit = speed * speed / available;
             if (radiusAtLimit <= wheelBase) return s;
             float wheelAtLimit = (float)Math.Atan(wheelBase / radiusAtLimit) * 180f / (float)Math.PI;
-            s.CeilingDeg = wheelAtLimit / EngineSteerWheelOuterShare;
+            s.CeilingDeg = ARS.Clamp(wheelAtLimit / EngineSteerWheelOuterShare, 0f, VehicleData.SteeringLock);
             return s;
         }
 
@@ -3649,10 +3654,15 @@ namespace ARS
                 + _slip.RightPct.ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
             // The raw field follows the three proportions, for calibrating the scale by eye: it is what the tyre reports, before
             // any peak is chosen for it.
-            List<float> raw = ARS.WheelSideSlipAngles(Car);
-            if (raw.Count >= 2)
+            // Only the memory source has a raw field to show; in theory mode this read would put memory numbers beside a
+            // model percentage, which is two sources in one line.
+            if (ARS.SlipFromMemory)
             {
-                text += "   raw " + Math.Abs(raw[0]).ToString("0.00") + "/" + Math.Abs(raw[1]).ToString("0.00");
+                List<float> raw = ARS.WheelSideSlipAngles(Car);
+                if (raw.Count >= 2)
+                {
+                    text += "   raw " + Math.Abs(raw[0]).ToString("0.00") + "/" + Math.Abs(raw[1]).ToString("0.00");
+                }
             }
             UI.ShowSubtitle(text, 50);
         }

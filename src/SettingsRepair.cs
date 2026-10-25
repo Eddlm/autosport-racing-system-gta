@@ -247,13 +247,14 @@ namespace ARS
 
         // Pass 3: every declared key exists and holds a value the schema accepts. Runs after the legacy
         // migrations, so a repaired default can never shadow a value carried over from an older install.
-        public static void CompleteOwnedKeys(MenuSettings race, MenuSettings settings, MenuSettings debug)
+        public static void CompleteOwnedKeys(MenuSettings race, MenuSettings settings, MenuSettings debug, MenuSettings development)
         {
             Dictionary<string, MenuSettings> stores = new Dictionary<string, MenuSettings>(StringComparer.OrdinalIgnoreCase)
             {
                 { "Menu-Race.ini", race },
                 { "Menu-Settings.ini", settings },
                 { "Menu-Debug.ini", debug },
+                { "Menu-Development.ini", development },
             };
             foreach (FileSpec file in Schema)
             {

@@ -3650,7 +3650,7 @@ namespace ARS
                 DebugToggles[option] = DebugMenuStore.GetBool(option.ToString(), DebugToggles[option]);
             DebugToggles[Options.ReverseRoute] = RaceMenuStore.GetBool("ReverseRoute", DebugToggles[Options.ReverseRoute]);
 
-            SettingsRepair.CompleteOwnedKeys(RaceMenuStore, SettingsMenuStore, DebugMenuStore);
+            SettingsRepair.CompleteOwnedKeys(RaceMenuStore, SettingsMenuStore, DebugMenuStore, DevelopmentMenuStore);
             SettingsRepair.DeleteLegacyFiles();
             Log(LogImportance.Info, "Checked the Settings folder.");
         }
