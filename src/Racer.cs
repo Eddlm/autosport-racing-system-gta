@@ -485,6 +485,7 @@ namespace ARS
         // Read by the world card label: the dive's own brake bonus is the only number that card carries.
         public float DivebombBrakeBonus => _divebombBrakeBonus;
         int _nitrousActiveUntil = 0;
+        int _nitrousGsLoggedAt = 0;
         int _nitrousLapUsed = -1;
         int _nitroRefusalLoggedAt = 0;
         float _powerCounter = 1f;
@@ -2754,7 +2755,12 @@ namespace ARS
                 Control.MaxThrottleFromStability += StabilityRisePerSecond * TickScale;
             Control.MaxThrottleFromStability = ARS.Clamp(Control.MaxThrottleFromStability, 0f, 1f);
 
-            Control.MaxThrottleFromOverspeed = GlideCap(Control.MaxThrottleFromOverspeed, OverspeedThrottleLevel());
+            // The burn is exempt. This cap exists to catch the physics GTA gets wrong on its own - an uphill car pulling
+            // more Gs than its wheels justify - and a nitro burn produces exactly that signature on purpose. Left in, the
+            // cap ate the AI's burn and never the player's, because only the AI's pedal is ours to trim.
+            Control.MaxThrottleFromOverspeed = Game.GameTime < _nitrousActiveUntil
+                ? 1f
+                : GlideCap(Control.MaxThrottleFromOverspeed, OverspeedThrottleLevel());
 
             // The lift is a distance, not a countdown: no ramp on time-to-reach, so a closing rival never cuts the throttle
             // to nothing. Three metres out is full gas and contact is the floor, and the floor is half throttle, not zero —
@@ -5037,6 +5043,17 @@ namespace ARS
                     float measuredGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
                     float excess = measuredGs - wheelGs - 0.1f;
                     VehicleData.OverspeedExcessGs = excess;
+
+                    // Inside a burn only, and twice a second: the burn is the one moment the excess is expected to be
+                    // large, so this is the pair of numbers that says whether the wheel reading follows the cheat
+                    // multiplier or not. If wheel does not rise with measured, the reference is on a different scale.
+                    if (Game.GameTime < _nitrousActiveUntil && Game.GameTime > _nitrousGsLoggedAt)
+                    {
+                        _nitrousGsLoggedAt = Game.GameTime + 500;
+                        ARS.Log(ARS.LogImportance.Info, "Nitro Gs: measured " + measuredGs.ToString("0.00")
+                            + ", wheel " + wheelGs.ToString("0.00") + ", excess " + excess.ToString("0.00")
+                            + (ControlledByPlayer ? " (player)" : " (AI)"));
+                    }
                 }
             }
 
