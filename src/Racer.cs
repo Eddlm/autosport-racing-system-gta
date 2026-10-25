@@ -309,6 +309,8 @@ namespace ARS
         const float FrontSlipNeutralSteerDeg = 0.5f;
         // The theoretical source's floors: below this the kinematic radius is noise, and g is g.
         const float FrontSlipTheoryMinSpeedMps = 3f;
+        // Below this command the radius is a straight line and its inverse is noise.
+        const float FrontSlipTheoryMinCommandDeg = 0.05f;
         const float FrontSlipGravity = 9.81f;
         // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
         float _planCeilingDeg = 0f;
@@ -1957,7 +1959,6 @@ namespace ARS
             float gripGs = VehicleData.CurrentMechanicalGrip;
             float speed = Math.Abs(fwdSpeed);
             float wheelBase = Math.Max(VehicleData.WheelBase, 0.5f);
-            float track = Math.Max(VehicleData.ModelDimensions.X, 0.5f);
             // NaN fails every comparison, so the floors alone would let it through and poison the ceiling: test it first.
             if (float.IsNaN(speed) || float.IsNaN(gripGs) || float.IsNaN(wheelBase)) return s;
             if (speed < FrontSlipTheoryMinSpeedMps || gripGs <= 0.01f || wheelBase <= 0.5f) return s;
@@ -1965,21 +1966,26 @@ namespace ARS
             s.Readable = true;
             float available = gripGs * FrontSlipGravity * FrontSlipCapPeakShare;
 
-            // The radius the command asks for, from the outer wheel's share of it, then the inner wheel's tighter one.
-            float wheelDeg = Math.Abs(Control.SteerDegrees) * EngineSteerWheelOuterShare;
-            float radius = wheelDeg > 0.05f ? wheelBase / (float)Math.Tan(wheelDeg * (float)Math.PI / 180f) : 100000f;
-            float inner = Math.Max(0.5f, radius - track * 0.5f);
-            float demand = speed * speed / inner;
+            // The inner wheel is the signal, as in the measured source, and its angle IS the command: the file's own convention
+            // gives the outer wheel 0.75 of it (EngineSteerWheelOuterShare), so the inner turns more and takes the tighter line.
+            // Its radius is therefore L/tan(command) - not the axle-centre radius offset by half a track, which understated the
+            // demand by 13-30% and hid exactly the saturation this source exists to see.
+            float commandDeg = Math.Abs(Control.SteerDegrees);
+            float innerRadius = commandDeg > FrontSlipTheoryMinCommandDeg
+                ? wheelBase / (float)Math.Tan(commandDeg * (float)Math.PI / 180f)
+                : float.MaxValue;
+            float demand = speed * speed / Math.Max(innerRadius, 0.5f);
 
             s.InnerPct = 100f * demand / available;
             s.LeftPct = s.InnerPct;
             s.RightPct = s.InnerPct;
 
-            // The ceiling: the radius that puts the demand exactly on the allowance, back through the wheel angle and the share.
+            // The ceiling is the same question inverted, on the same radius the gate uses: the inner command whose demand lands
+            // exactly on the allowance. No outer-wheel share here - the command IS the inner angle under this convention.
             float radiusAtLimit = speed * speed / available;
             if (radiusAtLimit <= wheelBase) return s;
-            float wheelAtLimit = (float)Math.Atan(wheelBase / radiusAtLimit) * 180f / (float)Math.PI;
-            s.CeilingDeg = ARS.Clamp(wheelAtLimit / EngineSteerWheelOuterShare, 0f, VehicleData.SteeringLock);
+            float commandAtLimit = (float)Math.Atan(wheelBase / radiusAtLimit) * 180f / (float)Math.PI;
+            s.CeilingDeg = ARS.Clamp(commandAtLimit, 0f, VehicleData.SteeringLock);
             return s;
         }
 

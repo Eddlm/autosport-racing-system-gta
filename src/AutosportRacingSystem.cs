@@ -1416,7 +1416,7 @@ namespace ARS
             };
             developmentMenu.Add(brakeLearnNotifyItem);
 
-            NativeCheckboxItem slipSourceItem = new NativeCheckboxItem("Slip From Memory", "On reads the front tyres' side slip from the wheel memory; off derives the demand from the car's radius and its grip instead. Same limiter and the same 0-100 scale either way.", SlipFromMemory);
+            NativeCheckboxItem slipSourceItem = new NativeCheckboxItem("Slip From Memory", "On reads the front tyres' side slip from the wheel memory and reports how much of its peak the inner tyre is using; off derives the demand from the inner wheel's radius against the grip the car has. Two different laws on the same scale, not two sensors for one: switching changes the behaviour, not just the source.", SlipFromMemory);
             slipSourceItem.CheckboxChanged += (sender, args) =>
             {
                 SlipFromMemory = slipSourceItem.Checked;
