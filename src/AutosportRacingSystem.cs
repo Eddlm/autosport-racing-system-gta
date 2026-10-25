@@ -1994,32 +1994,40 @@ namespace ARS
                         TrackVisuals.DrawLiveCrestChecks(liveCrestRacer, ARS.TrackPoints);
                 }
 
-                // Rival walls: the corridor the focus car may aim into, projected along the next 40 nodes. The walls clamp a
-                // lane request, so this draws what is permitted, not a path the car follows.
+                // Rival walls: one straight line per wall, from the car's node to one second of travel ahead. Red while a
+                // rival holds the wall in; blue once it has been released and is moving back out.
                 if (DebugToggles[Options.ShowRivalry] && DebugFocusRacer != null && DebugFocusRacer.WallRoadWide > 0.01f)
                 {
                     Racer racer = DebugFocusRacer;
-                    int wallNode = racer.CurrentTrackPoint.Node;
                     int wallCount = ARS.TrackPoints.Count;
-                    float leftWall = racer.AvoidLeftWall;
-                    float rightWall = racer.AvoidRightWall;
-                    float wallBound = racer.WallRoadWide;
-                    Color leftColor = leftWall > -wallBound + 0.01f ? Color.Red : Color.DimGray;
-                    Color rightColor = rightWall < wallBound - 0.01f ? Color.Red : Color.DimGray;
+                    int wallNode = racer.CurrentTrackPoint.Node % wallCount;
+                    Color leftColor = racer.LeftWallHeld ? Color.Red : Color.DodgerBlue;
+                    Color rightColor = racer.RightWallHeld ? Color.Red : Color.DodgerBlue;
 
-                    for (int i = 0; i < 40; i++)
+                    // One second of travel, walked in track nodes so the far end sits where the car will be, not at a fixed count.
+                    float lookAheadMeters = racer.Car.Velocity.Length();
+                    int endNode = wallNode;
+                    float walked = 0f;
+                    int steps = 0;
+                    while (walked < lookAheadMeters && steps < 400)
                     {
-                        int node = ARS.IsPointToPoint ? wallNode + i : (wallNode + i) % wallCount;
-                        int nextNode = ARS.IsPointToPoint ? wallNode + i + 1 : (wallNode + i + 1) % wallCount;
-                        if (node >= wallCount || nextNode >= wallCount) continue;
-
-                        Vector3 pos = ARS.TrackPoints[node].Position;
-                        Vector3 nextPos = ARS.TrackPoints[nextNode].Position;
-                        Vector3 right = Vector3.Cross(ARS.TrackPoints[node].Direction, Vector3.WorldUp).Normalized;
-                        Vector3 lift = new Vector3(0, 0, LaneHeightWalls);
-                        DrawLine(pos + right * leftWall + lift, nextPos + right * leftWall + lift, leftColor);
-                        DrawLine(pos + right * rightWall + lift, nextPos + right * rightWall + lift, rightColor);
+                        int next = ARS.IsPointToPoint ? endNode + 1 : (endNode + 1) % wallCount;
+                        if (next >= wallCount) break;
+                        float step = ARS.TrackPoints[next].CumulativeDistance - ARS.TrackPoints[endNode].CumulativeDistance;
+                        if (step <= 0f) break;
+                        walked += step;
+                        endNode = next;
+                        steps++;
                     }
+
+                    Vector3 startPos = ARS.TrackPoints[wallNode].Position;
+                    Vector3 startRight = Vector3.Cross(ARS.TrackPoints[wallNode].Direction, Vector3.WorldUp).Normalized;
+                    Vector3 endPos = ARS.TrackPoints[endNode].Position;
+                    Vector3 endRight = Vector3.Cross(ARS.TrackPoints[endNode].Direction, Vector3.WorldUp).Normalized;
+                    Vector3 lift = new Vector3(0, 0, LaneHeightWalls);
+
+                    DrawLine(startPos + startRight * racer.AvoidLeftWall + lift, endPos + endRight * racer.AvoidLeftWall + lift, leftColor);
+                    DrawLine(startPos + startRight * racer.AvoidRightWall + lift, endPos + endRight * racer.AvoidRightWall + lift, rightColor);
                 }
 
                 // Player nitro: fire on key press, one bottle a lap. The fire charges the bottle itself, so there is
