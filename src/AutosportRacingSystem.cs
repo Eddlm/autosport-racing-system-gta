@@ -165,6 +165,9 @@ namespace ARS
         // rate sits at its top: the old const was 1.0, which the ladder cannot express.
         // Independent of the track-analysis visual: the learner's own read-out, one line per verdict a corner takes.
         public static bool BrakeLearningNotify = false;
+        // Which source the front-slip limiter reads: true takes the tyres' side slip from the wheel memory, false derives the
+        // demand from the car's own geometry and grip. Same limiter, same scale, different numerator.
+        public static bool SlipFromMemory = true;
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = false;
@@ -1412,6 +1415,14 @@ namespace ARS
                 DevelopmentMenuStore.Set("BrakeLearningNotify", BrakeLearningNotify.ToString());
             };
             developmentMenu.Add(brakeLearnNotifyItem);
+
+            NativeCheckboxItem slipSourceItem = new NativeCheckboxItem("Slip From Memory", "On reads the front tyres' side slip from the wheel memory; off derives the demand from the car's radius and its grip instead. Same limiter and the same 0-100 scale either way.", SlipFromMemory);
+            slipSourceItem.CheckboxChanged += (sender, args) =>
+            {
+                SlipFromMemory = slipSourceItem.Checked;
+                DevelopmentMenuStore.Set("SlipFromMemory", SlipFromMemory.ToString());
+            };
+            developmentMenu.Add(slipSourceItem);
 
             AddSub(_arsMenu, _raceMenu);
             AddSub(_arsMenu, rivalsMenu);
@@ -3584,6 +3595,7 @@ namespace ARS
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
+            SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             // Forced off while the native-ABS question is open, whatever the stored key says: the checkbox is greyed, so a value
             // restored from a previous session would be a switch the user cannot see or change and the car would still obey it.

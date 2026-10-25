@@ -173,6 +173,7 @@ namespace ARS
 
             FileSpec development = Owned("Menu-Development.ini");
             development.Specs.Add(new KeySpec("BrakeLearningNotify", "False", Kind.Bool));
+            development.Specs.Add(new KeySpec("SlipFromMemory", "True", Kind.Bool));
             files.Add(development);
 
             // The debug key set is the toggle table itself: retiring a toggle retires its key.
