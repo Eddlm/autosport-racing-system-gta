@@ -153,8 +153,11 @@ namespace ARS
             }
             else
             {
-                Vector3 pos = ARS.RouteNodes[2];
-                Vector3 dir = ARS.RouteNodes[3] - ARS.RouteNodes[1];
+                // A hand-written or old file can still be shorter than the indices the spawn wants; clamping is what keeps a
+                // short route loading somewhere instead of taking the screen down after the fade.
+                int last = ARS.RouteNodes.Count - 1;
+                Vector3 pos = ARS.RouteNodes[Math.Min(2, last)];
+                Vector3 dir = ARS.RouteNodes[Math.Min(3, last)] - ARS.RouteNodes[Math.Min(1, last)];
                 dir.Z = 0f;
                 if (dir.LengthSquared() < 0.001f) dir = Vector3.WorldNorth;
                 dir.Normalize();
@@ -163,7 +166,7 @@ namespace ARS
                 float side = ARS.GetRandomInt(0, 2) == 0 ? 1f : -1f;
                 Game.Player.Character.Position = pos + right * (halfWide * side) + new Vector3(0f, 0f, 0.5f);
             }
-            if (ARS.CanWeUse(ARS.FreeCamRide)) ARS.FreeCamRide.Position = ARS.RouteNodes[5] + new Vector3(0, 0, 20);
+            if (ARS.CanWeUse(ARS.FreeCamRide)) ARS.FreeCamRide.Position = ARS.RouteNodes[Math.Min(5, ARS.RouteNodes.Count - 1)] + new Vector3(0, 0, 20);
             ars.SetLoadingPromptText("Finished loading props");
             Function.Call(Hash._0x10D373323E5B9C0D);
             ars.SetSPLVisibility(false);

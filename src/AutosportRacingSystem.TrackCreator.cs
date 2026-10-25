@@ -45,9 +45,11 @@ namespace ARS
                 UI.Notify("~r~Start the track creator before saving a route.");
                 return;
             }
-            if (RouteNodes.Count < 2)
+            // Six, not two: the loader reads nodes 0, 2, 3 and 5 to place the car, so a two-node route saved here throws
+            // ArgumentOutOfRangeException after the screen has already faded out, and the player keeps a black screen.
+            if (RouteNodes.Count < 6)
             {
-                UI.Notify("~r~Record a route before saving: place the start line, then Apply Section.");
+                UI.Notify("~r~A route needs at least three sections: place the start line, then Apply Section three times.");
                 return;
             }
 
