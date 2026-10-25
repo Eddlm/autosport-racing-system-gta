@@ -1312,7 +1312,7 @@ namespace ARS
             };
             AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Pedal Trail", "Draw the closest AI car's input trail: one chevron per metre of travel, lying flat and pointing along the car's path, pitching its nose down on throttle and up on braking, green through yellow to red by pedal input, holding the last 40 m.");
             AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's steer-angle fan - pursuit, pursuit plus damper, the final steer line carrying the applied pedals and every limit that bites along it, and the limiter's ceiling - plus the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
-            AddDebugCheckbox(debugMenu, Options.ShowRivalry, "Show Rivalry", "Draw the two rival walls the focus car may aim between, projected 40 nodes ahead: red while a wall is still inside the track bound because a rival is holding it there, grey once it has relaxed to the edge. Watch it open at four metres a second after a pass.");
+            AddDebugCheckbox(debugMenu, Options.ShowRivalry, "Show Rivalry", "Draw the two rival walls the focus car may aim between, from its node to one second of travel ahead: red while a rival holds a wall in, blue once it has been released and is moving back out, plus a line from the car to each wall's far end. Walls close almost at once and open at five metres a second, so a pass reads as red snapping in and blue drifting out.");
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Draw a cyan marker at every lip the route scan found: a vertical tick and a line across the road, so the scan can be judged by eye before anything drives on it.");
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere a metre over each wheel of the closest AI car, coloured by that tyre's side-slip angle: white at rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
@@ -2188,7 +2188,7 @@ namespace ARS
 
                 
                 // Only the debug visuals read the focus racer, so the scan and its sort run only for them.
-                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowGsProjection])
+                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
                 {
                     Vector3 focusPos = Game.Player.Character.Position;
                     DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
