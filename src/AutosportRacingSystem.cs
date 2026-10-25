@@ -708,6 +708,15 @@ namespace ARS
         // Most recent valid player-vehicle pace reading; relative-mode fallback when the player has no vehicle.
         float _lastKnownPlayerPace = float.NaN;
 
+        // A submenu's own title carries its trail (Rivals > Rival Pace): the row that opens it stays short in the parent,
+        // and the header is where the text has room. The root contributes nothing, since the menu already sits inside ARS.
+        NativeSubmenuItem AddSub(NativeMenu parent, NativeMenu child)
+        {
+            NativeSubmenuItem item = parent.AddSubMenu(child);
+            child.Title.Text = (parent == _arsMenu ? string.Empty : parent.Title.Text + " > ") + child.Title.Text;
+            return item;
+        }
+
         void InitializeMenu()
         {
             _selectedTrackPath = RaceMenuStore.Get("Track", null);
@@ -829,7 +838,7 @@ namespace ARS
             paceDeviationItem.SelectedIndex = Math.Max(0, paceDeviationItem.Items.IndexOf(PaceDeviationLimit > 0 ? PaceDeviationLimit.ToString(CultureInfo.InvariantCulture) : "Off"));
             piSettingsMenu.Add(paceDeviationItem);
             HookListTextPicker(paceDeviationItem);
-            _raceMenu.AddSubMenu(piSettingsMenu);
+            AddSub(_raceMenu, piSettingsMenu);
 
             // Set last: assigning SelectedIndex fires ItemChanged, and the mode's handler rewrites both PI items.
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
@@ -1000,9 +1009,9 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            rivalsMenu.AddSubMenu(rivalPaceMenu);
-            rivalsMenu.AddSubMenu(rivalTractionMenu);
-            rivalsMenu.AddSubMenu(rivalSteeringMenu);
+            AddSub(rivalsMenu, rivalPaceMenu);
+            AddSub(rivalsMenu, rivalTractionMenu);
+            AddSub(rivalsMenu, rivalSteeringMenu);
 
             NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Speed Offset (mph)", "Raises the speed rivals brake for at the next corner. Only the slower of this and Road Curvature Offset applies.", SettingsRepair.OptionsFor("CornerOffset"));
             cornerOffsetItem.ItemChanged += (sender, args) =>
@@ -1375,19 +1384,19 @@ namespace ARS
             };
             developmentMenu.Add(brakeLearnNotifyItem);
 
-            _arsMenu.AddSubMenu(_raceMenu);
-            _arsMenu.AddSubMenu(rivalsMenu);
-            _arsMenu.AddSubMenu(rulesMenu);
-            _arsMenu.AddSubMenu(interfaceMenu);
-            _arsMenu.AddSubMenu(controlsMenu);
-            _arsMenu.AddSubMenu(debugMenu);
-            NativeSubmenuItem developmentEntry = _arsMenu.AddSubMenu(developmentMenu);
+            AddSub(_arsMenu, _raceMenu);
+            AddSub(_arsMenu, rivalsMenu);
+            AddSub(_arsMenu, rulesMenu);
+            AddSub(_arsMenu, interfaceMenu);
+            AddSub(_arsMenu, controlsMenu);
+            AddSub(_arsMenu, debugMenu);
+            NativeSubmenuItem developmentEntry = AddSub(_arsMenu, developmentMenu);
             // A single car on track is the whole point of these levers, and that is usually one AI while the player
             // watches, so the gate counts racers and does not look at PlayerParticipating: the player is only in
             // Racers when they are on the grid, and requiring them there would lock the menu out of its own test.
             developmentEntry.Enabled = false;
             _arsMenu.Shown += (sender, args) => developmentEntry.Enabled = RaceIsRunning && Racers.Count == 1;
-            _arsMenu.AddSubMenu(creatorMenu);
+            AddSub(_arsMenu, creatorMenu);
             _arsMenu.Add(resetItem);
 
             // Register all menus in the pool
