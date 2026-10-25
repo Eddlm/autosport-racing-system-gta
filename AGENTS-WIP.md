@@ -122,12 +122,20 @@ still never forms a region and so never reaches the blur test - worth attacking 
 - **Development gate (747)** — the row must NOT require `PlayerParticipating`: Racers holds the player only when
   they are on the grid, and the levers exist for a one-AI test with the player spectating.
 
-### Owed: the LSIA 66.3% hard brake
+### Closed: the LSIA 66.3% hard brake
 
-The corner at 66.3% of LSIA was culled by the blur gate and the car now brakes sharply there without leaving the
-road. The suspicion is a step change in the route speed: with no corner over that stretch, `followTrackSpd` is the
-only law, and it may be reading the raw `PreciseCurveRadius` (a +/-4-node circumradius, noisy by construction)
-rather than a smoothed one. Not started.
+The corner at 66.3% of LSIA was culled by the blur gate, so `followTrackSpd` is the only law over that stretch and the
+car braked sharply there without leaving the road. **Closed by the route brake cap — and the original suspicion was
+stale on both counts:**
+
+- The route speed does **not** read the raw `PreciseCurveRadius`: `RouteRadiusSampled()` (`Racer.cs:3921`) is the
+  four-point least-squares fit behind the sagitta guard, and `PreciseCurveRadius` is read only by the lean code
+  (`:1011`, `:1020`). There was no unsmoothed step to fix.
+- The curvature's brake is capped at `RouteBrakeCap` **0.2** (`Racer.cs:243`, applied at `:2448` — only while the route
+  term is the limiting one *and* no corner plans a brake — consumed at `:2787` with `Math.Min` and tagged
+  `BrakeReason.Route`). A step in the reading can ask for a fifth of the brake, never for a slam.
+
+Driver-reported fixed 2026-10-25. The cap had already closed it; what was owed was the update to this note.
 
 ## Handoff — harmonising the speed governors
 
@@ -204,8 +212,13 @@ EOL and refuses an ambiguous search instead of guessing.
 unpassed apex, corners under 50 m radius), the lean standing down only while the line is active, and the four audit fixes.
 
 **Compile-verified, drive owed**: the line's speed floor at **15 mph** under the apex speed (build 885); the outside leg of the lane mover
-at half rate (13 m/s2, 12 m/s, build 880); the 8 s `AvoidHoldTimeoutMs` backstop; and the ABS taper itself, which is now **off behind a
-greyed switch** - `AbsEnabled` forced false at load, so nothing of it is in play until the STATUS_PLAYER question is settled.
+at half rate (13 m/s2, 12 m/s, build 880); the 8 s `AvoidHoldTimeoutMs` backstop.
+
+**The ABS is not drive-owed — it ships off by design** (corrected 2026-10-25). The row is **unchecked and greyed**
+(`absItem.Enabled = false`, `AutosportRacingSystem.cs:1086-1089`) with the description *"GTA forces native ABS on non-player driven
+cars. I'm working on undoing that."*, and `AbsEnabled` is forced false at load whatever the stored key says (`:3463`), because a value
+restored from a previous session would be a switch the user cannot see or change and the car would still obey it. The code path stays
+built and one line from live, for the day `STATUS_PLAYER` can be put on an AI car.
 
 **Two documents added today**: `AGENTS-VEHICLE-STATUS.md` (all 117 engine sites that branch on STATUS_PLAYER vs STATUS_PHYSICS) and
 `docs/KNOWN-BUGS.md` (defects understood and deliberately not fixed; first entry `first-corner-eagerness`).
