@@ -1946,14 +1946,17 @@ namespace ARS
                     if (CanWeUse(gLineCar)) UpdatePlayerGLine(gLineCar);
                 }
                 // Live card read-out: what every nearby rival is playing at this instant, in the world, over its roof.
-                // No toggle: a card lasts about a second, so there is nothing to clutter, and reading the field from the
-                // outside is the whole point of it.
-                foreach (Racer cardRacer in Racers)
+                // Behind Show Rivalry: it was written as always-on on the argument that a card lasts a second, but four
+                // labels over four roofs is clutter the moment you are trying to read the walls.
+                if (DebugToggles[Options.ShowRivalry])
                 {
-                    if (cardRacer == null || cardRacer.ControlledByPlayer || !cardRacer.Car.Exists()) continue;
-                    if (cardRacer.ActiveManeuver.Type == ManeuverType.None) continue;
-                    if (cardRacer.Car.Position.DistanceTo(player.Character.Position) > 100f) continue;
-                    DrawText(cardRacer.Car.Position + Vector3.WorldUp * 2.2f, CardLabel(cardRacer), Color.White, 0.5f);
+                    foreach (Racer cardRacer in Racers)
+                    {
+                        if (cardRacer == null || cardRacer.ControlledByPlayer || !cardRacer.Car.Exists()) continue;
+                        if (cardRacer.ActiveManeuver.Type == ManeuverType.None) continue;
+                        if (cardRacer.Car.Position.DistanceTo(player.Character.Position) > 100f) continue;
+                        DrawText(cardRacer.Car.Position + Vector3.WorldUp * 2.2f, CardLabel(cardRacer), Color.White, 0.5f);
+                    }
                 }
 
                 if (DebugToggles[Options.ShowRouteRadius])
