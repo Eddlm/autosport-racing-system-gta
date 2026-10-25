@@ -43,7 +43,7 @@ namespace ARS
 
     public enum AutofixMode
     {
-        Off, DamageResistant, Invincible,
+        Off, AutoRepair, Invincible,
     }
 
     // Debug toggle keys. Position carries no meaning: the name is the key and the DebugToggles dictionary is the
@@ -3506,8 +3506,11 @@ namespace ARS
             // The option was a number before it was named; rewrite it so the repair pass cannot reset a stored choice.
             string storedAutofix = SettingsMenuStore.Get("AIRacerAutofix", null);
             if (storedAutofix == "0") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Off.ToString());
-            else if (storedAutofix == "1") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.DamageResistant.ToString());
+            else if (storedAutofix == "1") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.AutoRepair.ToString());
             else if (storedAutofix == "2") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Invincible.ToString());
+            // The middle mode was DamageResistant, which resisted and never repaired. It is AutoRepair now, and a stored
+            // name from an older session lands on the behaviour that replaced it rather than falling back to the default.
+            else if (storedAutofix == "DamageResistant") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.AutoRepair.ToString());
             Autofix = ParseEnum(SettingsMenuStore.Get("AIRacerAutofix", AutofixMode.Invincible.ToString()), AutofixMode.Invincible);
             SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
             UseMenyooSkins = SettingsMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);

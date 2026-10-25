@@ -548,7 +548,7 @@ namespace ARS
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_HAS_STRONG_AXLES, Car, true);
                     try { Car.EngineCanDegrade = false; } catch (Exception) { }
                 }
-                else if (autofix == AutofixMode.DamageResistant)
+                else if (autofix == AutofixMode.AutoRepair)
                 {
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_STRONG, Car, true);
                     Function.Call(GTA.Native.Hash.SET_VEHICLE_HAS_STRONG_AXLES, Car, true);
@@ -4513,6 +4513,18 @@ namespace ARS
                     if (BaseBehavior == RacerBaseBehavior.Race && ARS.Racers.Count >= 1)
                     {
                         ConsiderCrowdCard();
+                    }
+
+                    // AutoRepair: past half damage on the body or the engine the car puts itself back together. Once a
+                    // second is enough at this threshold, and a repair leaves the health full, so it cannot loop.
+                    if (ARS.Autofix == AutofixMode.AutoRepair)
+                    {
+                        float maxHealth = Math.Max(Car.MaxHealth, 1);
+                        if (Car.EngineHealth < maxHealth * 0.5f || Car.BodyHealth < maxHealth * 0.5f)
+                        {
+                            Car.Repair();
+                            ARS.Log(ARS.LogImportance.Info, "AutoRepair " + Name + ": body " + Car.BodyHealth.ToString("0") + ", engine " + Car.EngineHealth.ToString("0"));
+                        }
                     }
 
                     if (!Driver.IsSittingInVehicle(Car) && Car.IsStopped && Driver.IsStopped)
