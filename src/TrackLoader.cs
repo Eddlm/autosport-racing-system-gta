@@ -869,8 +869,12 @@ namespace ARS
             // metres from its own apex describes a bend the car is already inside, and the manoeuvre built on it opens and closes inside
             // a car's length. Measured in track nodes, which is what the distances between nodes are: metres.
             int widthNodes = (int)Math.Ceiling(2f * ARS.TrackPoints[apexNode].TrackHalfWidth);
-            while (startPosition > 0 && apexNode - scanNodes[startPosition] < widthNodes) startPosition--;
-            while (endPosition < scanNodes.Count - 1 && scanNodes[endPosition] - apexNode < widthNodes) endPosition++;
+            // Measured in scan steps, never in node numbers: scanNodes is a rotated list, so its entries wrap and an absolute
+            // apex minus a wrapped entry is nonsense - with the apex at node 0 and the scan starting at 37 the walk opened the
+            // entry all the way to position 0, which made IsWithinCorner true for 1696 of 1701 nodes of El Burro Rally. The
+            // step counts are the same quantity as LengthStart and LengthEnd below, which is what every consumer reads.
+            while (startPosition > 0 && apexPosition - startPosition < widthNodes) startPosition--;
+            while (endPosition < scanNodes.Count - 1 && endPosition - apexPosition < widthNodes) endPosition++;
             startPosition = Math.Max(0, Math.Min(startPosition, apexPosition));
             endPosition = Math.Min(scanNodes.Count - 1, Math.Max(endPosition, apexPosition));
 
