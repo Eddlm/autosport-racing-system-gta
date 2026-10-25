@@ -779,7 +779,7 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            _paceModeItem = new NativeListItem<string>("Grid PI Mode", "How the grid's performance index (PI - the score the leaderboard shows) is chosen. Absolute = every grid uses the fixed PI Target. Relative To Mine = your car's own PI + PI Offset. Governs menu starts and E-joins alike.", EnumLabels<PaceMode>());
+            _paceModeItem = new NativeListItem<string>("Grid PI Mode", "How the grid's performance index is chosen: Absolute uses PI Target; Relative To Mine uses your car's PI plus PI Offset.", EnumLabels<PaceMode>());
             _paceModeItem.ItemChanged += (sender, args) =>
             {
                 CurrentPaceMode = (PaceMode)args.Index;
@@ -790,7 +790,7 @@ namespace ARS
             HookListTextPicker(_paceModeItem);
 
             // ── PI offset / target (merged Council design; the mode above decides which one governs) ──
-            _paceOffsetItem = new NativeListItem<string>("PI Offset", "Field PI = your car's performance index + this offset, resolved at Spawn Grid (clamped to the fleet's range).", Array.Empty<string>());
+            _paceOffsetItem = new NativeListItem<string>("PI Offset", "Field PI = your car's PI plus this offset, resolved when the grid spawns.", Array.Empty<string>());
             for (int offset = -10; offset <= 10; offset++)
             {
                 _paceOffsetValues.Add(offset);
@@ -820,7 +820,7 @@ namespace ARS
             };
             piSettingsMenu.Add(_powerTargetItem);
             HookListTextPicker(_powerTargetItem);
-            NativeListItem<string> paceDeviationItem = new NativeListItem<string>("Max PI Deviation", "Hard limit on how far a rival's PI may sit from the grid's target. Off keeps taking the closest cars in the pool, however far that reaches.", SettingsRepair.OptionsFor("PaceDeviation"));
+            NativeListItem<string> paceDeviationItem = new NativeListItem<string>("Max PI Deviation", "How far a rival's PI may sit from the grid's target. Off takes the closest cars however far.", SettingsRepair.OptionsFor("PaceDeviation"));
             paceDeviationItem.ItemChanged += (sender, args) =>
             {
                 PaceDeviationLimit = ParseDeviationLimit(paceDeviationItem.Items[args.Index]);
@@ -848,7 +848,7 @@ namespace ARS
             int spawnGridSlot = _raceMenu.Items.IndexOf(instanceGridItem);
 
             // Start: add player to grid, place cars, tune, countdown. Lives at the end of Race.
-            NativeItem startItem = new NativeItem("Start Race", "Starts the race, loading the track and building the grid first if they are not up yet. You race it when you are in a car, and watch it from the sideline when you are not.");
+            NativeItem startItem = new NativeItem("Start Race", "Starts the race, loading the track and building the grid first if needed. You race from the grid or watch from the sideline.");
             startItem.Activated += (sender, args) =>
             {
                 _raceMenu.Visible = false;
@@ -868,7 +868,7 @@ namespace ARS
             _raceMenu.Add(restartItem);
 
             // Reset: teleport the player's car to the side of the closest track node, moving forward at low speed.
-            NativeItem resetItem = new NativeItem("Reset To Track", "Teleport your car to the side of the closest track node, facing the route at 10 mph. Only while a race is running.");
+            NativeItem resetItem = new NativeItem("Reset To Track", "Teleport your car beside the closest track node at 10 mph, facing the route. Races only.");
             resetItem.Activated += (sender, args) =>
             {
                 _arsMenu.Visible = false;
@@ -892,7 +892,7 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            NativeItem startCreatorItem = new NativeItem("Start Creator", "Take over the free camera and record a new route. Place the start line, then build the route: Weapon Wheel Widen/Tighten, Attack applies the pending section, Aim deletes a node.");
+            NativeItem startCreatorItem = new NativeItem("Start Creator", "Record a new route from the free camera: place the start line, then widen or tighten with the Weapon Wheel and apply each section.");
             startCreatorItem.Activated += (sender, args) =>
             {
                 creatorMenu.Visible = false;
@@ -924,7 +924,7 @@ namespace ARS
                 Alignment = Alignment.Right
             };
 
-            NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "Only the rivals are sorted. Your own car is added last - the back of the grid on a circuit, the front on a point-to-point.", EnumLabels<GridSort>());
+            NativeListItem<string> gridSortItem = new NativeListItem<string>("Grid Sorting", "Sorts the rivals only; your car is added last - the back on a circuit, the front on point-to-point.", EnumLabels<GridSort>());
             gridSortItem.ItemChanged += (sender, args) => SaveRacerSetting("GridSorting", ((GridSort)args.Index).ToString());
             gridSortItem.SelectedIndex = Math.Max(0, gridSortItem.Items.IndexOf(EnumLabel(ParseEnum(SettingsMenuStore.Get("GridSorting", "Random"), GridSort.Random))));
             rivalsMenu.Add(gridSortItem);
@@ -964,7 +964,7 @@ namespace ARS
             };
             rivalsMenu.Add(forceFillItem);
 
-            NativeCheckboxItem tuningItem = new NativeCheckboxItem("Auto Styling", "Your own car is never restyled, and cars that already have a mod kit are skipped. The work runs during the countdown, so it costs no load time.", SmartTuning);
+            NativeCheckboxItem tuningItem = new NativeCheckboxItem("Auto Styling", "Restyle the spawned cars only, skipping your own and any car that already has a mod kit. Runs during the countdown.", SmartTuning);
             tuningItem.CheckboxChanged += (sender, args) =>
             {
                 SmartTuning = tuningItem.Checked;
@@ -1004,7 +1004,7 @@ namespace ARS
             rivalsMenu.AddSubMenu(rivalTractionMenu);
             rivalsMenu.AddSubMenu(rivalSteeringMenu);
 
-            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Speed Offset (mph)", "Raises the target the rivals brake for at the next corner. Only the slower of this and Road Curvature Offset is ever used.", SettingsRepair.OptionsFor("CornerOffset"));
+            NativeListItem<string> cornerOffsetItem = new NativeListItem<string>("Corner Speed Offset (mph)", "Raises the speed rivals brake for at the next corner. Only the slower of this and Road Curvature Offset applies.", SettingsRepair.OptionsFor("CornerOffset"));
             cornerOffsetItem.ItemChanged += (sender, args) =>
             {
                 CornerOffsetMph = int.Parse(cornerOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1014,7 +1014,7 @@ namespace ARS
             rivalPaceMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
 
-            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Road Curvature Offset (mph)", "Raises the speed the road's curvature allows ahead of the car. Only the slower of this and Corner Speed Offset is ever used.", SettingsRepair.OptionsFor("RouteOffset"));
+            NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Road Curvature Offset (mph)", "Raises the speed the road's curvature allows ahead. Only the slower of this and Corner Speed Offset applies.", SettingsRepair.OptionsFor("RouteOffset"));
             routeOffsetItem.ItemChanged += (sender, args) =>
             {
                 RouteOffsetMph = int.Parse(routeOffsetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1024,7 +1024,7 @@ namespace ARS
             rivalPaceMenu.Add(routeOffsetItem);
             HookListTextPicker(routeOffsetItem);
 
-            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Each corner learns how hard the rivals dare to brake: miss the 90%-pedal fifth of a braking phase and it brakes harder next lap, slide through it and it loses a flat 0.1. Off, every corner starts from the same guess. Changes are announced while Show Track Analysis is on.", BrakeLearning);
+            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Each corner learns how hard rivals dare to brake: brake late and it brakes harder next lap, slide through and it loses 0.1.", BrakeLearning);
             brakeLearningItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearning = brakeLearningItem.Checked;
@@ -1032,7 +1032,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeListItem<string> maxCrestLiftItem = new NativeListItem<string>("Max Crest Lift (g)", "The maximum crest lift (gs reading at the 1.0s-ahead sample) the car is allowed to feel before the no-fly gate forces a slow-down. The speed factor is sqrt(MaxCrestLift / |gs|), so 1.0g means the car never slows for a peak below 1.0g -- only features that would physically lift the car at the current speed engage the gate. 0.1g is very conservative and slows on every noticeable crest; 2.0g only fires for the sharpest features. Dips are ignored -- they load the tyres, not unload. The previous build's 'Crest Loss' was a multiplier on a 0.2g fixed cap; this replaces it with an absolute threshold.", SettingsRepair.OptionsFor("MaxCrestLift"));
+            NativeListItem<string> maxCrestLiftItem = new NativeListItem<string>("Max Crest Lift (g)", "The crest lift, in g, the car may feel before the no-fly gate slows it: 0.1 is very conservative, 2.0 only the sharpest features.", SettingsRepair.OptionsFor("MaxCrestLift"));
             maxCrestLiftItem.ItemChanged += (sender, args) =>
             {
                 MaxCrestLift = float.Parse(maxCrestLiftItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1042,7 +1042,7 @@ namespace ARS
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
 
-            NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "A share of the tuned speed cut for slopes: 0% ignores them, 100% is the tuned cut, 200% doubles it. The pitch counts either way, so a descent costs speed like a climb; at 100%, 15 degrees halves grip.", SettingsRepair.OptionsFor("HillGripEffect"));
+            NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "Share of the tuned slope speed cut: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. Pitch counts both ways.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
             {
                 HillGripEffect = int.Parse(hillEffectItem.Items[args.Index], CultureInfo.InvariantCulture) * 0.01f;
@@ -1052,7 +1052,7 @@ namespace ARS
             rivalPaceMenu.Add(hillEffectItem);
             HookListTextPicker(hillEffectItem);
 
-            NativeListItem<string> overspeedItem = new NativeListItem<string>("Overspeed Correction", "How hard a rival's throttle is lifted when the car pulls harder than its wheels can explain - GTA accelerates a car up a hill on its own. The number is the throttle lifted per 0.1 G of surplus over the threshold, so 1.0 is all but a switch. It arms only on a straight, settled car above 30 mph; Off, that climb speed stands.", SettingsRepair.OptionsFor("OverspeedCut"));
+            NativeListItem<string> overspeedItem = new NativeListItem<string>("Overspeed Correction", "Throttle lifted per 0.1 G of surplus when the car pulls harder than its wheels explain. Arms on a settled car above 30 mph on a straight.", SettingsRepair.OptionsFor("OverspeedCut"));
             overspeedItem.ItemChanged += (sender, args) =>
             {
                 OverspeedCutPerTenthG = ParseOverspeedCut(overspeedItem.Items[args.Index]);
@@ -1070,7 +1070,7 @@ namespace ARS
             };
             rivalTractionMenu.Add(tcsItem);
 
-            NativeListItem<string> tcsLimitItem = new NativeListItem<string>("TCS Wheelspin Limit (%)", "The wheelspin the AI throttles to, as a share of the slip the tyres reach peak traction at: 100% is the peak itself, 80% just under it, 200% only once the car is already sliding well past. Nothing is cut below the limit, and it holds on every surface and at every speed.", SettingsRepair.OptionsFor("TcsSlipLimitPct"));
+            NativeListItem<string> tcsLimitItem = new NativeListItem<string>("TCS Wheelspin Limit (%)", "The wheelspin the AI throttles to, as a share of the peak-traction slip: 100% is the peak, 80% just under it.", SettingsRepair.OptionsFor("TcsSlipLimitPct"));
             tcsLimitItem.ItemChanged += (sender, args) =>
             {
                 TcsSlipLimitPct = int.Parse(tcsLimitItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1080,7 +1080,7 @@ namespace ARS
             rivalTractionMenu.Add(tcsLimitItem);
             HookListTextPicker(tcsLimitItem);
 
-            NativeListItem<string> tcsSpanItem = new NativeListItem<string>("TCS Cut Softness (%)", "How much further past the limit the cut spans before the throttle reaches its floor, as the same share of the peak slip: the ceiling is the limit plus this, so 80 with 80 bottoms the cut at 160% of the peak. The cut eases in on a curve rather than stepping.", SettingsRepair.OptionsFor("TcsTaperSpanPct"));
+            NativeListItem<string> tcsSpanItem = new NativeListItem<string>("TCS Cut Softness (%)", "How far past the limit the cut spans before the throttle floor: the ceiling is the limit plus this share of the peak slip.", SettingsRepair.OptionsFor("TcsTaperSpanPct"));
             tcsSpanItem.ItemChanged += (sender, args) =>
             {
                 TcsTaperSpanPct = int.Parse(tcsSpanItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1102,7 +1102,7 @@ namespace ARS
             };
             rivalTractionMenu.Add(absItem);
 
-            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping gain in seconds, applied to the excess over the yaw the aim point requires. Lower is crisper; higher opposes rotation more strongly.", SettingsRepair.OptionsFor("SteerDampingGain"));
+            NativeListItem<string> steerKDItem = new NativeListItem<string>("Steer Damping", "Yaw-rate damping in seconds. Lower is crisper; higher opposes rotation more.", SettingsRepair.OptionsFor("SteerDampingGain"));
             steerKDItem.ItemChanged += (sender, args) =>
             {
                 SteerDampingGain = float.Parse(steerKDItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1112,7 +1112,7 @@ namespace ARS
             rivalSteeringMenu.Add(steerKDItem);
             HookListTextPicker(steerKDItem);
 
-            NativeListItem<string> damperCounterItem = new NativeListItem<string>("Damper Countersteer", "How far past neutral the yaw damper may turn the wheel against the car's own rotation, in degrees. 0 lets it cancel the command and no more, which is the whole stabiliser with none of the opposite lock.", SettingsRepair.OptionsFor("DamperCountersteerMaxDeg"));
+            NativeListItem<string> damperCounterItem = new NativeListItem<string>("Damper Countersteer", "How far past neutral the damper may turn against the car's rotation, in degrees. 0 cancels the command and no more.", SettingsRepair.OptionsFor("DamperCountersteerMaxDeg"));
             damperCounterItem.ItemChanged += (sender, args) =>
             {
                 DamperCountersteerMaxDeg = float.Parse(damperCounterItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1122,7 +1122,7 @@ namespace ARS
             rivalSteeringMenu.Add(damperCounterItem);
             HookListTextPicker(damperCounterItem);
 
-            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Limit At Speed", "Scales the ceiling the limiter computes from the tyre's at-speed peak slip. 1.00 puts the outer front wheel — the loaded wheel in a corner — on that peak slip angle, lower holds the wheel tighter at speed, and above 1.00 asks past the peak, which is how a rival is made to slide. The corner-geometry fallback is not scaled.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
+            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Limit At Speed", "Scales the limiter's ceiling from the tyre's at-speed peak slip: 1.00 puts the loaded outer wheel on its peak, above 1.00 makes it slide.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
             steerCeilingFactorItem.ItemChanged += (sender, args) =>
             {
                 SteerCeilingFactor = float.Parse(steerCeilingFactorItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1152,7 +1152,7 @@ namespace ARS
             rulesMenu.Add(autofixItem);
             HookListTextPicker(autofixItem);
 
-            NativeCheckboxItem dnfItem = new NativeCheckboxItem("Hide DNFs", "A car with a dead engine is dropped under the track, frozen and invisible, and ignored by the AI. Off: it is parked on the shoulder.", DNFUnderTrack);
+            NativeCheckboxItem dnfItem = new NativeCheckboxItem("Hide DNFs", "A dead-engine car is dropped under the track, frozen and invisible, and ignored by the AI. Off parks it on the shoulder.", DNFUnderTrack);
             dnfItem.CheckboxChanged += (sender, args) =>
             {
                 DNFUnderTrack = dnfItem.Checked;
@@ -1160,7 +1160,7 @@ namespace ARS
             };
             rulesMenu.Add(dnfItem);
 
-            NativeListItem<string> rubberbandItem = new NativeListItem<string>("Rubberbanding (%)", "Keeps the field packed: leaders are slowed and laggards are boosted, scaled by distance from the center position. 0 = off; 100 = max effect (0.66× for the leader, 1.33× for last place).", SettingsRepair.OptionsFor("Rubberbanding"));
+            NativeListItem<string> rubberbandItem = new NativeListItem<string>("Rubberbanding (%)", "Packs the field: leaders slowed and laggards boosted by distance from the middle. 0 off, 100 max (0.66x leader, 1.33x last).", SettingsRepair.OptionsFor("Rubberbanding"));
             rubberbandItem.ItemChanged += (sender, args) =>
             {
                 RubberbandingPct = int.Parse(rubberbandItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1190,7 +1190,7 @@ namespace ARS
             rulesMenu.Add(noCollisionItem);
 
             // ── Nitrous ──
-            NativeCheckboxItem nitroItem = new NativeCheckboxItem("Nitrous", "Give every racer a fresh nitrous bottle each lap. Racers fire theirs automatically on straights; the player fires manually.", NitrousEnabled);
+            NativeCheckboxItem nitroItem = new NativeCheckboxItem("Nitrous", "A fresh nitrous bottle each lap. Rivals fire on straights; the player fires manually.", NitrousEnabled);
             nitroItem.CheckboxChanged += (sender, args) =>
             {
                 NitrousEnabled = nitroItem.Checked;
@@ -1198,7 +1198,7 @@ namespace ARS
             };
             rulesMenu.Add(nitroItem);
 
-            NativeListItem<string> aiNitroItem = new NativeListItem<string>("AI Nitrous Power (%)", "The AI's bottle as a percentage of the player's: 100 is the same strength, 200 is twice. The player's own burn is unchanged.", AiNitroValues);
+            NativeListItem<string> aiNitroItem = new NativeListItem<string>("AI Nitrous Power (%)", "The AI's bottle as a percentage of the player's: 100 the same, 200 twice. Your own burn is unchanged.", AiNitroValues);
             // Seeded from the repaired store, not the load-time static: a value the repair snapped must be what both
             // the item shows and this session runs on, and the static is written to match before the handler lands so
             // the seed itself changes nothing.
@@ -1237,7 +1237,7 @@ namespace ARS
             AddDebugCheckbox(interfaceMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so the player can see where the track goes.");
             AddDebugCheckbox(interfaceMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so the player can read the track limits.");
             AddDebugCheckbox(interfaceMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when the player is not on the grid.");
-            AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show Rival Lap Times", "Announce each AI racer's lap time as they cross the line, the same way your own is. One notification per racer per lap, so a full grid is a lot of them.");
+            AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show Rival Lap Times", "Announce each AI lap time as it crosses the line. One per racer per lap, so a full grid is a lot of them.");
 
             NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Show Track & Grid Rows", "Show or hide Load Track and Build Grid in the Race menu.", StagedSpawns);
             stagedSpawnsItem.CheckboxChanged += (sender, args) =>
@@ -1310,15 +1310,15 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
-            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Pedal Trail", "Draw the closest AI car's input trail: one chevron per metre of travel, lying flat and pointing along the car's path, pitching its nose down on throttle and up on braking, green through yellow to red by pedal input, holding the last 40 m.");
-            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's steer-angle fan - pursuit, pursuit plus damper, the final steer line carrying the applied pedals and every limit that bites along it, and the limiter's ceiling - plus the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
-            AddDebugCheckbox(debugMenu, Options.ShowRivalry, "Show Rivalry", "Draw the two rival walls the focus car may aim between, from its node to one second of travel ahead: red while a rival holds a wall in, blue once it has been released and is moving back out, plus a line from the car to each wall's far end. Walls close almost at once and open at five metres a second, so a pass reads as red snapping in and blue drifting out.");
-            AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Draw a cyan marker at every lip the route scan found: a vertical tick and a line across the road, so the scan can be judged by eye before anything drives on it.");
-            AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere a metre over each wheel of the closest AI car, coloured by that tyre's side-slip angle: white at rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.");
-            AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
-            AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the closest AI car's constant-acceleration path from its roof: one line to where it projects at 0.5s, then a second connected from there to the 1s mark, both floating at roof height. The bend at the joint is the acceleration the car is committing to.");
-            AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw one line from your own car's roof along the horizontal acceleration it is pulling, racing or not: the direction is the G vector and the length is its magnitude at one metre per G, with a short cross at the tail so the direction reads. Your own car only: on foot or spectating there is nothing to draw.");
-            AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is actually measured from, as crossing lines: the car's own node is where the car stands, the magenta line is the near sample and the pale one the far sample, at speed/grip and twice that ahead. The crest checks (blue and red) only land on the same nodes when grip is 1.0, so these are the ones to read when a route-speed step is suspected.");
+            AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Pedal Trail", "Draw the focus car's input trail: one chevron per metre, coloured green to red by pedal input, holding the last 40 m.");
+            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the focus car's steer-angle fan, the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
+            AddDebugCheckbox(debugMenu, Options.ShowRivalry, "Show Rivalry", "Draw the two rival walls from the car's node to one second ahead: red while a rival holds one in, blue once released, plus a line from the car to each far end.");
+            AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Mark every lip the route scan found with a cyan tick and a line across the road.");
+            AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere over each wheel of the focus car, coloured by side-slip: white at rest, green at the peak, red where grip goes flat.");
+            AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the corner, avoidance and wall systems.");
+            AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the focus car's constant-acceleration path from its roof: a line to 0.5 s and another from there to 1 s; the bend is the acceleration.");
+            AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
+            AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is measured from: the car's own, the near sample and the far one at speed/grip and twice that ahead.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
@@ -1333,7 +1333,7 @@ namespace ARS
             // The corner ceiling, owned by this menu: a change rebuilds the derived table at once, so it can be
             // judged mid-race. Seeded from the repaired store, and the static is written to that same value before
             // the handler lands, so the item, the session and the file agree even when the repair moved the number.
-            NativeListItem<string> cornerCeilingItem = new NativeListItem<string>("Corner Ceiling", "The radius the detector treats as a straight: regions are cut where the road opens past it. It no longer rejects corners - what exists is decided by whether the road opens to twice the radius within 60 nodes. A change rebuilds the table at once, mid-race included.", CornerCeilingValues);
+            NativeListItem<string> cornerCeilingItem = new NativeListItem<string>("Corner Ceiling", "The radius treated as a straight: regions are cut where the road opens past it. A change rebuilds the table at once.", CornerCeilingValues);
             cornerCeilingItem.SelectedIndex = Math.Max(0, cornerCeilingItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerCeiling", CornerCeilingMeters).ToString(CultureInfo.InvariantCulture)));
             CornerCeilingMeters = int.Parse(cornerCeilingItem.Items[cornerCeilingItem.SelectedIndex], CultureInfo.InvariantCulture);
             cornerCeilingItem.ItemChanged += (sender, args) =>
@@ -1364,7 +1364,7 @@ namespace ARS
                 Alignment = Alignment.Right
             };
 
-            NativeCheckboxItem brakeLearnNotifyItem = new NativeCheckboxItem("Brake Learn Notify", "Announce every verdict the brake learner lands, on its own switch rather than the track-analysis visual: (car) adjusted corner No<node> | before + change > after. Off by default, since it prints once per corner per lap.", BrakeLearningNotify);
+            NativeCheckboxItem brakeLearnNotifyItem = new NativeCheckboxItem("Brake Learn Notify", "Announce every brake-learner verdict: corner, before, change and after. Off by default, it prints once per corner per lap.", BrakeLearningNotify);
             brakeLearnNotifyItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearningNotify = brakeLearnNotifyItem.Checked;
