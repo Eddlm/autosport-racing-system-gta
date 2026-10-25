@@ -2071,10 +2071,19 @@ namespace ARS
             // The ceiling is a state, not a fresh function of this tick: it closes towards what the tyre asks at
             // SlipCeilingDegPerSec and opens back at SlipCeilingDegPerSec, so a step in the measurement never
             // becomes a step at the wheel. Only the closing side is slow; opening fast would let the guard outrun the tyre.
+            // A ceiling above the angle being asked for says nothing, and starting it at the lock made the state march down
+            // from 38 deg: at 6 deg/s that is five seconds of continuous bite before it reached a 7 deg target, so it never left.
+            // Seeding it to the request each tick leaves the rate to cover only the gap between the wheel and the target.
+            _slipCeilingDeg = Math.Min(_slipCeilingDeg, Math.Abs(requestedSteer));
             if (_slip.Readable)
             {
                 if (_slip.InnerPct > 100f && _slip.CeilingDeg > 0.01f)
-                    _slipCeilingDeg = Math.Max(_slip.CeilingDeg, _slipCeilingDeg - SlipCeilingDegPerSec * TickScale);
+                {
+                    float target = Math.Min(_slip.CeilingDeg, Math.Abs(requestedSteer));
+                    // Down only: the opening side is the branch below, so a target that rises cannot snap the state up.
+                    if (target < _slipCeilingDeg)
+                        _slipCeilingDeg = Math.Max(target, _slipCeilingDeg - SlipCeilingDegPerSec * TickScale);
+                }
                 else
                     _slipCeilingDeg = Math.Min(VehicleData.SteeringLock, _slipCeilingDeg + SlipCeilingDegPerSec * TickScale);
                 speedCeiling = Math.Min(speedCeiling, _slipCeilingDeg);
