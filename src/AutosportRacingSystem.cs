@@ -50,7 +50,7 @@ namespace ARS
     // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry
     }
     public partial class ARS : Script
     {
@@ -212,6 +212,7 @@ namespace ARS
     {
         { Options.ShowInputs, false },
         { Options.ShowTrackAnalysis, false },
+        { Options.ShowRivalry, false },
         { Options.ReverseRoute, false },
         { Options.HighDownforceOnline, false },
         { Options.ShowCheckpoints, true },
@@ -1301,6 +1302,7 @@ namespace ARS
             };
             AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Pedal Trail", "Draw the closest AI car's input trail: one chevron per metre of travel, lying flat and pointing along the car's path, pitching its nose down on throttle and up on braking, green through yellow to red by pedal input, holding the last 40 m.");
             AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the closest AI car's steer-angle fan - pursuit, pursuit plus damper, the final steer line carrying the applied pedals and every limit that bites along it, and the limiter's ceiling - plus the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
+            AddDebugCheckbox(debugMenu, Options.ShowRivalry, "Show Rivalry", "Draw the two rival walls the focus car may aim between, projected 40 nodes ahead: red while a wall is still inside the track bound because a rival is holding it there, grey once it has relaxed to the edge. Watch it open at four metres a second after a pass.");
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Draw a cyan marker at every lip the route scan found: a vertical tick and a line across the road, so the scan can be judged by eye before anything drives on it.");
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere a metre over each wheel of the closest AI car, coloured by that tyre's side-slip angle: white at rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the high-speed, corner, avoidance and rival-wall lane systems. Use it to watch centring alone.");
@@ -1990,6 +1992,34 @@ namespace ARS
                     Racer liveCrestRacer = PlayerRacer ?? DebugFocusRacer;
                     if (liveCrestRacer != null)
                         TrackVisuals.DrawLiveCrestChecks(liveCrestRacer, ARS.TrackPoints);
+                }
+
+                // Rival walls: the corridor the focus car may aim into, projected along the next 40 nodes. The walls clamp a
+                // lane request, so this draws what is permitted, not a path the car follows.
+                if (DebugToggles[Options.ShowRivalry] && DebugFocusRacer != null && DebugFocusRacer.WallRoadWide > 0.01f)
+                {
+                    Racer racer = DebugFocusRacer;
+                    int wallNode = racer.CurrentTrackPoint.Node;
+                    int wallCount = ARS.TrackPoints.Count;
+                    float leftWall = racer.AvoidLeftWall;
+                    float rightWall = racer.AvoidRightWall;
+                    float wallBound = racer.WallRoadWide;
+                    Color leftColor = leftWall > -wallBound + 0.01f ? Color.Red : Color.DimGray;
+                    Color rightColor = rightWall < wallBound - 0.01f ? Color.Red : Color.DimGray;
+
+                    for (int i = 0; i < 40; i++)
+                    {
+                        int node = ARS.IsPointToPoint ? wallNode + i : (wallNode + i) % wallCount;
+                        int nextNode = ARS.IsPointToPoint ? wallNode + i + 1 : (wallNode + i + 1) % wallCount;
+                        if (node >= wallCount || nextNode >= wallCount) continue;
+
+                        Vector3 pos = ARS.TrackPoints[node].Position;
+                        Vector3 nextPos = ARS.TrackPoints[nextNode].Position;
+                        Vector3 right = Vector3.Cross(ARS.TrackPoints[node].Direction, Vector3.WorldUp).Normalized;
+                        Vector3 lift = new Vector3(0, 0, LaneHeightWalls);
+                        DrawLine(pos + right * leftWall + lift, nextPos + right * leftWall + lift, leftColor);
+                        DrawLine(pos + right * rightWall + lift, nextPos + right * rightWall + lift, rightColor);
+                    }
                 }
 
                 // Player nitro: fire on key press, one bottle a lap. The fire charges the bottle itself, so there is
@@ -3269,6 +3299,7 @@ namespace ARS
         const float LaneHeightCurrent = 0.100f;
         const float LaneHeightCarried = 0.125f;
         const float LaneHeightRequest = 0.150f;
+        const float LaneHeightWalls = 0.175f;
 
         public static void DrawLine(Vector3 from, Vector3 to, Color color)
         {

@@ -173,6 +173,11 @@ namespace ARS
 
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
+        float _wallRoadWide = 0f;
+        // Read by the Show Rivalry debug lines: the corridor the car is allowed to aim into.
+        public float AvoidLeftWall => _avoidLeftWall;
+        public float AvoidRightWall => _avoidRightWall;
+        public float WallRoadWide => _wallRoadWide;
         int _activeRivalWallCount = 0;
         bool _avoidWallsInitialized = false;
         // The carried lane and the sources' request for it are separate: the mover carries one onto the other with
@@ -1632,7 +1637,10 @@ namespace ARS
                 }
             }
 
-            float openRate = 10f * TickScale;
+            // Four metres per second: the corridor opens slower than the car can unwind, so a wall that has just let go
+            // is still the limit when the corner line starts asking (was 10, which the mover could outrun).
+            float openRate = 4f * TickScale;
+            _wallRoadWide = roadWide;
             _avoidLeftWall = leftConstrained ? targetLeftWall : Math.Max(_avoidLeftWall - openRate, -trackBound);
             _avoidRightWall = rightConstrained ? targetRightWall : Math.Min(_avoidRightWall + openRate, trackBound);
             _activeRivalWallCount = (_avoidLeftWall > -trackBound ? 1 : 0) + (_avoidRightWall < trackBound ? 1 : 0);
