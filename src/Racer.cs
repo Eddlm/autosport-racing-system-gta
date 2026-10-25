@@ -2162,12 +2162,9 @@ namespace ARS
                 }
                 else if (newThrottle > projectionInput) newThrottle = projectionInput;
             }
-            bool rbFreeZonePedal = Lap <= 1 && CurrentTrackPoint != null && CurrentTrackPoint.Node < 500;
-            if (ARS.RubberbandingPct > 0 && ARS.CurrentRubberbandMode == RubberbandMode.Artificial && newThrottle >= 1.00f && !rbFreeZonePedal)
-            {
-                float rbTorque = ComputeRubberBandFactor();
-                if (rbTorque > 1f) newThrottle *= rbTorque;
-            }
+            // Artificial rubberbanding no longer borrows the pedal: a throttle above 1.0 is a number the engine cannot
+            // apply, so its boost arrived only through the power compensation and the two features were multiplying.
+            // It now sets the power outright, in ApplyPowerMultiplier, next to the burn.
 
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
@@ -3768,16 +3765,10 @@ namespace ARS
         // inverse restores it, whereas a cut to zero cannot be, and grip-side losses only add wheelspin.
         void UpdatePowerCompensation()
         {
+            // This channel can only take power AWAY. Exactly one reason at a time may ask for more than stock - the burn or
+            // artificial rubberbanding - and both of them set the multiplier outright in ApplyPowerMultiplier. The pedal gap
+            // and the over-top-speed fade used to inflate this counter, so three features multiplied through one number.
             float counter = 1f;
-
-            float commanded = Math.Abs(Control.Throttle);
-            if (!ControlledByPlayer && commanded > PowerCounterMinCommanded && _appliedThrottleLastFrame < commanded)
-                counter *= ARS.Clamp(commanded / Math.Max(_appliedThrottleLastFrame, PowerCounterMinApplied), 1f, PowerCounterMax);
-
-            // Past the car's own top speed the engine fades drive force and adds an over-speed brake. No
-            // throttle gate is needed: this scales fDriveForce, which is already zero off-throttle.
-            float overTopSpeed = ARS.GetForwardSpeed(Car) - Handling.EstimatedTopSpeed * TopSpeedCounterOnsetScale;
-            if (overTopSpeed > 0f) counter *= ARS.Remap(overTopSpeed, 0f, TopSpeedCounterBand, 1f, TopSpeedCounterMax, true);
 
             // The player's side of the Gs correction. Their pedal is theirs, so the same level is taken out of the drive
             // force instead: for an input the engine reads as 1.0 this is as close to capping it as the mod can get.
@@ -3794,22 +3785,25 @@ namespace ARS
                 _powerCounterLoggedAt = Game.GameTime + 2000;
                 ARS.Log(ARS.LogImportance.Info, "Player power cut " + _overspeedPowerLevel.ToString("0.00") + " (excess Gs " + VehicleData.OverspeedExcessGs.ToString("0.00") + ")");
             }
-            if (_powerCounter > 1.001f && Game.GameTime > _powerCounterLoggedAt)
-            {
-                _powerCounterLoggedAt = Game.GameTime + 2000;
-                string throttlePart = ControlledByPlayer ? "" : ", throttle " + _appliedThrottleLastFrame.ToString("0.00") + " of " + commanded.ToString("0.00");
-                ARS.Log(ARS.LogImportance.Info, "Power counter " + Car.DisplayName + " x" + _powerCounter.ToString("0.00") + " (over top speed " + overTopSpeed.ToString("0.0") + " m/s" + throttlePart + ")");
-            }
+            // The counter can no longer exceed 1, so the 'power counter raised' line it used to print has nothing left to
+            // report: a boost is the burn or the rubberbanding now, and both announce themselves.
         }
 
         void ApplyPowerMultiplier()
         {
-            // One law at a time. The burn is its own multiplier - exactly the nitro factor - and the power compensation does
-            // not ride on top of it. It used to multiply: an AI car with a pedal gap and past its top speed turned 2.5 into 5,
-            // and the burn stopped being a known quantity.
-            float multiplier = Game.GameTime < _nitrousActiveUntil
-                ? NitrousPowerMultiplier * (ControlledByPlayer ? 1f : ARS.AiNitroPct * 0.01f)
-                : _powerCounter;
+            // One reason at a time. The burn is its own multiplier; artificial rubberbanding is its own, and only for an AI
+            // car; everything else can only be _powerCounter, which is <= 1. They never multiply with each other, so the
+            // number the car gets on this tick is a number someone chose.
+            float multiplier = _powerCounter;
+            if (Game.GameTime < _nitrousActiveUntil)
+            {
+                multiplier = NitrousPowerMultiplier * (ControlledByPlayer ? 1f : ARS.AiNitroPct * 0.01f);
+            }
+            else if (!ControlledByPlayer && ARS.RubberbandingPct > 0 && ARS.CurrentRubberbandMode == RubberbandMode.Artificial)
+            {
+                float rbTorque = ComputeRubberBandFactor();
+                if (rbTorque > 1f) multiplier *= rbTorque;
+            }
 
             if (float.IsNaN(multiplier) || float.IsInfinity(multiplier) || multiplier < 0f || multiplier > 10f) multiplier = 1f;
 
