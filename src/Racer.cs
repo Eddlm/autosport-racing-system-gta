@@ -413,6 +413,9 @@ namespace ARS
         const float NitrousPowerMultiplier = 2.5f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
+        // The card may not fire inside the first six seconds of the race: at the launch the field is still bunched, so a
+        // bottle spent there buys a gap off the line rather than a pass.
+        const int NitrousArmDelayMs = 6000;
         const float NitrousCornerLookaheadSeconds = 8f;
         const float NitrousLonelySpeedFraction = 0.5f;
         const float NitrousLonelyMinApexDistance = 500f;
@@ -436,7 +439,7 @@ namespace ARS
         const float ChillThrottleCap = 0.5f;
         // Anti-collision lift: full gas at this bumper gap, this much at contact, linear between.
         const float RivalLiftMeters = 3f;
-        const float RivalLiftFloor = 0.5f;
+        const float RivalLiftFloor = 0.1f;
         const float ChillStandoffEscapeMargin = 2f;
         const float ChillMinSpeedMph = 30f;
 
@@ -2768,8 +2771,8 @@ namespace ARS
                 : GlideCap(Control.MaxThrottleFromOverspeed, OverspeedThrottleLevel());
 
             // The lift is a distance, not a countdown: no ramp on time-to-reach, so a closing rival never cuts the throttle
-            // to nothing. Three metres out is full gas and contact is the floor, and the floor is half throttle, not zero —
-            // this term yields the acceleration, it does not stop the car.
+            // to nothing. Three metres out is full gas and contact is the floor, and the floor is a tenth of throttle, not
+            // zero — this term yields the acceleration, it does not stop the car.
             //
             // Written ascending on both sides on purpose: Remap's clamp runs Clamp(r, out_min, out_max) and Clamp tests the
             // minimum first, so a descending output range returns out_min for everything. Ascending in and out, and the
@@ -3034,8 +3037,12 @@ namespace ARS
                 EndCard();
             }
 
+            // Off for now. The card holds a standoff behind the nearest rival and pays for it in throttle; parked until the
+            // pack behaviour it was written for earns that cost. The cleanup above still runs, so a card armed before this
+            // flag was flipped still ends cleanly.
+            const bool ChillOutEnabled = false;
             // ChillOut: only when fast enough for bunching to matter, in a dense pack of better-placed cars.
-            if (ActiveManeuver.Type == ManeuverType.None && ARS.MpsToMph(Car.Velocity.Length()) >= ChillMinSpeedMph && RivalsWithinDistance(ChillRivalCrowdDistance) >= ChillCrowdCount)
+            if (ChillOutEnabled && ActiveManeuver.Type == ManeuverType.None && ARS.MpsToMph(Car.Velocity.Length()) >= ChillMinSpeedMph && RivalsWithinDistance(ChillRivalCrowdDistance) >= ChillCrowdCount)
             {
                 Rival closestRival = NearestRival();
                 if (closestRival != null && CardFree(closestRival.RivalRacer, ManeuverType.ChillOut))
@@ -3091,6 +3098,7 @@ namespace ARS
         bool TryPlayNitrousCard()
         {
             if (!ARS.NitrousEnabled || Lap <= _nitrousLapUsed) return false;
+            if (ARS.RaceStartTime > 0 && Game.GameTime - ARS.RaceStartTime < NitrousArmDelayMs) return false;
             if (Control.Brake > 0f) return false;
             if (OutOfTrackDistance() > 0f) return false;
             if (Math.Abs(Control.SteerDegrees) >= NitrousMaxSteerDegrees) return false;
