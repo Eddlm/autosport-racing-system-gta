@@ -2558,6 +2558,7 @@ namespace ARS
             // The batch cursor indexes Racers, so it dies with the list; a stale one is out of range for the
             // next grid, which is only guaranteed to be smaller.
             _nextInLine = 0;
+            _raceTimedFinishMs = 0;
             _gameTimeNextInLine = 0;
             LeaderboardFinish.Clear();
             RaceStatus = RaceState.None;
@@ -2591,6 +2592,10 @@ namespace ARS
 
         public void SetupRace(bool placecars, bool tunecars)
         {
+            // The grace deadline belongs to one race. A race started from the menu after another one had a finisher used to
+            // inherit that race's deadline and end itself the moment the old clock reached zero - sometimes before its own
+            // countdown finished. SetupRace is where a race begins, so it is where the clock is cleared.
+            _raceTimedFinishMs = 0;
             LeaderboardFinish.Clear();
             Log(LogImportance.Info, "Initializing racers");
             foreach (Racer r in Racers)
