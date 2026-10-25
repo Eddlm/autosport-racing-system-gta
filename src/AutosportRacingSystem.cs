@@ -709,18 +709,25 @@ namespace ARS
         float _lastKnownPlayerPace = float.NaN;
 
         // Every submenu's black bar carries its full trail (ARS > RIVALS > RIVAL TRACTION), and the row that opens it in the
-        // parent stays short. The trail is kept in its own map rather than read back from Subtitle, so it does not depend on
-        // the order the tree happens to be assembled in: a child added after its parent was attached would otherwise prefix
-        // itself twice.
-        readonly Dictionary<NativeMenu, string> _menuTrails = new Dictionary<NativeMenu, string>();
+        // parent stays short. AddSub only records the edge: the trails are written in one pass once the whole tree exists,
+        // because the menus are built children-first - a submenu is filled before it is attached, so computing the trail while
+        // linking it asked for a parent's trail that did not exist yet.
+        readonly Dictionary<NativeMenu, NativeMenu> _menuParents = new Dictionary<NativeMenu, NativeMenu>();
         NativeSubmenuItem AddSub(NativeMenu parent, NativeMenu child)
         {
             NativeSubmenuItem item = parent.AddSubMenu(child);
-            string parentTrail = parent == _arsMenu ? _arsMenu.Title.Text : _menuTrails[parent];
-            string trail = parentTrail + " > " + child.Title.Text;
-            _menuTrails[child] = trail;
-            child.Subtitle = trail;
+            _menuParents[child] = parent;
             return item;
+        }
+        void ApplyMenuTrails(NativeMenu parent, string parentTrail)
+        {
+            foreach (KeyValuePair<NativeMenu, NativeMenu> edge in _menuParents)
+            {
+                if (edge.Value != parent) continue;
+                string trail = parentTrail + " > " + edge.Key.Title.Text;
+                edge.Key.Subtitle = trail;
+                ApplyMenuTrails(edge.Key, trail);
+            }
         }
 
         void InitializeMenu()
@@ -1403,6 +1410,9 @@ namespace ARS
             developmentEntry.Enabled = false;
             _arsMenu.Shown += (sender, args) => developmentEntry.Enabled = RaceIsRunning && Racers.Count == 1;
             AddSub(_arsMenu, creatorMenu);
+
+            // One pass, after the last edge: the root keeps its own subtitle (RACING) and every menu under it gets its trail.
+            ApplyMenuTrails(_arsMenu, _arsMenu.Title.Text);
             _arsMenu.Add(resetItem);
 
             // Register all menus in the pool
