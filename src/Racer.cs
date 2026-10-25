@@ -317,7 +317,9 @@ namespace ARS
         const float SlipCeilingSlowDegPerSec = 1f;
         const float SlipCeilingFastDegPerSec = 10f;
         const float SlipCeilingOpenDegPerSec = 4f;
-        const float SlipCeilingCloseSpanPct = 50f;
+        // The span is where the curve does its work: at 75 the 120-130% band stays near 4-5 deg/s and only a real slide reaches
+        // the maximum, which keeps the measurement lag from over-closing the gate by a third as it did at 50.
+        const float SlipCeilingCloseSpanPct = 75f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
         SlipState _slip;
         // Below this command there is no inside of the corner, so the pair is averaged instead of picked.
@@ -1929,7 +1931,7 @@ namespace ARS
             public bool Readable;    // false when this source could not answer this tick
         }
 
-        // How fast the gate may shut, from the share of the peak the tyre is using: 1 deg/s at the target, 10 at 150% and beyond.
+        // How fast the gate may shut, from the share of the peak the tyre is using: 1 deg/s at the target, 10 at 200% and beyond.
         float SlipCeilingCloseRate(float pct)
         {
             float over = (pct - 100f) / SlipCeilingCloseSpanPct;
