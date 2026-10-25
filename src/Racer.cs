@@ -1922,9 +1922,13 @@ namespace ARS
                 left = rawLeft * livePeak * EngineSteerWheelOuterShare;
                 right = rawRight * livePeak * EngineSteerWheelOuterShare;
             }
-            // The average of the two fronts, not the worst: a single wheel clipping a kerb should not scale the whole
-            // command, and the pair is the axis the car actually turns on.
-            float slip = 0.5f * (left + right);
+            // The INNER wheel is the signal. Ackermann steers it to the full command while the outer only takes
+            // EngineSteerWheelOuterShare of it, so the inner reaches its peak first and is the tyre that warns. With the wheel
+            // neutral there is no inside, so the pair is averaged; positive command steers left, so in a left turn the inside
+            // is wheel 0.
+            float slip;
+            if (Math.Abs(Control.SteerDegrees) < 0.5f) slip = 0.5f * (left + right);
+            else slip = Control.SteerDegrees > 0f ? left : right;
             _frontSlipLeftDeg = left;
             _frontSlipRightDeg = right;
             _frontSlipLimitDeg = limitDeg;            // Shown as a share of the limit, so the number rises with the slip: 100% is at the cap, 200% is twice it.
