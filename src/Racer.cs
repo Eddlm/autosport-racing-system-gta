@@ -3682,32 +3682,10 @@ namespace ARS
         // this tick. 1.00 leaves the steering alone; 0.60 removes two fifths of it.
         void DrawFrontSlipReadout()
         {
-            // Three proportions and nothing else: each front wheel's slip as a share of the limit, and how much of its own
-            // request the car was actually granted. 100% on a slip means that tyre is at its limit; below 100% on the wheel
-            // means the command is being clipped. Measured against the ceiling instead, any ordinary request read a few
-            // percent, because the lock dwarfs a normal steering angle.
-            float wheel = Math.Abs(_steerPreLimitDegrees) > 0.01f
-                ? Math.Min(100f, 100f * Math.Abs(Control.SteerDegrees) / Math.Abs(_steerPreLimitDegrees))
-                : 100f;
-            string text = "L " + _slip.LeftPct.ToString("0") + "%   R "
-                + _slip.RightPct.ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
-            // The ceiling the command is actually held under, state included: the one number that shows the ramp
-            // moving, which the three proportions above cannot (they only say where the tyre and the wheel are now).
-            float ceiling = Math.Min(_finalCeilingDeg, VehicleData.SteeringLock);
-            text += "   cap " + ceiling.ToString("0") + "deg";
-            // The raw field follows the three proportions, for calibrating the scale by eye: it is what the tyre reports, before
-            // any peak is chosen for it.
-            // Only the memory source has a raw field to show; in theory mode this read would put memory numbers beside a
-            // model percentage, which is two sources in one line.
-            if (ARS.SlipFromMemory)
-            {
-                List<float> raw = ARS.WheelSideSlipAngles(Car);
-                if (raw.Count >= 2)
-                {
-                    text += "   raw " + Math.Abs(raw[0]).ToString("0.00") + "/" + Math.Abs(raw[1]).ToString("0.00");
-                }
-            }
-            UI.ShowSubtitle(text, 50);
+            // One number while the law is being tuned: the chase itself, in degrees of command, two decimals. Everything else
+            // the readout used to carry can be derived from it once the shape is settled.
+            float clamp = float.IsNaN(_chasingClampDeg) ? _finalCeilingDeg : _chasingClampDeg;
+            UI.ShowSubtitle(clamp.ToString("0.00") + "deg", 50);
         }
 
         void DrawWheelSlip()
