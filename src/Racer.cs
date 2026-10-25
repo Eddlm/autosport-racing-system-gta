@@ -1934,6 +1934,7 @@ namespace ARS
             public float LeftPct;    // left front tyre, as a share of the target
             public float RightPct;   // right front tyre
             public float InnerPct;   // the inner front tyre: the signal the limit acts on
+            public float RearPct;    // the worse rear tyre, same scale: tells an understeer from a slide the front cannot see
             public float PeakDeg;    // measured source only: the live peak, for the display
             public bool Readable;    // false when this source could not answer this tick
         }
@@ -1993,6 +1994,9 @@ namespace ARS
             s.LeftPct = 100f * rawLeft / capShare;
             s.RightPct = 100f * rawRight / capShare;
             s.InnerPct = 100f * rawInner / capShare;
+            s.RearPct = slips.Count >= 4
+                ? 100f * Math.Max(Math.Abs(slips[2]), Math.Abs(slips[3])) / capShare
+                : 0f;
             return s;
         }
 
@@ -3725,7 +3729,8 @@ namespace ARS
             float asked = Math.Abs(_steerPreLimitDegrees);
             float mph = ARS.MpsToMph(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
             UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.00") + "   "
-                + _slipFactor.ToString("0.00") + "   " + mph.ToString("0") + "mph", 50);
+                + _slipFactor.ToString("0.00") + "   " + mph.ToString("0") + "mph"
+                + "   F " + _slip.InnerPct.ToString("0") + "   R " + _slip.RearPct.ToString("0"), 50);
         }
 
         void DrawWheelSlip()
