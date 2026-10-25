@@ -3436,6 +3436,7 @@ namespace ARS
             if (ARS.DebugToggles[Options.ShowInputs]) DrawInputTrail();
             if (ARS.DebugToggles[Options.ShowTrackAnalysis]) DrawSteerAngles();
             if (ARS.DebugToggles[Options.ShowWheelSlip]) DrawWheelSlip();
+            if (ARS.DebugToggles[Options.ShowFrontSlip]) DrawFrontSlipReadout();
             if (ARS.DebugToggles[Options.ShowGsProjection]) DrawGsProjection();
         }
 
@@ -3582,6 +3583,18 @@ namespace ARS
             bool outside = _projectionOutsideMeters > 0f;
             ARS.DrawLine(origin, half, outside ? Color.Red : Color.White);
             ARS.DrawLine(half, full, outside ? Color.Red : Color.Cyan);
+        }
+
+        // The measured front slip, over the focus car's roof: each wheel's side slip on the tyre's own axis (peak 1.0),
+        // the share the cap holds, and the steer ceiling it has glided to in degrees. This is the readout of the real
+        // field, not of a model - the same number the cap itself acts on.
+        void DrawFrontSlipReadout()
+        {
+            List<float> slips = ARS.WheelSideSlipAngles(Car);
+            if (slips.Count < 2) return;
+            string text = "slip L " + Math.Abs(slips[0]).ToString("0.00") + " R " + Math.Abs(slips[1]).ToString("0.00")
+                + "~n~cap " + _frontSlipCapDeg.ToString("0.0") + "deg of " + FrontSlipCapShare.ToString("0.00") + " peak";
+            ARS.DrawText(Car.Position + Vector3.WorldUp * 2.6f, text, Color.Yellow, 0.4f);
         }
 
         void DrawWheelSlip()

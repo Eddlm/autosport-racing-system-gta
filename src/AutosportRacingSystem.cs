@@ -50,7 +50,7 @@ namespace ARS
     // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip
     }
     public partial class ARS : Script
     {
@@ -220,6 +220,7 @@ namespace ARS
         { Options.LockLaneCentre, false },
         { Options.ShowBumps, false },
         { Options.ShowWheelSlip, false },
+        { Options.ShowFrontSlip, false },
         { Options.ShowGsProjection, false },
         { Options.ShowGLine, false },
         { Options.ShowRouteRadius, false }
@@ -1354,6 +1355,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowRivalry, "Show Rivalry", "Draw the two rival walls from the car's node to one second ahead: red while a rival holds one in, blue once released, plus a line from the car to each far end.");
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Mark every lip the route scan found with a cyan tick and a line across the road.");
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere over each wheel of the focus car, coloured by side-slip: white at rest, green at the peak, red where grip goes flat.");
+            AddDebugCheckbox(debugMenu, Options.ShowFrontSlip, "Show Front Slip", "Read the focus car's measured front side-slip over its roof: each wheel, and the steer cap it is holding down, in degrees.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the corner, avoidance and wall systems.");
             AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the focus car's constant-acceleration path from its roof: a line to 0.5 s and another from there to 1 s; the bend is the acceleration.");
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
@@ -2238,7 +2240,7 @@ namespace ARS
 
                 
                 // Only the debug visuals read the focus racer, so the scan and its sort run only for them.
-                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
+                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
                 {
                     Vector3 focusPos = Game.Player.Character.Position;
                     DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
