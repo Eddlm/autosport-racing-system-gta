@@ -408,6 +408,28 @@ of this car's offset — so a car angled away but in another lane still cannot b
 `AvoidAngleGateDegrees` remains in use by the second-rival (needle) filter of the pass lane; it is no longer load-bearing for
 the walls or for target selection.
 
+### Build 956 — the walls can no longer leave the road (the jitter)
+
+Driver saw the walls jump outside the track for a tick and snap back. Cause, found with a read-only subagent's simulation and
+matching arithmetic:
+
+1. `targetLeftWall = Math.Max(targetLeftWall, r.NodeOffset + rivalBuffer)` — **never clamped to the edge**. A rival near or past
+   one edge (its `NodeOffset` 7.9 on a 6 m half-width) produced a left target of 9.55.
+2. The corridor inverted, and the ordering guard wrote `mid ± 1` — with `mid` outside the road, **both walls** landed off the
+   track (5.81 / 7.81), leaving the car aiming outside it.
+3. Next tick the targets recomputed and the rate walked them back. One-tick spike outward, smooth return: exactly the symptom.
+4. Compounding it: the side test `LateralGap > CombinedWidth` is **one-sided**, not a deadband, so a rival 1.5 m to this car's
+   *right* is also sent to the left wall — it needs only a rival within a body width of the edge to reach the out-of-bounds case.
+
+Three clamps, one rule — a wall is a lane offset inside the road:
+
+- targets clamped to `±trackBound`;
+- the stored walls re-clamped every tick, because they are measured against the previous tick's width and a narrowing road
+  leaves them outside the new edge;
+- the ordering guard keeps its ±1 m corridor *inside* the edges (`corridorHalf = min(1, trackBound)`).
+
+**Drive owed**: the same narrowing straight and the edge-hugging rival, with Show Rivalry visible.
+
 ### Build 951 — the approach half comes back; 943 took both halves, not just the broken one
 
 **Correction to 943**: deleting the `aheadAndClose` branch also removed the only rule that put a wall up for a car that is

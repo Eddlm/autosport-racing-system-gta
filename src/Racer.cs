@@ -1689,6 +1689,13 @@ namespace ARS
                 }
             }
 
+            // A wall is a lane offset inside the road and nothing else: neither a target nor a stored value may leave the
+            // edges. Without this a rival near - or past - one edge produced a target beyond the opposite bound, the
+            // corridor inverted, and the ordering guard wrote both walls off the road for a tick, then the rate pulled them
+            // back: the one-tick spike the Show Rivalry lines showed.
+            targetLeftWall = Math.Min(targetLeftWall, trackBound);
+            targetRightWall = Math.Max(targetRightWall, -trackBound);
+
             _leftWallHeld = leftConstrained;
             _rightWallHeld = rightConstrained;
             _wallRoadWide = roadWide;
@@ -1700,6 +1707,10 @@ namespace ARS
             float wallCloseRate = 10f * TickScale;
             float wallOpenRate = 5f * TickScale;
             float wallSnapMeters = VehicleData.BoundingBox;
+            // The stored walls are measured against the previous tick's width: a road that narrows leaves them outside the
+            // new edge until the rate walks them in, which is a slow version of the same spike.
+            _avoidLeftWall = Math.Min(_avoidLeftWall, trackBound);
+            _avoidRightWall = Math.Max(_avoidRightWall, -trackBound);
             float leftTarget = leftConstrained ? targetLeftWall : -trackBound;
             float rightTarget = rightConstrained ? targetRightWall : trackBound;
 
@@ -1718,9 +1729,10 @@ namespace ARS
             // Rival walls must remain ordered; collapse overlap to a narrow centered corridor.
             if (_avoidLeftWall > _avoidRightWall)
             {
-                float mid = (_avoidLeftWall + _avoidRightWall) * 0.5f;
-                _avoidLeftWall = mid - 1f;
-                _avoidRightWall = mid + 1f;
+                float corridorHalf = Math.Min(1f, trackBound);
+                float mid = ARS.Clamp((_avoidLeftWall + _avoidRightWall) * 0.5f, -trackBound + corridorHalf, trackBound - corridorHalf);
+                _avoidLeftWall = mid - corridorHalf;
+                _avoidRightWall = mid + corridorHalf;
             }
 
             return ClampLaneToWalls(requestLane, roadWide, leftConstrained, rightConstrained);
