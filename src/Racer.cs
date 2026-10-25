@@ -413,10 +413,11 @@ namespace ARS
 
         // Feature gate for nitrous (ARS.NitrousEnabled). Both sides burn the same multiplier; the AI's share of it
         // is the Race Rules setting ARS.AiNitroPct, which ships at 100 so the two are equal until tuned.
-        const float NitrousPowerMultiplier = 2.5f;
-        // The player's own factor, and it is neutral on purpose: the bottle currently gives them the native nitrous and
-        // its FX and no power at all. The rivals keep NitrousPowerMultiplier x AiNitroPct.
-        const float PlayerNitrousPowerMultiplier = 1f;
+        const float NitrousPowerMultiplier = 5f;
+        // The player's own factor. Measured on track: their 1.0 and the rivals' 2.5 produced the same shove, because the player's
+        // burn rides GTA's own nitrous force (1 + 3.0 x powerMod) while the rivals only get this one. The pair is doubled here
+        // instead of bridged: 2 for the player, 5 for a rival at AiNitroPct 100, which keeps the observed 1:2.5.
+        const float PlayerNitrousPowerMultiplier = 2f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
         // The card may not fire inside the first six seconds of the race: at the launch the field is still bunched, so a
