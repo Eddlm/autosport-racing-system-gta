@@ -379,3 +379,19 @@ drifting by a few centimetres across it swapped walls in a single tick, and the 
   stays where the pass began. The latch is per slot **and per rival**, so a different car in the same slot decides fresh.
 
 **Drive owed**: a rival that crosses the centreline mid-overtake, and a three-wide pinch where two slots latch opposite sides.
+
+### Build 950 — the latch is gone, the fold is pure
+
+Build 949's per-slot latch was the last thing making the corridor depend on anything but the current geometry: a rival that
+left the three slots and came back kept the side it had been given before, and `UpdateRivals` re-sorts slots by distance every
+tick, so the far car could outvote the near one. Deleted — no fields, no memory.
+
+The side now comes from `r.LateralGap > r.CombinedWidth`: the rival's lateral offset **in this car's frame** (+ is right), with
+a body width of deadband. Inside that band the rival is straight ahead and takes the same side every tick, so abreast never
+swaps — which is what the latch was for — and nothing outside it can be remembered.
+
+The accumulation is `Math.Max` on the left wall and `Math.Min` on the right, both commutative: the most constraining rival wins
+and no rival can open a wall another closed.
+
+**Drive owed**: the case that started this — a car constrained against a rival further away than the nearest one — and a pinch
+where two rivals sit one each side.
