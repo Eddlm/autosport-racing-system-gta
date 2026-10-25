@@ -1814,7 +1814,7 @@ namespace ARS
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
-        const float FrontSlipCapPeakShare = 1.00f;
+        const float FrontSlipCapPeakShare = 0.70f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -3629,6 +3629,13 @@ namespace ARS
                 : 100f;
             string text = "L " + (100f * _frontSlipLeftDeg / limit).ToString("0") + "%   R "
                 + (100f * _frontSlipRightDeg / limit).ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
+            // The raw field follows the three proportions, for calibrating the scale by eye: it is what the tyre reports, before
+            // any peak is chosen for it.
+            List<float> raw = ARS.WheelSideSlipAngles(Car);
+            if (raw.Count >= 2)
+            {
+                text += "   raw " + Math.Abs(raw[0]).ToString("0.00") + "/" + Math.Abs(raw[1]).ToString("0.00");
+            }
             UI.ShowSubtitle(text, 50);
         }
 
