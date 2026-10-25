@@ -1815,7 +1815,7 @@ namespace ARS
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
-        const float FrontSlipCapPeakShare = 2.00f;
+        const float FrontSlipCapPeakShare = 4.00f;
         const float FrontSlipFactorFloor = 0.50f;
         const float FrontSlipCeilingFloorShare = 0.05f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
@@ -1913,13 +1913,15 @@ namespace ARS
             float limitDeg = FrontSlipCapPeakShare * livePeak;
 
             float left = 0f, right = 0f;
+            float rawLeft = 0f, rawRight = 0f;
             List<float> slips = ARS.WheelSideSlipAngles(Car);
             if (slips.Count >= 2)
             {
-                left = Math.Abs(slips[0]) * basePeak;
-                right = Math.Abs(slips[1]) * basePeak;
+                rawLeft = Math.Abs(slips[0]);
+                rawRight = Math.Abs(slips[1]);
+                left = rawLeft * basePeak;
+                right = rawRight * basePeak;
             }
-
             // The average of the two fronts, not the worst: a single wheel clipping a kerb should not scale the whole
             // command, and the pair is the axis the car actually turns on.
             float slip = 0.5f * (left + right);
@@ -1928,8 +1930,7 @@ namespace ARS
                 : ARS.Clamp(limitDeg / slip, FrontSlipFactorFloor, 1f);
 
             _frontSlipLeftDeg = left;
-            _frontSlipRightDeg = right;
-            _frontSlipLimitDeg = limitDeg;
+            _frontSlipRightDeg = right;            _frontSlipLimitDeg = limitDeg;
             // Shown as a share of the limit, so the number rises with the slip: 100% is at the cap, 200% is twice it.
             // The applied multiplier is this ratio inverted, which is why the factor falls while this climbs.
             _frontSlipPct = limitDeg > 0.01f ? 100f * slip / limitDeg : 0f;
@@ -3635,8 +3636,15 @@ namespace ARS
         void DrawFrontSlipReadout()
         {
             string limit = _frontSlipLimitDeg.ToString("0.0");
+            // The raw field values go alongside: if they read around 0.1-0.3 the axis is normalised and multiplying by the
+            // peak angle is right; if they read 5-20 the field is already in degrees and this conversion inflates it.
+            List<float> raw = ARS.WheelSideSlipAngles(Car);
+            string rawText = raw.Count >= 2
+                ? "   raw " + Math.Abs(raw[0]).ToString("0.00") + "/" + Math.Abs(raw[1]).ToString("0.00")
+                : "";
             string text = "L " + _frontSlipLeftDeg.ToString("0.0") + "/" + limit + "deg     R "
-                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     slip " + _frontSlipPct.ToString("0") + "%";
+                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     slip " + _frontSlipPct.ToString("0") + "%"
+                + rawText;
             UI.ShowSubtitle(text, 50);
         }
 
