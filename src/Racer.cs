@@ -301,14 +301,15 @@ namespace ARS
         // The limiter's before-and-after: the ask it was handed and the granted ceiling it enforced, one core
         // tick old when the kick card reads them, so the over-the-limiter test is the delivery's own.
         float _steerPreLimitDegrees = 0f;
-        // The measured-slip steer cap, in degrees. Starts wide and clamps to the lock on the first tick.
+        // The measured-slip steer cap, in degrees. Derived from the gliding slip limit every tick.
         float _frontSlipCapDeg = 999f;
+        // The slip limit itself, in degrees of side slip: this is the number that falls at 2 deg/s and climbs at 4.
+        float _frontSlipLimitDeg = 0f;
         // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
         float _planCeilingDeg = 0f;
         // Last tick's front side slip in degrees and the ceiling it is being held to, for the subtitle readout only.
         float _frontSlipLeftDeg = 0f;
         float _frontSlipRightDeg = 0f;
-        float _frontSlipTargetDeg = 0f;
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _projectionOutsideMeters = 0f;
@@ -1813,7 +1814,6 @@ namespace ARS
         const float FrontSlipCapPeakShare = 0.50f;
         const float FrontSlipCapFallDegPerSec = 2f;
         const float FrontSlipCapRiseDegPerSec = 4f;
-        const float FrontSlipCapFloorShare = 0.15f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -1897,31 +1897,32 @@ namespace ARS
             return lat <= 0.01f ? 0f : lat / (1f + Math.Min(5f, 0.1f * speed));
         }
 
-        // The measured front-slip cap, in degrees. Read the two front tyres' side-slip angles off the cars' own traction axis
-        // (peak 1.0) and compare them in degrees against half the live peak angle: TRlatAtSpeed can only lower that ceiling,
-        // never raise it above half the base. Front wheels are 0 and 1.
+        // The measured front-slip limit, in degrees of slip angle. It glides between the live peak and half of it: down at
+        // 2 deg/s while the car is on the throttle and the fronts are over, back up at twice that. The steer ceiling is then
+        // read off this limit through the same map the plan uses, so the gliding number is a slip, not a wheel angle.
         void UpdateFrontSlipSteerCap()
         {
-            float cap = _frontSlipCapDeg;
             float basePeak = Handling.LateralTractionCurve;
             float livePeak = TRLateralAtSpeed > 0.01f ? Math.Min(basePeak, TRLateralAtSpeed) : basePeak;
             float targetDeg = FrontSlipCapPeakShare * livePeak;
 
-            float frontDeg = 0f;
+            float left = 0f, right = 0f;
             List<float> slips = ARS.WheelSideSlipAngles(Car);
             if (slips.Count >= 2)
             {
-                frontDeg = Math.Max(Math.Abs(slips[0]), Math.Abs(slips[1])) * basePeak;
+                left = Math.Abs(slips[0]) * basePeak;
+                right = Math.Abs(slips[1]) * basePeak;
             }
 
             bool accelerating = Control.Throttle > 0.05f && Control.Brake <= 0f;
-            bool over = frontDeg > targetDeg;
-            cap += (accelerating && over ? -FrontSlipCapFallDegPerSec : FrontSlipCapRiseDegPerSec) * TickScale;
+            float limit = _frontSlipLimitDeg > 0f ? _frontSlipLimitDeg : livePeak;
+            bool over = Math.Max(left, right) > limit;
+            limit += (accelerating && over ? -FrontSlipCapFallDegPerSec : FrontSlipCapRiseDegPerSec) * TickScale;
 
-            _frontSlipCapDeg = ARS.Clamp(cap, FrontSlipCapFloorShare * VehicleData.SteeringLock, VehicleData.SteeringLock);
-            _frontSlipTargetDeg = targetDeg;
-            _frontSlipLeftDeg = slips.Count >= 2 ? Math.Abs(slips[0]) * basePeak : 0f;
-            _frontSlipRightDeg = slips.Count >= 2 ? Math.Abs(slips[1]) * basePeak : 0f;
+            _frontSlipLimitDeg = ARS.Clamp(limit, targetDeg, livePeak);
+            _frontSlipCapDeg = PeakSlipCeilingAt(_frontSlipLimitDeg);
+            _frontSlipLeftDeg = left;
+            _frontSlipRightDeg = right;
         }
 
         float GeometrySteerCeiling(float fwdSpeed)
@@ -3599,12 +3600,12 @@ namespace ARS
             ARS.DrawLine(half, full, outside ? Color.Red : Color.Cyan);
         }
 
-        // The two front wheels' side slip in degrees, each against the ceiling the cap holds them to. The ceiling is half the
-        // live peak angle, and TRlatAtSpeed only ever lowers it from the base.
+        // Both front wheels' measured side slip in degrees, against the limit that is gliding right now.
         void DrawFrontSlipReadout()
         {
-            string text = "L " + _frontSlipLeftDeg.ToString("0.0") + "/" + _frontSlipTargetDeg.ToString("0.0")
-                + "deg     R " + _frontSlipRightDeg.ToString("0.0") + "/" + _frontSlipTargetDeg.ToString("0.0") + "deg";
+            string limit = _frontSlipLimitDeg.ToString("0.0");
+            string text = "L " + _frontSlipLeftDeg.ToString("0.0") + "/" + limit + "deg     R "
+                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg";
             UI.ShowSubtitle(text, 50);
         }
 
