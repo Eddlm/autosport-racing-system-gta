@@ -1146,7 +1146,7 @@ namespace ARS
             rulesMenu.Add(timeoutItem);
             HookListTextPicker(timeoutItem);
 
-            NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "Damage handling for the rivals' cars.", EnumLabels<AutofixMode>());
+            NativeListItem<string> autofixItem = new NativeListItem<string>("Racer Autofix", "What the rivals' cars survive: Off takes damage like yours, Auto Repair rebuilds a body or engine below half, Invincible is proofs plus an instant repair.", EnumLabels<AutofixMode>());
             autofixItem.ItemChanged += (sender, args) => { Autofix = (AutofixMode)args.Index; SaveRacerSetting("AIRacerAutofix", Autofix.ToString()); };
             autofixItem.SelectedIndex = Math.Max(0, autofixItem.Items.IndexOf(EnumLabel(Autofix)));
             rulesMenu.Add(autofixItem);

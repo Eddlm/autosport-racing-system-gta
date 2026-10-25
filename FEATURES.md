@@ -84,7 +84,7 @@ Your own bottle is coming. Theirs is live now.
 
 Spins, offs and wrecks happen. A rival that ends up stationary with its own plan still asking to move reverses out; one that has left the road drives back on; and one that truly cannot get going is set back on the road rather than left there. None of it arms in the opening stretch of a race, when a car crawling off the line is not stuck and the pack around it is not a place to reverse into.
 
-With damage on, cars die too. Racer Autofix decides how much of that the field suffers: Off takes it the way you do, Damage Resistant makes them hard to break, and Invincible — the default — means a rival's car cannot be killed at all, because the field is there to race rather than to be eliminated by one stray kerb. A car whose engine is gone leaves the race properly: parked on the shoulder, or dropped out of sight and ignored by the AI, depending on the rule you picked.
+With damage on, cars die too. Racer Autofix decides how much of that the field suffers: Off takes it the way you do, Auto Repair keeps them hard to break and rebuilds the car once body or engine drops below half, and Invincible — proofs and an instant repair — means a rival's car cannot be killed at all, because the field is there to race rather than to be eliminated by one stray kerb. A car whose engine is gone leaves the race properly: parked on the shoulder, or dropped out of sight and ignored by the AI, depending on the rule you picked.
 
 **What you notice:** a spun rival rejoins instead of sitting there, and you are not left weaving through wreckage on lap two.
 

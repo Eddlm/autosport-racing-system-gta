@@ -1484,6 +1484,8 @@ namespace ARS
         // A rival this many seconds away puts its wall up now, so the car has moved over before it arrives. The walls are
         // what starts an overtake, not only what survives one.
         const float WallApproachSeconds = 3f;
+        // Half of the 1000 an engine's health tops out at, which is not the body's ceiling.
+        const float EngineHealthHalf = 500f;
         // How far off the centreline a rival must sit before its wall takes the right side. A body width sent rivals that were
         // clearly to the right onto the left wall, which pushed the left target past the far edge on a narrow road.
         const float WallSideDeadbandMeters = 0.3f;
@@ -4519,11 +4521,15 @@ namespace ARS
                     // second is enough at this threshold, and a repair leaves the health full, so it cannot loop.
                     if (ARS.Autofix == AutofixMode.AutoRepair)
                     {
-                        float maxHealth = Math.Max(Car.MaxHealth, 1);
-                        if (Car.EngineHealth < maxHealth * 0.5f || Car.BodyHealth < maxHealth * 0.5f)
+                        // Body and engine do not share a ceiling: MaxHealth is the body's, while an engine's health tops out at
+                        // 1000 by GTA's own table and goes negative when it is on fire. Comparing the engine against MaxHealth
+                        // made the threshold wrong on any car whose body health is not 1000.
+                        float bodyFloor = Math.Max(Car.MaxHealth, 1) * 0.5f;
+                        if (Car.EngineHealth < EngineHealthHalf || Car.BodyHealth < bodyFloor)
                         {
-                            Car.Repair();
+                            // Before the repair: afterwards both read full and the line proves nothing.
                             ARS.Log(ARS.LogImportance.Info, "AutoRepair " + Name + ": body " + Car.BodyHealth.ToString("0") + ", engine " + Car.EngineHealth.ToString("0"));
+                            Car.Repair();
                         }
                     }
 
@@ -4547,7 +4553,9 @@ namespace ARS
                 if (Function.Call<bool>((Hash)0x3D34E80EED4AE3BE, Car) && Control.Brake > 0.1f) Function.Call((Hash)0x81E1552E35DC3839, Car, false);
 
 
-                if (ARS.Autofix == AutofixMode.Invincible && Function.Call<bool>(Hash._IS_VEHICLE_DAMAGED, Car))
+                // Rivals only: this sits outside the !ControlledByPlayer block that carries the proofs, so without the guard
+                // the player's own car was repaired every tick in this mode - and the probe below would have measured it.
+                if (!ControlledByPlayer && ARS.Autofix == AutofixMode.Invincible && Function.Call<bool>(Hash._IS_VEHICLE_DAMAGED, Car))
                 {
                     // Info, so it only shows when someone raises Log Level to Info on purpose: does an invincible car ever take
                     // damage at all? If it never appears when the level is up, the proofs hold and this repair is dead weight.
