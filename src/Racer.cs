@@ -3243,10 +3243,9 @@ namespace ARS
 
         void UpdateNitrous()
         {
-            if (!ARS.NitrousEnabled) return;
-
-            if (Game.GameTime < _nitrousActiveUntil) return;   // the burn's power rides ApplyPowerMultiplier
-            if (_nitrousActiveUntil > 0) StopNitrous();
+            // The burn is shut down whatever the setting says now: an override left armed is not a racing state, it is the
+            // car keeping a bottle it was never given, and it outlives the toggle that spawned it.
+            if (_nitrousActiveUntil > 0 && Game.GameTime >= _nitrousActiveUntil) StopNitrous();
         }
 
         // Valid when a shot is available and the straight is long enough; appropriate when contested, defended,
@@ -5290,6 +5289,10 @@ namespace ARS
             // out before the race ended had their own car deleted at teardown - and the arm that ran when they were inside
             // teleported them into the driver's seat for no reason. A player-owned racer keeps its vehicle; an AI car is
             // deleted unless the player happens to be sitting in it, which would take them with it.
+            // A burn still live when the race ends would leave SET_OVERRIDE_NITROUS_LEVEL armed on a car the player keeps, and
+            // nothing in Initialize clears it: the bottle would follow them out of the race for the rest of the session.
+            if (_nitrousActiveUntil > Game.GameTime) StopNitrous();
+
             if (!ControlledByPlayer) Driver.Delete();
 
             if (Car.CurrentBlip != null && Car.CurrentBlip.Exists()) Car.CurrentBlip.Remove();
