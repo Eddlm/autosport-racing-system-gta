@@ -456,13 +456,23 @@ namespace ARS
             foreach (string dir in folders)
             {
                 int count = 0;
-                foreach (string st in Directory.EnumerateFiles(dir))
+                // Only track files, and one bad one must not stop the mod: discovery used to enumerate every file in Tracks\
+                // and its subfolders and parse each twice with no guard, so a stray or truncated file threw out of startup.
+                foreach (string st in Directory.EnumerateFiles(dir, "*.xml"))
                 {
                     string n = System.IO.Path.GetFileName(st);
-                    Log(LogImportance.Info, st + " - [" + string.Join(", ", TrackRepository.ReadTrackTags(st)) + "]");
-                    _trackTags.Add(st, string.Join(", ", TrackRepository.ReadTrackTags(st)));
-                    TrackStartInfo info = TrackRepository.ComputeTrackStartInfo(st);
-                    if (info != null && !TrackStartInfos.Any(existing => existing.StartPosition.DistanceTo(info.StartPosition) < 1f)) TrackStartInfos.Add(info);
+                    try
+                    {
+                        string tags = string.Join(", ", TrackRepository.ReadTrackTags(st));
+                        Log(LogImportance.Info, st + " - [" + tags + "]");
+                        _trackTags.Add(st, tags);
+                        TrackStartInfo info = TrackRepository.ComputeTrackStartInfo(st);
+                        if (info != null && !TrackStartInfos.Any(existing => existing.StartPosition.DistanceTo(info.StartPosition) < 1f)) TrackStartInfos.Add(info);
+                    }
+                    catch (Exception trackError)
+                    {
+                        Log(LogImportance.Error, "Track skipped (" + st + "): " + trackError.Message);
+                    }
 
                     count++;
                     if (allowScriptYield && count > 5)

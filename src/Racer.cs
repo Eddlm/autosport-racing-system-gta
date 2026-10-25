@@ -584,13 +584,19 @@ namespace ARS
                 catch (Exception) {  }
             }
 
-            Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Car, true, 1);
-            Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Driver, true, 1);
-            Function.Call(GTA.Native.Hash.SET_ENTITY_PROOFS, Driver, true, true, true, false, true, true, 1, true);
+            // AI racers must survive a race; the player's own ped must not. AddPlayerToGrid passes the player as Driver, and
+            // this block ran for every racer, so a race left the player bullet, fire, explosion, melee and water proof at
+            // 1000 HP with critical hits disabled - for good.
+            if (!Driver.IsPlayer)
+            {
+                Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Car, true, 1);
+                Function.Call(GTA.Native.Hash._0x0DC7CABAB1E9B67E, Driver, true, 1);
+                Function.Call(GTA.Native.Hash.SET_ENTITY_PROOFS, Driver, true, true, true, false, true, true, 1, true);
 
-            Driver.MaxHealth = 1000;
-            Driver.Health = 1000;
-            Driver.CanSufferCriticalHits = false;
+                Driver.MaxHealth = 1000;
+                Driver.Health = 1000;
+                Driver.CanSufferCriticalHits = false;
+            }
 
             if (Car.ClassType == VehicleClass.Emergency) TeamRole = Team.Cop;
 
@@ -3674,7 +3680,11 @@ namespace ARS
         void UpdateSlideAndBoundingBox()
         {
             VehicleData.BoundingBox = ARS.SlidingBoundingBoxWidth(Car);
-            VehicleData.SlideAngle = (float)Math.Round(Vector3.SignedAngle(Car.Velocity.Normalized, Car.ForwardVector, Car.UpVector), 3);
+            // A stationary car has no direction of travel: Normalized() of a zero velocity is NaN, SignedAngle carries it, and
+            // the first Math.Sign that reads SlideAngle throws out of the tick (38 OnTick errors in two minutes on build 958).
+            VehicleData.SlideAngle = Car.Velocity.LengthSquared() > 0.01f
+                ? (float)Math.Round(Vector3.SignedAngle(Car.Velocity.Normalized, Car.ForwardVector, Car.UpVector), 3)
+                : 0f;
         }
 
         void UpdatePassengerSeat()
@@ -5028,19 +5038,20 @@ namespace ARS
 
         public void Delete()
         {
-            if (!Driver.IsPlayer)
-            {
-                Driver.Delete();
-            }
+            // Ownership decides, not where the player is standing. This used to test IsInVehicle, so a player who stepped
+            // out before the race ended had their own car deleted at teardown - and the arm that ran when they were inside
+            // teleported them into the driver's seat for no reason. A player-owned racer keeps its vehicle; an AI car is
+            // deleted unless the player happens to be sitting in it, which would take them with it.
+            if (!ControlledByPlayer) Driver.Delete();
 
-            if (Game.Player.Character.IsInVehicle(Car))
+            if (Car.CurrentBlip != null && Car.CurrentBlip.Exists()) Car.CurrentBlip.Remove();
+
+            if (ControlledByPlayer || Game.Player.Character.IsInVehicle(Car))
             {
-                Game.Player.Character.SetIntoVehicle(Car, VehicleSeat.Driver);
                 Car.IsPersistent = false;
             }
             else
             {
-                if (Car.CurrentBlip != null && Car.CurrentBlip.Exists()) Car.CurrentBlip.Remove();
                 Car.Delete();
             }
         }
