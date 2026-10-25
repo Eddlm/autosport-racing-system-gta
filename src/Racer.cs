@@ -1817,7 +1817,6 @@ namespace ARS
         // a cap that reached zero would drive the car straight out of the corner.
         const float FrontSlipCapPeakShare = 0.50f;
         const float FrontSlipFactorFloor = 0.50f;
-        const float FrontSlipCeilingReleaseDegPerSec = 8f;
         const float FrontSlipCeilingFloorShare = 0.05f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
@@ -2041,7 +2040,7 @@ namespace ARS
             }
             else
             {
-                _frontSlipCeilingDeg = Math.Min(VehicleData.SteeringLock, _frontSlipCeilingDeg + FrontSlipCeilingReleaseDegPerSec * TickScale);
+                _frontSlipCeilingDeg = VehicleData.SteeringLock;
             }
             // Absolute floor: the bite takes min() against the wheel it has already cut, so a long slide would ratchet the
             // ceiling towards zero one halving at a time. Half the lock is the floor, mirrored from the factor's own floor.
