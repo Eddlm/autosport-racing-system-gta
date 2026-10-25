@@ -1472,6 +1472,9 @@ namespace ARS
         // The wall and pass geometry only trust an adjacency when the pair also sits on neighbouring route nodes,
         // so an overlapping car on the far leg of a U is never mistaken for a trackside blockage.
         const float SameSectionMaxGapMeters = 30f;
+        // A rival this many seconds away puts its wall up now, so the car has moved over before it arrives. The walls are
+        // what starts an overtake, not only what survives one.
+        const float WallApproachSeconds = 3f;
         // After a pass the lane must not snap back to the line: the rear is still beside the car that was passed, and
         // turning in there is what puts it in the other car's nose. The request holds until nothing is left alongside.
         // ZOMBIE (2026-10-25): unused while avoidHoldEnabled is false - see ComputeAvoidanceLane.
@@ -1657,7 +1660,11 @@ namespace ARS
                 // corner, so a car beside this one could drop out of overlap without moving. One axis, and no same-section
                 // guard: an arc shorter than a body cannot reach the far leg of a U.
                 bool overlaps = Math.Abs(r.RouteGapAhead) < r.CombinedSize.Y;
-                if (!overlaps) continue;
+                // TimeToReach already carries every gate that matters - ahead in arc, inside this car's lateral corridor and
+                // actually closing - and returns infinity otherwise, so the approach needs no angle test of its own. The
+                // angle and the RelativePos classification were what made the old branch flicker, not the approach itself.
+                bool approaching = r.TimeToReach < WallApproachSeconds;
+                if (!overlaps && !approaching) continue;
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
                 // Same rule as the pass lane: ClampLaneToWalls adds the car's own half width on a constrained side, so

@@ -395,3 +395,14 @@ and no rival can open a wall another closed.
 
 **Drive owed**: the case that started this — a car constrained against a rival further away than the nearest one — and a pinch
 where two rivals sit one each side.
+
+### Build 951 — the approach half comes back; 943 took both halves, not just the broken one
+
+**Correction to 943**: deleting the `aheadAndClose` branch also removed the only rule that put a wall up for a car that is
+*approaching*. The walls are what starts an overtake, not only what survives one, so with the branch gone a wall could not
+appear until the bodies were already level — and the car never moved over.
+
+The approach is back as one condition, `r.TimeToReach < WallApproachSeconds` (3 s). `TimeToReach` already carries every gate
+that matters — ahead in arc, inside this car's lateral corridor, and genuinely closing — and returns infinity otherwise, so it
+needs no angle test and no `RelativePos` classification. Those two were what made the old branch flicker; the approach itself
+was never the problem.
