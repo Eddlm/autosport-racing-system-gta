@@ -462,3 +462,34 @@ The approach is back as one condition, `r.TimeToReach < WallApproachSeconds` (3 
 that matters — ahead in arc, inside this car's lateral corridor, and genuinely closing — and returns infinity otherwise, so it
 needs no angle test and no `RelativePos` classification. Those two were what made the old branch flicker; the approach itself
 was never the problem.
+
+## Session close 2026-10-25 (evening) — builds 934-988
+
+**Audit swarm** (13 Kanban cards, read-only, ~330 KB in `docs/audit/`). Verified by hand before touching code: six
+blockers real and fixed (NaN out of the tick, the player's car deleted at teardown, the player's ped left invulnerable,
+a malformed track file stopping startup, unbounded wheel-pointer reads, rival records one second stale), one real by
+design (the route brake cap only applies outside corner plans), one false (`ScriptSettings.Save()` returns void).
+The rest of the reports — ~38 blockers — are still unverified claims.
+
+**Nitro.** The player's burn never showed because nothing lifted the entity's speed cap: the 2.5x power multiplier drove
+the car into the model's own top speed. `StartNitrous` now sets `SET_ENTITY_MAX_SPEED(Car, 50000)` and `StopNitrous` puts
+the model's top speed back with `MODIFY_VEHICLE_TOP_SPEED(Car, 0)` (hash not in SHVDN's enum). Taken from
+`FIying-Scotsman/GTAV-EnhancedNativeTrainer`, cloned to `D:/Projects/FromInternet/`.
+
+**Power channel — the rule that now holds.** Only two reasons may raise power above stock:
+- the burn, at `NitrousPowerMultiplier` (2.5, x `AiNitroPct` for AI);
+- artificial rubberbanding, at `ComputeRubberBandFactor()` for an AI car that is behind.
+`UpdatePowerCompensation` can only reduce (`_overspeedPowerLevel`, player-only), and `ApplyPowerMultiplier` takes one
+reason per tick — nothing multiplies with anything else. Removed: the pedal-gap boost (x1.5), the over-top-speed boost
+(x1.35), and the artificial rubberbanding that used to ride the throttle above 1.0.
+
+**Menus.** Submenu titles carry the trail in the `Subtitle` (`MAIN MENU > RIVALS > RIVAL TRACTION`), written in one pass
+after the tree exists — computing it while linking crashed the menu, because menus are built children-first. Menu build
+is wrapped so a failure logs at Error instead of taking the mod down. Show Track & Grid Rows ships off and greyed.
+
+**Defaults** now the driver's tuned set: AutoRepair, Laps 10, GridSize 8, CornerOffset 4 / RouteOffset 2, TCS 100/50,
+Damper countersteer 2.0, Steer ceiling 0.9, MaxCrestLift 0.4, Rubberbanding 100, every debug toggle off except the
+leaderboard.
+
+**Owed a drive**: the AI without the pedal-gap padding (a car may now fall short where it used to be propped up), and the
+artificial rubberbanding as explicit power.
