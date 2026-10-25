@@ -3674,6 +3674,10 @@ namespace ARS
                 : 100f;
             string text = "L " + _slip.LeftPct.ToString("0") + "%   R "
                 + _slip.RightPct.ToString("0") + "%   wheel " + wheel.ToString("0") + "%";
+            // The ceiling the command is actually held under, state included: the one number that shows the ramp
+            // moving, which the three proportions above cannot (they only say where the tyre and the wheel are now).
+            float ceiling = float.IsPositiveInfinity(_slipCeilingDeg) ? VehicleData.SteeringLock : Math.Min(_slipCeilingDeg, VehicleData.SteeringLock);
+            text += "   cap " + ceiling.ToString("0") + "deg";
             // The raw field follows the three proportions, for calibrating the scale by eye: it is what the tyre reports, before
             // any peak is chosen for it.
             // Only the memory source has a raw field to show; in theory mode this read would put memory numbers beside a
