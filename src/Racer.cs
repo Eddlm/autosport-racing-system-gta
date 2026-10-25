@@ -303,6 +303,11 @@ namespace ARS
         float _steerPreLimitDegrees = 0f;
         // The ceiling actually in force after every limit, and the wheel angle granted, both for the readout.
         float _finalCeilingDeg = 0f;
+        // The slip ceiling as it stands, in command degrees: closes at SlipCeilingDropDegPerSec, opens at
+        // SlipCeilingRiseDegPerSec. Starts wide open so the first tick clamps nothing.
+        float _slipCeilingDeg = float.PositiveInfinity;
+        const float SlipCeilingDropDegPerSec = 1f;
+        const float SlipCeilingRiseDegPerSec = 8f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
         SlipState _slip;
         // Below this command there is no inside of the corner, so the pair is averaged instead of picked.
@@ -2060,8 +2065,17 @@ namespace ARS
             _slip = MeasureFrontSlip(fwdSpeed);
             // The ceiling exists only when the field is readable, the tyre is past its target and the peak is usable to map
             // degrees onto a wheel angle. Any of the three missing leaves the limiter out of the way rather than guessing.
-            if (_slip.Readable && _slip.InnerPct > 100f && _slip.CeilingDeg > 0.01f)
-                speedCeiling = Math.Min(speedCeiling, _slip.CeilingDeg);
+            // The ceiling is a state, not a fresh function of this tick: it closes towards what the tyre asks at
+            // SlipCeilingDropDegPerSec and opens back at SlipCeilingRiseDegPerSec, so a step in the measurement never
+            // becomes a step at the wheel. Only the closing side is slow; opening fast would let the guard outrun the tyre.
+            if (_slip.Readable)
+            {
+                if (_slip.InnerPct > 100f && _slip.CeilingDeg > 0.01f)
+                    _slipCeilingDeg = Math.Max(_slip.CeilingDeg, _slipCeilingDeg - SlipCeilingDropDegPerSec * TickScale);
+                else
+                    _slipCeilingDeg = Math.Min(VehicleData.SteeringLock, _slipCeilingDeg + SlipCeilingRiseDegPerSec * TickScale);
+                speedCeiling = Math.Min(speedCeiling, _slipCeilingDeg);
+            }
             _finalCeilingDeg = speedCeiling;
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
