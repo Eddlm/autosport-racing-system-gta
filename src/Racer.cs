@@ -3682,10 +3682,11 @@ namespace ARS
         // this tick. 1.00 leaves the steering alone; 0.60 removes two fifths of it.
         void DrawFrontSlipReadout()
         {
-            // One number while the law is being tuned: the chase itself, in degrees of command, two decimals. Everything else
-            // the readout used to carry can be derived from it once the shape is settled.
+            // One dimensionless number: what the car asked for over what the ceiling allows. 1.00 means the clamp is just
+            // touching, 2.00 means the request was twice the allowed angle, and the value falls below 1 once it stops biting.
             float clamp = float.IsNaN(_chasingClampDeg) ? _finalCeilingDeg : _chasingClampDeg;
-            UI.ShowSubtitle(clamp.ToString("0.00") + "deg", 50);
+            float asked = Math.Abs(_steerPreLimitDegrees);
+            UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.00"), 50);
         }
 
         void DrawWheelSlip()
