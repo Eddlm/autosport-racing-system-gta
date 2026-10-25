@@ -312,8 +312,12 @@ namespace ARS
         // 10 deg in 1.7 s and 20 in 3.3 s - slow enough to be felt, quick enough to arrive inside a long corner. One rate for
         // both directions: the ceiling recovers in exactly the time it takes to bite, and an asymmetric pair pumps.
         const float SlipCeilingDegPerSec = 6f;
-        // The chase opens at this multiple of its closing rate.
-        const float SlipCeilingOpenShare = 2f;
+        // The closing rate runs from the resting value at the target to the full one at SlipCeilingCloseSpanPct over it, on a tanh
+        // so both ends ease in; the opening is one flat rate, careful by design.
+        const float SlipCeilingSlowDegPerSec = 1f;
+        const float SlipCeilingFastDegPerSec = 10f;
+        const float SlipCeilingOpenDegPerSec = 4f;
+        const float SlipCeilingCloseSpanPct = 50f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
         SlipState _slip;
         // Below this command there is no inside of the corner, so the pair is averaged instead of picked.
@@ -1924,6 +1928,15 @@ namespace ARS
             public bool Readable;    // false when this source could not answer this tick
         }
 
+        // How fast the gate may shut, from the share of the peak the tyre is using: 1 deg/s at the target, 10 at 150% and beyond.
+        float SlipCeilingCloseRate(float pct)
+        {
+            float over = (pct - 100f) / SlipCeilingCloseSpanPct;
+            float severity = (float)(Math.Tanh(over) / Math.Tanh(1.0));
+            severity = ARS.Clamp(severity, 0f, 1f);
+            return SlipCeilingSlowDegPerSec + (SlipCeilingFastDegPerSec - SlipCeilingSlowDegPerSec) * severity;
+        }
+
         SlipState MeasureFrontSlip(float fwdSpeed)
         {
             // Reverse is always the full lock, as the speed ceiling above already states: neither source answers going backwards,
@@ -2071,12 +2084,15 @@ namespace ARS
                 float chase = float.IsNaN(_chasingClampDeg)
                     ? clampTarget
                     : Math.Min(_chasingClampDeg, Math.Abs(requestedSteer));
-                // Closing at SlipCeilingDegPerSec, opening at twice that: slow enough to feel on the way in, quick enough that
-                // the car is not left holding a shut gate once the tyre has recovered.
-                float closeStep = SlipCeilingDegPerSec * TickScale;
+                // The closing rate follows the severity of the overshoot, the opening is a flat rate: the harder the tyre is past
+                // its peak the faster the gate shuts, and it always reopens carefully rather than snapping wide.
+                float rate = clampTarget >= chase
+                    ? SlipCeilingOpenDegPerSec
+                    : SlipCeilingCloseRate(_slip.InnerPct);
+                float step = rate * TickScale;
                 _chasingClampDeg = clampTarget >= chase
-                    ? Math.Min(clampTarget, chase + closeStep * SlipCeilingOpenShare)
-                    : Math.Max(clampTarget, chase - closeStep);
+                    ? Math.Min(clampTarget, chase + step)
+                    : Math.Max(clampTarget, chase - step);
                 speedCeiling = Math.Min(speedCeiling, _chasingClampDeg);
             }
             _finalCeilingDeg = speedCeiling;
