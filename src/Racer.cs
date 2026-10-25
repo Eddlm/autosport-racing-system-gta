@@ -2068,12 +2068,16 @@ namespace ARS
             // The ceiling is a state, not a fresh function of this tick: it closes towards what the tyre asks at
             // SlipCeilingDegPerSec and opens back at SlipCeilingDegPerSec, so a step in the measurement never
             // becomes a step at the wheel. Only the closing side is slow; opening fast would let the guard outrun the tyre.
-            // The rate belongs to the CUT, not to a stored ceiling: each tick the command may fall by SlipCeilingDegPerSec
-            // at most, until it meets the angle the tyre allows. No state, so nothing to seed and nothing to drift: a 
-            // small request cannot drag the limit down, and a target that rises never has to be waited out.
+            // The rate belongs to the CUT, not to a stored ceiling, and it is measured from the angle actually applied last
+            // tick - never from the request, which the plan or the pad regenerates every tick, so 'the request minus 6 deg/s'
+            // never accumulates and the clamp looks like it is doing nothing. No new state: the steering slew already keeps
+            // that number, so there is one writer for it and nothing to seed, drift or release.
             if (_slip.Readable && _slip.InnerPct > 100f && _slip.CeilingDeg > 0.01f)
             {
-                float slowestCut = Math.Abs(requestedSteer) - SlipCeilingDegPerSec * TickScale;
+                float held = Math.Abs(Control.LastAppliedSteerDegrees);
+                bool sameSide = Math.Sign(requestedSteer) == Math.Sign(Control.LastAppliedSteerDegrees);
+                // Crossing the centre there is no continuity to keep, and the answering side has its own allowance.
+                float slowestCut = sameSide ? held - SlipCeilingDegPerSec * TickScale : 0f;
                 speedCeiling = Math.Min(speedCeiling, Math.Max(_slip.CeilingDeg, slowestCut));
             }
             _finalCeilingDeg = speedCeiling;
