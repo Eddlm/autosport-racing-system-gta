@@ -301,8 +301,8 @@ namespace ARS
         // The limiter's before-and-after: the ask it was handed and the granted ceiling it enforced, one core
         // tick old when the kick card reads them, so the over-the-limiter test is the delivery's own.
         float _steerPreLimitDegrees = 0f;
-        // The measured-slip steer cap, in degrees. Derived from the gliding slip limit every tick.
-        float _frontSlipCapDeg = 999f;
+        // The scale the steer command is multiplied by this tick. 1.0 leaves the request alone.
+        float _frontSlipFactor = 1f;
         // The slip limit itself, in degrees of side slip: this is the number that falls at 2 deg/s and climbs at 4.
         float _frontSlipLimitDeg = 0f;
         // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
@@ -1812,8 +1812,7 @@ namespace ARS
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
         const float FrontSlipCapPeakShare = 0.50f;
-        const float FrontSlipCapFallDegPerSec = 2f;
-        const float FrontSlipCapRiseDegPerSec = 4f;
+        const float FrontSlipFactorFloor = 0.25f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -1897,14 +1896,14 @@ namespace ARS
             return lat <= 0.01f ? 0f : lat / (1f + Math.Min(5f, 0.1f * speed));
         }
 
-        // The measured front-slip limit, in degrees of slip angle. It glides between the live peak and half of it: down at
-        // 2 deg/s while the car is on the throttle and the fronts are over, back up at twice that. The steer ceiling is then
-        // read off this limit through the same map the plan uses, so the gliding number is a slip, not a wheel angle.
-        void UpdateFrontSlipSteerCap()
+        // The measured front slip as a multiplicative factor on the steer command: the request is scaled by limit / slip,
+        // a ratio, so it needs no gain and means the same thing on a 12-degree car as on a 22-degree one. A floor keeps a
+        // kerb strike from taking the wheel away, and the caller exempts a countersteer, which is answering a slide.
+        void UpdateFrontSlipFactor()
         {
             float basePeak = Handling.LateralTractionCurve;
             float livePeak = TRLateralAtSpeed > 0.01f ? Math.Min(basePeak, TRLateralAtSpeed) : basePeak;
-            float targetDeg = FrontSlipCapPeakShare * livePeak;
+            float limitDeg = FrontSlipCapPeakShare * livePeak;
 
             float left = 0f, right = 0f;
             List<float> slips = ARS.WheelSideSlipAngles(Car);
@@ -1914,15 +1913,14 @@ namespace ARS
                 right = Math.Abs(slips[1]) * basePeak;
             }
 
-            bool accelerating = Control.Throttle > 0.05f && Control.Brake <= 0f;
-            float limit = _frontSlipLimitDeg > 0f ? _frontSlipLimitDeg : livePeak;
-            bool over = Math.Max(left, right) > limit;
-            limit += (accelerating && over ? -FrontSlipCapFallDegPerSec : FrontSlipCapRiseDegPerSec) * TickScale;
+            float worst = Math.Max(left, right);
+            _frontSlipFactor = worst <= 0.01f || limitDeg <= 0.01f
+                ? 1f
+                : ARS.Clamp(limitDeg / worst, FrontSlipFactorFloor, 1f);
 
-            _frontSlipLimitDeg = ARS.Clamp(limit, targetDeg, livePeak);
-            _frontSlipCapDeg = PeakSlipCeilingAt(_frontSlipLimitDeg);
             _frontSlipLeftDeg = left;
             _frontSlipRightDeg = right;
+            _frontSlipLimitDeg = limitDeg;
         }
 
         float GeometrySteerCeiling(float fwdSpeed)
@@ -2013,11 +2011,10 @@ namespace ARS
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             _planCeilingDeg = speedCeiling;
-            // The measured front-slip cap sits under the plan's ceiling: whichever is lower keeps the front tyres out of
-            // their own peak while the throttle is down. The raises below can still open past it, which is right - a
-            // countersteer is answering a slide, not asking for more lock.
-            UpdateFrontSlipSteerCap();
-            speedCeiling = Math.Min(speedCeiling, _frontSlipCapDeg);
+            // The measured slip scales the request itself, as a ratio of limit to slip. Skipped while countersteering:
+            // the wheel there is answering a slide, and scaling it down is scaling down the correction.
+            UpdateFrontSlipFactor();
+            if (!countersteering) requestedSteer *= _frontSlipFactor;
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
@@ -3600,15 +3597,13 @@ namespace ARS
             ARS.DrawLine(half, full, outside ? Color.Red : Color.Cyan);
         }
 
-        // Both front wheels' measured side slip in degrees against the limit that is gliding, plus the degrees the limiter
-        // actually removed from the command this tick. A zero cut with a slip at the limit says the car is not asking for
-        // more lock than it is allowed - the wheel is not the thing holding the tyre there.
+        // Both front wheels' measured side slip in degrees against the limit, and the factor the request is being scaled by
+        // this tick. 1.00 leaves the steering alone; 0.60 removes two fifths of it.
         void DrawFrontSlipReadout()
         {
             string limit = _frontSlipLimitDeg.ToString("0.0");
-            float cut = Math.Max(0f, Math.Abs(_steerPreLimitDegrees) - Math.Abs(Control.SteerDegrees));
             string text = "L " + _frontSlipLeftDeg.ToString("0.0") + "/" + limit + "deg     R "
-                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     cut " + cut.ToString("0.0") + "deg";
+                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     f " + _frontSlipFactor.ToString("0.00");
             UI.ShowSubtitle(text, 50);
         }
 
