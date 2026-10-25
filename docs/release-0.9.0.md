@@ -30,7 +30,9 @@ not from a tuned constant.
 the x1-x2.5 band of the target, never below zero — braking stays the plan's decision.
 
 **Nitrous is finally symmetrical.** The player rides the game's native nitrous (its own ×4); rivals
-get a scripting multiplier on the same measured scale, 1:2.5 as measured on track. The AI's burn is
+get a scripting multiplier on the same measured scale: `NitrousPowerMultiplier = 5` against the player's
+`PlayerNitrousPowerMultiplier = 1`, so the AI's bottle is five times the player's at the default `AiNitroPct = 100`
+and they are at parity at 50. The AI's burn is
 exempt from the packing factor and from the anti-overspeed cap, so a leader no longer brakes against
 its own bottle.
 
