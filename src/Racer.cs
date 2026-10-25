@@ -1692,10 +1692,11 @@ namespace ARS
             _leftWallHeld = leftConstrained;
             _rightWallHeld = rightConstrained;
             _wallRoadWide = roadWide;
-            // Two rates, one per direction. Closing is the safety half - a rival that has just appeared must be answered
-            // quickly, so it runs at 10 m/s. Opening is the comfort half and stays at 5, which is slower than the car can
-            // unwind and keeps a wall that has just let go as the limit while the corner line starts asking.
-            float wallCloseRate = 10f * TickScale;
+            // Two rates, one per direction. Closing is the safety half and runs at 100 m/s, all but instant: a rival that has
+            // just appeared is answered within a tick or two (2 m in ~20 ms at 60 fps), and nothing is gained by arriving
+            // late to a guard. Opening is the comfort half at 5 m/s, slower than the car can unwind, so a wall that has just
+            // let go is still the limit while the corner line starts asking.
+            float wallCloseRate = 100f * TickScale;
             float wallOpenRate = 5f * TickScale;
             float leftTarget = leftConstrained ? targetLeftWall : -trackBound;
             float rightTarget = rightConstrained ? targetRightWall : trackBound;
