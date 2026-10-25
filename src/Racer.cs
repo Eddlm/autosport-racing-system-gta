@@ -1556,7 +1556,10 @@ namespace ARS
             passLeft = false;
 
             float rivalLane = rival.NodeOffset;
-            float buffer = rival.CombinedWidth + aggroBuffer;
+            // The rival's half width only: the lane built below adds the car's own half width, and CombinedWidth
+            // already carries both of them (it is the average of the two full widths), so using it here counted the
+            // car's body twice and left a full half width of air between the two.
+            float buffer = rival.RivalRacer.VehicleData.BoundingBox * 0.5f + aggroBuffer;
 
             // Pass on the side the rival sits on relative to our predicted line (0.5s→1s projection segment).
             Vector3 predHalf = ProjectAhead(0.5f);
@@ -1628,7 +1631,9 @@ namespace ARS
                 if (!overlaps && !aheadAndClose) continue;
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
-                float rivalBuffer = r.CombinedWidth + aggroBuffer;
+                // Same rule as the pass lane: ClampLaneToWalls adds the car's own half width on a constrained side, so
+                // the wall carries the rival's half width alone and puts the car's body edge at the rival's edge.
+                float rivalBuffer = r.RivalRacer.VehicleData.BoundingBox * 0.5f + aggroBuffer;
 
                 if (r.NodeOffset <= 0f)
                 {

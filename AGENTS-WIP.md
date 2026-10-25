@@ -311,3 +311,16 @@ opens at 10 m/s, which is enough for the car to unwind clear of the passed car.
 **Kept as zombie code, driver's decision (2026-10-25)**: the fields, `ComputeAvoidanceLane` and `AvoidHoldTimeoutMs` stay in
 the source, unused, marked `ZOMBIE` at the switch and at the constants — *due to be revisited and removed if it truly is of no
 use*. Nothing is rebuilt for the annotation: 934 stays in the car.
+
+### Same day, build 941 — the margin was a half width wide twice
+
+`CombinedWidth` is the **average of the two full widths**, i.e. the car's half width plus the rival's — the code calls the same
+formula `combinedHalfWidth` at `:787`. Both the pass lane (`:1559`) and the wall target (`:1631`) then added
+`VehicleData.BoundingBox * 0.5f` **again**, so a clean pass left a full half width of air (≈0.95 m) on top of the aggression
+buffer (0.2–1.2 m), and the wall sat that far outside the rival's own body.
+
+Both now carry `rival.RivalRacer.VehicleData.BoundingBox * 0.5f + aggroBuffer`, and the half width the caller adds puts the
+car's **body edge** on the rival's edge, which is what `ClampLaneToWalls` was written to mean. Expected effect: passes closer by
+~0.95 m, walls that visibly sit on the rival's flank, and — with a fixed 5 m/s rate — a shorter distance to travel either way.
+
+**Drive owed**: whether the tighter corridor still passes without contact, at both ends of the aggression range.
