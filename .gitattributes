@@ -1,0 +1,6 @@
+# Canonical line endings, independent of each clone's core.autocrlf.
+# Git stores LF in the index (canonical) and checks out CRLF for C# sources on any platform,
+# so a file written by a tool that normalises to LF does not leave the working tree disagreeing
+# with a fresh checkout.
+* text=auto
+*.cs text eol=crlf
