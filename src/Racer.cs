@@ -1606,8 +1606,8 @@ namespace ARS
 
         float ApplyRivalWalls(float requestLane, float roadWide)
         {
-            // The outer bound here is the raw track edge with no car-width inset; the per-rival walls below carry
-            // both cars' widths instead.
+            // The outer bound here is the raw track edge with no car-width inset. A rival's wall carries that rival's
+            // half width, and ClampLaneToWalls adds this car's own, so the body edge lands on the other body's edge.
             float trackBound = roadWide;
 
             if (!_avoidWallsInitialized)
