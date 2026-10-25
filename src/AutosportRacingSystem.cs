@@ -396,7 +396,16 @@ namespace ARS
             File.AppendAllText(ScriptsFolder + @"\Log.log", "\n----------------------------");
             VerifyScriptBridge();
             LoadSettings();
-            InitializeMenu();
+            // A menu that throws used to take the whole mod down with it, and only the driver could see it. Now the failure is
+            // written at Error - the shipped default level - so the log names it even when the menu did not come up.
+            try
+            {
+                InitializeMenu();
+            }
+            catch (Exception menuError)
+            {
+                Log(LogImportance.Error, "Menu build failed: " + menuError);
+            }
 
 
             string scriptName = "ARS";
@@ -719,22 +728,24 @@ namespace ARS
             _menuParents[child] = parent;
             return item;
         }
-        void ApplyMenuTrails(NativeMenu parent, string parentTrail)
+        int ApplyMenuTrails(NativeMenu parent, string parentTrail)
         {
+            int written = 0;
             foreach (KeyValuePair<NativeMenu, NativeMenu> edge in _menuParents)
             {
                 if (edge.Value != parent) continue;
                 string trail = parentTrail + " > " + edge.Key.Title.Text;
                 edge.Key.Subtitle = trail;
-                ApplyMenuTrails(edge.Key, trail);
+                written += 1 + ApplyMenuTrails(edge.Key, trail);
             }
+            return written;
         }
 
         void InitializeMenu()
         {
             _selectedTrackPath = RaceMenuStore.Get("Track", null);
 
-            _arsMenu = new NativeMenu("ARS", "RACING")
+            _arsMenu = new NativeMenu("ARS", "MAIN MENU")
             {
                 UseMouse = false,
                 DisableControls = true,
@@ -1412,7 +1423,8 @@ namespace ARS
             AddSub(_arsMenu, creatorMenu);
 
             // One pass, after the last edge: the root keeps its own subtitle (RACING) and every menu under it gets its trail.
-            ApplyMenuTrails(_arsMenu, _arsMenu.Title.Text);
+            int trails = ApplyMenuTrails(_arsMenu, _arsMenu.Subtitle);
+            Log(LogImportance.Info, "Menu built: " + _menuParents.Count + " submenus, " + trails + " trails");
             _arsMenu.Add(resetItem);
 
             // Register all menus in the pool
