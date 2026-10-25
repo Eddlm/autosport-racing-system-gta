@@ -3545,11 +3545,12 @@ namespace ARS
             foreach (Options option in DebugToggles.Keys.ToArray())
                 DebugMenuStore.Migrate(option.ToString(), legacyDebug.GetValue<string>("MENU", option.ToString(), null));
             ScriptSettings legacyRacers = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
-            SettingsMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", "Random"));
-            // Read as a string with a null fallback: Migrate seeds only when the legacy key is really there. With an int and
-            // a 60 fallback it seeded 60 on a machine that never had the old file, and that beat the spec's 30.
+            // Every legacy read below passes a null fallback, so Migrate's contract - seed only when the old key is really
+            // there - holds. An int or a bool with a fallback always returns something, so a machine that never had the
+            // old file was seeded from a number copied by hand; that is how TimeoutSeconds shipped 60 over the spec's 30.
+            SettingsMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", null));
             SettingsMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<string>("RACERS", "TimeoutSeconds", null));
-            SettingsMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString());
+            SettingsMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<string>("RACERS", "AIRacerAutofix", null));
             // The option was a number before it was named; rewrite it so the repair pass cannot reset a stored choice.
             string storedAutofix = SettingsMenuStore.Get("AIRacerAutofix", null);
             if (storedAutofix == "0") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Off.ToString());
@@ -3559,7 +3560,7 @@ namespace ARS
             // name from an older session lands on the behaviour that replaced it rather than falling back to the default.
             else if (storedAutofix == "DamageResistant") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.AutoRepair.ToString());
             Autofix = ParseEnum(SettingsMenuStore.Get("AIRacerAutofix", AutofixMode.AutoRepair.ToString()), AutofixMode.AutoRepair);
-            SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
+            SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<string>("RACERS", "UseMenyooSkins", null));
             UseMenyooSkins = SettingsMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
             string legacyAiNitro = legacyRacers.GetValue<string>("RACERS", "AiNitro", null);
             if (legacyAiNitro != null) NitrousEnabled = !legacyAiNitro.Equals("Never", StringComparison.OrdinalIgnoreCase);
