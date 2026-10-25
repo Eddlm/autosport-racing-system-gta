@@ -908,6 +908,11 @@ namespace ARS
             // drop is what keeps the assist from becoming the next snap. A car sliding steadily has no rotation to reverse,
             // so it accumulates; a car being caught is dropped to zero at once.
             float slideDeg = VehicleData.SlideAngle;
+            // A non-finite slide reaching Math.Sign throws ArithmeticException out of the tick: 208 of those in seven minutes on
+            // build 1092, each one abandoning the rest of the frame. The guard at the end of this method ran after both calls, so it
+            // could never help. Sanitising at the read keeps every consumer below on a number; what produces the non-finite value
+            // is still unidentified, so this closes the symptom and not the cause.
+            if (float.IsNaN(slideDeg) || float.IsInfinity(slideDeg)) slideDeg = 0f;
             bool blendCommitted = _slidePriority > 0f;
             bool rotationReversed = VehicleData.YawRotationPerSecondDegrees * Math.Sign(slideDeg) < 0f;
             if (!blendCommitted || rotationReversed)
