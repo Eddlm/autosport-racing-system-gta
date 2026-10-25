@@ -527,3 +527,33 @@ Consequence to watch: the launch and every full-throttle exit now run through th
 False` on this machine there is nothing modulating it, so wheelspin off the line is expected. The pedal chain itself
 is clean end to end: `Speed -> IntendedSpeedChange -> combined input -> throttle/brake` has no dead zone, verified
 stage by stage (the launch relay was the only one, removed in 1004).
+
+## Session close 2026-10-25 (late) — builds 994-1011
+
+**Nitro, settled by measurement on track.** The player's burn and the rivals' are two different mechanisms: the
+player's rides GTA's own nitrous force (`Transmission.cpp:1624`, `fDriveForce *= 1 + 3.0 x powerMod`, with our power
+override at 1.0), while an AI car never sets `GetNitrousActive()` — nothing presses boost for it — so it only gets
+`SET_VEHICLE_CHEAT_POWER_INCREASE`. Measured: the player at 1.0 and a rival at 2.5 produced the same shove. Bridging
+that properly (calling `SET_NITROUS_IS_ACTIVE`, `0x9E566EA551F4F1A6`) was **declined as too complex for now**; the
+values were doubled instead: player **2.0** (`PlayerNitrousPowerMultiplier`), rivals **5.0** at `AiNitroPct 100`.
+
+**Pad binding.** The fire check was `Game.IsKeyPressed(Keys.X)` — keyboard only, so a gamepad had no trigger at all.
+`GTA.Control.VehicleDuck` works; `GTA.Control.VehicleHorn` never fired and was removed. Index `2` = gamepad only;
+keyboard X still works.
+
+**Pedal law, now 1:3.** `FullPedalSpeedErrorMps = 1` (full gas at 1 m/s of deficit), `BrakeErrorMultiplier = 3`
+(full brake at 3 m/s = 6.7 mph). The chain `Speed -> IntendedSpeedChange -> throttle/brake` was audited stage by
+stage and has no dead zone; the launch relay that quantised the pedal to 0/1 below 27 mph was the only one and is
+gone. `ModulatedThrottleCap` (0.99) was removed too — it existed to dodge GTA's own full-throttle grip loss, and
+dodging a native behaviour is not the same as not having it.
+
+**Cards.** ChillOut parked behind `const bool ChillOutEnabled = false`; the nitro card cannot fire inside the first
+6 s (`NitrousArmDelayMs`); the `DIVEBOMB`/`DEFEND`/`YIELD`/`CHILL` labels over the roofs are now behind `ShowRivalry`
+instead of always on. `RivalLiftFloor` 0.5 -> 0.1.
+
+**Track surgery.** `Tracks/Figureight.xml` now carries F8's 2350 route nodes (same layout, new editor, same rotation,
+start line ~55 m earlier); everything else — name, tags, 19 props, trackside — is still Figureight's. Backup at
+`Tracks/Figureight.xml.bak` (deliberately not `.xml`, or the mod would list it as a track).
+
+**Settings.** Laps default 6. The legacy migrations now seed only from a key that really exists, so a fresh install
+takes its defaults from `KeySpec` and not from a number copied into a `GetValue<int>(..., 60)` fallback.
