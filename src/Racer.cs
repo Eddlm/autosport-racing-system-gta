@@ -301,6 +301,8 @@ namespace ARS
         // The limiter's before-and-after: the ask it was handed and the granted ceiling it enforced, one core
         // tick old when the kick card reads them, so the over-the-limiter test is the delivery's own.
         float _steerPreLimitDegrees = 0f;
+        // The measured-slip steer cap, in degrees. Starts wide and clamps to the lock on the first tick.
+        float _frontSlipCapDeg = 999f;
         float _steerGrantedCeiling = 0f;
         // Last off-track projection cap, kept for the pedal bar's override sphere.
         float _projectionOutsideMeters = 0f;
@@ -1797,6 +1799,15 @@ namespace ARS
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
         const float SteerSlewRate = 180f;
+
+        // A cap on the steer command driven by the front tyres' measured side slip. While the car is on the throttle the
+        // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
+        // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
+        // a cap that reached zero would drive the car straight out of the corner.
+        const float FrontSlipCapShare = 0.60f;
+        const float FrontSlipCapFallDegPerSec = 2f;
+        const float FrontSlipCapRiseDegPerSec = 4f;
+        const float FrontSlipCapFloorShare = 0.15f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -1878,6 +1889,26 @@ namespace ARS
         {
             float lat = Handling.LateralTractionCurve;
             return lat <= 0.01f ? 0f : lat / (1f + Math.Min(5f, 0.1f * speed));
+        }
+
+        // The measured front-slip cap: read the two front tyres' side-slip angles off the cars' own traction axis and
+        // glide a ceiling down while the car is on the throttle and they are past the share. Reading the real field is the
+        // point - a handling-derived model cannot see a car whose peak sits elsewhere. Front wheels are 0 and 1.
+        void UpdateFrontSlipSteerCap()
+        {
+            float cap = _frontSlipCapDeg;
+            float front = 0f;
+            List<float> slips = ARS.WheelSideSlipAngles(Car);
+            if (slips.Count >= 2)
+            {
+                front = Math.Max(Math.Abs(slips[0]), Math.Abs(slips[1]));
+            }
+
+            bool accelerating = Control.Throttle > 0.05f && Control.Brake <= 0f;
+            bool over = front > FrontSlipCapShare;
+            cap += (accelerating && over ? -FrontSlipCapFallDegPerSec : FrontSlipCapRiseDegPerSec) * TickScale;
+
+            _frontSlipCapDeg = ARS.Clamp(cap, FrontSlipCapFloorShare * VehicleData.SteeringLock, VehicleData.SteeringLock);
         }
 
         float GeometrySteerCeiling(float fwdSpeed)
@@ -1967,6 +1998,11 @@ namespace ARS
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
+            // The measured front-slip cap sits under the plan's ceiling: whichever is lower keeps the front tyres out of
+            // their own peak while the throttle is down. The raises below can still open past it, which is right - a
+            // countersteer is answering a slide, not asking for more lock.
+            UpdateFrontSlipSteerCap();
+            speedCeiling = Math.Min(speedCeiling, _frontSlipCapDeg);
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
