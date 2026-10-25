@@ -266,9 +266,12 @@ namespace ARS
         // Line discipline belongs to speed: below this the problem is traction, and a cap would hold an off-edge car
         // at zero, because the projection of a stationary car is the car.
         const float OffshootMinSpeedMph = 20f;
-        const float FullPedalSpeedErrorMps = 3f;
+        // Throttle saturates at one metre per second of deficit: the pedal is there to reach the plan, not to approach it
+        // gently. Braking keeps its six, so the pair is now 1:6 - full gas the moment the car is a hair under its speed,
+        // full brake only when it is six over.
+        const float FullPedalSpeedErrorMps = 1f;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
-        const float BrakeErrorMultiplier = 2f;
+        const float BrakeErrorMultiplier = 6f;
 
         // Applied pedal input sampled every half metre of travel, for the debug trail: the cap holds 40 m.
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
