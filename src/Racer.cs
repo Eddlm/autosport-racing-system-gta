@@ -2103,11 +2103,13 @@ namespace ARS
                 // buys no grip and only takes the wheel away. The floor still applies below that.
                 float factor = ARS.Clamp(100f / Math.Min(_slip.InnerPct, FrontSlipFactorSaturatePct), FrontSlipFactorFloor, 1f);
                 _slipFactor = factor;
-                float clampTarget = Math.Abs(requestedSteer) * factor;
-                // A cap above the angle being asked for says nothing, so the chase never sits above the request.
-                float chase = float.IsNaN(_chasingClampDeg)
-                    ? clampTarget
-                    : Math.Min(_chasingClampDeg, Math.Abs(requestedSteer));
+                // Only an overshoot lowers the target. Below it the gate has no business being under the lock, and a target that
+                // tracked every small request collapsed the ceiling in the straights and then needed seconds to climb back - which is
+                // exactly what held the wheel down on corner entry while the factor itself was barely cutting.
+                float clampTarget = _slip.InnerPct > 100f
+                    ? Math.Abs(requestedSteer) * factor
+                    : VehicleData.SteeringLock;
+                float chase = float.IsNaN(_chasingClampDeg) ? clampTarget : _chasingClampDeg;
                 // The closing rate follows the severity of the overshoot, the opening is a flat rate: the harder the tyre is past
                 // its peak the faster the gate shuts, and it always reopens carefully rather than snapping wide.
                 float rate = clampTarget >= chase
