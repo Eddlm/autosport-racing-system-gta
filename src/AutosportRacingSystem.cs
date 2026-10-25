@@ -166,7 +166,7 @@ namespace ARS
         // made to learn faster (or not at all) while a track is being probed. The ladder tops at 0.9, so the shipped
         // rate sits at its top: the old const was 1.0, which the ladder cannot express.
         // Independent of the track-analysis visual: the learner's own read-out, one line per verdict a corner takes.
-        public static bool BrakeLearningNotify = true;
+        public static bool BrakeLearningNotify = false;
         // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = false;
@@ -767,7 +767,7 @@ namespace ARS
                 _intendedOpponents = GridSizeChoices[args.Index];
                 RaceMenuStore.Set("GridSize", _intendedOpponents);
             };
-            _intendedOpponents = NearestGridSize(RaceMenuStore.GetInt("GridSize", 14));
+            _intendedOpponents = NearestGridSize(RaceMenuStore.GetInt("GridSize", 8));
             _gridSizeItem.SelectedIndex = Array.IndexOf(GridSizeChoices, _intendedOpponents);
             _raceMenu.Add(_gridSizeItem);
             HookListTextPicker(_gridSizeItem);
