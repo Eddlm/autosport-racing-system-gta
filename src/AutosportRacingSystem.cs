@@ -3063,6 +3063,13 @@ namespace ARS
                     Log(LogImportance.Info, "[MEMORY] Learned the handling offset: " + WheelsPtr);
 
                 }
+                else
+                {
+                    // Unknown layout: returning the vehicle's own first bytes as a "wheels pointer" is how a miss used to
+                    // become an unbounded dereference loop. Zero means no answer, and every caller treats it as no wheels.
+                    Log(LogImportance.Error, "[MEMORY] Wheels offset not found on this game build; wheel reads disabled.");
+                    return 0;
+                }
             }
             return *((ulong*)(address + WheelsPtr));
         }
@@ -3078,6 +3085,10 @@ namespace ARS
                 {
                     NumWheelsOffset = *(uint*)(addr + 2);
                 }
+                else
+                {
+                    return 0;
+                }
             }
             GameVersion gameVersion = Game.Version;
             var address = (ulong)handle.MemoryAddress;
@@ -3089,6 +3100,9 @@ namespace ARS
             var wheelPtr = GetWheelsPtr(handle);
             var numWheels = GetNumWheels(handle);
             List<ulong> wheelPtrs = new List<ulong>();
+            // Both can be 0 when the pattern was not found; a count read off the wrong offset walked the loop off the
+            // end of memory. Eight is more wheels than any GTA vehicle has.
+            if (wheelPtr == 0 || numWheels <= 0 || numWheels > 8) return wheelPtrs;
             for (int i = 0; i < numWheels; i++)
             {
                 var wheelAddr = *((ulong*)(wheelPtr + 0x008 * (ulong)i));
@@ -3105,7 +3119,7 @@ namespace ARS
         static public unsafe float MeanWheelGripMultiplier(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            if (wheelPtrs.Count == 0) return 0f;
+            if (wheelPtrs.Count == 0) return 1f;   // unknown, not "no grip": zero would brick the car
             ulong offset = 0x198;
             double total = 0d;
             foreach (var wheel in wheelPtrs)

@@ -100,6 +100,9 @@ namespace ARS
         int _halfSecondTick = 0;
         int _oneSecondTick = 0;
         int _phaseOffsetMs = 0;
+        // Rival records feed the rival walls, so their freshness is a safety property, not a convenience.
+        const int RivalRefreshMs = 250;
+        int _rivalTick = 0;
         int _pressureTick = 0;
         int _apexUpdateTick = 0;
         int _rivalInfoTick = 0;
@@ -4490,6 +4493,15 @@ namespace ARS
                 _halfSecondTick = now + 500 + (int)ARS.Remap(Car.Velocity.Length(), 0, 100, -250, 250, true);
             }
 
+            // 04: the rival records used to refresh once a second, so the rival walls decided from a picture up to a second
+            // old - sixty metres at racing speed. They now have their own timer, and the one-second work below keeps its
+            // cadence; UpdateRivals is three records and a handful of native reads, cheap at four times a second.
+            if (_rivalTick + _phaseOffsetMs < now)
+            {
+                _rivalTick = now + RivalRefreshMs;
+                if (!ControlledByPlayer && BaseBehavior == RacerBaseBehavior.Race && ARS.Racers.Count >= 1) UpdateRivals();
+            }
+
             if (_oneSecondTick + _phaseOffsetMs < now)
             {
                 _oneSecondTick = now + 1000;
@@ -4498,7 +4510,6 @@ namespace ARS
                 {
                     if (BaseBehavior == RacerBaseBehavior.Race && ARS.Racers.Count >= 1)
                     {
-                        UpdateRivals();
                         ConsiderCrowdCard();
                     }
 
