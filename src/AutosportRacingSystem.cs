@@ -3502,7 +3502,7 @@ namespace ARS
             ScriptSettings legacyRacers = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
             SettingsMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", "Random"));
             SettingsMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<int>("RACERS", "TimeoutSeconds", 60).ToString());
-            SettingsMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 2).ToString());
+            SettingsMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<int>("RACERS", "AIRacerAutofix", 1).ToString());
             // The option was a number before it was named; rewrite it so the repair pass cannot reset a stored choice.
             string storedAutofix = SettingsMenuStore.Get("AIRacerAutofix", null);
             if (storedAutofix == "0") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Off.ToString());
@@ -3511,7 +3511,7 @@ namespace ARS
             // The middle mode was DamageResistant, which resisted and never repaired. It is AutoRepair now, and a stored
             // name from an older session lands on the behaviour that replaced it rather than falling back to the default.
             else if (storedAutofix == "DamageResistant") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.AutoRepair.ToString());
-            Autofix = ParseEnum(SettingsMenuStore.Get("AIRacerAutofix", AutofixMode.Invincible.ToString()), AutofixMode.Invincible);
+            Autofix = ParseEnum(SettingsMenuStore.Get("AIRacerAutofix", AutofixMode.AutoRepair.ToString()), AutofixMode.AutoRepair);
             SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<bool>("RACERS", "UseMenyooSkins", UseMenyooSkins).ToString());
             UseMenyooSkins = SettingsMenuStore.GetBool("UseMenyooSkins", UseMenyooSkins);
             string legacyAiNitro = legacyRacers.GetValue<string>("RACERS", "AiNitro", null);
@@ -3592,7 +3592,7 @@ namespace ARS
 
         // The rivals' damage handling, cached where the key is loaded and written so the per-tick damage gate
         // reads a field rather than walking the store for every car.
-        public static AutofixMode Autofix = AutofixMode.Invincible;
+        public static AutofixMode Autofix = AutofixMode.AutoRepair;
 
         // Off is the off state and everything else is PI units; an unknown spelling falls back to off.
         static int ParseDeviationLimit(string value)
