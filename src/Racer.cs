@@ -4549,6 +4549,10 @@ namespace ARS
 
                 if (ARS.Autofix == AutofixMode.Invincible && Function.Call<bool>(Hash._IS_VEHICLE_DAMAGED, Car))
                 {
+                    // TEMPORARY probe (forced, so it survives Log Level Error): does an invincible car ever take damage at
+                    // all? If this never appears, the proofs hold and this repair is dead weight.
+                    ARS.Log(ARS.LogImportance.Info, "Invincible repair " + Name + ": body " + Car.BodyHealth.ToString("0") +
+                        ", engine " + Car.EngineHealth.ToString("0"), true);
                     Car.Repair();
                 }
             }
