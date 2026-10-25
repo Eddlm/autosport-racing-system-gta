@@ -1982,9 +1982,12 @@ namespace ARS
             // The INNER wheel is the signal: Ackermann steers it to the full command while the outer only takes
             // EngineSteerWheelOuterShare of it, so the inner reaches its peak first and is the tyre that warns. With the wheel
             // neutral there is no inside, so the pair is averaged; a positive command steers left, so a left turn's inside is 0.
+            // The wheel that complains most, not a wheel chosen by the sign of the command: the index-to-side mapping was an
+            // assumption nobody ever verified, and a wrong guess would make the two directions behave differently. Taking the
+            // larger of the two is assumption-free, and in a corner the inner tyre is the one with the larger angle anyway.
             float rawInner = Math.Abs(Control.SteerDegrees) < FrontSlipNeutralSteerDeg
                 ? 0.5f * (rawLeft + rawRight)
-                : (Control.SteerDegrees > 0f ? rawLeft : rawRight);
+                : Math.Max(rawLeft, rawRight);
 
             float capShare = FrontSlipCapPeakShare * SlowCornerSlipShare(fwdSpeed);
             s.LeftPct = 100f * rawLeft / capShare;
