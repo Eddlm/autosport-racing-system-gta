@@ -268,11 +268,19 @@ untracked track files (`Dist/AutosportRacingSystem/Tracks/F8.xml`, `TestOct.xml`
 - The brake learner: one lap to learn a corner, +/-0.02 per lap once settled (922).
 - The corner entry/exit floor at one track width (932): *"los coches toman las curvas mejor - tienen mas espacio considerado corner"*.
 
+**Driven since, driver report 2026-10-25**:
+- The apex blend's clock on the entry speed latched at the window, with no cushion (917/926) — **correct**.
+- The blend ends and pins the inside at a quarter second (`IdealLineBlendEndSeconds` 0.25, `Racer.cs:1203`, read at `:1389` as
+  `apexCommitted`) — **adequate behaviour, not exactly verified**: the driver is not certain the pin actually fires, and no log
+  line proves it. What was judged is the result on track, not the mechanism.
+
 **Changed but not driven**:
-- The apex blend's clock now runs on the entry speed latched at the window, with no cushion (917/926).
-- The blend ends and pins the inside at 0.25 s (928).
-- The braking modulation of the clock, cap raised to 10 mph for a feel test (927/929) - **this one is an experiment**: at 10 mph the
+- The braking modulation of the clock (`LineClockBrakeMphPerG` 2, `Racer.cs:1352`, clamped by `LineClockBrakeCapMph`), cap raised to
+  10 mph for a feel test (927/929) - **this one is an experiment**: at 10 mph the
   adjustment is live and proportionally larger on slow entries, which is the opposite of what such a system usually wants.
+- The outside leg of the lane mover at half rate (13 m/s2 and 12 m/s while the reason is `OutsideLine`, 880).
+- The eight-second `AvoidHoldTimeoutMs` backstop (880).
+- The line's speed floor at 15 mph under the apex speed (885).
 
 **Filed, not fixed**: `docs/KNOWN-BUGS.md` - `apex-stays-referenced`, `first-corner-eagerness`.
 **Audit findings still open** (`deleg_7fee6020`): the overshoot deadband at 0.1 m against overshoots of metres; the lean sampling a single
