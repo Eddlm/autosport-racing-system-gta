@@ -2256,11 +2256,12 @@ namespace ARS
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
-            // The front tyre's overshoot caps the throttle only: x1 of the target leaves it wide open and x2 closes it to nothing,
-            // linear between and never below zero, so the brake is never taken from the driver - it is only ever the plan's to ask for.
-            if (_slip.Readable && _slip.InnerPct > 100f)
+            // The front tyre's overshoot caps the throttle only, and only once the corner is already twice the target: x2 leaves it
+            // wide open because that is the normal working band, x3 closes it to nothing, and it never goes below zero, so the
+            // brake stays the plan's to ask for.
+            if (_slip.Readable && _slip.InnerPct > 200f)
             {
-                float over = ARS.Clamp((_slip.InnerPct - 100f) / 100f, 0f, 1f);
+                float over = ARS.Clamp((_slip.InnerPct - 200f) / 100f, 0f, 1f);
                 combinedInput = Math.Min(combinedInput, Math.Max(0f, 1f - over));
             }
             MeasureProjectionOutside(1f);
