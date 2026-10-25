@@ -302,9 +302,12 @@ namespace ARS
         // tick old when the kick card reads them, so the over-the-limiter test is the delivery's own.
         float _steerPreLimitDegrees = 0f;
         // The same quantity as a share of the limit, for the readout: it climbs where the factor falls.
+        // The same quantity as a share of the limit, for the readout: it climbs where the factor falls.
         float _frontSlipPct = 0f;
         // The slip limit itself, in degrees of side slip: this is the number that falls at 2 deg/s and climbs at 4.
         float _frontSlipLimitDeg = 0f;
+        // The ceiling actually in force after every limit, and the wheel angle granted, both for the readout.
+        float _finalCeilingDeg = 0f;
         // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
         float _planCeilingDeg = 0f;
         // Last tick's front side slip in degrees and the ceiling it is being held to, for the subtitle readout only.
@@ -2027,6 +2030,7 @@ namespace ARS
             UpdateFrontSlipLimit(fwdSpeed);
             if (_frontSlipPct > 100f)
                 speedCeiling = Math.Min(speedCeiling, PeakSlipCeilingAt(_frontSlipLimitDeg));
+            _finalCeilingDeg = speedCeiling;
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
@@ -3613,21 +3617,20 @@ namespace ARS
         // this tick. 1.00 leaves the steering alone; 0.60 removes two fifths of it.
         void DrawFrontSlipReadout()
         {
-            string limit = _frontSlipLimitDeg.ToString("0.0");
-            // The raw field values go alongside: if they read around 0.1-0.3 the axis is normalised and multiplying by the
-            // peak angle is right; if they read 5-20 the field is already in degrees and this conversion inflates it.
+            // The final numbers, in the order they act: each front wheel's slip in degrees, the live peak those degrees are
+            // measured against, the ceiling actually in force, the wheel angle granted, and the slip as a share of the limit.
             List<float> raw = ARS.WheelSideSlipAngles(Car);
             string rawText = "";
             if (raw.Count >= 4)
             {
-                // All four, in the order the array hands them over: in a corner the pair carrying the lateral load is the
-                // front, and this is what says whether indices 0-1 really are that pair.
                 rawText = "   raw " + Math.Abs(raw[0]).ToString("0.00") + "/" + Math.Abs(raw[1]).ToString("0.00")
                     + "/" + Math.Abs(raw[2]).ToString("0.00") + "/" + Math.Abs(raw[3]).ToString("0.00");
             }
-            string text = "L " + _frontSlipLeftDeg.ToString("0.0") + "/" + limit + "deg     R "
-                + _frontSlipRightDeg.ToString("0.0") + "/" + limit + "deg     slip " + _frontSlipPct.ToString("0") + "%"
-                + rawText;
+            float peak = LateralPeakAtSpeed(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
+            string text = "L " + _frontSlipLeftDeg.ToString("0.0") + " R " + _frontSlipRightDeg.ToString("0.0")
+                + " | peak " + peak.ToString("0.0") + " | cap " + _finalCeilingDeg.ToString("0.0")
+                + " | steer " + Control.SteerDegrees.ToString("0.0")
+                + " | " + _frontSlipPct.ToString("0") + "%" + rawText;
             UI.ShowSubtitle(text, 50);
         }
 
