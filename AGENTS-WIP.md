@@ -593,5 +593,8 @@ Two things the session established that are easy to lose:
 - **The whole guard is AI-only.** `ApplySteerLimits` sits inside `if (!ControlledByPlayer)`, and the readout only
   draws for `DebugFocusRacer`, so the numbers on screen always belong to a rival. The player's steering is never
   written by ARS.
+- **The 0.40 factor floor is load-bearing and nobody wrote it down.** It falls out of `100 / 250` (the 2.5x saturation),
+  not out of `FrontSlipFactorFloor`, which is 0.30 lower and never reached. Proposed fix in
+  `docs/steering-and-pedals.md` item 5: `Clamp(100 / InnerPct, 0.40, 1)` and delete the saturation constant.
 - **A four-wheel slide is not an understeer.** `F` and `R` near each other in `docs/steering-and-pedals.md`'s
   capture means both axles are past the peak, where cutting the wheel buys nothing; speed is the only lever.

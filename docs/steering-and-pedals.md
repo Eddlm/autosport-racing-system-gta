@@ -83,7 +83,17 @@ Only an AI racer draws it: `DrawFrontSlipReadout` returns early for the player, 
 2. **Never cut below the peak angle.** With the saturation the factor bottoms at 0.40, but the ceiling is still `request x 0.40`, which can be under the angle that produces peak force on a car asking for little.
 3. **Hysteresis.** Closing starts at 1 deg/s exactly at the target and opening runs at 4 deg/s; sitting at 100% can oscillate a few degrees at 1-2 Hz. A dead band (close above 105, open below 95) would settle it.
 4. **The measurement lag.** The slip trails the command by 100-200 ms and nothing compensates: at 10 deg/s the gate over-closes by ~1.5 deg. A first-order filter on `InnerPct` would remove most of it.
-5. **`FrontSlipFactorFloor` is inert** — decide whether the deep cut (0.05) matters or delete the constant.
+5. **The 0.40 floor is accidental, and it is what keeps the car drivable.** Nothing states "never take more than 60% of the
+   wheel": `100 / 250` produces it as a side effect of the 2.5x saturation, while the constant that means to say it
+   (`FrontSlipFactorFloor = 0.05`) is never reached. Proposed consolidation, behaviour identical, one constant instead of two:
+
+   ```csharp
+   factor = Clamp(100 / InnerPct, 0.40, 1);   // and delete FrontSlipFactorSaturatePct
+   ```
+
+   with a comment tying 0.40 to the 2.5x plateau. The alternative — keep the saturation and delete the floor — expresses the
+   same law in two steps and leaves a floor of 0 that means nothing. Open question for the next session: whether 0.40 is the
+   right policy floor or whether a maximum cut of half (0.50) is the number wanted now that it would be explicit.
 6. **Two slip sources.** `Slip From Memory` (Development submenu) reads the wheel memory; off derives the demand from the inner wheel's radius against the grip. They are two different laws on the same scale (at 60 mph the ceilings are 7.97 and 2.81 deg), by decision. Normalising them means turning a lateral demand back into an equivalent slip angle, i.e. reintroducing a tyre model.
 7. **`SpeedSteerCeiling`** is parked at `false`: `ResolveSteerCeiling`, `ManeuverRamp` and `GeometrySteerCeiling` are compiled but inert. Decide whether to delete them or revive the law.
 8. **Left/right asymmetry** was reported and never confirmed. The wheel pick is now assumption-free (`max` of both fronts), so if it persists the suspects are the countersteer/damper sign path and the AI's own steering.
