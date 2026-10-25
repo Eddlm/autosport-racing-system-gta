@@ -1815,7 +1815,7 @@ namespace ARS
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
-        const float FrontSlipCapPeakShare = 1.00f;
+        const float FrontSlipCapPeakShare = 0.50f;
         const float FrontSlipFactorFloor = 0.50f;
         const float FrontSlipCeilingReleaseDegPerSec = 8f;
         const float FrontSlipCeilingFloorShare = 0.50f;
