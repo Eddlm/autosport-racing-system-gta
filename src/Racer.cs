@@ -615,6 +615,12 @@ namespace ARS
 
             Handling.BrakingAbility = Car.MaxBraking;
             Handling.EstimatedTopSpeed = ARS.EngineTopSpeed(Car);
+            // Two numbers, one line: what the native reports (m/s, the same value the open trainer converts with
+            // 2.236936 for its stats bar) and what the mod keeps after the /0.75. If the second is above the car's real
+            // top speed, every threshold built on it - the nitro's "half my top speed" - is being drawn too high.
+            ARS.Log(ARS.LogImportance.Info, "Top speed " + Car.DisplayName + ": native "
+                + Function.Call<float>(Hash._0x53AF99BAA671CA47, Car).ToString("0.0") + " m/s, used "
+                + ARS.MpsToMph(Handling.EstimatedTopSpeed).ToString("0") + " mph");
             Handling.Acceleration = Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, Car);
 
 
