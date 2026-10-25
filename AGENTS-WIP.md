@@ -281,7 +281,11 @@ untracked track files (`Dist/AutosportRacingSystem/Tracks/F8.xml`, `TestOct.xml`
 
 **Changed but not driven**:
 - The outside leg of the lane mover at half rate (13 m/s2 and 12 m/s while the reason is `OutsideLine`, 880).
-- The eight-second `AvoidHoldTimeoutMs` backstop (880).
+- The eight-second `AvoidHoldTimeoutMs` backstop (880) — **not ChillOut**: this is the *lane* hold after a pass (`ComputeAvoidanceLane`,
+  `Racer.cs:1470-1500`), which keeps the pass lane until nothing is left alongside (14 m behind, 1.5 m lateral) and dies after 8 s
+  because a pass that long is not a pass any more. Without the backstop the held lane outranked the corner line for the rest of the
+  race when the geometric release never fired. ChillOut is the separate **throttle** manoeuvre that holds a standoff behind the
+  closest rival (`:2450`, `ManeuverType.ChillOut`).
 - The line's speed floor at 15 mph under the apex speed (885).
 
 **Filed, not fixed**: `docs/KNOWN-BUGS.md` - `apex-stays-referenced`, `first-corner-eagerness`.
