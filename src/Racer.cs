@@ -1685,7 +1685,14 @@ namespace ARS
             float trackBound = roadWide;
             float clampLeft = leftConstrained ? Math.Max(_avoidLeftWall + carHalfWidth, -trackBound) : Math.Max(_avoidLeftWall, -trackBound);
             float clampRight = rightConstrained ? Math.Min(_avoidRightWall - carHalfWidth, trackBound) : Math.Min(_avoidRightWall, trackBound);
-            if (clampLeft > clampRight) return ARS.Clamp(lane, -trackBound, trackBound);
+            if (clampLeft > clampRight)
+            {
+                // The insets are what invert here, not the targets: the corridor has been narrowed below one car's width.
+                // Returning the whole road is what made both walls vanish exactly when a rival sat on each side; collapsing to
+                // the corridor's midpoint keeps the request between them, which is the best a car of this size can do.
+                float collapsed = (clampLeft + clampRight) * 0.5f;
+                return ARS.Clamp(collapsed, -trackBound, trackBound);
+            }
             return ARS.Clamp(lane, clampLeft, clampRight);
         }
 
