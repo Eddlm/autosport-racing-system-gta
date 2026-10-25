@@ -3413,7 +3413,9 @@ namespace ARS
         {
             UpdateTickData();
 
-            if (ARS.DebugToggles[Options.ShowInputs] && !ControlledByPlayer) SampleInputTrail();
+            // The trail is only ever drawn for the focus car (DrawDebug's own gate), so sampling every racer filled a
+            // ring buffer nobody would read: same condition, one place that decides.
+            if (ARS.DebugToggles[Options.ShowInputs] && !ControlledByPlayer && ARS.DebugFocusRacer == this) SampleInputTrail();
             DrawDebug();
 
             _appliedThrottleLastFrame = VehicleMemory.GetThrottle(Car);
