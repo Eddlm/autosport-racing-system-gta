@@ -273,11 +273,13 @@ untracked track files (`Dist/AutosportRacingSystem/Tracks/F8.xml`, `TestOct.xml`
 - The blend ends and pins the inside at a quarter second (`IdealLineBlendEndSeconds` 0.25, `Racer.cs:1203`, read at `:1389` as
   `apexCommitted`) — **adequate behaviour, not exactly verified**: the driver is not certain the pin actually fires, and no log
   line proves it. What was judged is the result on track, not the mechanism.
+- The braking modulation of the clock (`LineClockBrakeMphPerG` 2, `Racer.cs:1352`, clamped to ±10 mph) — **driver-observed
+  working**: *"veo la línea morada ajustar su velocidad acorde; coche más lento, la línea morada avanza al interior más lenta"*.
+  What that observation pins down is the clock running on the **latched entry speed** (`:1348-1351`, `secondsToApex = metres /
+  clock`): a slower car stays further from the apex longer, so the purple line's inward advance slows with it. The ±10 mph brake
+  boost rides on the same denominator and has no separate observable, so it was not isolated — accepted on feel.
 
 **Changed but not driven**:
-- The braking modulation of the clock (`LineClockBrakeMphPerG` 2, `Racer.cs:1352`, clamped by `LineClockBrakeCapMph`), cap raised to
-  10 mph for a feel test (927/929) - **this one is an experiment**: at 10 mph the
-  adjustment is live and proportionally larger on slow entries, which is the opposite of what such a system usually wants.
 - The outside leg of the lane mover at half rate (13 m/s2 and 12 m/s while the reason is `OutsideLine`, 880).
 - The eight-second `AvoidHoldTimeoutMs` backstop (880).
 - The line's speed floor at 15 mph under the apex speed (885).
