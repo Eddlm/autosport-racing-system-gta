@@ -1942,6 +1942,10 @@ namespace ARS
         // which is full lock.
         float ResolveSteerCeiling(float fwdSpeed)
         {
+            // Parked by decision while the measured-slip factor is being evaluated: the speed-derived ceiling used to be the
+            // only steering law, and the only way to judge the new one is to let it work alone. The law stays compiled, so
+            // reviving it is this one flag. Full lock means the tyre is the limit, not a precomputed angle.
+            if (!SpeedSteerCeiling) return VehicleData.SteeringLock;
             float ceiling = TRLateralAtSpeed > 0.01f ? Math.Min(PeakSlipCeilingAt(TRLateralAtSpeed) * ARS.SteerCeilingFactor, SlipAllowanceCeilingAt(TRLateralAtSpeed)) : GeometrySteerCeiling(fwdSpeed);
             float speedMph = ARS.MpsToMph(fwdSpeed);
             if (speedMph >= SteerLimitRampEndMph) return ceiling;
@@ -1963,6 +1967,9 @@ namespace ARS
         const float SteerSlipClimbPerSecond = (1f - SteerSlipAllowanceBase) / SteerSlipClimbSeconds;
         // Parked off by decision: the law stays compiled, so reviving it is this one flag.
         static readonly bool SlipPeakCeiling = false;
+        // The speed-derived steer ceiling (peak slip angle at speed, scaled by the menu's SteerCeilingFactor). Off while the
+        // measured-slip factor is on trial; with it off, nothing but the tyre's own slip limits the wheel.
+        static readonly bool SpeedSteerCeiling = false;
         float _slipPeakAllowance = SteerSlipAllowanceBase;
 
         float SlipAllowanceCeilingAt(float peakSlipDeg)
