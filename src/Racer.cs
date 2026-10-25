@@ -301,12 +301,8 @@ namespace ARS
         // The limiter's before-and-after: the ask it was handed and the granted ceiling it enforced, one core
         // tick old when the kick card reads them, so the over-the-limiter test is the delivery's own.
         float _steerPreLimitDegrees = 0f;
-        // The scale the steer command is multiplied by this tick. 1.0 leaves the request alone.
-        float _frontSlipFactor = 1f;
         // The same quantity as a share of the limit, for the readout: it climbs where the factor falls.
         float _frontSlipPct = 0f;
-        // The steer ceiling the measured slip holds the wheel to, in degrees. Starts wide and is cut only while over.
-        float _frontSlipCeilingDeg = 999f;
         // The slip limit itself, in degrees of side slip: this is the number that falls at 2 deg/s and climbs at 4.
         float _frontSlipLimitDeg = 0f;
         // The plan's own ceiling this tick (peak-slip at speed, scaled), kept only so the readout can show which of the two binds.
@@ -1816,8 +1812,6 @@ namespace ARS
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
         const float FrontSlipCapPeakShare = 4.00f;
-        const float FrontSlipFactorFloor = 0.50f;
-        const float FrontSlipCeilingFloorShare = 0.05f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
         // signs do not match: the damper is allowed to countersteer at full authority on a slide.
         const float DamperCrossingShare = 1f;
@@ -1901,10 +1895,10 @@ namespace ARS
             return lat <= 0.01f ? 0f : lat / (1f + Math.Min(5f, 0.1f * speed));
         }
 
-        // The measured front slip as a multiplicative factor on the steer command: the request is scaled by limit / slip,
-        // a ratio, so it needs no gain and means the same thing on a 12-degree car as on a 22-degree one. A floor keeps a
-        // kerb strike from taking the wheel away, and the caller exempts a countersteer, which is answering a slide.
-        void UpdateFrontSlipFactor(float fwdSpeed)
+        // The measured front slip as a ceiling on the command: while the tyres are past the limit, the command is capped at the
+        // slip the limit allows, mapped through the same outer-wheel share the plan uses (slip x 1/0.75). No ratio and no
+        // state: the cap is the same number every tick the slip is over, and it disappears the tick it is not.
+        void UpdateFrontSlipLimit(float fwdSpeed)
         {
             float basePeak = Handling.LateralTractionCurve;
             // The live peak at the speed the car has right now, not the round-robin copy: TRlatAtSpeed steps once per core
@@ -1925,12 +1919,9 @@ namespace ARS
             // The average of the two fronts, not the worst: a single wheel clipping a kerb should not scale the whole
             // command, and the pair is the axis the car actually turns on.
             float slip = 0.5f * (left + right);
-            _frontSlipFactor = slip <= 0.01f || limitDeg <= 0.01f
-                ? 1f
-                : ARS.Clamp(limitDeg / slip, FrontSlipFactorFloor, 1f);
-
             _frontSlipLeftDeg = left;
-            _frontSlipRightDeg = right;            _frontSlipLimitDeg = limitDeg;
+            _frontSlipRightDeg = right;
+            _frontSlipLimitDeg = limitDeg;
             // Shown as a share of the limit, so the number rises with the slip: 100% is at the cap, 200% is twice it.
             // The applied multiplier is this ratio inverted, which is why the factor falls while this climbs.
             _frontSlipPct = limitDeg > 0.01f ? 100f * slip / limitDeg : 0f;
@@ -2031,24 +2022,11 @@ namespace ARS
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             _planCeilingDeg = speedCeiling;
-            // The measured slip is a ceiling on the wheel, not a scale on the request: while the front tyres are past their
-            // limit the ceiling drops to the angle that produced the limit (achieved x factor, so no more than half is ever
-            // taken), and it is released at 8 deg/s once they are back under. A request smaller than the ceiling passes
-            // untouched, which a multiplicative factor could never allow.
-            UpdateFrontSlipFactor(fwdSpeed);
+            // The measured slip is a ceiling on the command, derived from the slip the limit allows rather than from a ratio
+            // against the current wheel: past the peak the slip grows faster than the wheel, so a proportional bite overshot.
+            UpdateFrontSlipLimit(fwdSpeed);
             if (_frontSlipPct > 100f)
-            {
-                float achieved = Math.Abs(Control.SteerDegrees);
-                _frontSlipCeilingDeg = Math.Min(_frontSlipCeilingDeg, achieved * _frontSlipFactor);
-            }
-            else
-            {
-                _frontSlipCeilingDeg = VehicleData.SteeringLock;
-            }
-            // Absolute floor: the bite takes min() against the wheel it has already cut, so a long slide would ratchet the
-            // ceiling towards zero one halving at a time. Half the lock is the floor, mirrored from the factor's own floor.
-            _frontSlipCeilingDeg = ARS.Clamp(_frontSlipCeilingDeg, FrontSlipCeilingFloorShare * VehicleData.SteeringLock, VehicleData.SteeringLock);
-            speedCeiling = Math.Min(speedCeiling, _frontSlipCeilingDeg);
+                speedCeiling = Math.Min(speedCeiling, PeakSlipCeilingAt(_frontSlipLimitDeg));
             // LEFT bounds positive commands and RIGHT negative ones, because a positive command steers left.
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
