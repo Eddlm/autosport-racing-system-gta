@@ -1642,14 +1642,16 @@ namespace ARS
                 }
             }
 
-            // Four metres per second: the corridor opens slower than the car can unwind, so a wall that has just let go
-            // is still the limit when the corner line starts asking (was 10, which the mover could outrun).
             _leftWallHeld = leftConstrained;
             _rightWallHeld = rightConstrained;
-            float openRate = 4f * TickScale;
             _wallRoadWide = roadWide;
-            _avoidLeftWall = leftConstrained ? targetLeftWall : Math.Max(_avoidLeftWall - openRate, -trackBound);
-            _avoidRightWall = rightConstrained ? targetRightWall : Math.Min(_avoidRightWall + openRate, trackBound);
+            // Both directions move at the same rate. Closing used to be instant, which stepped the corridor sideways in one tick
+            // and showed up as a jump in the Show Rivalry lines; the wall now walks to its target from either side.
+            float wallRate = 4f * TickScale;
+            float leftTarget = leftConstrained ? targetLeftWall : -trackBound;
+            float rightTarget = rightConstrained ? targetRightWall : trackBound;
+            _avoidLeftWall = ARS.Clamp(leftTarget, _avoidLeftWall - wallRate, _avoidLeftWall + wallRate);
+            _avoidRightWall = ARS.Clamp(rightTarget, _avoidRightWall - wallRate, _avoidRightWall + wallRate);
             _activeRivalWallCount = (_avoidLeftWall > -trackBound ? 1 : 0) + (_avoidRightWall < trackBound ? 1 : 0);
 
             // Rival walls must remain ordered; collapse overlap to a narrow centered corridor.
