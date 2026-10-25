@@ -3817,6 +3817,21 @@ namespace ARS
 
             if (float.IsNaN(multiplier) || float.IsInfinity(multiplier) || multiplier < 0f || multiplier > 10f) multiplier = 1f;
 
+            // The burn's own readout, independent of every setting: the power asked for, the pedal that receives it and
+            // the three caps trimming that pedal. A small burn is a pedal story long before it is a power story.
+            if (Game.GameTime < _nitrousActiveUntil && Game.GameTime > _nitrousGsLoggedAt)
+            {
+                _nitrousGsLoggedAt = Game.GameTime + 500;
+                string planMph = Brain.CurrentIntention.Speed >= 0f ? ARS.MpsToMph(Brain.CurrentIntention.Speed).ToString("0") : "?";
+                ARS.Log(ARS.LogImportance.Info, "Burn " + Car.DisplayName + (ControlledByPlayer ? " (player)" : " (AI)")
+                    + ", power x" + multiplier.ToString("0.00")
+                    + ", throttle " + Control.Throttle.ToString("0.00")
+                    + " caps TCS " + Control.MaxThrottleFromTCS.ToString("0.00")
+                    + " stab " + Control.MaxThrottleFromStability.ToString("0.00")
+                    + " over " + Control.MaxThrottleFromOverspeed.ToString("0.00")
+                    + ", plan " + planMph + " mph, speed " + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + " mph");
+            }
+
             Function.Call((Hash)CheatPowerIncreaseHash, Car, multiplier);
         }
 
