@@ -2332,6 +2332,27 @@ namespace ARS
         const float PedalSlewRate = 6f;             // pedal slew rate (units/second: full range in ~167ms)
         const float PedalSlewMaxPerTick = 0.5f;     // hitch guard: never step more than this in one tick
 
+        // Development experiment (owner, 2026-10-26): a car already pulling more than half the lateral grip it has, with the
+        // projected line further inside than the car itself, may not lift off the throttle. Both offsets are measured from the
+        // CAR's node and direction: the projection has a node of its own with its own direction, and two offsets taken in two
+        // frames put the line on the wrong side of the centre on noise.
+        //
+        // The inside test is what makes it liveable: halfway through a 90 degree bend the projection already points down the
+        // straight, the projected lane is not further inside than the car, and the rule lets go exactly where lifting would
+        // cost the exit.
+        bool GsLaneThrottleFloorApplies()
+        {
+            if (!ARS.GsLaneThrottleFloor) return false;
+            float theoreticalGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
+            if (!(theoreticalGs > 0f)) return false;
+            if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= 0.5f * theoreticalGs) return false;
+            int insideSign = Math.Sign(CurrentTrackPoint.Angle);
+            if (insideSign == 0) return false;
+            float carOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
+            float projectedOffset = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
+            return (projectedOffset - carOffset) * insideSign > 0f;
+        }
+
         void ConvertSpeedToPedals()
         {
             float currentForwardSpeed = VehicleData.SpeedVectorLocal.Y;
@@ -2403,6 +2424,9 @@ namespace ARS
 
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
+            // The development floor bounds this pedal and nothing else: the brake keeps whatever the plan and the projection
+            // asked for, because the rule is about not lifting, not about not slowing.
+            if (GsLaneThrottleFloorApplies()) Control.Throttle = Math.Max(Control.Throttle, 0.8f);
 
             UpdateBrakeLearning();
 

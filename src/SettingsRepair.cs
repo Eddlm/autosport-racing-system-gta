@@ -176,6 +176,7 @@ namespace ARS
             development.Specs.Add(new KeySpec("BrakeLearningNotify", "False", Kind.Bool));
 development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             development.Specs.Add(new KeySpec("SlipFromMemory", "True", Kind.Bool));
+            development.Specs.Add(new KeySpec("GsLaneThrottleFloor", "False", Kind.Bool));
             files.Add(development);
 
             // The debug key set is the toggle table itself: retiring a toggle retires its key.
