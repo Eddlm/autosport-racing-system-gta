@@ -73,6 +73,30 @@ Rules the calibration has to respect, learned the hard way:
 - **A relative rule and an absolute cap do not agree.** "500 % arrives in 0.1 s" is true for a 2 deg target and false for a 10 deg one, because 500 % of 10 deg is a 40 deg gap and 40 deg in 0.1 s is 400 deg/s. The measured table above is the honest statement; the percentage alone is not.
 - **Exponential opening was tried and rejected**: its time varied with the gap, so the same manoeuvre looked different depending on how far the clamp had fallen. Linear makes the time proportional to the distance, which is what the car feels.
 
+## The input stage
+
+The angle the limiter allows is still a request: `TranslateSteerToInput` is what actually writes `Control.SteerDegrees`, and it rates
+the move the same way the ceiling is rated:
+
+```csharp
+rate  = Min(Abs(error) * 18f, 180f);   // SteerInputPerSecond, SteerSlewRate
+delta = Sign(error) * rate * TickScale;
+```
+
+The cap is reached at a 10 deg error, so every real correction runs at the full 180 deg/s it always ran, and anything smaller moves
+proportionally slower. That is what calms the wheel: a 1-2 deg ask used to be copied in a single tick (6 deg of travel available for a
+1 deg change), which is why a small dither appeared in the wheel one to one.
+
+| error | rate | per tick (30 Hz) | time to 5 % of the gap (was) |
+|---|---|---|---|
+| 1 deg | 18 deg/s | 0.60 deg | 133 ms (6 ms) |
+| 3 deg | 54 deg/s | 1.80 deg | 133 ms (17 ms) |
+| 10 deg | 180 deg/s | 6.00 deg | 133 ms (56 ms) |
+| 38 deg | 180 deg/s | 6.00 deg | 233 ms (211 ms) |
+
+As a first-order filter with tau = 55.6 ms it attenuates a small oscillation by 31 % at 3 Hz and 50 % at 5 Hz, at the cost of 46 deg of
+phase lag at 3 Hz. It hides a dithering ask; it does not remove the oscillation from the controller that produces it.
+
 ## Why the floor and the share are settings
 
 - **`Slip Cut Floor`** (0.00-0.90, ships 0.40) is the deepest the cut may go. 0.40 leaves 40 % of the request; 0.00 can remove it entirely and the car goes straight on.
