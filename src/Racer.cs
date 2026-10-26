@@ -316,11 +316,10 @@ namespace ARS
         const float SlipCeilingOpenDegPerSec = 4f;
         // Closing is exponential in the gap, not in the severity: the rate is the distance to the target times this gain, so the
         // time to arrive is a property of the system and not of how big the drop happened to be. Calibration (owner's rule): a
-        // clamp sitting at 500% of its target - a gap of four times the target - arrives in 0.1 s, which is ln(400)/0.1 here.
+        // clamp sitting at 500% of its target - a gap of four times the target - arrives in about 0.1 s. There is NO ceiling on the
+        // rate: a collapsed target closes in one or two ticks, which was chosen over a fixed deg/s cap because the cap was what made
+        // a big target take half a second at the same 500%.
         const float SlipClosePerSecond = 60f;
-        // Ceiling on the closing rate so a collapsed target cannot snap the ceiling in a single tick; 90 deg/s still lets the
-        // wheel follow at the slew rate rather than waiting for it.
-        const float SlipCloseMaxDegPerSec = 90f;
         // Below this the gap is the same thing as arrived: an exponential never quite touches its target.
         const float SlipCloseSnapDeg = 0.05f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
@@ -2129,7 +2128,7 @@ namespace ARS
                 else
                 {
                     float gap = chase - clampTarget;
-                    float step = Math.Min(gap * SlipClosePerSecond, SlipCloseMaxDegPerSec) * TickScale;
+                    float step = gap * SlipClosePerSecond * TickScale;
                     _chasingClampDeg = gap <= SlipCloseSnapDeg ? clampTarget : Math.Max(clampTarget, chase - step);
                 }
                 speedCeiling = Math.Min(speedCeiling, _chasingClampDeg);
