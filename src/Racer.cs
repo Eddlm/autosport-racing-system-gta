@@ -914,7 +914,9 @@ namespace ARS
                     + " pursuit=" + nonDamperSteerDeg.ToString("0.00")
                     + " damper=" + damperTermDeg.ToString("0.00")
                     + " yaw=" + VehicleData.YawRotationPerSecondDegrees.ToString("0.0")
-                    + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0"));
+                    + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0")
+                    // The axis as the game will receive it this tick: same remap TranslateSteerToInput applies after the limiter.
+                    + " in=" + ARS.Remap(Control.SteerDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1f, 1f, true).ToString("0.000"));
 
             if (_slidePriority > 0f)
             {
