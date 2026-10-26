@@ -1851,9 +1851,6 @@ namespace ARS
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
         const float SteerSlewRate = 180f;
-        // The input closes exponentially in the gap, like the ceiling: the cap is reached at a 10 deg error, so a small ask moves
-        // proportionally slower (1 deg -> 0.6 deg a tick) and anything at or above 10 deg runs at the full 180 deg/s it always ran.
-        const float SteerInputPerSecond = 18f;
 
         // A cap on the steer command driven by the front tyres' measured side slip. While the car is on the throttle the
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
@@ -2621,11 +2618,10 @@ namespace ARS
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees)) Control.SteerDegrees = 0f;
 
             float error = Control.SteerDegrees - Control.LastAppliedSteerDegrees;
-            // Exponential in the gap, capped at the slew rate: a 1-2 deg ask used to be copied in a single tick, which is why a small
-            // dither went straight to the wheel. Big moves are unchanged - the cap is reached at 10 deg and every real correction is
-            // bigger than that.
-            float rate = Math.Min(Math.Abs(error) * SteerInputPerSecond, SteerSlewRate);
-            float delta = Math.Sign(error) * rate * TickScale;
+            // Flat slew, not exponential: filtering the input to calm a small dither only adds phase lag inside the pursuit loop, and the
+            // car oscillated MORE with it (build 1143, reverted the same day).
+            float maxDeltaPerTick = SteerSlewRate * TickScale;
+            float delta = ARS.Clamp(error, -maxDeltaPerTick, maxDeltaPerTick);
             Control.SteerDegrees = Control.LastAppliedSteerDegrees + delta;
             Control.LastAppliedSteerDegrees = Control.SteerDegrees;
 
