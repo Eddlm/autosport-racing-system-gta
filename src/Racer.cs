@@ -2503,10 +2503,13 @@ namespace ARS
             float throttleBeforeFloor = Control.Throttle;
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
             _throttleFloorGain = Control.Throttle - throttleBeforeFloor;
-            // Development read-out, on the car being driven and only while the toggle is on: what the floor added, in percent of
-            // full throttle, measured against everything that had already had its say. A focus racer keeps the subtitle for itself,
-            // so this stands aside when one is set.
-            if (ARS.GsLaneThrottleFloor && ControlledByPlayer && ARS.DebugFocusRacer == null)
+            // Development read-out, on the focused racer and only while the toggle is on: what the floor added, in percent of
+            // full throttle, measured against everything that had already had its say.
+            //
+            // It cannot live on the player's car: this whole method only runs under !ControlledByPlayer, because the human
+            // drives that one. The floor is an AI rule, so the number has to be read on an AI - the same car whose trajectory
+            // line is on screen.
+            if (ARS.GsLaneThrottleFloor && ARS.DebugFocusRacer == this)
                 UI.ShowSubtitle("Gs floor: +" + (100f * _throttleFloorGain).ToString("0") + "% throttle", 50);
             _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
 
