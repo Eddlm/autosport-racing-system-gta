@@ -916,7 +916,12 @@ namespace ARS
                     + " yaw=" + VehicleData.YawRotationPerSecondDegrees.ToString("0.0")
                     + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0")
                     // The axis as the game will receive it this tick: same remap TranslateSteerToInput applies after the limiter.
-                    + " in=" + ARS.Remap(Control.SteerDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1f, 1f, true).ToString("0.000"));
+                    + " in=" + ARS.Remap(Control.SteerDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1f, 1f, true).ToString("0.000")
+                    + " lane=" + laneSteerDeg.ToString("0.00")
+                    + " side=" + sideBySideSteerDeg.ToString("0.00")
+                    + " bearing=" + _steerAimBearingDegrees.ToString("0.0")
+                    + " carried=" + _carriedLane.ToString("0.00")
+                    + " req=" + _laneRequest.ToString("0.00"));
 
             if (_slidePriority > 0f)
             {
