@@ -91,7 +91,7 @@ When 0.9.0 is published, tell people this in the README, not only in the release
 2. Build locally, so `RefreshDist` mirrors the game folder into `Dist\AutosportRacingSystem`. That mirror is data only (tracks, `cars.txt`,
    `Drivers\names.txt`, `Settings\tips.txt`); the binaries and the banner are added at packaging time.
 3. Assemble the zip with `powershell -NoProfile -File tools\make-package.ps1` (add `-SkipBuild` to package what is already on disk).
-   It emits `AutosportRacingSystem-DD-MM-YYYY.zip` in the repo root - the name the README advertises - containing exactly one folder,
+   It emits `Dist\AutosportRacingSystem-DD-MM-YYYY.zip` - the name the README advertises, beside the reviewed mirror - containing one folder,
    `AutosportRacingSystem\`, with: `ARS.dll`, `LemonUI.SHVDN2.dll`,
    `build-number.txt`, `README.txt` (install + requirements + LemonUI credit), `Tracks\`, `Vehicles\cars.txt`, `Drivers\names.txt`,
    `Settings\tips.txt`. Never `ScriptHookVDotNet2.dll`, never `*.ini`, never `Vehicles\tests.txt`, never logs.

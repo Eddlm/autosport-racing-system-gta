@@ -59,3 +59,4 @@ release-latest.json
 Dist/AutosportRacingSystem/Settings/*.ini
 # The release zip is built from this tree, never stored in it (tools/make-package.ps1).
 AutosportRacingSystem-*.zip
+Dist/AutosportRacingSystem-*.zip

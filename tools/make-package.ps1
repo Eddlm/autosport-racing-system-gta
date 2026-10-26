@@ -2,7 +2,8 @@
   make-package.ps1 - build the release zip by hand.
 
   The owner assembles the package, CI never publishes one (deploy.yml only keeps a testable
-  artifact on pushes to master). Output name follows the README: AutosportRacingSystem-DD-MM-YYYY.zip
+  artifact on pushes to master). Output lands in Dist\, named as the README advertises:
+  AutosportRacingSystem-DD-MM-YYYY.zip
 
   What goes in, and why:
     Dist\AutosportRacingSystem\      the hand-reviewed data mirror (tracks, rosters, tips)
@@ -62,12 +63,11 @@ try {
     $junk = Get-ChildItem $stage -Recurse -Include '*.ini', '*.log', 'tests.txt', 'ScriptHookVDotNet2.dll' -File
     foreach ($f in $junk) { Remove-Item $f.FullName -Force }
 
-    $zip = Join-Path $repo ('AutosportRacingSystem-' + (Get-Date -Format 'dd-MM-yyyy') + '.zip')
+    $zip = Join-Path $repo ('Dist\AutosportRacingSystem-' + (Get-Date -Format 'dd-MM-yyyy') + '.zip')
     if (Test-Path $zip) { Remove-Item $zip -Force }
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
     Remove-Item $stage -Recurse -Force
 
-    $files = (Get-ChildItem $repo -Filter 'AutosportRacingSystem-*.zip' | Where-Object { $_.FullName -eq $zip })
     $count = ([System.IO.Compression.ZipFile]::OpenRead($zip)).Entries.Count
     Write-Host ''
     Write-Host ("package : " + (Split-Path $zip -Leaf))
