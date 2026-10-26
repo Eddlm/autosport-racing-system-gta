@@ -13,12 +13,12 @@ How the front-slip guard is built today, what each number means, the evidence be
 The steering factor:
 
 ```csharp
-factor = Clamp(100 / Min(InnerPct, 250), FrontSlipFactorFloor, 1)
+factor = Clamp(100 / InnerPct, SlipCutFloor, 1)
 ```
 
 - `InnerPct` is the worse front tyre's slip as a percentage of `maxSlip` (the readout's `F`).
-- The cut saturates at **2.5x** because that is where the tyre's own curve stops falling (see below).
-- `FrontSlipFactorFloor = 0.05` is currently **inert**: with the saturation at 250 the factor cannot fall below 0.40.
+- The cut stops at **`Slip Cut Floor`** (`Rival Steering`, 0.00-0.90, ships **0.40**): there is no second clamp behind it. The old 2.5x saturation is gone because it was the thing that made every floor below 0.40 inert - the constant spoke and nothing could move it.
+- At the shipping 0.40 the arithmetic is identical to the retired 2.5x saturation (`100/250 = 0.40`), so the default changes nothing; the setting only has teeth when it is moved.
 
 The pedal, applied to `combinedInput` before it splits into throttle and brake:
 
