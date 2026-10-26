@@ -2556,7 +2556,9 @@ namespace ARS
         // and the result. A cut reads as a minus rather than a plus with a negative behind it.
         void AnnounceBrakeAdjustment(int apexNode, float before, float after)
         {
-            if (!ARS.BrakeLearningNotify || !ARS.DebugToggles[Options.ShowTrackAnalysis]) return;
+            // Its own switch, and only that: gating it behind Show Track Analysis made the checkbox inert for anyone not running
+            // the debug view, which read as 'brake learning announces nothing'.
+            if (!ARS.BrakeLearningNotify) return;
             float change = after - before;
             string sign = change < 0f ? " - " : " + ";
             UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") adjusted corner Nº" + apexNode + " | "
