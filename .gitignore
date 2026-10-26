@@ -45,9 +45,10 @@ Util/
 # Dist mirror: keep only the data (ini/xml/docs), not the built binaries
 Dist/**/*.dll
 
-# A roster the game rewrites is session data, not shipped content. RefreshDist mirrors the live install
-# back into Dist, so this pool would dirty the tree after every run and deploy.yml would ship it with
-# the release. It stays on disk in both places; only its place in the repo goes.
+# A roster the game rewrites is session data, not shipped content. RefreshDist does NOT exclude it (its /XF
+# list covers *.zip, *.log, *.bak*, pidump.txt and build-number.txt only), so it is mirrored into Dist on
+# every build and would ship with the release. It stays on disk in both places; only its place in the repo
+# goes. tools/make-package.ps1 purges it from the zip as the second line of defence.
 Dist/AutosportRacingSystem/Vehicles/tests.txt
 
 # Imported python tooling leaves bytecode behind (docs/check-settings-keys.py is imported by its own self-test)
