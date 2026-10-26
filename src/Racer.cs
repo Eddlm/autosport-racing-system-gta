@@ -199,6 +199,8 @@ namespace ARS
         // How many times the de-glitch fired: it belongs in the trace, because the fix is only right if the flips are artefacts.
         int _pursuitFlipCount;
         bool _pursuitFlipThisTick;
+        Vector3 _aimPointSmoothed;
+        bool _aimPointSeeded;
         // The bearing before the de-glitch and the distance to the aim point: together they say whether the flip is the aim moving
         // or the same aim seen from a very short baseline.
         float _pursuitRawBearingDeg;
@@ -809,6 +811,13 @@ namespace ARS
             Vector3 aimPoint = steerRefPoint.Position + steerRight * aimPointOffset;
 
             // --- Lane steer: pure pursuit toward the carried lane ---
+
+            // The aim steps a node when the projection flips between two: average it before the pursuit reads it. Only this consumer,
+            // only this point - the corner lane and the Gs preview keep the raw aim.
+            if (_aimPointSeeded && Vector3.Distance(aimPoint, _aimPointSmoothed) <= AimPointSmoothingMaxStep)
+                aimPoint = Vector3.Lerp(_aimPointSmoothed, aimPoint, AimPointSmoothing);
+            _aimPointSmoothed = aimPoint;
+            _aimPointSeeded = true;
 
             float laneSteerDeg = PursuitSteerDegrees(aimPoint, courseDir);
             _kickAskDegrees = laneSteerDeg;
@@ -1901,6 +1910,12 @@ namespace ARS
         // one side of the axis and then the other: the midpoint of the two samples is a better estimate than either. Below this
         // magnitude the flip is normal motion around the centre line and must not be touched.
         const float PursuitFlipMinDeg = 2f;
+        // The aim point steps a whole node when the nearest-node projection flips between two of them, which at an 8 m lookahead is
+        // +/-7 deg of bearing - the dither. A half-weight average per tick removes the step: it is 16 ms of lag on a point 8 m away,
+        // and it touches this aim and nothing else. A step larger than the max is a teleport (grid placement, the wrap at the line) and
+        // snaps instead of being averaged across the map.
+        const float AimPointSmoothing = 0.5f;
+        const float AimPointSmoothingMaxStep = 5f;
 
         // A cap on the steer command driven by the front tyres' measured side slip. While the car is on the throttle the
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap

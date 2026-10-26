@@ -23,7 +23,18 @@
   is smooth across the flips, so the suspect is `aimPointOffset = aimLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset)`:
   either `_laneOvershoot` flickering (aimLane toggling between `steerRefOffset` and `_carriedLane`) or `ProjectAhead` alternating
   between two route nodes. Amplitude scales with speed: |ask| 6.06 deg at 7-15 mph down to 2.22 deg at 55-70, which is why it reads
-  as "1-2 deg" at speed. Next run logged `aimoff`, `proj`, `steerRef` and the aim distance to settle which of the two it is.
+  as "1-2 deg" at speed.
+  **ROOT CAUSE FOUND (build 1158):** the aim point steps a whole NODE. `steerRef = (int)Clamp(speed * 0.5, 8, 30)` is a node count,
+  `aim = TrackPoints[CurrentTrackPoint.Node + steerRef]`, and `FindNearestTrackPoint` picks the nearest node by distance with no
+  hysteresis, so between two nodes the winner flips and the aim jumps ~0.9 m - which at an 8 m lookahead is +/-7 deg of bearing. The
+  log proves it: `dist` swings 7.6..8.5 m in phase with the sign flip, while `aimoff`, `proj` and `ref` stay smooth (they are offsets
+  relative to the route, so they never see the step). `courseDir` was ruled out (its reference is steady above 20 mph).
+  **Applied 2026-10-26 (build 1159, option A):** half-weight EMA on the aim point, for the pursuit only - 16 ms of lag on a point 8 m
+  away, snaps when the step is over 5 m (grid placement, the wrap at the line). Blast radius: one variable, one method.
+  **OWED (option C, the definitive fix):** interpolate the lookahead by ARC LENGTH along the polyline instead of indexing a node, so the
+  quantisation disappears instead of being averaged. ~25 lines confined to the aim, needs the wrap case at the start line tested.
+  Hysteresis inside `FindNearestTrackPoint` (option B) is ruled out: `CurrentTrackPoint` has 56 consumers (50 in Racer, 6 in ARS) and
+  changing the projection globally to fix a steering tremor is not a trade worth making.
 
 - `speed-steer-ceiling` — **ZOMBIE CODE, revisit 0.11.0 (driver, 2026-10-26)**: `SpeedSteerCeiling` (a `static readonly bool`,
   `Racer.cs:2083`) is false, so `ResolveSteerCeiling` returns `VehicleData.SteeringLock` on its first line and this whole law is
