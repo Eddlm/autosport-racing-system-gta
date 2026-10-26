@@ -2336,17 +2336,17 @@ namespace ARS
         const float PedalSlewMaxPerTick = 0.5f;     // hitch guard: never step more than this in one tick
 
         // Development experiment (owner, 2026-10-26): a car already pulling more than half the lateral grip it has, with the
-        // projected line further inside than the car itself, may not lift off the throttle. Both offsets are measured from the
-        // CAR's node and direction: the projection has a node of its own with its own direction, and two offsets taken in two
-        // frames put the line on the wrong side of the centre on noise.
+        // projected line heading for the inside of the road, may not lift off the throttle. The offset is measured from the
+        // CAR's node and direction: the projection has a node of its own with its own direction, and offsets taken in two
+        // frames put the line on the wrong side of the centre on noise. What the car itself is doing is not part of the test.
         //
         // The inside test is what makes it liveable: halfway through a 90 degree bend the projection already points down the
         // straight, the projected lane is not further inside than the car, and the rule lets go exactly where lifting would
         // cost the exit.
         // Development experiment (owner, 2026-10-26): a car already pulling more than half the lateral grip it has, with the
-        // projected line further inside than the car itself, may not lift off the throttle. Both offsets are measured from the
-        // CAR's node and direction: the projection has a node of its own with its own direction, and two offsets taken in two
-        // frames put the line on the wrong side of the centre on noise.
+        // projected line heading for the inside of the road, may not lift off the throttle. The offset is measured from the
+        // CAR's node and direction: the projection has a node of its own with its own direction, and offsets taken in two
+        // frames put the line on the wrong side of the centre on noise. What the car itself is doing is not part of the test.
         //
         // The floor is a ramp, not a switch: it scales with how deep the projection sits toward the inside, from nothing at the
         // track centre to the full GsLaneThrottleMaxFloor at the inside edge. Past the centre toward the outside it stays zero,
@@ -2364,9 +2364,7 @@ namespace ARS
             if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= 0.5f * theoreticalGs) return 0f;
             int insideSign = Math.Sign(CurrentTrackPoint.Angle);
             if (insideSign == 0) return 0f;
-            float carOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
             float projectedOffset = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
-            if ((projectedOffset - carOffset) * insideSign <= 0f) return 0f;
             // Room to the inside measured in metres: the centre is zero, the inner edge is 1, and the car's own width is not
             // lane the projection can use.
             float room = Math.Max(CurrentTrackPoint.TrackHalfWidth - VehicleData.ModelDimensions.X * 0.5f, 1f);
