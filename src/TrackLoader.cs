@@ -376,6 +376,8 @@ namespace ARS
             const int smoothingNodes = 2;
             const int exitRelaxationNodes = 4;
             const int minimumCornerNodes = 25;
+        // Corners are not recognised this close to the start/finish line, counted the short way round on a circuit.
+        const int ApexStartLineClearanceNodes = 80;
             const float closeCornerSeconds = 2f;
 
             // Start a circuit scan on a straight so a corner crossing the node-zero boundary
@@ -837,6 +839,16 @@ namespace ARS
             if (float.IsNaN(tightestRadius) || float.IsInfinity(tightestRadius)) return;
 
             int apexNode = scanNodes[apexPosition];
+
+            // A corner whose apex sits on the line is not one the car can use: the plan brakes for it while the grid is still
+            // leaving it, and on a circuit the region straddles the wrap. El Burro Rally produced exactly that, with its apex on
+            // node 0 and its entrance at the end of the route. Anything inside the clearance is not a corner, it is the line.
+            int lineDistance = ARS.IsPointToPoint ? apexNode : Math.Min(apexNode, count - apexNode);
+            if (lineDistance < ApexStartLineClearanceNodes)
+            {
+                ARS.Log(ARS.LogImportance.Info, "Corner skipped: apex=" + apexNode + " is " + lineDistance + " nodes from the line (clearance " + ApexStartLineClearanceNodes + ")");
+                return;
+            }
             // A span is capped at a hard node count each way rather than by the corner's own size: offroad the radius
             // never settles, so without a cap the walk runs all the way out to the region bound. The step is also capped
             // by what the scan list holds, because the walk returns a step count and these are list positions.
