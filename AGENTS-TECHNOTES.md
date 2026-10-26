@@ -530,6 +530,11 @@ The two-livery-spaces trap (mod slot 48 vs the livery list), the exact natives a
   calls `StartRace()` directly, and `StartRace()` auto-instances the track and grid when they are missing. Any check that must
   run before a race starts belongs at BOTH doors until those two are merged - a preflight placed only in `StartRaceFromMenu`
   never runs when the player presses Start Race, which is how the on-foot Relative guard was bypassed twice.
+- **The pool excludes only what cannot race on a road** (build 1142): motorcycles, cycles, boats, helicopters, planes and trains. Every
+  four-wheeled class is now fair game - off-road, industrial, utility, commercial, service, emergency and military included - because
+  "unsuitable looking" is not a reason to keep a car out; the pace band decides who races whom. The old list also dropped OffRoad,
+  which is why the Karin Everon (an off-roader) vanished from a one-car test roster and the only symptom was "no car in the pool
+  carries a pace index". The catalog now logs the reason for every entry it drops.
 - **The clamp CLOSES exponentially in the gap (15/s, ceiling 90 deg/s) and OPENS linearly (72 deg/s)** (build 1140). Closing: rate = `min(gap x 15/s, 90)`, so the gap halves every 30 Hz tick and a full 38->2 deg collapse takes 633 ms in 19 ticks; measured to 1 % of the target, 500 % = 300 ms at a 2 deg target and 600 ms at 10 deg. Opening: fixed 72 deg/s, so the full travel takes 0.5 s. There is no snap: the exponential closes and `Math.Max` keeps the last step from crossing the target, so the tail is visible in the readout. The closing gain cannot approach the tick rate (`1 - k/30` per tick: k = 60 snaps in one tick, k = 30 arrives exactly in one). A 45 deg/s cap and a tanh severity rate were both tried and rejected: the cap made a 10 deg target take over a second, the tanh ignored the distance to the target.
   snapped at 0.05 deg; opening stays a flat 4 deg/s. The owner's calibration rule: a clamp at 500 % of its target arrives in 0.1 s.
   Measured times to 1 % of the target, target 2 deg: 200 % -> 39 ms, 500 % -> 105 ms, 1000 % -> 216 ms. The old tanh mapped
