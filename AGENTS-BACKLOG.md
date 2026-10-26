@@ -132,6 +132,12 @@
   "point ahead" along the route. When it is picked up, settle WHICH chevron first - the debug drawing or the in-race one -
   because they are two different code paths and the fix only applies to one of them.
 
+- `corner-chevron-exit` — **parked for 0.9.1 (owner, 2026-10-26)**: the chevron drawn at a corner should point at the corner's
+  END, not at the next one. Owner's words, not yet pinned to a mechanism: the candidates are the apex markers
+  (`AutosportRacingSystem.cs:2205`, `MarkerType.ChevronUpx1`) and `TrackVisuals.DrawEdgeChevronsAround`, whose chevrons
+  "point ahead" along the route. When it is picked up, settle WHICH chevron first - the debug drawing or the in-race one -
+  because they are two different code paths and the fix only applies to one of them.
+
 - `preflight-pace-target` — **parked for 0.9.1 / 0.11.0 (owner, 2026-10-26)**: `PreflightStartRace` checks the pool before
   anything is instanced, but the pace target it resolves can differ from the grid's, because in `PaceMode.RelativeToMine`
   the target is the PLAYER'S car pace and the instancing teleports them into the car at the track. So the preflight can

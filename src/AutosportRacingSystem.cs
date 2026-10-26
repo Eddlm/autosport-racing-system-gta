@@ -2484,7 +2484,8 @@ namespace ARS
 
         static void DrawLeaderboard()
         {
-            const float headerY = 0.06f;
+            // 0.11 clears the help text: at 0.06 the POS header sat on top of the hints the game prints in the same corner.
+            const float headerY = 0.11f;
             const float step = 0.031f;
             const float colPos = 0.02f;
             const float colPI = 0.05f;
