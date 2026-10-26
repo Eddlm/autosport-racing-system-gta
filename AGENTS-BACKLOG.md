@@ -7,6 +7,15 @@
 ## The ladder — open items, simplest → most complex
 
 **Tier 0 — decisions, no code**
+- `speed-steer-ceiling` — **ZOMBIE CODE, revisit 0.11.0 (driver, 2026-10-26)**: `SpeedSteerCeiling` (a `static readonly bool`,
+  `Racer.cs:2083`) is false, so `ResolveSteerCeiling` returns `VehicleData.SteeringLock` on its first line and this whole law is
+  compiled but inert: `PeakSlipCeilingAt`, `GeometrySteerCeiling`, `ManeuverRamp`, `SteerLimitRampStartMph = 5`,
+  `SteerLimitRampEndMph = 30`. The setting that drives it is STILL IN THE MENU (`Rival Steering > Steer Limit At Speed`,
+  `SteerCeilingFactor = 0.90`, steps 0.05..1.00, persisted with its own KeySpec) and moves nothing - a knob wired to a motor that
+  is unplugged. It was parked to judge the measured-slip limiter alone, not because it was wrong. To settle in 0.11: revive it
+  (then it becomes the min of two ceilings, and it overlaps the 5-15 mph slip allowance that is now ON) or delete the law AND the
+  menu row together. Leaving the row live while the law is dead is the one option to rule out.
+
 - `lane-repulsion-ceiling` — the contact push stays unbounded. It is not a lane law: the request is settled above it, and the lane-side contact term is `ApplyRivalWalls`. **DECIDED (driver)**
 - `player-special-ability` — ignore the engine's player grip and steer advantage. **DECIDED (driver)**
 - `ai-free-abs` — ABS stays the car's flags plus ARS's own cap. **DECIDED (driver)**
