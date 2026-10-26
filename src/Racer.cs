@@ -357,6 +357,9 @@ namespace ARS
         float _projectionOutsideMeters = 0f;
         bool _projectionWidening = false;
         float _projectionOutsideSeconds = 0f;
+        // The colour the trajectory is drawn in, decided where the trajectory is measured rather than in the drawing code:
+        // the floor, the edge and the widening all live here, and DrawDebug only has to paint what it is handed.
+        Color _projectionPathColor = Color.Blue;
         // True only on the tick the projection actually cut the throttle, which is what the red lines report.
         bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
@@ -2353,6 +2356,28 @@ namespace ARS
         // track centre to the full GsLaneThrottleMaxFloor at the inside edge. Past the centre toward the outside it stays zero,
         // where the off-track limit already lives. Halfway through a 90 degree bend the projection points down the straight,
         // the inside test fails and the rule lets go exactly where lifting would cost the exit.
+        // One colour for the whole trajectory, decided from the numbers the tick already computed:
+        //   green to white - the inside floor is holding, scaled by how hard (green at the inside edge, white as it fades);
+        //   red            - the path leaves the road and runs further out than the car, or drifts out with the car on the road;
+        //   yellow         - it leaves the road but cuts inside the car;
+        //   blue           - nothing to say.
+        // Green wins because the floor is the reason the line is on screen; the two families cannot overlap, since the floor
+        // returns zero while the off-track clock is running.
+        Color ProjectionPathColour(float gsFloor)
+        {
+            if (gsFloor > 0f)
+            {
+                float share = ARS.Clamp(gsFloor / GsLaneThrottleMaxFloor, 0f, 1f);
+                int dim = (int)(255f * (1f - share));
+                return Color.FromArgb(255, dim, 255, dim);
+            }
+            bool outside = _projectionOutsideMeters > 0f;
+            if (outside && _projectionWidening) return Color.Red;
+            if (outside) return Color.Yellow;
+            if (_projectionWidening) return Color.Red;
+            return Color.Blue;
+        }
+
         float GsLaneThrottleFloorValue()
         {
             if (!ARS.GsLaneThrottleFloor) return 0f;
@@ -2448,6 +2473,7 @@ namespace ARS
             // asked for, because the rule is about not lifting, not about not slowing.
             float gsFloor = GsLaneThrottleFloorValue();
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
+            _projectionPathColor = ProjectionPathColour(gsFloor);
 
             UpdateBrakeLearning();
 
@@ -3829,15 +3855,10 @@ namespace ARS
             // when the projection leaves the road AND is further out than the car, yellow when it leaves the road but is
             // more inside than the car, red again when it is still on the road but drifting further out than the car, and
             // blue when there is nothing to say.
-            bool projectionOutside = _projectionOutsideMeters > 0f;
-            Color path;
-            if (GsLaneThrottleFloorValue() > 0f) path = Color.Green;
-            else if (projectionOutside && _projectionWidening) path = Color.Red;
-            else if (projectionOutside) path = Color.Yellow;
-            else if (_projectionWidening) path = Color.Red;
-            else path = Color.Blue;
-            ARS.DrawLine(origin, half, path);
-            ARS.DrawLine(half, full, path);
+            // One colour for both halves, decided in the tick that measured them: green fading to white while the inside floor
+            // holds, red when the path runs wide, yellow when it runs off the road but cuts inside, blue otherwise.
+            ARS.DrawLine(origin, half, _projectionPathColor);
+            ARS.DrawLine(half, full, _projectionPathColor);
         }
 
         // Both front wheels' measured side slip in degrees against the limit, and the factor the request is being scaled by
