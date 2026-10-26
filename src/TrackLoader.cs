@@ -13,6 +13,10 @@ namespace ARS
 {
     public static class TrackLoader
     {
+        // Corners are not recognised this close to the start/finish line, counted the short way round on a circuit: a corner that
+        // straddles the line makes the plan brake while the grid is still leaving it.
+        const int ApexStartLineClearanceNodes = 80;
+
         public static XmlDocument LoadTrackFile(string trackname = null)
         {
             ARS.Log(ARS.LogImportance.Info, "Loading " + trackname);
@@ -376,8 +380,6 @@ namespace ARS
             const int smoothingNodes = 2;
             const int exitRelaxationNodes = 4;
             const int minimumCornerNodes = 25;
-        // Corners are not recognised this close to the start/finish line, counted the short way round on a circuit.
-        const int ApexStartLineClearanceNodes = 80;
             const float closeCornerSeconds = 2f;
 
             // Start a circuit scan on a straight so a corner crossing the node-zero boundary
