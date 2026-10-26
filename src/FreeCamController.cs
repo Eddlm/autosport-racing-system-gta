@@ -35,6 +35,16 @@ namespace ARS
                 return;
             }
 
+            // The mode writes the ped's position every active frame, so anything the game does to that ped is undone next tick: a
+            // player who dies, respawns or gets into a car during freecam is dragged back under the drone, and a mounted ped is warped
+            // out of its vehicle. Leaving is the only safe answer, and Toggle restores gravity, collision, visibility and the view mode.
+            Ped ped = Game.Player.Character;
+            if (ped == null || !ped.Exists() || ped.IsDead || ped.IsInVehicle())
+            {
+                Toggle();
+                return;
+            }
+
             Function.Call(Hash.HIDE_HUD_AND_RADAR_THIS_FRAME, true);
             if (Game.IsControlJustPressed(2, Control.Detonate)) ARS.HideHudMode = !ARS.HideHudMode;
 
@@ -151,7 +161,9 @@ namespace ARS
 
             if (!ARS.CanWeUse(ARS.FreeCamRide)) return;
             _previousViewMode = Function.Call<int>(Hash.GET_FOLLOW_PED_CAM_VIEW_MODE);
-            if (_previousViewMode != 4)
+            // Forced only when the reading is a real mode: a -1 cannot be restored on the way out, so forcing 4 over it would leave
+            // the player's camera on the drone's mode for good.
+            if (_previousViewMode >= 0 && _previousViewMode != 4)
                 Function.Call(Hash.SET_FOLLOW_PED_CAM_VIEW_MODE, 4);
 
             _isActive = true;
