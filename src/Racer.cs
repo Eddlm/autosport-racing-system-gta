@@ -3871,6 +3871,16 @@ namespace ARS
         // mirrors, spoilers, roof racks - so the same line began three metres up on a truck and one and a half on a coupe, and a
         // body kit moved it. The bone is where the mass that produces the acceleration sits, and it is the same reference the
         // wheelbase already reads. The lift clears the bodywork, because the bone itself sits inside the engine bay.
+        // Off road the projection's vertical component is mostly the car's own pitching, and the line jumped enough to be hard to
+        // follow - the eye loses it among the bumps. Only a tenth of the vertical deviation from the origin survives: the horizontal
+        // path is the part that says where the car is going, and the slope it climbs is already visible in the road itself.
+        const float ProjectionVerticalShare = 0.1f;
+
+        Vector3 DampedVertical(Vector3 point, float baseZ)
+        {
+            return new Vector3(point.X, point.Y, baseZ + (point.Z - baseZ) * ProjectionVerticalShare);
+        }
+
         Vector3 ProjectionOrigin()
         {
             const float lift = 0.2f;
@@ -3886,8 +3896,8 @@ namespace ARS
             // and not of its tallest trim.
             Vector3 origin = ProjectionOrigin();
             float lift = origin.Z - Car.Position.Z;
-            Vector3 half = ProjectAhead(0.5f) + Vector3.WorldUp * lift;
-            Vector3 full = ProjectAhead(1f) + Vector3.WorldUp * lift;
+            Vector3 half = DampedVertical(ProjectAhead(0.5f) + Vector3.WorldUp * lift, origin.Z);
+            Vector3 full = DampedVertical(ProjectAhead(1f) + Vector3.WorldUp * lift, origin.Z);
             // One colour for both halves, decided in the tick that measured them: green fading to white while the inside floor
             // holds, red when the path runs wide, yellow when it runs off the road but cuts inside, blue otherwise.
             ARS.DrawLine(origin, half, _projectionPathColor);
