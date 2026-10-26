@@ -415,6 +415,11 @@ test took four laps to settle at the gentler settings; this is one lap for anyth
 floor and every clean lap buys back only 0.025, so a corner can sit at 0.5 for ten laps after one mistake - the symptom is brakes far too
 early on a corner the AI got wrong once.
 
+**Superseded 2026-10-27 by the feasibility ratio** - see `AGENTS-TECHNOTES.md`, "The brake learner's verdict is a feasibility
+ratio". The paragraph above is the tuning record of the arrival-speed law (build 922) and its numbers no longer exist in the
+code: `BrakeEntryExcessMps`, `BrakeEntryDeadbandMps` and `BrakeEntryFactorStep` are gone, replaced by `BrakeFeasibilityCutStep`
+0.2 per `BrakeFeasibilityCutSpan` 0.5. The steps, the range 0.5-1.0 and the one-lap settling behaviour below still hold.
+
 **The brake learner is calibrated and VERIFIED (driver, 2026-10-24, build 922).** One lap to learn a corner - a single pass through
 the apex - and once settled the factor moves at most **+/-0.02 per lap**. The driver's verdict: *"este balance esta bien"*. That closes
 the thread; the numbers in the paragraph above are the calibrated set and should not be nudged without a fresh on-track reason. The

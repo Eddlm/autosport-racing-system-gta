@@ -132,18 +132,30 @@ before the pedal lets go. A car with no ABS of its own is the first case where t
 `+0x174` for it. Numbers for the decision: 0.2/s is 4 s; 2/s is 0.4 s; 6/s is 0.13 s, which is ABS-shaped. The rise is a
 separate question - slow reapplication is the point of ABS.
 
-**The brake learner's verdict is the arrival speed, not the pedal (driver, 2026-10-23).** The old law scored the *share
-of the braking phase spent above 0.9 of pedal* against a 20 % target and multiplied the factor by the error. That asked
-the factor to reproduce a braking **style** rather than a braking **point**: a corner taken exactly right with a gentle
-pedal scored zero and kept inflating the factor every lap, and the route brake cap meant the pedal could not reach the
-share the target wanted even when the corner was perfect. Now there are two verdicts and they are the ones already
-measured: **inside `BrakeEntryDeadbandMps` (5 mph) of the speed the corner asks for at the entrance, the factor gains a
-flat `BrakeGoodArrivalStep` 0.05**; above the deadband the existing deducer applies its cut, `BrakeEntryFactorStep` 0.2 for
-20 mph over, linear beyond. The skid verdict is untouched. The whole full-pedal machinery went with it - `_brakeSampleSeconds`,
-`_brakeSampleFullSeconds` and their commit copies, `BrakeSampleThreshold` 0.25, `BrakeFullPedalThreshold` 0.9,
-`BrakeFullFractionTarget` 0.2 - and so did the **Brake Learn Gain** setting, which stepped the old share error and has no
-meaning now; the step is a constant in one place. The learner therefore searches: credit until the arrival goes hot, cut
-until it comes back inside the band.
+**The brake learner's verdict is a feasibility ratio, not an arrival speed (driver, 2026-10-27).** Two earlier laws failed,
+and the failures are worth keeping. The first scored the *share of the braking phase spent above 0.9 of pedal* against a 20 %
+target, which asked the factor to reproduce a braking **style** rather than a braking **point**: a corner taken exactly right
+with a gentle pedal scored zero and kept inflating the factor every lap. The second compared the arrival speed at the entrance
+against the speed the corner asks for, which had **no distance in it** - one metre a second over scored the same with two
+hundred metres to lose it in as with ten, and the Gs lane throttle floor (2026-10-27) walked straight into it: the floor holds
+throttle through a corner, the car arrives hot, the learner reads "braked too late" and cuts a corner that was fine.
+The verdict is now
+
+    ratio = (vReal^2 - vApex^2) / (vRamp^2 - vApex^2)
+
+where `vRamp` is `ApexBrakingSpeed` - the most the car may carry right now and still reach the apex speed, solved from the
+remaining distance against the decel the grip and the grade supply. Both sides carry the same `2 * decel * distance`, so it
+cancels: **1.00 is exactly on the ramp at any distance**, and the number needs no calibration per corner. It is sampled every
+`BrakeFeasibilitySampleMs` (100 ms) during the braking run, pedal above 0.05, and the **worst** ratio of the approach is the
+verdict; `BrakeFeasibilityMinBudgetMps2` 4 stops the denominator dying as the car reaches the target.
+**Two rules, one each way, and silence between them.** Over the ramp the factor pays `BrakeFeasibilityCutStep` 0.2 per
+`BrakeFeasibilityCutSpan` 0.5 of overage, capped by `BrakeMaxCutPerEvent` 0.15. Under it with budget to spare - ratio between
+`BrakeFeasibilityRewardAbove` 0.5 and `BrakeFeasibilityRewardBelow` 0.8 - it earns the flat `BrakeGoodArrivalStep` 0.025. On the
+ramp, or so far under it that the ramp never bound, nothing is written and nothing is announced: rewarding every easy arrival
+is how a factor inflates a step a lap until the corner breaks, and the band's lower edge is what keeps a car held up by traffic
+out of the reward. The skid verdict is untouched and still lands its flat 0.1. The announcement carries the ratio and the reason
+(`over`, `spare`, `skid`) so the band can be tuned by driving. `BrakeEntryExcessMps`, `BrakeEntryDeadbandMps`,
+`BrakeEntryFactorStep`, `_brakeEntryExcessMps` and `_brakeEntryMeasured` are gone with the old signal.
 
 **The corner plan carries no terrain factor, and the route carries all of it (driver, 2026-10-23).** `cornerSpd` is
 multiplied by neither the slope's `sqrt(hill grip)` nor the crest's `routeCrestFactor`; `followTrackSpd` is multiplied by

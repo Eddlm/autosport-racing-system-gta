@@ -391,16 +391,18 @@ namespace ARS
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;  // largest slip seen between this apex's entrance and the apex itself
         int _brakeSampleApexNode = -1;
-        float _brakeEntryExcessMps = 0f;     // speed over the plan's at the entrance pass, this corner
-        bool _brakeEntryMeasured = false;
+        // The worst feasibility ratio seen on this approach: what the car was carrying against the most the plan allows
+        // here, both as kinetic energy above the apex speed. The constants explain why the ratio needs no distance.
+        float _brakeSampleFeasibility = 0f;
+        int _brakeFeasibilityNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
         // BrakeCommitDelaySeconds gathering the exit's slide before it is allowed to teach anything.
         int _brakeCommitApexNode = -1;
         int _brakeCommitAtGameTime = 0;
         float _brakeCommitMaxSlideDeg = 0f;
-        float _brakeCommitEntryExcessMps = 0f;
-        const float BrakeGoodArrivalStep = 0.025f;  // arriving at the speed the corner asks for earns this, flat
+        float _brakeCommitFeasibility = 0f;
+        const float BrakeGoodArrivalStep = 0.025f;  // arriving with budget to spare earns this, flat
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
@@ -408,11 +410,21 @@ namespace ARS
         // One approach may not take the whole factor: an entry 5 m/s hot used to earn 0.367, which is the entire distance from the
         // seed to the floor, so one bad arrival ruined that corner for the rest of the race - fourteen clean arrivals to undo.
         const float BrakeMaxCutPerEvent = 0.15f;
-        // Arriving at the entrance faster than the plan asked is a verdict on the plan, not on the pedal: the
-        // share of full pedal cannot see a car that came in hot and still spent the approach on the brake.
-        const float BrakeEntryExcessMps = 2.2352f;  // five miles an hour over costs...
-        const float BrakeEntryFactorStep = 0.2f;    // ...a fifth of the factor; linear beyond, capped per event below
-        const float BrakeEntryDeadbandMps = 0.89408f; // the first two mph are measurement noise, not a verdict
+        // The verdict is a feasibility ratio, not a speed difference. ApexBrakingSpeed already answers "the most this car may
+        // carry right now and still reach the apex speed", solved from the remaining distance and the decel the grade and the
+        // grip allow; call that the ramp. Real speed against the ramp, both written as kinetic energy above the apex speed,
+        //
+        //     ratio = (vReal^2 - vApex^2) / (vRamp^2 - vApex^2)
+        //
+        // and the distance and the decel cancel out of the fraction. 1.00 is exactly on the ramp, and the same number means the
+        // same thing at two hundred metres out and at twenty. The old reading - arrival speed against the apex speed - had no
+        // distance in it at all: one metre a second over scored the same with two hundred metres to lose it in as with ten.
+        const float BrakeFeasibilityCutStep = 0.2f;       // a full step of factor for...
+        const float BrakeFeasibilityCutSpan = 0.5f;       // ...half again the budget the ramp allows
+        const float BrakeFeasibilityRewardBelow = 0.8f;   // under this share of the budget the entry had margin to give
+        const float BrakeFeasibilityRewardAbove = 0.5f;   // under this one the ramp never bound, so it proves nothing
+        const float BrakeFeasibilityMinBudgetMps2 = 4f;   // near the target the denominator dies and the ratio lies
+        const int BrakeFeasibilitySampleMs = 100;         // the ramp costs a corner lookup, so ten samples an approach will do
         const float BrakeMaxFactor = 1f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
@@ -2636,19 +2648,30 @@ namespace ARS
             {
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
-                _brakeEntryExcessMps = 0f;
-                _brakeEntryMeasured = false;
+                _brakeSampleFeasibility = 0f;
+                _brakeFeasibilityNextSampleAt = 0;
                 // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
                 // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
                 // would be a second place the factor is written, judged without the slide and the pedal share.
             }
 
-            // The entrance pass is measured once: what the plan wanted there against what the car actually carried.
-            if (!_brakeEntryMeasured && _brakeSampleApexNode >= 0 && HasPassedBrakingTarget())
+            // The approach is watched, not sampled once: the ratio climbs while the car runs hotter than the ramp and falls
+            // again if it gets back on it, so the worst reading of the whole braking run is what judges the entry.
+            if (_brakeSampleApexNode >= 0 && !HasPassedBrakingTarget()
+                && Control.Brake > 0.05f && Game.GameTime >= _brakeFeasibilityNextSampleAt)
             {
-                _brakeEntryMeasured = true;
-                float expected = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed);
-                _brakeEntryExcessMps = Math.Max(0f, ARS.GetForwardSpeed(Car) - expected);
+                _brakeFeasibilityNextSampleAt = Game.GameTime + BrakeFeasibilitySampleMs;
+                float apexSpeed = Math.Max(2f, NextApexSpeed);
+                float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed);
+                float budget = ramp * ramp - apexSpeed * apexSpeed;
+                // The budget dies as the car reaches the target, and a ratio built on a dying denominator is noise. Under
+                // this floor the approach is over anyway: the car is at the speed the corner asks for.
+                if (budget > BrakeFeasibilityMinBudgetMps2)
+                {
+                    float carried = ARS.GetForwardSpeed(Car);
+                    float ratio = (carried * carried - apexSpeed * apexSpeed) / budget;
+                    if (ratio > _brakeSampleFeasibility) _brakeSampleFeasibility = ratio;
+                }
             }
 
             // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. A car that slid on
@@ -2673,7 +2696,7 @@ namespace ARS
             _brakeCommitApexNode = _brakeSampleApexNode;
             _brakeCommitAtGameTime = Game.GameTime + (int)(BrakeCommitDelaySeconds * 1000f);
             _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
-            _brakeCommitEntryExcessMps = _brakeEntryExcessMps;
+            _brakeCommitFeasibility = _brakeSampleFeasibility;
         }
 
         void CommitBrakeLearning()
@@ -2681,9 +2704,12 @@ namespace ARS
             if (!ARS.BrakeLearning || _brakeCommitApexNode < 0) return;
             int apexNode = _brakeCommitApexNode;
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
+            float feasibility = _brakeCommitFeasibility;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
-            float entryCut = BrakeEntryFactorStep * (Math.Max(0f, _brakeCommitEntryExcessMps - BrakeEntryDeadbandMps) / BrakeEntryExcessMps);
+            // Over the ramp the cut grows with how far over: needing half again the budget costs a whole step, and the
+            // per-event cap keeps one bad entry from spending the factor's whole range.
+            float entryCut = BrakeFeasibilityCutStep * (Math.Max(0f, feasibility - 1f) / BrakeFeasibilityCutSpan);
             entryCut = Math.Min(entryCut, BrakeMaxCutPerEvent);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
             // curve has fallen all the way to fTractionCurveMin, so that is sliding rather than merely cornering at
@@ -2693,28 +2719,42 @@ namespace ARS
                 float skidCut = Math.Min(BrakeSkidFactorStep + entryCut, BrakeMaxCutPerEvent);
                 float skidFactor = ARS.Clamp(before - skidCut, BrakeMinFactor, BrakeMaxFactor);
                 CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment(apexNode, before, skidFactor);
+                AnnounceBrakeAdjustment(apexNode, before, skidFactor, "skid " + feasibility.ToString("0.00"));
                 return;
             }
-            // The verdict is the arrival speed and nothing else. Inside the deadband the corner has been learned:
-            // it is taken at the speed it asks for, so the factor earns a flat step and may brake later next time.
-            // Above it the deducer applies the cut it already had. Reading the pedal instead - the share of the
-            // phase spent at full pressure - asked the factor to reproduce a braking *style* rather than a braking
-            // *point*, and a corner taken exactly right with a gentle pedal scored zero and kept inflating the
-            // factor every lap.
+            // Two rules, one in each direction, and silence in between. Under the ramp with budget to spare the entry can
+            // be taken later, so the factor earns a flat step. Over the ramp it pays the proportional cut. In between - on
+            // the ramp, or so far under it that the ramp never bound - the corner proves nothing and the factor is left
+            // alone: rewarding every easy arrival is how a factor inflates a step a lap until the corner breaks. And the
+            // old reading of the pedal - the share of the phase spent at full pressure - asked for a braking *style* rather
+            // than a braking *point*; a corner taken exactly right with a gentle pedal scored zero and kept inflating.
             float factor;
-            if (_brakeCommitEntryExcessMps <= BrakeEntryDeadbandMps) factor = before + BrakeGoodArrivalStep;
-            else factor = before - entryCut;
+            string why;
+            if (feasibility > 1f)
+            {
+                factor = before - entryCut;
+                why = "over " + feasibility.ToString("0.00");
+            }
+            else if (feasibility >= BrakeFeasibilityRewardAbove && feasibility < BrakeFeasibilityRewardBelow)
+            {
+                factor = before + BrakeGoodArrivalStep;
+                why = "spare " + feasibility.ToString("0.00");
+            }
+            else
+            {
+                // On the ramp, or never bound by it. No verdict, and no second write of the value it already holds.
+                return;
+            }
             factor = ARS.Clamp(factor, BrakeMinFactor, BrakeMaxFactor);
             CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
             // braking that corner costs.
-            AnnounceBrakeAdjustment(apexNode, before, factor);
+            AnnounceBrakeAdjustment(apexNode, before, factor, why);
         }
 
         // One line per verdict, on its own switch: the car, the corner's node, the factor it had, the move it took
         // and the result. A cut reads as a minus rather than a plus with a negative behind it.
-        void AnnounceBrakeAdjustment(int apexNode, float before, float after)
+        void AnnounceBrakeAdjustment(int apexNode, float before, float after, string why)
         {
             // Its own switch, and only that: gating it behind Show Track Analysis made the checkbox inert for anyone not running
             // the debug view, which read as 'brake learning announces nothing'.
@@ -2722,7 +2762,8 @@ namespace ARS
             float change = after - before;
             string sign = change < 0f ? " - " : " + ";
             UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") adjusted corner Nº" + apexNode + " | "
-                + before.ToString("0.00") + sign + Math.Abs(change).ToString("0.00") + " > " + after.ToString("0.00"));
+                + before.ToString("0.00") + sign + Math.Abs(change).ToString("0.00") + " > " + after.ToString("0.00")
+                + " | " + why);
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
