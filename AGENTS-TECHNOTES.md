@@ -535,6 +535,14 @@ The two-livery-spaces trap (mod slot 48 vs the livery list), the exact natives a
   "unsuitable looking" is not a reason to keep a car out; the pace band decides who races whom. The old list also dropped OffRoad,
   which is why the Karin Everon (an off-roader) vanished from a one-car test roster and the only symptom was "no car in the pool
   carries a pace index". The catalog now logs the reason for every entry it drops.
+- **`Vector3.SignedAngle` returns the FULL 3D angle; the axis only sets the sign.** Measured against SHVDN itself: a pair with 0.1 deg of
+  heading and 6.4 deg of pitch difference returns 6.4, and a pure pitch difference always returns POSITIVE. The grade cancels only when
+  both vectors carry the SAME pitch - so the danger is exactly where the two inputs come from different points on the road (node to node,
+  node to car, car to car). Any horizontal quantity (bearing, heading match, lane crossing, chicane test) must flatten both vectors first.
+  Found and fixed 2026-10-26 (builds 1163-1165): the pursuit bearing, the slide angle, the side-by-side heading match, the chicane test,
+  the grid slot lateral offset and `DirectionDiff`. Ruled benign and left alone: the 3D `DistanceTo` calls - a car on a flyover must not
+  snap to the road underneath, and a lap arc length is a real 3D length. `ARS.SignedLaneOffset` reads ~0.6 % short at a 6.4 deg grade
+  because `Cross(dir, WorldUp)` is cos(pitch) long; exact enough, not touched.
 - **The clamp CLOSES exponentially in the gap (15/s, ceiling 90 deg/s) and OPENS linearly (72 deg/s)** (build 1140). Closing: rate = `min(gap x 15/s, 90)`, so the gap halves every 30 Hz tick and a full 38->2 deg collapse takes 633 ms in 19 ticks; measured to 1 % of the target, 500 % = 300 ms at a 2 deg target and 600 ms at 10 deg. Opening: fixed 72 deg/s, so the full travel takes 0.5 s. There is no snap: the exponential closes and `Math.Max` keeps the last step from crossing the target, so the tail is visible in the readout. The closing gain cannot approach the tick rate (`1 - k/30` per tick: k = 60 snaps in one tick, k = 30 arrives exactly in one). A 45 deg/s cap and a tanh severity rate were both tried and rejected: the cap made a 10 deg target take over a second, the tanh ignored the distance to the target.
   snapped at 0.05 deg; opening stays a flat 4 deg/s. The owner's calibration rule: a clamp at 500 % of its target arrives in 0.1 s.
   Measured times to 1 % of the target, target 2 deg: 200 % -> 39 ms, 500 % -> 105 ms, 1000 % -> 216 ms. The old tanh mapped
