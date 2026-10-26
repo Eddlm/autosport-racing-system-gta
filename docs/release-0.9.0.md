@@ -50,6 +50,10 @@ logs instead of taking the mod down.
 
 ## Behaviour to know about
 
+- **Every four-wheeled class can now race.** The pool used to drop off-road, industrial, utility, commercial, service,
+  emergency and military cars; only motorcycles, bicycles, boats, helicopters, planes and trains are excluded now. The indexed fleet
+  is much larger, so a grid can mix types it never mixed before - the pace band decides who races whom, not the body style.
+
 - The steering and pedal guard is **AI-only**: it lives inside the non-player branch, so the player's
   own steering is never written by ARS.
 - Debug readouts always describe `DebugFocusRacer` — the rival nearest the player — never the player's

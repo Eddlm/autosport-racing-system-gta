@@ -69,6 +69,18 @@ The track creator is live — a root Track Creator submenu records a route and S
 - Low-grip steering behavior still needs the dedicated release-gate drive above.
 - The beater/rust matte paint rule is implemented and ships **unverified in game** — drive a `rusty`/`rat look`/`junkyard`/`primed` livery before trusting it.
 
+## MUST GO IN THE README (owner, 2026-10-26)
+
+When 0.9.0 is published, tell people this in the README, not only in the release body:
+
+
+- **The pool now admits every four-wheeled class.** Off-road, industrial, utility, commercial, service, emergency and military cars
+  are no longer filtered out; only motorcycles, bicycles, boats, helicopters, planes and trains are excluded. The indexed fleet grew
+  from ~472 to whatever the roster holds, so grids can mix types they never mixed before (a truck can end up in a sports car's pace
+  band). That is intended: the band decides who races whom, not the body style.
+- Why it changed: a car could vanish from a one-car roster with the message "No car in the pool carries a pace index", which named
+  the wrong cause - the Karin Everon is an off-roader and the off-road class was blacklisted.
+
 ## Release sequence — 0.9.0 (prep state)
 
 `AssemblyInfo.cs` carries `0.9.0.0` ahead of the cut, so the in-game banner announces the version the tag claims; the two are still hand-moved and nothing derives either from the other. The notes are hand-written in `docs/RELEASE-NOTES.md`, because the auto-generated body would span every commit since `v0.8.6` and read as noise.
