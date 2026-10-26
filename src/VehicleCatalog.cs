@@ -95,11 +95,33 @@ namespace ARS
                 pool[i] = key;
                 if (!seen.Add(key)) continue;
                 Model model = new Model(hash);
-                if (!model.IsCar || !model.IsValid) continue;
+                if (!model.IsCar || !model.IsValid)
+                {
+                    // A DLC model that has never been streamed can fail IS_MODEL_A_VEHICLE (and IsValid) while its hash is
+                    // perfectly good in the cdimage. cars.txt never shows it - it is almost all base-game traffic - but a one-
+                    // car test roster does, and the only symptom was 'no car carries a pace index'.
+                    if (!model.IsInCdImage)
+                    {
+                        log("  dropped " + entry + ": not in the cdimage");
+                        pool[i] = null;
+                        continue;
+                    }
+                    model.Request(750);
+                    for (int waited = 0; waited < 1000 && !model.IsLoaded; waited += 50) Script.Wait(50);
+                    bool usable = model.IsCar && model.IsValid;
+                    log("  " + (usable ? "streamed" : "dropped") + " " + entry + " (" + hash + "): IsCar=" + model.IsCar
+                        + " IsValid=" + model.IsValid + " loaded=" + model.IsLoaded);
+                    if (!usable) { model.MarkAsNoLongerNeeded(); pool[i] = null; continue; }
+                }
                 try
                 {
                     VehicleClass vehicleClass = (VehicleClass)Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, model.Hash);
-                    if (blacklistedClasses.Contains(vehicleClass)) continue;
+                    if (blacklistedClasses.Contains(vehicleClass))
+                    {
+                        log("  dropped " + entry + ": class " + vehicleClass + " is blacklisted");
+                        pool[i] = null;
+                        continue;
+                    }
                     float grip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, model.Hash);
                     float topSpeedMph = ARS.MpsToMph(Function.Call<float>((Hash)0xF417C2502FFFED43, model.Hash));
                     float accel = Function.Call<float>(Hash.GET_VEHICLE_MODEL_ACCELERATION, model.Hash);
