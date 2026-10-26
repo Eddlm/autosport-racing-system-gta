@@ -49,7 +49,7 @@ namespace ARS
             // ArgumentOutOfRangeException after the screen has already faded out, and the player keeps a black screen.
             if (RouteNodes.Count < 6)
             {
-                UI.Notify("~r~A route needs at least three sections: place the start line, then Apply Section three times.");
+                UI.Notify("~r~A route needs at least six nodes: " + RouteNodes.Count + " so far. Place the start line, then draw a section.");
                 return;
             }
 

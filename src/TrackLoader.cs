@@ -140,6 +140,15 @@ namespace ARS
             RefreshRouteTopology();
             DensifyRoute();
 
+            // A file can be well-formed and still carry no route: the creator refuses below six nodes, but a hand-edited or
+            // truncated track does not pass through the creator. Six is the highest index the spawn below reads.
+            if (ARS.RouteNodes.Count < 6)
+            {
+                ARS.Log(ARS.LogImportance.Error, "Track refused: " + ARS.RouteNodes.Count + " route nodes, six needed");
+                GTA.UI.Notify("~r~That track has no usable route: six nodes minimum.");
+                return;
+            }
+
             GenerateRouteInfo();
 
             Script.Wait(1000);

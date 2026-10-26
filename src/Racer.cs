@@ -3257,7 +3257,9 @@ namespace ARS
         {
             // The burn is shut down whatever the setting says now: an override left armed is not a racing state, it is the
             // car keeping a bottle it was never given, and it outlives the toggle that spawned it.
-            if (_nitrousActiveUntil > 0 && Game.GameTime >= _nitrousActiveUntil) StopNitrous();
+            // Unticking the setting cuts a live burn: the player asked for no nitrous, and an override that keeps applying until its
+            // own window expires is not what the toggle means.
+            if (_nitrousActiveUntil > 0 && (!ARS.NitrousEnabled || Game.GameTime >= _nitrousActiveUntil)) StopNitrous();
         }
 
         // Valid when a shot is available and the straight is long enough; appropriate when contested, defended,
@@ -5303,7 +5305,9 @@ namespace ARS
             // deleted unless the player happens to be sitting in it, which would take them with it.
             // A burn still live when the race ends would leave SET_OVERRIDE_NITROUS_LEVEL armed on a car the player keeps, and
             // nothing in Initialize clears it: the bottle would follow them out of the race for the rest of the session.
-            if (_nitrousActiveUntil > Game.GameTime) StopNitrous();
+            // Presence, not liveness: a burn that expired since the last core tick is still armed in the vehicle, and StopNitrous is
+            // idempotent, so the wider test is the correct one.
+            if (_nitrousActiveUntil > 0) StopNitrous();
 
             if (!ControlledByPlayer) Driver.Delete();
 

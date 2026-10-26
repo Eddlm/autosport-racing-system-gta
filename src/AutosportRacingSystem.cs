@@ -3511,29 +3511,32 @@ namespace ARS
             Function.Call(Hash._0x10D373323E5B9C0D);
             Game.Player.Character.HasGravity = true;
 
-            // The race is over, not paused: nothing of it may survive into the next load, or a reload resumes a race on a
-            // half-reset state and that race can no longer be timed out.
-            // The pedals live in the vehicle's own memory and are written every frame, so a car caught mid-throttle would drive
-            // away from the teardown on its own. Hand it back neutral: that is what "as if the script had never loaded" means here.
-            if (CanWeUse(Game.Player.Character.CurrentVehicle))
-            {
-                Vehicle vehicle = Game.Player.Character.CurrentVehicle;
-                VehicleMemory.SetThrottle(vehicle, 0f);
-                VehicleMemory.SetBrakes(vehicle, 0f);
-                VehicleMemory.SetSteerInput(vehicle, 0f);
-                VehicleMemory.SetSteerAngle(vehicle, 0f);
-            }
-
-            RaceStatus = RaceState.None;
-            PlayerParticipating = false;
-            LeaderboardFinish.Clear();
-            _raceTimedFinishMs = 0;
-            _routeEditorActive = false;
             }
             catch (Exception abortError)
             {
                 // Logging can itself fail during an abort; a swallowed teardown error is better than a dead game.
                 try { Log(LogImportance.Error, "Abort teardown failed: " + abortError.Message); } catch { }
+            }
+            finally
+            {
+                // The race is over, not paused: nothing of it may survive into the next load, or a reload resumes a race on a
+                // half-reset state and that race can no longer be timed out.
+                // The pedals live in the vehicle's own memory and are written every frame, so a car caught mid-throttle would drive
+                // away from the teardown on its own. Hand it back neutral: that is what "as if the script had never loaded" means here.
+                if (CanWeUse(Game.Player.Character.CurrentVehicle))
+                {
+                    Vehicle vehicle = Game.Player.Character.CurrentVehicle;
+                    VehicleMemory.SetThrottle(vehicle, 0f);
+                    VehicleMemory.SetBrakes(vehicle, 0f);
+                    VehicleMemory.SetSteerInput(vehicle, 0f);
+                    VehicleMemory.SetSteerAngle(vehicle, 0f);
+                }
+
+                RaceStatus = RaceState.None;
+                PlayerParticipating = false;
+                LeaderboardFinish.Clear();
+                _raceTimedFinishMs = 0;
+                _routeEditorActive = false;
             }
         }
         
