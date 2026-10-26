@@ -2491,6 +2491,12 @@ namespace ARS
             // The development floor bounds this pedal and nothing else: the brake keeps whatever the plan and the projection
             // asked for, because the rule is about not lifting, not about not slowing.
             float gsFloor = GsLaneThrottleFloorValue(out bool gsInsideRegime);
+            // The floor asks the same question as any other cap - does the tyre allow it? - so it composes through the ceiling
+            // ComposeThrottleCap has just built (TCS, stability, overspeed, rival, offtrack, recovery) and stands down entirely
+            // while the countersteer release is working. Those are physics, not intentions; the floor is a preference about the
+            // line and has no business outvoting a spinning tyre.
+            if (countersteering) gsFloor = 0f;
+            gsFloor = Math.Min(gsFloor, Control.MaxThrottle);
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
             _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
 
