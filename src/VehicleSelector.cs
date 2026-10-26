@@ -17,6 +17,9 @@ namespace ARS
             int outsideLimit = 0;
             foreach (string key in pool)
             {
+                // A null here used to throw ArgumentNullException out of the tick; the pool must not carry one, and the selector
+                // should not die if it does.
+                if (key == null) continue;
                 float pace;
                 if (paceIndex.TryGetValue(key, out pace))
                 {

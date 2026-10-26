@@ -90,7 +90,8 @@ namespace ARS
                 string entry = pool[i];
                 int hash;
                 if (!int.TryParse(entry, out hash)) hash = Game.GenerateHash(entry);
-                if (hash == 0) { pool[i] = null; continue; }
+                // Never null an entry: a dropped name simply misses the pace index, and a null key throws in TryGetValue.
+                if (hash == 0) continue;
                 string key = hash.ToString();
                 pool[i] = key;
                 if (!seen.Add(key)) continue;
@@ -103,7 +104,6 @@ namespace ARS
                     if (!model.IsInCdImage)
                     {
                         log("  dropped " + entry + ": not in the cdimage");
-                        pool[i] = null;
                         continue;
                     }
                     model.Request(750);
@@ -111,7 +111,7 @@ namespace ARS
                     bool usable = model.IsCar && model.IsValid;
                     log("  " + (usable ? "streamed" : "dropped") + " " + entry + " (" + hash + "): IsCar=" + model.IsCar
                         + " IsValid=" + model.IsValid + " loaded=" + model.IsLoaded);
-                    if (!usable) { model.MarkAsNoLongerNeeded(); pool[i] = null; continue; }
+                    if (!usable) { model.MarkAsNoLongerNeeded(); continue; }
                 }
                 try
                 {
@@ -119,7 +119,6 @@ namespace ARS
                     if (blacklistedClasses.Contains(vehicleClass))
                     {
                         log("  dropped " + entry + ": class " + vehicleClass + " is blacklisted");
-                        pool[i] = null;
                         continue;
                     }
                     float grip = Function.Call<float>((Hash)0x539DE94D44FDFD0D, model.Hash);
