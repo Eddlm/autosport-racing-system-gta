@@ -132,36 +132,28 @@ before the pedal lets go. A car with no ABS of its own is the first case where t
 `+0x174` for it. Numbers for the decision: 0.2/s is 4 s; 2/s is 0.4 s; 6/s is 0.13 s, which is ABS-shaped. The rise is a
 separate question - slow reapplication is the point of ABS.
 
-**The brake learner's verdict is a feasibility ratio, not an arrival speed (driver, 2026-10-27).** Two earlier laws failed,
-and the failures are worth keeping. The first scored the *share of the braking phase spent above 0.9 of pedal* against a 20 %
-target, which asked the factor to reproduce a braking **style** rather than a braking **point**: a corner taken exactly right
-with a gentle pedal scored zero and kept inflating the factor every lap. The second compared the arrival speed at the entrance
-against the speed the corner asks for, which had **no distance in it** - one metre a second over scored the same with two
-hundred metres to lose it in as with ten, and the Gs lane throttle floor (2026-10-27) walked straight into it: the floor holds
-throttle through a corner, the car arrives hot, the learner reads "braked too late" and cuts a corner that was fine.
-The verdict is now
+**The brake learner's yardstick is time over the ramp - one second of it (driver, 2026-10-27).** Three signals died before
+this one, and each taught the next. The share of the braking phase spent above 0.9 of pedal asked for a braking **style** rather
+than a **point**. Arrival speed at the entrance against the apex speed had no distance in it: one metre a second over scored the
+same with two hundred metres to lose it in as with ten. And the feasibility ratio - the car's kinetic energy above the apex speed
+over the ramp's - was the right question with the wrong yardstick, because a car braking at the limit is **always** fractionally
+over its own theory: brake onset, weight transfer, and a proportional pedal law that needs a sustained error to hold any decel
+(`BrakeErrorMultiplier` 3 m/s). Every corner therefore read "over" and the factor could only fall. **The learner could never risk
+more, which is half of what it exists to do.**
+So the measure is a **duration**: how long the approach spends above the ramp.
 
-    ratio = (vReal^2 - vApex^2) / (vRamp^2 - vApex^2)
+    over = seconds with vReal > ApexBrakingSpeed(apex) + BrakeErrorMultiplier
 
-where `vRamp` is `ApexBrakingSpeed` - the most the car may carry right now and still reach the apex speed, solved from the
-remaining distance against the decel the grip and the grade supply - **plus `BrakeErrorMultiplier` 3 m/s**. Both sides carry the
-same `2 * decel * distance`, so it cancels: **1.00 is exactly on the reference at any distance**, and the number needs no
-calibration per corner. It is sampled every `BrakeFeasibilitySampleMs` (100 ms) during the braking run, pedal above 0.05, and the
-**worst** ratio of the approach is the verdict.
-
-Two corrections came out of driving it (2026-10-27), and both are structural rather than tuning:
-
-1. **The reference is the ramp plus the brake law's own error.** The pedal law is proportional on the speed error, so sustaining
-any decel needs a sustained error - full brake only arrives `BrakeErrorMultiplier` above the target. A car braking at the limit sits
-about that far above the bare ramp *by design*, which read as "over" on every corner. The allowance is the law's own constant.
-2. **The budget is only read while it keeps its resolution**: `BrakeFeasibilityMinBudgetShare` 0.25 of the apex energy, a ramp 12 %
-above the apex speed. Nearer than that the denominator dies and the same speed error reads two or three times larger - with apex
-30 m/s, a ramp of 31 leaves 61 m^2/s^2, so three metres a second over scores nine. The last metre always won "worst of the run"
-and every correct stop looked catastrophic. A ramp of 999 (no plan) is skipped the same way.
-
-`BrakeFeasibilityOverAbove` **1.1** is the measurement floor above the reference - brake onset, weight transfer and fade put a real
-car slightly over its own theory all the way down - and the cut is scaled by `BrakeFeasibilityCutSpan` **1.5** so that a five per
-cent entry costs ~0.06 rather than spending the per-event cap. Both are knobs, and both were set by driving, not by derivation.
+clocked every `BrakeOverSampleMs` (100 ms) while the car is on the brake and the ramp still has resolution
+(`BrakeOverMinBudgetShare` 0.25 of the apex energy - nearer the target its budget dies and the comparison is noise), then handed
+to the commit at the apex pass. **One target, both directions always live:** under `BrakeOverTargetSeconds` 1 s the factor climbs
+`BrakeOverStepUp` 0.025, so the corner is braked later; over it the factor gives back `BrakeOverStepDown` 0.05, twice as much,
+because a mistake is not free. **There is no silent band**, and that is the point: a corner that spends no time over is exactly the
+corner that should be pushed. Time is also what makes corners comparable - a short corner and a long one are both given the same
+second - where one ratio meant different things at different speeds. The skid verdict is untouched and still lands its flat 0.1.
+The announcement carries the seconds and the direction (`braver`, `relax`, `skid`).
+`BrakeFeasibilityCutStep`, `BrakeFeasibilityCutSpan`, `BrakeFeasibilityRewardAbove`/`Below`, `BrakeFeasibilityOverAbove`,
+`BrakeFeasibilityMinBudgetMps2` and `BrakeGoodArrivalStep` are gone with the ratio.
 **Two rules, one each way, and silence between them.** Over the ramp the factor pays `BrakeFeasibilityCutStep` 0.2 per
 `BrakeFeasibilityCutSpan` 0.5 of overage, capped by `BrakeMaxCutPerEvent` 0.15. Under it with budget to spare - ratio between
 `BrakeFeasibilityRewardAbove` 0.5 and `BrakeFeasibilityRewardBelow` 0.8 - it earns the flat `BrakeGoodArrivalStep` 0.025. On the
