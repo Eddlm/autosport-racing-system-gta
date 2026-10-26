@@ -116,7 +116,7 @@ The corner table is rebuilt each time you apply a section or delete a node, so t
 
 The grid draws from a text file of model names in `Vehicles\` — the default list runs to hundreds of cars, and there is a muscle list, a lemons list and room for yours. The menu lists whatever files are in the folder, re-read each time it opens, so adding a roster is dropping in a file. If your list is shorter than the grid you asked for, Repeat Cars To Fill Grid tops it up, and your own car is added last: the back of the grid on a circuit, the front on a point-to-point.
 
-Rivals get their names from `sillynames.txt`, reshuffled for every grid, and the player keeps their own. Switch rival lap times on in Interface and those names come with them.
+Rivals get their names from `Drivers\names.txt`, reshuffled for every grid, and the player keeps their own. Switch rival lap times on in Interface and those names come with them.
 
 Auto Styling dresses the field before a race: it reads each car's own livery names, picks a style from what they say — rust, camouflage, racing, stripes, flames, tuner, plain — fits cosmetic parts to match and paints last, one car per tick during the countdown, so it costs you no loading time. Your car is never touched, and a car that is already tuned is left alone; a car whose liveries carry no names still gets the parts-and-paint half. With Menyoo installed a matching saved appearance can dress a grid car instead, and when one is applied Auto Styling leaves that car alone.
 
