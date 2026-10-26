@@ -2396,10 +2396,18 @@ namespace ARS
             // Without that distinction the gradient had no white end - the value that paints white was the value that
             // switched the branch off (2026-10-26).
             insideRegime = true;
-            float projectedOffset = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
+            // The side comes from the CAR's corner - the direction of the turn is the car's business - but the distance comes
+            // from the node the projection actually falls on. Measured against the car's own node the two get mixed: half a
+            // second at 30 m/s is 15 m ahead, which in a 30 m radius is 14 degrees round the corner and about 3.6 m of fake
+            // lateral offset. That is what made the depth collapse or saturate depending on where the apex was - a colour
+            // that went white deep inside the inside.
+            Vector3 projected = ProjectAhead(SteerPreviewSeconds);
+            int projectedWindow = (int)(Car.Velocity.Length() * SteerPreviewSeconds) + 10;
+            TrackPoint projectedNode = ARS.FindNearestTrackPoint(projected, CurrentTrackPoint.Node, 0, projectedWindow);
+            float projectedOffset = ARS.SignedLaneOffset(projected, projectedNode.Position, projectedNode.Direction);
             // Room to the inside measured in metres: the centre is zero, the inner edge is 1, and the car's own width is not
             // lane the projection can use.
-            float room = Math.Max(CurrentTrackPoint.TrackHalfWidth - VehicleData.ModelDimensions.X * 0.5f, 1f);
+            float room = Math.Max(projectedNode.TrackHalfWidth - VehicleData.ModelDimensions.X * 0.5f, 1f);
             float depth = ARS.Clamp(projectedOffset * insideSign / room, 0f, 1f);
             return GsLaneThrottleMaxFloor * depth;
         }
