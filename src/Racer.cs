@@ -2355,6 +2355,10 @@ namespace ARS
         float GsLaneThrottleFloorValue()
         {
             if (!ARS.GsLaneThrottleFloor) return 0f;
+            // The off-track system owns the pedal while its clock runs: this floor works the inside of the road and must
+            // never lift a throttle the projection is pulling down, nor stand in front of its brake. Two laws on one
+            // pedal is one too many, and the outside one has seniority because it is the one that knows the plan failed.
+            if (_projectionOutsideSeconds > 0f) return 0f;
             float theoreticalGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
             if (!(theoreticalGs > 0f)) return 0f;
             if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= 0.5f * theoreticalGs) return 0f;
