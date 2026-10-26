@@ -324,6 +324,10 @@ namespace ARS
         // rate, so the gain has to stay well under the tick rate: at 15/s the gap keeps half of itself per 30 Hz tick, and any gain
         // above 30/s would overshoot the target and be clamped back in a single tick, which is a snap, not a law.
         const float SlipClosePerSecond = 15f;
+        // And a ceiling on the close: without one, a target that collapses 36 deg is covered at 500 deg/s and the clamp reads as a
+        // teleport. 45 deg/s is decisive without being instant - 1.5 deg a tick - and it only binds above a 3 deg gap, so short
+        // corrections keep the exponential's shape.
+        const float SlipCloseMaxDegPerSec = 45f;
         // Below this the gap is the same thing as arrived: an exponential never quite touches its target.
         const float SlipCloseSnapDeg = 0.05f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
@@ -2132,7 +2136,7 @@ namespace ARS
                 else
                 {
                     float gap = chase - clampTarget;
-                    float step = gap * SlipClosePerSecond * TickScale;
+                    float step = Math.Min(gap * SlipClosePerSecond, SlipCloseMaxDegPerSec) * TickScale;
                     _chasingClampDeg = gap <= SlipCloseSnapDeg ? clampTarget : Math.Max(clampTarget, chase - step);
                 }
                 speedCeiling = Math.Min(speedCeiling, _chasingClampDeg);
