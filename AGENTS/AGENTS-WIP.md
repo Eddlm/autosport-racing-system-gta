@@ -55,7 +55,7 @@ The track creator is live — a root Track Creator submenu records a route and S
   `cars.txt`, `Drivers\\names.txt` and `Settings\\tips.txt`. **No ini ships** (owner, 2026-10-26): `SettingsRepair` writes every missing key on
   first load from the same schema that validates them, so the defaults live in one place - the code - and cannot drift from a generated file.
   `Settings\\` ships with `tips.txt` and `.gitkeep` only, and `Dist/AutosportRacingSystem/Settings/*.ini` is gitignored, so a local run cannot leak
-  personal values into the release. `docs/emit-default-settings.py` is obsolete under this rule.
+  personal values into the release. The script that used to write them (`docs/emit-default-settings.py`) is gone with the rule.
 
   **Dist is assembled by hand before a deploy** (owner, 2026-10-26): the build mirrors the game folder into it, but the shipped folder is
   reviewed and finished manually, so nothing here is automated end to end.  - **No `LemonUI-LICENSE.txt` and no verbatim MIT notice ship. That is deliberate and informed, not an oversight — do not "fix" it.** It sits outside the MIT condition that the notice accompany copies, and the copyright holder's real name is in the dll's own assembly metadata in any case, so the file bought no privacy.
