@@ -3803,11 +3803,20 @@ namespace ARS
             Vector3 origin = Car.Position + Vector3.WorldUp * lift;
             Vector3 half = ProjectAhead(0.5f) + Vector3.WorldUp * lift;
             Vector3 full = ProjectAhead(1f) + Vector3.WorldUp * lift;
-            // Red the moment the projection leaves the track, which is a fact about where the car is going — not about
-            // how much pedal the clock has taken. Tying it to the cap made it wait two steps to say what it knew at once.
-            bool outside = _projectionOutsideMeters > 0f;
-            ARS.DrawLine(origin, half, outside ? Color.Red : Color.White);
-            ARS.DrawLine(half, full, outside ? Color.Red : Color.Cyan);
+            // One colour for both segments: they are one trajectory, and the near half and the far half answer the same
+            // question. Green when the development throttle floor is holding - the line exists to explain that rule - red
+            // when the projection leaves the road AND is further out than the car, yellow when it leaves the road but is
+            // more inside than the car, red again when it is still on the road but drifting further out than the car, and
+            // blue when there is nothing to say.
+            bool projectionOutside = _projectionOutsideMeters > 0f;
+            Color path;
+            if (GsLaneThrottleFloorApplies()) path = Color.Green;
+            else if (projectionOutside && _projectionWidening) path = Color.Red;
+            else if (projectionOutside) path = Color.Yellow;
+            else if (_projectionWidening) path = Color.Red;
+            else path = Color.Blue;
+            ARS.DrawLine(origin, half, path);
+            ARS.DrawLine(half, full, path);
         }
 
         // Both front wheels' measured side slip in degrees against the limit, and the factor the request is being scaled by
