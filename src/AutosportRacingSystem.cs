@@ -4024,13 +4024,16 @@ namespace ARS
         static readonly List<string> _sillyNames = new List<string>();
         static readonly Random _sillyNameRandom = new Random();
 
-        // Reloads sillynames.txt and reshuffles the pick pool each race; players edit the file in the script folder.
+        // Reloads Drivers\names.txt and reshuffles the pick pool each race; players edit the file in the script folder.
         static void ResetSillyNames()
         {
             _sillyNames.Clear();
             try
             {
-                _sillyNames.AddRange(File.ReadAllLines(Path.Combine(ScriptsFolder, "sillynames.txt")).Select(l => l.Trim()).Where(l => l.Length > 0));
+                // Drivers\names.txt, with the old root file still read so an install that has not been reorganised keeps working.
+                string names = Path.Combine(ScriptsFolder, "Drivers", "names.txt");
+                if (!File.Exists(names)) names = Path.Combine(ScriptsFolder, "sillynames.txt");
+                _sillyNames.AddRange(File.ReadAllLines(names).Select(l => l.Trim()).Where(l => l.Length > 0));
             }
             catch (Exception) { }
             for (int i = _sillyNames.Count - 1; i > 0; i--) { int j = _sillyNameRandom.Next(i + 1); string t = _sillyNames[i]; _sillyNames[i] = _sillyNames[j]; _sillyNames[j] = t; }

@@ -71,7 +71,9 @@ namespace ARS
         {
             try
             {
-                string path = Path.Combine(ARS.ScriptsFolder, "tips.txt");
+                // Settings\tips.txt, with the old root file still read so an existing install keeps its edited tips.
+                string path = Path.Combine(ARS.ScriptsFolder, "Settings", "tips.txt");
+                if (!File.Exists(path)) path = Path.Combine(ARS.ScriptsFolder, "tips.txt");
                 if (File.Exists(path)) return File.ReadAllLines(path);
             }
             catch (Exception) { }
