@@ -1635,9 +1635,7 @@ namespace ARS
             // Pace mode Relative reads the PLAYER'S car: on foot there is nothing to read, and the grid would fall back to a target the
             // player never chose - which is what produced an empty band they could not explain. Refused at the action rather than
             // greyed in the menu, because the same entry point is reached from the world join prompt, where no row exists.
-            if (CurrentPaceMode == PaceMode.RelativeToMine
-                && !TryComputePlayerCarPaceIndex(out float _)
-                && float.IsNaN(_lastKnownPlayerPace))
+            if (CurrentPaceMode == PaceMode.RelativeToMine && !TryComputePlayerCarPaceIndex(out float _))
             {
                 reason = "Pace Mode is Relative, and you are not in a car: get in one, or pick a fixed PI target.";
                 return false;
