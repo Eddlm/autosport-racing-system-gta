@@ -2743,7 +2743,7 @@ namespace ARS
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
             float overSeconds = _brakeCommitOverSeconds;
             float airPenalty = _brakeCommitAirPenalty;
-            string entry = _brakeCommitEntryExcessMph.ToString("+0;-0;0") + "mph";
+            float entryExcessMph = _brakeCommitEntryExcessMph;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
@@ -2753,7 +2753,7 @@ namespace ARS
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
                 if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment(apexNode, before, skidFactor, entry + " | skid " + overSeconds.ToString("0.0") + "s" + (airPenalty > 0f ? " air -" + airPenalty.ToString("0.00") : ""));
+                AnnounceBrakeAdjustment(entryExcessMph);
                 return;
             }
             // One measure, one target, and both directions scale alike: the step is proportional to how far the corner landed from
@@ -2765,30 +2765,19 @@ namespace ARS
             // The air penalty comes off on top of the step and is never offset by it: a jump is a fault even on a corner whose clock
             // landed under the target, and the clamp is the only bound left.
             float factor = before + step - airPenalty;
-            string why = entry + " | " + overSeconds.ToString("0.0") + "s" + (airPenalty > 0f ? " air -" + airPenalty.ToString("0.00") : "");
             factor = ARS.Clamp(factor, BrakeMinFactor, BrakeMaxFactor);
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
             // braking that corner costs.
-            AnnounceBrakeAdjustment(apexNode, before, factor, why);
+            AnnounceBrakeAdjustment(entryExcessMph);
         }
 
-        // One line per verdict, on its own switch: the car, the corner's node, the factor it had, the move it took
-        // and the result. A cut reads as a minus rather than a plus with a negative behind it.
-        void AnnounceBrakeAdjustment(int apexNode, float before, float after, string why)
+        // One line per verdict: the car and how many miles an hour over the speed the corner asks for it arrived at the entrance.
+        // Nothing else - the rest of the numbers belong in the log, not on the screen.
+        void AnnounceBrakeAdjustment(float entryExcessMph)
         {
-            // Its own switch, and only that: gating it behind Show Track Analysis made the checkbox inert for anyone not running
-            // the debug view, which read as 'brake learning announces nothing'.
             if (!ARS.BrakeLearningNotify) return;
-            float change = after - before;
-            string sign = change < 0f ? " - " : " + ";
-            // With learning off the factor does not move, so the line reports the measurement instead of a change: what the car
-            // carried at the entrance, and what the verdict would have been.
-            string verb = BrakeLearningApplies ? "adjusted corner Nº" : "measured corner Nº";
-            string move = BrakeLearningApplies
-                ? before.ToString("0.00") + sign + Math.Abs(change).ToString("0.00") + " > " + after.ToString("0.00")
-                : "would " + after.ToString("0.00");
-            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + verb + apexNode + " | " + move + " | " + why);
+            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + entryExcessMph.ToString("+0;-0;0") + "mph");
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
