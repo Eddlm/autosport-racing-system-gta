@@ -313,16 +313,16 @@ namespace ARS
         // The share of the request the cut is leaving this tick, 1 when it is not cutting. Written here so the readout can show it.
         float _slipFactor = 1f;
 
-        // The ceiling lives on the scale of the corner, not of the steering wheel: at speed it is already 5-6 deg, so the whole
-        // correction is a handful of degrees and the rate is what makes it felt rather than stepped.
-        // The closing rate runs from the resting value at the target to the full one at SlipCeilingCloseSpanPct over it, on a tanh
-        // so both ends ease in; the opening is one flat rate, careful by design.
-        const float SlipCeilingSlowDegPerSec = 1f;
-        const float SlipCeilingFastDegPerSec = 10f;
         const float SlipCeilingOpenDegPerSec = 4f;
-        // The span is where the curve does its work: at 75 the 120-130% band stays near 4-5 deg/s and only a real slide reaches
-        // the maximum, which keeps the measurement lag from over-closing the gate by a third as it did at 50.
-        const float SlipCeilingCloseSpanPct = 75f;
+        // Closing is exponential in the gap, not in the severity: the rate is the distance to the target times this gain, so the
+        // time to arrive is a property of the system and not of how big the drop happened to be. Calibration (owner's rule): a
+        // clamp sitting at 500% of its target - a gap of four times the target - arrives in 0.1 s, which is ln(400)/0.1 here.
+        const float SlipClosePerSecond = 60f;
+        // Ceiling on the closing rate so a collapsed target cannot snap the ceiling in a single tick; 90 deg/s still lets the
+        // wheel follow at the slew rate rather than waiting for it.
+        const float SlipCloseMaxDegPerSec = 90f;
+        // Below this the gap is the same thing as arrived: an exponential never quite touches its target.
+        const float SlipCloseSnapDeg = 0.05f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
         SlipState _slip;
         // Below this command there is no inside of the corner, so the pair is averaged instead of picked.
@@ -1948,15 +1948,6 @@ namespace ARS
             public bool Readable;    // false when this source could not answer this tick
         }
 
-        // How fast the gate may shut, from the share of the peak the tyre is using: 1 deg/s at the target, 10 at 200% and beyond.
-        float SlipCeilingCloseRate(float pct)
-        {
-            float over = (pct - 100f) / SlipCeilingCloseSpanPct;
-            float severity = (float)(Math.Tanh(over) / Math.Tanh(1.0));
-            severity = ARS.Clamp(severity, 0f, 1f);
-            return SlipCeilingSlowDegPerSec + (SlipCeilingFastDegPerSec - SlipCeilingSlowDegPerSec) * severity;
-        }
-
         SlipState MeasureFrontSlip(float fwdSpeed)
         {
             // Reverse is always the full lock, as the speed ceiling above already states: neither source answers going backwards,
@@ -2131,13 +2122,16 @@ namespace ARS
                 float chase = float.IsNaN(_chasingClampDeg) ? clampTarget : _chasingClampDeg;
                 // The closing rate follows the severity of the overshoot, the opening is a flat rate: the harder the tyre is past
                 // its peak the faster the gate shuts, and it always reopens carefully rather than snapping wide.
-                float rate = clampTarget >= chase
-                    ? SlipCeilingOpenDegPerSec
-                    : SlipCeilingCloseRate(_slip.InnerPct);
-                float step = rate * TickScale;
-                _chasingClampDeg = clampTarget >= chase
-                    ? Math.Min(clampTarget, chase + step)
-                    : Math.Max(clampTarget, chase - step);
+                if (clampTarget >= chase)
+                {
+                    _chasingClampDeg = Math.Min(clampTarget, chase + SlipCeilingOpenDegPerSec * TickScale);
+                }
+                else
+                {
+                    float gap = chase - clampTarget;
+                    float step = Math.Min(gap * SlipClosePerSecond, SlipCloseMaxDegPerSec) * TickScale;
+                    _chasingClampDeg = gap <= SlipCloseSnapDeg ? clampTarget : Math.Max(clampTarget, chase - step);
+                }
                 speedCeiling = Math.Min(speedCeiling, _chasingClampDeg);
             }
             _finalCeilingDeg = speedCeiling;
