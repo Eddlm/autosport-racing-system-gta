@@ -128,12 +128,13 @@ namespace ARS
         }
 
         // Vehicle classes we never race.
+        // Only what cannot race on a road: two wheels, no wheels, wings, hulls and rails. Every four-wheeled class is fair game -
+        // off-road, industrial, utility, vans, service, emergency and military included - because "unsuitable looking" is not a
+        // reason to keep a car out, and the pace band already decides who races whom.
         static readonly HashSet<VehicleClass> BlacklistedVehicleClasses = new HashSet<VehicleClass>
         {
-            VehicleClass.Motorcycles, VehicleClass.OffRoad, VehicleClass.Industrial, VehicleClass.Utility,
-            VehicleClass.Cycles, VehicleClass.Boats, VehicleClass.Helicopters, VehicleClass.Planes,
-            VehicleClass.Service, VehicleClass.Emergency, VehicleClass.Military, VehicleClass.Commercial,
-            VehicleClass.Trains
+            VehicleClass.Motorcycles, VehicleClass.Cycles, VehicleClass.Boats, VehicleClass.Helicopters,
+            VehicleClass.Planes, VehicleClass.Trains
         };
 
         public static int RaceReward = 0;
