@@ -391,18 +391,18 @@ namespace ARS
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;  // largest slip seen between this apex's entrance and the apex itself
         int _brakeSampleApexNode = -1;
-        // The worst feasibility ratio seen on this approach: what the car was carrying against the most the plan allows
-        // here, both as kinetic energy above the apex speed. The constants explain why the ratio needs no distance.
-        float _brakeSampleFeasibility = 0f;
-        int _brakeFeasibilityNextSampleAt = 0;
+        // How long this approach has spent over the ramp, in seconds. The learner aims at BrakeOverTargetSeconds of it, so a
+        // corner that never goes over buys later braking and one that spends too long over gives some back.
+        //
+        float _brakeSampleOverSeconds = 0f;
+        int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
         // BrakeCommitDelaySeconds gathering the exit's slide before it is allowed to teach anything.
         int _brakeCommitApexNode = -1;
         int _brakeCommitAtGameTime = 0;
         float _brakeCommitMaxSlideDeg = 0f;
-        float _brakeCommitFeasibility = 0f;
-        const float BrakeGoodArrivalStep = 0.025f;  // arriving with budget to spare earns this, flat
+        float _brakeCommitOverSeconds = 0f;
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
@@ -419,23 +419,18 @@ namespace ARS
         // and the distance and the decel cancel out of the fraction. 1.00 is exactly on the ramp, and the same number means the
         // same thing at two hundred metres out and at twenty. The old reading - arrival speed against the apex speed - had no
         // distance in it at all: one metre a second over scored the same with two hundred metres to lose it in as with ten.
-        const float BrakeFeasibilityCutStep = 0.2f;       // a full step of factor for...
-        // ...this much over the tolerance. The ratio is steep near the corner - a five per cent speed error reads 1.53 where the
-        // budget is a quarter of the apex energy - so the span is the knob that sets how hard that error is punished. At 1.5 a
-        // five per cent entry costs about 0.06 and ten per cent about 0.13; at 0.5 either of them spent the per-event cap.
-        const float BrakeFeasibilityCutSpan = 1.5f;
-        const float BrakeFeasibilityRewardBelow = 0.8f;   // under this share of the budget the entry had margin to give
-        const float BrakeFeasibilityRewardAbove = 0.5f;   // under this one the ramp never bound, so it proves nothing
-        // The denominator is the ramp's budget above the apex speed, and it dies as the car reaches the target: with apex 30 m/s,
-        // a ramp of 31 leaves 61 m^2/s^2, so three metres a second over reads as a ratio of nine. Measured there, every correct
-        // braking run looks catastrophic and the last metre always wins the "worst of the run". The budget is therefore only read
-        // while it is still a real share of the apex energy - a quarter of it, which is a ramp 12% above the apex speed.
-        const float BrakeFeasibilityMinBudgetShare = 0.25f;
-        // A car braking at the limit runs slightly over its own theoretical ramp all the way down - brake onset, weight transfer,
-        // fade - so a tolerance above the ramp is not laziness, it is the measurement floor. Ten per cent of the decel. Below it
-        // nothing is written, which is what makes "on the ramp" a band instead of a razor edge.
-        const float BrakeFeasibilityOverAbove = 1.1f;
-        const int BrakeFeasibilitySampleMs = 100;         // the ramp costs a corner lookup, so ten samples an approach will do
+        // The learner aims at a *duration*, not a magnitude: one second spent over the ramp. Time is the unit that makes the two
+        // directions symmetric - a short corner and a long one are both given the same second - and it is what a magnitude could
+        // never deliver. A car braking at the limit is always fractionally over its own theory, so a speed or a ratio scored "over"
+        // on every corner and the factor could only ever fall: the learner could never risk more. Under the target the entry may be
+        // braver, over it the entry is relaxed.
+        const float BrakeOverTargetSeconds = 1f;
+        const float BrakeOverStepUp = 0.025f;        // a lap inside the target buys this much later braking
+        const float BrakeOverStepDown = 0.05f;       // a lap over it gives back twice as much: a mistake is not free
+        // The clock only runs while the ramp still has resolution: near the target its budget dies, and over a dying budget a correct
+        // car reads as wildly over. A quarter of the apex energy is a ramp 12% above the apex speed.
+        const float BrakeOverMinBudgetShare = 0.25f;
+        const int BrakeOverSampleMs = 100;
         const float BrakeMaxFactor = 1f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
@@ -2659,33 +2654,28 @@ namespace ARS
             {
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
-                _brakeSampleFeasibility = 0f;
-                _brakeFeasibilityNextSampleAt = 0;
+                _brakeSampleOverSeconds = 0f;
+                _brakeOverNextSampleAt = 0;
                 // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
                 // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
                 // would be a second place the factor is written, judged without the slide and the pedal share.
             }
 
-            // The approach is watched, not sampled once: the ratio climbs while the car runs hotter than the ramp and falls
-            // again if it gets back on it, so the worst reading of the whole braking run is what judges the entry.
+            // The clock runs only while the car is actually on the brake and the ramp still has resolution; what it counts is time
+            // spent above the ramp, because that is the quantity the learner is aiming at.
             if (_brakeSampleApexNode >= 0 && !HasPassedBrakingTarget()
-                && Control.Brake > 0.05f && Game.GameTime >= _brakeFeasibilityNextSampleAt)
+                && Control.Brake > 0.05f && Game.GameTime >= _brakeOverNextSampleAt)
             {
-                _brakeFeasibilityNextSampleAt = Game.GameTime + BrakeFeasibilitySampleMs;
+                _brakeOverNextSampleAt = Game.GameTime + BrakeOverSampleMs;
                 float apexSpeed = Math.Max(2f, NextApexSpeed);
-                // The ramp is the speed the plan would carry; the pedal law is proportional on the speed error and needs an error
-                // to sustain any decel at all - full brake only arrives BrakeErrorMultiplier above the target. A car braking at the
-                // limit therefore sits that far above the ramp by design, and judging it against the bare ramp reads "over" on every
-                // corner. The allowance is the law's own constant, not a fudge factor.
+                // The ramp carries the pedal law's own brake error: a proportional law needs a sustained error to hold any decel, so a
+                // car braking at the limit sits about BrakeErrorMultiplier above the bare ramp by design. Against the bare number it
+                // would read as over from the first metre of every stop.
                 float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed) + BrakeErrorMultiplier;
                 float budget = ramp * ramp - apexSpeed * apexSpeed;
-                // A ramp of 999 means no plan out there; a budget that is no longer a real share of the apex energy means the
-                // measurement has lost its resolution. Either way there is nothing to read here.
-                if (ramp < 100f && budget > BrakeFeasibilityMinBudgetShare * apexSpeed * apexSpeed)
+                if (ramp < 100f && budget > BrakeOverMinBudgetShare * apexSpeed * apexSpeed)
                 {
-                    float carried = ARS.GetForwardSpeed(Car);
-                    float ratio = (carried * carried - apexSpeed * apexSpeed) / budget;
-                    if (ratio > _brakeSampleFeasibility) _brakeSampleFeasibility = ratio;
+                    if (ARS.GetForwardSpeed(Car) > ramp) _brakeSampleOverSeconds += BrakeOverSampleMs / 1000f;
                 }
             }
 
@@ -2711,7 +2701,7 @@ namespace ARS
             _brakeCommitApexNode = _brakeSampleApexNode;
             _brakeCommitAtGameTime = Game.GameTime + (int)(BrakeCommitDelaySeconds * 1000f);
             _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
-            _brakeCommitFeasibility = _brakeSampleFeasibility;
+            _brakeCommitOverSeconds = _brakeSampleOverSeconds;
         }
 
         void CommitBrakeLearning()
@@ -2719,46 +2709,34 @@ namespace ARS
             if (!ARS.BrakeLearning || _brakeCommitApexNode < 0) return;
             int apexNode = _brakeCommitApexNode;
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
-            float feasibility = _brakeCommitFeasibility;
+            float overSeconds = _brakeCommitOverSeconds;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
-            // Over the tolerance the cut grows with how far over: half again the planned decel costs a whole step, and the
-            // per-event cap keeps one bad entry from spending the factor's whole range.
-            float entryCut = BrakeFeasibilityCutStep * (Math.Max(0f, feasibility - BrakeFeasibilityOverAbove) / BrakeFeasibilityCutSpan);
-            entryCut = Math.Min(entryCut, BrakeMaxCutPerEvent);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
             // curve has fallen all the way to fTractionCurveMin, so that is sliding rather than merely cornering at
             // the limit. The factor then takes a flat cut — sample or no sample, the slide is the evidence.
             if (TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple)
             {
-                float skidCut = Math.Min(BrakeSkidFactorStep + entryCut, BrakeMaxCutPerEvent);
-                float skidFactor = ARS.Clamp(before - skidCut, BrakeMinFactor, BrakeMaxFactor);
+                float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
                 CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment(apexNode, before, skidFactor, "skid " + feasibility.ToString("0.00"));
+                AnnounceBrakeAdjustment(apexNode, before, skidFactor, "skid " + overSeconds.ToString("0.0") + "s");
                 return;
             }
-            // Two rules, one in each direction, and silence in between. Under the ramp with budget to spare the entry can
-            // be taken later, so the factor earns a flat step. Over the ramp it pays the proportional cut. In between - on
-            // the ramp, or so far under it that the ramp never bound - the corner proves nothing and the factor is left
-            // alone: rewarding every easy arrival is how a factor inflates a step a lap until the corner breaks. And the
-            // old reading of the pedal - the share of the phase spent at full pressure - asked for a braking *style* rather
-            // than a braking *point*; a corner taken exactly right with a gentle pedal scored zero and kept inflating.
+            // One measure, one target, and both directions are always live. Under BrakeOverTargetSeconds of time over the ramp the
+            // entry can afford to be braver, so the factor climbs; over it the entry pays time back. There is no silent band: with a
+            // duration as the yardstick, a corner that spends no time over is exactly the corner that should be pushed, which is the
+            // lever a magnitude could never give because every car is fractionally over its own theory.
             float factor;
             string why;
-            if (feasibility > BrakeFeasibilityOverAbove)
+            if (overSeconds < BrakeOverTargetSeconds)
             {
-                factor = before - entryCut;
-                why = "over " + feasibility.ToString("0.00");
-            }
-            else if (feasibility >= BrakeFeasibilityRewardAbove && feasibility < BrakeFeasibilityRewardBelow)
-            {
-                factor = before + BrakeGoodArrivalStep;
-                why = "spare " + feasibility.ToString("0.00");
+                factor = before + BrakeOverStepUp;
+                why = "braver " + overSeconds.ToString("0.0") + "s";
             }
             else
             {
-                // On the ramp, or never bound by it. No verdict, and no second write of the value it already holds.
-                return;
+                factor = before - BrakeOverStepDown;
+                why = "relax " + overSeconds.ToString("0.0") + "s";
             }
             factor = ARS.Clamp(factor, BrakeMinFactor, BrakeMaxFactor);
             CornerContextForWrite(apexNode).BrakeFactor = factor;
