@@ -144,10 +144,24 @@ The verdict is now
     ratio = (vReal^2 - vApex^2) / (vRamp^2 - vApex^2)
 
 where `vRamp` is `ApexBrakingSpeed` - the most the car may carry right now and still reach the apex speed, solved from the
-remaining distance against the decel the grip and the grade supply. Both sides carry the same `2 * decel * distance`, so it
-cancels: **1.00 is exactly on the ramp at any distance**, and the number needs no calibration per corner. It is sampled every
-`BrakeFeasibilitySampleMs` (100 ms) during the braking run, pedal above 0.05, and the **worst** ratio of the approach is the
-verdict; `BrakeFeasibilityMinBudgetMps2` 4 stops the denominator dying as the car reaches the target.
+remaining distance against the decel the grip and the grade supply - **plus `BrakeErrorMultiplier` 3 m/s**. Both sides carry the
+same `2 * decel * distance`, so it cancels: **1.00 is exactly on the reference at any distance**, and the number needs no
+calibration per corner. It is sampled every `BrakeFeasibilitySampleMs` (100 ms) during the braking run, pedal above 0.05, and the
+**worst** ratio of the approach is the verdict.
+
+Two corrections came out of driving it (2026-10-27), and both are structural rather than tuning:
+
+1. **The reference is the ramp plus the brake law's own error.** The pedal law is proportional on the speed error, so sustaining
+any decel needs a sustained error - full brake only arrives `BrakeErrorMultiplier` above the target. A car braking at the limit sits
+about that far above the bare ramp *by design*, which read as "over" on every corner. The allowance is the law's own constant.
+2. **The budget is only read while it keeps its resolution**: `BrakeFeasibilityMinBudgetShare` 0.25 of the apex energy, a ramp 12 %
+above the apex speed. Nearer than that the denominator dies and the same speed error reads two or three times larger - with apex
+30 m/s, a ramp of 31 leaves 61 m^2/s^2, so three metres a second over scores nine. The last metre always won "worst of the run"
+and every correct stop looked catastrophic. A ramp of 999 (no plan) is skipped the same way.
+
+`BrakeFeasibilityOverAbove` **1.1** is the measurement floor above the reference - brake onset, weight transfer and fade put a real
+car slightly over its own theory all the way down - and the cut is scaled by `BrakeFeasibilityCutSpan` **1.5** so that a five per
+cent entry costs ~0.06 rather than spending the per-event cap. Both are knobs, and both were set by driving, not by derivation.
 **Two rules, one each way, and silence between them.** Over the ramp the factor pays `BrakeFeasibilityCutStep` 0.2 per
 `BrakeFeasibilityCutSpan` 0.5 of overage, capped by `BrakeMaxCutPerEvent` 0.15. Under it with budget to spare - ratio between
 `BrakeFeasibilityRewardAbove` 0.5 and `BrakeFeasibilityRewardBelow` 0.8 - it earns the flat `BrakeGoodArrivalStep` 0.025. On the
