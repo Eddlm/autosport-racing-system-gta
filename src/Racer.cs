@@ -823,6 +823,9 @@ namespace ARS
                 aimPoint = Vector3.Lerp(_aimPointSmoothed, aimPoint, AimPointSmoothing);
             _aimPointSmoothed = aimPoint;
             _aimPointSeeded = true;
+            // The step size in metres, which is what separates a node step from the lookahead index jumping.
+            _pursuitAimLateralRawM = ARS.SignedLaneOffset(aimPointRaw, Car.Position, Car.ForwardVector);
+            _pursuitAimLateralM = ARS.SignedLaneOffset(aimPoint, Car.Position, Car.ForwardVector);
 
             float laneSteerDeg = PursuitSteerDegrees(aimPoint, courseDir);
             _kickAskDegrees = laneSteerDeg;
@@ -1131,8 +1134,6 @@ namespace ARS
                 bearing = 0.5f * (_steerAimBearingDegrees + bearing);
             }
 
-            _pursuitAimLateralRawM = ARS.SignedLaneOffset(aimPointRaw, Car.Position, Car.ForwardVector);
-            _pursuitAimLateralM = ARS.SignedLaneOffset(aimPoint, Car.Position, Car.ForwardVector);
             _pursuitRawBearingDeg = rawBearing;
             _pursuitAimDistanceM = distance;
             _steerAimBearingDegrees = bearing;
@@ -1923,7 +1924,7 @@ namespace ARS
         // +/-7 deg of bearing - the dither. A half-weight average per tick removes the step: it is 16 ms of lag on a point 8 m away,
         // and it touches this aim and nothing else. A step larger than the max is a teleport (grid placement, the wrap at the line) and
         // snaps instead of being averaged across the map.
-        const float AimPointSmoothing = 0.5f;
+        const float AimPointSmoothing = 0.75f;
         const float AimPointSmoothingMaxStep = 5f;
 
         // A cap on the steer command driven by the front tyres' measured side slip. While the car is on the throttle the
