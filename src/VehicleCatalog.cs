@@ -98,20 +98,12 @@ namespace ARS
                 Model model = new Model(hash);
                 if (!model.IsCar || !model.IsValid)
                 {
-                    // A DLC model that has never been streamed can fail IS_MODEL_A_VEHICLE (and IsValid) while its hash is
-                    // perfectly good in the cdimage. cars.txt never shows it - it is almost all base-game traffic - but a one-
-                    // car test roster does, and the only symptom was 'no car carries a pace index'.
-                    if (!model.IsInCdImage)
-                    {
-                        log("  dropped " + entry + ": not in the cdimage");
-                        continue;
-                    }
-                    model.Request(750);
-                    for (int waited = 0; waited < 1000 && !model.IsLoaded; waited += 50) Script.Wait(50);
-                    bool usable = model.IsCar && model.IsValid;
-                    log("  " + (usable ? "streamed" : "dropped") + " " + entry + " (" + hash + "): IsCar=" + model.IsCar
-                        + " IsValid=" + model.IsValid + " loaded=" + model.IsLoaded);
-                    if (!usable) { model.MarkAsNoLongerNeeded(); continue; }
+                    // No request and no wait: this runs from a menu callback inside the tick, where yielding the script is not legal. It
+                    // was written for a DLC-streaming theory that the roster disproved (zion3 works without it), and it cost a second per
+                    // dropped entry plus the hang.
+                    log("  dropped " + entry + (model.IsInCdImage ? ": not a car" : ": not in the cdimage"));
+                    continue;
+                }
                 }
                 try
                 {
