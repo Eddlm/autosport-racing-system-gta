@@ -170,9 +170,9 @@ reader, or only a debug draw.
 | `DebugToggles[LockLaneCentre]` | `AutosportRacingSystem.cs:194` (default false), menu `:889` | **debug menu**, live at `Racer.cs:527` |
 | `SteerDampingEnabled` | `Racer.cs:1031`, rationale `:1029-1030` | compile-time switch, fixed true; **A/B handle per `AGENTS/AGENTS-STEERING.md:52`** |
 | `SteerDampingAimReference` | `Racer.cs:1034`, rationale `:1032-1033` | compile-time switch, fixed true; the code comment keeps the zero reference "one flip away for A/B", and `AGENTS/AGENTS-STEERING.md:218` treats the reference as the lever if the standing-offset toll returns |
-| `SteerSlewRate` | `Racer.cs:1026` | live at `:1542`; driver-verified at 180 (`TEST-PLAN.md:242-245`) |
+| `SteerSlewRate` | `Racer.cs:1026` | live at `:1542`; driver-verified at 180 (`docs/TEST-PLAN.md:242-245`) |
 | `SteerDampingReferenceMps` | `Racer.cs:1039` | live at `:1043` |
-| `DamperCrossingShare` | `Racer.cs:1028` | live at `:608`; rule driver-verified (`TEST-PLAN.md:277-285`) |
+| `DamperCrossingShare` | `Racer.cs:1028` | live at `:608`; rule driver-verified (`docs/TEST-PLAN.md:277-285`) |
 | `SlidingFraction` | `Racer.cs:1015` | live at `:594` (damper reference gate) |
 | `SlideBlendStartFraction` / `SlideBlendFullFraction` | `Racer.cs:1018-1019` | live at `:590` and (the full one) `:1232` |
 | `CountersteerSlideShare` | `Racer.cs:1020` | live at `:1232` |
@@ -240,7 +240,7 @@ the countersteer allowance, the bypass, the ramp, the cornering ceiling — is c
 rotating is granted the least authority to start (2.5° at 30 mph, 2.1° at 40); the value climbs only as the car
 already rotates. `AGENTS/AGENTS-STEERING.md:92` records the field's warning about closing a loop through a signal the loop
 produced, which is the shape this has. That is a design question, not a finding — **the A/B is undriven**
-(`TEST-PLAN.md:287`), and nothing here can say which shape drives better. What can be said is that the two modes are
+(`docs/TEST-PLAN.md:287`), and nothing here can say which shape drives better. What can be said is that the two modes are
 not redundant and the switch selects one design decision, not a tuning.
 
 ---
@@ -346,7 +346,7 @@ unconditional. The countersteer allowance, the bypass and the ramp are untouched
 2.5° → 12.5° at 30 mph, 2.1° → 10.5° at 40, 1.6° → 8.0° at 60 — and inside the band it rises to the ramp's value
 (18.8° → 23.5° at 20 mph). Below 5 mph nothing changes (both are the lock). In other words the limiter stops being a
 steer-in governor and becomes a cornering ceiling with its raisers. This is a behaviour that is currently
-undriven either way (`TEST-PLAN.md:287`), and it is the one candidate here that changes what the wheel can ask for.
+undriven either way (`docs/TEST-PLAN.md:287`), and it is the one candidate here that changes what the wheel can ask for.
 **How the driver would know:** the same corners taken with visibly more steer-in at speed — a sharper turn-in, and
 the symptoms that would follow it: entry over-rotation, more slide-blend activity at high speed, or a weave on fast
 sweeps. The specific check is a fast corner where the car currently ploughs with the wheel at its limit; with this
@@ -368,18 +368,18 @@ tick's clamped request. The doc's own pipeline list (`AGENTS/AGENTS-STEERING.md:
 Decision: fix the contract to match the code, or move the limiter above the pedal stage (a real behaviour change to
 those two gates), or state which readers were intended.
 
-**Q2 — `SteerLimitMode` cannot survive a reload, so the A/B procedure in `TEST-PLAN.md` cannot hold as written.**
+**Q2 — `SteerLimitMode` cannot survive a reload, so the A/B procedure in `docs/TEST-PLAN.md` cannot hold as written.**
 The menu writes the key (`AutosportRacingSystem.cs:1074` → `SaveRacerSetting` `:1256-1258` → `SettingsMenuStore`,
 which is `Menu-Settings.ini`, `:3074`). `SettingsRepair.PruneOwnedFiles` (`SettingsRepair.cs:195-232`) drops every
 `[MENU]` key of an owned file that is not declared in `BuildSchema` (`:214`, `:218`, `:224`), and `BuildSchema`
 declares `SteerDampingGain` (`:151`) and the two turn-in dials (`:152-153`) but **no `SteerLimitMode`**. `LoadSettings`
 runs the prune (`:3071`) before reading the value with a `"Yaw-Governed"` default (`:3103`), and the menu rebuilds its
 selection from the same store (`:1076`). So within one session the switch holds; across a script reload it is pruned
-and both the code and the menu return to Yaw-Governed. `TEST-PLAN.md:328-329` tells the tester to "confirm the mode
+and both the code and the menu return to Yaw-Governed. `docs/TEST-PLAN.md:328-329` tells the tester to "confirm the mode
 you think you are driving is the one the menu shows" — that check passes, but the mode it shows will be the default.
 Decision: declare the key (a fix, outside this pass's write scope) or amend the test note.
 
-**Q3 — `TEST-PLAN.md`'s "inside the band the modes do not differ" is false.** `TEST-PLAN.md:337-338`: "from 5 to
+**Q3 — `docs/TEST-PLAN.md`'s "inside the band the modes do not differ" is false.** `docs/TEST-PLAN.md:337-338`: "from 5 to
 30 mph the limit is the ramp's value whichever governor is set". The ramp is applied to a *different input* per mode
 (`:1143` on the ceiling, then `:1208` on the Yaw share-scaled value), so the outputs differ throughout the band —
 33.4° vs 34.5° at 10 mph, 18.8° vs 23.5° at 20, 10.9° vs 18.0° at 25 — and coincide only at ≤5 mph, where both are
@@ -412,7 +412,7 @@ Decision: which statement is the record, and whether ranked item 5's premise nee
 - Two menu descriptions contradict their consumers: "Steer Damping" says "against zero yaw"
   (`AutosportRacingSystem.cs:1059`) while the live damper is aim-referenced (`Racer.cs:594`), and "Steer Limit Mode"
   says Slide-Governed "sets the limit to the slide angle plus a degree" (`:1070`) while `:1184` takes the **max** of
-  the cornering law and **half** the slide **plus half a degree** (`TEST-PLAN.md:299-300` records the halving;
+  the cornering law and **half** the slide **plus half a degree** (`docs/TEST-PLAN.md:299-300` records the halving;
   `AGENTS/AGENTS-STEERING.md:234` records the addition).
 
 **Q6 — retiring the two fixed-true switches (C5) retires the documented A/B handles.** Decision: inline the kept
@@ -427,7 +427,7 @@ guard before removing it.
 slide-derived ramps on different scales (`:1193` with `:590`; `:1232` with `:1230`), and the allowance is a superset
 of the command's own countersteer component at every slide. Not proposed as a candidate because the magnitude of the
 change is hard to state and the allowance is the limiter's guarantee that the correction is never clipped
-(`TEST-PLAN.md:324-325` wants exactly that). Decision: leave two laws, or unify and re-drive.
+(`docs/TEST-PLAN.md:324-325` wants exactly that). Decision: leave two laws, or unify and re-drive.
 
 ---
 

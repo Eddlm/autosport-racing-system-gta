@@ -17,7 +17,7 @@ the driver can feel and judge.
   candidate may not quietly move a stage.
 - **The comment policy binds.** A simplification that lets a comment die is worth naming as such; a comment may only
   be added for an engine citation, a deliberate asymmetry or floor, or a unit the name cannot carry.
-- **Verified-by-drive state is evidence, not an obstacle.** Anything already driver-verified (`TEST-PLAN.md`,
+- **Verified-by-drive state is evidence, not an obstacle.** Anything already driver-verified (`docs/TEST-PLAN.md`,
   `AGENTS/AGENTS-STEERING.md`) is a behaviour to preserve unless a candidate explicitly proposes changing it, and then the
   proposal has to say so in those words.
 
@@ -33,7 +33,7 @@ the driver can feel and judge.
 2. Every candidate carries three things: **what it removes**, **what it is expected to cost behaviourally**, and
    **how the driver would know** (the specific on-track symptom to look for).
 3. Candidates are ranked by behaviour risk first, then by how much they remove — not by effort.
-4. Anything that contradicts `AGENTS/AGENTS-STEERING.md` or `TEST-PLAN.md` is reported as a decision for the Lead, never
+4. Anything that contradicts `AGENTS/AGENTS-STEERING.md` or `docs/TEST-PLAN.md` is reported as a decision for the Lead, never
    patched into the file's own conclusions.
 5. Dead code, write-only fields, and dials with no consumer are listed separately as an inventory line, since those
    are simplifications with zero behaviour risk and can be applied first.
