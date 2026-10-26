@@ -249,6 +249,9 @@ namespace ARS
             if (Pending.Count == 0) return;
             Vehicle veh = Pending.Dequeue();
             if (!ARS.SmartTuning || !ARS.CanWeUse(veh) || !veh.Exists()) return;
+            // Re-tested here, not only at enqueue: a car the player gets into after the queue was built would otherwise be restyled
+            // under them one tick later, and the rule is that their own car is never touched.
+            if (Game.Player.Character.IsInVehicle(veh)) return;
             Apply(veh, random);
         }
 
