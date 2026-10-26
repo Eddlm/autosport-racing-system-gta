@@ -395,6 +395,9 @@ namespace ARS
         // corner that never goes over buys later braking and one that spends too long over gives some back.
         //
         float _brakeSampleOverSeconds = 0f;
+        // Factor already forfeited this corner for leaving the ground while still over the ramp. A car in the air has lost the
+        // corner regardless of the clock: the jump is the proof, not a hint.
+        float _brakeSampleAirPenalty = 0f;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
@@ -403,6 +406,7 @@ namespace ARS
         int _brakeCommitAtGameTime = 0;
         float _brakeCommitMaxSlideDeg = 0f;
         float _brakeCommitOverSeconds = 0f;
+        float _brakeCommitAirPenalty = 0f;
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
@@ -422,6 +426,12 @@ namespace ARS
         // of a moving target - so the floor is raised to 1.5: four and a half metres a second, about ten miles an hour, above the
         // ramp before a single tenth of a second is counted.
         const float BrakeOverAllowanceShare = 1.5f;
+        // Leaving the ground while still over the ramp is the one verdict that needs no interpretation: the car flew because it
+        // arrived too fast. It costs factor on every sample it spends up there - a tenth of a second each - with a per-corner cap so
+        // a single jump cannot take the whole range. Per tick would be six times faster than the learner can ever see it, and the
+        // sampler is the clock everything else here already runs on.
+        const float BrakeAirPenaltyPerSample = 0.05f;
+        const float BrakeAirPenaltyMax = 0.20f;
         // The clock only runs while the ramp is still meaningfully ahead of the apex speed - a quarter of the apex energy, a ramp 12 %
         // above it. Nearer than that the car is already at the corner speed, the brake is coming off, and a sample of a moving target
         // is measuring the tail of the stop rather than the entry.
@@ -2651,16 +2661,16 @@ namespace ARS
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleOverSeconds = 0f;
+                _brakeSampleAirPenalty = 0f;
                 _brakeOverNextSampleAt = 0;
                 // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
                 // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
                 // would be a second place the factor is written, judged without the slide and the pedal share.
             }
 
-            // The clock runs only while the car is actually on the brake and the ramp still has resolution; what it counts is time
-            // spent above the ramp, because that is the quantity the learner is aiming at.
-            if (_brakeSampleApexNode >= 0 && !HasPassedBrakingTarget()
-                && Control.Brake > 0.05f && Game.GameTime >= _brakeOverNextSampleAt)
+            // Sampled on the learner's own clock, and the air penalty is checked over the whole corner rather than inside the braking
+            // window: a car that takes off has already passed its braking target, which is exactly where the window ends.
+            if (_brakeSampleApexNode >= 0 && !HasPassedApex(_brakeSampleApexNode) && Game.GameTime >= _brakeOverNextSampleAt)
             {
                 _brakeOverNextSampleAt = Game.GameTime + BrakeOverSampleMs;
                 float apexSpeed = Math.Max(2f, NextApexSpeed);
@@ -2668,11 +2678,19 @@ namespace ARS
                 // car braking at the limit sits about BrakeErrorMultiplier above the bare ramp by design. Against the bare number it
                 // would read as over from the first metre of every stop.
                 float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed) + BrakeErrorMultiplier * BrakeOverAllowanceShare;
+                float carried = ARS.GetForwardSpeed(Car);
                 float budget = ramp * ramp - apexSpeed * apexSpeed;
-                if (ramp < 100f && budget > BrakeOverMinBudgetShare * apexSpeed * apexSpeed)
-                {
-                    if (ARS.GetForwardSpeed(Car) > ramp) _brakeSampleOverSeconds += BrakeOverSampleMs / 1000f;
-                }
+                bool over = ramp < 100f && carried > ramp;
+
+                // Airborne and still over the ramp: the jump is the verdict, whether or not the clock below is still running.
+                if (over && Car.IsInAir)
+                    _brakeSampleAirPenalty = Math.Min(_brakeSampleAirPenalty + BrakeAirPenaltyPerSample, BrakeAirPenaltyMax);
+
+                // The clock itself only runs while the car is on the brake and the ramp still has resolution; what it counts is time
+                // spent above the ramp, because that is the quantity the learner aims at.
+                if (over && !HasPassedBrakingTarget() && Control.Brake > 0.05f
+                    && budget > BrakeOverMinBudgetShare * apexSpeed * apexSpeed)
+                    _brakeSampleOverSeconds += BrakeOverSampleMs / 1000f;
             }
 
             // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. A car that slid on
@@ -2698,6 +2716,7 @@ namespace ARS
             _brakeCommitAtGameTime = Game.GameTime + (int)(BrakeCommitDelaySeconds * 1000f);
             _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
             _brakeCommitOverSeconds = _brakeSampleOverSeconds;
+            _brakeCommitAirPenalty = _brakeSampleAirPenalty;
         }
 
         void CommitBrakeLearning()
@@ -2706,6 +2725,7 @@ namespace ARS
             int apexNode = _brakeCommitApexNode;
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
             float overSeconds = _brakeCommitOverSeconds;
+            float airPenalty = _brakeCommitAirPenalty;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
@@ -2715,7 +2735,7 @@ namespace ARS
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
                 CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment(apexNode, before, skidFactor, "skid " + overSeconds.ToString("0.0") + "s");
+                AnnounceBrakeAdjustment(apexNode, before, skidFactor, "skid " + overSeconds.ToString("0.0") + "s" + (airPenalty > 0f ? " air -" + airPenalty.ToString("0.00") : ""));
                 return;
             }
             // One measure, one target, and both directions scale alike: the step is proportional to how far the corner landed from
@@ -2724,8 +2744,10 @@ namespace ARS
             // fractionally over its own theory.
             float error = BrakeOverTargetSeconds - overSeconds;
             float step = BrakeOverStepPerTenth * (error / 0.1f);
-            float factor = before + step;
-            string why = overSeconds.ToString("0.0") + "s";
+            // The air penalty comes off on top of the step and is never offset by it: a jump is a fault even on a corner whose clock
+            // landed under the target, and the clamp is the only bound left.
+            float factor = before + step - airPenalty;
+            string why = overSeconds.ToString("0.0") + "s" + (airPenalty > 0f ? " air -" + airPenalty.ToString("0.00") : "");
             factor = ARS.Clamp(factor, BrakeMinFactor, BrakeMaxFactor);
             CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided

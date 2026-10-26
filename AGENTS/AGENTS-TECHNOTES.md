@@ -154,6 +154,20 @@ second - where one ratio meant different things at different speeds. The skid ve
 The announcement carries the seconds and the direction (`braver`, `relax`, `skid`).
 `BrakeFeasibilityCutStep`, `BrakeFeasibilityCutSpan`, `BrakeFeasibilityRewardAbove`/`Below`, `BrakeFeasibilityOverAbove`,
 `BrakeFeasibilityMinBudgetMps2` and `BrakeGoodArrivalStep` are gone with the ratio.
+
+**The step is proportional and the clock starts above the law's own brake error (driver, 2026-10-27).** `BrakeOverStepPerTenth`
+**0.05** per tenth of a second away from the target, in either direction, with **no dead zone**: half a factor per second of error,
+so the 0.5-1.0 range is crossed in a second. The ramp is allowed `BrakeOverAllowanceShare` **1.5** x `BrakeErrorMultiplier` - four
+and a half metres a second, about ten miles an hour - before a tenth of a second is counted; at 1.0 a stop that was going well
+still clocked time over, because the car trails the falling ramp by more than the law's steady error and every sample is a measure
+of a moving target.
+
+**Leaving the ground while over the ramp is a verdict of its own (driver, 2026-10-27).** `BrakeAirPenaltyPerSample` **0.05** for
+every 100 ms sample airborne *and* above the ramp, capped at `BrakeAirPenaltyMax` **0.20** per corner, taken off on top of the
+step and never offset by it: the jump is the proof that the car arrived too fast, so a corner whose clock landed under the target
+still pays. It is checked across the whole corner rather than inside the braking window, because a car that takes off has already
+passed its braking target - the window ends exactly where the evidence starts. Per tick would have been six times faster than the
+learner can see; the sample clock is the one every other rule here runs on.
 **Two rules, one each way, and silence between them.** Over the ramp the factor pays `BrakeFeasibilityCutStep` 0.2 per
 `BrakeFeasibilityCutSpan` 0.5 of overage, capped by `BrakeMaxCutPerEvent` 0.15. Under it with budget to spare - ratio between
 `BrakeFeasibilityRewardAbove` 0.5 and `BrakeFeasibilityRewardBelow` 0.8 - it earns the flat `BrakeGoodArrivalStep` 0.025. On the
