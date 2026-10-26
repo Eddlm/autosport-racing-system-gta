@@ -54,3 +54,6 @@ Dist/AutosportRacingSystem/Vehicles/tests.txt
 __pycache__/
 # A GitHub API response somebody downloaded once; regenerated on demand, never source.
 release-latest.json
+# Defaults are NOT shipped as files: SettingsRepair writes every missing key on first load, from the same schema that
+# validates them. Shipping generated inis only guarantees they drift from the code. Decisions: owner, 2026-10-26.
+Dist/AutosportRacingSystem/Settings/*.ini
