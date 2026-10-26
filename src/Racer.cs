@@ -316,10 +316,10 @@ namespace ARS
         const float SlipCeilingOpenDegPerSec = 4f;
         // Closing is exponential in the gap, not in the severity: the rate is the distance to the target times this gain, so the
         // time to arrive is a property of the system and not of how big the drop happened to be. Calibration (owner's rule): a
-        // clamp sitting at 500% of its target - a gap of four times the target - arrives in about 0.1 s. There is NO ceiling on the
-        // rate: a collapsed target closes in one or two ticks, which was chosen over a fixed deg/s cap because the cap was what made
-        // a big target take half a second at the same 500%.
-        const float SlipClosePerSecond = 60f;
+        // clamp sitting at 500% of its target - a gap of four times the target - arrives in about 0.2 s. There is NO ceiling on the
+        // rate, so the gain has to stay well under the tick rate: at 20/s the gap keeps a third of itself per 30 Hz tick, and any gain
+        // above 30/s would overshoot the target and be clamped back in a single tick, which is a snap, not a law.
+        const float SlipClosePerSecond = 20f;
         // Below this the gap is the same thing as arrived: an exponential never quite touches its target.
         const float SlipCloseSnapDeg = 0.05f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
