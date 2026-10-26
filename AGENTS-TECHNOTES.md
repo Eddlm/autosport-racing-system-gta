@@ -530,7 +530,7 @@ The two-livery-spaces trap (mod slot 48 vs the livery list), the exact natives a
   calls `StartRace()` directly, and `StartRace()` auto-instances the track and grid when they are missing. Any check that must
   run before a race starts belongs at BOTH doors until those two are merged - a preflight placed only in `StartRaceFromMenu`
   never runs when the player presses Start Race, which is how the on-foot Relative guard was bypassed twice.
-- **The slip clamp closes exponentially in the GAP, not in the severity** (build 1132). Rate = `gap x 60/s`, capped at 90 deg/s,
+- **The slip clamp closes exponentially in the GAP, at 20/s, with no ceiling** (build 1134). Rate = `gap x 20/s`, snapped at 0.05 deg; opening stays a flat 4 deg/s. Measured, to 1 % of the target: 500 % with a 2 deg target = 167 ms (5 ticks), with a 10 deg target = 233 ms (7 ticks). The gain cannot go near the tick rate: at 30 Hz the factor per tick is `1 - k/30`, so k = 60 overshoots and snaps in ONE tick, and k = 30 arrives exactly in one. A fixed deg/s cap was tried first and made a 10 deg target take 0.44 s at the same 500 %, which is why it is gone.
   snapped at 0.05 deg; opening stays a flat 4 deg/s. The owner's calibration rule: a clamp at 500 % of its target arrives in 0.1 s.
   Measured times to 1 % of the target, target 2 deg: 200 % -> 39 ms, 500 % -> 105 ms, 1000 % -> 216 ms. The old tanh mapped
   severity to a 1-10 deg/s rate, so a collapsed target took 1.35 s to travel 13.5 deg - that is the 1000 % the driver saw.
