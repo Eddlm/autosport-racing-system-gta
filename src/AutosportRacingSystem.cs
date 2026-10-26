@@ -1131,11 +1131,10 @@ namespace ARS
             rivalTractionMenu.Add(tcsSpanItem);
             HookListTextPicker(tcsSpanItem);
 
-            // Off and greyed while the native ABS question is open: GTA re-grants WF_ABS to every non-player-driven car each tick,
-            // so on an AI car this switch cannot out-brake the engine's own clamp (0.6 of slip) by more than 0.1. It stays built
-            // and one line from live, so the day STATUS_PLAYER can be put on an AI car this becomes the only ABS in play.
-            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "GTA forces native ABS on non-player driven cars. I'm working on undoing that.", false);
-            absItem.Enabled = false;
+            // Live again (owner, 2026-10-26): the row was greyed while the native-ABS question was open, and the owner watched AI
+            // cars lock their wheels at full brake, which is the symptom the switch exists for. GTA re-grants WF_ABS to every
+            // non-player car each tick, so this may still be out-braked by the engine's own clamp - that is what a drive settles.
+            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "GTA forces native ABS on non-player driven cars. I'm working on undoing that.", AbsEnabled);
             absItem.CheckboxChanged += (sender, args) =>
             {
                 AbsEnabled = absItem.Checked;
@@ -3650,9 +3649,7 @@ namespace ARS
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
-            // Forced off while the native-ABS question is open, whatever the stored key says: the checkbox is greyed, so a value
-            // restored from a previous session would be a switch the user cannot see or change and the car would still obey it.
-            AbsEnabled = false;
+            AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);
             TcsTaperSpanPct = SettingsMenuStore.GetInt("TcsTaperSpanPct", TcsTaperSpanPct);
             DNFUnderTrack = SettingsMenuStore.GetBool("DNFUnderTrack", DNFUnderTrack);
