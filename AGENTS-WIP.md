@@ -88,6 +88,8 @@ When 0.9.0 is published, tell people this in the README, not only in the release
 1. Land and push the release commit; CI builds from a fresh checkout, so a local build counter ahead of it does not matter.
 2. Tag `v0.9.0` and push the tag — `deploy.yml` attaches a prerelease with an auto-generated body.
 3. Replace that body: `gh release edit v0.9.0 --notes-file docs/RELEASE-NOTES.md`.
+   WARNING: two files look like release notes - `docs/RELEASE-NOTES.md` (the one this command publishes) and `docs/release-0.9.0.md`
+   (the curated draft). Decide which is canonical before the cut and keep the other from drifting; the pool-change bullet is in both.
 4. **Clean install before flipping**: download the attached zip, extract into a clean `Scripts\` beside the matched SHVDN pair, and run the race-loop gate above.
 5. Flip the prerelease off — that is what moves `releases/latest` and lets the in-game update notice fire.
 6. Close what the release answers, one line each: **#8** (a build the mod cannot drive on now logs a forced error instead of crashing) and **#3** (the downforce toggle — the reporter confirmed it works). **#1** and **#7** are old and unrelated: close as stale or leave, the owner's call rather than the release's.

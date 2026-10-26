@@ -19,6 +19,10 @@ The first public WIP of the reworked mod: the playable race loop, the bundled tr
 - **Grid and board**: pace-ranked car selection for the grid, PI and best-lap columns on the frozen leaderboard.
 - **Auto Styling**: the cosmetic auto-tuner (optional Menyoo appearance support).
 
+- **Every four-wheeled class can race now.** The pool no longer filters off-road, industrial, utility, commercial, service, emergency
+  or military cars; only motorcycles, bicycles, boats, helicopters, planes and trains stay out. The fleet the mod indexes is much
+  larger, so a grid can mix types it never mixed before - the pace band decides who races whom, not the body style.
+
 ## Known limitations
 
 - **Bikes are out of scope** — the loader drops every bike line.
