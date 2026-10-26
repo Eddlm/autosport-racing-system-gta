@@ -921,7 +921,9 @@ namespace ARS
 
             // Steer trace (Development > Steer Trace): the four signals a loop delay can be measured from - what was asked, what the
             // game got, the yaw it produced and the slip the tyre reports. One line per tick, off by default.
-            if (ARS.SteerTrace)
+            // Only the racer the player is driving: the trace exists to measure the loop on the car whose hands are on the
+            // wheel, and printing it for every rival multiplied the volume by the size of the grid (394 lines/s, 2026-10-26).
+            if (ARS.SteerTrace && ControlledByPlayer)
                 ARS.Log(ARS.LogImportance.Info, "steertrace t=" + Game.GameTime
                     + " ask=" + Control.SteerDegrees.ToString("0.00")
                     + " in=" + ARS.Remap(Control.SteerDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1f, 1f, true).ToString("0.000")
