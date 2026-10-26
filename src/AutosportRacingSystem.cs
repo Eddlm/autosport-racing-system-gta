@@ -166,6 +166,9 @@ namespace ARS
         // rate sits at its top: the old const was 1.0, which the ladder cannot express.
         // Independent of the track-analysis visual: the learner's own read-out, one line per verdict a corner takes.
         public static bool BrakeLearningNotify = false;
+        // Steer trace: one Info line per tick with the ask, the axis, the yaw and the front slip, for measuring the loop's delay.
+        // Off unless asked: it writes ~30 lines a second.
+        public static bool SteerTrace = false;
         // Which source the front-slip limiter reads: true takes the tyres' side slip from the wheel memory, false derives the
         // demand from the car's own geometry and grip. Same limiter, same scale, different numerator.
         public static bool SlipFromMemory = true;
@@ -1422,6 +1425,14 @@ namespace ARS
                 DisableControls = true,
                 Alignment = Alignment.Right
             };
+
+            NativeCheckboxItem steerTraceItem = new NativeCheckboxItem("Steer Trace", "Log the steering ask, the axis, the yaw and the front slip every tick. For measuring the loop delay only: it writes about thirty lines a second.");
+            steerTraceItem.CheckboxChanged += (sender, args) =>
+            {
+                SteerTrace = steerTraceItem.Checked;
+                DevelopmentMenuStore.Set("SteerTrace", SteerTrace.ToString());
+            };
+            developmentMenu.Add(steerTraceItem);
 
             NativeCheckboxItem brakeLearnNotifyItem = new NativeCheckboxItem("Brake Learn Notify", "Announce every brake-learner verdict: corner, before, change and after. Off by default, it prints once per corner per lap.", BrakeLearningNotify);
             brakeLearnNotifyItem.CheckboxChanged += (sender, args) =>
@@ -3762,6 +3773,7 @@ namespace ARS
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
+            SteerTrace = DevelopmentMenuStore.GetBool("SteerTrace", SteerTrace);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);

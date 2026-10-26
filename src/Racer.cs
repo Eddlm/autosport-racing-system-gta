@@ -905,6 +905,16 @@ namespace ARS
             _damperTermDeg = damperTermDeg;
             Control.SteerDegrees = nonDamperSteerDeg + damperTermDeg;
 
+            // Steer trace (Development > Steer Trace): the four signals a loop delay can be measured from - what was asked, what the
+            // game got, the yaw it produced and the slip the tyre reports. One line per tick, off by default.
+            if (ARS.SteerTrace)
+                ARS.Log(ARS.LogImportance.Info, "steertrace t=" + Game.GameTime
+                    + " ask=" + Control.SteerDegrees.ToString("0.00")
+                    + " in=" + ARS.Remap(Control.SteerDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1f, 1f, true).ToString("0.000")
+                    + " yaw=" + VehicleData.YawRotationPerSecondDegrees.ToString("0.0")
+                    + " slip=" + _slip.InnerPct.ToString("0")
+                    + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0"));
+
 
             if (_slidePriority > 0f)
             {
