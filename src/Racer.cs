@@ -400,10 +400,11 @@ namespace ARS
         // Factor already forfeited this corner for leaving the ground while still over the ramp. A car in the air has lost the
         // corner regardless of the clock: the jump is the proof, not a hint.
         float _brakeSampleAirPenalty = 0f;
-        // How many miles an hour over the speed the corner asks for the car actually arrived at its entrance. One sample, taken as
-        // the car passes the braking target - the point the plan already treats as being at apex speed.
-        float _brakeSampleEntryExcessMph = 0f;
+        // Where the car reached the corner's speed, in metres relative to its braking target: positive late, negative early, zero where
+        // the plan asked. A position, so the pedal law's steady error cannot contaminate it the way a speed difference did.
+        float _brakeSampleEntryMetres = 0f;
         bool _brakeSampleEntryMeasured = false;
+        bool _brakeSampleSawAboveApex = false;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
@@ -413,7 +414,7 @@ namespace ARS
         float _brakeCommitMaxSlideDeg = 0f;
         float _brakeCommitOverSeconds = 0f;
         float _brakeCommitAirPenalty = 0f;
-        float _brakeCommitEntryExcessMph = 0f;
+        float _brakeCommitEntryMetres = 0f;
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
@@ -2668,8 +2669,9 @@ namespace ARS
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleOverSeconds = 0f;
                 _brakeSampleAirPenalty = 0f;
-                _brakeSampleEntryExcessMph = 0f;
+                _brakeSampleEntryMetres = 0f;
                 _brakeSampleEntryMeasured = false;
+                _brakeSampleSawAboveApex = false;
                 _brakeOverNextSampleAt = 0;
                 // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
                 // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
@@ -2701,12 +2703,30 @@ namespace ARS
                     _brakeSampleOverSeconds += BrakeOverSampleMs / 1000f;
             }
 
-            // The entrance reading, taken once as the car passes its braking target: the plan holds apex speed there, so the difference
-            // is how hot the car actually arrived. This is the number the announcement reports.
-            if (!_brakeSampleEntryMeasured && _brakeSampleApexNode >= 0 && HasPassedBrakingTarget())
+            // Where the car actually reaches the corner speed, measured against its braking target: positive is late, negative is early,
+            // zero is the corner taken exactly where the plan asked. A position rather than a speed difference, so the pedal law's
+            // steady error - it needs up to BrakeErrorMultiplier above the target to hold full brake - cannot contaminate the reading.
+            // The car has to have been above apex speed first: a car already slow coming out of the previous corner never crossed it.
+            if (!_brakeSampleEntryMeasured && _brakeSampleApexNode >= 0 && !HasPassedApex(_brakeSampleApexNode))
             {
-                _brakeSampleEntryMeasured = true;
-                _brakeSampleEntryExcessMph = (ARS.GetForwardSpeed(Car) - Math.Max(2f, NextApexSpeed)) * 2.23694f;
+                float apexSpeed = Math.Max(2f, NextApexSpeed);
+                float forward = ARS.GetForwardSpeed(Car);
+                if (forward > apexSpeed + 1f) _brakeSampleSawAboveApex = true;
+                if (_brakeSampleSawAboveApex && forward <= apexSpeed + 0.2f)
+                {
+                    int entranceNode = CornerEntranceNode(_nextApexCorner, _brakeSampleApexNode);
+                    int targetNode = BrakeTargetBaseNode(_nextApexCorner, entranceNode);
+                    if (targetNode < 0) targetNode = entranceNode;
+                    if (targetNode >= 0)
+                    {
+                        float metres = CurrentTrackPoint.CumulativeDistance - ARS.TrackPoints[targetNode].CumulativeDistance;
+                        // The wrap the rest of the route code applies: on a circuit a target behind the car reads as most of a lap.
+                        if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metres) > ARS.RouteLengthMeters * 0.5f)
+                            metres -= Math.Sign(metres) * ARS.RouteLengthMeters;
+                        _brakeSampleEntryMetres = metres;
+                        _brakeSampleEntryMeasured = true;
+                    }
+                }
             }
 
             // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. A car that slid on
@@ -2733,7 +2753,7 @@ namespace ARS
             _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
             _brakeCommitOverSeconds = _brakeSampleOverSeconds;
             _brakeCommitAirPenalty = _brakeSampleAirPenalty;
-            _brakeCommitEntryExcessMph = _brakeSampleEntryExcessMph;
+            _brakeCommitEntryMetres = _brakeSampleEntryMetres;
         }
 
         void CommitBrakeLearning()
@@ -2743,7 +2763,7 @@ namespace ARS
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
             float overSeconds = _brakeCommitOverSeconds;
             float airPenalty = _brakeCommitAirPenalty;
-            float entryExcessMph = _brakeCommitEntryExcessMph;
+            float entryMetres = _brakeCommitEntryMetres;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
@@ -2753,7 +2773,7 @@ namespace ARS
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
                 if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment(entryExcessMph);
+                AnnounceBrakeAdjustment(entryMetres);
                 return;
             }
             // One measure, one target, and both directions scale alike: the step is proportional to how far the corner landed from
@@ -2769,15 +2789,15 @@ namespace ARS
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
             // braking that corner costs.
-            AnnounceBrakeAdjustment(entryExcessMph);
+            AnnounceBrakeAdjustment(entryMetres);
         }
 
         // One line per verdict: the car and how many miles an hour over the speed the corner asks for it arrived at the entrance.
         // Nothing else - the rest of the numbers belong in the log, not on the screen.
-        void AnnounceBrakeAdjustment(float entryExcessMph)
+        void AnnounceBrakeAdjustment(float entryMetres)
         {
             if (!ARS.BrakeLearningNotify) return;
-            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + entryExcessMph.ToString("+0;-0;0") + "mph");
+            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + entryMetres.ToString("+0;-0;0") + "m");
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
