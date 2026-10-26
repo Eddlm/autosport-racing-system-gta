@@ -1475,7 +1475,7 @@ namespace ARS
             };
             developmentMenu.Add(slipSourceItem);
 
-            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "Never let the throttle fall below 0.8 while the car pulls over half its lateral grip and the projected line sits further inside than the car. Experiment: on the corner exit the projection points down the straight and it lets go.");
+            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "While the car pulls over half its lateral grip and the projected line sits further inside than the car, the throttle may not fall below a floor that ramps from nothing at the track centre to 0.8 at the inside edge. Experiment: on the corner exit the projection points down the straight and it lets go.");
             gsLaneFloorItem.CheckboxChanged += (sender, args) =>
             {
                 GsLaneThrottleFloor = gsLaneFloorItem.Checked;
