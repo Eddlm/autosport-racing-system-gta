@@ -2612,6 +2612,16 @@ namespace ARS
         {
             Log(LogImportance.Info, "Starting race");
 
+            // The Race menu's Start Race comes straight here (handler at the menu build) and NEVER through StartRaceFromMenu, so the
+            // refusal has to sit at this door as well: this is the method that instances a track when nothing is built yet.
+            string refusal;
+            if (!PreflightStartRace(out refusal))
+            {
+                UI.Notify("~o~" + refusal);
+                Log(LogImportance.Error, "Start Race refused: " + refusal);
+                return;
+            }
+
             // Auto-call missing phases: if no track, instance one; if no grid, spawn one.
             // InstanceGrid already requires the track, so order is implicit.
             if (!_trackInstanced)
