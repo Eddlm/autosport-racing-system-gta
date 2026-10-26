@@ -168,14 +168,6 @@ step and never offset by it: the jump is the proof that the car arrived too fast
 still pays. It is checked across the whole corner rather than inside the braking window, because a car that takes off has already
 passed its braking target - the window ends exactly where the evidence starts. Per tick would have been six times faster than the
 learner can see; the sample clock is the one every other rule here runs on.
-
-The penalty is **gated on the crest**, because the two systems would otherwise fight: `CrestGripSpeedFactor` slows the route term
-by `sqrt(MaxCrestLift / |deltaGs|)`, but the **corner plan deliberately carries no terrain factor**, so a corner sitting on a crest
-throws the car with no fault at all. A rolling minimum of the unload - `BrakeCrestMemoryMs` 1500, because the crest that threw the
-car is already behind it when the wheels leave - suppresses the penalty whenever the ground just crossed was unloading by at least
-`MaxCrestLift`. It reads the driver's own setting, so the gate moves with the menu knob. What the gate does *not* do is excuse a car
-that arrives too fast over a crest: there the fault is the corner plan's missing terrain term, and no braking point fixes it - the
-learner would only learn to brake early for terrain it cannot see.
 **Two rules, one each way, and silence between them.** Over the ramp the factor pays `BrakeFeasibilityCutStep` 0.2 per
 `BrakeFeasibilityCutSpan` 0.5 of overage, capped by `BrakeMaxCutPerEvent` 0.15. Under it with budget to spare - ratio between
 `BrakeFeasibilityRewardAbove` 0.5 and `BrakeFeasibilityRewardBelow` 0.8 - it earns the flat `BrakeGoodArrivalStep` 0.025. On the

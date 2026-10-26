@@ -398,10 +398,6 @@ namespace ARS
         // Factor already forfeited this corner for leaving the ground while still over the ramp. A car in the air has lost the
         // corner regardless of the clock: the jump is the proof, not a hint.
         float _brakeSampleAirPenalty = 0f;
-        // The strongest unload the route has shown in the last second and a half, in gs. The crest that throws the car is behind it by
-        // the time the wheels leave, so the value read now is the next one; this remembers the one just crossed.
-        float _brakeRecentCrestGs = 0f;
-        int _brakeRecentCrestUntil = 0;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
@@ -436,7 +432,6 @@ namespace ARS
         // sampler is the clock everything else here already runs on.
         const float BrakeAirPenaltyPerSample = 0.05f;
         const float BrakeAirPenaltyMax = 0.20f;
-        const int BrakeCrestMemoryMs = 1500;
         // The clock only runs while the ramp is still meaningfully ahead of the apex speed - a quarter of the apex energy, a ramp 12 %
         // above it. Nearer than that the car is already at the corner speed, the brake is coming off, and a sample of a moving target
         // is measuring the tail of the stop rather than the entry.
@@ -2687,22 +2682,8 @@ namespace ARS
                 float budget = ramp * ramp - apexSpeed * apexSpeed;
                 bool over = ramp < 100f && carried > ramp;
 
-                // A crest the plan already allows throws the car on purpose. CrestGripSpeedFactor slows the route term by
-                // sqrt(MaxCrestLift / |deltaGs|), and the corner plan deliberately carries no terrain factor at all, so a corner sitting on
-                // a crest can put the car in the air with no fault. The unload that matters has just gone past by the time the wheels
-                // leave, hence the rolling minimum.
-                CrestGripSpeedFactor(CurrentTrackPoint.Node, ARS.TrackPoints.Count, out _, out _, out float crestGs);
-                if (crestGs < 0f)
-                {
-                    _brakeRecentCrestGs = Math.Min(_brakeRecentCrestGs, crestGs);
-                    _brakeRecentCrestUntil = Game.GameTime + BrakeCrestMemoryMs;
-                }
-                else if (Game.GameTime > _brakeRecentCrestUntil) _brakeRecentCrestGs = 0f;
-                bool crestExplainsTheAir = _brakeRecentCrestGs <= -ARS.MaxCrestLift;
-
-                // Airborne and still over the ramp, on ground flat enough to have kept it there: the jump is the verdict, whether or
-                // not the clock below is still running.
-                if (over && Car.IsInAir && !crestExplainsTheAir)
+                // Airborne and still over the ramp: the jump is the verdict, whether or not the clock below is still running.
+                if (over && Car.IsInAir)
                     _brakeSampleAirPenalty = Math.Min(_brakeSampleAirPenalty + BrakeAirPenaltyPerSample, BrakeAirPenaltyMax);
 
                 // The clock itself only runs while the car is on the brake and the ramp still has resolution; what it counts is time
