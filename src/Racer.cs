@@ -325,9 +325,9 @@ namespace ARS
         // above 30/s would overshoot the target and be clamped back in a single tick, which is a snap, not a law.
         const float SlipClosePerSecond = 15f;
         // And a ceiling on the close: without one, a target that collapses 36 deg is covered at 500 deg/s, which is a teleport rather
-        // than a law. 180 deg/s is 6 deg a tick - it bounds the worst case without shaping the normal one, and it only binds above a
-        // 12 deg gap, so every correction short of a full collapse keeps the exponential's own curve.
-        const float SlipCloseMaxDegPerSec = 180f;
+        // than a law. 90 deg/s is 3 deg a tick: it binds above a 6 deg gap, so a big drop is visibly stepped rather than instantaneous,
+        // and everything short of that keeps the exponential's own curve.
+        const float SlipCloseMaxDegPerSec = 90f;
         // One measurement of the front axle per tick, filled by MeasureFrontSlip and read by the limiter and the readout.
         SlipState _slip;
         // Below this command there is no inside of the corner, so the pair is averaged instead of picked.
