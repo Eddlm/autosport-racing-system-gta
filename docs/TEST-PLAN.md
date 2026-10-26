@@ -20,7 +20,7 @@ batch and the governor-key fix regressed nothing. The deployed DLL writes its bu
 | `cbae845` | each car is ghosted against its nearest rival only (engine has one slot) | §12 |
 | `f3f318f` → `148db70` | the bump/lip scan and its `Show Bumps` overlay, then the rise-walk fixes | Bump scan overlay |
 
-Start a race with several AI cars. `Show Pedal Trail` on the Debug menu helps for the input trail, and `Log.log` in the
+Start a race with several AI cars. `Show Pedal Trail` on the Debug menu helps for the input trail, and `ARS.log` in the
 game folder carries the init banner and lap lines.
 
 ---
@@ -321,7 +321,7 @@ Watch:
    the bug it was when the governor key was undeclared.
 6. **Reverse** — a reversing car holds full lock. If a recovery reverse still reads as steering straight, the ramp is
    not the reason.
-7. **Settings — a load check with a falsifier.** Every key the menu touches is declared, so `Log.log` must hold **no
+7. **Settings — a load check with a falsifier.** Every key the menu touches is declared, so `ARS.log` must hold **no
    "declares no key" line** after a load. A line there means something wrote or read a key that `SettingsRepair` would
    prune, which is the bug class the store now refuses and reports instead of tolerating.
 
@@ -370,7 +370,7 @@ Three changes on the speed axis. The limiter's maneuvering ramp still rises from
 2. **Below the ramp's start** — placement is still near full lock: a car nosing out of a ditch or off the line must still steer.
 3. **The damper knob's range** — at 10 the damper gives up early and a fast car should read lively and loose; at 250 it is the dial all the way to racing speed. The surprise that motivated the wider range was 90 holding at ×1 — so check whether 130 or 190 reads any different from 90, or whether the damper stops being the limit well below either.
 4. **The ceiling factor** — at 0.20 the at-speed ceiling is a fifth of the tyre law: the plan's target speeds do not read the limiter, so expect cars asking for the same corners and washing visibly wide for want of wheel. At 0.75 the loss should be subtle. At 1.00 the build must drive exactly like 488. The range was widened after that batch (`29b267b`); the outer-reference change (`0dfbf53`) sits on top of it: at 1.25 the ceiling is about 1.67× the modelled peak slip, so the wheel is asked well past the tyre's peak on purpose and the read is whether the rivals visibly slide; on a car whose lock is below that product the top of the range changes nothing.
-5. **The menu and the file** — both items sit under Steer Damping in Rivals > Rival Steering, their values survive a reload, and `Log.log` holds no "declares no key" line after a load.
+5. **The menu and the file** — both items sit under Steer Damping in Rivals > Rival Steering, their values survive a reload, and `ARS.log` holds no "declares no key" line after a load.
 
 The ceiling law is plotted in `docs/steer-ceiling.png`, regenerated with the narrower band (the factor is a flat scale on top of it).
 
@@ -391,7 +391,7 @@ The ceiling law is plotted in `docs/steer-ceiling.png`, regenerated with the nar
 2. **The knobs** — Rival Traction holds **TCS Wheelspin Limit** (0.1 to 2.5 in steps of 0.1, default 0.5) and **TCS Cut Softness** (0.1 to 0.5 in steps of 0.1, default 0.5). Both are in the tyre's slip-ratio units, the same ones the traction curve is: the curve peaks at 1.0 and is flat past the knee at 2.5, which is the top of the threshold's range. **The ceiling is the sum of the two**, so the shipped pair regulates to half a slip unit and floors the cut at exactly 1.0 — the traction peak. Raise the threshold to let the AI spin more before it intervenes; widen the span to make the cut more gradual. The extremes are the point rather than a side effect: at 0.1 + 0.1 the field drives more safely than anything the old law could express.
 3. **Off-track halves it, and nothing else moves it** — the threshold is the setting on every surface and at every speed now: the surface-grip scaling is gone (it tightened the regulation where grip was scarce, tracking the lower peak slip a loose surface has, and it went for simplicity) and so is the launch ramp. The off-track half is the only modulation left, and the surface no longer reads into the value at all. Expect the cars to be a shade more permissive than before wherever grip is scarce and off the line — 0.5 everywhere, where the old law gave more slip at launch and less on dirt. A launch allowance, as a setting or a per-racer personality, is filed as `launch-slip-allowance`.
 4. **ABS** — the same shape with no knobs: the cut still starts at the knee and floors at mingrip, which are the traction curve's own numbers.
-5. **The menu and the file** — both items sit under TCS in Rival Traction, and their keys appear in `Menu-Settings.ini` on the first load after this build; `Log.log` must hold no "declares no key" line, and both values must survive a reload.
+5. **The menu and the file** — both items sit under TCS in Rival Traction, and their keys appear in `Menu-Settings.ini` on the first load after this build; `ARS.log` must hold no "declares no key" line, and both values must survive a reload.
 6. **The cut floors at 0.2 throttle** (driver-decided, no row of its own): a car held at the bottom of a TCS cut keeps a fifth of the throttle, not a quarter. It is the floor the cut lands on at the far end of the taper, so it shows on a long wheelspin exit rather than in the middle of the span — a car that now reads as bogged or slow to recover is this number, not the taper.
 
 ## The ceiling's reference is the outer wheel (driver-verified)
@@ -402,7 +402,7 @@ The peak-slip ceiling is stated at the *outer* front wheel — the loaded wheel 
 
 1. **The size of the change.** The cap is a flat 14% tighter at every speed and every factor, so the new 1.00 sits between the old 1.00 and the old 0.75. Judge the drive against that bracketing, not against a setting that reproduces 488 exactly.
 2. **The tight stuff.** The tightened cap bites hardest above the ramp's end speed, where the ramp no longer reaches: watch a slow corner for a car that cannot place itself, or that turns in more lazily than it did.
-3. **The item and the file.** The description now names what 1.00 means; confirm it shows, the value survives a reload, and `Log.log` holds no "declares no key" line after a load.
+3. **The item and the file.** The description now names what 1.00 means; confirm it shows, the value survives a reload, and `ARS.log` holds no "declares no key" line after a load.
 
 ## The measured-slip allowance under the ceiling (CLOSED — built, driven once, switched off; do not drive)
 
@@ -432,8 +432,8 @@ Promotion happens at the previous corner's apex (`UpdateApexLeapfrog`), so the s
 
 The whole session's UI work shipped without a game session: the menu tree, the two copy sweeps, the Reset gate, the named autofix options, the PI deviation limit and the Start Race line. Nothing below has been seen in game.
 
-1. **The tree loads at all.** The root should be eight submenus in frequency order — Race, Rivals, Race Rules, Interface, Controls, Debug, Development, Track Creator — plus Reset To Track as the last row. The Development row is disabled unless a race is running with exactly one racer - which in practice is one AI car while the player watches, so the player being on the grid is not required. A constructor fault would have stopped the script loading, so check `Log.log` for a load error and open every menu once.
-2. **Every settings item survives a reload.** The homes all moved and one ini domain changed, so change one item per menu, reload with Insert, and confirm each value came back; `Log.log` must hold no "declares no key" line.
+1. **The tree loads at all.** The root should be eight submenus in frequency order — Race, Rivals, Race Rules, Interface, Controls, Debug, Development, Track Creator — plus Reset To Track as the last row. The Development row is disabled unless a race is running with exactly one racer - which in practice is one AI car while the player watches, so the player being on the grid is not required. A constructor fault would have stopped the script loading, so check `ARS.log` for a load error and open every menu once.
+2. **Every settings item survives a reload.** The homes all moved and one ini domain changed, so change one item per menu, reload with Insert, and confirm each value came back; `ARS.log` must hold no "declares no key" line.
 3. **Racer Autofix reads as names.** The row should offer Off / Auto Repair / Invincible, and a previously stored `0`/`1`/`2` must have migrated rather than reset. Auto Repair is the default. Under Invincible the repair no longer touches the player's own car: the check carries `!ControlledByPlayer`, the same guard the proofs have.
 4. **Max PI Deviation actually caps the grid.** Set a target and a window, build a grid, and check the field's PIs sit inside the window and match the log's `PI limit N around X: …` line. A window nothing fits must give the explicit no-vehicles-in-window error rather than a silent solo grid.
 5. **Reset To Track is race-only.** In free roam the row must be greyed and must not teleport; mid-race it behaves as it always did. If it is still clickable, the guard's notification should say why it refused.
@@ -488,7 +488,7 @@ The steer-away correction used to be folded into the lane steer, so the lane sys
 
 The factor each corner starts from was one per-corner draw around 0.75, so a fresh grid differed corner by corner but every racer averaged the same centre. It is two draws now: `_brakeConfidenceBias`, taken once in the constructor (`Racer.cs:362`) and added to every corner that racer seeds, plus the per-corner draw unchanged (`SeededBrakeFactor` `Racer.cs:275`). Both are ±0.05, so a racer starts anywhere in 0.65–0.85 with a centre of its own, and the bias is the half that moves a lap because it repeats across every corner while the per-corner draw averages out.
 
-1. **The draw is in the log, so this needs no drive.** Starting a race must write one `Brake confidence bias <car>: <value>` line per racer to `Log.log`, spread across ±0.05 rather than all reading the same number. A grid of identical lines means the draw is per corner after all, or the cars never reach the constructor.
+1. **The draw is in the log, so this needs no drive.** Starting a race must write one `Brake confidence bias <car>: <value>` line per racer to `ARS.log`, spread across ±0.05 rather than all reading the same number. A grid of identical lines means the draw is per corner after all, or the cars never reach the constructor.
 2. **Brake Learning off stays uniform.** With the toggle off `BrakeFactorForApex` returns the flat seed and no corner context is ever seeded, so the field must brake identically again — that is what the option promises, and it is the baseline for judging the on state.
 3. **The opening lap is the only place to see it.** The first commit moves a corner's factor up to ±0.2 against a ±0.05 seed, so the bias is a lap-one difference and the field converges after that; a spread that has gone by lap two is the design working, not the draw failing.
 4. **The feel** — with one centre for the field, the pack used to brake as a single car into the first corner; each racer should now be slightly earlier or later. A car *visibly* overshooting corners is the ±0.05 bias being too much rather than a fault in the draw, and `BrakeConfidenceJitterHundredths` (`Racer.cs:206`) is the knob.
@@ -603,7 +603,7 @@ Below the corner line's far clamp — the `ApexLine` phase — the demand is ref
 
 The slip axis was settled by a live probe (`b889222`, evidence on the ladder item `slip-axis-scale`): `wheel+0x174` is the raw signed slip ratio, so the traction curve peaks at 0.4 in the field and goes flat at 1.0 — every threshold ARS compared against that curve was 2.5× too high. Both TCS knobs are now shares of the peak (`TcsSlipLimitPct`, `TcsTaperSpanPct`: 10 to 200 in tens, default 80 and 80), and the ABS left this axis in `7ccaac7` as a wheel-rotation lock guard, so the TCS pair are the only thresholds read here. **Items 4 and 5 below describe the taper that rewrite deleted and are kept as history.**
 
-1. **The file converts itself once.** A `Menu-Settings.ini` holding the old raw pair (0.4 / 0.4 on this install) must come back as 100 / 100 with `TcsSlipThreshold` and `TcsTaperSpan` gone; 0.5 / 0.5 comes back as 120 / 120, because a tie rounds to the lower, tighter offer. `Log.log` must hold no "declares no key" line, and both new values must survive a reload.
+1. **The file converts itself once.** A `Menu-Settings.ini` holding the old raw pair (0.4 / 0.4 on this install) must come back as 100 / 100 with `TcsSlipThreshold` and `TcsTaperSpan` gone; 0.5 / 0.5 comes back as 120 / 120, because a tie rounds to the lower, tighter offer. `ARS.log` must hold no "declares no key" line, and both new values must survive a reload.
 2. **The menu reads in shares.** `TCS Wheelspin Limit (%)` and `TCS Cut Softness (%)` under Rival Traction, and both descriptions name the peak as their reference. The ceiling is the limit plus the softness, so 80 with 80 bottoms the cut at 160% of the peak.
 3. **The extremes are the point of the range**: 10 with 10 should read as a field slower and safer than anything the old law could express, and 200 with 200 as traction control that barely intervenes, its floor landing at four times the peak — past the point the curve goes flat, where the tyres are simply spinning.
 4. **The ABS re-scale owes a setup rather than a drive** — a car with no ABS of its own on a low-grip surface, so the wheels actually lock, and the instrument the section above names. What to watch: the cap trimming the brake from the peak slip onward, with full authority before the wheel is locked. The falsifier is a car that can no longer brake to the threshold, which would say the taper is too tight for the plan. On a car whose own ABS is active the engine forces the field to ±5, so its cap sits at the brake floor either way and the re-scale cannot be judged there.
@@ -646,7 +646,7 @@ The throttle cut was a binary declared by two arms — the chassis riding above 
 
 Applying a section or deleting nodes now rebuilds the derived table on the same tick — the node geometry around the change, the apex table whole — and the circuit/point-to-point flag is recomputed from the route's end gap rather than inherited from the last track loaded. Entering the creator clears the table it would otherwise carry over.
 
-1. **The rebuild agrees with the load.** With `Log.log` at Info, every apply and delete prints `Route rebuild: incremental matches the full pass (N nodes, local Xms, full Yms)`. `INCREMENTAL DIFFERS` is the check failing rather than a cosmetic message: the line carries both signatures, so copy them out.
+1. **The rebuild agrees with the load.** With `ARS.log` at Info, every apply and delete prints `Route rebuild: incremental matches the full pass (N nodes, local Xms, full Yms)`. `INCREMENTAL DIFFERS` is the check failing rather than a cosmetic message: the line carries both signatures, so copy them out.
 2. **The cost number.** That same line is the measurement that decides whether the local rebuild was worth building — if the local time is a rounding error beside the full pass, the locality is doing its job, and if it is not, the corner cut is where the time went.
 3. **Nothing throws on a clear.** With Show Bumps on, press Aim until the route empties: the log must not fill with the same exception every frame, which is what the missing bump clear would have caused.
 4. **The table survives the edit.** After several sections, the corners reported at draw time must be the ones the saved track loads with.
@@ -682,7 +682,7 @@ Builds 694–699 cut the damper's authority back and moved the blend's band and 
 A wide corner the car passes flat was still taken as the promotion reference for the tight corner behind it: at the sweeper's apex the tight corner was promoted already inside its own window, so the whole approach was skipped and its outside line never ran — every lap, not only the first. Now the requirements scan flags a corner that cannot ask for positioning by its own radius (`DetectedRadius >= CornerTightRadius`) and has not asked for braking by the time the car is inside its 3.95 s window; `RefillApexQueue` gives slot one to the next corner instead, and the flag holds until that apex is behind. The driver confirmed the fix on the corner that showed the bug.
 
 1. **The hairpin behind the sweeper takes its approach, every lap.** On the track that showed it, the tight corner after the fast one must show the outside line for the same number of seconds it has on the laps where it worked.
-2. **The log names the skip.** With `Log.log` at Info, one `Queue skip <name>: corner N ignored (wide R m, no braking asked)` per approach, once — a repeat each scan would be the flag failing to latch.
+2. **The log names the skip.** With `ARS.log` at Info, one `Queue skip <name>: corner N ignored (wide R m, no braking asked)` per approach, once — a repeat each scan would be the flag failing to latch.
 3. **No regression late in the approach.** A skipped corner must not become slot one again unless it armed braking — that revocation is deliberate and retakes slot one the same pass — and a skipped corner's log line should not reappear within the same approach.
 4. **An armed corner is never skipped.** A wide corner that arms a braking plan must show its usual braking: the flag is revoked in the same pass and the queue re-picks it, so the braking plan appears the tick it is asked for rather than half a second later.
 5. **The consumer shifts, from slot one no longer being the nearest corner.** DefendLane and Yield now arm in the 1-3 s and 0.5-2 s windows before the *next* corner rather than the skipped one; a nitrous shot that used to be vetoed while approaching or inside the skipped corner can now fire; the lane-crossing taper (`turningIn`) stays active through the skipped corner's turn-in where it used to stand down; brake learning does not sample the skipped corner's approach. None of these is a defect to "fix" blind — they are the shape of the trade and are judged on the drive.

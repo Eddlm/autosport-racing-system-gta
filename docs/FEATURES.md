@@ -11,7 +11,7 @@ This file is the tour, written for players: what you get and what it feels like,
 - **ScriptHookVDotNet Enhanced (SHVDNE) — not upstream's stable release.** The stable bridge cannot start on current game builds and takes every other script down with it. ARS is built against the v2 API (`ScriptHookVDotNet2.dll` **2.11.6**), which SHVDNE ships.
 - **ScriptHookV**, **.NET Framework 4.8** and the current **Visual C++ redistributable** — installed separately.
 - **Extract the `AutosportRacingSystem` folder into the game's `Scripts` folder**, overwriting if you are updating. Tracks, car rosters and settings live inside it, a first run writes the settings files for you, and the menu library is included — so there is nothing to hand-edit before your first race.
-- If ARS does not appear, `Scripts\AutosportRacingSystem\Log.log` names the reason.
+- If ARS does not appear, `ARS.log`, at the game root, names the reason.
 - **The menu** opens on `Left Shift + E`, or by typing `arsmenu` in the chat console.
 
 ## The rivals play by your rules

@@ -7,7 +7,7 @@ The first public WIP of the reworked mod: the playable race loop, the bundled tr
 - **ScriptHookVDotNet Enhanced (SHVDNE)**, not upstream's stable v3.6.0 - the stable bridge cannot start on current game builds. ARS is built against the v2 API, `ScriptHookVDotNet2.dll` **2.11.6**, which SHVDNE ships: copy the `.asi` and the `2.dll` from the same install.
 - ScriptHookV, .NET Framework 4.8 and the latest Visual C++ Redistributable.
 - `ScriptHookVDotNet2.dll` is **not** bundled — the asi and the API dll must be a matched pair.
-- If ARS does not appear, `Scripts\AutosportRacingSystem\Log.log` names the reason; a build the mod cannot drive on logs a forced error rather than crashing.
+- If ARS does not appear, `ARS.log`, at the game root, names the reason; a build the mod cannot drive on logs a forced error rather than crashing.
 
 ## In this release
 

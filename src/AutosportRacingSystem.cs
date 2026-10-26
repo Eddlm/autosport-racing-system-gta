@@ -402,12 +402,14 @@ namespace ARS
 
             // Keep the previous session: the crash we most want to read is the one that killed the game, and truncating the log at
             // startup destroyed the only evidence of it (2026-10-26). One previous file is enough and costs a rename.
-            string logPath = ScriptsFolder + @"\Log.log";
-            try { if (File.Exists(logPath)) File.Copy(logPath, ScriptsFolder + @"\Log.prev.log", true); }
+            string legacyLogPath = ScriptsFolder + @"\Log.log";
+            try { if (File.Exists(legacyLogPath) && !File.Exists(LogPath)) File.Move(legacyLogPath, LogPath); }
             catch (Exception) { }
-            File.WriteAllText(logPath, "----------------------------");
+            try { if (File.Exists(LogPath)) File.Copy(LogPath, PreviousLogPath, true); }
+            catch (Exception) { }
+            File.WriteAllText(LogPath, "----------------------------");
             Log(LogImportance.Info, "Script initialized - " + DateTime.Now);
-            File.AppendAllText(ScriptsFolder + @"\Log.log", "\n----------------------------");
+            File.AppendAllText(LogPath, "\n----------------------------");
             VerifyScriptBridge();
             LoadSettings();
             // A menu that throws used to take the whole mod down with it, and only the driver could see it. Now the failure is
@@ -702,11 +704,16 @@ namespace ARS
         // 0 = no limit: the grid takes the closest PIs in the pool however far they sit from the target.
         public static int PaceDeviationLimit = 0;
         // Default script folder under GTA's `scripts\` (Tracks/, Vehicles/cars.txt, sillynames.txt,
-        // Log.log, etc.). All path constants below derive from this so the folder name lives in one place.
+        // pidump.txt, etc.). All path constants below derive from this so the folder name lives in one place.
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
         // Config .ini files (Options/DevConfig) live in a
         // dedicated Settings subfolder, derived from ScriptsFolder so the base stays in one place.
         public static string SettingsFolder => ScriptsFolder + @"\Settings";
+        // The log sits at the game root beside asiloader.log and ScriptHookV.log, not inside the mod folder: that is where
+        // every other tool writes it and where a player looks first (owner, 2026-10-26). Derived from ScriptsFolder so the
+        // one relative anchor still resolves every path in this file.
+        public static string LogPath => Path.GetFullPath(Path.Combine(ScriptsFolder, "..", "..", "ARS.log"));
+        public static string PreviousLogPath => Path.GetFullPath(Path.Combine(ScriptsFolder, "..", "..", "ARS.prev.log"));
         // Temp: bypass pace matching entirely and load only these models into the grid.
         // Set to null (or empty list) to re-enable pace-matched selection.
         public static List<string> HardcodedRoster = null;
@@ -3913,7 +3920,7 @@ namespace ARS
             // LogLevel is a floor, not a switch: None (highest value) fails every level test and returns here.
             if (LogLevel > i && !forced) return;
             string log = "\n[" + DateTime.Now + "](" + i.ToString() + "): " + text;
-            File.AppendAllText(ScriptsFolder + @"\Log.log", log);
+            File.AppendAllText(LogPath, log);
         }
 
         
