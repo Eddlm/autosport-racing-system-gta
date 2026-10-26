@@ -49,7 +49,7 @@ Drive-side evidence for the pedal: `Automobile.cpp` splits drive force by `fDriv
 
 ```csharp
 slow = Clamp((SlowCornerSlipFullMph - mph) / (SlowCornerSlipFullMph - SlowCornerSlipDoubleMph), 0, 1);
-maxSlip *= 1 + slow;     // SlowCornerSlipFullMph = 30, SlowCornerSlipDoubleMph = 10
+maxSlip *= 1 + slow;     // SlowCornerSlipFullMph = 15, SlowCornerSlipDoubleMph = 5, and SlowCornerSlipAllowance is ON
 ```
 
 The allowance is 1x at 30 mph and 2x at 10 mph, for both the wheel and the pedal. Below 30 mph the readout's 100% therefore means "the peak times the allowance", not "at the peak".

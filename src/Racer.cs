@@ -1856,7 +1856,7 @@ namespace ARS
         // Where the cut stops deepening: the same 2.5x at which sfTractionMinAngle flattens the tyre's curve.
         const float FrontSlipFactorSaturatePct = 250f;
         // From this speed down the slip allowance starts doubling, and it is fully doubled at the second one.
-        static readonly bool SlowCornerSlipAllowance = false;
+        static readonly bool SlowCornerSlipAllowance = true;
         const float SlowCornerSlipFullMph = 15f;
         const float SlowCornerSlipDoubleMph = 5f;
         // How much of the damper's overshoot past neutral survives. 1.0 keeps the full overshoot when the
@@ -1976,8 +1976,9 @@ namespace ARS
         // makes it push wide. The allowance doubles by 5 mph, where the geometry needs the lock and the slip is harmless.
         float SlowCornerSlipShare(float fwdSpeed)
         {
-            // Parked: with the pedal and the ceiling fixes in place the allowance stopped mattering, and it was the only part of the
-            // law that moved with speed. Reviving it is this one flag; the numbers below stay as they were.
+            // ON: this is the only part of the law that moves with speed. Under 15 mph the effective cap share grows to 2.0 at 5 mph,
+            // so the wheel is allowed past the tyre's own peak exactly where a hairpin needs it; above 15 mph it is identically 1.0.
+            // The 2.0 plateau is deliberate: the curve is still falling at 2x the peak, and 2.5x is where it goes flat.
             if (!SlowCornerSlipAllowance) return 1f;
             float mph = ARS.MpsToMph(fwdSpeed);
             float slow = ARS.Clamp((SlowCornerSlipFullMph - mph) / (SlowCornerSlipFullMph - SlowCornerSlipDoubleMph), 0f, 1f);
@@ -3742,9 +3743,13 @@ namespace ARS
             float clamp = float.IsNaN(_chasingClampDeg) ? _finalCeilingDeg : _chasingClampDeg;
             float asked = Math.Abs(_steerPreLimitDegrees);
             float mph = ARS.MpsToMph(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
+            float share = SlowCornerSlipShare(ARS.MphToMps(mph));
             UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.00") + "   "
                 + _slipFactor.ToString("0.00") + "   " + mph.ToString("0") + "mph"
-                + "   F " + _slip.InnerPct.ToString("0") + "   R " + _slip.RearPct.ToString("0"), 50);
+                + "   F " + _slip.InnerPct.ToString("0") + "   R " + _slip.RearPct.ToString("0")
+                // Below 15 mph the percentages are normalised against a share above 1, so 100 there is not the tyre peak. The token
+                // appears only when it is not 1.0, which keeps the line unchanged at racing speeds.
+                + (share > 1.001f ? "   x" + share.ToString("0.0") : ""), 50);
         }
 
         void DrawWheelSlip()

@@ -68,7 +68,7 @@ Tracked in `docs/steering-and-pedals.md` (items 1-8) and `AGENTS-WIP.md`. The lo
 - No hysteresis around the target, and no compensation for the 100-200 ms measurement lag.
 - `SpeedSteerCeiling` is parked at `false`, leaving `ResolveSteerCeiling`, `ManeuverRamp` and
   `GeometrySteerCeiling` compiled but inert.
-- The slow-corner slip allowance is parked behind `SlowCornerSlipAllowance = false`.
+- Under 15 mph the slip allowance grows to twice the peak share by 5 mph, so a hairpin can still ask the wheel for more; above 15 mph it is flat.
 
 ## Upgrade notes
 
