@@ -360,6 +360,9 @@ namespace ARS
         // The colour the trajectory is drawn in, decided where the trajectory is measured rather than in the drawing code:
         // the floor, the edge and the widening all live here, and DrawDebug only has to paint what it is handed.
         Color _projectionPathColor = Color.Blue;
+        // What the inside floor added to the pedal this tick, as a share of full throttle: the difference between what the plan,
+        // the caps and the slew had composed and what the car was finally given. Read by the development subtitle.
+        float _throttleFloorGain = 0f;
         // True only on the tick the projection actually cut the throttle, which is what the red lines report.
         bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
@@ -2497,7 +2500,14 @@ namespace ARS
             // line and has no business outvoting a spinning tyre.
             if (countersteering) gsFloor = 0f;
             gsFloor = Math.Min(gsFloor, Control.MaxThrottle);
+            float throttleBeforeFloor = Control.Throttle;
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
+            _throttleFloorGain = Control.Throttle - throttleBeforeFloor;
+            // Development read-out, on the car being driven and only while the toggle is on: what the floor added, in percent of
+            // full throttle, measured against everything that had already had its say. A focus racer keeps the subtitle for itself,
+            // so this stands aside when one is set.
+            if (ARS.GsLaneThrottleFloor && ControlledByPlayer && ARS.DebugFocusRacer == null)
+                UI.ShowSubtitle("Gs floor: +" + (100f * _throttleFloorGain).ToString("0") + "% throttle", 50);
             _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
 
             UpdateBrakeLearning();
