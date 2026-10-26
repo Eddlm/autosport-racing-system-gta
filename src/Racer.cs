@@ -1849,7 +1849,6 @@ namespace ARS
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
-        const float FrontSlipCapPeakShare = 1.00f;
         // How much of the request the cut may leave: 0.05 lets the guard take the wheel down to a twentieth, which is the
         // extreme end of the range and is here to be felt, not shipped.
         const float FrontSlipFactorFloor = 0.05f;
@@ -2005,7 +2004,10 @@ namespace ARS
                 ? 0.5f * (rawLeft + rawRight)
                 : Math.Max(rawLeft, rawRight);
 
-            float capShare = FrontSlipCapPeakShare * SlowCornerSlipShare(fwdSpeed);
+            // One owner for how much of the tyre's peak slip is allowed: the menu's Peak Slip Share. 1.00 cuts at the peak, below it
+            // cuts before the peak, above it lets the tyre slide, and 2.00 is past anything but a real slide. Clamped because a
+            // hand-edited ini could carry a zero and the division would poison the whole reading with NaN.
+            float capShare = Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed);
             s.InnerPct = 100f * rawInner / capShare;
             s.RearPct = slips.Count >= 4
                 ? 100f * Math.Max(Math.Abs(slips[2]), Math.Abs(slips[3])) / capShare
@@ -2028,7 +2030,7 @@ namespace ARS
             if (speed < FrontSlipTheoryMinSpeedMps || gripGs <= 0.01f || wheelBase <= 0.5f) return s;
 
             s.Readable = true;
-            float available = gripGs * FrontSlipGravity * FrontSlipCapPeakShare * SlowCornerSlipShare(fwdSpeed);
+            float available = gripGs * FrontSlipGravity * Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed);
 
             // The inner wheel is the signal, as in the measured source, and its angle IS the command: the file's own convention
             // gives the outer wheel 0.75 of it (EngineSteerWheelOuterShare), so the inner turns more and takes the tighter line.
@@ -3743,13 +3745,13 @@ namespace ARS
             float clamp = float.IsNaN(_chasingClampDeg) ? _finalCeilingDeg : _chasingClampDeg;
             float asked = Math.Abs(_steerPreLimitDegrees);
             float mph = ARS.MpsToMph(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
-            float share = SlowCornerSlipShare(ARS.MphToMps(mph));
+            float share = Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(ARS.MphToMps(mph));
             UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.00") + "   "
                 + _slipFactor.ToString("0.00") + "   " + mph.ToString("0") + "mph"
                 + "   F " + _slip.InnerPct.ToString("0") + "   R " + _slip.RearPct.ToString("0")
-                // Below 15 mph the percentages are normalised against a share above 1, so 100 there is not the tyre peak. The token
-                // appears only when it is not 1.0, which keeps the line unchanged at racing speeds.
-                + (share > 1.001f ? "   x" + share.ToString("0.0") : ""), 50);
+                // The percentages are normalised against the share in force: the menu's factor times the slow-corner allowance. The token
+                // appears whenever that is not 1.0, so F 100 never silently means something other than the tyre's peak.
+                + (Math.Abs(share - 1f) > 0.001f ? "   x" + share.ToString("0.0") : ""), 50);
         }
 
         void DrawWheelSlip()

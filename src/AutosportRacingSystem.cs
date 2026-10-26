@@ -1162,7 +1162,7 @@ namespace ARS
             rivalSteeringMenu.Add(damperCounterItem);
             HookListTextPicker(damperCounterItem);
 
-            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Steer Limit At Speed", "Scales the limiter's ceiling from the tyre's at-speed peak slip: 1.00 puts the loaded outer wheel on its peak, above 1.00 makes it slide, and 2.00 is above any lock, so the limiter is off.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
+            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Peak Slip Share", "How much of the tyre's peak slip the limiter allows before it cuts: 1.00 cuts exactly at the peak, below 1.00 cuts earlier and the car never uses its grip, above 1.00 lets it slide, 2.00 barely cuts at all.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
             steerCeilingFactorItem.ItemChanged += (sender, args) =>
             {
                 SteerCeilingFactor = float.Parse(steerCeilingFactorItem.Items[args.Index], CultureInfo.InvariantCulture);
