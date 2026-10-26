@@ -57,3 +57,5 @@ release-latest.json
 # Defaults are NOT shipped as files: SettingsRepair writes every missing key on first load, from the same schema that
 # validates them. Shipping generated inis only guarantees they drift from the code. Decisions: owner, 2026-10-26.
 Dist/AutosportRacingSystem/Settings/*.ini
+# The release zip is built from this tree, never stored in it (tools/make-package.ps1).
+AutosportRacingSystem-*.zip

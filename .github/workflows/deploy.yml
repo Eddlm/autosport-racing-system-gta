@@ -35,33 +35,9 @@ jobs:
           # The banner reads this beside ARS.dll. Stage the number the build actually used rather than
           # re-deriving it here, so the two can never drift.
           Copy-Item 'build\build-number.txt' $ars -Force
-          @'
-          Autosport Racing System (ARS) - WIP build
-
-          Install: extract the AutosportRacingSystem folder into
-          Grand Theft Auto V\Scripts\ (overwrite if updating).
-
-          Included: LemonUI.SHVDN2 1.5.2, used under the MIT License, by JustALemon
-          (https://github.com/LemonUIbyLemon/LemonUI).
-
-          Required (install separately, we do not bundle them):
-            - ScriptHookV (Alexander Blade): http://www.dev-c.com/gtav/scripthookv/
-            - .NET Framework 4.8 and the latest Visual C++ Redistributable.
-            - ScriptHookVDotNet Enhanced (SHVDNE), which ships the v2 API dll this mod
-              is built against: ScriptHookVDotNet2.dll 2.11.6. Upstream's stable
-              v3.6.0 cannot start on current game builds and takes every script down,
-              not just ARS.
-                https://github.com/Chiheb-Bacha/ScriptHookVDotNetEnhanced
-              Copy ScriptHookVDotNet.asi and ScriptHookVDotNet2.dll from the SAME
-              install into the game folder (ScriptHookVDotNet.ini too if you want to
-              edit it). ARS runs on the v2 API, so an asi paired with an older API dll
-              makes it fail silently - nothing else in the game looks wrong.
-
-          If ARS does not appear: open Scripts\AutosportRacingSystem\Log.log -
-          it names the reason (for example an SHVDN dll/asi build mismatch).
-
-          Menu: Sprint + Context hotkey, or type arsmenu in the chat console.
-          '@ | Set-Content -Encoding UTF8 (Join-Path $stage 'README.txt')
+          # One README for both paths: the file this workflow ships and the one make-package.ps1
+          # ships must be the same text, so it lives in tools/ and is copied, never retyped.
+          Copy-Item 'tools\PACKAGE-README.txt' (Join-Path $ars 'README.txt') -Force
           $zip = "AutosportRacingSystem-$($env:GITHUB_SHA.Substring(0,7)).zip"
           Compress-Archive -Path "$stage\*" -DestinationPath $zip -Force
           "ZIPFILE=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
