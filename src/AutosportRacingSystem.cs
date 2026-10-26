@@ -1541,13 +1541,8 @@ namespace ARS
 
             // Resolve the effective pace target once per grid from Pace Mode — the menu is the only authority on the anchor.
             // An anchor outside the fleet span is harmless: the ranking starts from the closest end.
-            _resolvedPaceTarget = PowerTargetScale;
-            if (CurrentPaceMode == PaceMode.RelativeToMine)
-            {
-                if (TryComputePlayerCarPaceIndex(out float playerPace)) { _lastKnownPlayerPace = playerPace; _resolvedPaceTarget = playerPace + PaceOffsetScale; }
-                else if (!float.IsNaN(_lastKnownPlayerPace)) { _resolvedPaceTarget = _lastKnownPlayerPace + PaceOffsetScale; UI.Notify("~o~No vehicle to read a performance index from - using your last car's PI."); }
-                else UI.Notify("~o~No vehicle to read a performance index from - using the fixed PI Target.");
-            }
+            ResolvePaceTargetForGrid();
+
 
             Log(LogImportance.Info, "Grid: ranking " + _vehiclePool.Count + " pool files, target " + _resolvedPaceTarget.ToString(CultureInfo.InvariantCulture));
             // Ask for one more car than the AI count: AddPlayerToGrid puts the player's racer on top of these
@@ -1595,8 +1590,76 @@ namespace ARS
 
         // All-in-one chain: runs all three phases back-to-back with no UI stops.
         // Used by future presets; also the backward-compatible single-call path.
+        // Phase 1 of the preflight: everything that can fail is asked BEFORE anything is torn down. InstanceTrack deletes the
+        // previous track's props, fades the screen and kills the racers before it has parsed a single route, so a bad file or an
+        // empty pool used to leave the world half-rebuilt. This resolves the cheap half - the file parses, the route is long
+        // enough, the pace target resolves and the pool yields a car - and refuses the start without touching the world.
+        //
+        // It does NOT replace the checks inside the instance path, and it cannot: the definitive slot count needs the densified
+        // route, which only the loader produces. See docs/audit/200-audit-0.9.0.md's B6 and the 304 findings.
+        // One writer for the grid's pace target: the preflight needs the same answer before anything is instanced, and the
+        // grid needs it a moment later.
+        void ResolvePaceTargetForGrid()
+        {
+            _resolvedPaceTarget = PowerTargetScale;
+            if (CurrentPaceMode == PaceMode.RelativeToMine)
+            {
+                if (TryComputePlayerCarPaceIndex(out float playerPace)) { _lastKnownPlayerPace = playerPace; _resolvedPaceTarget = playerPace + PaceOffsetScale; }
+                else if (!float.IsNaN(_lastKnownPlayerPace)) { _resolvedPaceTarget = _lastKnownPlayerPace + PaceOffsetScale; UI.Notify("~o~No vehicle to read a performance index from - using your last car's PI."); }
+                else UI.Notify("~o~No vehicle to read a performance index from - using the fixed PI Target.");
+            }
+        }
+
+        bool PreflightStartRace(out string reason)
+        {
+            reason = null;
+
+            string trackPath = _selectedTrackPath;
+            if (trackPath == null)
+            {
+                if (_trackListPaths.Count == 0) { reason = "No tracks found. Put track files in the Tracks folder."; return false; }
+                trackPath = _trackListPaths[0];
+            }
+
+            XmlDocument file = TrackLoader.LoadTrackFile(trackPath);
+            if (file == null) { reason = "That track file could not be read."; return false; }
+
+            XmlNode data = file.SelectSingleNode("Data");
+            int routePoints = data == null ? 0 : data.SelectNodes("Route/Point").Count;
+            if (routePoints < 6)
+            {
+                reason = "That track has " + routePoints + " route nodes; six are needed before a car can be placed on it.";
+                return false;
+            }
+
+            // The pool: the same selection the grid will run, asked for one more car than the AI count. An empty answer here is the
+            // failure the player was being sent to the wrong folder for.
+            if (_intendedOpponents > 0)
+            {
+                ResolvePaceTargetForGrid();
+                FillCachedCandidates(_intendedOpponents + 1);
+                if (_cachedCandidates.Count == 0)
+                {
+                    reason = PaceDeviationLimit > 0
+                        ? "No car within " + PaceDeviationLimit + " PI of " + Math.Round(_resolvedPaceTarget) + ". Widen Max PI Deviation, or pick a PI target the pool can reach."
+                        : "No car in the pool carries a pace index.";
+                    return false;
+                }
+            }
+            return true;
+        }
+
         public void StartRaceFromMenu()
         {
+            // The refusal happens before any world work: no props, no fade, no racers torn down.
+            string refusal;
+            if (!PreflightStartRace(out refusal))
+            {
+                UI.Notify("~o~" + refusal);
+                Log(LogImportance.Error, "Start Race refused: " + refusal);
+                return;
+            }
+
             InstanceTrack();
             if (!_trackInstanced) return;
             InstanceGrid();
