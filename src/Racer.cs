@@ -266,8 +266,9 @@ namespace ARS
         // ramp: braking on it at full authority is what reads as a slam. A corner owns its own ramp and is exempt.
         const float RouteBrakeCap = 0.2f;
 
-        // The most throttle the development Gs floor will hold: reached at the inside edge, fading to nothing at the centre.
-        const float GsLaneThrottleMaxFloor = 0.8f;
+        // The most throttle the development Gs floor will hold: full pedal at the inside edge, fading to nothing at the centre.
+        // 1.00 is deliberate - at the edge the car is not allowed to lift at all, which is the extreme the owner asked to feel.
+        const float GsLaneThrottleMaxFloor = 1f;
 
         // Two input units per second while outside, down to a floor that leaves two thirds of the tyre for steering.
         const float ProjectionInputPerSecond = 2f;
