@@ -530,6 +530,10 @@ The two-livery-spaces trap (mod slot 48 vs the livery list), the exact natives a
   calls `StartRace()` directly, and `StartRace()` auto-instances the track and grid when they are missing. Any check that must
   run before a race starts belongs at BOTH doors until those two are merged - a preflight placed only in `StartRaceFromMenu`
   never runs when the player presses Start Race, which is how the on-foot Relative guard was bypassed twice.
+- **The slip clamp closes exponentially in the GAP, not in the severity** (build 1132). Rate = `gap x 60/s`, capped at 90 deg/s,
+  snapped at 0.05 deg; opening stays a flat 4 deg/s. The owner's calibration rule: a clamp at 500 % of its target arrives in 0.1 s.
+  Measured times to 1 % of the target, target 2 deg: 200 % -> 39 ms, 500 % -> 105 ms, 1000 % -> 216 ms. The old tanh mapped
+  severity to a 1-10 deg/s rate, so a collapsed target took 1.35 s to travel 13.5 deg - that is the 1000 % the driver saw.
 - **No apex is recognised within 30 nodes of the start/finish line** (`ApexStartLineClearanceNodes`, `TrackLoader.cs`, counted the
   short way round on a circuit). El Burro Rally and Oct1 both produced a corner with its apex on node 0 and its entrance at the
   end of the route, which made the plan brake while the grid was still leaving the line. Measured after the change: 14 and 18
