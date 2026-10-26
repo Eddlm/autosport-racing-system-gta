@@ -199,6 +199,10 @@ namespace ARS
         // How many times the de-glitch fired: it belongs in the trace, because the fix is only right if the flips are artefacts.
         int _pursuitFlipCount;
         bool _pursuitFlipThisTick;
+        // The bearing before the de-glitch and the distance to the aim point: together they say whether the flip is the aim moving
+        // or the same aim seen from a very short baseline.
+        float _pursuitRawBearingDeg;
+        float _pursuitAimDistanceM;
         // The apex blend only ever closes: the latched phase of the corner currently being approached, and which corner it belongs to.
         int _linePhaseNode = -1;
         float _linePhaseLatched;
@@ -923,7 +927,9 @@ namespace ARS
                     + " ref=" + steerRefOffset.ToString("0.00")
                     + " over=" + (_laneOvershoot ? 1 : 0)
                     + " flip=" + (_pursuitFlipThisTick ? 1 : 0)
-                    + " flips=" + _pursuitFlipCount);
+                    + " flips=" + _pursuitFlipCount
+                    + " rawbear=" + _pursuitRawBearingDeg.ToString("0.0")
+                    + " dist=" + _pursuitAimDistanceM.ToString("0.0"));
 
 
             if (_slidePriority > 0f)
@@ -1095,6 +1101,8 @@ namespace ARS
                 _steerAimBearingDegrees = 0f;
                 return 0f;
             }
+            float rawBearing = bearing;
+
             // De-glitch BEFORE the bearing is stored or used: the aim flips sign between ticks with a similar magnitude, which turns a
             // straight-line ask into a 6 deg alternation. The midpoint of the two samples describes the same aim seen from either side of
             // the axis, so it is a better estimate than either; nothing else in the loop is touched.
@@ -1107,6 +1115,8 @@ namespace ARS
                 bearing = 0.5f * (_steerAimBearingDegrees + bearing);
             }
 
+            _pursuitRawBearingDeg = rawBearing;
+            _pursuitAimDistanceM = distance;
             _steerAimBearingDegrees = bearing;
             _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / distance;
             return PursuitSteerFromBearing(bearing, distance);
