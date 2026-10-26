@@ -308,6 +308,8 @@ namespace ARS
         // The chase that is actually applied: follows clampTarget at one rate in both directions, and is born at whatever the
         // target is the first time the guard can speak. NaN until then.
         float _chasingClampDeg = float.NaN;
+        // What the gate is aiming at this tick, kept only so the readout can say whether the applied clamp has got there yet.
+        float _clampTargetDeg = float.NaN;
         // The share of the request the cut is leaving this tick, 1 when it is not cutting. Written here so the readout can show it.
         float _slipFactor = 1f;
 
@@ -2108,6 +2110,7 @@ namespace ARS
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             _slip = MeasureFrontSlip(fwdSpeed);
             _slipFactor = 1f;
+            _clampTargetDeg = float.NaN;
             // maxSlip is the peak at this speed and it is the only thing that moves with speed. clampTarget is the old proportional
             // law - the request scaled by maxSlip/slip - so it carries the percentage of reduction, and it is recomputed every
             // tick. chasingClamp is the value actually applied and the only state in the system.
@@ -2124,6 +2127,7 @@ namespace ARS
                 float clampTarget = _slip.InnerPct > 100f
                     ? Math.Abs(requestedSteer) * factor
                     : VehicleData.SteeringLock;
+                _clampTargetDeg = clampTarget;
                 float chase = float.IsNaN(_chasingClampDeg) ? clampTarget : _chasingClampDeg;
                 // The closing rate follows the severity of the overshoot, the opening is a flat rate: the harder the tyre is past
                 // its peak the faster the gate shuts, and it always reopens carefully rather than snapping wide.
@@ -3738,6 +3742,19 @@ namespace ARS
         {
             // One dimensionless number: what the car asked for over what the ceiling allows. 1.00 means the clamp is just
             // touching, 2.00 means the request was twice the allowed angle, and the value falls below 1 once it stops biting.
+            // Theory source: the only number worth seeing is whether the applied clamp has arrived at the target. Over 100% the
+            // gate is still closing onto it; 100% means it sits where the law says. Nothing else is printed in this mode.
+            if (!ARS.SlipFromMemory)
+            {
+                float target = _clampTargetDeg;
+                float applied = _chasingClampDeg;
+                string proportion = (float.IsNaN(target) || float.IsNaN(applied) || target < 0.01f)
+                    ? "--"
+                    : (100f * applied / target).ToString("0") + "%";
+                UI.ShowSubtitle(proportion, 50);
+                return;
+            }
+
             float clamp = float.IsNaN(_chasingClampDeg) ? _finalCeilingDeg : _chasingClampDeg;
             float asked = Math.Abs(_steerPreLimitDegrees);
             float mph = ARS.MpsToMph(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
