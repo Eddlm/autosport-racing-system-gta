@@ -313,10 +313,11 @@ namespace ARS
         // The share of the request the cut is leaving this tick, 1 when it is not cutting. Written here so the readout can show it.
         float _slipFactor = 1f;
 
-        // Opening is the same exponential as the close, with a smaller gain: the gap shrinks by (1 - k/30) per tick, so at 11/s the
-        // worst case - from 2 deg to the full lock, a gap of 36 - is covered in 15 ticks, half a second, and a short gap takes less.
-        // The flat 4 deg/s it replaces needed 4.5 s for the same travel, which read as 'the clamp never comes back'.
-        const float SlipOpenPerSecond = 11f;
+        // Opening is LINEAR by decision: a fixed 72 deg/s, which covers the whole travel from 2 deg to the lock (36 deg) in half a
+        // second and any shorter gap proportionally less. Exponential opening was tried and rejected - the time varied with the gap,
+        // so the same manoeuvre looked different depending on how far the clamp had fallen. The old 4 deg/s needed 4.5 s for the same
+        // travel, which read as 'the clamp never comes back'.
+        const float SlipOpenDegPerSec = 72f;
         // Closing is exponential in the gap, not in the severity: the rate is the distance to the target times this gain, so the
         // time to arrive is a property of the system and not of how big the drop happened to be. Calibration (owner's rule): a
         // clamp sitting at 500% of its target - a gap of four times the target - arrives in about 0.2 s. There is NO ceiling on the
@@ -2126,10 +2127,7 @@ namespace ARS
                 // its peak the faster the gate shuts, and it always reopens carefully rather than snapping wide.
                 if (clampTarget >= chase)
                 {
-                    float rise = clampTarget - chase;
-                    _chasingClampDeg = rise <= SlipCloseSnapDeg
-                        ? clampTarget
-                        : Math.Min(clampTarget, chase + rise * SlipOpenPerSecond * TickScale);
+                    _chasingClampDeg = Math.Min(clampTarget, chase + SlipOpenDegPerSec * TickScale);
                 }
                 else
                 {
