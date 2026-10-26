@@ -284,8 +284,8 @@ namespace ARS
         // at zero, because the projection of a stationary car is the car.
         const float OffshootMinSpeedMph = 20f;
         // Throttle saturates at one metre per second of deficit: the pedal is there to reach the plan, not to approach it
-        // gently. Braking keeps its six, so the pair is now 1:6 - full gas the moment the car is a hair under its speed,
-        // full brake only when it is six over.
+        // gently. Braking keeps its three, so the pair is 1:3 - full gas the moment the car is a hair under its speed,
+        // full brake only when it is three metres a second over.
         const float FullPedalSpeedErrorMps = 1f;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
         const float BrakeErrorMultiplier = 3f;
@@ -420,10 +420,21 @@ namespace ARS
         // same thing at two hundred metres out and at twenty. The old reading - arrival speed against the apex speed - had no
         // distance in it at all: one metre a second over scored the same with two hundred metres to lose it in as with ten.
         const float BrakeFeasibilityCutStep = 0.2f;       // a full step of factor for...
-        const float BrakeFeasibilityCutSpan = 0.5f;       // ...half again the budget the ramp allows
+        // ...this much over the tolerance. The ratio is steep near the corner - a five per cent speed error reads 1.53 where the
+        // budget is a quarter of the apex energy - so the span is the knob that sets how hard that error is punished. At 1.5 a
+        // five per cent entry costs about 0.06 and ten per cent about 0.13; at 0.5 either of them spent the per-event cap.
+        const float BrakeFeasibilityCutSpan = 1.5f;
         const float BrakeFeasibilityRewardBelow = 0.8f;   // under this share of the budget the entry had margin to give
         const float BrakeFeasibilityRewardAbove = 0.5f;   // under this one the ramp never bound, so it proves nothing
-        const float BrakeFeasibilityMinBudgetMps2 = 4f;   // near the target the denominator dies and the ratio lies
+        // The denominator is the ramp's budget above the apex speed, and it dies as the car reaches the target: with apex 30 m/s,
+        // a ramp of 31 leaves 61 m^2/s^2, so three metres a second over reads as a ratio of nine. Measured there, every correct
+        // braking run looks catastrophic and the last metre always wins the "worst of the run". The budget is therefore only read
+        // while it is still a real share of the apex energy - a quarter of it, which is a ramp 12% above the apex speed.
+        const float BrakeFeasibilityMinBudgetShare = 0.25f;
+        // A car braking at the limit runs slightly over its own theoretical ramp all the way down - brake onset, weight transfer,
+        // fade - so a tolerance above the ramp is not laziness, it is the measurement floor. Ten per cent of the decel. Below it
+        // nothing is written, which is what makes "on the ramp" a band instead of a razor edge.
+        const float BrakeFeasibilityOverAbove = 1.1f;
         const int BrakeFeasibilitySampleMs = 100;         // the ramp costs a corner lookup, so ten samples an approach will do
         const float BrakeMaxFactor = 1f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
@@ -2662,11 +2673,15 @@ namespace ARS
             {
                 _brakeFeasibilityNextSampleAt = Game.GameTime + BrakeFeasibilitySampleMs;
                 float apexSpeed = Math.Max(2f, NextApexSpeed);
-                float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed);
+                // The ramp is the speed the plan would carry; the pedal law is proportional on the speed error and needs an error
+                // to sustain any decel at all - full brake only arrives BrakeErrorMultiplier above the target. A car braking at the
+                // limit therefore sits that far above the ramp by design, and judging it against the bare ramp reads "over" on every
+                // corner. The allowance is the law's own constant, not a fudge factor.
+                float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed) + BrakeErrorMultiplier;
                 float budget = ramp * ramp - apexSpeed * apexSpeed;
-                // The budget dies as the car reaches the target, and a ratio built on a dying denominator is noise. Under
-                // this floor the approach is over anyway: the car is at the speed the corner asks for.
-                if (budget > BrakeFeasibilityMinBudgetMps2)
+                // A ramp of 999 means no plan out there; a budget that is no longer a real share of the apex energy means the
+                // measurement has lost its resolution. Either way there is nothing to read here.
+                if (ramp < 100f && budget > BrakeFeasibilityMinBudgetShare * apexSpeed * apexSpeed)
                 {
                     float carried = ARS.GetForwardSpeed(Car);
                     float ratio = (carried * carried - apexSpeed * apexSpeed) / budget;
@@ -2707,9 +2722,9 @@ namespace ARS
             float feasibility = _brakeCommitFeasibility;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
-            // Over the ramp the cut grows with how far over: needing half again the budget costs a whole step, and the
+            // Over the tolerance the cut grows with how far over: half again the planned decel costs a whole step, and the
             // per-event cap keeps one bad entry from spending the factor's whole range.
-            float entryCut = BrakeFeasibilityCutStep * (Math.Max(0f, feasibility - 1f) / BrakeFeasibilityCutSpan);
+            float entryCut = BrakeFeasibilityCutStep * (Math.Max(0f, feasibility - BrakeFeasibilityOverAbove) / BrakeFeasibilityCutSpan);
             entryCut = Math.Min(entryCut, BrakeMaxCutPerEvent);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
             // curve has fallen all the way to fTractionCurveMin, so that is sliding rather than merely cornering at
@@ -2730,7 +2745,7 @@ namespace ARS
             // than a braking *point*; a corner taken exactly right with a gentle pedal scored zero and kept inflating.
             float factor;
             string why;
-            if (feasibility > 1f)
+            if (feasibility > BrakeFeasibilityOverAbove)
             {
                 factor = before - entryCut;
                 why = "over " + feasibility.ToString("0.00");
