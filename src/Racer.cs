@@ -367,8 +367,10 @@ namespace ARS
         bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
 
-        // Brake learning (Phase 1): learn the effective decel factor per corner apex.
-        const float BrakeFactorSeed = 0.75f;
+        // Brake learning: the factor moves the corner's braking point between this seed and the range below.
+        // Held at 1.0 with no draw while the learner is being measured: a seeded range would make two runs of the same corner
+        // incomparable, and the point of the exercise is to read the excess speed, not to watch the seed drift.
+        const float BrakeFactorSeed = 1f;
         // The radius under which a corner counts as tight, i.e. where the outside line is worth having.
         const float CornerTightRadius = 50f;
         // Arrival is extrapolated from the live forward Gs at this discount: holding a G flat across the window
@@ -378,11 +380,9 @@ namespace ARS
         const float BrakeExcessMph = 25f;
         // Braking is judged from the distance it actually needs, plus this much road for the plan to take hold.
         const float BrakeHorizonMargin = 40f;
-        // Each corner's initial factor is the seed plus the racer's own bias plus a draw of +/- this many hundredths.
-        const int BrakeFactorSeedJitterHundredths = 5;
-        // The racer's own bias is a draw of +/- this many hundredths, taken once in the constructor.
-        const int BrakeConfidenceJitterHundredths = 5;
-        float _brakeConfidenceBias;
+        // Learning is measured but NOT applied: the verdict is computed and announced so the excess can be read off, and the factor
+        // the car drives with stays at the seed. Flip this to true to let it teach again.
+        const bool BrakeLearningApplies = false;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
         // Apex nodes the scan has judged worth nothing this approach (wide and unarmed inside their window). The
@@ -398,6 +398,10 @@ namespace ARS
         // Factor already forfeited this corner for leaving the ground while still over the ramp. A car in the air has lost the
         // corner regardless of the clock: the jump is the proof, not a hint.
         float _brakeSampleAirPenalty = 0f;
+        // How many miles an hour over the speed the corner asks for the car actually arrived at its entrance. One sample, taken as
+        // the car passes the braking target - the point the plan already treats as being at apex speed.
+        float _brakeSampleEntryExcessMph = 0f;
+        bool _brakeSampleEntryMeasured = false;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
@@ -407,6 +411,7 @@ namespace ARS
         float _brakeCommitMaxSlideDeg = 0f;
         float _brakeCommitOverSeconds = 0f;
         float _brakeCommitAirPenalty = 0f;
+        float _brakeCommitEntryExcessMph = 0f;
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
@@ -480,7 +485,7 @@ namespace ARS
         // The racer's own bias plus one independent draw per corner. The bias repeats across all of that racer's
         // corners where the per-corner draw averages out, so the bias is the half that moves a lap. The +1 makes
         // each draw symmetric: GetRandomInt's max is exclusive.
-        float SeededBrakeFactor() => BrakeFactorSeed + _brakeConfidenceBias + ARS.GetRandomInt(-BrakeFactorSeedJitterHundredths, BrakeFactorSeedJitterHundredths + 1) / 100f;
+        float SeededBrakeFactor() => BrakeFactorSeed;
 
         // While diving, a temp bonus is appended to the learned factor; the stored factor itself never changes.
         public float EffectiveBrakeFactor(int apexNode)
@@ -614,8 +619,7 @@ namespace ARS
             if (Driver.IsPlayer) ControlledByPlayer = true;
             _halfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));
             _phaseOffsetMs = ARS.GetRandomInt(0, 500);
-            _brakeConfidenceBias = ARS.GetRandomInt(-BrakeConfidenceJitterHundredths, BrakeConfidenceJitterHundredths + 1) / 100f;
-            ARS.Log(ARS.LogImportance.Info, "Brake confidence bias " + Name + ": " + _brakeConfidenceBias.ToString("0.00"));
+            // The confidence draw is gone with the fixed seed: the learner now starts every corner from the same number.
             _pressureTick = Game.GameTime;
             VehicleData.ModelDimensions = Car.Model.GetDimensions();
 
@@ -2662,6 +2666,8 @@ namespace ARS
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleOverSeconds = 0f;
                 _brakeSampleAirPenalty = 0f;
+                _brakeSampleEntryExcessMph = 0f;
+                _brakeSampleEntryMeasured = false;
                 _brakeOverNextSampleAt = 0;
                 // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
                 // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
@@ -2693,6 +2699,14 @@ namespace ARS
                     _brakeSampleOverSeconds += BrakeOverSampleMs / 1000f;
             }
 
+            // The entrance reading, taken once as the car passes its braking target: the plan holds apex speed there, so the difference
+            // is how hot the car actually arrived. This is the number the announcement reports.
+            if (!_brakeSampleEntryMeasured && _brakeSampleApexNode >= 0 && HasPassedBrakingTarget())
+            {
+                _brakeSampleEntryMeasured = true;
+                _brakeSampleEntryExcessMph = (ARS.GetForwardSpeed(Car) - Math.Max(2f, NextApexSpeed)) * 2.23694f;
+            }
+
             // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. A car that slid on
             // the way in was on a tyre that had already let go, so the commit below throws that sample away.
             if (_brakeSampleApexNode >= 0 && HasPassedBrakingTarget() && !HasPassedApex(_brakeSampleApexNode))
@@ -2717,6 +2731,7 @@ namespace ARS
             _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
             _brakeCommitOverSeconds = _brakeSampleOverSeconds;
             _brakeCommitAirPenalty = _brakeSampleAirPenalty;
+            _brakeCommitEntryExcessMph = _brakeSampleEntryExcessMph;
         }
 
         void CommitBrakeLearning()
@@ -2726,6 +2741,7 @@ namespace ARS
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
             float overSeconds = _brakeCommitOverSeconds;
             float airPenalty = _brakeCommitAirPenalty;
+            string entry = _brakeCommitEntryExcessMph.ToString("+0;-0;0") + "mph";
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
@@ -2734,8 +2750,8 @@ namespace ARS
             if (TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple)
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
-                CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment(apexNode, before, skidFactor, "skid " + overSeconds.ToString("0.0") + "s" + (airPenalty > 0f ? " air -" + airPenalty.ToString("0.00") : ""));
+                if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
+                AnnounceBrakeAdjustment(apexNode, before, skidFactor, entry + " | skid " + overSeconds.ToString("0.0") + "s" + (airPenalty > 0f ? " air -" + airPenalty.ToString("0.00") : ""));
                 return;
             }
             // One measure, one target, and both directions scale alike: the step is proportional to how far the corner landed from
@@ -2747,9 +2763,9 @@ namespace ARS
             // The air penalty comes off on top of the step and is never offset by it: a jump is a fault even on a corner whose clock
             // landed under the target, and the clamp is the only bound left.
             float factor = before + step - airPenalty;
-            string why = overSeconds.ToString("0.0") + "s" + (airPenalty > 0f ? " air -" + airPenalty.ToString("0.00") : "");
+            string why = entry + " | " + overSeconds.ToString("0.0") + "s" + (airPenalty > 0f ? " air -" + airPenalty.ToString("0.00") : "");
             factor = ARS.Clamp(factor, BrakeMinFactor, BrakeMaxFactor);
-            CornerContextForWrite(apexNode).BrakeFactor = factor;
+            if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
             // braking that corner costs.
             AnnounceBrakeAdjustment(apexNode, before, factor, why);
@@ -2764,9 +2780,13 @@ namespace ARS
             if (!ARS.BrakeLearningNotify) return;
             float change = after - before;
             string sign = change < 0f ? " - " : " + ";
-            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") adjusted corner Nº" + apexNode + " | "
-                + before.ToString("0.00") + sign + Math.Abs(change).ToString("0.00") + " > " + after.ToString("0.00")
-                + " | " + why);
+            // With learning off the factor does not move, so the line reports the measurement instead of a change: what the car
+            // carried at the entrance, and what the verdict would have been.
+            string verb = BrakeLearningApplies ? "adjusted corner Nº" : "measured corner Nº";
+            string move = BrakeLearningApplies
+                ? before.ToString("0.00") + sign + Math.Abs(change).ToString("0.00") + " > " + after.ToString("0.00")
+                : "would " + after.ToString("0.00");
+            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + verb + apexNode + " | " + move + " | " + why);
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
