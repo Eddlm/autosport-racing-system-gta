@@ -367,10 +367,11 @@ namespace ARS
         bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
 
-        // Brake learning: the factor moves the corner's braking point between this seed and the range below.
-        // Held at 1.0 with no draw while the learner is being measured: a seeded range would make two runs of the same corner
-        // incomparable, and the point of the exercise is to read the excess speed, not to watch the seed drift.
-        const float BrakeFactorSeed = 1f;
+        // Brake learning: the factor multiplies the decel the plan assumes it has - `brakingAbility * g * factor` - so 1.0 is the
+        // grip-limited maximum, and anything above it asks the plan for a stop the tyres cannot deliver. Held at 1.5 with no draw
+        // while the learner is being measured: a seeded range would make two runs of the same corner incomparable, and the point of
+        // the exercise is to read the excess speed, not to watch the seed drift.
+        const float BrakeFactorSeed = 1.5f;
         // The radius under which a corner counts as tight, i.e. where the outside line is worth having.
         const float CornerTightRadius = 50f;
         // Arrival is extrapolated from the live forward Gs at this discount: holding a G flat across the window
@@ -442,7 +443,7 @@ namespace ARS
         // is measuring the tail of the stop rather than the entry.
         const float BrakeOverMinBudgetShare = 0.25f;
         const int BrakeOverSampleMs = 100;
-        const float BrakeMaxFactor = 1f;
+        const float BrakeMaxFactor = 1.5f;   // the seed sits at the ceiling: 1.5 x the grip-limited decel, i.e. beyond reach
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
 
