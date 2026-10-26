@@ -205,6 +205,10 @@ namespace ARS
         // or the same aim seen from a very short baseline.
         float _pursuitRawBearingDeg;
         float _pursuitAimDistanceM;
+        // Lateral offset of the aim from the car's own axis, raw and smoothed: the step size in METRES, which is what tells a node
+        // step (about a metre) from the lookahead index jumping (metres).
+        float _pursuitAimLateralRawM;
+        float _pursuitAimLateralM;
         // The apex blend only ever closes: the latched phase of the corner currently being approached, and which corner it belongs to.
         int _linePhaseNode = -1;
         float _linePhaseLatched;
@@ -814,6 +818,7 @@ namespace ARS
 
             // The aim steps a node when the projection flips between two: average it before the pursuit reads it. Only this consumer,
             // only this point - the corner lane and the Gs preview keep the raw aim.
+            Vector3 aimPointRaw = aimPoint;
             if (_aimPointSeeded && Vector3.Distance(aimPoint, _aimPointSmoothed) <= AimPointSmoothingMaxStep)
                 aimPoint = Vector3.Lerp(_aimPointSmoothed, aimPoint, AimPointSmoothing);
             _aimPointSmoothed = aimPoint;
@@ -938,7 +943,9 @@ namespace ARS
                     + " flip=" + (_pursuitFlipThisTick ? 1 : 0)
                     + " flips=" + _pursuitFlipCount
                     + " rawbear=" + _pursuitRawBearingDeg.ToString("0.0")
-                    + " dist=" + _pursuitAimDistanceM.ToString("0.0"));
+                    + " dist=" + _pursuitAimDistanceM.ToString("0.0")
+                    + " latraw=" + _pursuitAimLateralRawM.ToString("0.00")
+                    + " lat=" + _pursuitAimLateralM.ToString("0.00"));
 
 
             if (_slidePriority > 0f)
@@ -1124,6 +1131,8 @@ namespace ARS
                 bearing = 0.5f * (_steerAimBearingDegrees + bearing);
             }
 
+            _pursuitAimLateralRawM = ARS.SignedLaneOffset(aimPointRaw, Car.Position, Car.ForwardVector);
+            _pursuitAimLateralM = ARS.SignedLaneOffset(aimPoint, Car.Position, Car.ForwardVector);
             _pursuitRawBearingDeg = rawBearing;
             _pursuitAimDistanceM = distance;
             _steerAimBearingDegrees = bearing;
@@ -1914,7 +1923,7 @@ namespace ARS
         // +/-7 deg of bearing - the dither. A half-weight average per tick removes the step: it is 16 ms of lag on a point 8 m away,
         // and it touches this aim and nothing else. A step larger than the max is a teleport (grid placement, the wrap at the line) and
         // snaps instead of being averaged across the map.
-        const float AimPointSmoothing = 0.25f;
+        const float AimPointSmoothing = 0.5f;
         const float AimPointSmoothingMaxStep = 5f;
 
         // A cap on the steer command driven by the front tyres' measured side slip. While the car is on the throttle the
