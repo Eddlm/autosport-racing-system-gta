@@ -3867,19 +3867,27 @@ namespace ARS
         const float WheelSlipSphereHeight = 1f;
         const float WheelSlipSphereSize = 0.35f;
 
+        // Where the trajectory starts: the engine bone, not the model's bounding box. The box is the tallest part of the shell -
+        // mirrors, spoilers, roof racks - so the same line began three metres up on a truck and one and a half on a coupe, and a
+        // body kit moved it. The bone is where the mass that produces the acceleration sits, and it is the same reference the
+        // wheelbase already reads. The lift clears the bodywork, because the bone itself sits inside the engine bay.
+        Vector3 ProjectionOrigin()
+        {
+            const float lift = 0.2f;
+            if (Car.HasBone("engine")) return Car.GetBoneCoord("engine") + Vector3.WorldUp * lift;
+            if (Car.HasBone("chassis")) return Car.GetBoneCoord("chassis") + Vector3.WorldUp * lift;
+            // Bikes and trailers have neither; the roof is the honest last resort.
+            return Car.Position + Vector3.WorldUp * (VehicleData.ModelDimensions.Z + lift);
+        }
+
         void DrawGsProjection()
         {
-            // Same roof convention as the steer fan: the model origin sits near the ground, so the roof is the
-            // full model height and the projection path floats at it rather than diving into the ground.
-            float lift = VehicleData.ModelDimensions.Z + 0.2f;
-            Vector3 origin = Car.Position + Vector3.WorldUp * lift;
+            // The path hangs off the engine bone rather than the model box, so its height is a property of the car's mass
+            // and not of its tallest trim.
+            Vector3 origin = ProjectionOrigin();
+            float lift = origin.Z - Car.Position.Z;
             Vector3 half = ProjectAhead(0.5f) + Vector3.WorldUp * lift;
             Vector3 full = ProjectAhead(1f) + Vector3.WorldUp * lift;
-            // One colour for both segments: they are one trajectory, and the near half and the far half answer the same
-            // question. Green when the development throttle floor is holding - the line exists to explain that rule - red
-            // when the projection leaves the road AND is further out than the car, yellow when it leaves the road but is
-            // more inside than the car, red again when it is still on the road but drifting further out than the car, and
-            // blue when there is nothing to say.
             // One colour for both halves, decided in the tick that measured them: green fading to white while the inside floor
             // holds, red when the path runs wide, yellow when it runs off the road but cuts inside, blue otherwise.
             ARS.DrawLine(origin, half, _projectionPathColor);
