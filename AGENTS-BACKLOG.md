@@ -7,6 +7,16 @@
 ## The ladder — open items, simplest → most complex
 
 **Tier 0 — decisions, no code**
+- `steer-dither-small-ask` — **parked for 0.9.1 / 0.11.0 (owner, 2026-10-26)**: with the car pointing straight and the ask small
+  (1-2 deg) the wheel dithers. TWO fixes were tried and both reverted the same day, and the reasons matter more than the code:
+  (a) **exponential slew on the input** (build 1143, `rate = min(error x 18, 180)`, cap reached at 10 deg): it did slow a 1-2 deg
+  ask from one tick to four, and the car oscillated MORE - as a first-order filter with tau = 55.6 ms it adds 46 deg of phase lag
+  at 3 Hz, inside the pursuit loop, so it moved the oscillation instead of damping it. (b) **soft centre on the ask** (build 1145,
+  half at 4 deg, untouched from 8 deg): no lag at all, amplitude halved, and the dither remained - so the amplitude of the ask is
+  not what sustains it. What is left to look at, in order: the yaw damper term at small angles (it is the only term whose sign
+  flips with the rotation), the pursuit gain near zero bearing, and the aim point's own jitter. The actuator is NOT the place:
+  proven twice.
+
 - `speed-steer-ceiling` — **ZOMBIE CODE, revisit 0.11.0 (driver, 2026-10-26)**: `SpeedSteerCeiling` (a `static readonly bool`,
   `Racer.cs:2083`) is false, so `ResolveSteerCeiling` returns `VehicleData.SteeringLock` on its first line and this whole law is
   compiled but inert: `PeakSlipCeilingAt`, `GeometrySteerCeiling`, `ManeuverRamp`, `SteerLimitRampStartMph = 5`,
