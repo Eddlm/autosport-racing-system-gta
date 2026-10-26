@@ -269,9 +269,11 @@ namespace ARS
         // Two input units per second while outside, down to a floor that leaves two thirds of the tyre for steering.
         const float ProjectionInputPerSecond = 2f;
         const float ProjectionBrakeFloor = 0.5f;
-        // Off the line the car does not need to stop, only to be slow enough to turn back: the projection's escalation stops
-        // once the car is this far under the speed its own curvature asks for, and the plan drives from there.
-        const float OffTrackSpeedSlackMph = 10f;
+        // Off the line the car does not need to stop, only to be slow enough to turn back. The projection escalates down to the
+        // speed the curvature asks for minus this much, and never below the absolute floor: a 35 mph corner asks 35-40 = -5, so
+        // the car is taken to exactly 20 and no slower - which is also where the widening gate turns itself off.
+        const float OffTrackSpeedSlackMph = 40f;
+        const float OffTrackSpeedFloorMph = 20f;
         // A node deflection below this is a straight, which has no outside to judge.
         const float OffshootMinRouteAngleDeg = 2f;
         // Line discipline belongs to speed: below this the problem is traction, and a cap would hold an off-edge car
@@ -2366,7 +2368,7 @@ namespace ARS
             // full countersteer is the one branch it yields to: the tyre there is already working diagonally, so
             // brake on top saturates the circle instead of sharing it.
             float projectionSpeedMph = ARS.MpsToMph(Car.Velocity.Length());
-            float projectionTargetMph = Math.Max(0f, ARS.MpsToMph(RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint)) - OffTrackSpeedSlackMph);
+            float projectionTargetMph = Math.Max(OffTrackSpeedFloorMph, ARS.MpsToMph(RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint)) - OffTrackSpeedSlackMph);
             bool projectionOutside = _projectionWidening && _projectionOutsideMeters > 0f && projectionSpeedMph > projectionTargetMph;
             _projectionOutsideSeconds = projectionOutside ? _projectionOutsideSeconds + TickScale : 0f;
             float projectionInput = Math.Max(1f - ProjectionInputPerSecond * _projectionOutsideSeconds, -ProjectionBrakeFloor);
