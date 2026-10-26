@@ -52,8 +52,12 @@ The track creator is live — a root Track Creator submenu records a route and S
 - [ ] Build Release, and confirm `ARS.dll` and `LemonUI.SHVDN2.dll` deploy to the game Scripts folder.
 - [ ] Run the generated GitHub artifact from a clean install on a current, matched SHVDN asi/API-dll pair — the verified pair is nightly **`v3.7.0-nightly.188`**: asi `239104` B + `ScriptHookVDotNet2.dll` `984576` B, both from that one zip (`AGENTS-SHVDN.md`).
 - [ ] Confirm the package includes the LemonUI credit — **JustALemon**, its nickname, stating the dll is used under the MIT License — plus tracks,
-  `cars.txt`, `Drivers\names.txt` and `Settings\tips.txt`. **No inis ship**: the mod writes its four on first run (Race, Settings, Debug, Development).
-  - **No `LemonUI-LICENSE.txt` and no verbatim MIT notice ship. That is deliberate and informed, not an oversight — do not "fix" it.** It sits outside the MIT condition that the notice accompany copies, and the copyright holder's real name is in the dll's own assembly metadata in any case, so the file bought no privacy.
+  `cars.txt`, `Drivers\names.txt`, `Settings\tips.txt` and a **`Settings\` populated with the defaults**: the four inis ship filled, so a player can
+  read what the defaults are without launching the game. `docs/emit-default-settings.py` writes them from the same schema the repair pass uses;
+  keys whose default is code-computed (a menu choice, an enum) are left out on purpose and seeded by the mod on first load.
+
+  **Dist is assembled by hand before a deploy** (owner, 2026-10-26): the build mirrors the game folder into it, but the shipped folder is
+  reviewed and finished manually, so nothing here is automated end to end.  - **No `LemonUI-LICENSE.txt` and no verbatim MIT notice ship. That is deliberate and informed, not an oversight — do not "fix" it.** It sits outside the MIT condition that the notice accompany copies, and the copyright holder's real name is in the dll's own assembly metadata in any case, so the file bought no privacy.
 - [ ] Confirm it excludes `ScriptHookVDotNet2.dll`, logs, crash artifacts and stale legacy settings files.
 - [ ] Read the staged release `README.txt` for installation, matched-SHVDN, menu and log-troubleshooting instructions.
 
