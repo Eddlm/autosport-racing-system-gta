@@ -1614,6 +1614,13 @@ namespace ARS
         {
             reason = null;
 
+            // The refusal must be provable from the log alone: without this, 'it instanced anyway' is a guess about which of five
+            // conditions said yes.
+            Log(LogImportance.Info, "Preflight: paceMode=" + CurrentPaceMode + " participating=" + PlayerParticipating
+                + " inCar=" + (Game.Player.Character.CurrentVehicle != null)
+                + " canReadPace=" + TryComputePlayerCarPaceIndex(out float _)
+                + " lastKnown=" + _lastKnownPlayerPace);
+
             string trackPath = _selectedTrackPath;
             if (trackPath == null)
             {
