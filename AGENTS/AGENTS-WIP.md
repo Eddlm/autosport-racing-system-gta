@@ -86,13 +86,18 @@ When 0.9.0 is published, tell people this in the README, not only in the release
 
 `AssemblyInfo.cs` carries `0.9.0.0` ahead of the cut, so the in-game banner announces the version the tag claims; the two are still hand-moved and nothing derives either from the other. The notes are hand-written in `docs/RELEASE-NOTES.md`, because the auto-generated body would span every commit since `v0.8.6` and read as noise.
 
-1. Land and push the release commit; CI builds from a fresh checkout, so a local build counter ahead of it does not matter.
-2. Tag `v0.9.0` and push the tag — `deploy.yml` attaches a prerelease with an auto-generated body.
-3. Replace that body: `gh release edit v0.9.0 --notes-file docs/RELEASE-NOTES.md`.
+1. Land and push the release commit. The published zip is **assembled and uploaded by hand** (owner, 2026-10-26): CI no longer runs on tags,
+   so nothing can race our asset onto the release - it builds, and keeps a testable artifact on every push to master.
+2. Build locally, so `RefreshDist` mirrors the game folder into `Dist\AutosportRacingSystem`. That mirror is data only (tracks, `cars.txt`,
+   `Drivers\names.txt`, `Settings\tips.txt`); the binaries and the banner are added at packaging time.
+3. Assemble `AutosportRacingSystem-<version>.zip` containing exactly one folder, `AutosportRacingSystem\`, with: `ARS.dll`, `LemonUI.SHVDN2.dll`,
+   `build-number.txt`, `README.txt` (install + requirements + LemonUI credit), `Tracks\`, `Vehicles\cars.txt`, `Drivers\names.txt`,
+   `Settings\tips.txt`. Never `ScriptHookVDotNet2.dll`, never `*.ini`, never `Vehicles\tests.txt`, never logs.
+4. **Clean install before publishing**: extract that zip into a clean `Scripts\` beside the matched SHVDN pair and run the race-loop gate above.
+5. Publish: `gh release create v0.9.0 <zip> --title "0.9.0" --notes-file docs/RELEASE-NOTES.md --prerelease`, then
+   `gh release edit v0.9.0 --prerelease=false` when you are ready for `releases/latest` to move and the in-game notice to fire.
    WARNING: two files look like release notes - `docs/RELEASE-NOTES.md` (the one this command publishes) and `docs/release-0.9.0.md`
-   (the curated draft). Decide which is canonical before the cut and keep the other from drifting; the pool-change bullet is in both.
-4. **Clean install before flipping**: download the attached zip, extract into a clean `Scripts\` beside the matched SHVDN pair, and run the race-loop gate above.
-5. Flip the prerelease off — that is what moves `releases/latest` and lets the in-game update notice fire.
+   (the curated draft). Decide which is canonical before the cut and keep the other from drifting.
 6. Close what the release answers, one line each: **#8** (a build the mod cannot drive on now logs a forced error instead of crashing) and **#3** (the downforce toggle — the reporter confirmed it works). **#1** and **#7** are old and unrelated: close as stale or leave, the owner's call rather than the release's.
 
 ## WIP — projection throttle rule (spec, user-stated 2026-10-23)

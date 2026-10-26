@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: [master]
-    tags: ['v*']
+
+    # No tag trigger on purpose (owner, 2026-10-26): the published zip is assembled and uploaded by hand, so CI must never
+    # race it by attaching its own build to the same release. This workflow builds and keeps a testable artifact only.
 
 jobs:
   build:
@@ -69,12 +71,3 @@ jobs:
         with:
           name: AutosportRacingSystem-${{ github.sha }}
           path: AutosportRacingSystem-*.zip
-
-      - name: Attach to release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Build ${{ github.run_number }}
-          files: AutosportRacingSystem-*.zip
-          prerelease: true
-          generate_release_notes: true
