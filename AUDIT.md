@@ -33,8 +33,8 @@ grep the symbol if one misses.
    `SmartTuner.cs`'s brand-palette evidence (10 → 5) and the downforce derivation
    (`AutosportRacingSystem.cs`, 9 → 4). Untouched: the seven steer-ceiling blocks in `Racer.cs`,
    `TrackCreator`'s ground-probe note, and the `SettingsRepair` / `MenyooAppearance` / `VehicleSelector` /
-   `DataStructures` / `MenuSettings` / `VehicleCatalog` one-offs. The depth goes to `AGENTS-STEERING.md` /
-   `AGENTS-TECHNOTES.md` / `AGENTS-SMARTTUNING.md` with a one-line pointer left behind.
+   `DataStructures` / `MenuSettings` / `VehicleCatalog` one-offs. The depth goes to `AGENTS/AGENTS-STEERING.md` /
+   `AGENTS/AGENTS-TECHNOTES.md` / `AGENTS/AGENTS-SMARTTUNING.md` with a one-line pointer left behind.
 2. **Whitespace residue (§5.3).** 319 lines in 67 runs, untouched — including six whitespace-only lines left
    where `DrawRouteNodes` was (in `TrackCreator.cs`, just above `DrawSection`). The trap: many of those lines
    carry spaces, so an exact-match edit needs their real space counts, which the scan reports.
@@ -496,13 +496,13 @@ Worst first:
 
 | Where | Size | What it is |
 |---|---|---|
-| `Racer.cs:1557-1568` | 12 lines, 1210 chars, 7 sentences | The TCS wheelspin scale: free-rolling/peak/flat landmarks, why the target sits past the peak, what the plateau drop costs, and the grip scaling. `AGENTS-TECHNOTES.md` material with a one-line pointer here. |
-| `SmartTuner.cs:92-101` | 10 lines, 6 sentences | Brand-palette evidence, including a dated note. Belongs in `AGENTS-SMARTTUNING.md`. |
-| `AutosportRacingSystem.cs:3327-3335` | 9 lines, 7 sentences | Downforce model derivation with engine line references. `AGENTS-TECHNOTES.md`. |
+| `Racer.cs:1557-1568` | 12 lines, 1210 chars, 7 sentences | The TCS wheelspin scale: free-rolling/peak/flat landmarks, why the target sits past the peak, what the plateau drop costs, and the grip scaling. `AGENTS/AGENTS-TECHNOTES.md` material with a one-line pointer here. |
+| `SmartTuner.cs:92-101` | 10 lines, 6 sentences | Brand-palette evidence, including a dated note. Belongs in `AGENTS/AGENTS-SMARTTUNING.md`. |
+| `AutosportRacingSystem.cs:3327-3335` | 9 lines, 7 sentences | Downforce model derivation with engine line references. `AGENTS/AGENTS-TECHNOTES.md`. |
 | `TrackCreator.cs:315-321` | 7 lines, 5 sentences | Three separate facts about the ground probe; one line is enough. |
 | `SettingsRepair.cs:10-16` | 7 lines, 5 sentences | Header. |
 | `MenyooAppearance.cs:12-18` | 7 lines, 5 sentences | Header. |
-| `Racer.cs:871-874`, `:886-888`, `:904-907`, `:923-928`, `:936-937`, `:952-954`, `:960-961` | 4–6 lines each | The whole steer-ceiling family carries a paragraph per method. Correct and hard-won — and exactly what `AGENTS-STEERING.md` exists for. |
+| `Racer.cs:871-874`, `:886-888`, `:904-907`, `:923-928`, `:936-937`, `:952-954`, `:960-961` | 4–6 lines each | The whole steer-ceiling family carries a paragraph per method. Correct and hard-won — and exactly what `AGENTS/AGENTS-STEERING.md` exists for. |
 | `AutosportRacingSystem.cs:166-171` | 6 lines, 4 sentences | `SteerSlipCeiling`, including negative-value behaviour: rationale, not code. |
 | `VehicleSelector.cs:10-15`, `DataStructures.cs:63`, `MenuSettings.cs:47-48`, `VehicleCatalog.cs:68-70/78-80`, `SmartTuner.cs:55-58/129-137/201-203/375-380` | 3–6 lines | Same class. |
 
@@ -643,8 +643,8 @@ change behaviour except where they fix a bug.
    319 blank lines. Doing this first makes every later diff smaller — and the memory records that
    exact-match edits driven from a `line=length` map are the fail-safe way to cut large regions.
 4. **Stale comments** (§4.2): the ones actively costing future sessions time.
-5. **Comment prose migration** (§4.1): move the paragraphs into `AGENTS-STEERING.md`,
-   `AGENTS-TECHNOTES.md` and `AGENTS-SMARTTUNING.md`, leaving one-line pointers. Biggest readability win
+5. **Comment prose migration** (§4.1): move the paragraphs into `AGENTS/AGENTS-STEERING.md`,
+   `AGENTS/AGENTS-TECHNOTES.md` and `AGENTS/AGENTS-SMARTTUNING.md`, leaving one-line pointers. Biggest readability win
    per edit, zero runtime risk.
 6. **Method splits** (§2), in this order of value/risk: `ComputeTargetSpeed`'s duplicated crest block →
    `Rival.Update`'s three jobs → `HandleCheats`' three handlers → `OnTick`'s draw/cheat/HUD blocks →

@@ -63,7 +63,7 @@ logs instead of taking the mod down.
 
 ## Known open items
 
-Tracked in `docs/steering-and-pedals.md` (items 1-8) and `AGENTS-WIP.md`. The load-bearing ones:
+Tracked in `docs/steering-and-pedals.md` (items 1-8) and `AGENTS/AGENTS-WIP.md`. The load-bearing ones:
 
 - The 0.40 cut floor is an accident of the 2.5x saturation; the constant that states it says 0.05 and
   never binds.

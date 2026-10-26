@@ -28,7 +28,7 @@ jobs:
           Copy-Item 'bin\Release\ARS.dll' $ars -Force
           # LemonUI is redistributable (MIT, permission obtained) and is staged BY NAME.
           # Never wildcard bin\Release\* here: that folder also holds ScriptHookVDotNet2.dll,
-          # which must always come from the user's own matched SHVDN install (AGENTS-SHVDN.md).
+          # which must always come from the user's own matched SHVDN install (AGENTS/AGENTS-SHVDN.md).
           Copy-Item 'libs\LemonUI.SHVDN2.dll' $ars -Force
           # The banner reads this beside ARS.dll. Stage the number the build actually used rather than
           # re-deriving it here, so the two can never drift.

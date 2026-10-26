@@ -6,11 +6,11 @@ question about a system is usually a question about its goal, and the goal is wh
 between two implementations that both look reasonable the one closer to the stated intent wins, and
 when neither does, the intent is the thing that has to change.
 
-The code owns every value, and `AGENTS-STEERING.md` owns the live wiring, the anchors and the measured
+The code owns every value, and `AGENTS/AGENTS-STEERING.md` owns the live wiring, the anchors and the measured
 numbers. Where the three disagree, the code wins and this file is the intent to argue against — but a
 system the code no longer serves the goal of is a **defect to file**, not a paragraph to reword.
 
-Nothing here is a line number on purpose. If a claim needs one, it belongs in `AGENTS-STEERING.md`.
+Nothing here is a line number on purpose. If a claim needs one, it belongs in `AGENTS/AGENTS-STEERING.md`.
 
 Coverage began on the steering side and now includes the lane, the corner table, the traction control on the
 pedals, the levels the chain is balanced at, the standing limit beneath all of it, and the settings guard that
@@ -614,6 +614,6 @@ learner at all.
 
 The damper's law, the slide blend and its countersteer, the steer limiter's ceiling and the brake side's own
 caps, the recovery state machine and the route law's own choice of radius all have design intent worth
-writing down — they live in `AGENTS-STEERING.md` and `AGENTS-TECHNOTES.md` today only as live description.
+writing down — they live in `AGENTS/AGENTS-STEERING.md` and `AGENTS/AGENTS-TECHNOTES.md` today only as live description.
 Naming them here is deliberate: this file is expected to grow, one system at a time, and nothing in it
 should be read as a claim about a part that is not written up yet.

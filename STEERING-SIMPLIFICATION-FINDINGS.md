@@ -168,8 +168,8 @@ reader, or only a debug draw.
 | `YawTurnInMinimumPercent` / `Maximum` | `AutosportRacingSystem.cs:155-156`, menu `:1080-1100`, schema `:152-153` | **menu**, live at `Racer.cs:1203-1204` |
 | `DebugToggles[GsAwarePreview]` | `AutosportRacingSystem.cs:195` (default true), menu `:890` | **debug menu**, live at `Racer.cs:535-538` |
 | `DebugToggles[LockLaneCentre]` | `AutosportRacingSystem.cs:194` (default false), menu `:889` | **debug menu**, live at `Racer.cs:527` |
-| `SteerDampingEnabled` | `Racer.cs:1031`, rationale `:1029-1030` | compile-time switch, fixed true; **A/B handle per `AGENTS-STEERING.md:52`** |
-| `SteerDampingAimReference` | `Racer.cs:1034`, rationale `:1032-1033` | compile-time switch, fixed true; the code comment keeps the zero reference "one flip away for A/B", and `AGENTS-STEERING.md:218` treats the reference as the lever if the standing-offset toll returns |
+| `SteerDampingEnabled` | `Racer.cs:1031`, rationale `:1029-1030` | compile-time switch, fixed true; **A/B handle per `AGENTS/AGENTS-STEERING.md:52`** |
+| `SteerDampingAimReference` | `Racer.cs:1034`, rationale `:1032-1033` | compile-time switch, fixed true; the code comment keeps the zero reference "one flip away for A/B", and `AGENTS/AGENTS-STEERING.md:218` treats the reference as the lever if the standing-offset toll returns |
 | `SteerSlewRate` | `Racer.cs:1026` | live at `:1542`; driver-verified at 180 (`TEST-PLAN.md:242-245`) |
 | `SteerDampingReferenceMps` | `Racer.cs:1039` | live at `:1043` |
 | `DamperCrossingShare` | `Racer.cs:1028` | live at `:608`; rule driver-verified (`TEST-PLAN.md:277-285`) |
@@ -238,7 +238,7 @@ the countersteer allowance, the bypass, the ramp, the cornering ceiling — is c
 **Is the switch earning its place?** The evidence that bears on it: the cut is computed from
 `|YawRotationPerSecondDegrees|` (`:1127`), i.e. from a state the steering itself produces, so a car not yet
 rotating is granted the least authority to start (2.5° at 30 mph, 2.1° at 40); the value climbs only as the car
-already rotates. `AGENTS-STEERING.md:92` records the field's warning about closing a loop through a signal the loop
+already rotates. `AGENTS/AGENTS-STEERING.md:92` records the field's warning about closing a loop through a signal the loop
 produced, which is the shape this has. That is a design question, not a finding — **the A/B is undriven**
 (`TEST-PLAN.md:287`), and nothing here can say which shape drives better. What can be said is that the two modes are
 not redundant and the switch selects one design decision, not a tuning.
@@ -289,9 +289,9 @@ find exists — which is itself the check.
 the guard at `:594`; both are `const … = true`, so inlining the kept path is behaviour-identical.
 **Behavioural cost:** none by construction.
 **How the driver would know:** no symptom.
-**Ruling needed — Q6:** `AGENTS-STEERING.md:52` names the kill switch as "the handle for re-running the experiment";
+**Ruling needed — Q6:** `AGENTS/AGENTS-STEERING.md:52` names the kill switch as "the handle for re-running the experiment";
 the reference switch's own comment keeps the zero reference "one flip away for A/B" (`Racer.cs:1032-1033`), and
-`AGENTS-STEERING.md:218` treats the reference as the lever if the standing-offset toll returns. Removing both
+`AGENTS/AGENTS-STEERING.md:218` treats the reference as the lever if the standing-offset toll returns. Removing both
 retires those handles, which contradicts the docs' intent even though it changes no behaviour.
 
 ### C6 — Remove the unreachable geometry ceiling fallback
@@ -364,7 +364,7 @@ Nothing below is settled here; each is named with its evidence.
 limiter (`:3378`), with the throttle/brake reason caps between them (`:3368-3369`). That is not cosmetic: the
 overspeed arm gate reads `Control.SteerDegrees` at `:1780`, and `SteerLimitedSpeed` reads it at `:1626`; in the
 code's order both see the previous core tick's post-slew steer, while the contract's order would have them see this
-tick's clamped request. The doc's own pipeline list (`AGENTS-STEERING.md:230-236`) is in the contract's order too.
+tick's clamped request. The doc's own pipeline list (`AGENTS/AGENTS-STEERING.md:230-236`) is in the contract's order too.
 Decision: fix the contract to match the code, or move the limiter above the pedal stage (a real behaviour change to
 those two gates), or state which readers were intended.
 
@@ -390,7 +390,7 @@ With no lane demand, `targetLane` is 0 and the aim follows it (`:534`); the aim 
 `steerRefPoint.Position + steerRight × aimPointOffset` (`:542`) and the pursuit runs unconditionally once the context gate
 passes (`:548`; no `|targetLane|` gate on the command). So with no lane demand the aim is the **route centre
 at the lookahead**, not the car's own offset, and a car offset laterally on a straight has a non-zero bearing and
-gets a non-zero pursuit command. `AGENTS-STEERING.md:210` ("a car displaced laterally on a straight is therefore
+gets a non-zero pursuit command. `AGENTS/AGENTS-STEERING.md:210` ("a car displaced laterally on a straight is therefore
 corrected by nothing") and `:222` (ranked item 5's premise that a straight-line offset is uncontrolled) say the
 opposite; `:255` says the gate was removed, which matches the code; and `:256` says "with no lane demand the aim is
 the car's own live offset" — no such line exists in the code, and the Gs-aware preview shifts the aim by half the
@@ -398,14 +398,14 @@ the car's own live offset" — no such line exists in the code, and the Gs-aware
 Decision: which statement is the record, and whether ranked item 5's premise needs correcting.
 
 **Q5 — doc anchors and claims that no longer match the code (hygiene batch).**
-- `AGENTS-STEERING.md:230-236`'s pipeline anchors: `UpdateTrackPosition` is at `:2711` (doc 2295),
+- `AGENTS/AGENTS-STEERING.md:230-236`'s pipeline anchors: `UpdateTrackPosition` is at `:2711` (doc 2295),
   `ComputeTargetSpeed` at `:1556` (doc 1315), `ComputeSteering` at `:494` (doc 416), `ConvertSpeedToPedals` at
   `:1302` (doc 1072), `TranslateSteerToInput` at `:1536` (doc 1537).
-- `AGENTS-STEERING.md:283` cites `AutosportRacingSystem.cs:1888` for the timed-core pacing; that line is
+- `AGENTS/AGENTS-STEERING.md:283` cites `AutosportRacingSystem.cs:1888` for the timed-core pacing; that line is
   `_countdown--`. The batch is `AutosportRacingSystem.cs:1922-1938`.
-- `AGENTS-STEERING.md:126` says "ARS already has `_steerLimitedThisFrame` for the saturation gate" — no such symbol
+- `AGENTS/AGENTS-STEERING.md:126` says "ARS already has `_steerLimitedThisFrame` for the saturation gate" — no such symbol
   exists in the tree.
-- `AGENTS-STEERING.md:292` says the Show Pedal Trail fan draws each limit on its true side; nothing outside
+- `AGENTS/AGENTS-STEERING.md:292` says the Show Pedal Trail fan draws each limit on its true side; nothing outside
   `ApplySteerLimits` reads either limit field (C3).
 - `AGENTS.md`'s durable-gotcha line "`if (1 == 2) return;` is an INVERTED gate that disables nothing" — no
   `1 == 2` (spaced or not) exists in any `.cs` file.
@@ -413,7 +413,7 @@ Decision: which statement is the record, and whether ranked item 5's premise nee
   (`AutosportRacingSystem.cs:1059`) while the live damper is aim-referenced (`Racer.cs:594`), and "Steer Limit Mode"
   says Slide-Governed "sets the limit to the slide angle plus a degree" (`:1070`) while `:1184` takes the **max** of
   the cornering law and **half** the slide **plus half a degree** (`TEST-PLAN.md:299-300` records the halving;
-  `AGENTS-STEERING.md:234` records the addition).
+  `AGENTS/AGENTS-STEERING.md:234` records the addition).
 
 **Q6 — retiring the two fixed-true switches (C5) retires the documented A/B handles.** Decision: inline the kept
 path, or keep the switches as the record says they are kept.

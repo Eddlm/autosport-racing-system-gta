@@ -3758,7 +3758,7 @@ namespace ARS
             World.DrawMarker(MarkerType.DebugSphere, basePt + dir * length * ARS.Clamp(level, 0f, 1f), Vector3.Zero, Vector3.Zero, new Vector3(size, size, size), color);
         }
 
-        // A sphere over each wheel, coloured by the tyre's side slip on the axis in AGENTS-TECHNOTES.md: white at
+        // A sphere over each wheel, coloured by the tyre's side slip on the axis in AGENTS/AGENTS-TECHNOTES.md: white at
         // rest, green at the traction peak, yellow at the engine's own skid line, red where the curve goes flat.
         static readonly Color SlipRestColor = Color.White;
         static readonly Color SlipPeakColor = Color.Lime;

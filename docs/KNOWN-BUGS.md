@@ -1,6 +1,6 @@
 # ARS — known bugs, for future attacking
 
-**What this is**: defects that are understood well enough to describe and not worth fixing now. They are **not** in the backlog ladder (that is `AGENTS-BACKLOG.md`, which ranks work by size) and they are **not** open questions (that is `docs/OPEN-ITEMS.md`). This file is for the long game: a behaviour someone has seen, with the shape it takes and what would make it diagnosable when it is finally attacked.
+**What this is**: defects that are understood well enough to describe and not worth fixing now. They are **not** in the backlog ladder (that is `AGENTS/AGENTS-BACKLOG.md`, which ranks work by size) and they are **not** open questions (that is `docs/OPEN-ITEMS.md`). This file is for the long game: a behaviour someone has seen, with the shape it takes and what would make it diagnosable when it is finally attacked.
 
 **Read this when**: a session is playing with the area a bug lives in anyway, or a report arrives that might be one of these.
 
