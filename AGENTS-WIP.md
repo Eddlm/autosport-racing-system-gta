@@ -50,7 +50,7 @@ The track creator is live — a root Track Creator submenu records a route and S
 ## Package gate
 
 - [ ] Build Release, and confirm `ARS.dll` and `LemonUI.SHVDN2.dll` deploy to the game Scripts folder.
-- [ ] Run the generated GitHub artifact from a clean install on a current, matched SHVDN asi/API-dll pair — the verified pair is nightly **`v3.7.0-nightly.188`**: asi `239104` B + `ScriptHookVDotNet2.dll` `984576` B, both from that one zip (`AGENTS-SHVDN.md`).
+- [ ] Run the generated GitHub artifact from a clean install on a current, matched SHVDN asi/API-dll pair — the verified pair is **SHVDNE 3.9.0.6** (asi + `ScriptHookVDotNet2.dll` 2.11.6).
 - [ ] Confirm the package includes the LemonUI credit — **JustALemon**, its nickname, stating the dll is used under the MIT License — plus tracks,
   `cars.txt`, `Drivers\names.txt`, `Settings\tips.txt` and a **`Settings\` populated with the defaults**: the four inis ship filled, so a player can
   read what the defaults are without launching the game. `docs/emit-default-settings.py` writes them from the same schema the repair pass uses;

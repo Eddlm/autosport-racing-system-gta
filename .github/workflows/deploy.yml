@@ -45,17 +45,15 @@ jobs:
           Required (install separately, we do not bundle them):
             - ScriptHookV (Alexander Blade): http://www.dev-c.com/gtav/scripthookv/
             - .NET Framework 4.8 and the latest Visual C++ Redistributable.
-            - ScriptHookVDotNet: use a NIGHTLY build, NOT stable v3.6.0. The stable
-              bridge cannot start on current game builds and every script dies, not
-              just ARS. Nightlies, no GitHub account needed:
-                https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases
-              ARS is verified against v3.7.0-nightly.188:
-                https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases/tag/v3.7.0-nightly.188
-              Copy ScriptHookVDotNet.asi, ScriptHookVDotNet2.dll and
-              ScriptHookVDotNet3.dll from the SAME download into the game folder
-              (ScriptHookVDotNet.ini too if you want to edit it). ARS runs on the v2
-              API, so mixing builds of the asi and the API dll makes it fail
-              silently - nothing else in the game looks wrong.
+            - ScriptHookVDotNet Enhanced (SHVDNE), which ships the v2 API dll this mod
+              is built against: ScriptHookVDotNet2.dll 2.11.6. Upstream's stable
+              v3.6.0 cannot start on current game builds and takes every script down,
+              not just ARS.
+                https://github.com/Chiheb-Bacha/ScriptHookVDotNetEnhanced
+              Copy ScriptHookVDotNet.asi and ScriptHookVDotNet2.dll from the SAME
+              install into the game folder (ScriptHookVDotNet.ini too if you want to
+              edit it). ARS runs on the v2 API, so an asi paired with an older API dll
+              makes it fail silently - nothing else in the game looks wrong.
 
           If ARS does not appear: open Scripts\AutosportRacingSystem\Log.log -
           it names the reason (for example an SHVDN dll/asi build mismatch).

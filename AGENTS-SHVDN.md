@@ -2,6 +2,10 @@
 
 Companion to the "SHVDN build compatibility (release-critical)" block in `AGENTS.md`, which is the summary; this is the evidence, the mechanism and the lab.
 
+**Historical note (2026-10-26)**: the word *nightly* appears throughout this file because that is what was tested then. It is NOT the requirement:
+the mod is built against the v2 API (`ScriptHookVDotNet2.dll` **2.11.6**) and the host that has actually run it, races included, is **SHVDN Enhanced
+3.9.0.6** (`ScriptHookV .Net Enhanced 3.9.0.6 (1.1.0.6)` in its own log). User-facing docs point at SHVDNE, not at a nightly.
+
 **Read this when**: the work touches **SHVDN / ScriptHookVDotNet, install or compatibility, "the mod doesn't load", the asi or API dll, version matching, the game build, or release requirements** — or **SHVDN Enhanced / SHVDNE / the Enhanced edition / "would that other SHVDN work with ARS"**.
 
 ## The question this answers
@@ -45,13 +49,10 @@ The 2022 bundle fails identically with and without the v3 dll, and kills `Handli
 
 ## Release requirement (user-facing)
 
-1. **A SHVDN build that supports the user's game build.** The stable **v3.6.0** public download cannot run on current game builds at all (SHVDN's own release notes say to use nightly.89 or later from game `v1.0.3258.0`). Send users to the **nightly** releases — a separate repo, and no GitHub account is needed:
-   - page: `https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases`
-   - the verified build: `https://github.com/scripthookvdotnet/scripthookvdotnet-nightly/releases/tag/v3.7.0-nightly.188` (asset `ScriptHookVDotNet-v3.7.0-nightly.188.zip`)
-   - these links ship to users in the generated `README.txt` (`deploy.yml`); keep the two in sync.
-2. **The asi and `ScriptHookVDotNet2.dll` from the same build** — not merely "a v2 dll present". Verified pair, byte-for-byte: asi `239104` + `ScriptHookVDotNet2.dll` `984576`.
-3. Diagnosis to quote: `MissingMethodException: Method not found: 'UInt32 SHVDN.NativeMemory.GetHashKey(System.String)'` (or any other `SHVDN.*` member) in `ScriptHookVDotNet.log`; since `353d65f` also named in ARS's own `Log.log`.
-4. **Never ship a pinned `ScriptHookVDotNet2.dll` with ARS** — it would manufacture exactly this mismatch for every user whose asi is a different build. Considered and rejected on this evidence. **LemonUI is the deliberate opposite case and *is* bundled** (`libs\LemonUI.SHVDN2.dll`, staged by name in `deploy.yml`, MIT with the author's permission, and the last release supporting the v2 API): it is our own script-side dependency, whereas the API dll belongs to the user's SHVDN install. The `deploy.yml` staging line must therefore name the file — a `bin\Release\*` wildcard would sweep `ScriptHookVDotNet2.dll` in and undo this.
+1. **A SHVDN build that supports the user's game build.** The stable **v3.6.0** public download cannot run on current game builds at all. What ARS is
+   actually built against is the **v2 API, `ScriptHookVDotNet2.dll` 2.11.6**, and the distribution that ships it and has run races here is
+   **SHVDN Enhanced**: `https://github.com/Chiheb-Bacha/ScriptHookVDotNetEnhanced`. The v3 nightly recorded below was the test article of the time,
+   not the requirement.
 
 ## A second distribution: SHVDN Enhanced (SHVDNE)
 
@@ -95,7 +96,8 @@ All under the gitignored `Util\shvdn-compat\`:
 
 ## Open
 
-- **SHVDNE is statically analysed, never run** — the missing evidence is one Legacy game session on it (see above). Its Enhanced-edition claim is also untested here and out of scope for ARS.
+- **SHVDNE is no longer just analysed: it is the live host.** Its own log announces `ScriptHookV .Net Enhanced 3.9.0.6 (1.1.0.6)` and races have run
+  on it (builds 1100-1171). The Enhanced-edition branch of the fork is still untested here, but the Legacy path is proven by use.
 - **v3-only** install (modern asi, no `ScriptHookVDotNet2.dll`): predicted dead, never run — no modern v3 dll exists on this machine (the only one is the bundle's 2022 build, itself broken on current game builds). Run `v3only-2026asi` if the signature is needed.
 - The modern **v3 channel's** own asi/dll pairing is unknown.
 - **The v3 migration is the exit from this trap**: the nightly v2 dll marks its own API `[Obsolete] … use the v3 API instead`, SHVDN's log calls it deprecated and warns it "may completely stop being supported", and depending on the v2 bridge is exactly what makes ARS hostage to build matching. `LemonUI.SHVDN3.dll` is already on disk (`Downloads\LemonUI\SHVDN3\`). Migration not yet costed.

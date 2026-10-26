@@ -13,9 +13,7 @@ pass, and the player's car can be raced against them.
 
 - ScriptHookV (Alexander Blade) — not bundled.
 - .NET Framework 4.8 and the latest Visual C++ Redistributable.
-- ScriptHookVDotNet **nightly**, not stable v3.6.0: the stable bridge cannot start on current game
-  builds and every script dies. Verified against `v3.7.0-nightly.188`; copy the `.asi`, the `2.dll` and
-  the `3.dll` from the same download.
+- ScriptHookVDotNet **Enhanced (SHVDNE)**, not upstream's stable v3.6.0: the stable bridge cannot start on current game builds and every script dies. ARS is built against the v2 API, `ScriptHookVDotNet2.dll` **2.11.6**, which SHVDNE ships; copy the `.asi` and the `2.dll` from the same install.
 - LemonUI.SHVDN2 1.5.2 ships inside the package (MIT).
 
 ## Highlights
