@@ -196,18 +196,14 @@ namespace ARS
         // Set by the mover when the aim has overshot the demand on the same side of the car: the car stops following it and it
         // returns at twice the acceleration until it is back on the segment.
         bool _laneOvershoot;
-        // How many times the de-glitch fired: it belongs in the trace, because the fix is only right if the flips are artefacts.
-        int _pursuitFlipCount;
-        bool _pursuitFlipThisTick;
-        Vector3 _aimPointSmoothed;
-        bool _aimPointSeeded;
+
+
         // The bearing before the de-glitch and the distance to the aim point: together they say whether the flip is the aim moving
         // or the same aim seen from a very short baseline.
         float _pursuitRawBearingDeg;
         float _pursuitAimDistanceM;
         // Lateral offset of the aim from the car's own axis, raw and smoothed: the step size in METRES, which is what tells a node
         // step (about a metre) from the lookahead index jumping (metres).
-        float _pursuitAimLateralRawM;
         float _pursuitAimLateralM;
         // The apex blend only ever closes: the latched phase of the corner currently being approached, and which corner it belongs to.
         int _linePhaseNode = -1;
@@ -813,19 +809,10 @@ namespace ARS
             float aimLane = _laneOvershoot ? steerRefOffset : _carriedLane;
             float aimPointOffset = aimLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset);
             Vector3 aimPoint = steerRefPoint.Position + steerRight * aimPointOffset;
+            _pursuitAimLateralM = ARS.SignedLaneOffset(aimPoint, Car.Position, Car.ForwardVector);
 
             // --- Lane steer: pure pursuit toward the carried lane ---
 
-            // The aim steps a node when the projection flips between two: average it before the pursuit reads it. Only this consumer,
-            // only this point - the corner lane and the Gs preview keep the raw aim.
-            Vector3 aimPointRaw = aimPoint;
-            if (_aimPointSeeded && Vector3.Distance(aimPoint, _aimPointSmoothed) <= AimPointSmoothingMaxStep)
-                aimPoint = Vector3.Lerp(_aimPointSmoothed, aimPoint, AimPointSmoothing);
-            _aimPointSmoothed = aimPoint;
-            _aimPointSeeded = true;
-            // The step size in metres, which is what separates a node step from the lookahead index jumping.
-            _pursuitAimLateralRawM = ARS.SignedLaneOffset(aimPointRaw, Car.Position, Car.ForwardVector);
-            _pursuitAimLateralM = ARS.SignedLaneOffset(aimPoint, Car.Position, Car.ForwardVector);
 
             float laneSteerDeg = PursuitSteerDegrees(aimPoint, courseDir);
             _kickAskDegrees = laneSteerDeg;
@@ -943,11 +930,8 @@ namespace ARS
                     + " proj=" + offsetAtProjection.ToString("0.00")
                     + " ref=" + steerRefOffset.ToString("0.00")
                     + " over=" + (_laneOvershoot ? 1 : 0)
-                    + " flip=" + (_pursuitFlipThisTick ? 1 : 0)
-                    + " flips=" + _pursuitFlipCount
                     + " rawbear=" + _pursuitRawBearingDeg.ToString("0.0")
                     + " dist=" + _pursuitAimDistanceM.ToString("0.0")
-                    + " latraw=" + _pursuitAimLateralRawM.ToString("0.00")
                     + " lat=" + _pursuitAimLateralM.ToString("0.00"));
 
 
@@ -1106,7 +1090,6 @@ namespace ARS
 
         float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading)
         {
-            _pursuitFlipThisTick = false;
             Vector3 toAim = aimPoint - Car.Position;
             // FLAT, both of them: the aim is 8 m ahead and the terrain between the two is not level, so the 3D angle between them
             // carries the road's own grade. One metre of difference over eight is 7 degrees of 'bearing', which flipped sign with
@@ -1125,21 +1108,8 @@ namespace ARS
                 _steerAimBearingDegrees = 0f;
                 return 0f;
             }
-            float rawBearing = bearing;
 
-            // De-glitch BEFORE the bearing is stored or used: the aim flips sign between ticks with a similar magnitude, which turns a
-            // straight-line ask into a 6 deg alternation. The midpoint of the two samples describes the same aim seen from either side of
-            // the axis, so it is a better estimate than either; nothing else in the loop is touched.
-            if (_steerAimBearingDegrees * bearing < 0f
-                && Math.Abs(_steerAimBearingDegrees) > PursuitFlipMinDeg
-                && Math.Abs(bearing) > PursuitFlipMinDeg)
-            {
-                _pursuitFlipCount++;
-                _pursuitFlipThisTick = true;
-                bearing = 0.5f * (_steerAimBearingDegrees + bearing);
-            }
-
-            _pursuitRawBearingDeg = rawBearing;
+            _pursuitRawBearingDeg = bearing;
             _pursuitAimDistanceM = distance;
             _steerAimBearingDegrees = bearing;
             _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / distance;
@@ -1921,16 +1891,6 @@ namespace ARS
         // 120 deg/s, not 180: it still outruns the yaw the car can generate (a car rotating at 90 deg/s would out-turn the 90 deg/s this
         // used to be tried at), but it takes the edge off the small corrections the pursuit asks for. 4 deg a tick at 30 Hz.
         const float SteerSlewRate = 120f;
-        // A bearing that flips sign between consecutive ticks, with a comparable magnitude either side, is the aim being read from
-        // one side of the axis and then the other: the midpoint of the two samples is a better estimate than either. Below this
-        // magnitude the flip is normal motion around the centre line and must not be touched.
-        const float PursuitFlipMinDeg = 2f;
-        // The aim point steps a whole node when the nearest-node projection flips between two of them, which at an 8 m lookahead is
-        // +/-7 deg of bearing - the dither. A half-weight average per tick removes the step: it is 16 ms of lag on a point 8 m away,
-        // and it touches this aim and nothing else. A step larger than the max is a teleport (grid placement, the wrap at the line) and
-        // snaps instead of being averaged across the map.
-        const float AimPointSmoothing = 0.75f;
-        const float AimPointSmoothingMaxStep = 5f;
 
         // A cap on the steer command driven by the front tyres' measured side slip. While the car is on the throttle the
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
