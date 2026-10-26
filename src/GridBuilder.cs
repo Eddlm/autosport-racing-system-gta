@@ -20,7 +20,9 @@ namespace ARS
             Racer player = racers.FirstOrDefault(r => r.Driver.IsPlayer);
             if (player != null) { racers.Remove(player); racers.Add(player); }
             if (pointToPoint) positions.Reverse();
-            for (int index = 0; index < racers.Count; index++)
+            // No slots means no grid: placing a car would index an empty list. The caller reports the failure.
+            if (positions.Count == 0) return;
+            for (int index = 0; index < racers.Count && index < positions.Count; index++)
             {
                 Racer racer = racers[index];
                 racer.Initialize();

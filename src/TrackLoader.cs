@@ -1207,7 +1207,10 @@ namespace ARS
 
         static void BuildPointToPointGrid(List<Vector3> nodes, Dictionary<int, float> widths, List<Vector3> grid, int slotCount)
         {
-            for (int i = slotCount + 1; i > 1 && i * 3 < nodes.Count; i--)
+            // The start index is clamped to what the route can hold: with a fixed slotCount+1 a short route produced no slots at
+            // all, where a circuit at least degrades. Now both builders yield what the road allows.
+            int first = Math.Max(2, Math.Min(slotCount + 1, nodes.Count / 3));
+            for (int i = first; i > 1 && i * 3 < nodes.Count; i--)
             {
                 Vector3 point = nodes[i * 3];
                 Vector3 direction = (point - nodes[i * 3 - 1]).Normalized;
@@ -1218,7 +1221,10 @@ namespace ARS
         static void BuildCircuitGrid(List<Vector3> nodes, Dictionary<int, float> widths, List<Vector3> grid, int slotCount)
         {
             int reference = nodes.Count - 1;
-            for (int i = nodes.Count - 1; i > 50 && grid.Count < slotCount; i--)
+            // The floor is a quarter of the route, capped at the old 50: a fixed 50 left any route densified to 57 nodes or
+            // fewer with ZERO slots, and the caller then indexed an empty list and the race died at its own lights.
+            int floor = Math.Min(50, Math.Max(1, nodes.Count / 4));
+            for (int i = nodes.Count - 1; i > floor && grid.Count < slotCount; i--)
             {
                 if (i >= reference - 5) continue;
                 Vector3 direction = (nodes[reference] - nodes[i]).Normalized;
