@@ -1851,7 +1851,9 @@ namespace ARS
         const float CountersteerPedalCap = 0.5f;
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
-        const float SteerSlewRate = 180f;
+        // 120 deg/s, not 180: it still outruns the yaw the car can generate (a car rotating at 90 deg/s would out-turn the 90 deg/s this
+        // used to be tried at), but it takes the edge off the small corrections the pursuit asks for. 4 deg a tick at 30 Hz.
+        const float SteerSlewRate = 120f;
 
         // A cap on the steer command driven by the front tyres' measured side slip. While the car is on the throttle the
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
