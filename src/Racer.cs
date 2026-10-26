@@ -1914,7 +1914,7 @@ namespace ARS
         // +/-7 deg of bearing - the dither. A half-weight average per tick removes the step: it is 16 ms of lag on a point 8 m away,
         // and it touches this aim and nothing else. A step larger than the max is a teleport (grid placement, the wrap at the line) and
         // snaps instead of being averaged across the map.
-        const float AimPointSmoothing = 0.5f;
+        const float AimPointSmoothing = 0.25f;
         const float AimPointSmoothingMaxStep = 5f;
 
         // A cap on the steer command driven by the front tyres' measured side slip. While the car is on the throttle the
