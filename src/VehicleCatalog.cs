@@ -104,7 +104,6 @@ namespace ARS
                     log("  dropped " + entry + (model.IsInCdImage ? ": not a car" : ": not in the cdimage"));
                     continue;
                 }
-                }
                 try
                 {
                     VehicleClass vehicleClass = (VehicleClass)Function.Call<int>(Hash.GET_VEHICLE_CLASS_FROM_NAME, model.Hash);
