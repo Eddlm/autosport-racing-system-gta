@@ -3872,9 +3872,9 @@ namespace ARS
         // body kit moved it. The bone is where the mass that produces the acceleration sits, and it is the same reference the
         // wheelbase already reads. The lift clears the bodywork, because the bone itself sits inside the engine bay.
         // Off road the projection's vertical component is mostly the car's own pitching, and the line jumped enough to be hard to
-        // follow - the eye loses it among the bumps. Only a tenth of the vertical deviation from the origin survives: the horizontal
-        // path is the part that says where the car is going, and the slope it climbs is already visible in the road itself.
-        const float ProjectionVerticalShare = 0.1f;
+        // follow - the eye loses it among the bumps. Half of the vertical deviation from the origin survives: enough to read a
+        // real grade, little enough that the bumps stop throwing the end of the line around.
+        const float ProjectionVerticalShare = 0.5f;
 
         Vector3 DampedVertical(Vector3 point, float baseZ)
         {
