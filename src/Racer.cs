@@ -198,6 +198,7 @@ namespace ARS
         bool _laneOvershoot;
         // How many times the de-glitch fired: it belongs in the trace, because the fix is only right if the flips are artefacts.
         int _pursuitFlipCount;
+        bool _pursuitFlipThisTick;
         // The apex blend only ever closes: the latched phase of the corner currently being approached, and which corner it belongs to.
         int _linePhaseNode = -1;
         float _linePhaseLatched;
@@ -921,6 +922,7 @@ namespace ARS
                     + " proj=" + offsetAtProjection.ToString("0.00")
                     + " ref=" + steerRefOffset.ToString("0.00")
                     + " over=" + (_laneOvershoot ? 1 : 0)
+                    + " flip=" + (_pursuitFlipThisTick ? 1 : 0)
                     + " flips=" + _pursuitFlipCount);
 
 
@@ -1079,6 +1081,7 @@ namespace ARS
 
         float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading)
         {
+            _pursuitFlipThisTick = false;
             Vector3 toAim = aimPoint - Car.Position;
             float distance = new Vector3(toAim.X, toAim.Y, 0f).Length();
             if (distance <= 0.5f)
@@ -1100,6 +1103,7 @@ namespace ARS
                 && Math.Abs(bearing) > PursuitFlipMinDeg)
             {
                 _pursuitFlipCount++;
+                _pursuitFlipThisTick = true;
                 bearing = 0.5f * (_steerAimBearingDegrees + bearing);
             }
 
