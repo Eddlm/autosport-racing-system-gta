@@ -905,27 +905,6 @@ namespace ARS
             _damperTermDeg = damperTermDeg;
             Control.SteerDegrees = nonDamperSteerDeg + damperTermDeg;
 
-            // Diagnostic, Info level: the ask tick by tick while it is small enough to dither. It exists so the oscillation can be
-            // READ instead of described - pursuit and damper separately, with the yaw the damper is reacting to. Remove once the
-            // cause is known.
-            if (Math.Abs(Control.SteerDegrees) < 10f && fwdSpeed > 3f)
-                ARS.Log(ARS.LogImportance.Info, "steerlog t=" + Game.GameTime
-                    + " ask=" + Control.SteerDegrees.ToString("0.00")
-                    + " pursuit=" + nonDamperSteerDeg.ToString("0.00")
-                    + " damper=" + damperTermDeg.ToString("0.00")
-                    + " yaw=" + VehicleData.YawRotationPerSecondDegrees.ToString("0.0")
-                    + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0")
-                    // The axis as the game will receive it this tick: same remap TranslateSteerToInput applies after the limiter.
-                    + " in=" + ARS.Remap(Control.SteerDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1f, 1f, true).ToString("0.000")
-                    + " lane=" + laneSteerDeg.ToString("0.00")
-                    + " side=" + sideBySideSteerDeg.ToString("0.00")
-                    + " bearing=" + _steerAimBearingDegrees.ToString("0.0")
-                    + " carried=" + _carriedLane.ToString("0.00")
-                    + " req=" + _laneRequest.ToString("0.00")
-                    + " aimoff=" + aimPointOffset.ToString("0.00")
-                    + " proj=" + offsetAtProjection.ToString("0.00")
-                    + " ref=" + steerRefOffset.ToString("0.00")
-                    + " over=" + (_laneOvershoot ? 1 : 0));
 
             if (_slidePriority > 0f)
             {
