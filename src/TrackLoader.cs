@@ -480,8 +480,12 @@ namespace ARS
                 if (!ARS.IsPointToPoint) fwdNode = fwdNode % nodeCount;
                 if (fwdNode < 0 || fwdNode >= nodeCount) continue;
 
-                float angleBack = Vector3.SignedAngle(apexDir, ARS.TrackPoints[backNode].Direction, Vector3.WorldUp);
-                float angleFwd = Vector3.SignedAngle(apexDir, ARS.TrackPoints[fwdNode].Direction, Vector3.WorldUp);
+                // Flat: the two nodes are walkDist apart in the world and a chicane is a horizontal reversal, not a grade change.
+                Vector3 apexFlat = new Vector3(apexDir.X, apexDir.Y, 0f);
+                Vector3 backFlat = new Vector3(ARS.TrackPoints[backNode].Direction.X, ARS.TrackPoints[backNode].Direction.Y, 0f);
+                Vector3 fwdFlat = new Vector3(ARS.TrackPoints[fwdNode].Direction.X, ARS.TrackPoints[fwdNode].Direction.Y, 0f);
+                float angleBack = Vector3.SignedAngle(apexFlat, backFlat, Vector3.WorldUp);
+                float angleFwd = Vector3.SignedAngle(apexFlat, fwdFlat, Vector3.WorldUp);
 
                 if (Math.Abs(angleBack) > 1f && Math.Abs(angleFwd) > 1f && Math.Sign(angleBack) == Math.Sign(angleFwd))
                 {
@@ -994,7 +998,7 @@ namespace ARS
             if (previous.EndNode < 0 || corner.StartNode < 0) return false;
             Vector3 exitDirection = ARS.TrackPoints[previous.EndNode].Direction;
             Vector3 entranceDirection = ARS.TrackPoints[corner.StartNode].Direction;
-            float angle = Vector3.SignedAngle(exitDirection, entranceDirection, Vector3.WorldUp);
+            float angle = Vector3.SignedAngle(new Vector3(exitDirection.X, exitDirection.Y, 0f), new Vector3(entranceDirection.X, entranceDirection.Y, 0f), Vector3.WorldUp);
             return !float.IsNaN(angle) && !float.IsInfinity(angle) && Math.Abs(angle) <= degrees;
         }
 
@@ -1236,7 +1240,8 @@ namespace ARS
             for (int i = first; i > 1 && i * 3 < nodes.Count; i--)
             {
                 Vector3 point = nodes[i * 3];
-                Vector3 direction = (point - nodes[i * 3 - 1]).Normalized;
+                // Rotation about WorldUp preserves Z, so an unflattened direction pushes each slot up or down the grade.
+                Vector3 direction = new Vector3(point.X - nodes[i * 3 - 1].X, point.Y - nodes[i * 3 - 1].Y, 0f).Normalized;
                 grid.Add(point - Quaternion.RotationAxis(Vector3.WorldUp, (float)Math.PI / 180f * -90f) * (direction * ((i % 2 == 1) ? widths[0] * 0.45f : -widths[0] * 0.45f)));
             }
         }
@@ -1250,7 +1255,7 @@ namespace ARS
             for (int i = nodes.Count - 1; i > floor && grid.Count < slotCount; i--)
             {
                 if (i >= reference - 5) continue;
-                Vector3 direction = (nodes[reference] - nodes[i]).Normalized;
+                Vector3 direction = new Vector3(nodes[reference].X - nodes[i].X, nodes[reference].Y - nodes[i].Y, 0f).Normalized;
                 grid.Add(nodes[i] - Quaternion.RotationAxis(Vector3.WorldUp, (float)Math.PI / 180f * -90f) * (direction * ((grid.Count % 2 == 1) ? -widths[0] * 0.45f : widths[0] * 0.45f)));
                 reference = i;
             }

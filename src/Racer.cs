@@ -849,7 +849,8 @@ namespace ARS
             const float ContactPushMinSpeedMps = 1f;
             float contactSteerDeg = 0f;
             Vector3 velDir = speedMps > 0.5f ? Car.Velocity / speedMps : courseDir;
-            Vector3 velRight = Vector3.Cross(velDir, Vector3.WorldUp);
+            // Normalised: Cross(velDir, WorldUp) shrinks by cos(pitch), which shortened every lateral reading on a grade.
+            Vector3 velRight = Vector3.Cross(velDir, Vector3.WorldUp).Normalized;
             Vector3 myHoriz = new Vector3(Car.Velocity.X, Car.Velocity.Y, 0f);
             bool myDirectionKnown = myHoriz.Length() >= ContactPushMinSpeedMps;
             foreach (Rival r in Brain.Rivals)
@@ -925,7 +926,7 @@ namespace ARS
                     + " yaw=" + VehicleData.YawRotationPerSecondDegrees.ToString("0.0")
                     + " slip=" + _slip.InnerPct.ToString("0")
                     + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0")
-                    + " cref=" + Vector3.SignedAngle(Car.ForwardVector, courseDir, Vector3.WorldUp).ToString("0.0")
+                    + " cref=" + Vector3.SignedAngle(new Vector3(Car.ForwardVector.X, Car.ForwardVector.Y, 0f), new Vector3(courseDir.X, courseDir.Y, 0f), Vector3.WorldUp).ToString("0.0")
                     + " aimoff=" + aimPointOffset.ToString("0.00")
                     + " proj=" + offsetAtProjection.ToString("0.00")
                     + " ref=" + steerRefOffset.ToString("0.00")
@@ -1028,7 +1029,9 @@ namespace ARS
                 if (lateralGap > 0.01f && Vector3.Dot(rival.RivalRacer.Car.Velocity, lateralAxis / lateralGap) >= 0f) continue;
 
                 float proximity = ARS.Remap(lateralDistance, wideDistance, fullAssistDistance, SideBySideMinimumAssist, 1f, true);
-                float headingDifference = -Vector3.SignedAngle(rival.RivalRacer.Car.ForwardVector, courseDir, Vector3.WorldUp);
+                Vector3 rivalFlat = new Vector3(rival.RivalRacer.Car.ForwardVector.X, rival.RivalRacer.Car.ForwardVector.Y, 0f);
+                Vector3 courseFlat = new Vector3(courseDir.X, courseDir.Y, 0f);
+                float headingDifference = -Vector3.SignedAngle(rivalFlat, courseFlat, Vector3.WorldUp);
                 if (float.IsNaN(headingDifference) || float.IsInfinity(headingDifference)) continue;
 
                 correction += headingDifference * proximity;
@@ -3962,7 +3965,7 @@ namespace ARS
             // A stationary car has no direction of travel: Normalized() of a zero velocity is NaN, SignedAngle carries it, and
             // the first Math.Sign that reads SlideAngle throws out of the tick (38 OnTick errors in two minutes on build 958).
             VehicleData.SlideAngle = Car.Velocity.LengthSquared() > 0.01f
-                ? (float)Math.Round(Vector3.SignedAngle(Car.Velocity.Normalized, Car.ForwardVector, Car.UpVector), 3)
+                ? (float)Math.Round(Vector3.SignedAngle(new Vector3(Car.Velocity.X, Car.Velocity.Y, 0f).Normalized, new Vector3(Car.ForwardVector.X, Car.ForwardVector.Y, 0f).Normalized, Car.UpVector), 3)
                 : 0f;
         }
 

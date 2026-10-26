@@ -252,7 +252,8 @@ namespace ARS
             }
             else
             {
-                DirectionDiff = Vector3.SignedAngle(myVelocity, rivalVelocity, me.Car.UpVector);
+                // Horizontal: two cars on different points of a grade would otherwise differ by the slope itself.
+                DirectionDiff = Vector3.SignedAngle(new Vector3(myVelocity.X, myVelocity.Y, 0f), new Vector3(rivalVelocity.X, rivalVelocity.Y, 0f), me.Car.UpVector);
             }
         }
 
