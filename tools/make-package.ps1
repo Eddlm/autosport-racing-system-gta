@@ -9,7 +9,6 @@
     Dist\AutosportRacingSystem\      the hand-reviewed data mirror (tracks, rosters, tips)
     bin\Release\ARS.dll              the mod itself
     libs\LemonUI.SHVDN2.dll          MIT dependency, credited in README.txt
-    build\build-number.txt           the banner the player will see
     tools\PACKAGE-README.txt         install + requirements, copied as README.txt
 
   What never goes in: ScriptHookVDotNet2.dll (the player installs their own pair),
@@ -38,7 +37,6 @@ try {
         @{ Path = 'Dist\AutosportRacingSystem'; Dir = 'AutosportRacingSystem' },
         @{ Path = 'bin\Release\ARS.dll';        Dir = 'AutosportRacingSystem' },
         @{ Path = 'libs\LemonUI.SHVDN2.dll';    Dir = 'AutosportRacingSystem' },
-        @{ Path = 'build\build-number.txt';     Dir = 'AutosportRacingSystem' },
         @{ Path = 'tools\PACKAGE-README.txt';   Dir = 'AutosportRacingSystem'; Rename = 'README.txt' }
     )
     foreach ($s in $sources) {
@@ -72,7 +70,8 @@ try {
     Write-Host ''
     Write-Host ("package : " + (Split-Path $zip -Leaf))
     Write-Host ("size    : " + [math]::Round((Get-Item $zip).Length / 1MB, 2) + " MB, $count entries")
-    Write-Host ("build   : " + (Get-Content 'build\build-number.txt' -Raw).Trim())
+    $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $repo 'bin\Release\ARS.dll')).FileVersion
+    Write-Host ("build   : " + $fileVersion + "  (from the DLL's file version)")
     Write-Host ("path    : " + $zip)
 }
 finally {

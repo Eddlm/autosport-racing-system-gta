@@ -405,6 +405,10 @@ namespace ARS
             string legacyLogPath = ScriptsFolder + @"\Log.log";
             try { if (File.Exists(legacyLogPath) && !File.Exists(LogPath)) File.Move(legacyLogPath, LogPath); }
             catch (Exception) { }
+            // The build number used to ship as this sidecar; it now lives in the DLL's file version. Remove the
+            // leftover so a folder listing does not suggest a number that nothing reads.
+            try { string staleBuildNumber = ScriptsFolder + @"\build-number.txt"; if (File.Exists(staleBuildNumber)) File.Delete(staleBuildNumber); }
+            catch (Exception) { }
             try { if (File.Exists(LogPath)) File.Copy(LogPath, PreviousLogPath, true); }
             catch (Exception) { }
             File.WriteAllText(LogPath, "----------------------------");
@@ -436,21 +440,23 @@ namespace ARS
             scriptDate = File.GetLastWriteTimeUtc(ScriptsFolder + @"\ARS.dll").ToString();
 
 
-            UI.Notify("~b~" + scriptName + "~g~e~w~" + "~y~ " + scriptVer + "~n~Build: ~g~" + ReadDevBuildNumber() + " ~w~(" + scriptDate + ")");
+            UI.Notify("~b~" + scriptName + "~g~e~w~" + "~y~ " + scriptVer + "~n~Build: ~g~" + ReadBuildNumber() + " ~w~(" + scriptDate + ")");
 
             UpdateChecker.CheckLatestRelease();
         }
 
-        // The build number is a sidecar NewRacingSystem.csproj writes beside the DLL, deliberately NOT the assembly
-        // version (that is the release identity and only moves by hand); a missing file means the DLL came alone.
-        static string ReadDevBuildNumber()
+        // The build number travels inside the DLL: the GenerateBuildInfo target writes AssemblyFileVersion as
+        // 0.9.0.<build>, so the banner and the file's Windows properties report the same thing and a DLL copied
+        // without its neighbours still knows which build it is. AssemblyVersion stays the hand-moved release identity.
+        static string ReadBuildNumber()
         {
             try
             {
-                string path = ScriptsFolder + @"\build-number.txt";
-                if (!File.Exists(path)) return "?";
-                string value = File.ReadAllText(path).Trim();
-                return value.Length > 0 ? value : "?";
+                AssemblyFileVersionAttribute attribute = (AssemblyFileVersionAttribute)Attribute.GetCustomAttribute(
+                    Assembly.GetExecutingAssembly(), typeof(AssemblyFileVersionAttribute));
+                if (attribute == null || string.IsNullOrEmpty(attribute.Version)) return "?";
+                string[] parts = attribute.Version.Split('.');
+                return parts.Length == 4 ? parts[3] : attribute.Version;
             }
             catch (Exception) { return "?"; }
         }

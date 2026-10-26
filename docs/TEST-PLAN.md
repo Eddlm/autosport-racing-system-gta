@@ -7,7 +7,7 @@ driven and **failed** against the engine's one-slot limit, and its nearest-rival
 (`5bb94bd`), and its two subtraction rules are **driver-verified as working very well** (`a0134d9`); the damper bypass and the maneuvering ramp are new; **build 473 collapsed the steer governor
 to the slide**, so a car at turn-in now gets the full cornering law where
 the retired yaw cut allowed it about a fifth of that — driven with the rest of the list, so that authority is in. Build 471's state was accepted on the drive — the simplification
-batch and the governor-key fix regressed nothing. The deployed DLL writes its build number to `build-number.txt` beside it, and the counter moves on every compile, so read that file rather than trusting a number written here; a build + reload is enough
+batch and the governor-key fix regressed nothing. The deployed DLL carries its build number in its own file version (Properties -> Details on ARS.dll, or the init banner), not in a file beside it, and the counter moves on every compile, so read that file rather than trusting a number written here; a build + reload is enough
 (SHVDN reloads the scripts live, no game restart).
 
 | commit | what it is | section |

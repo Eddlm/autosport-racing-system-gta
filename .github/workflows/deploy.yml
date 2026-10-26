@@ -32,9 +32,7 @@ jobs:
           # Never wildcard bin\Release\* here: that folder also holds ScriptHookVDotNet2.dll,
           # which must always come from the user's own matched SHVDN install (AGENTS/AGENTS-SHVDN.md).
           Copy-Item 'libs\LemonUI.SHVDN2.dll' $ars -Force
-          # The banner reads this beside ARS.dll. Stage the number the build actually used rather than
-          # re-deriving it here, so the two can never drift.
-          Copy-Item 'build\build-number.txt' $ars -Force
+          # No build-number.txt: the number lives in the DLL as AssemblyFileVersion, so there is nothing to stage.
           # One README for both paths: the file this workflow ships and the one make-package.ps1
           # ships must be the same text, so it lives in tools/ and is copied, never retyped.
           Copy-Item 'tools\PACKAGE-README.txt' (Join-Path $ars 'README.txt') -Force

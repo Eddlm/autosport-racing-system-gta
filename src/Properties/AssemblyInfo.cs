@@ -33,4 +33,5 @@ using System.Runtime.InteropServices;
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
 [assembly: AssemblyVersion("0.9.0.0")]
-[assembly: AssemblyFileVersion("0.9.0.0")]
+// AssemblyFileVersion is generated at build time as 0.9.0.<build number> (see the GenerateBuildInfo target);
+// declaring it here as well would be a duplicate attribute and fail the build.
