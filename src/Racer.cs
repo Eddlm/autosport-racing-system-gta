@@ -905,6 +905,17 @@ namespace ARS
             _damperTermDeg = damperTermDeg;
             Control.SteerDegrees = nonDamperSteerDeg + damperTermDeg;
 
+            // Diagnostic, Info level: the ask tick by tick while it is small enough to dither. It exists so the oscillation can be
+            // READ instead of described - pursuit and damper separately, with the yaw the damper is reacting to. Remove once the
+            // cause is known.
+            if (Math.Abs(Control.SteerDegrees) < 10f && fwdSpeed > 3f)
+                ARS.Log(ARS.LogImportance.Info, "steerlog t=" + Game.GameTime
+                    + " ask=" + Control.SteerDegrees.ToString("0.00")
+                    + " pursuit=" + nonDamperSteerDeg.ToString("0.00")
+                    + " damper=" + damperTermDeg.ToString("0.00")
+                    + " yaw=" + VehicleData.YawRotationPerSecondDegrees.ToString("0.0")
+                    + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0"));
+
             if (_slidePriority > 0f)
             {
                 // The correction term only - not the slidePriority ramp - and the share of the slide the countersteer
