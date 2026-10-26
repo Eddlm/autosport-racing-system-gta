@@ -19,6 +19,8 @@ namespace ARS
 
         public string Name = "Racer";
         internal string _baseName = "Racer";
+        // The name without the PI suffix: what a board or a label should print.
+        public string DriverName = "Racer";
         internal string CarModelName = "";
         public Ped Driver;
         public Vehicle Car;
@@ -710,8 +712,11 @@ namespace ARS
             float livePace = ARS.ComputePaceIndex(modelTopSpeedMph, modelGrip, modelAccel, modelElectric);
             if (float.IsNaN(livePace) || float.IsInfinity(livePace)) ARS.ModelPaceIndexCache.TryGetValue(Car.Model.Hash.ToString(), out livePace);
             VehicleData.PowerScale = livePace;
-            VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.00");
+            VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.0");
+            // The PI used to be glued to the name for the logs; the board has a column for it, so the name stays clean and the suffix
+            // survives only where a log line needs to tell two identical names apart.
             if (!ControlledByPlayer) Name = _baseName + " (" + VehicleData.PowerScale.ToString("0.00") + ")";
+            DriverName = _baseName;
 
             _cornerContexts.Clear();
             _cornersRevisionSeeded = -1;

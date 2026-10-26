@@ -2462,7 +2462,7 @@ namespace ARS
         // car, so the column is never blank.
         static string BoardRowName(Racer r)
         {
-            if (DebugToggles[Options.ShowDriverNames] && !string.IsNullOrEmpty(r.Name)) return r.Name;
+            if (DebugToggles[Options.ShowDriverNames] && !string.IsNullOrEmpty(r.DriverName)) return r.DriverName;
             return r.CarModelName;
         }
 
@@ -4218,6 +4218,9 @@ namespace ARS
 
                     if (car == Game.Player.Character.CurrentVehicle) r.Name = Game.Player.Name;
                     else r.Name = NextSillyName() ?? r.Name;
+                    // The clean name follows whatever was assigned, so the board never prints the PI suffix.
+                    r._baseName = r.Name;
+                    r.DriverName = r.Name;
                     r._baseName = r.Name;
 
                     
