@@ -453,6 +453,9 @@ The two-livery-spaces trap (mod slot 48 vs the livery list), the exact natives a
 
 ## Logging — levels, and why `None` is the default
 
+Every `Info` call site, and the volume each one produced in a real session, is audited in `docs/working/LOG-AUDIT.md`. The finding that mattered: one debug trace (`Racer.cs`, `ComputeSteering`) wrote 29,961 of 30,980 lines - per car, per tick - while every other site together wrote about 1,000.
+
+
 - `LogImportance` is a **floor**, not a switch: `Log()` returns when `LogLevel > i`. `None` is deliberately the **last (highest) enum member**, so it silences every level through that same test with no second branch; the **shipped default** is `Error` (code static *and* `SettingsRepair` KeySpec), so a fresh install records errors without the Info chatter. Levels persist by **name**, so adding a member renumbers nothing.
 - **The session banner** (truncate + separator) is written in the ctor **before `LoadSettings`**, so it cannot consult the stored level — 2 writes a session; it also stops a stale log reading as current evidence.
 - **`forced: true` calls** — all error paths: settings repair, model and ped load failures, the `OnTick` catch, the bridge probe. Keeping those is the whole reason `None` is a floor rather than a hard kill — `VerifyScriptBridge` runs *before* `LoadSettings`, so a suppressed forced line would make a bad SHVDN asi/dll pairing completely silent in our log. That is why the release README's "the log names the reason" stays true under the default.
