@@ -913,7 +913,12 @@ namespace ARS
                     + " in=" + ARS.Remap(Control.SteerDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1f, 1f, true).ToString("0.000")
                     + " yaw=" + VehicleData.YawRotationPerSecondDegrees.ToString("0.0")
                     + " slip=" + _slip.InnerPct.ToString("0")
-                    + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0"));
+                    + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0")
+                    + " cref=" + Vector3.SignedAngle(Car.ForwardVector, courseDir, Vector3.WorldUp).ToString("0.0")
+                    + " aimoff=" + aimPointOffset.ToString("0.00")
+                    + " proj=" + offsetAtProjection.ToString("0.00")
+                    + " ref=" + steerRefOffset.ToString("0.00")
+                    + " over=" + (_laneOvershoot ? 1 : 0));
 
 
             if (_slidePriority > 0f)
