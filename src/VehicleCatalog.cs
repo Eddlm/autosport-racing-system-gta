@@ -98,9 +98,10 @@ namespace ARS
                 Model model = new Model(hash);
                 if (!model.IsCar || !model.IsValid)
                 {
-                    // No request and no wait: this runs from a menu callback inside the tick, where yielding the script is not legal. It
-                    // was written for a DLC-streaming theory that the roster disproved (zion3 works without it), and it cost a second per
-                    // dropped entry plus the hang.
+                    // No request and no wait. A menu callback runs inside OnTick, so the wait was legal - it was expensive: up to a second
+                    // per dropped entry, and cars.txt drops about 185 of them, which freezes the script for minutes on a roster change.
+                    // It was written for a DLC-streaming theory the roster has since contradicted.
+                    // A dropped entry is NOT nulled: it simply misses the pace index, and a null key throws in TryGetValue.
                     log("  dropped " + entry + (model.IsInCdImage ? ": not a car" : ": not in the cdimage"));
                     continue;
                 }

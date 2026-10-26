@@ -400,7 +400,12 @@ namespace ARS
             KeyDown += OnKeyDown;
             Aborted += OnAbort;
 
-            File.WriteAllText(ScriptsFolder + @"\Log.log", "----------------------------");
+            // Keep the previous session: the crash we most want to read is the one that killed the game, and truncating the log at
+            // startup destroyed the only evidence of it (2026-10-26). One previous file is enough and costs a rename.
+            string logPath = ScriptsFolder + @"\Log.log";
+            try { if (File.Exists(logPath)) File.Copy(logPath, ScriptsFolder + @"\Log.prev.log", true); }
+            catch (Exception) { }
+            File.WriteAllText(logPath, "----------------------------");
             Log(LogImportance.Info, "Script initialized - " + DateTime.Now);
             File.AppendAllText(ScriptsFolder + @"\Log.log", "\n----------------------------");
             VerifyScriptBridge();
