@@ -15,7 +15,7 @@ namespace ARS
     {
         // Corners are not recognised this close to the start/finish line, counted the short way round on a circuit: a corner that
         // straddles the line makes the plan brake while the grid is still leaving it.
-        const int ApexStartLineClearanceNodes = 80;
+        const int ApexStartLineClearanceNodes = 30;
 
         public static XmlDocument LoadTrackFile(string trackname = null)
         {
