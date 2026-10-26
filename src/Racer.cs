@@ -427,6 +427,11 @@ namespace ARS
         const float BrakeOverTargetSeconds = 1f;
         const float BrakeOverStepUp = 0.025f;        // a lap inside the target buys this much later braking
         const float BrakeOverStepDown = 0.05f;       // a lap over it gives back twice as much: a mistake is not free
+        // How much of the law's own brake error the ramp is allowed before the clock starts. At 1.0 a stop that is going well still
+        // counted time over - the car trails the falling ramp by more than the law's steady error, and every measurement is a sample
+        // of a moving target - so the floor is raised to 1.5: four and a half metres a second, about ten miles an hour, above the
+        // ramp before a single tenth of a second is counted.
+        const float BrakeOverAllowanceShare = 1.5f;
         // The clock only runs while the ramp still has resolution: near the target its budget dies, and over a dying budget a correct
         // car reads as wildly over. A quarter of the apex energy is a ramp 12% above the apex speed.
         const float BrakeOverMinBudgetShare = 0.25f;
@@ -2671,7 +2676,7 @@ namespace ARS
                 // The ramp carries the pedal law's own brake error: a proportional law needs a sustained error to hold any decel, so a
                 // car braking at the limit sits about BrakeErrorMultiplier above the bare ramp by design. Against the bare number it
                 // would read as over from the first metre of every stop.
-                float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed) + BrakeErrorMultiplier;
+                float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed) + BrakeErrorMultiplier * BrakeOverAllowanceShare;
                 float budget = ramp * ramp - apexSpeed * apexSpeed;
                 if (ramp < 100f && budget > BrakeOverMinBudgetShare * apexSpeed * apexSpeed)
                 {
