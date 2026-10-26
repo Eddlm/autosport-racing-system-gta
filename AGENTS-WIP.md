@@ -598,3 +598,31 @@ Two things the session established that are easy to lose:
   `docs/steering-and-pedals.md` item 5: `Clamp(100 / InnerPct, 0.40, 1)` and delete the saturation constant.
 - **A four-wheel slide is not an understeer.** `F` and `R` near each other in `docs/steering-and-pedals.md`'s
   capture means both axles are past the peak, where cutting the wheel buys nothing; speed is the only lever.
+
+## Session 2026-10-26 (early) — the second audit, and eleven fixes
+
+Board `ars`, five cards on `deepseek/deepseek-v4-flash` (Command Code), reports in `docs/audit/301-305`. It did **not**
+repeat the first audit: it was aimed at the gaps. What it found: 43 of the 44 inherited rows were **real** (301), no
+blocker in appearance/vehicles (302), one blocker in the grid builders (303-G1), three in the grid-fill refusal (304),
+and nine of nine fixes verified with four named residuals (305).
+
+Fixed and deployed, builds **1107-1111** (each its own commit, each hash-checked against the deployed dll):
+
+- **304** — a starved grid says which cause it is (PI band / no pace index / empty) and Start Race does not start.
+- **303-G1, G2** — both grid builders adapt to short routes; `Place` never indexes an empty grid.
+- **305 residuals** — the abort clears moved into a `finally`; a spent burn still clears; unticking the setting cuts a
+  live burn; a routeless file is refused before the fade; the creator's message counts nodes.
+- **303-F1, F3** — freecam leaves on death, respawn or a vehicle; no view mode is forced that cannot be restored.
+- **302** — the tuner re-tests the player's car at the tick, not only at enqueue.
+
+**Owed, in this order**: drive the 1111 — (1) Start Race with nothing in the PI band, (2) a solo race on a short
+circuit, (3) freecam while entering a car. Nothing here is driver-verified.
+
+**Open, deliberately**:
+- `301` — the 43 real rows. All release-note or file grade; a multi-session job, not a blocker.
+- `303-F2` — the dead `HideHudMode` reset. Its proof is a decompile this side could not reproduce; touching it blind
+  can leave the HUD hidden, so it stays.
+- `302` — the player keeps an AI car's permanent look if they steal one. A design consequence, not a defect.
+- `B5` (rival record lag) and `R12` (leaderboard per frame) — parked for 0.11.0 in `AGENTS-BACKLOG.md`, R12 with its
+  98 % claim corrected.
+- The tag: `v0.9.0` is not cut, and `Dist/AutosportRacingSystem/Tracks/Figureight.xml` is modified and uncommitted.
