@@ -2389,7 +2389,12 @@ namespace ARS
             float theoreticalGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
             if (!(theoreticalGs > 0f)) return 0f;
             if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= 0.5f * theoreticalGs) return 0f;
-            int insideSign = Math.Sign(CurrentTrackPoint.Angle);
+            // The two conventions point opposite ways and mixing them cost a build of white lines: TrackPoint.Angle is
+            // SignedAngle(previous, next, WorldUp), so POSITIVE is a LEFT turn, while SignedLaneOffset is built on
+            // Cross(direction, WorldUp), so POSITIVE is the RIGHT of travel. MeasureProjectionOutside pins the pair by
+            // calling sign(offset) == sign(Angle) the OUTSIDE, which leaves the inside on the negative side of a left-hander.
+            // The side still comes from the car's node, as the owner asked - only its sign is flipped.
+            int insideSign = -Math.Sign(CurrentTrackPoint.Angle);
             if (insideSign == 0) return 0f;
             // Every gate above is about the car and the moment, not about where the line points: passing them is what makes
             // the regime "live", and it is reported even when the line sits at the centre and the floor is therefore zero.
