@@ -126,6 +126,14 @@
   the sort, not the draws. Cutting the native count means drawing fewer elements (near rows only), and that is an
   interface decision, not a fix.
 
+- `preflight-pace-target` — **parked for 0.9.1 / 0.11.0 (owner, 2026-10-26)**: `PreflightStartRace` checks the pool before
+  anything is instanced, but the pace target it resolves can differ from the grid's, because in `PaceMode.RelativeToMine`
+  the target is the PLAYER'S car pace and the instancing teleports them into the car at the track. So the preflight can
+  pass on a band that is empty two seconds later. Measured: build 1117, log 15:30-15:31, three `No vehicles within N PI`
+  from the grid path and zero `Start Race refused`. Kept deliberately as a sometimes-fast-fail with the prop cleanup
+  (build 1115) as the safety net. The fix is to make the target car-independent, which needs the track's car placement
+  to happen before the pool is chosen - the phase-2 split of `LoadTrack`.
+
 - `rival-record-lag` — **parked for 0.11.0 (owner, 2026-10-25)**: `UpdateRivalInfo` publishes on a `250 + phase` ms
   beat (250-749 ms), while the wall gate needs the alongside tick; at 10 m/s closure the tested gap moves 2.5-7.5 m per
   beat against a 10.05 m window. Audit B5 (`docs/audit/200-audit-0.9.0.md`). Accepted as shipped for 0.9.0: either the
