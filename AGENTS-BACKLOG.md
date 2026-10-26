@@ -7,34 +7,14 @@
 ## The ladder — open items, simplest → most complex
 
 **Tier 0 — decisions, no code**
-- `steer-dither-small-ask` — **parked for 0.9.1 / 0.11.0 (owner, 2026-10-26)**: with the car pointing straight and the ask small
-  (1-2 deg) the wheel dithers. TWO fixes were tried and both reverted the same day, and the reasons matter more than the code:
-  (a) **exponential slew on the input** (build 1143, `rate = min(error x 18, 180)`, cap reached at 10 deg): it did slow a 1-2 deg
-  ask from one tick to four, and the car oscillated MORE - as a first-order filter with tau = 55.6 ms it adds 46 deg of phase lag
-  at 3 Hz, inside the pursuit loop, so it moved the oscillation instead of damping it. (b) **soft centre on the ask** (build 1145,
-  half at 4 deg, untouched from 8 deg): no lag at all, amplitude halved, and the dither remained - so the amplitude of the ask is
-  not what sustains it. What is left to look at, in order: the yaw damper term at small angles (it is the only term whose sign
-  flips with the rotation), the pursuit gain near zero bearing, and the aim point's own jitter. The actuator is NOT the place:
-  proven twice.
-  **MEASURED 2026-10-26 (builds 1148-1149, Log.log `steerlog`):** it is not a 1-2 deg wobble - the ask FLIPS SIGN every one or
-  two ticks (172 sign runs in 374 samples, median semi-period 16.8 ms = the tick). The damper never fires (0 of 374 samples), so
-  the whole thing is `laneSteerDeg` (159 sign flips) and `sideBySideSteerDeg` is identically 0. The BEARING flips with it, median
-  jump 9.3 deg (+7.3 to -7.4), so the aim point is jumping from one side of the car's axis to the other, not the gain. `_carriedLane`
-  is smooth across the flips, so the suspect is `aimPointOffset = aimLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset)`:
-  either `_laneOvershoot` flickering (aimLane toggling between `steerRefOffset` and `_carriedLane`) or `ProjectAhead` alternating
-  between two route nodes. Amplitude scales with speed: |ask| 6.06 deg at 7-15 mph down to 2.22 deg at 55-70, which is why it reads
-  as "1-2 deg" at speed.
-  **ROOT CAUSE FOUND (build 1158):** the aim point steps a whole NODE. `steerRef = (int)Clamp(speed * 0.5, 8, 30)` is a node count,
-  `aim = TrackPoints[CurrentTrackPoint.Node + steerRef]`, and `FindNearestTrackPoint` picks the nearest node by distance with no
-  hysteresis, so between two nodes the winner flips and the aim jumps ~0.9 m - which at an 8 m lookahead is +/-7 deg of bearing. The
-  log proves it: `dist` swings 7.6..8.5 m in phase with the sign flip, while `aimoff`, `proj` and `ref` stay smooth (they are offsets
-  relative to the route, so they never see the step). `courseDir` was ruled out (its reference is steady above 20 mph).
-  **Applied 2026-10-26 (build 1159, option A):** half-weight EMA on the aim point, for the pursuit only - 16 ms of lag on a point 8 m
-  away, snaps when the step is over 5 m (grid placement, the wrap at the line). Blast radius: one variable, one method.
-  **OWED (option C, the definitive fix):** interpolate the lookahead by ARC LENGTH along the polyline instead of indexing a node, so the
-  quantisation disappears instead of being averaged. ~25 lines confined to the aim, needs the wrap case at the start line tested.
-  Hysteresis inside `FindNearestTrackPoint` (option B) is ruled out: `CurrentTrackPoint` has 56 consumers (50 in Racer, 6 in ARS) and
-  changing the projection globally to fix a steering tremor is not a trade worth making.
+- `steer-dither-small-ask` — **RESOLVED 2026-10-26 (build 1163)**. The wheel dither on a straight line was never lateral: `PursuitSteerDegrees`
+  measured `Vector3.SignedAngle(heading, toAim, WorldUp)` in THREE dimensions. The aim sits 8 m ahead and the route's own nodes differ by
+  about a metre in height, so the angle carried the road's grade - 0.9 m over 8 m is 6.4 deg - and it flipped sign every time the lookahead
+  node stepped. Measured proof: the aim's LATERAL offset was +/-0.04 m while the bearing swung +/-6.5 deg, and `dist` (which is X,Y only)
+  stayed flat. Fix: flatten both vectors before the angle. Result: ask sign inversions 23 % -> 1 %, de-glitch firings 0. What was tried first
+  and did NOT work, kept here so nobody repeats it: exponential slew on the input (1143, adds 46 deg of phase at 3 Hz), soft centre on the ask
+  (1145), EMA on the aim point at alpha 0.5 and 0.25 (1159-1160, the second was worse), and a sign-flip average on the bearing (1156). All of
+  them treated a lateral displacement that did not exist.
 
 - `speed-steer-ceiling` — **ZOMBIE CODE, revisit 0.11.0 (driver, 2026-10-26)**: `SpeedSteerCeiling` (a `static readonly bool`,
   `Racer.cs:2083`) is false, so `ResolveSteerCeiling` returns `VehicleData.SteeringLock` on its first line and this whole law is

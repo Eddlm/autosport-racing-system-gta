@@ -158,6 +158,12 @@ Only an AI racer draws it: `DrawFrontSlipReadout` returns early for the player, 
 7. **The guard disappears when the source cannot answer.** If `InnerPct <= 0.01` or the source is unreadable (theory below 6.7 mph), the block is skipped and the applied ceiling is the lock — i.e. no limit at all, which reads as an instant release. Keeping the last ceiling instead is a one-line change with real consequences in the car, so it waits for a decision.
 
 ## Failures worth remembering
+- **A bearing measured in three dimensions (build 1163).** `PursuitSteerDegrees` took `Vector3.SignedAngle(heading, toAim, WorldUp)` with the raw
+  3D vectors. The aim is 8 m ahead and adjacent route nodes differ by ~1 m in height, so the angle included the road's grade: 6.4 deg that
+  flipped sign with every node step and read as a lateral tremor. The tell was in the numbers - the aim's lateral offset was 0.04 m while the
+  bearing swung 6.5 deg - and it went unnoticed for a whole session of filters. Steering is a horizontal problem: flatten both vectors first.
+
+
 
 - **Starting the chase at the lock.** A ceiling that begins at 38 deg and closes at 6 deg/s needs five seconds to reach a 7 deg target, so it never moved.
 - **Seeding it to the request.** That made the ceiling follow the wheel, a ratchet dragged down by every small angle that could only climb back at the open rate.
