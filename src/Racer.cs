@@ -1849,11 +1849,6 @@ namespace ARS
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
         // falls at 2 deg/s and rises at twice that, so it lets go before it binds. The floor keeps the wheel steerable:
         // a cap that reached zero would drive the car straight out of the corner.
-        // How much of the request the cut may leave: 0.05 lets the guard take the wheel down to a twentieth, which is the
-        // extreme end of the range and is here to be felt, not shipped.
-        const float FrontSlipFactorFloor = 0.05f;
-        // Where the cut stops deepening: the same 2.5x at which sfTractionMinAngle flattens the tyre's curve.
-        const float FrontSlipFactorSaturatePct = 250f;
         // From this speed down the slip allowance starts doubling, and it is fully doubled at the second one.
         static readonly bool SlowCornerSlipAllowance = true;
         const float SlowCornerSlipFullMph = 15f;
@@ -2118,9 +2113,10 @@ namespace ARS
             // tick. chasingClamp is the value actually applied and the only state in the system.
             if (_slip.Readable && _slip.InnerPct > 0.01f)
             {
-                // The factor saturates where the tyre's curve does: past 2.5x the peak the lateral force is flat, so a deeper cut
-                // buys no grip and only takes the wheel away. The floor still applies below that.
-                float factor = ARS.Clamp(100f / Math.Min(_slip.InnerPct, FrontSlipFactorSaturatePct), FrontSlipFactorFloor, 1f);
+                // One stop, the menu's Slip Cut Floor: it is the deepest the cut may go, and there is no second clamp behind it. At the
+                // shipping 0.40 this is arithmetically the old 2.5x saturation (100/250 = 0.40), so the default changes nothing, but a
+                // value below 0.40 now actually reaches the wheel instead of dying against a constant nobody could move.
+                float factor = ARS.Clamp(100f / _slip.InnerPct, ARS.SlipCutFloor, 1f);
                 _slipFactor = factor;
                 // Only an overshoot lowers the target. Below it the gate has no business being under the lock, and a target that
                 // tracked every small request collapsed the ceiling in the straights and then needed seconds to climb back - which is

@@ -178,6 +178,8 @@ namespace ARS
         // How far past neutral the damper may countersteer, in degrees. 0 means it can only cancel the command.
         public static float DamperCountersteerMaxDeg = 2f;
         public static float SteerCeilingFactor = 0.9f;
+        // The deepest the slip cut may take the wheel: 0.40 keeps 40% of what the car asked for, 0.00 can remove the request entirely.
+        public static float SlipCutFloor = 0.4f;
         // The slip the tyres reach peak traction at, in the field's own units: the curve is indexed from the
         // field at x sfTractionMinAngle with its peak at argument 1.0, and the engine's own below-the-peak test
         // compares the field against sfTractionPeakAngle x sfTractionMinAngleInv = 0.4 (wheel.cpp:4465, :4497).
@@ -1171,6 +1173,17 @@ namespace ARS
             steerCeilingFactorItem.SelectedIndex = Math.Max(0, steerCeilingFactorItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor).ToString("0.00", CultureInfo.InvariantCulture)));
             rivalSteeringMenu.Add(steerCeilingFactorItem);
             HookListTextPicker(steerCeilingFactorItem);
+
+            NativeListItem<string> slipCutFloorItem = new NativeListItem<string>("Slip Cut Floor", "The deepest the limiter may cut the wheel: 0.40 leaves 40% of what was asked, 0.00 removes the request entirely and the car goes straight on."
+                , SettingsRepair.OptionsFor("SlipCutFloor"));
+            slipCutFloorItem.ItemChanged += (sender, args) =>
+            {
+                SlipCutFloor = float.Parse(slipCutFloorItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SlipCutFloor", slipCutFloorItem.Items[args.Index]);
+            };
+            slipCutFloorItem.SelectedIndex = Math.Max(0, slipCutFloorItem.Items.IndexOf(SettingsMenuStore.GetFloat("SlipCutFloor", SlipCutFloor).ToString("0.00", CultureInfo.InvariantCulture)));
+            rivalSteeringMenu.Add(slipCutFloorItem);
+            HookListTextPicker(slipCutFloorItem);
 
             // ── Race Rules (root) — rules that apply to every race ──
             NativeMenu rulesMenu = new NativeMenu("Race Rules", "Race Rules", "Rules that apply to every race: timing, damaged and dead cars, field pace, collision, nitrous and downforce.")
@@ -3743,6 +3756,7 @@ namespace ARS
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
             DamperCountersteerMaxDeg = SettingsMenuStore.GetFloat("DamperCountersteerMaxDeg", DamperCountersteerMaxDeg);
             SteerCeilingFactor = SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor);
+            SlipCutFloor = SettingsMenuStore.GetFloat("SlipCutFloor", SlipCutFloor);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
