@@ -1108,13 +1108,18 @@ namespace ARS
         {
             _pursuitFlipThisTick = false;
             Vector3 toAim = aimPoint - Car.Position;
-            float distance = new Vector3(toAim.X, toAim.Y, 0f).Length();
+            // FLAT, both of them: the aim is 8 m ahead and the terrain between the two is not level, so the 3D angle between them
+            // carries the road's own grade. One metre of difference over eight is 7 degrees of 'bearing', which flipped sign with
+            // every node step and was read as a lateral tremor for a whole session. Steering is a horizontal problem.
+            Vector3 toAimFlat = new Vector3(toAim.X, toAim.Y, 0f);
+            Vector3 headingFlat = new Vector3(heading.X, heading.Y, 0f);
+            float distance = toAimFlat.Length();
             if (distance <= 0.5f)
             {
                 _steerAimBearingDegrees = 0f;
                 return 0f;
             }
-            float bearing = Vector3.SignedAngle(heading, toAim, Vector3.WorldUp);
+            float bearing = Vector3.SignedAngle(headingFlat, toAimFlat, Vector3.WorldUp);
             if (float.IsNaN(bearing) || float.IsInfinity(bearing))
             {
                 _steerAimBearingDegrees = 0f;
