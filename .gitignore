@@ -52,3 +52,5 @@ Dist/AutosportRacingSystem/Vehicles/tests.txt
 
 # Imported python tooling leaves bytecode behind (docs/check-settings-keys.py is imported by its own self-test)
 __pycache__/
+# A GitHub API response somebody downloaded once; regenerated on demand, never source.
+release-latest.json
