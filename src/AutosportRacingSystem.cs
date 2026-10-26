@@ -412,7 +412,10 @@ namespace ARS
             try { if (File.Exists(LogPath)) File.Copy(LogPath, PreviousLogPath, true); }
             catch (Exception) { }
             File.WriteAllText(LogPath, "----------------------------");
-            Log(LogImportance.Info, "Script initialized - " + DateTime.Now);
+            // Forced: this runs before LoadSettings, so LogLevel is still the field default (Error) and would swallow it - the
+            // one line that says which build booted is the one line a log must never omit. The build number rides in the
+            // assembly, so a log file names its own build even when it is read away from the game folder.
+            Log(LogImportance.Info, "Script initialized - " + DateTime.Now + " - build " + ReadBuildNumber(), true);
             File.AppendAllText(LogPath, "\n----------------------------");
             VerifyScriptBridge();
             LoadSettings();
