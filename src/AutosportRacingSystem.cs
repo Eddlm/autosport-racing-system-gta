@@ -1554,13 +1554,20 @@ namespace ARS
             TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, _intendedOpponents + 1, GridPositions);
             int gridSize = Math.Min(_intendedOpponents, Math.Max(0, GridSlotsAvailable - 1));
             if (gridSize != _intendedOpponents) Log(LogImportance.Info, "Grid: the track only yielded " + GridSlotsAvailable + " slots, so " + _intendedOpponents + " was capped to " + gridSize);
-            FillCachedCandidates(gridSize);
+            GridFill fill = FillCachedCandidates(gridSize);
             LoadGrid(gridSize);
 
             // Zero opponents is a solo race, not a roster failure.
             if (Racers.Count == 0 && _intendedOpponents > 0)
             {
-                UI.Notify("~o~No vehicles found with a performance index. Check the Vehicles folder.");
+                // The player is told which of the three causes it was, and the PI one names the band it could not fill: the
+                // old message sent them to the Vehicles folder even when 472 models were indexed and the folder was fine.
+                if (fill == GridFill.NoneInBand)
+                    UI.Notify("~o~No car within " + PaceDeviationLimit + " PI of " + Math.Round(_resolvedPaceTarget) + ": nothing to build a grid from. Widen Max PI Deviation, or pick a PI target the pool can reach.");
+                else if (fill == GridFill.NoPaceIndex)
+                    UI.Notify("~o~No pace index for any car in the pool: check the Vehicles folder.");
+                else
+                    UI.Notify("~o~The grid came back empty.");
                 _gridInstanced = false;
                 if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
                 return;
@@ -3966,7 +3973,11 @@ namespace ARS
 
         List<string> _cachedCandidates = new List<string>();
 
-        void FillCachedCandidates(int maxcars)
+        // Why a grid fill produced nothing. The three causes are told apart here because the player is told about them, and
+        // one message for all of them named a folder that was never the problem.
+        enum GridFill { Filled, NoPaceIndex, NoneInBand }
+
+        GridFill FillCachedCandidates(int maxcars)
         {
             if (HardcodedRoster != null && HardcodedRoster.Count > 0)
             {
@@ -3981,8 +3992,20 @@ namespace ARS
                 DateTime rankingStarted = DateTime.UtcNow;
                 _cachedCandidates = VehicleSelector.SelectClosestByPace(_vehiclePool, ModelPaceIndexCache, maxcars, GetRandomInt, text => Log(LogImportance.Info, text), _resolvedPaceTarget, PaceDeviationLimit);
                 Log(LogImportance.Info, "Ranking took " + (int)(DateTime.UtcNow - rankingStarted).TotalMilliseconds + " ms for " + _vehiclePool.Count + " pool files");
-                if (_cachedCandidates.Count == 0) Log(LogImportance.Error, PaceDeviationLimit > 0 ? "No vehicles within " + PaceDeviationLimit + " PI of the target - widen Max PI Deviation or the pool." : "No vehicles in the pool with a pace index.");
+                if (_cachedCandidates.Count == 0 && maxcars > 0)
+                {
+                    // A solo grid asks for no rivals, so an empty result there is not a failure and must not be logged as one.
+                    if (PaceDeviationLimit > 0 && ModelPaceIndexCache.Count > 0)
+                    {
+                        Log(LogImportance.Error, "No vehicles within " + PaceDeviationLimit + " PI of the target " + Math.Round(_resolvedPaceTarget) + " - widen Max PI Deviation or the pool");
+                        return GridFill.NoneInBand;
+                    }
+                    Log(LogImportance.Error, "No pace index loaded for the pool - " + _vehiclePool.Count + " pool files, " + ModelPaceIndexCache.Count + " indexed");
+                    return GridFill.NoPaceIndex;
+                }
+                return GridFill.Filled;
             }
+            return GridFill.Filled;
         }
 
         static readonly List<string> _sillyNames = new List<string>();
