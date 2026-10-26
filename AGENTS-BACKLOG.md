@@ -11,8 +11,10 @@
   `Racer.cs:2083`) is false, so `ResolveSteerCeiling` returns `VehicleData.SteeringLock` on its first line and this whole law is
   compiled but inert: `PeakSlipCeilingAt`, `GeometrySteerCeiling`, `ManeuverRamp`, `SteerLimitRampStartMph = 5`,
   `SteerLimitRampEndMph = 30`. The setting that drives it is STILL IN THE MENU (`Rival Steering > Steer Limit At Speed`,
-  `SteerCeilingFactor = 0.90`, steps 0.05..1.00, persisted with its own KeySpec) and moves nothing - a knob wired to a motor that
-  is unplugged. It was parked to judge the measured-slip limiter alone, not because it was wrong. To settle in 0.11: revive it
+  `SteerCeilingFactor = 0.90`, steps 0.05..2.00, persisted with its own KeySpec) and moved nothing - a knob wired to a motor that
+  is unplugged. **UPDATE 2026-10-26 (build 1128): the knob was re-pointed at the live limiter** - it is now `Rival Steering >
+  Peak Slip Share` and scales `capShare` in the measured-slip system, so it does something again. What remains zombie is the
+  speed law only: `ResolveSteerCeiling` and its helpers still read the same number for a ceiling nothing applies. It was parked to judge the measured-slip limiter alone, not because it was wrong. To settle in 0.11: revive it
   (then it becomes the min of two ceilings, and it overlaps the 5-15 mph slip allowance that is now ON) or delete the law AND the
   menu row together. Leaving the row live while the law is dead is the one option to rule out.
 
