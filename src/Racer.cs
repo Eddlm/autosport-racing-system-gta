@@ -921,7 +921,11 @@ namespace ARS
                     + " side=" + sideBySideSteerDeg.ToString("0.00")
                     + " bearing=" + _steerAimBearingDegrees.ToString("0.0")
                     + " carried=" + _carriedLane.ToString("0.00")
-                    + " req=" + _laneRequest.ToString("0.00"));
+                    + " req=" + _laneRequest.ToString("0.00")
+                    + " aimoff=" + aimPointOffset.ToString("0.00")
+                    + " proj=" + offsetAtProjection.ToString("0.00")
+                    + " ref=" + steerRefOffset.ToString("0.00")
+                    + " over=" + (_laneOvershoot ? 1 : 0));
 
             if (_slidePriority > 0f)
             {

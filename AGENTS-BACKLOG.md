@@ -16,6 +16,14 @@
   not what sustains it. What is left to look at, in order: the yaw damper term at small angles (it is the only term whose sign
   flips with the rotation), the pursuit gain near zero bearing, and the aim point's own jitter. The actuator is NOT the place:
   proven twice.
+  **MEASURED 2026-10-26 (builds 1148-1149, Log.log `steerlog`):** it is not a 1-2 deg wobble - the ask FLIPS SIGN every one or
+  two ticks (172 sign runs in 374 samples, median semi-period 16.8 ms = the tick). The damper never fires (0 of 374 samples), so
+  the whole thing is `laneSteerDeg` (159 sign flips) and `sideBySideSteerDeg` is identically 0. The BEARING flips with it, median
+  jump 9.3 deg (+7.3 to -7.4), so the aim point is jumping from one side of the car's axis to the other, not the gain. `_carriedLane`
+  is smooth across the flips, so the suspect is `aimPointOffset = aimLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset)`:
+  either `_laneOvershoot` flickering (aimLane toggling between `steerRefOffset` and `_carriedLane`) or `ProjectAhead` alternating
+  between two route nodes. Amplitude scales with speed: |ask| 6.06 deg at 7-15 mph down to 2.22 deg at 55-70, which is why it reads
+  as "1-2 deg" at speed. Next run logged `aimoff`, `proj`, `steerRef` and the aim distance to settle which of the two it is.
 
 - `speed-steer-ceiling` — **ZOMBIE CODE, revisit 0.11.0 (driver, 2026-10-26)**: `SpeedSteerCeiling` (a `static readonly bool`,
   `Racer.cs:2083`) is false, so `ResolveSteerCeiling` returns `VehicleData.SteeringLock` on its first line and this whole law is
