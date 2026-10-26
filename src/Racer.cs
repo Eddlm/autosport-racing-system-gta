@@ -886,6 +886,9 @@ namespace ARS
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
             float damperGain = SteerDampingFor();
             float nonDamperSteerDeg = (steerKP * sideBySideSteerDeg) + (steerKP * laneSteerDeg);
+            // Applied to the pursuit only: the damper term is the stabiliser, and scaling it down would take away the very thing
+            // that keeps a straight line straight.
+            nonDamperSteerDeg *= SoftCentreShare(nonDamperSteerDeg);
             float damperTermDeg = -damperGain * yawRateToDamp * DamperEffectScale;
             // The damper only ever subtracts: a left command never gets more left from it.
             if (damperTermDeg * nonDamperSteerDeg > 0f) damperTermDeg = 0f;
@@ -1851,6 +1854,20 @@ namespace ARS
         // Below this forward speed the velocity direction is numerical noise, so the slide angle means nothing.
         const float CountersteerMinSpeedMph = 10f;
         const float SteerSlewRate = 180f;
+        // Soft centre for the ask: at 8 deg and above the request goes through untouched, at 4 deg and below it is halved, linear in
+        // between. A GAIN, deliberately, not a filter - lagging the actuator added phase inside the loop and made the car oscillate
+        // more (build 1143). Halving the amplitude of a small dither costs gain at the centre, not phase.
+        const float SteerSoftCentreFullDeg = 8f;
+        const float SteerSoftCentreLowDeg = 4f;
+        const float SteerSoftCentreLowShare = 0.5f;
+
+        static float SoftCentreShare(float askDeg)
+        {
+            float magnitude = Math.Abs(askDeg);
+            if (magnitude >= SteerSoftCentreFullDeg) return 1f;
+            if (magnitude <= SteerSoftCentreLowDeg) return SteerSoftCentreLowShare;
+            return ARS.Remap(magnitude, SteerSoftCentreLowDeg, SteerSoftCentreFullDeg, SteerSoftCentreLowShare, 1f, true);
+        }
 
         // A cap on the steer command driven by the front tyres' measured side slip. While the car is on the throttle the
         // command may not push the fronts past this share of their own peak (the side-slip axis peaks at 1.0); the cap
