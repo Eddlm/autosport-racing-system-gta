@@ -1,37 +1,45 @@
-Let's keep this one brief. I'm in Vanillaworks and the ARS dedicated server if you wanna pester me. Let's avoid Github issues, they're too... static.
+Let's keep this one brief.
 
-# The Revival
+
+## Contact & Feedback
+- I'm in [Vanillaworks](https://discord.gg/hPUEChBCeV) Discord Server, [#ars-project](https://discord.com/channels/837447158197518376/985845358900940800) workshop. Alternatively, [GTA5Mods discord](https://discord.gg/2PR7aMzD4U), ``@eddlm``. No DMs.
+- You can also open Github Issues here.
+
+# Project Status | The Revival
 
 ARS is finally working and up to date. As of now, it has been reduced to the core features and will recover missing systems (like Personalities) over time. It was getting way too complicated without a solid foundation.
 
 ## What is working
-- You can race on a smol selection of tracks I chose for this core-only build.
-- You can race any car you wish and have the AI race any car too. check ``cars.txt``.
-- Racers have a complex, custom AI system that allows them to be competitive:
-- - Each racer knows their car's stats and will adjust to fit within them.
-- - They know to avoid, overtake, take lanes and lines.
-- - They have specific moves they can try. These are called Cards, as they are pretty much playing a card from their available hand.
-- - - That includes NITROUS. If you want. As a generic rule they are allowed one nitrous shot per lap if the config enabled nitrous for them.
-- - They adjust their braking plan to brake as late and hard as possible without screwing up. This is not persistent yet, but does adjust over laps over each race.
-- - Hills and crests are accounted for, regarding grip.
+### Racing
+
+- Can race on a preset list of routes.
+- Can create any route you want.
+- Can race against AI oponents.
+- Can choose your oponents from a list.
+- Can create more lists ``Vehicles/namedlist.txt``
+
+### Roster files
+
+`Vehicles\` holds plain text files, one model name per line, and the Rivals menu picks which one the grid draws from.
+Two rows are enough to see the shape - add your own the same way:
+
+| File | What it is for |
+|---|---|
+| `Vehicles\cars.txt` | The full list. Every four-wheeled model the game knows, minus bikes, boats, wings and trains. |
+| `Vehicles\tests.txt` | A scratch list for testing one car at a time; drop a single model name in it and the grid is that car. |
 
 ## What is gone temporarily
 - Racer creation.
 - Track editing. Creating a route and saving it works; reopening a saved track to change it is not back yet.
 - Personalities.
 
-## What is the plan
+## The plan
 
 Plan? There is no plan. VI is out in like a month and I don't expect anybody to care about ARS by now, much less when THAT is gonna steal everything's spotlight.
 
-But there are potential avenues.
+## The future
 
-- **Bring back Disciplines**: Properly separate into gamemodes. Street races, professional races, rally stages, you know.
-- **FiveM port**: Get the AI working over there.
-
-Maybe pick up some gran turismo-esque systems like stat tuning, progress, etc.
-
-## Your role in this
-
-You are the tester and the customer. You want to help me out telling me what is broken, what is missing, and what is cool.
-
+| Cadence | What to expect |
+|---|---|
+| Weekly updates | I'll keep the GTA5Mods' release up to date weekly at best, monthly at worst. |
+| Issues | Opened on GitHub are read; fixes land in the next build, not in a hotfix. |
