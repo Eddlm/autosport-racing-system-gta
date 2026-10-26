@@ -2363,9 +2363,9 @@ namespace ARS
         //   blue           - nothing to say.
         // Green wins because the floor is the reason the line is on screen; the two families cannot overlap, since the floor
         // returns zero while the off-track clock is running.
-        Color ProjectionPathColour(float gsFloor)
+        Color ProjectionPathColour(float gsFloor, bool insideRegime)
         {
-            if (gsFloor > 0f)
+            if (insideRegime)
             {
                 float share = ARS.Clamp(gsFloor / GsLaneThrottleMaxFloor, 0f, 1f);
                 int dim = (int)(255f * (1f - share));
@@ -2378,8 +2378,9 @@ namespace ARS
             return Color.Blue;
         }
 
-        float GsLaneThrottleFloorValue()
+        float GsLaneThrottleFloorValue(out bool insideRegime)
         {
+            insideRegime = false;
             if (!ARS.GsLaneThrottleFloor) return 0f;
             // The off-track system owns the pedal while its clock runs: this floor works the inside of the road and must
             // never lift a throttle the projection is pulling down, nor stand in front of its brake. Two laws on one
@@ -2390,6 +2391,11 @@ namespace ARS
             if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= 0.5f * theoreticalGs) return 0f;
             int insideSign = Math.Sign(CurrentTrackPoint.Angle);
             if (insideSign == 0) return 0f;
+            // Every gate above is about the car and the moment, not about where the line points: passing them is what makes
+            // the regime "live", and it is reported even when the line sits at the centre and the floor is therefore zero.
+            // Without that distinction the gradient had no white end - the value that paints white was the value that
+            // switched the branch off (2026-10-26).
+            insideRegime = true;
             float projectedOffset = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
             // Room to the inside measured in metres: the centre is zero, the inner edge is 1, and the car's own width is not
             // lane the projection can use.
@@ -2471,9 +2477,9 @@ namespace ARS
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
             // The development floor bounds this pedal and nothing else: the brake keeps whatever the plan and the projection
             // asked for, because the rule is about not lifting, not about not slowing.
-            float gsFloor = GsLaneThrottleFloorValue();
+            float gsFloor = GsLaneThrottleFloorValue(out bool gsInsideRegime);
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
-            _projectionPathColor = ProjectionPathColour(gsFloor);
+            _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
 
             UpdateBrakeLearning();
 
