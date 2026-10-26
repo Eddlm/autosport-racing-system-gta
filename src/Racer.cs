@@ -1167,6 +1167,34 @@ namespace ARS
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
         // and walks back: the pedal path bounds its own step for the same reason.
         const float LaneMoverMaxStepSeconds = 0.1f;
+
+        // The outward move answers to how far the car's heading is from the track's own direction. Through a soft bend that
+        // opens into a corner the two pull apart, and the plain half cap let the car slide to the outer edge sideways while it
+        // was still going straight - the artefact the owner reported (2026-10-26). Below 5 deg the car is simply following the
+        // track and the lane is free; from 30 deg the outward move may only creep, and the ramp between the two is linear.
+        // Absolute values: a car crossing the track the other way is the same geometry mirrored.
+        const float OutsideLaneFreeAngleDeg = 5f;
+        const float OutsideLaneSlowAngleDeg = 30f;
+        const float OutsideLaneSlowRateMps = 0.5f;
+
+        float OutsideLaneRateCapMps(float crossingDegrees)
+        {
+            float angle = Math.Abs(crossingDegrees);
+            if (angle <= OutsideLaneFreeAngleDeg) return float.MaxValue;
+            if (angle >= OutsideLaneSlowAngleDeg) return OutsideLaneSlowRateMps;
+            float share = (angle - OutsideLaneFreeAngleDeg) / (OutsideLaneSlowAngleDeg - OutsideLaneFreeAngleDeg);
+            return OutsideLaneSlowRateMps + (LaneMoverSpeedCapMps * 0.5f - OutsideLaneSlowRateMps) * (1f - share);
+        }
+
+        // Flat, because the route carries grade: 1 m of rise over an 8 m lookahead reads as 7 deg of crossing, which would slow
+        // the lane on every slope. Same trap the steering bearing fell into - a horizontal question measured in 3D.
+        float FlatCrossingDegrees()
+        {
+            Vector3 track = new Vector3(CurrentTrackPoint.Direction.X, CurrentTrackPoint.Direction.Y, 0f);
+            Vector3 heading = new Vector3(Car.ForwardVector.X, Car.ForwardVector.Y, 0f);
+            if (track.LengthSquared() < 0.0001f || heading.LengthSquared() < 0.0001f) return 0f;
+            return Vector3.SignedAngle(track, heading, Vector3.WorldUp);
+        }
         // Under this a request is too close to the car's own lane for "the other side" to mean anything, and the aim would be
         // flipped to the car on noise.
         const float LaneCrossMinMeters = 0.1f;
@@ -1250,6 +1278,7 @@ namespace ARS
             // outer edge is a positioning choice the car makes with room to spare, and at the full rate it arrived as a sideways
             // lunge. The apex side keeps the full pair, because there the car is being placed for a corner it is already turning into.
             bool toOutside = _laneRequestReason == LaneReason.OutsideLine;
+            float outsideCrossDeg = toOutside ? FlatCrossingDegrees() : 0f;
             float moverAccel = toOutside ? LaneMoverAccelMps2 * 0.5f : LaneMoverAccelMps2;
             // Half the inertia on the way back, and only the acceleration: the cap is what bounds the visible lunge, so an
             // overshoot returns twice as promptly without ever moving faster than any other request.
@@ -1263,6 +1292,9 @@ namespace ARS
             float awayFromCar = Math.Abs(_carriedLane - steerRefOffset);
             float leash = ARS.Clamp((awayFromCar - LaneTaperNearMeters) / (LaneTaperFarMeters - LaneTaperNearMeters), 0f, 1f);
             moverSpeedCap *= 1f + leash * (LaneTaperCapShare - 1f);
+            // After the leash, so the creep is an absolute rate and the leash cannot shave it further: the point of the number
+            // is that the car visibly takes its time, not that it takes none.
+            if (toOutside) moverSpeedCap = Math.Min(moverSpeedCap, OutsideLaneRateCapMps(outsideCrossDeg));
             float requestRate = ARS.Clamp((request - _laneRequestPrev) / dt, -moverSpeedCap, moverSpeedCap);
             _laneRequestPrev = request;
 
@@ -1288,7 +1320,7 @@ namespace ARS
             if (Math.Abs(_laneRate) > 0.2f && Game.GameTime > _laneMoverLoggedAt)
             {
                 _laneMoverLoggedAt = Game.GameTime + 1000;
-                ARS.Log(ARS.LogImportance.Info, "Lane mover " + Name + ": asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + "), aimed " + _carriedLane.ToString("0.00") + ", rate " + _laneRate.ToString("0.00"));
+                ARS.Log(ARS.LogImportance.Info, "Lane mover " + Name + ": asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + "), aimed " + _carriedLane.ToString("0.00") + ", rate " + _laneRate.ToString("0.00") + (toOutside ? ", cross " + outsideCrossDeg.ToString("0.0") + " deg, cap " + moverSpeedCap.ToString("0.00") + " m/s" : ""));
             }
         }
 
