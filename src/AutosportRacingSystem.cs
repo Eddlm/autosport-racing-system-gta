@@ -50,7 +50,7 @@ namespace ARS
     // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip
     }
     public partial class ARS : Script
     {
@@ -219,6 +219,7 @@ namespace ARS
         { Options.ShowCheckpoints, false },
         { Options.ShowEdgeChevrons, false },
         { Options.ShowLeaderboard, true },
+        { Options.ShowDriverNames, true },
         { Options.ShowAiLapTimes, false },
         { Options.LockLaneCentre, false },
         { Options.ShowBumps, false },
@@ -1277,6 +1278,7 @@ namespace ARS
             AddDebugCheckbox(interfaceMenu, Options.ShowCheckpoints, "Show Corner Checkpoints", "Draw a marker at every corner apex so you can see where the track goes.");
             AddDebugCheckbox(interfaceMenu, Options.ShowEdgeChevrons, "Show Edge Chevrons", "Draw small blue chevrons along both track edges so you can read the track limits.");
             AddDebugCheckbox(interfaceMenu, Options.ShowLeaderboard, "Show Leaderboard", "Show the race leaderboard on screen, even when you are not on the grid.");
+            AddDebugCheckbox(interfaceMenu, Options.ShowDriverNames, "Show Driver Names", "The leaderboard names the driver instead of the car: the rival's name, the player's own for their row. Off shows the car model only.");
             AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show Rival Lap Times", "Announce each AI lap time as it crosses the line. One per racer per lap, so a full grid is a lot of them.");
 
             // Off and greyed: Load Track and Build Grid stay out of the Race menu, and the row cannot be turned back on.
@@ -2384,6 +2386,14 @@ namespace ARS
         // to put the four columns back on the board.
         const bool ShowPeakStats = false;
 
+        // The row's name column: the driver when the option is on, the car otherwise. A rival with no name assigned yet falls back to the
+        // car, so the column is never blank.
+        static string BoardRowName(Racer r)
+        {
+            if (DebugToggles[Options.ShowDriverNames] && !string.IsNullOrEmpty(r.Name)) return r.Name;
+            return r.CarModelName;
+        }
+
         static void DrawLeaderboard()
         {
             const float headerY = 0.06f;
@@ -2403,7 +2413,7 @@ namespace ARS
             // Header
             DrawText(new Vector2(colPos, headerY), "POS", hCol, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colPI, headerY), "PI", hCol, font, DrawTextAlign.Left, scale);
-            DrawText(new Vector2(colCar, headerY), "CAR", hCol, font, DrawTextAlign.Left, scale);
+            DrawText(new Vector2(colCar, headerY), DebugToggles[Options.ShowDriverNames] ? "DRIVER" : "CAR", hCol, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colBest, headerY), "BEST LAP", hCol, font, DrawTextAlign.Left, scale);
             if (ShowPeakStats)
             {
@@ -2422,7 +2432,7 @@ namespace ARS
                 Color c = r.Driver != null && r.Driver.IsPlayer ? Color.Yellow : Color.White;
                 DrawText(new Vector2(colPos, y), pos + "º", c, font, DrawTextAlign.Left, scale);
                 DrawText(new Vector2(colPI, y), r.VehicleData.TextPerformanceIndex, c, font, DrawTextAlign.Left, scale);
-                DrawText(new Vector2(colCar, y), r.CarModelName, c, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colCar, y), BoardRowName(r), c, font, DrawTextAlign.Left, scale);
                 DrawLapStats(r, y, c, font, scale, colBest, colAcc, colDec, colLat, colTop);
                 y += step;
                 pos++;
@@ -2435,7 +2445,7 @@ namespace ARS
                 Color c = r.Driver != null && r.Driver.IsPlayer ? Color.Yellow : Color.White;
                 DrawText(new Vector2(colPos, y), pos + "º", c, font, DrawTextAlign.Left, scale);
                 DrawText(new Vector2(colPI, y), r.VehicleData.TextPerformanceIndex, c, font, DrawTextAlign.Left, scale);
-                DrawText(new Vector2(colCar, y), r.CarModelName, c, font, DrawTextAlign.Left, scale);
+                DrawText(new Vector2(colCar, y), BoardRowName(r), c, font, DrawTextAlign.Left, scale);
                 DrawLapStats(r, y, c, font, scale, colBest, colAcc, colDec, colLat, colTop);
                 y += step;
                 pos++;
