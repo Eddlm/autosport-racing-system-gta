@@ -411,7 +411,8 @@ namespace ARS
         // The floor state read as the car crossed this corner's entrance.
         bool _brakeSampleFloorAtEntrance = false;
         bool _brakeSampleEntranceCrossed = false;
-        bool _brakeSampleApexNoticeSent = false;
+        // Lane offset to this corner's apex, refreshed every tick: the last one taken before the sample rolls over is the reading at the pass.
+        float _brakeSampleApexOffset = 0f;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
@@ -2676,6 +2677,11 @@ namespace ARS
             // during a maneuver or past its own entrance cannot leave the sample pointing at an older apex.
             if (NextApexNode != _brakeSampleApexNode)
             {
+                // The previous apex has just gone past - the picker only advances once it is behind - so the offset held from the last tick
+                // is the reading at the pass. It fires here rather than in the apex-pass branch because by the time that branch runs the
+                // sample already points at the next corner.
+                if (_brakeSampleApexNode >= 0)
+                    AnnounceBrakeAdjustment("Apex " + _brakeSampleApexOffset.ToString("+0.0;-0.0;0.0") + "m");
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleWasAirborne = false;
@@ -2687,12 +2693,16 @@ namespace ARS
                 _brakeSampleEntryHasCandidate = false;
                 _brakeSampleFloorAtEntrance = false;
                 _brakeSampleEntranceCrossed = false;
-                _brakeSampleApexNoticeSent = false;
                 _brakeOverNextSampleAt = 0;
                 // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
                 // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
                 // would be a second place the factor is written, judged without the slide and the pedal share.
             }
+
+            // Lane offset to this corner's apex, refreshed every tick, so the last one taken before the sample rolls over is the reading
+            // at the pass. Lateral only, the same signed offset everything else uses: positive to the right of travel.
+            if (_brakeSampleApexNode >= 0)
+                _brakeSampleApexOffset = ARS.SignedLaneOffset(Car.Position, ARS.TrackPoints[_brakeSampleApexNode].Position, ARS.TrackPoints[_brakeSampleApexNode].Direction);
 
             // Sampled on the learner's own clock, and the air penalty is checked over the whole corner rather than inside the braking
             // window: a car that takes off has already passed its braking target, which is exactly where the window ends.
@@ -2789,21 +2799,7 @@ namespace ARS
             // half the apex speed invalidates that queue, and the notice used to be swallowed with it - which is exactly what made the
             // reports look random. Every corner reports now, and a corner with no mark says so instead of staying silent.
             if (_brakeCommitApexNode < 0 && _brakeSampleApexNode >= 0 && HasPassedApex(_brakeSampleApexNode))
-            {
-                // How far the car was from the apex point as it went past it, on its own line: the verdict above is about the braking point,
-                // and this is about the line. Two facts, two notices, and neither has to be read out of the other.
-                if (!_brakeSampleApexNoticeSent)
-                {
-                    _brakeSampleApexNoticeSent = true;
-                    // Lateral, in lane units: how far the car was from the apex point across the road when it went past it. Signed the same
-                    // way every other lane offset is - positive to the right of travel - so the sign says which side it clipped.
-                    Vector3 apexPoint = ARS.TrackPoints[_brakeSampleApexNode].Position;
-                    TrackPoint apexTrack = ARS.TrackPoints[_brakeSampleApexNode];
-                    float toApex = ARS.SignedLaneOffset(Car.Position, apexPoint, apexTrack.Direction);
-                    if (!float.IsNaN(toApex)) AnnounceBrakeAdjustment("Apex " + toApex.ToString("+0.0;-0.0;0.0") + "m");
-                }
                 ScheduleBrakeCommit();
-            }
 
             if (ActiveManeuver.Type != ManeuverType.None) return;
 
