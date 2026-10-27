@@ -2680,14 +2680,11 @@ namespace ARS
                 // sample already points at the next corner.
                 if (_brakeSampleApexNode >= 0)
                 {
-                    // How close the car was to the INSIDE edge as it went past the apex, in metres: zero is touching the inside, larger means it
-                    // clipped wide. The inside is the negative lane side, the same convention the lane floor uses - Angle is positive to the left,
-                    // lane offsets are positive to the right - so the sign of the turn picks the edge, in the apex node's own frame.
+                    // Distance to the apex, the simple way: the track's half width against the car's lane offset. Zero is on the inside
+                    // edge, positive is road still left between the car and it, negative is past it.
                     TrackPoint apexTrack = ARS.TrackPoints[_brakeSampleApexNode];
-                    float carLane = ARS.SignedLaneOffset(Car.Position, apexTrack.Position, apexTrack.Direction);
-                    float insideLane = -Math.Sign(apexTrack.Angle) * apexTrack.TrackHalfWidth;
-                    float gap = Math.Abs(insideLane - carLane);
-                    if (!float.IsNaN(gap)) AnnounceBrakeAdjustment("Apex inside " + gap.ToString("0.0") + "m");
+                    float lane = Math.Abs(ARS.SignedLaneOffset(Car.Position, apexTrack.Position, apexTrack.Direction));
+                    AnnounceBrakeAdjustment("Apex " + (apexTrack.TrackHalfWidth - lane).ToString("0.0") + "m");
                 }
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
