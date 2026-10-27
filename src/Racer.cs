@@ -1556,10 +1556,13 @@ namespace ARS
             }
             float clockBoostMph = ARS.Clamp(_lineDecelG * LineClockBrakeMphPerG, -LineClockBrakeCapMph, LineClockBrakeCapMph);
             float secondsToApex = metresToApex / Math.Max(_lineClockMps + ARS.MphToMps(clockBoostMph), 1f);
-            // The move lasts exactly as long as 50 m takes at the speed sampled at 50 m: the car's own approach sets the tempo, and the
-            // outside-to-inside sweep is done by the time it would have covered that distance - which, because it is braking, lands a little
+            // The move lasts exactly as long as gate minus end takes at the speed sampled at the gate: the car's own approach sets the tempo,
+            // and the outside-to-inside sweep is done by the time it would have covered that span - which, because it is braking, lands a little
             // before the apex. apexCommitted below is the backstop.
-            float blendSeconds = Math.Max(blendStartMeters / _lineClockMps, 0.1f);
+            // The move has to cover gate minus end, not the whole gate: timing it over the gate put phase 1 one width late, which read as the
+            // inside arriving after the metres asked for - worst on a constant-radius corner, where the speed does not change and nothing
+            // hides the error.
+            float blendSeconds = Math.Max((blendStartMeters - blendEndMeters) / _lineClockMps, 0.1f);
             float blendElapsed = _lineBlendStartAt > 0 ? (Game.GameTime - _lineBlendStartAt) / 1000f : 0f;
             float linePhase = ARS.Clamp(blendElapsed / blendSeconds, 0f, 1f);
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
