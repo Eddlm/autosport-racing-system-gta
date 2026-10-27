@@ -411,11 +411,9 @@ namespace ARS
         // The floor state read as the car crossed this corner's entrance.
         bool _brakeSampleFloorAtEntrance = false;
         bool _brakeSampleEntranceCrossed = false;
-        // Closest approach to this corner's apex: the lane offset and the half width at the tick where the car was nearest the apex point.
-        // Read at the rollover instead, the apex is already tens of metres behind and the perpendicular to its old tangent means nothing.
-        float _brakeSampleApexBestLane = 0f;
-        float _brakeSampleApexBestHalf = 0f;
-        float _brakeSampleApexBestDistance = float.MaxValue;
+        // Room left to the edge at the closest approach to this corner's apex. Two floats, nothing else.
+        float _brakeSampleApexGap = 0f;
+        float _brakeSampleApexClosest = float.MaxValue;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
@@ -2683,8 +2681,8 @@ namespace ARS
                 // The previous apex has just gone past, so this is the frame where the passed corner is still known by name. The reading comes
                 // from the closest approach tracked while approaching, not from here: by now the apex is tens of metres behind, and the
                 // perpendicular to its old tangent means nothing in a tight corner.
-                if (_brakeSampleApexNode >= 0 && _brakeSampleApexBestDistance < float.MaxValue)
-                    AnnounceBrakeAdjustment("Apex " + (_brakeSampleApexBestHalf - _brakeSampleApexBestLane).ToString("0.0") + "m");
+                if (_brakeSampleApexNode >= 0 && _brakeSampleApexClosest < float.MaxValue)
+                    AnnounceBrakeAdjustment("Apex " + _brakeSampleApexGap.ToString("0.0") + "m");
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleWasAirborne = false;
@@ -2696,7 +2694,7 @@ namespace ARS
                 _brakeSampleEntryHasCandidate = false;
                 _brakeSampleFloorAtEntrance = false;
                 _brakeSampleEntranceCrossed = false;
-                _brakeSampleApexBestDistance = float.MaxValue;
+                _brakeSampleApexClosest = float.MaxValue;
                 _brakeOverNextSampleAt = 0;
                 // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
                 // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
@@ -2704,17 +2702,15 @@ namespace ARS
             }
 
 
-            // Closest approach to this corner's apex, tracked every tick: the lane offset and the half width from the tick where the car was
-            // nearest the apex point. That tick is the pass, and nothing is read after it.
+            // Room to the edge at the closest approach to the apex: one comparison, one subtraction, read where the car is nearest the apex.
             if (_brakeSampleApexNode >= 0)
             {
                 TrackPoint apexTrack = ARS.TrackPoints[_brakeSampleApexNode];
                 float approach = Car.Position.DistanceTo(apexTrack.Position);
-                if (approach < _brakeSampleApexBestDistance)
+                if (approach < _brakeSampleApexClosest)
                 {
-                    _brakeSampleApexBestDistance = approach;
-                    _brakeSampleApexBestLane = Math.Abs(ARS.SignedLaneOffset(Car.Position, apexTrack.Position, apexTrack.Direction));
-                    _brakeSampleApexBestHalf = apexTrack.TrackHalfWidth;
+                    _brakeSampleApexClosest = approach;
+                    _brakeSampleApexGap = apexTrack.TrackHalfWidth - Math.Abs(ARS.SignedLaneOffset(Car.Position, apexTrack.Position, apexTrack.Direction));
                 }
             }
 
