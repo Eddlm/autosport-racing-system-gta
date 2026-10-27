@@ -1229,7 +1229,7 @@ namespace ARS
         // track - and it has to happen inside the blend's 1.5 s, which needs 4 * 18 / 1.5^2 = 32 m/s^2 to start and stop
         // within it. At 14 the aim could not follow the ramp at all, and a reversal first had to spend 24 / 14 = 1.7 s
         // killing its own speed, longer than the whole window.
-        const float LaneMoverAccelMps2 = 26f;
+        const float LaneMoverAccelMps2 = 40f;
         const float LaneMoverSpeedCapMps = 24f;
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
         // and walks back: the pedal path bounds its own step for the same reason.
@@ -1241,7 +1241,7 @@ namespace ARS
         // The leash slows the lane down as it leaves the car; it never stops it, or the car could not be led anywhere at all.
         const float LaneTaperNearMeters = 2f;
         const float LaneTaperFarMeters = 4f;
-        const float LaneTaperCapShare = 0.5f;
+        const float LaneTaperCapShare = 0.8f;
 
         // Carries the aim onto the request. The rate is bounded by the acceleration, which is what stops a
         // request that flips inside half a second from stepping the lane; the arrival term decelerates on the rate
