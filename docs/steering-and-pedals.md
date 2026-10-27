@@ -8,7 +8,7 @@ How the front-slip guard is built today, what each number means, the evidence be
 |---|---|---|
 | `capShare` | what counts as "the peak" this tick: `Peak Slip Share (0.90) x slow-corner allowance`. `InnerPct` is normalised against it. | none — physics and settings |
 | `factor` | how much of the request survives: `Clamp(100 / InnerPct, SlipCutFloor, 1)`. | none — recomputed every tick |
-| `clampTarget` | the angle the wheel is allowed. Above the target (`InnerPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. | none — recomputed every tick |
+| `clampTarget` | the angle the wheel is allowed. Above the target (`InnerPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. Then scaled by **Open Up on Throttle** (`Development`, 10-100 %, ships 100 = off): the clamp falls to that share of itself by half pedal. It scales the clamp and not `capShare`, because `InnerPct` also feeds the throttle cap and scaling it there closed the pedal instead of the wheel. | none — recomputed every tick |
 | `chasingClamp` | the ceiling actually applied, `min(lock, chasingClamp)`. Born at `clampTarget` the first time the guard can speak, and the **only state** in the system. | closes exponentially, opens linearly (below) |
 
 The steering factor:
