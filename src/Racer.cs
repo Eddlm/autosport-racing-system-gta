@@ -2432,6 +2432,7 @@ namespace ARS
             _lineCornerNode = -1;
             _lineClockNode = -1;
             _lineClockMps = 0f;
+            _lineAlongPrev = 0f;
             Control.ThrottleReasonLevel = 1f;
             Control.BrakeReason = BrakeReason.Plan;
             Control.BrakeReasonLevel = 1f;
