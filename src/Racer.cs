@@ -1374,8 +1374,8 @@ namespace ARS
         // the apex, and the outside needs no constant of its own because everything beyond the ramp's start is already the
         // outer clamp - the platform IS the clamp. It was being eaten because the clock ran on the apex's speed, which
         // measures a slow corner's window in metres too short for a fast car to reach the clamp in time.
-        // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
-        // needs to get out there and hold it.
+        // How far before the apex the corner starts asking for the outside at all: IdealLineWindowMeters of route, room for the car
+        // to get out there and hold the clamp before the blend begins.
         // The two halves need room, and room on this road is measured in metres: the line exists inside IdealLineWindowMeters of
         // them, the outside holds the clamp until the gate, and the ramp runs from six widths out to one.
         // The outside is a distance decision and the apex is not. Placing the car on the outer edge is done with room to spare
