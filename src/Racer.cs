@@ -421,6 +421,8 @@ namespace ARS
         float _brakeCommitOverSeconds = 0f;
         float _brakeCommitAirPenalty = 0f;
         float _brakeCommitEntryMetres = 0f;
+        bool _brakeCommitEntryMeasured = false;
+        bool _brakeCommitSawAboveApex = false;
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
@@ -2768,8 +2770,8 @@ namespace ARS
 
             // A passed corner always gets its verdict, whatever the held queue did this tick. A corner-table rebuild or a car slowed to
             // half the apex speed invalidates that queue, and the notice used to be swallowed with it - which is exactly what made the
-            // reports look random. The mark has to exist: with no crossing there is nothing to report.
-            if (_brakeCommitApexNode < 0 && _brakeSampleApexNode >= 0 && _brakeSampleEntryMeasured && HasPassedApex(_brakeSampleApexNode))
+            // reports look random. Every corner reports now, and a corner with no mark says so instead of staying silent.
+            if (_brakeCommitApexNode < 0 && _brakeSampleApexNode >= 0 && HasPassedApex(_brakeSampleApexNode))
                 ScheduleBrakeCommit();
 
             if (ActiveManeuver.Type != ManeuverType.None) return;
@@ -2792,6 +2794,8 @@ namespace ARS
             _brakeCommitOverSeconds = _brakeSampleOverSeconds;
             _brakeCommitAirPenalty = _brakeSampleAirPenalty;
             _brakeCommitEntryMetres = _brakeSampleEntryMetres;
+            _brakeCommitEntryMeasured = _brakeSampleEntryMeasured;
+            _brakeCommitSawAboveApex = _brakeSampleSawAboveApex;
         }
 
         void CommitBrakeLearning()
@@ -2801,7 +2805,11 @@ namespace ARS
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
             float overSeconds = _brakeCommitOverSeconds;
             float airPenalty = _brakeCommitAirPenalty;
-            float entryMetres = _brakeCommitEntryMetres;
+            // Every verdict says where the mark landed, or why there is none: a corner that never needed the bar and one the car never
+            // came down to are different facts, and both are worth more than silence.
+            string detail = _brakeCommitEntryMeasured
+                ? _brakeCommitEntryMetres.ToString("+0;-0;0") + "m"
+                : (_brakeCommitSawAboveApex ? "never slowed" : "no braking");
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
@@ -2811,7 +2819,7 @@ namespace ARS
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
                 if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment(entryMetres);
+                AnnounceBrakeAdjustment(detail);
                 return;
             }
             // One measure, one target, and both directions scale alike: the step is proportional to how far the corner landed from
@@ -2827,15 +2835,15 @@ namespace ARS
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
             // braking that corner costs.
-            AnnounceBrakeAdjustment(entryMetres);
+            AnnounceBrakeAdjustment(detail);
         }
 
         // One line per verdict: the car and how many miles an hour over the speed the corner asks for it arrived at the entrance.
         // Nothing else - the rest of the numbers belong in the log, not on the screen.
-        void AnnounceBrakeAdjustment(float entryMetres)
+        void AnnounceBrakeAdjustment(string detail)
         {
             if (!ARS.BrakeLearningNotify) return;
-            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + entryMetres.ToString("+0;-0;0") + "m");
+            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + detail);
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
