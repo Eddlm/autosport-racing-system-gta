@@ -2157,11 +2157,17 @@ namespace ARS
         // which is one frame against a rule that is meant to be driven by feel.
 
 
+        // The pedal travel the reduction is spread over: half. Above it the floor already stands.
+        const float OpensUpThrottleSpanShare = 0.5f;
+
         float OpensUpSlipScale()
         {
             float floorPct = ARS.Clamp(ARS.OpenUpOnThrottleFloorPct, 0, 100) / 100f;
             if (floorPct >= 1f) return 1f;
-            return 1f - (1f - floorPct) * ARS.Clamp(Control.Throttle, 0f, 1f);
+            // The reduction runs out at half pedal: the front tyre is already spending what it has by then, and the top half of the travel was
+            // only repeating the same cut on a car that had stopped asking for more.
+            float travel = ARS.Clamp(Control.Throttle / OpensUpThrottleSpanShare, 0f, 1f);
+            return 1f - (1f - floorPct) * travel;
         }
 
         float GeometrySteerCeiling(float fwdSpeed)
