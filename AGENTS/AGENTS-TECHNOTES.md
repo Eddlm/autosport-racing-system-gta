@@ -600,6 +600,7 @@ Every `Info` call site, and the volume each one produced in a real session, is a
 - Sub-200 ms lags don't matter; don't restructure call order to kill one-frame quirks.
 - **Default branch is `master`** (the `2026` branch is redundant). Rollback points: **`54b33a7`** = last commit before the live corner-creation experiments; tag **`checkpoint-pre-gs-aware`** = before the Gs-aware preview steering experiment.
 - **A dev build number auto-increments per compiled build** (`GenerateBuildNumber` in `NewRacingSystem.csproj`) and the init banner prints it beside the DLL's write time. It is deliberately **not** the assembly version — that stays the release identity and only moves by hand — and its `Inputs`/`Outputs` make it skip exactly when `CoreCompile` does. The counter lives in a gitignored `build\` so a build never dirties the tree; CI supplies its own via `-p:BuildNumber`.
+- **A skipped target still evaluates its `PropertyGroup`s.** Only the *tasks* are suppressed by `Inputs`/`Outputs`, so `ReadLinesFromFile` does not run while the arithmetic below it does — `[MSBuild]::Add(0, 1)` then fabricates a `BuildNumber=1` that any later target reads as truth. `GenerateBuildNumber` now leaves `BuildNumber` empty when its read produced no digits, `GenerateBuildInfo` reads `build-number.txt` itself instead of trusting the property, and an `Error` fails the build when neither yields digits. Symptom to recognise: `AssemblyFileVersion` 0.9.0.1 while the counter says 1287.
 
 ## Code map
 

@@ -146,7 +146,7 @@
       <_StoredBuildNumberDigits>$([System.Text.RegularExpressions.Regex]::Match($(_StoredBuildNumberText), '[0-9]+').Value)</_StoredBuildNumberDigits>
       <_StoredBuildNumberValue Condition="'$(_StoredBuildNumberDigits)' == ''">0</_StoredBuildNumberValue>
       <_StoredBuildNumberValue Condition="'$(_StoredBuildNumberDigits)' != ''">$(_StoredBuildNumberDigits)</_StoredBuildNumberValue>
-      <BuildNumber Condition="'$(BuildNumber)' == ''">$([MSBuild]::Add($(_StoredBuildNumberValue), 1))</BuildNumber>
+      <BuildNumber Condition="'$(BuildNumber)' == '' AND '$(_StoredBuildNumberDigits)' != ''">$([MSBuild]::Add($(_StoredBuildNumberValue), 1))</BuildNumber>
       <_BuildNumberGenerated>true</_BuildNumberGenerated>
     </PropertyGroup>
 
@@ -161,15 +161,18 @@
        GenerateBuildNumber is skipped when the sources are unchanged, and a skipped target sets no properties, so
        the value is re-read from the counter file in that case: the attribute then matches the DLL already on disk. -->
   <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile" Condition="'$(DesignTimeBuild)' != 'true'">
-    <ReadLinesFromFile File="$(BuildNumberFile)" Condition="'$(BuildNumber)' == '' AND Exists('$(BuildNumberFile)')">
-      <Output TaskParameter="Lines" ItemName="_BuildInfoNumber" />
+    <ReadLinesFromFile File="$(BuildNumberFile)" Condition="Exists('$(BuildNumberFile)')">
+      <Output TaskParameter="Lines" PropertyName="_BuildInfoFileValue" />
     </ReadLinesFromFile>
     <PropertyGroup>
-      <_BuildInfoText>$([System.String]::Copy('$(BuildNumber)@(_BuildInfoNumber)').Trim())</_BuildInfoText>
-      <_BuildInfoDigits>$([System.Text.RegularExpressions.Regex]::Match($(_BuildInfoText), '[0-9]+').Value)</_BuildInfoDigits>
-      <_BuildInfoValue Condition="'$(_BuildInfoDigits)' == ''">0</_BuildInfoValue>
-      <_BuildInfoValue Condition="'$(_BuildInfoDigits)' != ''">$(_BuildInfoDigits)</_BuildInfoValue>
+      <_BuildInfoText Condition="'$(_BuildInfoFileValue)' != ''">$(_BuildInfoFileValue)</_BuildInfoText>
+      <_BuildInfoText Condition="'$(_BuildInfoText)' == ''">$(BuildNumber)</_BuildInfoText>
+      <_BuildInfoDigits>$([System.Text.RegularExpressions.Regex]::Match('$(_BuildInfoText)', '[0-9]+').Value)</_BuildInfoDigits>
+      <_BuildInfoValue>$(_BuildInfoDigits)</_BuildInfoValue>
     </PropertyGroup>
+    <!-- A failed read used to fall back to 0 and then, one target later, to a fabricated 1 - which shipped as
+         AssemblyFileVersion 0.9.0.1 while the counter said 1287. Missing digits now stop the build. -->
+    <Error Condition="'$(_BuildInfoValue)' == ''" Text="No build number: $(BuildNumberFile) held no digits and no BuildNumber property was passed, so the assembly would carry a version that is not a build." />
     <WriteLinesToFile File="$(MSBuildProjectDirectory)\obj\BuildInfo.g.cs"
                       Lines="[assembly: System.Reflection.AssemblyFileVersion(&quot;0.9.0.$(_BuildInfoValue)&quot;)]"
                       Overwrite="true" WriteOnlyWhenDifferent="true" />
