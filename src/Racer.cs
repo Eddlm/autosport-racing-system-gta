@@ -1223,12 +1223,12 @@ namespace ARS
         // crosses two bounds over 2R·leadAngle metres, which asks about 8 m/s and 21 m/s^2 at a supercar's own apex
         // speed and 6.4 m/s and 13.6 m/s^2 at a vanilla car's — self-similar across radii, because a car takes each
         // corner at its own limit — so the cap has to sit above the line's own rate and the acceleration is the only
-        // lunge knob. At the shipped 26 the aim tracks the line inside a centimetre, and a 6 m request valid for half a second moves 3.4 m
+        // lunge knob. At the shipped 40 the aim tracks the line inside a centimetre, and a 6 m request valid for half a second moves 3.4 m
         // where it used to step the whole way.
         // Sized from the line's own geometry, not by feel: the outside-inside traversal is 2 * safeBound - 18 m on a wide
-        // track - and it has to happen inside the blend's 1.5 s, which needs 4 * 18 / 1.5^2 = 32 m/s^2 to start and stop
+        // track - and it has to happen inside the blend's 1.75 s, which needs 4 * 18 / 1.75^2 = 23.5 m/s^2 to start and stop
         // within it. At 14 the aim could not follow the ramp at all, and a reversal first had to spend 24 / 14 = 1.7 s
-        // killing its own speed, longer than the whole window.
+        // killing its own speed, longer than the whole window. It ships at 40: the aim now tracks the ramp inside its window.
         const float LaneMoverAccelMps2 = 40f;
         const float LaneMoverSpeedCapMps = 24f;
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
