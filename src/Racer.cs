@@ -222,6 +222,8 @@ namespace ARS
         // The speed the car carried when it entered this corner's out-in window, frozen for the whole manoeuvre: the clock then says the
         // same thing every lap, and braking, traffic or a throttle cut can no longer move where the blend opens.
         int _lineClockNode = -1;
+        // Tick at which the blend opened for this apex: the move's duration is measured from here.
+        int _lineBlendStartAt;
         // The clock follows the car's own braking, a little: a car that is shedding speed will reach the apex later than the cached entry
         // speed says, so the line is allowed to slow with it. 0.1 mph per 0.1 g, and never more than a mile an hour either way.
         const float LineClockBrakeMphPerG = 2f;
@@ -1540,15 +1542,22 @@ namespace ARS
             // The clock runs on the speed the car carried when it ENTERED the window, latched once per corner. The live speed moved the
             // blend opening with braking and traffic; the apex speed was too slow and shortened the manoeuvre to a third of its real time.
             // The entry speed is the one number that is both honest about the approach and stable for the whole corner.
-            if (_lineClockNode != apexNode) { _lineClockNode = apexNode; _lineClockMps = 0f; }
-            // Sampled at the gate the move actually starts from, not at the 300 m window: the speed here is the one the car is approaching
-            // at, after the brake has begun. It feeds the debug line only now - the phase itself is metres.
+            if (_lineClockNode != apexNode) { _lineClockNode = apexNode; _lineClockMps = 0f; _lineBlendStartAt = 0; }
+            // Sampled at the gate the move actually starts from: the speed here is the one the car is approaching at, after the brake has
+            // begun. That sample sets the move's duration - 50 m at this speed - and the phase is then simply the time elapsed over it.
             if (_lineClockMps <= 0f && metresToApex >= 0f && metresToApex <= IdealLineBlendStartMeters)
+            {
                 _lineClockMps = Math.Max(speedMps, 1f);
+                _lineBlendStartAt = Game.GameTime;
+            }
             float clockBoostMph = ARS.Clamp(_lineDecelG * LineClockBrakeMphPerG, -LineClockBrakeCapMph, LineClockBrakeCapMph);
             float secondsToApex = metresToApex / Math.Max(_lineClockMps + ARS.MphToMps(clockBoostMph), 1f);
-            float linePhase = ARS.Clamp((IdealLineBlendStartMeters - metresToApex)
-                / Math.Max(IdealLineBlendStartMeters - IdealLineBlendEndMeters, 0.01f), 0f, 1f);
+            // The move lasts exactly as long as 50 m takes at the speed sampled at 50 m: the car's own approach sets the tempo, and the
+            // outside-to-inside sweep is done by the time it would have covered that distance - which, because it is braking, lands a little
+            // before the apex. apexCommitted below is the backstop.
+            float blendSeconds = Math.Max(IdealLineBlendStartMeters / _lineClockMps, 0.1f);
+            float blendElapsed = _lineBlendStartAt > 0 ? (Game.GameTime - _lineBlendStartAt) / 1000f : 0f;
+            float linePhase = ARS.Clamp(blendElapsed / blendSeconds, 0f, 1f);
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
             // would reopen a blend that has already closed; the phase is ratcheted per apex, so the demand can only move inward and
             // a new corner starts from the outside.
