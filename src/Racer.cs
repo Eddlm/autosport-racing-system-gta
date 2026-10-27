@@ -1380,11 +1380,11 @@ namespace ARS
         // and does not change with speed, so the window and the plateau stay in metres of route.
         const float IdealLineWindowMeters = 300f;
         // Clearance from the edges, and the personal bias. The outside line keeps half a metre from the outer edge; the lean keeps a
-        // full metre from the inner one. Each car also rolls its own pull-in of 0..LaneBiasMaxMeters, once per corner and held until
-        // it passes, so a field does not stack itself on one line - and never enough to reach the centre, which the clamp guarantees.
+        // full metre from the inner one. Each car also rolls its own bias of +/-LaneBiasMaxMeters, once per corner and held until it passes,
+        // so a field does not stack itself on one line: half a metre either side of the same outside, never the four it used to draw.
         const float LaneOutsideGapMeters = 0.5f;
         const float LaneInsideGapMeters = 1f;
-        const float LaneBiasMaxMeters = 4f;
+        const float LaneBiasMaxMeters = 0.5f;
         // How much nearer another corner must be before it takes the line away from the one already adopted. A few metres of
         // hysteresis is enough: two apexes that swap places tick after tick do so by less than that.
         const float LineApexStickyMeters = 30f;
@@ -1484,7 +1484,7 @@ namespace ARS
             if (_lineBiasNode != apexNode)
             {
                 _lineBiasNode = apexNode;
-                _lineBiasMeters = ARS.GetRandomInt(0, (int)(LaneBiasMaxMeters * 100f) + 1) / 100f;
+                _lineBiasMeters = ARS.GetRandomInt(-(int)(LaneBiasMaxMeters * 100f), (int)(LaneBiasMaxMeters * 100f) + 1) / 100f;
             }
             float outsideBound = Math.Max(safeBound - LaneOutsideGapMeters - _lineBiasMeters, 0f);
             // Corner-commit: hold the defend/dive line for the card's whole life, but only on the corner the card was armed
