@@ -169,13 +169,13 @@ namespace ARS
         // Steer trace: one Info line per tick with the ask, the axis, the yaw and the front slip, for measuring the loop's delay.
         // Off unless asked: it writes ~30 lines a second.
         public static bool SteerTrace = false;
-        // Development experiment (owner, 2026-10-26): with the car already pulling over half the lateral grip it has, and the
-        // projected line further inside than the car itself, the throttle may not fall below 0.8. It bounds the pedal, never the plan,
-        // and the inside test is what lets go on the corner exit. Off by default: it exists to be felt, not shipped.
-        public static bool GsLaneThrottleFloor = false;
-        // Development experiment: the share of the normal slip allowance left at full pedal, in per cent. 100 is the rule doing nothing,
-        // 40 lets the wheel open to two fifths of its allowance under power.
-        public static int OpenUpOnThrottleFloorPct = 100;
+        // Corner exit aid (Rival Pace): with the car already pulling over half the lateral grip it has, and the projected line
+        // further inside than the car itself, the throttle may not fall below a floor that grows toward the inside edge. It
+        // bounds the pedal, never the plan, and the inside test is what lets go on the corner exit. Ships on.
+        public static bool GsLaneThrottleFloor = true;
+        // The share of the normal slip allowance left at full pedal, in per cent. 100 is the rule doing nothing, 60 lets the
+        // wheel open to three fifths of its allowance under power. Ships at 60.
+        public static int OpenUpOnThrottleFloorPct = 60;
         public static readonly string[] OpenUpFloorChoices = { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" };
         // Which source the front-slip limiter reads: true takes the tyres' side slip from the wheel memory, false derives the
         // demand from the car's own geometry and grip. Same limiter, same scale, different numerator.
@@ -1118,7 +1118,7 @@ namespace ARS
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
 
-            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "While the car pulls over a third of its lateral grip and the projected line heads for the inside of the road, the throttle may not fall below a floor that ramps from nothing at the track centre to full throttle at the inside edge, always within what TCS and stability allow. Experiment: on the corner exit the projection points down the straight and it lets go.", GsLaneThrottleFloor);
+            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "Corner exit aid: while the line ahead points at the inside of the road, the throttle cannot fall below a floor that grows toward the inside edge and never exceeds what TCS and stability allow.", GsLaneThrottleFloor);
             gsLaneFloorItem.CheckboxChanged += (sender, args) =>
             {
                 GsLaneThrottleFloor = gsLaneFloorItem.Checked;
