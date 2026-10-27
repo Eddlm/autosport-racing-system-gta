@@ -2113,7 +2113,7 @@ namespace ARS
             // One owner for how much of the tyre's peak slip is allowed: the menu's Peak Slip Share. 1.00 cuts at the peak, below it
             // cuts before the peak, above it lets the tyre slide, and 2.00 is past anything but a real slide. Clamped because a
             // hand-edited ini could carry a zero and the division would poison the whole reading with NaN.
-            float capShare = Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed) * OpensUpSlipScale();
+            float capShare = Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed);
             s.InnerPct = 100f * rawInner / capShare;
             s.RearPct = slips.Count >= 4
                 ? 100f * Math.Max(Math.Abs(slips[2]), Math.Abs(slips[3])) / capShare
@@ -2136,7 +2136,7 @@ namespace ARS
             if (speed < FrontSlipTheoryMinSpeedMps || gripGs <= 0.01f || wheelBase <= 0.5f) return s;
 
             s.Readable = true;
-            float available = gripGs * FrontSlipGravity * Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed) * OpensUpSlipScale();
+            float available = gripGs * FrontSlipGravity * Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed);
 
             // The inner wheel is the signal, as in the measured source, and its angle IS the command: the file's own convention
             // gives the outer wheel 0.75 of it (EngineSteerWheelOuterShare), so the inner turns more and takes the tighter line.
@@ -2152,9 +2152,10 @@ namespace ARS
             return s;
         }
 
-        // Development experiment: with Open Up on Throttle on, the slip the limit allows shrinks with the pedal, from what it is today at
-        // zero throttle down to OpensUpSlipFloorShare at full. The pedal read here is the previous tick's - it is computed after the wheel -
-        // which is one frame against a rule that is meant to be driven by feel.
+        // Development experiment: with Open Up on Throttle on, the steering clamp the car is allowed shrinks with the pedal, from what it is
+        // today at zero throttle down to OpensUpThrottleFloorPct at full. It scales the CLAMP, not the slip allowance: the allowance feeds
+        // InnerPct, which the throttle cap also reads, so scaling it there lifted the car instead of just opening the wheel.
+        // The pedal read here is this tick's: the pedals are computed before this limiter runs.
 
 
         // The pedal travel the reduction is spread over: half. Above it the floor already stands.
@@ -2255,6 +2256,10 @@ namespace ARS
                     ? Math.Abs(requestedSteer) * factor
                     : VehicleData.SteeringLock;
                 _clampTargetDeg = clampTarget;
+                // Open Up on Throttle: the wheel is what gives way under power, and only the wheel. Scaling the slip allowance itself would also
+                // close the pedal - InnerPct feeds the throttle cap at ConvertSpeedToPedals - which is the opposite of the trade the rule exists
+                // for: give up steering angle, keep the acceleration.
+                _clampTargetDeg *= OpensUpSlipScale();
                 float chase = float.IsNaN(_chasingClampDeg) ? clampTarget : _chasingClampDeg;
                 // The closing rate follows the severity of the overshoot, the opening is a flat rate: the harder the tyre is past
                 // its peak the faster the gate shuts, and it always reopens carefully rather than snapping wide.
@@ -2581,9 +2586,8 @@ namespace ARS
             float throttleBeforeFloor = Control.Throttle;
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
             _gsFloorActiveThisTick = Control.Throttle > throttleBeforeFloor;
-            // Development read-out, on the focused racer and only while the toggle is on: how far the slip allowance has been pulled below
-            // the ceiling it would have had without the rule, in per cent. It reads the pedal this tick just wrote, so the number is the one
-            // the next steering pass will use.
+            // Development read-out, on the focused racer and only while the list is set: how far the steering clamp has been pulled below the
+            // ceiling it would have had without the rule, in per cent. It reads the pedal this tick just wrote.
             //
             // It cannot live on the player's car: this whole method only runs under !ControlledByPlayer, because the human drives that one.
             if (ARS.OpenUpOnThrottleFloorPct < 100 && ARS.DebugFocusRacer == this)
