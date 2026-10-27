@@ -1327,7 +1327,7 @@ namespace ARS
             AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show Rival Lap Times", "Announce each AI lap time as it crosses the line. One per racer per lap, so a full grid is a lot of them.");
 
             // Off and greyed: Load Track and Build Grid stay out of the Race menu, and the row cannot be turned back on.
-            // The stored key is ignored at load for the same reason the ABS row ignores its own.
+            // The stored key is ignored at load because the switch that would honour it cannot be reached.
             NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Show Track & Grid Rows", "Load Track and Build Grid in the Race menu. Off and not changeable.", false);
             stagedSpawnsItem.Enabled = false;
             stagedSpawnsItem.CheckboxChanged += (sender, args) =>
