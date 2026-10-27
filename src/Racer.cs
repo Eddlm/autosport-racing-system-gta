@@ -1388,10 +1388,10 @@ namespace ARS
         // How much nearer another corner must be before it takes the line away from the one already adopted. A few metres of
         // hysteresis is enough: two apexes that swap places tick after tick do so by less than that.
         const float LineApexStickyMeters = 30f;
-        // Moving from the outside to the inside is a time decision: 3 s to the apex the car starts coming in, 1 s it is on the
-        // inside. In metres that stretch would be 20 m at 25 km/h and 80 m at 100, which is why the distance blend arrived
-        // early when slow and late when fast.
-        const float IdealLineBlendStartSeconds = 2f;
+        // Moving from the outside to the inside is a time decision, because in metres the same stretch would be 20 m at 25 km/h and 80 m
+        // at 100. It was 2 s, and at 40 m/s that is 80 m before the apex: the car reached the inside with road still to run and had to
+        // counter-steer back off it. 1.75 starts the move about ten metres later at speed, which is the few metres the driver asked for.
+        const float IdealLineBlendStartSeconds = 1.75f;
         const float IdealLineBlendEndSeconds = 0.25f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
