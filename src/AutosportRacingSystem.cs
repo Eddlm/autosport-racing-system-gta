@@ -173,8 +173,10 @@ namespace ARS
         // projected line further inside than the car itself, the throttle may not fall below 0.8. It bounds the pedal, never the plan,
         // and the inside test is what lets go on the corner exit. Off by default: it exists to be felt, not shipped.
         public static bool GsLaneThrottleFloor = false;
-        // Development experiment: the permitted slip shrinks as the throttle is pressed, down to 60 % of the current allowance at full pedal.
-        public static bool OpenUpOnThrottle = false;
+        // Development experiment: the share of the normal slip allowance left at full pedal, in per cent. 100 is the rule doing nothing,
+        // 40 lets the wheel open to two fifths of its allowance under power.
+        public static int OpenUpOnThrottleFloorPct = 100;
+        public static readonly string[] OpenUpFloorChoices = { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" };
         // Which source the front-slip limiter reads: true takes the tyres' side slip from the wheel memory, false derives the
         // demand from the car's own geometry and grip. Same limiter, same scale, different numerator.
         public static bool SlipFromMemory = true;
@@ -1485,13 +1487,15 @@ namespace ARS
             };
             developmentMenu.Add(gsLaneFloorItem);
 
-            NativeCheckboxItem openUpItem = new NativeCheckboxItem("Open Up on Throttle", "The slip the wheel is allowed to use shrinks with the throttle: at rest it is the allowance the car has today, and at full pedal it is 40 % of it. Experiment: asking for power never asks for more steering.", OpenUpOnThrottle);
-            openUpItem.CheckboxChanged += (sender, args) =>
+            NativeListItem<string> openUpItem = new NativeListItem<string>("Open Up on Throttle", "Share of the normal slip allowance left at full pedal: 100 % is the rule off, 40 % opens the wheel to two fifths of its allowance under power. Asking for throttle with the wheel wound on spends the front tyre on lateral force, and that force is not pushing the car.", OpenUpFloorChoices);
+            openUpItem.ItemChanged += (sender, args) =>
             {
-                OpenUpOnThrottle = openUpItem.Checked;
-                DevelopmentMenuStore.Set("OpenUpOnThrottle", OpenUpOnThrottle.ToString());
+                OpenUpOnThrottleFloorPct = int.Parse(openUpItem.Items[args.Index], CultureInfo.InvariantCulture);
+                DevelopmentMenuStore.Set("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct.ToString(CultureInfo.InvariantCulture));
             };
+            openUpItem.SelectedIndex = Math.Max(0, openUpItem.Items.IndexOf(OpenUpOnThrottleFloorPct.ToString(CultureInfo.InvariantCulture)));
             developmentMenu.Add(openUpItem);
+            HookListTextPicker(openUpItem);
 
             AddSub(_arsMenu, _raceMenu);
             AddSub(_arsMenu, rivalsMenu);
@@ -3819,7 +3823,7 @@ namespace ARS
             SteerTrace = DevelopmentMenuStore.GetBool("SteerTrace", SteerTrace);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
             GsLaneThrottleFloor = DevelopmentMenuStore.GetBool("GsLaneThrottleFloor", GsLaneThrottleFloor);
-            OpenUpOnThrottle = DevelopmentMenuStore.GetBool("OpenUpOnThrottle", OpenUpOnThrottle);
+            OpenUpOnThrottleFloorPct = DevelopmentMenuStore.GetInt("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);

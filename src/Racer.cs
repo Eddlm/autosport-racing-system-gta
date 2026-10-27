@@ -2155,12 +2155,13 @@ namespace ARS
         // Development experiment: with Open Up on Throttle on, the slip the limit allows shrinks with the pedal, from what it is today at
         // zero throttle down to OpensUpSlipFloorShare at full. The pedal read here is the previous tick's - it is computed after the wheel -
         // which is one frame against a rule that is meant to be driven by feel.
-        const float OpensUpSlipFloorShare = 0.4f;
+
 
         float OpensUpSlipScale()
         {
-            if (!ARS.OpenUpOnThrottle) return 1f;
-            return 1f - (1f - OpensUpSlipFloorShare) * ARS.Clamp(Control.Throttle, 0f, 1f);
+            float floorPct = ARS.Clamp(ARS.OpenUpOnThrottleFloorPct, 0, 100) / 100f;
+            if (floorPct >= 1f) return 1f;
+            return 1f - (1f - floorPct) * ARS.Clamp(Control.Throttle, 0f, 1f);
         }
 
         float GeometrySteerCeiling(float fwdSpeed)
@@ -2579,7 +2580,7 @@ namespace ARS
             // the next steering pass will use.
             //
             // It cannot live on the player's car: this whole method only runs under !ControlledByPlayer, because the human drives that one.
-            if (ARS.OpenUpOnThrottle && ARS.DebugFocusRacer == this)
+            if (ARS.OpenUpOnThrottleFloorPct < 100 && ARS.DebugFocusRacer == this)
                 UI.ShowSubtitle("Slip -" + (100f * (1f - OpensUpSlipScale())).ToString("0") + "%", 50);
             _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
 
