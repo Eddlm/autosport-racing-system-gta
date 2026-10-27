@@ -1455,7 +1455,7 @@ namespace ARS
                 Alignment = Alignment.Right
             };
 
-            NativeCheckboxItem steerTraceItem = new NativeCheckboxItem("Steer Trace", "Log the steering ask, the axis, the yaw and the front slip every tick, for your own car only. For measuring the loop delay: leave it off unless you are chasing one, because it writes about thirty lines a second.");
+            NativeCheckboxItem steerTraceItem = new NativeCheckboxItem("Steer Trace", "Log the steering ask, the axis, the yaw and the front slip every tick, for your own car only. For measuring the loop delay: leave it off unless you are chasing one, because it writes about thirty lines a second.", SteerTrace);
             steerTraceItem.CheckboxChanged += (sender, args) =>
             {
                 SteerTrace = steerTraceItem.Checked;
