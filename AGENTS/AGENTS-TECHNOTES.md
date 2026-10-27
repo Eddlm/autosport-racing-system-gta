@@ -132,28 +132,29 @@ before the pedal lets go. A car with no ABS of its own is the first case where t
 `+0x174` for it. Numbers for the decision: 0.2/s is 4 s; 2/s is 0.4 s; 6/s is 0.13 s, which is ABS-shaped. The rise is a
 separate question - slow reapplication is the point of ABS.
 
-**The brake learner's yardstick is time over the ramp - one second of it (driver, 2026-10-27).** Three signals died before
-this one, and each taught the next. The share of the braking phase spent above 0.9 of pedal asked for a braking **style** rather
-than a **point**. Arrival speed at the entrance against the apex speed had no distance in it: one metre a second over scored the
-same with two hundred metres to lose it in as with ten. And the feasibility ratio - the car's kinetic energy above the apex speed
-over the ramp's - was the right question with the wrong yardstick, because a car braking at the limit is **always** fractionally
-over its own theory: brake onset, weight transfer, and a proportional pedal law that needs a sustained error to hold any decel
-(`BrakeErrorMultiplier` 3 m/s). Every corner therefore read "over" and the factor could only fall. **The learner could never risk
-more, which is half of what it exists to do.**
-So the measure is a **duration**: how long the approach spends above the ramp.
+**The brake learner writes, and only the position writes it (driver, 2026-10-27).** Four signals died before this one. The share of the
+braking phase spent above 0.9 of pedal asked for a braking **style** rather than a **point**. Arrival speed at the entrance against the apex
+speed had no distance in it. The feasibility ratio - the car's kinetic energy above the apex speed over the ramp's - was the right question
+with the wrong yardstick, because a car braking at the limit is always fractionally over its own theory, so every corner read "over" and the
+factor could only fall. And a clock counting seconds over the ramp made the target a duration, which means different things in a seven-metre
+braking zone and a hundred-and-seventy-metre one. Driven at 1.0 the cars brake exactly as the plan asks and at 1.5 they overshoot everything,
+which says the model itself is calibrated: **the factor has nothing global to learn.** The learner now aims at a position.
 
-    over = seconds with vReal > ApexBrakingSpeed(apex) + BrakeErrorMultiplier
+    mark   = the node where the car drops below apex speed + BrakeErrorMultiplier (the full-brake error, 3 m/s)
+    metres = mark - entrance          // negative = road still to run, positive = already inside the corner
+    step   = -metres * BrakeEntryFactorPerMetre (0.005), capped at BrakeEntryMaxStepPerEvent (0.10)
 
-clocked every `BrakeOverSampleMs` (100 ms) while the car is on the brake and the ramp still has resolution
-(`BrakeOverMinBudgetShare` 0.25 of the apex energy - nearer the target its budget dies and the comparison is noise), then handed
-to the commit at the apex pass. **One target, both directions always live:** under `BrakeOverTargetSeconds` 1 s the factor climbs
-`BrakeOverStepUp` 0.025, so the corner is braked later; over it the factor gives back `BrakeOverStepDown` 0.05, twice as much,
-because a mistake is not free. **There is no silent band**, and that is the point: a corner that spends no time over is exactly the
-corner that should be pushed. Time is also what makes corners comparable - a short corner and a long one are both given the same
-second - where one ratio meant different things at different speeds. The skid verdict is untouched and still lands its flat 0.1.
-The announcement carries the seconds and the direction (`braver`, `relax`, `skid`).
-`BrakeFeasibilityCutStep`, `BrakeFeasibilityCutSpan`, `BrakeFeasibilityRewardAbove`/`Below`, `BrakeFeasibilityOverAbove`,
-`BrakeFeasibilityMinBudgetMps2` and `BrakeGoodArrivalStep` are gone with the ratio.
+Zero means the corner speed was reached exactly at the entrance. Negative means it was reached early, so the factor climbs and the next lap
+brakes later; positive gives factor back. No dead zone. The mark is taken on the FIRST tick below the bar and confirmed by the next two - the
+threshold is frozen when the sample opens, because `NextApexSpeed` is rebuilt every tick from grip and a smoothed radius and a live threshold
+decides the crossing on noise. The corner is looked up by apex node, exactly as `ApexBrakingSpeed` does.
+
+**Two gates stand in front of that step, and both are the driver's (2026-10-27).** The lane floor is latched over every tick of the last
+second of travel before the entrance (`BrakeFloorLatchSeconds`): if it was holding throttle at any point, the car was saying it did not want
+to brake there, so the verdict is not a braking error and the factor is left alone - the notice says `held`. And a slide or a jump is
+**reported, never charged**: those are the speed system's errors, and a factor cut there taught the braking point a lesson about somebody
+else's number. The notice reads `-12m | floor off`, with `| skid` and `| air` appended when they happened, plus `never slowed` (above the
+bar and still above it at the apex) and `no braking` (never reached the bar) for the corners with no mark.
 
 **The step is proportional and the clock starts above the law's own brake error (driver, 2026-10-27).** `BrakeOverStepPerTenth`
 **0.05** per tenth of a second away from the target, in either direction, with **no dead zone**: half a factor per second of error,
