@@ -400,8 +400,8 @@ namespace ARS
         // Factor already forfeited this corner for leaving the ground while still over the ramp. A car in the air has lost the
         // corner regardless of the clock: the jump is the proof, not a hint.
         float _brakeSampleAirPenalty = 0f;
-        // Where the car reached the corner's speed, in metres relative to its braking target: positive late, negative early, zero where
-        // the plan asked. A position, so the pedal law's steady error cannot contaminate it the way a speed difference did.
+        // Metres from the node where the car dropped below the corner speed plus the full-brake error, to the corner entrance. Positive
+        // means the mark sits before the entrance - the room it had left - and negative means it was already inside the corner.
         float _brakeSampleEntryMetres = 0f;
         bool _brakeSampleEntryMeasured = false;
         bool _brakeSampleSawAboveApex = false;
@@ -2721,7 +2721,9 @@ namespace ARS
             // crossed it, and has nothing to say.
             if (!_brakeSampleEntryMeasured && _brakeSampleApexNode >= 0 && !HasPassedApex(_brakeSampleApexNode))
             {
-                float apexSpeed = _brakeSampleApexSpeed;
+                // The bar is the corner speed plus the error the pedal law needs to reach full brake: below it the car is asking for the
+                // whole pedal, and that is the moment worth marking. Same allowance the over-clock uses, one place.
+                float apexSpeed = _brakeSampleApexSpeed + BrakeErrorMultiplier;
                 float forward = ARS.GetForwardSpeed(Car);
                 if (forward <= apexSpeed + 0.2f && _brakeSampleSawAboveApex)
                 {
@@ -2735,12 +2737,11 @@ namespace ARS
                         // whose entrance sits tens of metres away, and the target would then be placed from that one.
                         CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == _brakeSampleApexNode);
                         int entranceNode = CornerEntranceNode(corner, _brakeSampleApexNode);
-                        int targetNode = BrakeTargetBaseNode(corner, entranceNode);
-                        if (targetNode < 0) targetNode = entranceNode;
-                        if (targetNode >= 0)
+                        if (entranceNode >= 0)
                         {
-                            float metres = CurrentTrackPoint.CumulativeDistance - ARS.TrackPoints[targetNode].CumulativeDistance;
-                            // The wrap the rest of the route code applies: on a circuit a target behind the car reads as most of a lap.
+                            // From the mark to the entrance, signed: positive with road still to run, negative once inside the corner.
+                            float metres = ARS.TrackPoints[entranceNode].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
+                            // The wrap the rest of the route code applies: on a circuit an entrance behind the car reads as most of a lap.
                             if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metres) > ARS.RouteLengthMeters * 0.5f)
                                 metres -= Math.Sign(metres) * ARS.RouteLengthMeters;
                             _brakeSampleEntryMetres = metres;
@@ -2752,7 +2753,7 @@ namespace ARS
                 else
                 {
                     _brakeSampleBelowTicks = 0;
-                _brakeSampleEntryHasCandidate = false;
+                    _brakeSampleEntryHasCandidate = false;
                     if (forward > apexSpeed + 1f) _brakeSampleSawAboveApex = true;
                 }
             }
