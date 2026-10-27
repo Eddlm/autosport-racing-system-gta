@@ -1392,10 +1392,11 @@ namespace ARS
         const float LineApexStickyMeters = 30f;
         // Moving from the outside to the inside is a POSITION on the track, and that position scales with the road: the blend starts at this
         // many times the track's full width before the apex (six widths: 72 m on a 12 m road, 132 m on a 22 m one), floored so a narrow
-        // lane does not start it on top of the apex. The inside is reached IdealLineBlendEndMeters before the apex and held from there.
+        // lane does not start it on top of the apex. The inside is forced from IdealLineBlendEndWidthFactor widths out and held from there.
         const float IdealLineBlendWidthFactor = 6f;
         const float IdealLineBlendMinMeters = 20f;
-        const float IdealLineBlendEndMeters = 12.5f;
+        // The end scales with the road too, at three widths: 36 m before the apex on a 12 m road, 66 m on a 22 m one.
+        const float IdealLineBlendEndWidthFactor = 3f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
         // the point: they crawl to the first corner instead of diving for the outer edge.
@@ -1481,6 +1482,7 @@ namespace ARS
             // The blend's gate, in metres of this road: five full widths before the apex, with a floor. Every car on the same corner starts
             // closing at the same place, and a wide road gets the longer run-in its wider traverse needs.
             float blendStartMeters = Math.Max(2f * halfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
+            float blendEndMeters = 2f * halfWidth * IdealLineBlendEndWidthFactor;
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = Math.Max(halfWidth - carHalfWidth, 0f);
 
@@ -1603,10 +1605,10 @@ namespace ARS
             // No else-clear: the ratchet is released when a DIFFERENT corner is adopted, or in Launch. Clearing it whenever the
             // blend window flickered was how the line reset mid-manoeuvre - and the window contains the speed floor, which moves
             // with grip, so it flickers precisely when the car is unsettled.
-            // The last second is a commitment, not a preference. Whatever the blend managed by now - a short window at speed, a lean
-            // contesting the lane, a speed floor that dropped out under braking - inside the final second the target IS the inside
-            // extreme, and the line is active so that nothing else can claim the lane from it.
-            bool apexCommitted = metresToApex <= IdealLineBlendEndMeters && !HasPassedApex(apexNode);
+            // The last three widths are a commitment, not a preference. Whatever the blend managed by now - a short window at speed, a lean
+            // contesting the lane, a speed floor that dropped out under braking - inside them the target IS the inside extreme, and the line is
+            // active so that nothing else can claim the lane from it.
+            bool apexCommitted = metresToApex <= blendEndMeters && !HasPassedApex(apexNode);
             if (apexCommitted)
             {
                 linePhase = 1f;
