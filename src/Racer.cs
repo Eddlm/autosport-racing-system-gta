@@ -2844,18 +2844,14 @@ namespace ARS
                 : (_brakeCommitEntryMetres > 0.5f
                     ? "Late by " + _brakeCommitEntryMetres.ToString("0") + "m"
                     : "On the mark");
-            if (_brakeCommitFloorAtEntrance)
-            {
-                // The car was told to keep pushing: the speed is the intended one and there is no braking error to correct.
-                AnnounceBrakeAdjustment(where + ", floor held");
-                return;
-            }
             // The target is a position: the car should reach the corner speed exactly at the entrance. Negative is early, so the factor
             // climbs and the corner is braked later; positive is late and it gives factor back. No dead zone, capped per event.
+            // The floor no longer holds the verdict: it is reported in the line, and the metres still decide, because a corner the floor
+            // kept quick still has a braking point that can be measured wrong.
             float step = ARS.Clamp(-_brakeCommitEntryMetres * BrakeEntryFactorPerMetre, -BrakeEntryMaxStepPerEvent, BrakeEntryMaxStepPerEvent);
             float factor = ARS.Clamp(before + step, BrakeMinFactor, BrakeMaxFactor);
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
-            AnnounceBrakeAdjustment(where + (_brakeCommitWasAirborne ? ", air" : "") + ", adjust " + (factor - before).ToString("+0.00;-0.00"));
+            AnnounceBrakeAdjustment(where + (_brakeCommitFloorAtEntrance ? ", floor on" : "") + (_brakeCommitWasAirborne ? ", air" : "") + ", adjust " + (factor - before).ToString("+0.00;-0.00"));
         }
 
         // One line per verdict: the car and how many miles an hour over the speed the corner asks for it arrived at the entrance.
