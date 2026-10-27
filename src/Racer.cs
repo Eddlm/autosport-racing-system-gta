@@ -288,16 +288,16 @@ namespace ARS
         // Line discipline belongs to speed: below this the problem is traction, and a cap would hold an off-edge car
         // at zero, because the projection of a stationary car is the car.
         const float OffshootMinSpeedMph = 20f;
-        // Throttle saturates at two metres per second of deficit: the pedal is there to reach the plan, not to approach it gently.
-        // Braking is four times softer, so the pair is 1:4 - full gas with two metres a second to find, full brake at eight, which
-        // comes on early and builds instead of slamming.
-        const float FullPedalSpeedErrorMps = 2f;
+        // Throttle saturates at one metre per second of deficit: the pedal is there to reach the plan, not to approach it gently.
+        // Braking is three times softer, so the pair is 1:3 - full gas the moment the car is a hair under its speed, full brake at three
+        // metres a second over, which is the pair the pedals were first tuned against and the one the learner's marks were built on.
+        const float FullPedalSpeedErrorMps = 1f;
         // The learner's bar is the error at which the pedal actually reaches full brake: apex + this many metres a second. Coupled on purpose -
         // the mark means "where the car stopped needing the whole pedal", so it has to move when the pedal law moves, even though every
         // learned factor then starts again from the new geometry.
         const float BrakeLearnerBarMps = FullPedalSpeedErrorMps * BrakeErrorMultiplier;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
-        const float BrakeErrorMultiplier = 4f;
+        const float BrakeErrorMultiplier = 3f;
 
         // Applied pedal input sampled every half metre of travel, for the debug trail: the cap holds 40 m.
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
