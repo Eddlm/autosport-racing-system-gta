@@ -1391,9 +1391,9 @@ namespace ARS
         // hysteresis is enough: two apexes that swap places tick after tick do so by less than that.
         const float LineApexStickyMeters = 30f;
         // Moving from the outside to the inside is a POSITION on the track, and that position scales with the road: the blend starts at this
-        // many times the track's full width before the apex (five widths: 60 m on a 12 m road, 110 m on a 22 m one), floored so a narrow
+        // many times the track's full width before the apex (six widths: 72 m on a 12 m road, 132 m on a 22 m one), floored so a narrow
         // lane does not start it on top of the apex. The inside is reached IdealLineBlendEndMeters before the apex and held from there.
-        const float IdealLineBlendWidthFactor = 5f;
+        const float IdealLineBlendWidthFactor = 6f;
         const float IdealLineBlendMinMeters = 20f;
         const float IdealLineBlendEndMeters = 12.5f;
         const float IdealLineMaxRadiusMeters = 50f;
