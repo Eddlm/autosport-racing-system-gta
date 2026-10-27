@@ -377,11 +377,15 @@ namespace ARS
         int _offshootLogAt = 0;
 
         // Brake learning: the factor multiplies the decel the plan assumes it has - `brakingAbility * g * factor` - so 1.0 is the
-        // grip-limited maximum. Driven at 1.0 the cars brake exactly as the plan asks and at 1.5 they overshoot everything, which
-        // says the model is calibrated and the factor has nothing global to learn. Held at 1.0 with no draw while the learner is
-        // measured: a seeded range would make two runs of the same corner incomparable, and the exercise is to read the excess
-        // speed, not to watch the seed drift.
-        const float BrakeFactorSeed = 1f;
+        // grip-limited maximum. Driven at 1.0 the cars brake exactly as the plan asks and at 1.5 they overshoot everything, which says the
+        // model is calibrated. The seed sits under it at 0.8 with the draw restored, so a field is not twelve identical braking points: each
+        // driver carries a bias drawn once (BrakeConfidenceJitterHundredths) and each corner adds its own (BrakeFactorSeedJitterHundredths).
+        const float BrakeFactorSeed = 0.8f;
+        // Each corner's initial factor is the seed plus the racer's own bias plus a draw of +/- this many hundredths.
+        const int BrakeFactorSeedJitterHundredths = 5;
+        // The racer's own bias is a draw of +/- this many hundredths, taken once in the constructor.
+        const int BrakeConfidenceJitterHundredths = 5;
+        float _brakeConfidenceBias;
         // The radius under which a corner counts as tight, i.e. where the outside line is worth having.
         const float CornerTightRadius = 50f;
         // Arrival is extrapolated from the live forward Gs at this discount: holding a G flat across the window
@@ -504,7 +508,7 @@ namespace ARS
         // The racer's own bias plus one independent draw per corner. The bias repeats across all of that racer's
         // corners where the per-corner draw averages out, so the bias is the half that moves a lap. The +1 makes
         // each draw symmetric: GetRandomInt's max is exclusive.
-        float SeededBrakeFactor() => BrakeFactorSeed;
+        float SeededBrakeFactor() => BrakeFactorSeed + _brakeConfidenceBias + ARS.GetRandomInt(-BrakeFactorSeedJitterHundredths, BrakeFactorSeedJitterHundredths + 1) / 100f;
 
         // While diving, a temp bonus is appended to the learned factor; the stored factor itself never changes.
         public float EffectiveBrakeFactor(int apexNode)
@@ -742,6 +746,10 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Info, "Steerlock for " + Car.DisplayName + ":" + VehicleData.SteeringLock + "º");
 
             VehicleData.WheelBase = ARS.GetWheelBase(Car);
+            // This driver's own confidence at the pedal, drawn once and held for the race: the field is not twelve copies of the same
+            // braking point, and the corner draw above stacks on top of it.
+            _brakeConfidenceBias = ARS.GetRandomInt(-BrakeConfidenceJitterHundredths, BrakeConfidenceJitterHundredths + 1) / 100f;
+            ARS.Log(ARS.LogImportance.Info, "Brake confidence bias " + Name + ": " + _brakeConfidenceBias.ToString("0.00"));
             ARS.Log(ARS.LogImportance.Info, "Wheelbase for " + Car.DisplayName + ":" + VehicleData.WheelBase + " m");
             Control.SteerDegrees = 0f;
             CurrentTrackPoint = ARS.TrackPoints.Last();
