@@ -4,14 +4,17 @@
 #   [circuit]     circuit races only (not point to point)
 #   [nitro]       only while racers are allowed nitrous
 #   [tuning-off]  only while Auto Styling is off
-# The chance per apex is the Racing Tips setting: High 1 in 20, Medium 1 in 50, Low 1 in 100.
-[circuit] ARS hands you a fresh nitrous bottle every lap - spend the one you have.
+# The chance per apex is the Racing Tips setting: High 1 in 10, Medium 1 in 20, Low 1 in 30.
+[nitro] ARS hands you a fresh nitrous bottle every lap - spend the one you have.
 [nitro] Racers can fire nitrous too - one shot a lap, on the straights.
-A racer hounding you will eventually dive down the inside. Cover the line or leave room.
-The grid is pace-matched to your car. Grid PI Mode > Relative uses your PI plus the offset.
-When the winner crosses the line, the Timeout grace period starts - finish before it runs out.
-Best laps are read out when the race ends.
+[nitro] ARS manages nitrous for you if you enable it. Disable the one in your trainer or car tuning slot.
+Play with the AI settings - there is a lot to adjust to your liking.
+You can create specific car rosters creating more vehicle.txt lists in the Vehicles folder.
+A Rival hounding you will eventually dive down the inside. Cover the line or leave room.
+Adjust the difficulty in  Race Rules, or Race > PI settings.
+The car roster is grouped by a Performance Index to ensure a somewhat even grid.
 Rivals > Car Roster swaps which Vehicles roster the grid is drawn from.
 You can record your own route: ARS > Track Creator, then Save Track.
 [tuning-off] Auto Styling picks liveries, body kits and paint for the grid before a race.
-Every racer gets its own aggression from its grid slot, so the field never drives as one.
+For the best experience, pick up a handling mod. ARS can take it.
+Remember to bring feedback to the author from time to time.
