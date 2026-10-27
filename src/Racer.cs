@@ -292,10 +292,10 @@ namespace ARS
         // Braking is six times softer, so the pair is 1:6 - full gas with two metres a second to find, full brake only at twelve,
         // which is late-braking's whole margin: the brake comes on early and builds, instead of slamming in at the first overspeed.
         const float FullPedalSpeedErrorMps = 2f;
-        // The learner's own bar, in metres a second over the corner speed: the mark is taken where the car drops below apex + this. Kept
-        // independent of the pedal law on purpose - the multiplier above is a feel knob, and tuning it must not rescale every corner's
-        // measurement. Three is where full brake used to arrive, which is what the marks were tuned against.
-        const float BrakeLearnerBarMps = 3f;
+        // The learner's bar is the error at which the pedal actually reaches full brake: apex + this many metres a second. Coupled on purpose -
+        // the mark means "where the car stopped needing the whole pedal", so it has to move when the pedal law moves, even though every
+        // learned factor then starts again from the new geometry.
+        const float BrakeLearnerBarMps = FullPedalSpeedErrorMps * BrakeErrorMultiplier;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
         const float BrakeErrorMultiplier = 6f;
 
