@@ -288,12 +288,16 @@ namespace ARS
         // Line discipline belongs to speed: below this the problem is traction, and a cap would hold an off-edge car
         // at zero, because the projection of a stationary car is the car.
         const float OffshootMinSpeedMph = 20f;
-        // Throttle saturates at one metre per second of deficit: the pedal is there to reach the plan, not to approach it
-        // gently. Braking keeps its three, so the pair is 1:3 - full gas the moment the car is a hair under its speed,
-        // full brake only when it is three metres a second over.
-        const float FullPedalSpeedErrorMps = 1f;
+        // Throttle saturates at two metres per second of deficit: the pedal is there to reach the plan, not to approach it gently.
+        // Braking is six times softer, so the pair is 1:6 - full gas with two metres a second to find, full brake only at twelve,
+        // which is late-braking's whole margin: the brake comes on early and builds, instead of slamming in at the first overspeed.
+        const float FullPedalSpeedErrorMps = 2f;
+        // The learner's own bar, in metres a second over the corner speed: the mark is taken where the car drops below apex + this. Kept
+        // independent of the pedal law on purpose - the multiplier above is a feel knob, and tuning it must not rescale every corner's
+        // measurement. Three is where full brake used to arrive, which is what the marks were tuned against.
+        const float BrakeLearnerBarMps = 3f;
         // Braking is the softer side: it takes this many times the speed error to command full brake.
-        const float BrakeErrorMultiplier = 3f;
+        const float BrakeErrorMultiplier = 6f;
 
         // Applied pedal input sampled every half metre of travel, for the debug trail: the cap holds 40 m.
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
@@ -2761,7 +2765,7 @@ namespace ARS
                 // The ramp carries the pedal law's own brake error: a proportional law needs a sustained error to hold any decel, so a car
                 // braking at the limit sits about BrakeErrorMultiplier above the bare ramp by design, and 1.5x that is where the floor of
                 // the comparison sits before "over" means anything.
-                float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed) + BrakeErrorMultiplier * BrakeOverAllowanceShare;
+                float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed) + BrakeLearnerBarMps * BrakeOverAllowanceShare;
                 float carried = ARS.GetForwardSpeed(Car);
                 bool over = ramp < 100f && carried > ramp;
 
@@ -2781,7 +2785,7 @@ namespace ARS
             {
                 // The bar is the corner speed plus the error the pedal law needs to reach full brake: below it the car is asking for the
                 // whole pedal, and that is the moment worth marking. Same allowance the over-clock uses, one place.
-                float apexSpeed = _brakeSampleApexSpeed + BrakeErrorMultiplier;
+                float apexSpeed = _brakeSampleApexSpeed + BrakeLearnerBarMps;
                 float forward = ARS.GetForwardSpeed(Car);
                 if (forward <= apexSpeed + 0.2f && _brakeSampleSawAboveApex)
                 {
