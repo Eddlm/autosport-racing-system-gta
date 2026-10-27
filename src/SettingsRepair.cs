@@ -161,6 +161,8 @@ namespace ARS
             settings.Specs.Add(new KeySpec("SlipCutFloor", "0.40", Kind.Number, new[] { "0.00", "0.05", "0.10", "0.15", "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90" }));
             settings.Specs.Add(new KeySpec("MaxCrestLift", "0.4", Kind.Number, new[] { "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0" }));
             settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
+            settings.Specs.Add(new KeySpec("GsLaneThrottleFloor", "False", Kind.Bool));
+            settings.Specs.Add(new KeySpec("OpenUpOnThrottleFloorPct", "100", Kind.Number, ARS.OpenUpFloorChoices));
             settings.Specs.Add(new KeySpec("Rubberbanding", "100", Kind.Number, new[] { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" }));
             settings.Specs.Add(new KeySpec("RubberbandMode", RubberbandMode.Natural.ToString(), Kind.Text, Enum.GetNames(typeof(RubberbandMode))));
             settings.Specs.Add(new KeySpec("StagedSpawns", "False", Kind.Bool));
@@ -176,8 +178,6 @@ namespace ARS
             development.Specs.Add(new KeySpec("BrakeLearningNotify", "False", Kind.Bool));
 development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             development.Specs.Add(new KeySpec("SlipFromMemory", "True", Kind.Bool));
-            development.Specs.Add(new KeySpec("GsLaneThrottleFloor", "False", Kind.Bool));
-            development.Specs.Add(new KeySpec("OpenUpOnThrottleFloorPct", "100", Kind.Number, ARS.OpenUpFloorChoices));
             files.Add(development);
 
             // The debug key set is the toggle table itself: retiring a toggle retires its key.

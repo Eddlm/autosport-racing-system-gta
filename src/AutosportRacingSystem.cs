@@ -1118,6 +1118,24 @@ namespace ARS
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
 
+            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "While the car pulls over a third of its lateral grip and the projected line heads for the inside of the road, the throttle may not fall below a floor that ramps from nothing at the track centre to full throttle at the inside edge, always within what TCS and stability allow. Experiment: on the corner exit the projection points down the straight and it lets go.", GsLaneThrottleFloor);
+            gsLaneFloorItem.CheckboxChanged += (sender, args) =>
+            {
+                GsLaneThrottleFloor = gsLaneFloorItem.Checked;
+                SaveRacerSetting("GsLaneThrottleFloor", GsLaneThrottleFloor.ToString());
+            };
+            rivalPaceMenu.Add(gsLaneFloorItem);
+
+            NativeListItem<string> openUpItem = new NativeListItem<string>("Open Up on Throttle", "Share of the normal steering clamp left at full pedal: 100 % is the rule off, 40 % opens the wheel to two fifths of its allowance under power. Asking for throttle with the wheel wound on spends the front tyre on lateral force, and that force is not pushing the car. The reduction is spent by half pedal.", SettingsRepair.OptionsFor("OpenUpOnThrottleFloorPct"));
+            openUpItem.ItemChanged += (sender, args) =>
+            {
+                OpenUpOnThrottleFloorPct = int.Parse(openUpItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct.ToString(CultureInfo.InvariantCulture));
+            };
+            openUpItem.SelectedIndex = Math.Max(0, openUpItem.Items.IndexOf(SettingsMenuStore.GetInt("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct).ToString(CultureInfo.InvariantCulture)));
+            rivalPaceMenu.Add(openUpItem);
+            HookListTextPicker(openUpItem);
+
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "Share of the tuned slope speed cut: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. Pitch counts both ways.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
             {
@@ -1478,24 +1496,6 @@ namespace ARS
                 DevelopmentMenuStore.Set("SlipFromMemory", SlipFromMemory.ToString());
             };
             developmentMenu.Add(slipSourceItem);
-
-            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "While the car pulls over half its lateral grip and the projected line heads for the inside of the road, the throttle may not fall below a floor that ramps from nothing at the track centre to full throttle at the inside edge, always within what TCS and stability allow. Experiment: on the corner exit the projection points down the straight and it lets go.", GsLaneThrottleFloor);
-            gsLaneFloorItem.CheckboxChanged += (sender, args) =>
-            {
-                GsLaneThrottleFloor = gsLaneFloorItem.Checked;
-                DevelopmentMenuStore.Set("GsLaneThrottleFloor", GsLaneThrottleFloor.ToString());
-            };
-            developmentMenu.Add(gsLaneFloorItem);
-
-            NativeListItem<string> openUpItem = new NativeListItem<string>("Open Up on Throttle", "Share of the normal steering clamp left at full pedal: 100 % is the rule off, 40 % leaves the wheel two fifths of the angle it would otherwise be allowed under power. Asking for throttle with the wheel wound on spends the front tyre on lateral force, and that force is not pushing the car.", OpenUpFloorChoices);
-            openUpItem.ItemChanged += (sender, args) =>
-            {
-                OpenUpOnThrottleFloorPct = int.Parse(openUpItem.Items[args.Index], CultureInfo.InvariantCulture);
-                DevelopmentMenuStore.Set("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct.ToString(CultureInfo.InvariantCulture));
-            };
-            openUpItem.SelectedIndex = Math.Max(0, openUpItem.Items.IndexOf(OpenUpOnThrottleFloorPct.ToString(CultureInfo.InvariantCulture)));
-            developmentMenu.Add(openUpItem);
-            HookListTextPicker(openUpItem);
 
             AddSub(_arsMenu, _raceMenu);
             AddSub(_arsMenu, rivalsMenu);
@@ -3822,8 +3822,8 @@ namespace ARS
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             SteerTrace = DevelopmentMenuStore.GetBool("SteerTrace", SteerTrace);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
-            GsLaneThrottleFloor = DevelopmentMenuStore.GetBool("GsLaneThrottleFloor", GsLaneThrottleFloor);
-            OpenUpOnThrottleFloorPct = DevelopmentMenuStore.GetInt("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct);
+            GsLaneThrottleFloor = SettingsMenuStore.GetBool("GsLaneThrottleFloor", GsLaneThrottleFloor);
+            OpenUpOnThrottleFloorPct = SettingsMenuStore.GetInt("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);
