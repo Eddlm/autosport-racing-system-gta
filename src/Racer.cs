@@ -450,7 +450,7 @@ namespace ARS
         // ramp before a single tenth of a second is counted.
         const float BrakeOverAllowanceShare = 1.5f;
         const int BrakeOverSampleMs = 100;
-        const float BrakeMaxFactor = 1f;
+        const float BrakeMaxFactor = 1.5f;   // ceiling above the 1.0 seed so a learned cut can be earned back
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus; // temp brake boost while diving, whole hundredths 2-8 drawn per dive, never committed to learning
 
