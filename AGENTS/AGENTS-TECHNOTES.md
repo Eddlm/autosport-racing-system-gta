@@ -151,10 +151,15 @@ decides the crossing on noise. The corner is looked up by apex node, exactly as 
 
 **Two gates stand in front of that step, and both are the driver's (2026-10-27).** The lane floor is latched over every tick of the last
 second of travel before the entrance (`BrakeFloorLatchSeconds`): if it was holding throttle at any point, the car was saying it did not want
-to brake there, so the verdict is not a braking error and the factor is left alone - the notice says `held`. And a slide or a jump is
-**reported, never charged**: those are the speed system's errors, and a factor cut there taught the braking point a lesson about somebody
-else's number. The notice reads `-12m | floor off`, with `| skid` and `| air` appended when they happened, plus `never slowed` (above the
-bar and still above it at the apex) and `no braking` (never reached the bar) for the corners with no mark.
+to brake there, so the verdict is not a braking error and the factor is left alone - the notice says `held`.
+
+**A slide counts as the braking's fault only under real brake demand (driver, 2026-10-27).** Full pedal destabilises a rear-engined car -
+Monroe loses its rear at maximum brake, observed in game - so the slide is watched **only while the pedal is asking for more than
+`BrakeSkidBrakeShare` 0.25**. Above that gate a slide throws the position verdict away and the factor pays its flat `BrakeSkidFactorStep`
+0.1: the demand is what broke the rear, so the braking point is what pays. Below the gate there is no braking to blame and the slide is
+the speed system's. A jump is never charged - it is only reported - because leaving the ground is speed, not pedal.
+The notice reads `-12m | floor off`, with `| skid` and `| air` appended when they happened, plus `never slowed` (above the bar and
+still above it at the apex) and `no braking` (never reached the bar) for the corners with no mark.
 
 **The step is proportional and the clock starts above the law's own brake error (driver, 2026-10-27).** `BrakeOverStepPerTenth`
 **0.05** per tenth of a second away from the target, in either direction, with **no dead zone**: half a factor per second of error,
