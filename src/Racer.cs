@@ -424,6 +424,11 @@ namespace ARS
         bool _brakeCommitSawAboveApex = false;
         bool _brakeCommitFloorAtEntrance = false;
         bool _brakeCommitEntranceCrossed = false;
+        // A slide only counts as the braking's fault while the car is actually being asked to brake hard: a rear-engined car loses its
+        // rear at full pedal, which is a real effect of the demand and not of the entry speed. Below this share of brake there is no
+        // braking to blame, and the slide belongs to the speed system.
+        const float BrakeSkidBrakeShare = 0.25f;
+        const float BrakeSkidFactorStep = 0.1f;      // a skid under that demand costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
@@ -2768,9 +2773,11 @@ namespace ARS
                     if (toEntrance <= 0f) _brakeSampleEntranceCrossed = true;
                 }
             }
-            // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. A car that slid on
-            // the way in was on a tyre that had already let go, so the commit below throws that sample away.
-            if (_brakeSampleApexNode >= 0 && HasPassedBrakingTarget() && !HasPassedApex(_brakeSampleApexNode))
+            // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. The slide is only watched while the car
+            // is being asked for more than BrakeSkidBrakeShare of brake: a car that slides under light pedal is being carried too fast,
+            // and that is the speed system's error, not the braking point's.
+            if (_brakeSampleApexNode >= 0 && HasPassedBrakingTarget() && !HasPassedApex(_brakeSampleApexNode)
+                && Control.Brake > BrakeSkidBrakeShare)
             {
                 float slide = Math.Abs(VehicleData.SlideAngle);
                 if (!float.IsNaN(slide) && slide > _brakeSampleMaxSlideDeg) _brakeSampleMaxSlideDeg = slide;
@@ -2813,16 +2820,26 @@ namespace ARS
             int apexNode = _brakeCommitApexNode;
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
             // Every verdict says where the mark landed, or why there is none, and flags what belongs to the speed system rather than to the
-            // braking point: a slide and a jump are the speed's to answer for, so they are reported here and never charged to the factor.
+            // braking point. The floor and a jump are the speed's; a slide under real brake demand is the braking's, and it is charged below.
             string floor = !_brakeCommitEntranceCrossed ? "floor ?" : (_brakeCommitFloorAtEntrance ? "floor ON" : "floor off");
             string events = "";
-            if (TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple) events += " | skid";
+            bool skid = TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple;
+            if (skid) events += " | skid";
             if (_brakeCommitWasAirborne) events += " | air";
             string detail = (_brakeCommitEntryMeasured
                 ? _brakeCommitEntryMetres.ToString("+0;-0;0") + "m"
                 : (_brakeCommitSawAboveApex ? "never slowed" : "no braking")) + " | " + floor + events;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
+            // A slide seen while the pedal was asking for more than BrakeSkidBrakeShare of brake is the braking point's own fault - a
+            // rear-engined car loses its rear at that demand - so the position verdict is thrown away and the factor pays the flat cut.
+            if (skid)
+            {
+                float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
+                if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
+                AnnounceBrakeAdjustment(detail);
+                return;
+            }
             // The target is a position, not a duration: the car should reach the corner speed exactly at the entrance, so the mark wants to
             // land on zero metres. Negative is early - there was road left when the bar was crossed - so the factor climbs and the corner is
             // braked later; positive is late and it gives factor back. No dead zone, capped per event.
