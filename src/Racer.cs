@@ -363,6 +363,9 @@ namespace ARS
         // What the inside floor added to the pedal this tick, as a share of full throttle: the difference between what the plan,
         // the caps and the slew had composed and what the car was finally given. Read by the development subtitle.
         float _throttleFloorGain = 0f;
+        // Whether the lane floor was holding any throttle on the last tick it ran. Read from the brake sample as the car crosses a
+        // corner entrance, so the report can say whether the floor was live when the corner began.
+        bool _gsFloorActiveThisTick = false;
         // True only on the tick the projection actually cut the throttle, which is what the red lines report.
         bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
@@ -411,6 +414,9 @@ namespace ARS
         float _brakeSampleApexSpeed = 0f;
         int _brakeSampleBelowTicks = 0;
         bool _brakeSampleEntryHasCandidate = false;
+        // The floor state read as the car crossed this corner's entrance.
+        bool _brakeSampleFloorAtEntrance = false;
+        bool _brakeSampleEntranceCrossed = false;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
@@ -423,6 +429,8 @@ namespace ARS
         float _brakeCommitEntryMetres = 0f;
         bool _brakeCommitEntryMeasured = false;
         bool _brakeCommitSawAboveApex = false;
+        bool _brakeCommitFloorAtEntrance = false;
+        bool _brakeCommitEntranceCrossed = false;
         const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
@@ -2546,6 +2554,7 @@ namespace ARS
             float throttleBeforeFloor = Control.Throttle;
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
             _throttleFloorGain = Control.Throttle - throttleBeforeFloor;
+            _gsFloorActiveThisTick = Control.Throttle > throttleBeforeFloor;
             // Development read-out, on the focused racer and only while the toggle is on: what the floor added, in percent of
             // full throttle, measured against everything that had already had its say.
             //
@@ -2687,6 +2696,8 @@ namespace ARS
                 _brakeSampleApexSpeed = Math.Max(2f, NextApexSpeed);
                 _brakeSampleBelowTicks = 0;
                 _brakeSampleEntryHasCandidate = false;
+                _brakeSampleFloorAtEntrance = false;
+                _brakeSampleEntranceCrossed = false;
                 _brakeOverNextSampleAt = 0;
                 // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
                 // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
@@ -2764,6 +2775,25 @@ namespace ARS
                 }
             }
 
+            // Whether the lane floor was holding throttle as the car crossed this corner's entrance: read once, when the distance to
+            // the entrance goes from ahead to behind. The pedal values are a tick old, because the pedals are computed after this
+            // method in the tick - sixteen milliseconds against the metres being compared here.
+            if (!_brakeSampleEntranceCrossed && _brakeSampleApexNode >= 0)
+            {
+                CornerPoint entranceCorner = ARS.Corners.FirstOrDefault(c => c.Node == _brakeSampleApexNode);
+                int entranceNode = CornerEntranceNode(entranceCorner, _brakeSampleApexNode);
+                if (entranceNode >= 0)
+                {
+                    float toEntrance = ARS.TrackPoints[entranceNode].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
+                    if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(toEntrance) > ARS.RouteLengthMeters * 0.5f)
+                        toEntrance -= Math.Sign(toEntrance) * ARS.RouteLengthMeters;
+                    if (toEntrance <= 0f)
+                    {
+                        _brakeSampleFloorAtEntrance = _gsFloorActiveThisTick;
+                        _brakeSampleEntranceCrossed = true;
+                    }
+                }
+            }
             // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. A car that slid on
             // the way in was on a tyre that had already let go, so the commit below throws that sample away.
             if (_brakeSampleApexNode >= 0 && HasPassedBrakingTarget() && !HasPassedApex(_brakeSampleApexNode))
@@ -2800,6 +2830,8 @@ namespace ARS
             _brakeCommitEntryMetres = _brakeSampleEntryMetres;
             _brakeCommitEntryMeasured = _brakeSampleEntryMeasured;
             _brakeCommitSawAboveApex = _brakeSampleSawAboveApex;
+            _brakeCommitFloorAtEntrance = _brakeSampleFloorAtEntrance;
+            _brakeCommitEntranceCrossed = _brakeSampleEntranceCrossed;
         }
 
         void CommitBrakeLearning()
@@ -2811,9 +2843,10 @@ namespace ARS
             float airPenalty = _brakeCommitAirPenalty;
             // Every verdict says where the mark landed, or why there is none: a corner that never needed the bar and one the car never
             // came down to are different facts, and both are worth more than silence.
-            string detail = _brakeCommitEntryMeasured
+            string floor = !_brakeCommitEntranceCrossed ? "floor ?" : (_brakeCommitFloorAtEntrance ? "floor ON" : "floor off");
+            string detail = (_brakeCommitEntryMeasured
                 ? _brakeCommitEntryMetres.ToString("+0;-0;0") + "m"
-                : (_brakeCommitSawAboveApex ? "never slowed" : "no braking");
+                : (_brakeCommitSawAboveApex ? "never slowed" : "no braking")) + " | " + floor;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
             // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
