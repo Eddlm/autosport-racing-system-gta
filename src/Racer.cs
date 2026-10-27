@@ -1563,7 +1563,7 @@ namespace ARS
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
             // would reopen a blend that has already closed; the phase is ratcheted per apex, so the demand can only move inward and
             // a new corner starts from the outside.
-            // The armour exists only where the blend exists: inside the last IdealLineBlendStartMeters before the apex. Before that
+            // The armour exists only where the blend exists: inside the last blendStartMeters before the apex. Before that
             // the line is asking for the outside and there is nothing to ratchet, and a direction latched 300 m out would follow the
             // car into situations the corner knows nothing about. The SPEED floor is deliberately not part of this test: it moves with
             // mechanical grip and downforce, and one tick under it used to sweep the ratchet away mid-corner.
