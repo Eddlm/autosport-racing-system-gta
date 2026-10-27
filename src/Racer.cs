@@ -1550,6 +1550,11 @@ namespace ARS
                 {
                     _linePhaseNode = apexNode;
                     _linePhaseLatched = 0f;
+                    // A corner adopted already inside the blend has no outside left to run: seeding the latch from the car's own lane stops
+                    // the line asking for an outside it has already passed, which is a swerve out on a corner just met. The lane is read in
+                    // the same frame as the demand - cornerDir * ownLane - so the two are comparable.
+                    if (secondsToApex <= IdealLineBlendStartSeconds)
+                        _linePhaseLatched = ARS.Clamp((outsideBound - cornerDir * ownLane) / Math.Max(outsideBound + safeBound, 0.01f), 0f, 1f);
                     _linePhaseDir = cornerDir;
                 }
                 _linePhaseLatched = Math.Max(_linePhaseLatched, linePhase);
