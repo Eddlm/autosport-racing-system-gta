@@ -2116,7 +2116,7 @@ namespace ARS
             // One owner for how much of the tyre's peak slip is allowed: the menu's Peak Slip Share. 1.00 cuts at the peak, below it
             // cuts before the peak, above it lets the tyre slide, and 2.00 is past anything but a real slide. Clamped because a
             // hand-edited ini could carry a zero and the division would poison the whole reading with NaN.
-            float capShare = Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed);
+            float capShare = Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed) * OpensUpSlipScale();
             s.InnerPct = 100f * rawInner / capShare;
             s.RearPct = slips.Count >= 4
                 ? 100f * Math.Max(Math.Abs(slips[2]), Math.Abs(slips[3])) / capShare
@@ -2139,7 +2139,7 @@ namespace ARS
             if (speed < FrontSlipTheoryMinSpeedMps || gripGs <= 0.01f || wheelBase <= 0.5f) return s;
 
             s.Readable = true;
-            float available = gripGs * FrontSlipGravity * Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed);
+            float available = gripGs * FrontSlipGravity * Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed) * OpensUpSlipScale();
 
             // The inner wheel is the signal, as in the measured source, and its angle IS the command: the file's own convention
             // gives the outer wheel 0.75 of it (EngineSteerWheelOuterShare), so the inner turns more and takes the tighter line.
@@ -2153,6 +2153,17 @@ namespace ARS
 
             s.InnerPct = 100f * demand / available;
             return s;
+        }
+
+        // Development experiment: with Open Up on Throttle on, the slip the limit allows shrinks with the pedal, from what it is today at
+        // zero throttle down to OpensUpSlipFloorShare at full. The pedal read here is the previous tick's - it is computed after the wheel -
+        // which is one frame against a rule that is meant to be driven by feel.
+        const float OpensUpSlipFloorShare = 0.6f;
+
+        float OpensUpSlipScale()
+        {
+            if (!ARS.OpenUpOnThrottle) return 1f;
+            return 1f - (1f - OpensUpSlipFloorShare) * ARS.Clamp(Control.Throttle, 0f, 1f);
         }
 
         float GeometrySteerCeiling(float fwdSpeed)
