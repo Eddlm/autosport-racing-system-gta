@@ -385,9 +385,9 @@ namespace ARS
         const float BrakeExcessMph = 25f;
         // Braking is judged from the distance it actually needs, plus this much road for the plan to take hold.
         const float BrakeHorizonMargin = 40f;
-        // Learning is measured but NOT applied: the verdict is computed and announced so the excess can be read off, and the factor
-        // the car drives with stays at the seed. Flip this to true to let it teach again.
-        const bool BrakeLearningApplies = false;
+        // The learner writes. Only the metres verdict moves the factor: a slide and a jump are the speed system's errors, reported in the
+        // notice and never charged here.
+        const bool BrakeLearningApplies = true;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
         // Apex nodes the scan has judged worth nothing this approach (wide and unarmed inside their window). The
@@ -396,9 +396,7 @@ namespace ARS
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;  // largest slip seen between this apex's entrance and the apex itself
         int _brakeSampleApexNode = -1;
-        // Factor already forfeited this corner for leaving the ground while still over the ramp. A car in the air has lost the
-        // corner regardless of anything else: the jump is the proof, not a hint.
-        float _brakeSampleAirPenalty = 0f;
+        bool _brakeSampleWasAirborne = false;
         // Metres from the corner entrance to the node where the car dropped below the corner speed plus the full-brake error, so the
         // sign reads as a position on the road: negative with road still to run before the entrance, positive once past it.
         float _brakeSampleEntryMetres = 0f;
@@ -420,13 +418,12 @@ namespace ARS
         int _brakeCommitApexNode = -1;
         int _brakeCommitAtGameTime = 0;
         float _brakeCommitMaxSlideDeg = 0f;
-        float _brakeCommitAirPenalty = 0f;
+        bool _brakeCommitWasAirborne = false;
         float _brakeCommitEntryMetres = 0f;
         bool _brakeCommitEntryMeasured = false;
         bool _brakeCommitSawAboveApex = false;
         bool _brakeCommitFloorAtEntrance = false;
         bool _brakeCommitEntranceCrossed = false;
-        const float BrakeSkidFactorStep = 0.1f;     // a skidded corner costs this much factor, flat
         const float BrakeSkidPeakMultiple = 2.5f;   // skid gate sits at the peak x this, where grip hits its floor
         const float BrakeCommitDelaySeconds = 0.75f; // wait this long after the apex before the verdict lands
         const float BrakeMinFactor = 0.5f;       // learned factor range floor
@@ -447,12 +444,6 @@ namespace ARS
         // of a moving target - so the floor is raised to 1.5: four and a half metres a second, about ten miles an hour, above the
         // ramp before a single tenth of a second is counted.
         const float BrakeOverAllowanceShare = 1.5f;
-        // Leaving the ground while still over the ramp is the one verdict that needs no interpretation: the car flew because it
-        // arrived too fast. It costs factor on every sample it spends up there - a tenth of a second each - with a per-corner cap so
-        // a single jump cannot take the whole range. Per tick would be six times faster than the learner can ever see it, and the
-        // sampler is the clock everything else here already runs on.
-        const float BrakeAirPenaltyPerSample = 0.05f;
-        const float BrakeAirPenaltyMax = 0.20f;
         const int BrakeOverSampleMs = 100;
         const float BrakeMaxFactor = 1f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
@@ -2681,7 +2672,7 @@ namespace ARS
             {
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
-                _brakeSampleAirPenalty = 0f;
+                _brakeSampleWasAirborne = false;
                 _brakeSampleEntryMetres = 0f;
                 _brakeSampleEntryMeasured = false;
                 _brakeSampleSawAboveApex = false;
@@ -2708,9 +2699,8 @@ namespace ARS
                 float carried = ARS.GetForwardSpeed(Car);
                 bool over = ramp < 100f && carried > ramp;
 
-                // Airborne and still over the ramp: the jump is the verdict on its own.
-                if (over && Car.IsInAir)
-                    _brakeSampleAirPenalty = Math.Min(_brakeSampleAirPenalty + BrakeAirPenaltyPerSample, BrakeAirPenaltyMax);
+                // Airborne and still over the ramp: recorded for the notice, never charged to the factor.
+                if (over && Car.IsInAir) _brakeSampleWasAirborne = true;
 
             }
 
@@ -2809,7 +2799,7 @@ namespace ARS
             _brakeCommitApexNode = _brakeSampleApexNode;
             _brakeCommitAtGameTime = Game.GameTime + (int)(BrakeCommitDelaySeconds * 1000f);
             _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
-            _brakeCommitAirPenalty = _brakeSampleAirPenalty;
+            _brakeCommitWasAirborne = _brakeSampleWasAirborne;
             _brakeCommitEntryMetres = _brakeSampleEntryMetres;
             _brakeCommitEntryMeasured = _brakeSampleEntryMeasured;
             _brakeCommitSawAboveApex = _brakeSampleSawAboveApex;
@@ -2822,25 +2812,17 @@ namespace ARS
             if (!ARS.BrakeLearning || _brakeCommitApexNode < 0) return;
             int apexNode = _brakeCommitApexNode;
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
-            float airPenalty = _brakeCommitAirPenalty;
-            // Every verdict says where the mark landed, or why there is none: a corner that never needed the bar and one the car never
-            // came down to are different facts, and both are worth more than silence.
+            // Every verdict says where the mark landed, or why there is none, and flags what belongs to the speed system rather than to the
+            // braking point: a slide and a jump are the speed's to answer for, so they are reported here and never charged to the factor.
             string floor = !_brakeCommitEntranceCrossed ? "floor ?" : (_brakeCommitFloorAtEntrance ? "floor ON" : "floor off");
+            string events = "";
+            if (TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple) events += " | skid";
+            if (_brakeCommitWasAirborne) events += " | air";
             string detail = (_brakeCommitEntryMeasured
                 ? _brakeCommitEntryMetres.ToString("+0;-0;0") + "m"
-                : (_brakeCommitSawAboveApex ? "never slowed" : "no braking")) + " | " + floor;
+                : (_brakeCommitSawAboveApex ? "never slowed" : "no braking")) + " | " + floor + events;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
-            // A slide is a verdict of its own, but it takes a real one: 2.5x the live peak is where the lateral
-            // curve has fallen all the way to fTractionCurveMin, so that is sliding rather than merely cornering at
-            // the limit. The factor then takes a flat cut — sample or no sample, the slide is the evidence.
-            if (TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple)
-            {
-                float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
-                if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment(detail);
-                return;
-            }
             // The target is a position, not a duration: the car should reach the corner speed exactly at the entrance, so the mark wants to
             // land on zero metres. Negative is early - there was road left when the bar was crossed - so the factor climbs and the corner is
             // braked later; positive is late and it gives factor back. No dead zone, capped per event.
@@ -2856,11 +2838,8 @@ namespace ARS
             float step = _brakeCommitEntryMeasured
                 ? ARS.Clamp(-_brakeCommitEntryMetres * BrakeEntryFactorPerMetre, -BrakeEntryMaxStepPerEvent, BrakeEntryMaxStepPerEvent)
                 : 0f;
-            // The air penalty comes off on top of the step and is never offset by it: a jump is a fault even on a corner the mark liked.
-            float factor = ARS.Clamp(before + step - airPenalty, BrakeMinFactor, BrakeMaxFactor);
+            float factor = ARS.Clamp(before + step, BrakeMinFactor, BrakeMaxFactor);
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
-            // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
-            // braking that corner costs.
             AnnounceBrakeAdjustment(detail);
         }
 
