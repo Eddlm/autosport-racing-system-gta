@@ -400,8 +400,8 @@ namespace ARS
         // Factor already forfeited this corner for leaving the ground while still over the ramp. A car in the air has lost the
         // corner regardless of the clock: the jump is the proof, not a hint.
         float _brakeSampleAirPenalty = 0f;
-        // Metres from the node where the car dropped below the corner speed plus the full-brake error, to the corner entrance. Positive
-        // means the mark sits before the entrance - the room it had left - and negative means it was already inside the corner.
+        // Metres from the corner entrance to the node where the car dropped below the corner speed plus the full-brake error, so the
+        // sign reads as a position on the road: negative with road still to run before the entrance, positive once past it.
         float _brakeSampleEntryMetres = 0f;
         bool _brakeSampleEntryMeasured = false;
         bool _brakeSampleSawAboveApex = false;
@@ -2739,8 +2739,8 @@ namespace ARS
                         int entranceNode = CornerEntranceNode(corner, _brakeSampleApexNode);
                         if (entranceNode >= 0)
                         {
-                            // From the mark to the entrance, signed: positive with road still to run, negative once inside the corner.
-                            float metres = ARS.TrackPoints[entranceNode].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
+                            // Signed from the entrance: negative is the mark sitting before it, positive is the car still on the bar past it.
+                            float metres = CurrentTrackPoint.CumulativeDistance - ARS.TrackPoints[entranceNode].CumulativeDistance;
                             // The wrap the rest of the route code applies: on a circuit an entrance behind the car reads as most of a lap.
                             if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metres) > ARS.RouteLengthMeters * 0.5f)
                                 metres -= Math.Sign(metres) * ARS.RouteLengthMeters;
