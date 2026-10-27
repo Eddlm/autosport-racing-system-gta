@@ -412,6 +412,7 @@ namespace ARS
         bool _brakeSampleFloorAtEntrance = false;
         bool _brakeSampleEntranceCrossed = false;
         // Room left to the edge at the closest approach to this corner's apex. Two floats, nothing else.
+        const float BrakeApexNearMetres = 50f;
         float _brakeSampleApexGap = 0f;
         float _brakeSampleApexClosest = float.MaxValue;
         int _brakeOverNextSampleAt = 0;
@@ -2707,7 +2708,9 @@ namespace ARS
             {
                 TrackPoint apexTrack = ARS.TrackPoints[_brakeSampleApexNode];
                 float approach = Car.Position.DistanceTo(apexTrack.Position);
-                if (approach < _brakeSampleApexClosest)
+                // Only from close range: at the start of a race the tracker sits on the route's last node, and the lane offset to a distant
+                // apex is a chord of hundreds of metres. That is where the -129 m came from.
+                if (approach < BrakeApexNearMetres && approach < _brakeSampleApexClosest)
                 {
                     _brakeSampleApexClosest = approach;
                     _brakeSampleApexGap = apexTrack.TrackHalfWidth - Math.Abs(ARS.SignedLaneOffset(Car.Position, apexTrack.Position, apexTrack.Direction));
