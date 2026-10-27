@@ -1477,7 +1477,7 @@ namespace ARS
             };
             developmentMenu.Add(slipSourceItem);
 
-            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "While the car pulls over half its lateral grip and the projected line heads for the inside of the road, the throttle may not fall below a floor that ramps from nothing at the track centre to full throttle at the inside edge, always within what TCS and stability allow. Experiment: on the corner exit the projection points down the straight and it lets go.");
+            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "While the car pulls over half its lateral grip and the projected line heads for the inside of the road, the throttle may not fall below a floor that ramps from nothing at the track centre to full throttle at the inside edge, always within what TCS and stability allow. Experiment: on the corner exit the projection points down the straight and it lets go.", GsLaneThrottleFloor);
             gsLaneFloorItem.CheckboxChanged += (sender, args) =>
             {
                 GsLaneThrottleFloor = gsLaneFloorItem.Checked;
@@ -1485,7 +1485,7 @@ namespace ARS
             };
             developmentMenu.Add(gsLaneFloorItem);
 
-            NativeCheckboxItem openUpItem = new NativeCheckboxItem("Open Up on Throttle", "The slip the wheel is allowed to use shrinks with the throttle: at rest it is the allowance the car has today, and at full pedal it is 60 % of it. Experiment: asking for power never asks for more steering.");
+            NativeCheckboxItem openUpItem = new NativeCheckboxItem("Open Up on Throttle", "The slip the wheel is allowed to use shrinks with the throttle: at rest it is the allowance the car has today, and at full pedal it is 60 % of it. Experiment: asking for power never asks for more steering.", OpenUpOnThrottle);
             openUpItem.CheckboxChanged += (sender, args) =>
             {
                 OpenUpOnThrottle = openUpItem.Checked;
