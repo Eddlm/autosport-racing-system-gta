@@ -2766,6 +2766,12 @@ namespace ARS
                 if (!float.IsNaN(slide) && slide > _brakeSampleMaxSlideDeg) _brakeSampleMaxSlideDeg = slide;
             }
 
+            // A passed corner always gets its verdict, whatever the held queue did this tick. A corner-table rebuild or a car slowed to
+            // half the apex speed invalidates that queue, and the notice used to be swallowed with it - which is exactly what made the
+            // reports look random. The mark has to exist: with no crossing there is nothing to report.
+            if (_brakeCommitApexNode < 0 && _brakeSampleApexNode >= 0 && _brakeSampleEntryMeasured && HasPassedApex(_brakeSampleApexNode))
+                ScheduleBrakeCommit();
+
             if (ActiveManeuver.Type != ManeuverType.None) return;
 
             if (HasPassedBrakingTarget()) return;
@@ -2775,6 +2781,9 @@ namespace ARS
         // Park the sample at the apex pass; the verdict lands BrakeCommitDelaySeconds later.
         void ScheduleBrakeCommit()
         {
+            // Already parked for this apex: the leapfrog and the sample can both ask in the same tick, and the second must not
+            // commit what the first only just scheduled - the slide window would be cut to a single frame.
+            if (_brakeCommitApexNode >= 0 && _brakeCommitApexNode == _brakeSampleApexNode) return;
             // Two apexes inside the delay (a chicane) settle the older one now rather than lose it.
             if (_brakeCommitApexNode >= 0) CommitBrakeLearning();
             _brakeCommitApexNode = _brakeSampleApexNode;
