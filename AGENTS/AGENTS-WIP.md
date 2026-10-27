@@ -206,7 +206,7 @@ The slope's `sqrt(hill grip)` and the crest's `routeCrestFactor` multiply **`fol
 sampled **ahead of the car** (slope over the 1.0-2.0 s window, crest at the 1.0 s and 2.0 s nodes), so multiplying a corner
 target by them made an apex two hundred metres away rise and fall with the road under the wheels. Found from a corner that
 read as strangely slow on every lap; with the corner cut removed it took its authored speed again while the route term went
-on protecting the crests where the car actually is. `MaxCrestLift` (0.1-2.0 g, default 1.0) is the crest tolerance and it is
+on protecting the crests where the car actually is. `MaxCrestLift` (0.1-2.0 g, default 0.4) is the crest tolerance and it is
 live again, because the multiplier is back on the route.
 
 
