@@ -208,6 +208,11 @@ namespace ARS
         // The apex blend only ever closes: the latched phase of the corner currently being approached, and which corner it belongs to.
         int _linePhaseNode = -1;
         float _linePhaseLatched;
+        // The apex this line last seeded its phase for, and when. A corner the picker drops and re-adopts a tick later must not be re-seeded:
+        // that would push the demand back outward mid-manoeuvre.
+        int _linePhaseSeededNode = -1;
+        int _linePhaseSeededAt = 0;
+        const int LinePhaseReseedBlockMs = 5000;
         // This car's own pull-in for the outside line, rolled once per corner and held until the car passes it.
         int _lineBiasNode = -1;
         float _lineBiasMeters;
@@ -1548,13 +1553,21 @@ namespace ARS
                 // does it before the identity can change, so keeping the phase here would only make a real next corner start inside.
                 if (_linePhaseNode != apexNode)
                 {
+                    bool seedFromLane = secondsToApex <= IdealLineBlendStartSeconds
+                        && !(_linePhaseSeededNode == apexNode && Game.GameTime - _linePhaseSeededAt < LinePhaseReseedBlockMs);
                     _linePhaseNode = apexNode;
                     _linePhaseLatched = 0f;
                     // A corner adopted already inside the blend has no outside left to run: seeding the latch from the car's own lane stops
                     // the line asking for an outside it has already passed, which is a swerve out on a corner just met. The lane is read in
                     // the same frame as the demand - cornerDir * ownLane - so the two are comparable.
-                    if (secondsToApex <= IdealLineBlendStartSeconds)
+                    // The seed is refused for an apex this line already seeded recently: a picker that drops a corner and comes back a tick
+                    // later would otherwise re-inject the phase mid-manoeuvre. That is what the timestamp is for.
+                    if (seedFromLane)
+                    {
                         _linePhaseLatched = ARS.Clamp((outsideBound - cornerDir * ownLane) / Math.Max(outsideBound + safeBound, 0.01f), 0f, 1f);
+                        _linePhaseSeededNode = apexNode;
+                        _linePhaseSeededAt = Game.GameTime;
+                    }
                     _linePhaseDir = cornerDir;
                 }
                 _linePhaseLatched = Math.Max(_linePhaseLatched, linePhase);
