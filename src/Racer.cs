@@ -1388,9 +1388,9 @@ namespace ARS
         // How much nearer another corner must be before it takes the line away from the one already adopted. A few metres of
         // hysteresis is enough: two apexes that swap places tick after tick do so by less than that.
         const float LineApexStickyMeters = 30f;
-        // Moving from the outside to the inside is a time decision, because in metres the same stretch would be 20 m at 25 km/h and 80 m
-        // at 100. A second and a half to the start and half a second to the end: one second of blend, the inside reached 0.5 s before the
-        // apex and held from there, so the line is not still moving when the car arrives.
+        // Moving from the outside to the inside is a time decision, and the clock is the car's own speed taken once, at the point the window
+        // opens - so the tempo belongs to that car's approach and stays put while it brakes. A second and a half to the start, half a second
+        // to the inside, and the inside is held from there.
         const float IdealLineBlendStartSeconds = 1.5f;
         const float IdealLineBlendEndSeconds = 0.5f;
         const float IdealLineMaxRadiusMeters = 50f;
