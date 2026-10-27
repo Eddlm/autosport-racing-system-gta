@@ -2675,10 +2675,11 @@ namespace ARS
             // during a maneuver or past its own entrance cannot leave the sample pointing at an older apex.
             if (NextApexNode != _brakeSampleApexNode)
             {
-                // The previous apex has just gone past - the picker only advances once it is behind - so the offset held from the last tick
-                // is the reading at the pass. It fires here rather than in the apex-pass branch because by the time that branch runs the
+                // The previous apex has just gone past - the picker only advances once it is behind - so this is the frame where the passed
+                // corner is still known by name. It fires here rather than in the apex-pass branch because by the time that branch runs the
                 // sample already points at the next corner.
                 if (_brakeSampleApexNode >= 0)
+                {
                     // How close the car was to the INSIDE edge as it went past the apex, in metres: zero is touching the inside, larger means it
                     // clipped wide. The inside is the negative lane side, the same convention the lane floor uses - Angle is positive to the left,
                     // lane offsets are positive to the right - so the sign of the turn picks the edge, in the apex node's own frame.
@@ -2687,6 +2688,7 @@ namespace ARS
                     float insideLane = -Math.Sign(apexTrack.Angle) * apexTrack.TrackHalfWidth;
                     float gap = Math.Abs(insideLane - carLane);
                     if (!float.IsNaN(gap)) AnnounceBrakeAdjustment("Apex inside " + gap.ToString("0.0") + "m");
+                }
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleWasAirborne = false;
