@@ -441,7 +441,7 @@ namespace ARS
         // zero metres. This is the factor moved per metre of error - three metres costs 0.06, tuned by driving - capped per event so one
         // bad corner cannot spend the whole range.
         const float BrakeEntryFactorPerMetre = 0.02f;
-        const float BrakeEntryMaxStepPerEvent = 0.10f;
+        const float BrakeEntryMaxStepPerEvent = 0.25f;
         // How far before the entrance the floor state is watched, in seconds of travel.
         const float BrakeFloorLatchSeconds = 1f;
         // How much of the law's own brake error the ramp is allowed before the clock starts. At 1.0 a stop that is going well still
