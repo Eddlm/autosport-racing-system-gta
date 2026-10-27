@@ -1390,12 +1390,11 @@ namespace ARS
         // How much nearer another corner must be before it takes the line away from the one already adopted. A few metres of
         // hysteresis is enough: two apexes that swap places tick after tick do so by less than that.
         const float LineApexStickyMeters = 30f;
-        // Moving from the outside to the inside is a POSITION on the track, the same for every car: closing starts 50 m before the apex and
-        // the inside is reached 12 m before it, then held. The clock is sampled AT that gate instead of at the 300 m window, which is what
-        // makes it a position: with the entry speed taken where the move begins, the seconds cancel and the line stops depending on how fast
-        // the car happened to arrive. Sampling it at 300 m read a speed the car had not yet braked from, so the blend opened a hundred
-        // metres early and the car had to counter-steer off the inside.
-        const float IdealLineBlendStartMeters = 50f;
+        // Moving from the outside to the inside is a POSITION on the track, and that position scales with the road: the blend starts at this
+        // many times the track's full width before the apex (five widths: 60 m on a 12 m road, 110 m on a 22 m one), floored so a narrow
+        // lane does not start it on top of the apex. The inside is reached IdealLineBlendEndMeters before the apex and held from there.
+        const float IdealLineBlendWidthFactor = 5f;
+        const float IdealLineBlendMinMeters = 20f;
         const float IdealLineBlendEndMeters = 12f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
@@ -1479,6 +1478,9 @@ namespace ARS
             if (cornerDir == 0f) return 0f;
 
             float halfWidth = steerRefPoint.TrackHalfWidth;
+            // The blend's gate, in metres of this road: five full widths before the apex, with a floor. Every car on the same corner starts
+            // closing at the same place, and a wide road gets the longer run-in its wider traverse needs.
+            float blendStartMeters = Math.Max(2f * halfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = Math.Max(halfWidth - carHalfWidth, 0f);
 
@@ -1545,7 +1547,7 @@ namespace ARS
             if (_lineClockNode != apexNode) { _lineClockNode = apexNode; _lineClockMps = 0f; _lineBlendStartAt = 0; }
             // Sampled at the gate the move actually starts from: the speed here is the one the car is approaching at, after the brake has
             // begun. That sample sets the move's duration - 50 m at this speed - and the phase is then simply the time elapsed over it.
-            if (_lineClockMps <= 0f && metresToApex >= 0f && metresToApex <= IdealLineBlendStartMeters)
+            if (_lineClockMps <= 0f && metresToApex >= 0f && metresToApex <= blendStartMeters)
             {
                 _lineClockMps = Math.Max(speedMps, 1f);
                 _lineBlendStartAt = Game.GameTime;
@@ -1555,7 +1557,7 @@ namespace ARS
             // The move lasts exactly as long as 50 m takes at the speed sampled at 50 m: the car's own approach sets the tempo, and the
             // outside-to-inside sweep is done by the time it would have covered that distance - which, because it is braking, lands a little
             // before the apex. apexCommitted below is the backstop.
-            float blendSeconds = Math.Max(IdealLineBlendStartMeters / _lineClockMps, 0.1f);
+            float blendSeconds = Math.Max(blendStartMeters / _lineClockMps, 0.1f);
             float blendElapsed = _lineBlendStartAt > 0 ? (Game.GameTime - _lineBlendStartAt) / 1000f : 0f;
             float linePhase = ARS.Clamp(blendElapsed / blendSeconds, 0f, 1f);
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
@@ -1567,7 +1569,7 @@ namespace ARS
             // mechanical grip and downforce, and one tick under it used to sweep the ratchet away mid-corner.
             bool inBlendWindow = metresToApex >= 0 && metresToApex <= IdealLineWindowMeters
                 && c.DetectedRadius < IdealLineMaxRadiusMeters && !HasPassedApex(apexNode)
-                && metresToApex <= IdealLineBlendStartMeters;
+                && metresToApex <= blendStartMeters;
             if (inBlendWindow)
             {
                 // A different corner always starts from the outside. The old rule kept the latch when the handedness matched, so
@@ -1575,7 +1577,7 @@ namespace ARS
                 // does it before the identity can change, so keeping the phase here would only make a real next corner start inside.
                 if (_linePhaseNode != apexNode)
                 {
-                    bool seedFromLane = metresToApex <= IdealLineBlendStartMeters
+                    bool seedFromLane = metresToApex <= blendStartMeters
                         && !(_linePhaseSeededNode == apexNode && Game.GameTime - _linePhaseSeededAt < LinePhaseReseedBlockMs);
                     _linePhaseNode = apexNode;
                     _linePhaseLatched = 0f;
