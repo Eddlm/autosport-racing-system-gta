@@ -396,12 +396,8 @@ namespace ARS
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;  // largest slip seen between this apex's entrance and the apex itself
         int _brakeSampleApexNode = -1;
-        // How long this approach has spent over the ramp, in seconds. The learner aims at BrakeOverTargetSeconds of it, so a
-        // corner that never goes over buys later braking and one that spends too long over gives some back.
-        //
-        float _brakeSampleOverSeconds = 0f;
         // Factor already forfeited this corner for leaving the ground while still over the ramp. A car in the air has lost the
-        // corner regardless of the clock: the jump is the proof, not a hint.
+        // corner regardless of anything else: the jump is the proof, not a hint.
         float _brakeSampleAirPenalty = 0f;
         // Metres from the corner entrance to the node where the car dropped below the corner speed plus the full-brake error, so the
         // sign reads as a position on the road: negative with road still to run before the entrance, positive once past it.
@@ -424,7 +420,6 @@ namespace ARS
         int _brakeCommitApexNode = -1;
         int _brakeCommitAtGameTime = 0;
         float _brakeCommitMaxSlideDeg = 0f;
-        float _brakeCommitOverSeconds = 0f;
         float _brakeCommitAirPenalty = 0f;
         float _brakeCommitEntryMetres = 0f;
         bool _brakeCommitEntryMeasured = false;
@@ -440,11 +435,13 @@ namespace ARS
         // never deliver. A car braking at the limit is always fractionally over its own theory, so a speed or a ratio scored "over"
         // on every corner and the factor could only ever fall: the learner could never risk more. Under the target the entry may be
         // braver, over it the entry is relaxed.
-        const float BrakeOverTargetSeconds = 1f;
-        // The step is proportional and has no dead zone: this much factor for every tenth of a second away from the target, in either
-        // direction. At 0.05 per tenth the slope is half a factor second, so the range 0.5-1.0 is crossed in a second of error - the
-        // learner is meant to be aggressive, and the clamp is the only brake on it.
-        const float BrakeOverStepPerTenth = 0.05f;
+        // The verdict aims at a position: the car should reach the corner speed exactly at the entrance, so the mark wants to land on
+        // zero metres. This is the factor moved per metre of error - ten metres costs 0.05 - capped per event so one bad corner cannot
+        // spend the range. No dead zone, same as before.
+        const float BrakeEntryFactorPerMetre = 0.005f;
+        const float BrakeEntryMaxStepPerEvent = 0.10f;
+        // How far before the entrance the floor state is watched, in seconds of travel.
+        const float BrakeFloorLatchSeconds = 1f;
         // How much of the law's own brake error the ramp is allowed before the clock starts. At 1.0 a stop that is going well still
         // counted time over - the car trails the falling ramp by more than the law's steady error, and every measurement is a sample
         // of a moving target - so the floor is raised to 1.5: four and a half metres a second, about ten miles an hour, above the
@@ -456,10 +453,6 @@ namespace ARS
         // sampler is the clock everything else here already runs on.
         const float BrakeAirPenaltyPerSample = 0.05f;
         const float BrakeAirPenaltyMax = 0.20f;
-        // The clock only runs while the ramp is still meaningfully ahead of the apex speed - a quarter of the apex energy, a ramp 12 %
-        // above it. Nearer than that the car is already at the corner speed, the brake is coming off, and a sample of a moving target
-        // is measuring the tail of the stop rather than the entry.
-        const float BrakeOverMinBudgetShare = 0.25f;
         const int BrakeOverSampleMs = 100;
         const float BrakeMaxFactor = 1f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
@@ -2688,7 +2681,6 @@ namespace ARS
             {
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
-                _brakeSampleOverSeconds = 0f;
                 _brakeSampleAirPenalty = 0f;
                 _brakeSampleEntryMetres = 0f;
                 _brakeSampleEntryMeasured = false;
@@ -2709,24 +2701,17 @@ namespace ARS
             if (_brakeSampleApexNode >= 0 && !HasPassedApex(_brakeSampleApexNode) && Game.GameTime >= _brakeOverNextSampleAt)
             {
                 _brakeOverNextSampleAt = Game.GameTime + BrakeOverSampleMs;
-                float apexSpeed = Math.Max(2f, NextApexSpeed);
-                // The ramp carries the pedal law's own brake error: a proportional law needs a sustained error to hold any decel, so a
-                // car braking at the limit sits about BrakeErrorMultiplier above the bare ramp by design. Against the bare number it
-                // would read as over from the first metre of every stop.
+                // The ramp carries the pedal law's own brake error: a proportional law needs a sustained error to hold any decel, so a car
+                // braking at the limit sits about BrakeErrorMultiplier above the bare ramp by design, and 1.5x that is where the floor of
+                // the comparison sits before "over" means anything.
                 float ramp = ApexBrakingSpeed(_brakeSampleApexNode, NextApexSpeed) + BrakeErrorMultiplier * BrakeOverAllowanceShare;
                 float carried = ARS.GetForwardSpeed(Car);
-                float budget = ramp * ramp - apexSpeed * apexSpeed;
                 bool over = ramp < 100f && carried > ramp;
 
-                // Airborne and still over the ramp: the jump is the verdict, whether or not the clock below is still running.
+                // Airborne and still over the ramp: the jump is the verdict on its own.
                 if (over && Car.IsInAir)
                     _brakeSampleAirPenalty = Math.Min(_brakeSampleAirPenalty + BrakeAirPenaltyPerSample, BrakeAirPenaltyMax);
 
-                // The clock itself only runs while the car is on the brake and the ramp still has resolution; what it counts is time
-                // spent above the ramp, because that is the quantity the learner aims at.
-                if (over && !HasPassedBrakingTarget() && Control.Brake > 0.05f
-                    && budget > BrakeOverMinBudgetShare * apexSpeed * apexSpeed)
-                    _brakeSampleOverSeconds += BrakeOverSampleMs / 1000f;
             }
 
             // Where the car actually reaches the corner speed, measured against its braking target: positive is late, negative is early,
@@ -2775,9 +2760,9 @@ namespace ARS
                 }
             }
 
-            // Whether the lane floor was holding throttle as the car crossed this corner's entrance: read once, when the distance to
-            // the entrance goes from ahead to behind. The pedal values are a tick old, because the pedals are computed after this
-            // method in the tick - sixteen milliseconds against the metres being compared here.
+            // Whether the lane floor was holding throttle on the way into this corner. It is latched over every tick of the last second of
+            // travel before the entrance, not read on the crossing frame: a single tick samples a rule that ramps with depth, so ON at the
+            // entrance can be OFF a metre earlier and the verdict would turn on when it happened to be sampled.
             if (!_brakeSampleEntranceCrossed && _brakeSampleApexNode >= 0)
             {
                 CornerPoint entranceCorner = ARS.Corners.FirstOrDefault(c => c.Node == _brakeSampleApexNode);
@@ -2787,11 +2772,10 @@ namespace ARS
                     float toEntrance = ARS.TrackPoints[entranceNode].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
                     if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(toEntrance) > ARS.RouteLengthMeters * 0.5f)
                         toEntrance -= Math.Sign(toEntrance) * ARS.RouteLengthMeters;
-                    if (toEntrance <= 0f)
-                    {
-                        _brakeSampleFloorAtEntrance = _gsFloorActiveThisTick;
-                        _brakeSampleEntranceCrossed = true;
-                    }
+                    // The pedal state is one tick old (the pedals are computed after this method), which against a one-second window is nothing.
+                    if (toEntrance > 0f && toEntrance <= Car.Velocity.Length() * BrakeFloorLatchSeconds && _gsFloorActiveThisTick)
+                        _brakeSampleFloorAtEntrance = true;
+                    if (toEntrance <= 0f) _brakeSampleEntranceCrossed = true;
                 }
             }
             // Runs on the corner proper, entrance to apex — exactly where the sample has stopped. A car that slid on
@@ -2825,7 +2809,6 @@ namespace ARS
             _brakeCommitApexNode = _brakeSampleApexNode;
             _brakeCommitAtGameTime = Game.GameTime + (int)(BrakeCommitDelaySeconds * 1000f);
             _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
-            _brakeCommitOverSeconds = _brakeSampleOverSeconds;
             _brakeCommitAirPenalty = _brakeSampleAirPenalty;
             _brakeCommitEntryMetres = _brakeSampleEntryMetres;
             _brakeCommitEntryMeasured = _brakeSampleEntryMeasured;
@@ -2839,7 +2822,6 @@ namespace ARS
             if (!ARS.BrakeLearning || _brakeCommitApexNode < 0) return;
             int apexNode = _brakeCommitApexNode;
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
-            float overSeconds = _brakeCommitOverSeconds;
             float airPenalty = _brakeCommitAirPenalty;
             // Every verdict says where the mark landed, or why there is none: a corner that never needed the bar and one the car never
             // came down to are different facts, and both are worth more than silence.
@@ -2859,16 +2841,23 @@ namespace ARS
                 AnnounceBrakeAdjustment(detail);
                 return;
             }
-            // One measure, one target, and both directions scale alike: the step is proportional to how far the corner landed from
-            // the target, with no dead zone at all. A corner that spends no time over is the corner that should be pushed hardest, and
-            // one that spends twice the target pays the most - which is the lever a magnitude could never give, because every car is
-            // fractionally over its own theory.
-            float error = BrakeOverTargetSeconds - overSeconds;
-            float step = BrakeOverStepPerTenth * (error / 0.1f);
-            // The air penalty comes off on top of the step and is never offset by it: a jump is a fault even on a corner whose clock
-            // landed under the target, and the clamp is the only bound left.
-            float factor = before + step - airPenalty;
-            factor = ARS.Clamp(factor, BrakeMinFactor, BrakeMaxFactor);
+            // The target is a position, not a duration: the car should reach the corner speed exactly at the entrance, so the mark wants to
+            // land on zero metres. Negative is early - there was road left when the bar was crossed - so the factor climbs and the corner is
+            // braked later; positive is late and it gives factor back. No dead zone, capped per event.
+            //
+            // Unless the lane floor was holding throttle on the way in. That is the car saying it does not want to brake there, and it is
+            // usually right: the floor only fires where the projected line sits inside the car's, so the speed it produces is the intended
+            // one. The verdict is then not a braking error, and the factor is left exactly where it is.
+            if (_brakeCommitFloorAtEntrance)
+            {
+                AnnounceBrakeAdjustment(detail + " | held");
+                return;
+            }
+            float step = _brakeCommitEntryMeasured
+                ? ARS.Clamp(-_brakeCommitEntryMetres * BrakeEntryFactorPerMetre, -BrakeEntryMaxStepPerEvent, BrakeEntryMaxStepPerEvent)
+                : 0f;
+            // The air penalty comes off on top of the step and is never offset by it: a jump is a fault even on a corner the mark liked.
+            float factor = ARS.Clamp(before + step - airPenalty, BrakeMinFactor, BrakeMaxFactor);
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
             // The learned factor is otherwise invisible, and this is the only read-out of what the AI decided
             // braking that corner costs.
