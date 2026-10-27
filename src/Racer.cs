@@ -1395,8 +1395,8 @@ namespace ARS
         // lane does not start it on top of the apex. The inside is forced from IdealLineBlendEndWidthFactor widths out and held from there.
         const float IdealLineBlendWidthFactor = 6f;
         const float IdealLineBlendMinMeters = 20f;
-        // The end scales with the road too, at three widths: 36 m before the apex on a 12 m road, 66 m on a 22 m one.
-        const float IdealLineBlendEndWidthFactor = 3f;
+        // The end scales with the road too, at one width: 12 m before the apex on a 12 m road, 22 m on a 22 m one.
+        const float IdealLineBlendEndWidthFactor = 1f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
         // the point: they crawl to the first corner instead of diving for the outer edge.
@@ -1605,7 +1605,7 @@ namespace ARS
             // No else-clear: the ratchet is released when a DIFFERENT corner is adopted, or in Launch. Clearing it whenever the
             // blend window flickered was how the line reset mid-manoeuvre - and the window contains the speed floor, which moves
             // with grip, so it flickers precisely when the car is unsettled.
-            // The last three widths are a commitment, not a preference. Whatever the blend managed by now - a short window at speed, a lean
+            // The last width is a commitment, not a preference. Whatever the blend managed by now - a short window at speed, a lean
             // contesting the lane, a speed floor that dropped out under braking - inside them the target IS the inside extreme, and the line is
             // active so that nothing else can claim the lane from it.
             bool apexCommitted = metresToApex <= blendEndMeters && !HasPassedApex(apexNode);
