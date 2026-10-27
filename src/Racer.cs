@@ -2185,7 +2185,7 @@ namespace ARS
         }
 
         // Development experiment: with Open Up on Throttle on, the steering clamp the car is allowed shrinks with the pedal, from what it is
-        // today at zero throttle down to OpensUpThrottleFloorPct at full. It scales the CLAMP, not the slip allowance: the allowance feeds
+        // today at zero throttle down to OpenUpOnThrottleFloorPct at full. It scales the CLAMP, not the slip allowance: the allowance feeds
         // InnerPct, which the throttle cap also reads, so scaling it there lifted the car instead of just opening the wheel.
         // The pedal read here is this tick's: the pedals are computed before this limiter runs.
 
@@ -2193,7 +2193,7 @@ namespace ARS
         // The pedal travel the reduction is spread over: half. Above it the floor already stands.
         const float OpensUpThrottleSpanShare = 0.5f;
 
-        float OpensUpSlipScale()
+        float OpensUpClampScale()
         {
             float floorPct = ARS.Clamp(ARS.OpenUpOnThrottleFloorPct, 0, 100) / 100f;
             if (floorPct >= 1f) return 1f;
@@ -2291,7 +2291,7 @@ namespace ARS
                 // Open Up on Throttle: the wheel is what gives way under power, and only the wheel. Scaling the slip allowance itself would also
                 // close the pedal - InnerPct feeds the throttle cap at ConvertSpeedToPedals - which is the opposite of the trade the rule exists
                 // for: give up steering angle, keep the acceleration.
-                _clampTargetDeg *= OpensUpSlipScale();
+                _clampTargetDeg *= OpensUpClampScale();
                 float chase = float.IsNaN(_chasingClampDeg) ? clampTarget : _chasingClampDeg;
                 // The closing rate follows the severity of the overshoot, the opening is a flat rate: the harder the tyre is past
                 // its peak the faster the gate shuts, and it always reopens carefully rather than snapping wide.

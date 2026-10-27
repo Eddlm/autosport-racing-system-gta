@@ -1487,7 +1487,7 @@ namespace ARS
             };
             developmentMenu.Add(gsLaneFloorItem);
 
-            NativeListItem<string> openUpItem = new NativeListItem<string>("Open Up on Throttle", "Share of the normal slip allowance left at full pedal: 100 % is the rule off, 40 % opens the wheel to two fifths of its allowance under power. Asking for throttle with the wheel wound on spends the front tyre on lateral force, and that force is not pushing the car.", OpenUpFloorChoices);
+            NativeListItem<string> openUpItem = new NativeListItem<string>("Open Up on Throttle", "Share of the normal steering clamp left at full pedal: 100 % is the rule off, 40 % leaves the wheel two fifths of the angle it would otherwise be allowed under power. Asking for throttle with the wheel wound on spends the front tyre on lateral force, and that force is not pushing the car.", OpenUpFloorChoices);
             openUpItem.ItemChanged += (sender, args) =>
             {
                 OpenUpOnThrottleFloorPct = int.Parse(openUpItem.Items[args.Index], CultureInfo.InvariantCulture);
