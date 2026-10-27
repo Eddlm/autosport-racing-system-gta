@@ -230,7 +230,7 @@ namespace ARS
         { Options.ShowRivalry, false },
         { Options.ReverseRoute, false },
         { Options.HighDownforceOnline, false },
-        { Options.ShowCheckpoints, false },
+        { Options.ShowCheckpoints, true },
         { Options.ShowEdgeChevrons, false },
         { Options.ShowLeaderboard, true },
         { Options.ShowDriverNames, true },
