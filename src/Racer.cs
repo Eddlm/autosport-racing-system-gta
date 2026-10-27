@@ -2586,12 +2586,6 @@ namespace ARS
             float throttleBeforeFloor = Control.Throttle;
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
             _gsFloorActiveThisTick = Control.Throttle > throttleBeforeFloor;
-            // Development read-out, on the focused racer and only while the list is set: how far the steering clamp has been pulled below the
-            // ceiling it would have had without the rule, in per cent. It reads the pedal this tick just wrote.
-            //
-            // It cannot live on the player's car: this whole method only runs under !ControlledByPlayer, because the human drives that one.
-            if (ARS.OpenUpOnThrottleFloorPct < 100 && ARS.DebugFocusRacer == this)
-                UI.ShowSubtitle("Slip -" + (100f * (1f - OpensUpSlipScale())).ToString("0") + "%", 50);
             _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
 
             UpdateBrakeLearning();
