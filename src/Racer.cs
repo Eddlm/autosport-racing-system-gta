@@ -411,8 +411,6 @@ namespace ARS
         // The floor state read as the car crossed this corner's entrance.
         bool _brakeSampleFloorAtEntrance = false;
         bool _brakeSampleEntranceCrossed = false;
-        // Lane offset to this corner's apex, refreshed every tick: the last one taken before the sample rolls over is the reading at the pass.
-        float _brakeSampleApexOffset = 0f;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
@@ -2681,7 +2679,14 @@ namespace ARS
                 // is the reading at the pass. It fires here rather than in the apex-pass branch because by the time that branch runs the
                 // sample already points at the next corner.
                 if (_brakeSampleApexNode >= 0)
-                    AnnounceBrakeAdjustment("Apex " + _brakeSampleApexOffset.ToString("+0.0;-0.0;0.0") + "m");
+                    // How close the car was to the INSIDE edge as it went past the apex, in metres: zero is touching the inside, larger means it
+                    // clipped wide. The inside is the negative lane side, the same convention the lane floor uses - Angle is positive to the left,
+                    // lane offsets are positive to the right - so the sign of the turn picks the edge, in the apex node's own frame.
+                    TrackPoint apexTrack = ARS.TrackPoints[_brakeSampleApexNode];
+                    float carLane = ARS.SignedLaneOffset(Car.Position, apexTrack.Position, apexTrack.Direction);
+                    float insideLane = -Math.Sign(apexTrack.Angle) * apexTrack.TrackHalfWidth;
+                    float gap = Math.Abs(insideLane - carLane);
+                    if (!float.IsNaN(gap)) AnnounceBrakeAdjustment("Apex inside " + gap.ToString("0.0") + "m");
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleWasAirborne = false;
@@ -2699,10 +2704,6 @@ namespace ARS
                 // would be a second place the factor is written, judged without the slide and the pedal share.
             }
 
-            // Lane offset to this corner's apex, refreshed every tick, so the last one taken before the sample rolls over is the reading
-            // at the pass. Lateral only, the same signed offset everything else uses: positive to the right of travel.
-            if (_brakeSampleApexNode >= 0)
-                _brakeSampleApexOffset = ARS.SignedLaneOffset(Car.Position, ARS.TrackPoints[_brakeSampleApexNode].Position, ARS.TrackPoints[_brakeSampleApexNode].Direction);
 
             // Sampled on the learner's own clock, and the air penalty is checked over the whole corner rather than inside the braking
             // window: a car that takes off has already passed its braking target, which is exactly where the window ends.
