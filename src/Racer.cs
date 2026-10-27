@@ -365,9 +365,6 @@ namespace ARS
         // The colour the trajectory is drawn in, decided where the trajectory is measured rather than in the drawing code:
         // the floor, the edge and the widening all live here, and DrawDebug only has to paint what it is handed.
         Color _projectionPathColor = Color.Blue;
-        // What the inside floor added to the pedal this tick, as a share of full throttle: the difference between what the plan,
-        // the caps and the slew had composed and what the car was finally given. Read by the development subtitle.
-        float _throttleFloorGain = 0f;
         // Whether the lane floor was holding any throttle on the last tick it ran. Read from the brake sample as the car crosses a
         // corner entrance, so the report can say whether the floor was live when the corner began.
         bool _gsFloorActiveThisTick = false;
@@ -2158,7 +2155,7 @@ namespace ARS
         // Development experiment: with Open Up on Throttle on, the slip the limit allows shrinks with the pedal, from what it is today at
         // zero throttle down to OpensUpSlipFloorShare at full. The pedal read here is the previous tick's - it is computed after the wheel -
         // which is one frame against a rule that is meant to be driven by feel.
-        const float OpensUpSlipFloorShare = 0.6f;
+        const float OpensUpSlipFloorShare = 0.4f;
 
         float OpensUpSlipScale()
         {
@@ -2576,16 +2573,14 @@ namespace ARS
             gsFloor = Math.Min(gsFloor, Control.MaxThrottle);
             float throttleBeforeFloor = Control.Throttle;
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
-            _throttleFloorGain = Control.Throttle - throttleBeforeFloor;
             _gsFloorActiveThisTick = Control.Throttle > throttleBeforeFloor;
-            // Development read-out, on the focused racer and only while the toggle is on: what the floor added, in percent of
-            // full throttle, measured against everything that had already had its say.
+            // Development read-out, on the focused racer and only while the toggle is on: how far the slip allowance has been pulled below
+            // the ceiling it would have had without the rule, in per cent. It reads the pedal this tick just wrote, so the number is the one
+            // the next steering pass will use.
             //
-            // It cannot live on the player's car: this whole method only runs under !ControlledByPlayer, because the human
-            // drives that one. The floor is an AI rule, so the number has to be read on an AI - the same car whose trajectory
-            // line is on screen.
-            if (ARS.GsLaneThrottleFloor && ARS.DebugFocusRacer == this)
-                UI.ShowSubtitle("Gs floor: +" + (100f * _throttleFloorGain).ToString("0") + "% throttle", 50);
+            // It cannot live on the player's car: this whole method only runs under !ControlledByPlayer, because the human drives that one.
+            if (ARS.OpenUpOnThrottle && ARS.DebugFocusRacer == this)
+                UI.ShowSubtitle("Slip -" + (100f * (1f - OpensUpSlipScale())).ToString("0") + "%", 50);
             _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
 
             UpdateBrakeLearning();

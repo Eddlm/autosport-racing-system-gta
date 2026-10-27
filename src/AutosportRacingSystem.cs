@@ -1485,7 +1485,7 @@ namespace ARS
             };
             developmentMenu.Add(gsLaneFloorItem);
 
-            NativeCheckboxItem openUpItem = new NativeCheckboxItem("Open Up on Throttle", "The slip the wheel is allowed to use shrinks with the throttle: at rest it is the allowance the car has today, and at full pedal it is 60 % of it. Experiment: asking for power never asks for more steering.", OpenUpOnThrottle);
+            NativeCheckboxItem openUpItem = new NativeCheckboxItem("Open Up on Throttle", "The slip the wheel is allowed to use shrinks with the throttle: at rest it is the allowance the car has today, and at full pedal it is 40 % of it. Experiment: asking for power never asks for more steering.", OpenUpOnThrottle);
             openUpItem.CheckboxChanged += (sender, args) =>
             {
                 OpenUpOnThrottle = openUpItem.Checked;
