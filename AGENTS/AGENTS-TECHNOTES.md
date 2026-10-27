@@ -140,7 +140,8 @@ factor could only fall. And a clock counting seconds over the ramp made the targ
 braking zone and a hundred-and-seventy-metre one. Driven at 1.0 the cars brake exactly as the plan asks and at 1.5 they overshoot everything,
 which says the model itself is calibrated: **the factor has nothing global to learn.** The learner now aims at a position.
 
-    mark   = the node where the car drops below apex speed + BrakeErrorMultiplier (the full-brake error, 3 m/s)
+    mark   = the node where the car drops below apex speed + FullPedalSpeedErrorMps * BrakeErrorMultiplier
+             (the error that actually commands full brake: 12 m/s with the pair at 2 and 6)
     metres = mark - entrance          // negative = road still to run, positive = already inside the corner
     step   = -metres * BrakeEntryFactorPerMetre (0.005), capped at BrakeEntryMaxStepPerEvent (0.10)
 
