@@ -141,48 +141,31 @@ braking zone and a hundred-and-seventy-metre one. Driven at 1.0 the cars brake e
 which says the model itself is calibrated: **the factor has nothing global to learn.** The learner now aims at a position.
 
     mark   = the node where the car drops below apex speed + FullPedalSpeedErrorMps * BrakeErrorMultiplier
-             (the error that actually commands full brake: 12 m/s with the pair at 2 and 6)
+             (the error that actually commands full brake: 3 m/s with the pair at 1 and 3)
     metres = mark - entrance          // negative = road still to run, positive = already inside the corner
-    step   = -metres * BrakeEntryFactorPerMetre (0.005), capped at BrakeEntryMaxStepPerEvent (0.10)
+    step   = -metres * BrakeEntryFactorPerMetre (0.02), capped at BrakeEntryMaxStepPerEvent (0.25)
 
 Zero means the corner speed was reached exactly at the entrance. Negative means it was reached early, so the factor climbs and the next lap
 brakes later; positive gives factor back. No dead zone. The mark is taken on the FIRST tick below the bar and confirmed by the next two - the
 threshold is frozen when the sample opens, because `NextApexSpeed` is rebuilt every tick from grip and a smoothed radius and a live threshold
 decides the crossing on noise. The corner is looked up by apex node, exactly as `ApexBrakingSpeed` does.
 
-**Two gates stand in front of that step, and both are the driver's (2026-10-27).** The lane floor is latched over every tick of the last
-second of travel before the entrance (`BrakeFloorLatchSeconds`): if it was holding throttle at any point, the car was saying it did not want
-to brake there, so the verdict is not a braking error and the factor is left alone - the notice says `held`.
+**The lane floor is recorded and no longer holds the verdict (driver, 2026-10-27).** `BrakeFloorLatchSeconds` latches whether the floor
+was holding throttle over the last second before the entrance, and the flag reaches the commit - but the metres still decide: a corner the
+floor kept quick still has a braking point that can be measured wrong.
 
 **A slide counts as the braking's fault only under real brake demand (driver, 2026-10-27).** Full pedal destabilises a rear-engined car -
 Monroe loses its rear at maximum brake, observed in game - so the slide is watched **only while the pedal is asking for more than
 `BrakeSkidBrakeShare` 0.25**. Above that gate a slide throws the position verdict away and the factor pays its flat `BrakeSkidFactorStep`
 0.1: the demand is what broke the rear, so the braking point is what pays. Below the gate there is no braking to blame and the slide is
-the speed system's. A jump is never charged - it is only reported - because leaving the ground is speed, not pedal.
-The notice reads `-12m | floor off`, with `| skid` and `| air` appended when they happened, plus `never slowed` (above the bar and
-still above it at the apex) and `no braking` (never reached the bar) for the corners with no mark.
+the speed system's.
 
-**The step is proportional and the clock starts above the law's own brake error (driver, 2026-10-27).** `BrakeOverStepPerTenth`
-**0.05** per tenth of a second away from the target, in either direction, with **no dead zone**: half a factor per second of error,
-so the 0.5-1.0 range is crossed in a second. The ramp is allowed `BrakeOverAllowanceShare` **1.5** x `BrakeErrorMultiplier` - four
-and a half metres a second, about ten miles an hour - before a tenth of a second is counted; at 1.0 a stop that was going well
-still clocked time over, because the car trails the falling ramp by more than the law's steady error and every sample is a measure
-of a moving target.
+**The airborne flag is sampled and goes no further.** `BrakeOverSampleMs` walks the ramp every 100 ms across the whole corner and records
+whether the car was airborne over it, and the flag is copied into the commit; no rule and no notice reads it.
 
-**Leaving the ground while over the ramp is a verdict of its own (driver, 2026-10-27).** `BrakeAirPenaltyPerSample` **0.05** for
-every 100 ms sample airborne *and* above the ramp, capped at `BrakeAirPenaltyMax` **0.20** per corner, taken off on top of the
-step and never offset by it: the jump is the proof that the car arrived too fast, so a corner whose clock landed under the target
-still pays. It is checked across the whole corner rather than inside the braking window, because a car that takes off has already
-passed its braking target - the window ends exactly where the evidence starts. Per tick would have been six times faster than the
-learner can see; the sample clock is the one every other rule here runs on.
-**Two rules, one each way, and silence between them.** Over the ramp the factor pays `BrakeFeasibilityCutStep` 0.2 per
-`BrakeFeasibilityCutSpan` 0.5 of overage, capped by `BrakeMaxCutPerEvent` 0.15. Under it with budget to spare - ratio between
-`BrakeFeasibilityRewardAbove` 0.5 and `BrakeFeasibilityRewardBelow` 0.8 - it earns the flat `BrakeGoodArrivalStep` 0.025. On the
-ramp, or so far under it that the ramp never bound, nothing is written and nothing is announced: rewarding every easy arrival
-is how a factor inflates a step a lap until the corner breaks, and the band's lower edge is what keeps a car held up by traffic
-out of the reward. The skid verdict is untouched and still lands its flat 0.1. The announcement carries the ratio and the reason
-(`over`, `spare`, `skid`) so the band can be tuned by driving. `BrakeEntryExcessMps`, `BrakeEntryDeadbandMps`,
-`BrakeEntryFactorStep`, `_brakeEntryExcessMps` and `_brakeEntryMeasured` are gone with the old signal.
+**The notice carries one verdict per corner.** `Early by Nm`, `Late by Nm` or `On the mark`, then the factor it moved to;
+`Skid detected, assuming instability adjust -0.10` when the slide gate fires; and `Never slowed` (above the bar and still above it at the
+apex) or `No braking` (never reached the bar) for the corners with no mark. It is gated on `BrakeLearningNotify` alone.
 
 **The corner plan carries no terrain factor, and the route carries all of it (driver, 2026-10-23).** `cornerSpd` is
 multiplied by neither the slope's `sqrt(hill grip)` nor the crest's `routeCrestFactor`; `followTrackSpd` is multiplied by
