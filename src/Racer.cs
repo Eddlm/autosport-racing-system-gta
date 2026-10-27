@@ -1227,10 +1227,10 @@ namespace ARS
         // corner at its own limit — so the cap has to sit above the line's own rate and the acceleration is the only
         // lunge knob. At the shipped 40 the aim tracks the line inside a centimetre, and a 6 m request valid for half a second moves 3.4 m
         // where it used to step the whole way.
-        // Sized from the line's own geometry, not by feel: the outside-inside traversal is up to 18 m, and the window is now 1.0 s
-        // (1.5 to 0.5 before the apex), which asks 4 * 18 / 1.0^2 = 72 m/s^2 to start and stop inside it. At 40 the aim still tracks a
-        // normal 6 m move inside the window (4 * 6 / 1.0^2 = 24) and lags only on the widest traversals; raising this is the knob if the
-        // line is seen arriving late on a wide track.
+        // Sized from the line's own geometry, not by feel: the outside-inside traversal is up to 18 m, and the gate it has to happen
+        // inside is the blend's own six-to-one-width span, whose duration falls as the car speeds up. At 40 the aim still tracks a
+        // normal 6 m move inside that span and lags only on the widest traversals; raising this is the knob if the line is seen
+        // arriving late on a wide track.
         const float LaneMoverAccelMps2 = 40f;
         const float LaneMoverSpeedCapMps = 24f;
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
@@ -1376,8 +1376,8 @@ namespace ARS
         // measures a slow corner's window in metres too short for a fast car to reach the clamp in time.
         // How long before the apex the corner starts asking for the outside at all: the 1.5 s ramp plus the 4.5 s the car
         // needs to get out there and hold it.
-        // The two halves need room, and room on this road is measured in nodes: the line exists inside two hundred of them
-        // and the outside plateaus for those 250 metres. The ramp runs from 50 m out to 5 m out.
+        // The two halves need room, and room on this road is measured in metres: the line exists inside IdealLineWindowMeters of
+        // them, the outside holds the clamp until the gate, and the ramp runs from six widths out to one.
         // The outside is a distance decision and the apex is not. Placing the car on the outer edge is done with room to spare
         // and does not change with speed, so the window and the plateau stay in metres of route.
         const float IdealLineWindowMeters = 300f;
@@ -1479,7 +1479,7 @@ namespace ARS
             if (cornerDir == 0f) return 0f;
 
             float halfWidth = steerRefPoint.TrackHalfWidth;
-            // The blend's gate, in metres of this road: five full widths before the apex, with a floor. Every car on the same corner starts
+            // The blend's gate, in metres of this road: six full widths before the apex, with a floor. Every car on the same corner starts
             // closing at the same place, and a wide road gets the longer run-in its wider traverse needs.
             float blendStartMeters = Math.Max(2f * halfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
             float blendEndMeters = 2f * halfWidth * IdealLineBlendEndWidthFactor;
@@ -1541,8 +1541,8 @@ namespace ARS
             if (_apexLineInsideNode >= 0 && HasPassedApex(_apexLineInsideNode)) _apexLineInsideNode = -1;
             // The phase names the offset: +halfWidth is the outer edge, -halfWidth the inner one. Both are the RAW half width;
             // the mover's own guard (roadWide - carHalfWidth) is what finally places the car's CENTRE, so the body may still
-            // overhang the white line at the apex - which is the point of an apex. The inside extreme is reached ONE SECOND
-            // before the apex, so the car is already at the inside when it gets there instead of arriving on the way out.
+            // overhang the white line at the apex - which is the point of an apex. The inside extreme is reached when the blend
+            // ends, before the apex, so the car is already at the inside when it gets there instead of arriving on the way out.
             // The clock runs on the speed the car carried when it ENTERED the window, latched once per corner. The live speed moved the
             // blend opening with braking and traffic; the apex speed was too slow and shortened the manoeuvre to a third of its real time.
             // The entry speed is the one number that is both honest about the approach and stable for the whole corner.
