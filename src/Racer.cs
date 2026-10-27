@@ -414,6 +414,7 @@ namespace ARS
         // Room left to the edge at the closest approach to this corner's apex. Two floats, nothing else.
         const float BrakeApexNearMetres = 50f;
         float _brakeSampleApexGap = 0f;
+        int _brakeLastApexAnnounced = -1;
         float _brakeSampleApexClosest = float.MaxValue;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
@@ -2682,8 +2683,14 @@ namespace ARS
                 // The previous apex has just gone past, so this is the frame where the passed corner is still known by name. The reading comes
                 // from the closest approach tracked while approaching, not from here: by now the apex is tens of metres behind, and the
                 // perpendicular to its old tangent means nothing in a tight corner.
-                if (_brakeSampleApexNode >= 0 && _brakeSampleApexClosest < float.MaxValue)
+                // Fires once per apex, and only when that apex really went past: a picker that oscillates between candidates, or drops to -1 and
+                // comes back, changes the sample several times over one corner and used to announce each time.
+                if (_brakeSampleApexNode >= 0 && _brakeSampleApexNode != _brakeLastApexAnnounced
+                    && _brakeSampleApexClosest < float.MaxValue && HasPassedApex(_brakeSampleApexNode))
+                {
+                    _brakeLastApexAnnounced = _brakeSampleApexNode;
                     AnnounceBrakeAdjustment("Apex " + _brakeSampleApexGap.ToString("0.0") + "m");
+                }
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleWasAirborne = false;
