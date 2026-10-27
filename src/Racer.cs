@@ -1395,7 +1395,7 @@ namespace ARS
         // lane does not start it on top of the apex. The inside is reached IdealLineBlendEndMeters before the apex and held from there.
         const float IdealLineBlendWidthFactor = 5f;
         const float IdealLineBlendMinMeters = 20f;
-        const float IdealLineBlendEndMeters = 12f;
+        const float IdealLineBlendEndMeters = 12.5f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
         // the point: they crawl to the first corner instead of diving for the outer edge.
