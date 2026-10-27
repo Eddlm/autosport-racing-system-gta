@@ -1388,11 +1388,13 @@ namespace ARS
         // How much nearer another corner must be before it takes the line away from the one already adopted. A few metres of
         // hysteresis is enough: two apexes that swap places tick after tick do so by less than that.
         const float LineApexStickyMeters = 30f;
-        // Moving from the outside to the inside is a time decision, and the clock is the car's own speed taken once, at the point the window
-        // opens - so the tempo belongs to that car's approach and stays put while it brakes. A second and a half to the start, half a second
-        // to the inside, and the inside is held from there.
-        const float IdealLineBlendStartSeconds = 1.5f;
-        const float IdealLineBlendEndSeconds = 0.5f;
+        // Moving from the outside to the inside is a POSITION on the track, the same for every car: closing starts 50 m before the apex and
+        // the inside is reached 12 m before it, then held. The clock is sampled AT that gate instead of at the 300 m window, which is what
+        // makes it a position: with the entry speed taken where the move begins, the seconds cancel and the line stops depending on how fast
+        // the car happened to arrive. Sampling it at 300 m read a speed the car had not yet braked from, so the blend opened a hundred
+        // metres early and the car had to counter-steer off the inside.
+        const float IdealLineBlendStartMeters = 50f;
+        const float IdealLineBlendEndMeters = 12f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
         // the point: they crawl to the first corner instead of diving for the outer edge.
@@ -1539,12 +1541,14 @@ namespace ARS
             // blend opening with braking and traffic; the apex speed was too slow and shortened the manoeuvre to a third of its real time.
             // The entry speed is the one number that is both honest about the approach and stable for the whole corner.
             if (_lineClockNode != apexNode) { _lineClockNode = apexNode; _lineClockMps = 0f; }
-            if (_lineClockMps <= 0f && metresToApex >= 0f && metresToApex <= IdealLineWindowMeters)
+            // Sampled at the gate the move actually starts from, not at the 300 m window: the speed here is the one the car is approaching
+            // at, after the brake has begun. It feeds the debug line only now - the phase itself is metres.
+            if (_lineClockMps <= 0f && metresToApex >= 0f && metresToApex <= IdealLineBlendStartMeters)
                 _lineClockMps = Math.Max(speedMps, 1f);
             float clockBoostMph = ARS.Clamp(_lineDecelG * LineClockBrakeMphPerG, -LineClockBrakeCapMph, LineClockBrakeCapMph);
             float secondsToApex = metresToApex / Math.Max(_lineClockMps + ARS.MphToMps(clockBoostMph), 1f);
-            float linePhase = ARS.Clamp((IdealLineBlendStartSeconds - secondsToApex)
-                / Math.Max(IdealLineBlendStartSeconds - IdealLineBlendEndSeconds, 0.01f), 0f, 1f);
+            float linePhase = ARS.Clamp((IdealLineBlendStartMeters - metresToApex)
+                / Math.Max(IdealLineBlendStartMeters - IdealLineBlendEndMeters, 0.01f), 0f, 1f);
             // The line never backs out of the apex. The clock is the car's own speed, so braking lengthens the time to the apex and
             // would reopen a blend that has already closed; the phase is ratcheted per apex, so the demand can only move inward and
             // a new corner starts from the outside.
@@ -1554,7 +1558,7 @@ namespace ARS
             // mechanical grip and downforce, and one tick under it used to sweep the ratchet away mid-corner.
             bool inBlendWindow = metresToApex >= 0 && metresToApex <= IdealLineWindowMeters
                 && c.DetectedRadius < IdealLineMaxRadiusMeters && !HasPassedApex(apexNode)
-                && secondsToApex <= IdealLineBlendStartSeconds;
+                && metresToApex <= IdealLineBlendStartMeters;
             if (inBlendWindow)
             {
                 // A different corner always starts from the outside. The old rule kept the latch when the handedness matched, so
@@ -1562,7 +1566,7 @@ namespace ARS
                 // does it before the identity can change, so keeping the phase here would only make a real next corner start inside.
                 if (_linePhaseNode != apexNode)
                 {
-                    bool seedFromLane = secondsToApex <= IdealLineBlendStartSeconds
+                    bool seedFromLane = metresToApex <= IdealLineBlendStartMeters
                         && !(_linePhaseSeededNode == apexNode && Game.GameTime - _linePhaseSeededAt < LinePhaseReseedBlockMs);
                     _linePhaseNode = apexNode;
                     _linePhaseLatched = 0f;
@@ -1591,7 +1595,7 @@ namespace ARS
             // The last second is a commitment, not a preference. Whatever the blend managed by now - a short window at speed, a lean
             // contesting the lane, a speed floor that dropped out under braking - inside the final second the target IS the inside
             // extreme, and the line is active so that nothing else can claim the lane from it.
-            bool apexCommitted = secondsToApex <= IdealLineBlendEndSeconds && !HasPassedApex(apexNode);
+            bool apexCommitted = metresToApex <= IdealLineBlendEndMeters && !HasPassedApex(apexNode);
             if (apexCommitted)
             {
                 linePhase = 1f;
