@@ -118,9 +118,9 @@ namespace ARS
             {
                 switch (ARS.TipRate)
                 {
-                    case TipFrequency.High: return 20;
-                    case TipFrequency.Low: return 100;
-                    default: return 50;
+                    case TipFrequency.High: return 10;
+                    case TipFrequency.Low: return 30;
+                    default: return 20;
                 }
             }
         }
@@ -130,11 +130,12 @@ namespace ARS
             if (ARS.RaceStatus != RaceState.InProgress) return;
             // Once the winner is in, the help box belongs to the timeout countdown.
             if (ARS.LeaderboardFinish.Count > 0) return;
-            // A tip must never sit in front of a real message.
-            if (ARS.HelpMessages.Count > 0) return;
+            // No help-message gate: the tip is appended to the queue, so it plays after whatever is already waiting
+            // instead of being dropped for not finding the box empty.
             for (int i = 0; i < passedApexes; i++)
             {
-                if (ARS.GetRandomInt(1, Denominator) != 1) continue;
+                // Next(1, n + 1) so the draw is 1..n and the odds are exactly 1 in n, not 1 in n - 1.
+                if (ARS.GetRandomInt(1, Denominator + 1) != 1) continue;
                 string tip = NextTip();
                 if (tip == null) return;
                 ARS.HelpMessages.Add(tip);

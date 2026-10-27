@@ -151,8 +151,8 @@ namespace ARS
 
         // Player-facing AI/grid options (Settings\Menu-Settings.ini).
         public static bool NitrousEnabled = true;
-        // TipRate: how often a passed apex rolls for a tip. High = 1 in 20, Medium = 1 in 50, Low = 1 in 100.
-        public static TipFrequency TipRate = TipFrequency.Medium;
+        // TipRate: how often a passed apex rolls for a tip. High = 1 in 10, Medium = 1 in 20, Low = 1 in 30. Ships High.
+        public static TipFrequency TipRate = TipFrequency.High;
         // Apply Menyoo vehicle-appearance skins to grid cars when a matching file exists.
         public static bool UseMenyooSkins = true;
         // Repeat the pool's car models when it holds fewer cars than the grid target (tests.txt holds one).
@@ -1328,7 +1328,7 @@ namespace ARS
             };
 
             // ── Racing tips, shown through the help box after an apex ──
-            NativeListItem<string> tipRateItem = new NativeListItem<string>("Racing Tips", "How often a tip is shown when you pass an apex. The tips themselves are in tips.txt, next to sillynames.txt.", EnumLabels<TipFrequency>());
+            NativeListItem<string> tipRateItem = new NativeListItem<string>("Racing Tips", "How often a tip is shown when you pass an apex. The tips themselves are in Settings\\tips.txt.", EnumLabels<TipFrequency>());
             tipRateItem.ItemChanged += (sender, args) =>
             {
                 TipRate = (TipFrequency)args.Index;
