@@ -2420,6 +2420,10 @@ namespace ARS
             return Color.Blue;
         }
 
+        // The share of the theoretical lateral Gs the car must already be pulling before the floor holds any throttle. A third, so
+        // the floor is live through the whole of a committed corner instead of only its loaded half.
+        const float GsLaneFloorLateralShare = 0.33f;
+
         float GsLaneThrottleFloorValue(out bool insideRegime)
         {
             insideRegime = false;
@@ -2430,7 +2434,7 @@ namespace ARS
             if (_projectionOutsideSeconds > 0f) return 0f;
             float theoreticalGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
             if (!(theoreticalGs > 0f)) return 0f;
-            if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= 0.5f * theoreticalGs) return 0f;
+            if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= GsLaneFloorLateralShare * theoreticalGs) return 0f;
             // The two conventions point opposite ways and mixing them cost a build of white lines: TrackPoint.Angle is
             // SignedAngle(previous, next, WorldUp), so POSITIVE is a LEFT turn, while SignedLaneOffset is built on
             // Cross(direction, WorldUp), so POSITIVE is the RIGHT of travel. MeasureProjectionOutside pins the pair by
