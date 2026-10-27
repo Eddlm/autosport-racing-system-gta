@@ -405,6 +405,12 @@ namespace ARS
         float _brakeSampleEntryMetres = 0f;
         bool _brakeSampleEntryMeasured = false;
         bool _brakeSampleSawAboveApex = false;
+        // The corner speed frozen when the sample was opened. NextApexSpeed is rebuilt every tick from grip and a smoothed radius,
+        // and grip carries the per-tick downforce bonus, so a threshold read live jitters by about a metre a second and decides the
+        // crossing on noise instead of on the car.
+        float _brakeSampleApexSpeed = 0f;
+        int _brakeSampleBelowTicks = 0;
+        bool _brakeSampleEntryHasCandidate = false;
         int _brakeOverNextSampleAt = 0;
         // The commit is deferred past the exit, because a car that entered too hot slides on the way out and that is
         // the same verdict as sliding in. The sample is handed over when the apex is passed and then spends
@@ -2672,6 +2678,9 @@ namespace ARS
                 _brakeSampleEntryMetres = 0f;
                 _brakeSampleEntryMeasured = false;
                 _brakeSampleSawAboveApex = false;
+                _brakeSampleApexSpeed = Math.Max(2f, NextApexSpeed);
+                _brakeSampleBelowTicks = 0;
+                _brakeSampleEntryHasCandidate = false;
                 _brakeOverNextSampleAt = 0;
                 // A corner that never reaches its apex loses its entrance cut here, with the sample. That is
                 // deliberate: one verdict per corner and one exit from the commit. Settling the cut on the spot
@@ -2706,26 +2715,45 @@ namespace ARS
             // Where the car actually reaches the corner speed, measured against its braking target: positive is late, negative is early,
             // zero is the corner taken exactly where the plan asked. A position rather than a speed difference, so the pedal law's
             // steady error - it needs up to BrakeErrorMultiplier above the target to hold full brake - cannot contaminate the reading.
-            // The car has to have been above apex speed first: a car already slow coming out of the previous corner never crossed it.
+            // The reference is the speed frozen when the sample opened, and the crossing takes three ticks in a row below it: the speed
+            // signal crosses a live threshold several times per corner on its own noise, and one tick of it was enough to place the mark
+            // a hundred metres out. The car also has to have been above it first - one already slow out of the previous corner never
+            // crossed it, and has nothing to say.
             if (!_brakeSampleEntryMeasured && _brakeSampleApexNode >= 0 && !HasPassedApex(_brakeSampleApexNode))
             {
-                float apexSpeed = Math.Max(2f, NextApexSpeed);
+                float apexSpeed = _brakeSampleApexSpeed;
                 float forward = ARS.GetForwardSpeed(Car);
-                if (forward > apexSpeed + 1f) _brakeSampleSawAboveApex = true;
-                if (_brakeSampleSawAboveApex && forward <= apexSpeed + 0.2f)
+                if (forward <= apexSpeed + 0.2f && _brakeSampleSawAboveApex)
                 {
-                    int entranceNode = CornerEntranceNode(_nextApexCorner, _brakeSampleApexNode);
-                    int targetNode = BrakeTargetBaseNode(_nextApexCorner, entranceNode);
-                    if (targetNode < 0) targetNode = entranceNode;
-                    if (targetNode >= 0)
+                    // Marked on the FIRST tick below, then confirmed by the next two: waiting for three ticks before taking the position
+                    // would push the mark late by v * 0.05 s - two metres and a half at 180 km/h - and that bias would grow with speed,
+                    // which is exactly the sort of inconsistency this reading is meant not to have.
+                    _brakeSampleBelowTicks++;
+                    if (_brakeSampleBelowTicks == 1)
                     {
-                        float metres = CurrentTrackPoint.CumulativeDistance - ARS.TrackPoints[targetNode].CumulativeDistance;
-                        // The wrap the rest of the route code applies: on a circuit a target behind the car reads as most of a lap.
-                        if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metres) > ARS.RouteLengthMeters * 0.5f)
-                            metres -= Math.Sign(metres) * ARS.RouteLengthMeters;
-                        _brakeSampleEntryMetres = metres;
-                        _brakeSampleEntryMeasured = true;
+                        // The corner is looked up by apex node, exactly as ApexBrakingSpeed does: _nextApexCorner can be an older corner
+                        // whose entrance sits tens of metres away, and the target would then be placed from that one.
+                        CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == _brakeSampleApexNode);
+                        int entranceNode = CornerEntranceNode(corner, _brakeSampleApexNode);
+                        int targetNode = BrakeTargetBaseNode(corner, entranceNode);
+                        if (targetNode < 0) targetNode = entranceNode;
+                        if (targetNode >= 0)
+                        {
+                            float metres = CurrentTrackPoint.CumulativeDistance - ARS.TrackPoints[targetNode].CumulativeDistance;
+                            // The wrap the rest of the route code applies: on a circuit a target behind the car reads as most of a lap.
+                            if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metres) > ARS.RouteLengthMeters * 0.5f)
+                                metres -= Math.Sign(metres) * ARS.RouteLengthMeters;
+                            _brakeSampleEntryMetres = metres;
+                            _brakeSampleEntryHasCandidate = true;
+                        }
                     }
+                    else if (_brakeSampleBelowTicks >= 3 && _brakeSampleEntryHasCandidate) _brakeSampleEntryMeasured = true;
+                }
+                else
+                {
+                    _brakeSampleBelowTicks = 0;
+                _brakeSampleEntryHasCandidate = false;
+                    if (forward > apexSpeed + 1f) _brakeSampleSawAboveApex = true;
                 }
             }
 
