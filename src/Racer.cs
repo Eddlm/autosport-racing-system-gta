@@ -2819,45 +2819,43 @@ namespace ARS
             if (!ARS.BrakeLearning || _brakeCommitApexNode < 0) return;
             int apexNode = _brakeCommitApexNode;
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
-            // Every verdict says where the mark landed, or why there is none, and flags what belongs to the speed system rather than to the
-            // braking point. The floor and a jump are the speed's; a slide under real brake demand is the braking's, and it is charged below.
-            string floor = !_brakeCommitEntranceCrossed ? "floor ?" : (_brakeCommitFloorAtEntrance ? "floor ON" : "floor off");
-            string events = "";
-            bool skid = TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple;
-            if (skid) events += " | skid";
-            if (_brakeCommitWasAirborne) events += " | air";
-            string detail = (_brakeCommitEntryMeasured
-                ? _brakeCommitEntryMetres.ToString("+0;-0;0") + "m"
-                : (_brakeCommitSawAboveApex ? "never slowed" : "no braking")) + " | " + floor + events;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
-            // A slide seen while the pedal was asking for more than BrakeSkidBrakeShare of brake is the braking point's own fault - a
-            // rear-engined car loses its rear at that demand - so the position verdict is thrown away and the factor pays the flat cut.
+            bool skid = TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple;
+            // The notice reads the verdict, not the numbers behind it: how far from the entrance the corner speed was reached, and what that
+            // cost the factor. Events that are not the braking point's - a held floor, a jump - are named but never charged.
+            //
+            // A slide seen while the pedal was asking for more than BrakeSkidBrakeShare of brake is the braking point's own fault: a
+            // rear-engined car loses its rear at that demand. The position verdict is thrown away and the factor pays the flat cut.
             if (skid)
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
                 if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment(detail);
+                AnnounceBrakeAdjustment("Skid detected, assuming instability adjust " + (skidFactor - before).ToString("+0.00;-0.00"));
                 return;
             }
-            // The target is a position, not a duration: the car should reach the corner speed exactly at the entrance, so the mark wants to
-            // land on zero metres. Negative is early - there was road left when the bar was crossed - so the factor climbs and the corner is
-            // braked later; positive is late and it gives factor back. No dead zone, capped per event.
-            //
-            // Unless the lane floor was holding throttle on the way in. That is the car saying it does not want to brake there, and it is
-            // usually right: the floor only fires where the projected line sits inside the car's, so the speed it produces is the intended
-            // one. The verdict is then not a braking error, and the factor is left exactly where it is.
+            if (!_brakeCommitEntryMeasured)
+            {
+                AnnounceBrakeAdjustment(_brakeCommitSawAboveApex ? "Never slowed" : "No braking");
+                return;
+            }
+            string where = _brakeCommitEntryMetres < -0.5f
+                ? "Early by " + Math.Abs(_brakeCommitEntryMetres).ToString("0") + "m"
+                : (_brakeCommitEntryMetres > 0.5f
+                    ? "Late by " + _brakeCommitEntryMetres.ToString("0") + "m"
+                    : "On the mark");
             if (_brakeCommitFloorAtEntrance)
             {
-                AnnounceBrakeAdjustment(detail + " | held");
+                // The car was told to keep pushing: the speed is the intended one and there is no braking error to correct.
+                AnnounceBrakeAdjustment(where + ", floor held");
                 return;
             }
-            float step = _brakeCommitEntryMeasured
-                ? ARS.Clamp(-_brakeCommitEntryMetres * BrakeEntryFactorPerMetre, -BrakeEntryMaxStepPerEvent, BrakeEntryMaxStepPerEvent)
-                : 0f;
+            // The target is a position: the car should reach the corner speed exactly at the entrance. Negative is early, so the factor
+            // climbs and the corner is braked later; positive is late and it gives factor back. No dead zone, capped per event.
+            float step = ARS.Clamp(-_brakeCommitEntryMetres * BrakeEntryFactorPerMetre, -BrakeEntryMaxStepPerEvent, BrakeEntryMaxStepPerEvent);
             float factor = ARS.Clamp(before + step, BrakeMinFactor, BrakeMaxFactor);
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
-            AnnounceBrakeAdjustment(detail);
+            AnnounceBrakeAdjustment(where + (_brakeCommitWasAirborne ? ", air" : "") + ", adjust " + (factor - before).ToString("+0.00;-0.00"));
         }
 
         // One line per verdict: the car and how many miles an hour over the speed the corner asks for it arrived at the entrance.
