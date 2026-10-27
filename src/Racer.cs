@@ -1225,10 +1225,10 @@ namespace ARS
         // corner at its own limit — so the cap has to sit above the line's own rate and the acceleration is the only
         // lunge knob. At the shipped 40 the aim tracks the line inside a centimetre, and a 6 m request valid for half a second moves 3.4 m
         // where it used to step the whole way.
-        // Sized from the line's own geometry, not by feel: the outside-inside traversal is 2 * safeBound - 18 m on a wide
-        // track - and it has to happen inside the blend's 1.5 s (2.0 to 0.5 before the apex), which needs 4 * 18 / 1.5^2 = 32 m/s^2
-        // to start and stop within it. At 14 the aim could not follow the ramp at all, and a reversal first had to spend 24 / 14 = 1.7 s
-        // killing its own speed, longer than the whole window. It ships at 40: the aim now tracks the ramp inside its window.
+        // Sized from the line's own geometry, not by feel: the outside-inside traversal is up to 18 m, and the window is now 1.0 s
+        // (1.5 to 0.5 before the apex), which asks 4 * 18 / 1.0^2 = 72 m/s^2 to start and stop inside it. At 40 the aim still tracks a
+        // normal 6 m move inside the window (4 * 6 / 1.0^2 = 24) and lags only on the widest traversals; raising this is the knob if the
+        // line is seen arriving late on a wide track.
         const float LaneMoverAccelMps2 = 40f;
         const float LaneMoverSpeedCapMps = 24f;
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
@@ -1389,9 +1389,9 @@ namespace ARS
         // hysteresis is enough: two apexes that swap places tick after tick do so by less than that.
         const float LineApexStickyMeters = 30f;
         // Moving from the outside to the inside is a time decision, because in metres the same stretch would be 20 m at 25 km/h and 80 m
-        // at 100. Two seconds to the start and half a second to the end: the car reaches the inside early and holds it into the apex,
-        // instead of still moving when it arrives - which is what forced the counter-steer to stay off the inside edge.
-        const float IdealLineBlendStartSeconds = 2f;
+        // at 100. A second and a half to the start and half a second to the end: one second of blend, the inside reached 0.5 s before the
+        // apex and held from there, so the line is not still moving when the car arrives.
+        const float IdealLineBlendStartSeconds = 1.5f;
         const float IdealLineBlendEndSeconds = 0.5f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
