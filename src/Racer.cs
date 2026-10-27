@@ -2881,11 +2881,6 @@ namespace ARS
             // reports look random. Every corner reports now, and a corner with no mark says so instead of staying silent.
             if (_brakeCommitApexNode < 0 && _brakeSampleApexNode >= 0 && HasPassedApex(_brakeSampleApexNode))
                 ScheduleBrakeCommit();
-
-            if (ActiveManeuver.Type != ManeuverType.None) return;
-
-            if (HasPassedBrakingTarget()) return;
-
         }
 
         // Park the sample at the apex pass; the verdict lands BrakeCommitDelaySeconds later.
