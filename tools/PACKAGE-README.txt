@@ -4,7 +4,7 @@ Install: extract the AutosportRacingSystem folder into
 Grand Theft Auto V\Scripts\ (overwrite if updating).
 
 In game, press Left Shift + E (the chord: Left Shift is the modifier, E the
-second key). Rebind either half under Settings -> Hotkeys, or edit
+second key). Rebind either half under Controls (Menu Modifier, Menu Key), or edit
 MenuModifierKey / MenuKey in Settings\Menu-Settings.ini. You can also open it
 by typing arsmenu in the chat console.
 
