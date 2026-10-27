@@ -116,21 +116,19 @@ Authoring rule: halve the grip, halve the angle; raise one, raise the other. ARS
 and the grip as G, so a car authored outside this pairing also invalidates every threshold ARS compares against the curve - the
 slide blend's band, `SlidingFraction`, the steer ceiling and now the ABS taper all assume a peak at the authored angle.
 
-**The ABS switch is OFF and greyed, and the taper is behind it (build 883, 2026-10-24).** `AbsEnabled` now defaults false and the
-reader forces false whatever the stored key says, because the checkbox is greyed: a restored value would be a switch the user cannot
-see and the car would still obey it. The menu copy is "GTA forces native ABS on non-player driven cars. I'm working on undoing that."
-The taper itself is unchanged behind the flag and comes back with one line. Why it is off: `AGENTS-FLAGS.md` and
-`AGENTS-VEHICLE-STATUS.md` - `Automobile.cpp:3775` re-grants `WF_ABS` to every `STATUS_PHYSICS` car each tick, and the engine's own
-clamp holds slip at 0.6, so on an AI car our 0.5 knee has 0.1 of slip to work in.
+**The ABS switch ships OFF and is live again (2026-10-26).** `AbsEnabled` defaults false and the checkbox is live: a stored True is
+read at load and honoured, because the owner watched AI cars lock their wheels at full brake, which is the symptom the switch exists for.
+The menu copy is "GTA forces native ABS on non-player driven cars. I'm working on undoing that." Why it may still be out-braked:
+`AGENTS-FLAGS.md` and `AGENTS-VEHICLE-STATUS.md` - `Automobile.cpp:3775` re-grants `WF_ABS` to every `STATUS_PHYSICS` car each tick,
+and the engine's own clamp holds slip at 0.6, so on an AI car our 0.5 knee has 0.1 of slip to work in.
 
-**The ABS guard is instrumented, and its response rate is the open question (2026-10-24).** `ARS.MinWheelRotation` publishes the
+**The ABS guard is instrumented, and its release is instant (2026-10-24).** `ARS.MinWheelRotation` publishes the
 smallest per-wheel `m_fRotAngVel` (`wheel+0x170`, rad/s, absolute value) and `UpdateBrakeReasonCaps` logs
-`ABS <car>: locked=.. minWheel=.. rad/s cap=.. pedal=.. mph=..` at the moment a wheel crosses `AbsLockRadPerSecond` 2, rate-limited
-to twice a second. Why it matters: the detector is instant, but `Control.MaxBrakeFromABS` **glides** at
-`AbsBrakeFallPerSecond` **0.2/s**, so from 1.0 to the `AbsBrakeFloor` 0.2 takes **four seconds** - the wheel is locked long
-before the pedal lets go. A car with no ABS of its own is the first case where that shows, because the engine does not clamp
-`+0x174` for it. Numbers for the decision: 0.2/s is 4 s; 2/s is 0.4 s; 6/s is 0.13 s, which is ABS-shaped. The rise is a
-separate question - slow reapplication is the point of ABS.
+`ABS <car>: locked=.. slip=.. minWheel=.. rad/s cap=.. pedal=.. mph=..` at the moment a wheel crosses `AbsLockRadPerSecond` 2,
+rate-limited to twice a second. `Control.MaxBrakeFromABS` is assigned outright every tick from `AbsCapLevel()`: full pedal up to
+`AbsKneeSlip` 0.5, linear to `AbsBrakeFloor` 0 at `AbsLockSlip` 1.0, and straight to the floor when a wheel has actually stopped.
+There is no glide and no rate to tune - `AbsBrakeFallPerSecond` never existed in this tree. A car with no ABS of its own is the
+case that shows it, because the engine does not clamp `+0x174` for it; `GlideCap` remains for the throttle fields only.
 
 **The brake learner writes, and only the position writes it (driver, 2026-10-27).** Four signals died before this one. The share of the
 braking phase spent above 0.9 of pedal asked for a braking **style** rather than a **point**. Arrival speed at the entrance against the apex
