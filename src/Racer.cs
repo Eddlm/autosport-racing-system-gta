@@ -438,9 +438,9 @@ namespace ARS
         // on every corner and the factor could only ever fall: the learner could never risk more. Under the target the entry may be
         // braver, over it the entry is relaxed.
         // The verdict aims at a position: the car should reach the corner speed exactly at the entrance, so the mark wants to land on
-        // zero metres. This is the factor moved per metre of error - ten metres costs 0.05 - capped per event so one bad corner cannot
-        // spend the range. No dead zone, same as before.
-        const float BrakeEntryFactorPerMetre = 0.005f;
+        // zero metres. This is the factor moved per metre of error - three metres costs 0.06, tuned by driving - capped per event so one
+        // bad corner cannot spend the whole range.
+        const float BrakeEntryFactorPerMetre = 0.02f;
         const float BrakeEntryMaxStepPerEvent = 0.10f;
         // How far before the entrance the floor state is watched, in seconds of travel.
         const float BrakeFloorLatchSeconds = 1f;
