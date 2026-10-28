@@ -213,7 +213,8 @@ namespace ARS
         int _lineCornerNode = -1;
         // One log a second at most, so a rule that fires rarely does not flood the file when it does.
         int _laneCrossLoggedAt;
-        // The lean's approach speed in m/s: CurveLeanWidthScale × track width / radius — the tighter the bend, the faster.
+        // The line's approach speed in m/s: the inside phase sets it from the bend (CurveLeanWidthScale × track width /
+        // radius, the tighter the faster), the out phase pins it to CurveLeanOutMps.
         float _leanApproachMps;
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
@@ -819,7 +820,7 @@ namespace ARS
             // One line, two phases. It asks for the outside between the window and the gate, and for the inside after it;
             // the phase is decided inside the lean, so there is no second writer to arbitrate with.
             CornerPoint lineCorner = NearestApexAhead();
-            if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, drivableEdge, roadWide * 2f, out float curveLean, out bool leanOutward))
+            if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, steerRefOffset, drivableEdge, roadWide * 2f, out float curveLean, out bool leanOutward))
             {
                 laneRequest = curveLean;
                 laneReason = LaneReason.CurveLean;
@@ -1085,6 +1086,12 @@ namespace ARS
         const float CurveLeanRadiusMeters = 900f;
         const float CurveLeanChordSeconds = 1.01f;
         const float CurveLeanWidthScale = 10f;
+        // The out phase ignores the bend entirely: opening to the outer edge is a deliberate positioning move, so it runs
+        // at a fixed 6 m/s, straight or curve.
+        const float CurveLeanOutMps = 6f;
+        // How far the car's heading must lean out of the corner before the line stops pulling in. 1.5 deg is a quarter of a
+        // metre of drift per second at 30 m/s: enough to tell a car still going wide from one merely following the bend.
+        const float CurveLeanInwardHoldDegrees = 1.5f;
 
         // The rate is CurveLeanWidthScale times the track width over the radius: 10 m/s when the bend's radius equals the
         // track's width, 0.2 at 500 m on a 10 m track, and it keeps rising as the radius closes. The mover's own cap is the
@@ -1195,17 +1202,32 @@ namespace ARS
             return true;
         }
 
-        bool TryComputeCurveLean(CornerPoint lineCorner, TrackPoint steerRefPoint, float speedMps, float laneEdge, float trackWidthMeters, out float lane, out bool outward)
+        // True while the car's heading still leans OUT of the corner, resolved on the same axis the lane is measured on:
+        // the heading's component along the track's right vector tells the lane side directly, so no angle convention has to
+        // be reconciled with CornerPoint.Angle. Flat on purpose: the route carries grade, and 1 m of rise over an 8 m
+        // lookahead reads as 7 deg of lean, which would hold the line inward on every slope.
+        bool HeadingLeansOut(float cornerDir)
+        {
+            Vector3 track = new Vector3(CurrentTrackPoint.Direction.X, CurrentTrackPoint.Direction.Y, 0f);
+            Vector3 heading = new Vector3(Car.ForwardVector.X, Car.ForwardVector.Y, 0f);
+            if (track.LengthSquared() < 0.0001f || heading.LengthSquared() < 0.0001f) return false;
+            Vector3 right = Vector3.Cross(track.Normalized, Vector3.WorldUp);
+            float lateral = Vector3.Dot(heading.Normalized, right);
+            return lateral * cornerDir > (float)Math.Sin(ARS.DegToRad(CurveLeanInwardHoldDegrees));
+        }
+
+        bool TryComputeCurveLean(CornerPoint lineCorner, TrackPoint steerRefPoint, float speedMps, float ownLane, float laneEdge, float trackWidthMeters, out float lane, out bool outward)
         {
             lane = 0f;
             outward = false;
-            // The out phase comes first: between the window and the gate the same line names the OUTER edge at the same
-            // width-over-radius rate, and past the gate the inside attack below takes over with no handover to arbitrate.
+            // The out phase comes first: between the window and the gate the same line names the OUTER edge. Past the gate
+            // the base behaviour below takes over - the inside lane, held back while the car still leans out. Its rate in the
+            // out phase is fixed and slow: opening to the outside is a positioning move, not an attack.
             if (TryGetOutsideLane(lineCorner, steerRefPoint, speedMps, out float outsideLane))
             {
                 lane = outsideLane;
                 outward = true;
-                _leanApproachMps = CurveLeanWidthScale * trackWidthMeters / Math.Max(lineCorner.DetectedRadius, 5f);
+                _leanApproachMps = CurveLeanOutMps;
                 return true;
             }
             int count = ARS.TrackPoints.Count;
@@ -1226,6 +1248,11 @@ namespace ARS
             // the faster the line moves, and a wider track is placed proportionally faster at the same radius.
             _leanApproachMps = CurveLeanWidthScale * trackWidthMeters / Math.Max(ahead.PreciseCurveRadius, 5f);
             lane = -cornerDir * Math.Max(laneEdge - LaneInsideGapMeters, 0f);
+            // The base behaviour: while the car's heading still points OUT of the corner, the line may not run away from it
+            // toward the inside. The aim sits on the car's own lane and the attack resumes by itself on the tick the lean
+            // stops, so the line never fights a car that is still going wide. OUT mode is the one exception, and only because
+            // there the target is on the outside: nothing to hold back.
+            if (lane * cornerDir < ownLane * cornerDir && HeadingLeansOut(cornerDir)) lane = ownLane;
             return true;
         }
 
