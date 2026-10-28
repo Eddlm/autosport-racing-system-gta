@@ -4149,16 +4149,25 @@ namespace ARS
         {
             // One reading while the law is being tuned, in the driver's own form: what the clamp is applying against what
             // the law allows, as a factor, with the allowance in degrees beside it. Two lines so the header stays put while
-            // the numbers move under it.
+            // the numbers move under it. When nothing is being limited the second line names the reason instead of a dash:
+            // a missing number and a blind source are different states and must not read the same.
             if (!ARS.SlipFromMemory)
             {
                 float target = _clampTargetDeg;
                 float applied = _chasingClampDeg;
-                string reading = (float.IsNaN(target) || float.IsNaN(applied) || target < 0.01f)
-                    ? "Slip vs Allowed~n~--"
-                    : "Slip vs Allowed~n~x" + (applied / target).ToString("0.0")
-                        + " of " + target.ToString("0.0") + "°";
-                UI.ShowSubtitle(reading, 50);
+                if (float.IsNaN(target) || float.IsNaN(applied) || target < 0.01f)
+                {
+                    float forwardSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
+                    float speedMph = ARS.MpsToMph(Math.Abs(forwardSpeed));
+                    string state = forwardSpeed <= 0f ? "inactive - stopped"
+                        : speedMph < 7f ? "inactive - below 7 mph"
+                        : !_slip.Readable ? "no wheel data"
+                        : "inactive - straight";
+                    UI.ShowSubtitle("Slip vs Allowed~n~" + state, 50);
+                    return;
+                }
+                UI.ShowSubtitle("Slip vs Allowed~n~x" + (applied / target).ToString("0.0")
+                    + " of " + target.ToString("0.0") + "°", 50);
                 return;
             }
 
