@@ -317,7 +317,6 @@ namespace ARS
     {
         OwnLane,
         CurveLean,
-        OutsideLine,
         CommitCard,
         Avoidance,
         RecoveryEdge,

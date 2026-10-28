@@ -208,8 +208,8 @@ namespace ARS
         // This car's own pull-in for the outside line, rolled once per corner and held until the car passes it.
         int _lineBiasNode = -1;
         float _lineBiasMeters;
-        // The corner that owns the apex line until its apex is passed. NearestApexAhead keeps handing this back while it is the
-        // nearest, which is what stops two close apexes from taking the line off each other mid-manoeuvre.
+        // The corner whose outside phase the line is running, kept until its apex is passed. NearestApexAhead hands this
+        // back while it is the nearest, which is what stops two close apexes from taking the line off each other mid-corner.
         int _lineCornerNode = -1;
         // One log a second at most, so a rule that fires rarely does not flood the file when it does.
         int _laneCrossLoggedAt;
@@ -217,6 +217,9 @@ namespace ARS
         float _leanApproachMps;
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
+        // True while the request names the OUTER edge: the mover opens the lane at half rate, which is what keeps a
+        // positioning move from reading as a sideways lunge.
+        bool _laneRequestOutward;
         float _laneRequestPrev = 0f;
         float _laneRate = 0f;
         float _laneMoverLoggedAt = 0f;
@@ -224,7 +227,7 @@ namespace ARS
         bool _laneSnap = false;
         bool _laneOverride = false;
         public float CarriedLane { get { return _carriedLane; } }
-        // The corner that owns the apex line right now: the debug diagonal is drawn to its node, so a swap of identity is visible.
+        // The corner the line is working right now: the debug diagonal is drawn to its node, so a swap of identity is visible.
         public int LineCornerNode { get { return _lineCornerNode; } }
         public LaneReason LaneRequestReason { get { return _laneRequestReason; } }
         public float LaneRequest { get { return _laneRequest; } }
@@ -810,21 +813,18 @@ namespace ARS
             float steerRefOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
             // A lane nobody defines holds the one the car is already in. Zero is the centre lane, not the absence of
             // an answer, so seeding the chain with it would steer every car back to the middle of the road on a
-            // straight, where neither the lean nor a corner line has an opinion.
+            // straight, where the line has no opinion.
             float laneRequest = steerRefOffset;
             LaneReason laneReason = LaneReason.OwnLane;
-            // The two protocols never overlap: the lean is skipped exactly while the apex line is ACTIVE - inside its window and
-            // with the apex still ahead - and free everywhere else. Gating it on "a tight corner exists somewhere ahead" switched
-            // the lean off for most of a lap; gating it on the line's own activity is the rule the driver stated: with an outside
-            // there is no hug-inside.
+            // One line, two phases. It asks for the outside between the window and the gate, and for the inside after it;
+            // the phase is decided inside the lean, so there is no second writer to arbitrate with.
             CornerPoint lineCorner = NearestApexAhead();
-            float cornerLane = 0f;
-            LaneReason cornerReason = LaneReason.OwnLane;
-            bool cornerLineActive = false;
-            if (lineCorner != null && Lap > 0)
-                cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, lineCorner, out cornerReason, out cornerLineActive);
-            if (!cornerLineActive && TryComputeCurveLean(speedMps, steerRefOffset, drivableEdge, roadWide * 2f, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
-            if (cornerLane != 0f) { laneRequest = cornerLane; laneReason = cornerReason; }
+            if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, drivableEdge, roadWide * 2f, out float curveLean, out bool leanOutward))
+            {
+                laneRequest = curveLean;
+                laneReason = LaneReason.CurveLean;
+                _laneRequestOutward = leanOutward;
+            }
             float avoidAheadLane = ComputeAvoidanceLane(roadWide);
             if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
             if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { laneRequest = NearestEdgeLane(steerRefOffset, drivableEdge); laneReason = LaneReason.RecoveryEdge; }
@@ -1160,9 +1160,54 @@ namespace ARS
             return PursuitSteerFromBearing(bearing, distance);
         }
 
-        bool TryComputeCurveLean(float speedMps, float steerRefOffset, float laneEdge, float trackWidthMeters, out float lane)
+        // The out phase of the line: the outer edge, chosen between the window (IdealLineWindowMeters of route) and the
+        // gate (six track widths before the apex), which is the stretch the orange corner line used to own. Only corners
+        // with a real apex get one, and only for a car that can reach them - otherwise every car dives for the outer edge
+        // off the grid, where the window is metres and a car at 30 km/h sits inside it for ten seconds.
+        bool TryGetOutsideLane(CornerPoint lineCorner, TrackPoint steerRefPoint, float speedMps, out float lane)
         {
             lane = 0f;
+            if (lineCorner == null) return false;
+            int apexNode = lineCorner.Node;
+            if (HasPassedApex(apexNode)) return false;
+            if (!(lineCorner.DetectedRadius < IdealLineMaxRadiusMeters)) return false;
+            if (!(speedMps > ApexSpeedWithDownforce(lineCorner.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph))) return false;
+
+            // Metres along the route, measured from the CAR: the reference point sits a lookahead ahead, so a window read
+            // there opens early by a distance that moves with speed. The wrap is the shortest way round, as the rival gap uses.
+            float metresToApex = ARS.TrackPoints[apexNode].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
+            if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metresToApex) > ARS.RouteLengthMeters * 0.5f)
+                metresToApex -= Math.Sign(metresToApex) * ARS.RouteLengthMeters;
+
+            float gateMeters = Math.Max(2f * steerRefPoint.TrackHalfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
+            if (!(metresToApex <= IdealLineWindowMeters && metresToApex > gateMeters)) return false;
+
+            // This car's own pull-in, rolled once per corner and held until its apex passes, so a field does not stack on
+            // one outside line.
+            if (_lineBiasNode != apexNode)
+            {
+                _lineBiasNode = apexNode;
+                _lineBiasMeters = ARS.GetRandomInt(-(int)(LaneBiasMaxMeters * 100f), (int)(LaneBiasMaxMeters * 100f) + 1) / 100f;
+            }
+            _lineCornerNode = apexNode;
+            float safeBound = Math.Max(steerRefPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f);
+            lane = Math.Sign(lineCorner.Angle) * Math.Max(safeBound - LaneOutsideGapMeters - _lineBiasMeters, 0f);
+            return true;
+        }
+
+        bool TryComputeCurveLean(CornerPoint lineCorner, TrackPoint steerRefPoint, float speedMps, float laneEdge, float trackWidthMeters, out float lane, out bool outward)
+        {
+            lane = 0f;
+            outward = false;
+            // The out phase comes first: between the window and the gate the same line names the OUTER edge at the same
+            // width-over-radius rate, and past the gate the inside attack below takes over with no handover to arbitrate.
+            if (TryGetOutsideLane(lineCorner, steerRefPoint, speedMps, out float outsideLane))
+            {
+                lane = outsideLane;
+                outward = true;
+                _leanApproachMps = CurveLeanWidthScale * trackWidthMeters / Math.Max(lineCorner.DetectedRadius, 5f);
+                return true;
+            }
             int count = ARS.TrackPoints.Count;
             int fwdNode;
             int fwdOffset = (int)(speedMps * CurveLeanChordSeconds);
@@ -1176,8 +1221,6 @@ namespace ARS
 
             float cornerDir = Math.Sign(ahead.Angle);
             if (cornerDir == 0f) return false;
-            // Clamp answers a NaN with its min bound, so an unreadable car lane would ask for the wrong edge.
-            if (float.IsNaN(steerRefOffset) || float.IsInfinity(steerRefOffset)) return false;
 
             // The inside LANE, named absolutely, with the approach speed as the width over the radius: the tighter the bend,
             // the faster the line moves, and a wider track is placed proportionally faster at the same radius.
@@ -1269,7 +1312,7 @@ namespace ARS
             // The move OUT to the plateau is half the speed and half the acceleration of everything else: opening the line to the
             // outer edge is a positioning choice the car makes with room to spare, and at the full rate it arrived as a sideways
             // lunge. The apex side keeps the full pair, because there the car is being placed for a corner it is already turning into.
-            bool toOutside = _laneRequestReason == LaneReason.OutsideLine;
+            bool toOutside = _laneRequestOutward && _laneRequestReason == LaneReason.CurveLean;
             float moverAccel = toOutside ? LaneMoverAccelMps2 * 0.5f : LaneMoverAccelMps2;
             // Half the inertia on the way back, and only the acceleration: the cap is what bounds the visible lunge, so an
             // overshoot returns twice as promptly without ever moving faster than any other request.
@@ -1370,109 +1413,6 @@ namespace ARS
             return best;
         }
 
-        float ComputeCornerLane(TrackPoint steerRefPoint, float speedMps, float ownLane, CornerPoint lineCorner, out LaneReason reason, out bool lineActive)
-        {
-            reason = LaneReason.OwnLane;
-            lineActive = false;
-            // The lane belongs to the corner the car is approaching, never to the head of the plan's queue. That queue
-            // looks past a corner it has flagged as trivial, which swapped the head for the next apex while the car was
-            // still inside the flagged one's window: the profile then read as "far away" and the line went back to the
-            // outer clamp, so the car stopped turning in with the apex still ahead. Only passing the apex ends a line.
-            CornerPoint c = lineCorner;
-            if (c == null) return 0f;
-            int apexNode = c.Node;
-
-            // The line is a function of the distance to the apex, so no time enters the geometry. Signed, and negative once
-            // the apex is behind: a wrapped forward distance would hand the gate a near-full lap and hold the outside on the
-            // exit half.
-            int count = ARS.TrackPoints.Count;
-            // Metres along the route, not nodes, and measured from the CAR: the reference point sits a lookahead ahead, so
-            // reading the window there opened it early and killed it a lookahead before the apex - a distance that moved with
-            // speed, which is the one thing this window must not do. `CumulativeDistance` is metres and is rebuilt with the
-            // route; the wrap is the same shortest-way-round the rival gap uses.
-            float metresToApex = ARS.TrackPoints[apexNode].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
-            if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metresToApex) > ARS.RouteLengthMeters * 0.5f)
-                metresToApex -= Math.Sign(metresToApex) * ARS.RouteLengthMeters;
-
-            float cornerDir = Math.Sign(c.Angle);
-            if (cornerDir == 0f) return 0f;
-
-            float halfWidth = steerRefPoint.TrackHalfWidth;
-            // The gate, in metres of this road: six full widths before the apex, with a floor, so a wide road gets the
-            // longer run-in its wider traverse needs.
-            float gateMeters = Math.Max(2f * halfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
-            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-            float safeBound = Math.Max(halfWidth - carHalfWidth, 0f);
-
-            // The car's own line for this corner: a pull-in rolled once when the corner is adopted and held until the car passes its
-            // apex. The outside bound keeps the half-metre gap and the bias; floored at zero so the bias can reach the centre of the
-            // road but never cross it.
-            if (_lineBiasNode != apexNode)
-            {
-                _lineBiasNode = apexNode;
-                _lineBiasMeters = ARS.GetRandomInt(-(int)(LaneBiasMaxMeters * 100f), (int)(LaneBiasMaxMeters * 100f) + 1) / 100f;
-            }
-            float outsideBound = Math.Max(safeBound - LaneOutsideGapMeters - _lineBiasMeters, 0f);
-            // Corner-commit: hold the defend/dive line for the card's whole life, but only on the corner the card was armed
-            // for. Without the window test EVERY corner came back as CommitCard while any card was alive, because the branch
-            // returns before the outside is ever computed - three to four seconds of no outside on whatever corner the car
-            // happened to reach, which is exactly the intermittent blackout the driver reported.
-            bool isCornerCommit = ActiveManeuver.Target != null
-                && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb)
-                && metresToApex >= 0f && metresToApex <= IdealLineWindowMeters;
-            if (isCornerCommit)
-            {
-                Rival target = Brain.Rivals.FirstOrDefault(r => r.RivalRacer == ActiveManeuver.Target);
-                if (target != null && target.RivalRacer.Car.Exists())
-                {
-                    float gap = target.CombinedWidth + 0.6f;
-                    float commitLane = target.NodeOffset + (-cornerDir) * gap;
-                    reason = LaneReason.CommitCard;
-                    return ARS.Clamp(commitLane, -safeBound, safeBound);
-                }
-            }
-
-            // A corner asks for the outside because it is a corner, not as a correction for overspeed, and the ask ends at
-            // the apex and nowhere else. Only corners with a real apex get one: past IdealLineMaxRadiusMeters the bend is a
-            // kink the car takes without moving off its lane. And a car that cannot reach the corner fast enough gets none
-            // either, or every car dives for the outer edge off the grid: the window is metres, and a car at 30 km/h is
-            // inside it for ten seconds.
-            bool fastEnoughForLine = speedMps > ApexSpeedWithDownforce(c.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph);
-            bool wantsPosition = metresToApex >= 0 && metresToApex <= IdealLineWindowMeters
-                && c.DetectedRadius < IdealLineMaxRadiusMeters && fastEnoughForLine;
-            bool entryActive = wantsPosition && !HasPassedApex(apexNode);
-            lineActive = wantsPosition;
-            if (wantsPosition) _lineCornerNode = apexNode;
-
-            // The corner's opinion ends at the gate: past it the answer is zero, which is what hands the lane back so the lean
-            // attacks the inside with its own dynamics.
-            if (metresToApex <= gateMeters)
-            {
-                reason = LaneReason.OwnLane;
-                lineActive = false;
-                return 0f;
-            }
-
-
-            float offset = entryActive ? outsideBound : 0f;
-            // Temporary: why the outside line is or is not being asked for, for the cars the driver can see, once a second.
-            if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
-                && Game.GameTime > _cornerLineLoggedAt)
-            {
-                _cornerLineLoggedAt = Game.GameTime + 1000;
-                ARS.Log(ARS.LogImportance.Info, "Corner line " + Name + ": R " + c.DetectedRadius.ToString("0.0") + (c.DetectedRadius < CornerTightRadius ? " tight" : " WIDE")
-                    + " wants=" + wantsPosition
-                    + " entry=" + entryActive + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
-                    + " own=" + ownLane.ToString("0.00") + " out=" + outsideBound.ToString("0.00")
-                    + " bias=" + _lineBiasMeters.ToString("0.00") + " in=" + safeBound.ToString("0.00")
-                    + " apex=" + apexNode + " dir=" + cornerDir.ToString("0"));
-            }
-            // The corner's only demand is the outside line, held until the gate hands the lane to the lean.
-            if (entryActive) reason = LaneReason.OutsideLine;
-
-
-            return cornerDir * offset;
-        }
 
         // A rival ahead is only a pass target while the two velocity vectors sit within this angle; past it the
         // rival is not in a valid position to avoid, and the car falls back to follow-behind.
@@ -1493,7 +1433,7 @@ namespace ARS
         // ZOMBIE (2026-10-25): unused while avoidHoldEnabled is false - see ComputeAvoidanceLane.
         const float AvoidHoldBehindMeters = 14f;
         const float AvoidHoldLateralMeters = 1.5f;
-        // A pass that has taken longer than this is not a pass any more: the hold dies and the corner line gets the lane back.
+        // A pass that has taken longer than this is not a pass any more: the hold dies and the line gets the lane back.
         // ZOMBIE (2026-10-25): unused while avoidHoldEnabled is false - see ComputeAvoidanceLane.
         const int AvoidHoldTimeoutMs = 8000;
 
@@ -1732,7 +1672,7 @@ namespace ARS
             _rightWallHeld = rightConstrained;
             _wallRoadWide = roadWide;
             // Two rates, one per direction. Opening is the comfort half at 5 m/s: slower than the car can unwind, so a wall
-            // that has just let go is still the limit while the corner line starts asking. Closing runs at 10 m/s, but with a
+            // that has just let go is still the limit while the line starts asking. Closing runs at 10 m/s, but with a
             // jump: a wall further than one car width from where it belongs is teleported to a car width short of it first.
             // The guard is then immediate - it is never a car width late - while the only stretch the car can feel, the last
             // one, is always travelled at the rate instead of arriving in a single tick and snapping the aim.
@@ -4031,7 +3971,6 @@ namespace ARS
             switch (reason)
             {
                 case LaneReason.CurveLean: return GripReasonColor;
-                case LaneReason.OutsideLine: return LaneReasonOutsideColor;
                 case LaneReason.CommitCard: return LaneReasonCommitColor;
                 case LaneReason.Avoidance: return NonDangerousReasonColor;
                 case LaneReason.RecoveryEdge: return RecoveryReasonColor;
