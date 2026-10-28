@@ -43,6 +43,11 @@
 - `weaponized-grid-filter` — **DECIDED (driver): no code — the weaponized cars come out of the pool by hand**, so the roster-marker mechanism is dropped rather than built. Pending that edit; close once they are out of `Dist\AutosportRacingSystem\Vehicles\cars.txt` (the ship mirror refreshes from the game folder on the next build).
 - `update-checker` — **DECLINED (driver)**: the checker stays in-process. It is exclusive to ARS, so a second assembly buys nothing the mod can feel while adding a package member and an install failure mode — a missing or stale companion stops the script loading — and the estimate ran the wrong way: ~3 h for the single-project route (a seam refactor first, because `UpdateChecker` calls `ARS.Log` and a direct reference would be circular, then a conditioned configuration, guarded targets and a recursive build before `ResolveAssemblyReferences`) against ~45 min for a second csproj. The seam-only version is declined with it.
 - `slide-limit-raise-removal` — deleted (`ebb3178`); the countersteer allowance and damper bypass stay.
+- `emergency-siren-cut` — **reported, not reproduced** (RPH, 0.9.0). The siren of an emergency vehicle in the race cuts out, and the tester
+  suspects the seat move. Code: `Racer.cs:4151` puts the AI driver in the passenger seat (`_isPassengerized`) and `2237` sets
+  `Car.SirenActive = true` once, so the seat change leaves nothing re-asserting it. Candidate fix: re-assert the siren every tick while
+  `_isPassengerized` on a `Team.Cop` car, or stop passengerizing emergency vehicles at all. Confirm the mechanism with one drive carrying an
+  emergency vehicle before touching it.
 
 **Tier 2 — verify in game, then tune**
 - `apex-radius` — driver-observed on high-grip cars (`aa302e1`); the fleet-wide read is owed and **non-blocking** — it is a sanity check at the ends of the grip range: a car under **1.5 G** and one over **2.5 G** must both behave decently (no lazy turn-in, no washing wide on entry).
@@ -56,6 +61,13 @@
 **Tier 4 — coupled systems**
 - `corner-approach-braking` — **closed (driver)**: irrelevant now. **closed**
 - `rival-publish-core` — **CLOSED (driver)**: the half-second-old rival record is fine as it stands, so the publish stays on its own 500 ms beat (`UpdateRivalInfo`, `Racer.cs`) while the cards run on the core pass below it. **not built, by decision.**
+- `figure-eight-bridge-wall` — **reported twice, not reproduced** (RPH, 0.9.0, vanilla handling, ScriptHookVDotNet Enhanced). On the
+  figure-eight's long straight an opponent steers hard left on the bridge, rams the bridge wall and then rejoins the racing line; the second
+  report happened under the bridge. The tester's hypothesis is cross-elevation detection: cars above and below the bridge reading each other as
+  rivals. The owner's read is that detection goes by track length, not by world position, so the first thing to check is whether
+  `ComputeAvoidanceLane` sees a node offset whose two legs are metres apart in plan view but a bridge apart in elevation, and whether
+  `SameSectionMaxGapMeters` and the combined-width test let that pair through. Needs a figure-eight run at `LogLevel = Info` with the
+  avoidance log before any code.
 
 **Tier 5 — new controllers and design decisions**
 - `snap-oversteer` — **dropped (driver)**: old and irrelevant today. **closed**
@@ -138,6 +150,10 @@
 - `outward-lead-bound` — the hard stop at 1.5 m (`73756c7`) is reshaped: full send until 1 m of lead, then each outward tick scales by the band's tanh and the aim approaches a **3 m cap** asymptotically; the clamps stay as the failsafe. **driver-verified (build 703)**
 
 ## Agenda — the workstreams named for the coming days
+
+- `5mods-page` — **the real publication is owed** (owner, 2026-10-28). GitHub `v0.9.0` is the closed circle: six downloads against the
+  50,714 the three old builds carry on the site since 2019. What the page lacks is the presentation — screenshots and the description — and
+  that is what turns a mod a few people know about into a visible one. Not code, and it does not wait for the lane work.
 
 - `leaderboard-per-frame` — **parked for 0.11.0 (owner, 2026-10-25)**: `DrawLeaderboard` runs every frame and re-formats
   every row, which is ~1,092 heap allocations per frame at 20 cars (~1.5 MB/s). Audit R12 claimed a 5 Hz rebuild removes
