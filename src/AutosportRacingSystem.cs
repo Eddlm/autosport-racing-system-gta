@@ -233,7 +233,7 @@ namespace ARS
         { Options.ShowCheckpoints, true },
         { Options.ShowEdgeChevrons, false },
         { Options.ShowLeaderboard, true },
-        { Options.ShowDriverNames, true },
+        { Options.ShowDriverNames, false },
         { Options.ShowAiLapTimes, false },
         { Options.LockLaneCentre, false },
         { Options.ShowBumps, false },
@@ -306,6 +306,7 @@ namespace ARS
 
         public static ulong WheelsPtr = 0x0;
         public static ulong NumWheelsOffset = 0x0;
+        static bool _nullCarReported;
         public static ulong WheelPowerOffset = 0x0;
 
         
@@ -1693,6 +1694,11 @@ namespace ARS
                 + " canReadPace=" + TryComputePlayerCarPaceIndex(out float _)
                 + " lastKnown=" + _lastKnownPlayerPace);
 
+            // A build missing either signature runs a race it cannot drive: every car sits still, the player reads 0th,
+            // and each racer throws once per tick. Refused here, before the track or the grid is instanced.
+            string unsupported = VehicleMemory.UnsupportedBuildReason();
+            if (unsupported != null) { reason = unsupported; return false; }
+
             string trackPath = _selectedTrackPath;
             if (trackPath == null)
             {
@@ -2556,8 +2562,9 @@ namespace ARS
 
         static void DrawLeaderboard()
         {
-            // 0.11 clears the help text: at 0.06 the POS header sat on top of the hints the game prints in the same corner.
-            const float headerY = 0.11f;
+            // 0.18 clears a three-line tip: the tips ride the help box in this same corner, the longest is 94 characters,
+            // and 0.11 cleared only the single-line hints the board was first moved for.
+            const float headerY = 0.18f;
             const float step = 0.031f;
             const float colPos = 0.02f;
             const float colPI = 0.05f;
@@ -3305,9 +3312,18 @@ namespace ARS
         }
 
         
+        // Once per session: a missing handle used to be one NullReferenceException per racer per tick - 12,434 of them in
+        // eleven minutes on a build the mod could not drive - and the tick it killed is the one that would have driven.
+        static void ReportNullCar()
+        {
+            if (_nullCarReported) return;
+            _nullCarReported = true;
+            Log(LogImportance.Error, "[MEMORY] A racer reached the wheel reads with no vehicle handle; grip reads return the neutral value until it has one.");
+        }
+
         static public unsafe ulong GetWheelsPtr(Vehicle handle)
         {
-            GameVersion gameVersion = Game.Version;
+            if (handle == null) { ReportNullCar(); return 0; }
             var address = (ulong)handle.MemoryAddress;
             if (WheelsPtr == 0x0)
             {
@@ -3332,6 +3348,7 @@ namespace ARS
 
         static public unsafe int GetNumWheels(Vehicle handle)
         {
+            if (handle == null) { ReportNullCar(); return 0; }
 
             if (NumWheelsOffset == 0x0)
             {

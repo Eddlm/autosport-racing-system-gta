@@ -16,6 +16,13 @@ namespace ARS
         static bool _controlPatternReported;
         static bool _handlingPatternReported;
 
+        // The two signatures a drivable build must carry: the control field ARS writes, and the handling pointer it
+        // reads. Hoisted out of their two readers so the preflight asks the same question the drivers ask later.
+        const string ControlPattern = "\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25";
+        const string ControlMask = "xxxxx?????xx";
+        const string HandlingPattern = "\x3C\x03\x0F\x85\x00\x00\x00\x00\x48\x8B\x41\x20\x48\x8B\x88";
+        const string HandlingMask = "xxxx????xxxxxxx";
+
         public static void SetSteerInput(Vehicle vehicle, float value) => WriteInput(vehicle, value, ref _steerOffset, 0, "steer");
         public static void SetSteerAngle(Vehicle vehicle, float value) => WriteInput(vehicle, value, ref _steerAngleOffset, 8, "steer angle");
         public static void SetThrottle(Vehicle vehicle, float value) => WriteInput(vehicle, value, ref _throttleOffset, 0x10, "throttle");
@@ -46,7 +53,7 @@ namespace ARS
             if (!ARS.CanWeUse(vehicle)) return;
             if (offset == 0)
             {
-                IntPtr pattern = (IntPtr)FindPattern("\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25", "xxxxx?????xx");
+                IntPtr pattern = (IntPtr)FindPattern(ControlPattern, ControlMask);
                 if (pattern == IntPtr.Zero)
                 {
                     ReportMissingControlPattern();
@@ -74,6 +81,17 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Error, "[MEMORY] The handling-pointer pattern was not found on game build " + Game.Version + "; grip, steering lock, downforce and handling flags all read as zero.", true);
         }
 
+        // The build test the preflight runs before anything is torn down. A race started without these two runs with
+        // dead cars, the player in 0th, and one NullReferenceException per racer per tick.
+        public static string UnsupportedBuildReason()
+        {
+            if (FindPattern(ControlPattern, ControlMask) == null)
+                return "This game build (" + Game.Version + ") is not supported: the vehicle control signature is missing, so ARS cannot drive the cars.";
+            if (FindPattern(HandlingPattern, HandlingMask) == null)
+                return "This game build (" + Game.Version + ") is not supported: the handling signature is missing, so grip and steering lock read as zero.";
+            return null;
+        }
+
         static float ReadHandlingFloat(Vehicle vehicle, ulong offset)
         {
             ulong address = GetHandlingAddress(vehicle);
@@ -85,7 +103,7 @@ namespace ARS
             if (!ARS.CanWeUse(vehicle)) return 0;
             if (_handlingOffset == 0)
             {
-                IntPtr pattern = (IntPtr)FindPattern("\x3C\x03\x0F\x85\x00\x00\x00\x00\x48\x8B\x41\x20\x48\x8B\x88", "xxxx????xxxxxxx");
+                IntPtr pattern = (IntPtr)FindPattern(HandlingPattern, HandlingMask);
                 if (pattern == IntPtr.Zero)
                 {
                     ReportMissingHandlingPattern();
