@@ -1,3 +1,5 @@
+// The shared shapes: route points, corner records, the lane reason enum that names the debug colour, and the per-car
+// state bags. Plain fields, no logic.
 using GTA.Math;
 using System;
 using System.Collections.Generic;
@@ -6,9 +8,7 @@ namespace ARS
 {
     public static class AiConstants
     {
-        // The plan's own bounds, and nothing else's. Max is the "no plan" value the route asks for on a straight: it must
-        // be far above any car so the plan never becomes the ceiling - the car's motor is. It used to read 300 mph, which
-        // is reachable-looking and invited the belief that the mod capped speed.
+
         public static float MaxSpeed = ARS.MphToMps(999f);
         public static float MinSpeed = ARS.MphToMps(10f);
     }
@@ -28,7 +28,6 @@ namespace ARS
         public float DownforceGripBonus = 0f;
         public float CurrentMechanicalGrip = 1f;
 
-        // The overspeed detector's excess, read by the throttle cap that answers it.
         public float OverspeedExcessGs;
 
         public Vector3 AverageAcceleration
@@ -59,7 +58,6 @@ namespace ARS
             return Vector3.Dot(AverageAcceleration, right) / 9.8f;
         }
 
-        // Per-lap peaks ride the raw 20 ms sample, not the 200 ms mean; the G side is invalid past grip × margin, speed is uncapped.
         public const float LapPeakGripMargin = 1.33f;
         public float PeakAccelG;
         public float PeakDecelG;
@@ -93,7 +91,6 @@ namespace ARS
             PeakTopSpeedMps = 0f;
         }
 
-
         public float PowerScale = 0;
         public string TextPerformanceIndex = "0";
         public float BoundingBox = 0f;
@@ -115,18 +112,17 @@ namespace ARS
     {
         public Perception CurrentPerception = new Perception();
         public List<Rival> Rivals = new List<Rival> { new Rival(), new Rival(), new Rival() };
-        // The ahead rival this racer is reacting to for avoidance; UpdateRivalInfo sets it, steering reads it.
+
         public Rival AvoidanceTarget = null;
         public Corner Corner =null;
-
 
         public class Perception
         {
             public float CurrentNodeOffset = 0f;
             public float CurveRadiusToFollowPoint = 0f;
-            // Short 0.5-1.0 s window radius, read by the rocket-boost straight gate.
+
             public float HighSpeedCurveRadius = 0f;
-            // NEVER USED. Kept for future "two conflicting corners" work.
+
             public float CurveRadiusAfterFollowPoint = 0f;
         }
 
@@ -135,7 +131,7 @@ namespace ARS
         {
             public float Speed;
             public float IntendedSpeedChange;
-            // Max speed for the current steering input before exceeding available grip: v = √(grip × g × L / tan(δ))
+
             public float SteerLimitedSpeed;
 
         }
@@ -150,29 +146,25 @@ namespace ARS
         public float DirectionDiff = 99f;
         public Vector3 RelativeOffset = Vector3.Zero;
 
-        // Decomposed proximity (in me's local frame, SHVDN convention: +X right, +Y forward).
-        public float LongitudinalGap = 99f;   // signed: + = rival ahead, - = rival behind
-        public float LateralGap = 0f;          // signed: + = rival right, - = rival left
-        public float ForwardSpeedGap = 0f;      // signed: + = me faster than rival (along me's forward axis)
-        public float Speed;                                   // the rival's own velocity magnitude, read once per publish
-        public float TimeToReach = float.PositiveInfinity;     // seconds to close the route gap while closing on it
-        public float FrontGap = float.PositiveInfinity;        // front-to-rear distance along the route
-        public float RouteGapAhead = 0f;                       // signed route arc in metres, + = rival ahead
+        public float LongitudinalGap = 99f;
+        public float LateralGap = 0f;
+        public float ForwardSpeedGap = 0f;
+        public float Speed;
+        public float TimeToReach = float.PositiveInfinity;
+        public float FrontGap = float.PositiveInfinity;
+        public float RouteGapAhead = 0f;
 
         public Vector2 CombinedSize = Vector2.Zero;
-        // Both are the rival's own copies, published on the rival beat: unlike this car's live CurrentNodeOffset and
-        // its own dimensions, a consumer reads the publish and inherits its staleness.
+
         public float NodeOffset=0f;
         public float CombinedWidth = 0f;
-        // A rival below this speed has no meaningful direction of travel; it is treated as facing this car's way.
+
         const float SlowRivalMps = 1f;
         public void Update(Racer me)
         {
             RelativePosition = RelativePos.Unreachable;
             if (RivalRacer == null) return;
 
-            // One read each of the two entity vectors, handed to the parts that need them: every use below
-            // used to call the native again.
             Vector3 myVelocity = me.Car.Velocity;
             Vector3 rivalVelocity = RivalRacer.Car.Velocity;
             Speed = rivalVelocity.Length();
@@ -183,7 +175,6 @@ namespace ARS
             UpdateClosingTime(me, myVelocity, rivalVelocity);
         }
 
-        // Where the rival sits relative to me, and how much room the pair takes up.
         void UpdateOffsets(Racer me)
         {
             Vector3 myPosition = me.Car.Position;
@@ -192,7 +183,7 @@ namespace ARS
             RelativeOffset = ARS.EntityRelativeOffset(me.Car, RivalRacer.Car);
             LongitudinalGap = RelativeOffset.Y;
             LateralGap = RelativeOffset.X;
-            // More margin from a rival ahead (+1m) than behind (+0.25m).
+
             float yBuffer = RelativeOffset.Y >= 0f ? 1f : 0.25f;
             CombinedSize.Y = Math.Abs((me.VehicleData.ModelDimensions.Y / 2) + (RivalRacer.VehicleData.ModelDimensions.Y / 2)) + yBuffer;
             CombinedSize.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
@@ -202,8 +193,6 @@ namespace ARS
             UpdateRouteGap(me);
         }
 
-        // Signed arc to the rival along the route, shortest way round on a circuit. CumulativeDistance is metres and
-        // carries no lap, so a car a lap ahead but physically close still measures close.
         void UpdateRouteGap(Racer me)
         {
             float gap = RivalRacer.CurrentTrackPoint.CumulativeDistance - me.CurrentTrackPoint.CumulativeDistance;
@@ -212,7 +201,6 @@ namespace ARS
             RouteGapAhead = gap;
         }
 
-        // Speed gaps. ForwardSpeedGap projects the relative velocity onto my forward axis.
         void UpdateSpeedGaps(Racer me, Vector3 myVelocity, Vector3 rivalVelocity)
         {
             float mySpeedSquared = myVelocity.LengthSquared();
@@ -221,7 +209,6 @@ namespace ARS
             ForwardSpeedGap = Vector3.Dot(relativeVelocity, meForward);
         }
 
-        // Ahead, behind, or alongside: the longitudinal gap against the pair's combined length.
         void ClassifyRelativePosition()
         {
             if (RelativeOffset.Y > CombinedSize.Y)
@@ -243,8 +230,6 @@ namespace ARS
         {
             TimeToReach = ComputeTimeToReach(me);
 
-            // DirectionDiff: angle between velocity vectors, so a car that is stopped or barely rolling has no
-            // direction of travel to read. Assume it points the way this car does, or the avoidance cannot see it.
             float mySpeedSquared = myVelocity.LengthSquared();
             if (mySpeedSquared < 0.01f || rivalVelocity.Length() < SlowRivalMps)
             {
@@ -252,13 +237,11 @@ namespace ARS
             }
             else
             {
-                // Horizontal: two cars on different points of a grade would otherwise differ by the slope itself.
+
                 DirectionDiff = Vector3.SignedAngle(new Vector3(myVelocity.X, myVelocity.Y, 0f), new Vector3(rivalVelocity.X, rivalVelocity.Y, 0f), me.Car.UpVector);
             }
         }
 
-        // The gap and the closure both live in the route frame, so no straight axis can be laid across a corner to
-        // distort them: a rival on the racing line keeps its lane however the road bends under it.
         float ComputeTimeToReach(Racer me)
         {
             FrontGap = float.PositiveInfinity;
@@ -274,9 +257,6 @@ namespace ARS
         }
     }
 
-
-    // One sample of the applied pedal input every half metre of travel, for the debug trail. Chevron marks the
-    // samples that carry a trail chevron, decided when the sample is taken so the marker sites never re-form.
     public struct InputTrailSample
     {
         public Vector3 Position;
@@ -305,9 +285,9 @@ namespace ARS
         Plan,
         Abs,
         Countersteer,
-        // Route: the road's curvature is what set the target speed, so its brake ceiling is a candidate.
+
         Route,
-        // Projection: the future position left the track for long enough that the pedal, not the target, is the answer.
+
         Projection,
         GridWait,
         StuckRecovery
@@ -342,7 +322,7 @@ namespace ARS
         public float MaxBrake = 1f;
         public float MaxThrottleFromTCS = 1f;
         public float MaxBrakeFromABS = 1f;
-        // Ceiling on the brake while the road's own curvature, not a corner, is what sets the target speed.
+
         public float MaxBrakeFromRoute = 1f;
         public float MaxBrakeFromCountersteer = 1f;
         public float MaxThrottleFromOverspeed = 1f;
@@ -387,24 +367,16 @@ namespace ARS
         public float Elevation = 0f;
         public float ElevationChange = 0f;
         public bool IsKey = false;
-        // Vertical curvature for the corner's peak feature used to live here (CrestGs, CrestNode, CrestEntryNode,
-//        CrestSpanNodes); it moved to a global table at ARS.Crests so entry/exit can be defined by the half-gs
-//        threshold rather than the detection sweep's tolerance, and so the brake decel can read it without
-//        rewriting StartNode. The four fields are gone; nothing on the live read path named them.
-        // Part of a chicane: two close corners with opposite curvature signs.
+
         public bool IsChicane = false;
-        // The corner radius from its region limits: the region's minimum *precise* radius, i.e. the noisy tail
-        // of a short-chord measurement. Nothing on the speed path reads it; the audit of the radius family is
-        // filed in AGENTS/AGENTS-BACKLOG.md as `radius-variants`.
+
         public float SupposedRadius = 999f;
-        // The region's tightest *smoothed* radius: what the speed path and registration both read, and a far less
-        // noisy number than the min-precise SupposedRadius.
+
         public float DetectedRadius = 999f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }
-    // A lifting lip: the route rises over a short run and then drops away. Route geometry only for now -- nothing
-    // drives on it, and the lane-local case needs the raycast instrument that reads the real surface.
+
     public class Bump
     {
         public int LipNode = -1;
@@ -412,19 +384,13 @@ namespace ARS
         public float DepartureGrade = 0f;
         public float LipCurvature = 0f;
     }
-    // A crest or dip the route carries. The peak is where the vertical curvature is most extreme; entry and exit
-    // are the first nodes each side where the |Gs| has fallen to half the peak's. Type separates crests (unload the
-    // A sign change in the local road grade: a crest is where the road is climbing and then descending
-    // (top of a hill), a dip is where it's descending and then climbing (bottom of a valley). Live in
-    // ARS.Crests and read by the track-analysis visual; nothing else writes them.
+
     public enum CrestType { Crest, Dip }
     public class Crest
     {
         public int Node = -1;
         public CrestType Type = CrestType.Crest;
-        // The centripetal gs the car experiences crossing the peak at 100mph, as a magnitude. The
-        // scanner samples a 6-node triangle at v = 45 m/s and stores |gs|; crests and dips share
-        // the same sign convention the brake decel used to use.
+
         public float GsAt100Mph = 0f;
     }
     public class Corner
@@ -438,8 +404,7 @@ namespace ARS
             Point = point;
         }
     }
-    // Per-racer corner context: the shared corner plus what this car knows about it. Lives on the racer, never on
-    // CornerPoint, because every racer holds a reference to the same table entry.
+
     public class CornerContext
     {
         public CornerPoint Point;
@@ -460,7 +425,3 @@ namespace ARS
         public Racer Target = null;
     }
 }
-
-
-
-

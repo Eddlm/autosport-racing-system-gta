@@ -1,3 +1,4 @@
+// Debug drawing of the route: edges, chevrons, apex markers. Read-only over the track.
 using GTA;
 using GTA.Math;
 using System;
@@ -27,8 +28,6 @@ namespace ARS
             }
         }
 
-        // Racing path: a checkpoint at every corner apex ahead of the player and inside the lookahead window, with
-        // the player's live CurrentTrackPoint.Node as the LOD centre (see the center/radius overload below).
         public static void DrawCornerCheckpoints(Racer player, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             if (corners.Count == 0 || trackPoints.Count == 0) return;
@@ -48,7 +47,6 @@ namespace ARS
             }
         }
 
-        // FiveM-style checkpoint: a torus ring plus an orange chevron above the apex, pointing at the next corner.
         public static void DrawCornerCheckpoints(Vector3 center, float radiusMeters, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             if (corners.Count == 0 || trackPoints.Count == 0) return;
@@ -65,7 +63,6 @@ namespace ARS
             }
         }
 
-        // Shared ring + chevron rendering for a single corner apex (used by the racing and spectator paths).
         static void DrawCornerApexMarker(int cornerIndex, Vector3 apexGround, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             CornerPoint corner = corners[cornerIndex];
@@ -94,7 +91,6 @@ namespace ARS
             World.DrawMarker(chevronMarker, chevronPos, toNext, new Vector3(89f, 0f, -90f), new Vector3(chevronSize, chevronSize, chevronSize), chevronColor, false, false, 2, false, "", "", false);
         }
 
-        // Crossing lines at entrance, apex, and exit of each corner within range.
         public static void DrawCornerRegions(Racer player, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             if (corners.Count == 0 || trackPoints.Count == 0) return;
@@ -109,9 +105,9 @@ namespace ARS
                 int delta = ARS.IsPointToPoint ? apexNode - playerNode : ((apexNode - playerNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
                 if (!ARS.IsBetween(delta, -10, 400)) continue;
 
-                Color startColor = Color.FromArgb(200, 0, 255, 0);   // green = entrance
-                Color apexColor = Color.FromArgb(200, 255, 255, 0);  // yellow = apex
-                Color endColor = Color.FromArgb(200, 255, 0, 0);     // red = exit
+                Color startColor = Color.FromArgb(200, 0, 255, 0);
+                Color apexColor = Color.FromArgb(200, 255, 255, 0);
+                Color endColor = Color.FromArgb(200, 255, 0, 0);
 
                 if (corner.StartNode >= 0 && corner.StartNode < trackPoints.Count)
                     DrawTrackCrossingLine(trackPoints, corner.StartNode, startColor);
@@ -121,7 +117,6 @@ namespace ARS
             }
         }
 
-        // Spectator overload: draws corner regions within a radius of the center position.
         public static void DrawCornerRegions(Vector3 center, float radiusMeters, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             if (corners.Count == 0 || trackPoints.Count == 0) return;
@@ -145,9 +140,6 @@ namespace ARS
             }
         }
 
-        // A single track-crossing line at each crest/dip peak. Crests are the top of a climb; dips are the
-        // bottom of a valley. Crests draw orange, dips draw cyan. The peak is the only signal we have --
-        // the scanner no longer produces entry/exit lines.
         public static void DrawCrests(Racer player, List<Crest> crests, List<TrackPoint> trackPoints)
         {
             if (crests.Count == 0 || trackPoints.Count == 0) return;
@@ -166,7 +158,6 @@ namespace ARS
             }
         }
 
-        // Spectator overload: draw crests whose peak is within a radius of the centre.
         public static void DrawCrests(Vector3 center, float radiusMeters, List<Crest> crests, List<TrackPoint> trackPoints)
         {
             if (crests.Count == 0 || trackPoints.Count == 0) return;
@@ -180,11 +171,6 @@ namespace ARS
             }
         }
 
-        // The two nodes the live crest-grip system is currently reading on the supplied racer: the
-        // 1.0s-ahead point (blue) and the 2.0s-ahead point (red). Drawn on the track surface as
-        // track-crossing lines so the driver can see which sample the no-fly gate is checking this
-        // tick. The car itself is at its own position (chase cam shows it). -1 means no live read
-        // this tick (parked, degenerate triangle, etc.).
         public static void DrawLiveCrestChecks(Racer racer, List<TrackPoint> trackPoints)
         {
             if (trackPoints.Count == 0) return;
@@ -194,9 +180,6 @@ namespace ARS
                 DrawTrackCrossingLine(trackPoints, racer.LiveRouteCrestFarNode, Color.FromArgb(220, 255, 60, 60));
         }
 
-        // The two lookahead nodes the route radius is sampled from: near at speed/grip, far at twice that. Magenta
-        // against the crest checks' blue and red, because the two pairs only coincide when grip is 1.0 and reading
-        // the wrong one is how a route-speed step gets misdiagnosed.
         public static void DrawRouteRadiusChecks(Racer racer, List<TrackPoint> trackPoints)
         {
             if (trackPoints.Count == 0) return;
@@ -222,7 +205,6 @@ namespace ARS
             ARS.DrawLine(leftEdge, rightEdge, color);
         }
 
-        // Small blue chevrons on both track edges, pointing ahead, on odd absolute nodes within ±30 of the given node.
         public static void DrawEdgeChevrons(Racer player, List<TrackPoint> trackPoints)
         {
             if (trackPoints.Count == 0) return;
@@ -245,7 +227,7 @@ namespace ARS
             {
                 if (ARS.IsPointToPoint && (node < 0 || node >= trackPoints.Count)) continue;
                 int index = ARS.IsPointToPoint ? node : ((node % trackPoints.Count) + trackPoints.Count) % trackPoints.Count;
-                if (index % 2 == 0) continue; // odd nodes only so chevrons sit on a fixed track lattice
+                if (index % 2 == 0) continue;
                 TrackPoint tp = trackPoints[index];
 
                 Vector3 direction = tp.Direction;

@@ -1,3 +1,4 @@
+// Per-car pace and grip tuning from completed laps. Writes results back as settings, never mid-race.
 using GTA;
 using GTA.Native;
 using System;
@@ -5,14 +6,11 @@ using System.Collections.Generic;
 
 namespace ARS
 {
-    // A car's own livery names pick its style, which fits the body parts and paints last (a livery can dirty the
-    // appearance anyway). Queued post-spawn one car per tick so a full grid does not extend the race start.
-    // The GTA.VehicleMod / GTA.VehicleColor members here came from reflection on SHVDN2, not guesses.
+
     internal static class SmartTuner
     {
         enum Style { Clean, Racing, Stripes, Muscle, Offroad, Tuner, Beater }
 
-        // Per-name keyword match; first hit wins, so the order is deliberate (Rusty before Racing, etc).
         static readonly KeyValuePair<string, Style>[] Keywords =
         {
             new KeyValuePair<string, Style>("rusty", Style.Beater),
@@ -50,8 +48,7 @@ namespace ARS
             new KeyValuePair<string, Style>("abstraction", Style.Tuner),
             new KeyValuePair<string, Style>("geometric", Style.Tuner),
             new KeyValuePair<string, Style>("halftone", Style.Tuner),
-            // Tuner and Japanese-street brands: they are tuner brands rather than race sponsors, and no colour
-            // evidence exists for any of them, so they stay on the generic colour paths.
+
             new KeyValuePair<string, Style>("yogarishima", Style.Tuner),
             new KeyValuePair<string, Style>("teast", Style.Tuner),
             new KeyValuePair<string, Style>("tenshun", Style.Tuner),
@@ -72,8 +69,6 @@ namespace ARS
             new KeyValuePair<string, Style>("neds", Style.Tuner),
         };
 
-        // Cosmetic slots per style. Performance slots (Engine, Brakes, Transmission, Suspension) and their
-        // toggles are deliberately absent: this pass is appearance only.
         static readonly Dictionary<Style, VehicleMod[]> Parts = new Dictionary<Style, VehicleMod[]>
         {
             { Style.Racing, new[] { VehicleMod.Spoilers, VehicleMod.FrontBumper, VehicleMod.RearBumper, VehicleMod.SideSkirt, VehicleMod.Exhaust, VehicleMod.Frame, VehicleMod.Roof, VehicleMod.PlateHolder, VehicleMod.TrimDesign, VehicleMod.Windows } },
@@ -85,10 +80,6 @@ namespace ARS
             { Style.Beater, new[] { VehicleMod.Exhaust, VehicleMod.PlateHolder, VehicleMod.Ornaments, VehicleMod.Trunk, VehicleMod.Hydraulics, VehicleMod.VanityPlates } },
         };
 
-        // Brand liveries imply their own colours. The value is (preferred body families, the artwork's colours),
-        // both LISTS because most are two- or three-tone; accent and rims come from the artwork so variety stays
-        // inside the brand's own palette. Evidence: the GTA Wiki, the respray-colour pages and the fan livery DB,
-        // with the game's own artwork beating real-world folklore. Medium-confidence bodies are taste, not fact.
         static readonly Dictionary<string, KeyValuePair<string[], string[]>> Brands = new Dictionary<string, KeyValuePair<string[], string[]>>
         {
             { "redwood", new KeyValuePair<string[], string[]>(new[] { "white" }, new[] { "red", "yellow" }) },
@@ -116,14 +107,8 @@ namespace ARS
             { "vapid", new KeyValuePair<string[], string[]>(new[] { "white", "black", "silver" }, new[] { "red" }) },
         };
 
-        // Marques whose liveries carry no brand palette: the artwork is per-livery or a plain monochrome badge
-        // (Ubermacht is orange/white on a Zion Classic but a flat diamond on a Sentinel XS4). They stay monochrome,
-        // which is what a works livery looks like, and only pick up colours the livery name states.
         static readonly string[] Marques = { "ubermacht", "benefactor", "pegassi", "truffade", "coil", "willard", "dinka", "obey", "bravado", "declasse", "fathom" };
 
-        // Body paints, grouped so a livery that names a colour can pull from its whitelist. **Metallic only, by
-        // request** - no matte/worn/util/chrome variants. Every member was checked against GTA.VehicleColor by
-        // reflection; keep that rule when adding colours, and keep at least one member per family.
         static readonly KeyValuePair<VehicleColor, string>[] Palette =
         {
             new KeyValuePair<VehicleColor, string>(VehicleColor.MetallicWhite, "white"),
@@ -187,9 +172,6 @@ namespace ARS
         static readonly string[] AllFamilies = { "white", "black", "red", "blue", "green", "yellow", "orange", "silver", "gold", "purple", "brown", "cream" };
         static readonly string[] Neutrals = { "black", "white", "silver" };
 
-        // The matte finish for a beater, one entry per Palette family. GTA.VehicleColor has no MatteSilver and no
-        // MatteGold (checked by reflection), so silver lands on the matte greys and gold/cream on the desert tans.
-        // Only the finish changes here - the hue the name, brand or whitelist chose is preserved.
         static readonly Dictionary<string, VehicleColor[]> MatteByFamily = new Dictionary<string, VehicleColor[]>
         {
             { "white", new[] { VehicleColor.MatteWhite } },
@@ -206,8 +188,6 @@ namespace ARS
             { "cream", new[] { VehicleColor.MatteDesertTan, VehicleColor.MatteWhite } },
         };
 
-        // WHITELIST: the body colours that sit well with a livery of this colour. A blacklist plus a uniform draw
-        // produced muddy pairings; these sets stay broad enough (4+ families) that a pick is still a surprise.
         static readonly Dictionary<string, string[]> BodyWith = new Dictionary<string, string[]>
         {
             { "white", new[] { "red", "black", "blue", "orange", "green", "purple", "gold" } },
@@ -232,8 +212,8 @@ namespace ARS
             if (!ARS.SmartTuning) return;
             foreach (Racer r in racers)
             {
-                if (Game.Player.Character.IsInVehicle(r.Car)) continue;   // never restyle the player's own car
-                if (r.Car.GetMod(VehicleMod.Engine) != -1) continue;      // leave cars that are already tuned alone
+                if (Game.Player.Character.IsInVehicle(r.Car)) continue;
+                if (r.Car.GetMod(VehicleMod.Engine) != -1) continue;
                 if (ARS.CanWeUse(r.Car)) Pending.Enqueue(r.Car);
             }
         }
@@ -243,20 +223,16 @@ namespace ARS
             Pending.Clear();
         }
 
-        // One car per tick: bounded work, no Script.Wait, and the streaming cost stays spread out.
         internal static void Tick(Func<int, int, int> random)
         {
             if (Pending.Count == 0) return;
             Vehicle veh = Pending.Dequeue();
             if (!ARS.SmartTuning || !ARS.CanWeUse(veh) || !veh.Exists()) return;
-            // Re-tested here, not only at enqueue: a car the player gets into after the queue was built would otherwise be restyled
-            // under them one tick later, and the rule is that their own car is never touched.
+
             if (Game.Player.Character.IsInVehicle(veh)) return;
             Apply(veh, random);
         }
 
-        // A livery the car actually offers, and which space it came from: modern cars carry liveries as mod slot 48
-        // (GET_MOD_TEXT_LABEL / SET_VEHICLE_MOD), older ones in the livery list (GET_LIVERY_NAME / SET_VEHICLE_LIVERY).
         struct LiveryOption
         {
             public int Index;
@@ -307,8 +283,6 @@ namespace ARS
             ApplyPaint(veh, style, livery >= 0 ? names[livery] : null, random);
         }
 
-        // Groups the car's livery names by style and takes a random non-empty group, so a car with both rally
-        // and camo liveries can come out either way. Unmatched names land in Clean rather than being dropped.
         static Style PickStyle(List<string> names, Func<int, int, int> random, out int liveryIndex)
         {
             liveryIndex = -1;
@@ -339,7 +313,6 @@ namespace ARS
             return Style.Clean;
         }
 
-        // A quarter of the slots stay stock, so two cars of one style do not come out identical.
         static void ApplyParts(Vehicle veh, Style style, Func<int, int, int> random)
         {
             foreach (VehicleMod slot in Parts[style])
@@ -361,9 +334,7 @@ namespace ARS
             VehicleColor accent;
             if (brand != null)
             {
-                // Body from the brand's families, accent and rims from the colours its artwork carries — rims take
-                // the brand because R*'s own Sprunk Buffalo is white with green wheels. A colour the name states
-                // ("Xero Gas Black") narrows the brand's sets instead of being ignored.
+
                 KeyValuePair<string[], string[]> rule = Brands[brand];
                 body = PreferStated(rule.Key, named, random);
                 accent = PreferStated(rule.Value, named, random);
@@ -371,14 +342,13 @@ namespace ARS
             }
             else if (IsMarque(liveryName))
             {
-                // Works liveries are per-livery, not per-marque: stay monochrome and let the artwork speak, but
-                // still honour a colour the name itself states.
+
                 body = PickPaint(Neutrals, random);
                 accent = named.Count > 0 ? ColourOf(named[named.Count - 1]) : PickPaint(Neutrals, random);
             }
             else if (named.Count >= 2)
             {
-                // A name like "Black Pfister White Stripe" states its own base and its own accent - honour it.
+
                 body = ColourOf(named[0]);
                 accent = ColourOf(named[named.Count - 1]);
             }
@@ -389,14 +359,11 @@ namespace ARS
             }
             else
             {
-                // No livery, or a livery that names no colour: body stays a free pick, accent goes neutral so the
-                // two draws cannot clash, and the rims never follow the accent.
+
                 body = PickPaint(AllFamilies, random);
                 accent = PickPaint(Neutrals, random);
             }
 
-            // A beater takes the matte finish whatever hue the rules above chose. Rims are left alone: wheels
-            // carry their own colour set and have no matte family to land in.
             if (style == Style.Beater)
             {
                 body = MatteFor(body, random);
@@ -405,7 +372,7 @@ namespace ARS
 
             veh.PrimaryColor = body;
             veh.SecondaryColor = accent;
-            veh.PearlescentColor = VehicleColor.MetallicBlack;   // black pearl = no pearl tint, by request for now
+            veh.PearlescentColor = VehicleColor.MetallicBlack;
             veh.RimColor = rims;
         }
 
@@ -431,8 +398,6 @@ namespace ARS
             return false;
         }
 
-        // Whole-word match on purpose: a plain Contains would fire "ron" inside "Chevron" and "ltd" inside
-        // unrelated words, and a mis-firing brand rule is invisible - it just quietly paints the wrong car.
         static bool ContainsWord(string haystack, string word)
         {
             int at = haystack.IndexOf(word, StringComparison.Ordinal);
@@ -465,8 +430,6 @@ namespace ARS
             return options[random(0, options.Count)];
         }
 
-        // Uses a colour the livery name states when the given set contains it, and picks freely otherwise. This is
-        // what settles "is this car the white Karin or the gold one" from the name when the name says so.
         static VehicleColor PreferStated(string[] families, List<string> named, Func<int, int, int> random)
         {
             foreach (string colour in named)
@@ -476,8 +439,6 @@ namespace ARS
             return PickPaint(families, random);
         }
 
-        // Every colour the name mentions, in the order the name mentions them (the word list's own order is
-        // irrelevant here - "Black Pfister White Stripe" must read as black-then-white, not white-first).
         static List<string> ColoursIn(string liveryName)
         {
             List<string> found = new List<string>();
@@ -515,8 +476,6 @@ namespace ARS
             return VehicleColor.MetallicBlack;
         }
 
-        // A beater is never glossy. Rust, rat look, junkyard and primed all resolve to Style.Beater, so the style
-        // is the whole test: same hue from the normal rules, matte finish on top.
         static VehicleColor MatteFor(VehicleColor colour, Func<int, int, int> random)
         {
             foreach (KeyValuePair<VehicleColor, string> entry in Palette)
@@ -529,7 +488,6 @@ namespace ARS
             return VehicleColor.MatteGray;
         }
 
-        // The natives hand back a GXT label; _GET_LABEL_TEXT turns it into the game's own text.
         static string LabelText(string label)
         {
             if (string.IsNullOrEmpty(label)) return null;

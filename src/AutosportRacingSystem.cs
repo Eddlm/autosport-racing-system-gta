@@ -1,3 +1,6 @@
+// The outside world: menu and ini, the race cycle (grid, laps, results), the HUD and the debug toggles. Settings are read
+// once into Options and written back atomically; a value the ini does not carry keeps its default. Every per-tick path
+// fails soft: a bad frame logs once and the race survives instead of dying with it.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -28,9 +31,6 @@ namespace ARS
         None, NotInitiated, Countdown, InProgress, Finished,
     }
 
-
-
-    // Which performance index every grid is built around (the menu's "Grid PI Mode").
     public enum PaceMode
     {
         Absolute, RelativeToMine,
@@ -46,8 +46,6 @@ namespace ARS
         Off, AutoRepair, Invincible,
     }
 
-    // Debug toggle keys. Position carries no meaning: the name is the key and the DebugToggles dictionary is the
-    // set, so a member here without an entry there is invisible and a member cannot be persisted as an int.
     public enum Options
     {
         ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip
@@ -59,51 +57,36 @@ namespace ARS
 
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
         public static float RouteLengthMeters = 0f;
-        // Pre-computed apex table. Built in BuildApexTable after track generation.
+
         public static List<CornerPoint> Corners = new List<CornerPoint>();
-        // Bumped on every apex-table rebuild so each racer's corner contexts know to re-sync.
+
         public static int CornersRevision = 0;
-        // The detector's region delimiter: a corner region opens and closes where the road's radius crosses this
-        // number, and the circuit scan starts on a node at or above it. It does not decide what counts as a corner -
-        // the 60-node doubling test does - but no region, and so no corner, forms where the road is wider. The Debug
-        // menu owns it at runtime and rebuilds the table on a change, mid-race included.
+
         public static int CornerCeilingMeters = 200;
-        // The menu's ladder and the settings repair's domain, from one place: a value stored off this ladder is
-        // snapped to its nearest offer on load, so the two lists must not drift.
+
         public static readonly string[] CornerCeilingValues = { "20", "40", "60", "80", "100", "120", "140", "160", "180", "200" };
-        // The AI's nitrous strength as a percentage of the player's: 100 matches the player's burn. Only the AI's
-        // share is scaled, and both use the same multiplier otherwise. The Race Rules menu owns it.
+
         public static int AiNitroPct = 100;
         public static readonly string[] AiNitroValues = { "50", "100", "150", "200" };
-        // Lifting lips found on the route. The debug view reads this; nothing drives on it yet.
+
         public static List<Bump> Bumps = new List<Bump>();
-        // Crests and dips along the route, with entry/exit at the half-gs threshold. Read by the brake decel
-        // factor and the track-analysis visual; nothing else.
+
         public static List<Crest> Crests = new List<Crest>();
 
         public static List<string> KnownTracks = new List<string>();
-        // Raw grip (max traction, in G) per model, keyed by the XML <Model> hash text.
+
         public static Dictionary<string, float> ModelGripCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Raw estimated top speed (mph) per model, keyed same as ModelGripCache.
         public static Dictionary<string, float> ModelTopSpeedMphCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Raw acceleration (G, ~0-0.5) per model from GET_VEHICLE_MODEL_ACCELERATION.
         public static Dictionary<string, float> ModelAccelCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Per-model electric flag from GET_IS_VEHICLE_ELECTRIC (0x1FCB07FE230B6639 — a model-hash native,
-        // build 3258+). Used for the electric corrections in ComputePaceIndex.
         public static Dictionary<string, bool> ModelElectricCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
-        // Display name per model, keyed same as ModelGripCache. Used by the PI ballpark descriptions.
         public static Dictionary<string, string> ModelNameCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Pace score per model — raw units, not a 0–1 fraction — keyed same as the stat caches.
         public static Dictionary<string, float> ModelPaceIndexCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
-        // Electric drive force follows the game's own ramp: ×5 at standstill down to ×0.9 at top speed, applied to
-        // a raw G that is the pre-ramp value. So an electric is scored at the ramp's peak, and its top speed is not
-        // discounted — 0.9 is the ramp's endpoint, not a reduction of the car's top speed.
         const float ElectricDrivePeak = 5f;
 
         public static float ComputePaceIndex(float topSpeedMph, float grip, float accelRaw, bool isElectric)
@@ -113,8 +96,6 @@ namespace ARS
             return topSpeedMph + cornerSpeedMph + accelRaw * 123.1f;
         }
 
-        // GET_IS_VEHICLE_ELECTRIC is a model-hash native that only exists from game build 3258, so probe
-        // it once and degrade to ICE where it is missing rather than throwing per model.
         static bool? _electricNativeAvailable;
 
         public static bool IsElectricModel(int modelHash)
@@ -127,10 +108,6 @@ namespace ARS
             return _electricNativeAvailable.Value && Function.Call<int>((Hash)0x1FCB07FE230B6639, modelHash) != 0;
         }
 
-        // Vehicle classes we never race.
-        // Only what cannot race on a road: two wheels, no wheels, wings, hulls and rails. Every four-wheeled class is fair game -
-        // off-road, industrial, utility, vans, service, emergency and military included - because "unsuitable looking" is not a
-        // reason to keep a car out, and the pace band already decides who races whom.
         static readonly HashSet<VehicleClass> BlacklistedVehicleClasses = new HashSet<VehicleClass>
         {
             VehicleClass.Motorcycles, VehicleClass.Cycles, VehicleClass.Boats, VehicleClass.Helicopters,
@@ -139,77 +116,60 @@ namespace ARS
 
         public static int RaceReward = 0;
 
-        // One ini per menu (Settings\Menu-*.ini), created in LoadSettings.
         public static MenuSettings RaceMenuStore;
         public static MenuSettings SettingsMenuStore;
         public static MenuSettings DebugMenuStore;
         public static MenuSettings DevelopmentMenuStore;
 
         public static bool HideHudMode = false;
-        // True when the player's own car is on the current race grid.
+
         public static bool PlayerParticipating = false;
 
-        // Player-facing AI/grid options (Settings\Menu-Settings.ini).
         public static bool NitrousEnabled = true;
-        // TipRate: how often a passed apex rolls for a tip. High = 1 in 10, Medium = 1 in 20, Low = 1 in 30. Ships High.
+
         public static TipFrequency TipRate = TipFrequency.High;
-        // Apply Menyoo vehicle-appearance skins to grid cars when a matching file exists.
+
         public static bool UseMenyooSkins = true;
-        // Repeat the pool's car models when it holds fewer cars than the grid target (tests.txt holds one).
+
         public static bool ForceFillGrid = true;
-        public static float OverspeedCutPerTenthG = 0.2f;   // 0 = correction off
+        public static float OverspeedCutPerTenthG = 0.2f;
         public static bool SmartTuning = true;
-        // Learn the effective braking decel that keeps the car at full brake through a braking phase.
+
         public static bool BrakeLearning = true;
-        // How hard the learner moves a corner's factor per verdict. Live from the Development menu so one car can be
-        // made to learn faster (or not at all) while a track is being probed. The ladder tops at 0.9, so the shipped
-        // rate sits at its top: the old const was 1.0, which the ladder cannot express.
-        // Independent of the track-analysis visual: the learner's own read-out, one line per verdict a corner takes.
+
         public static bool BrakeLearningNotify = false;
-        // Steer trace: one Info line per tick with the ask, the axis, the yaw and the front slip, for measuring the loop's delay.
-        // Off unless asked: it writes ~30 lines a second.
+
         public static bool SteerTrace = false;
-        // Corner exit aid (Rival Pace): with the car already pulling over half the lateral grip it has, and the projected line
-        // further inside than the car itself, the throttle may not fall below a floor that grows toward the inside edge. It
-        // bounds the pedal, never the plan, and the inside test is what lets go on the corner exit. Ships on.
+
         public static bool GsLaneThrottleFloor = true;
-        // The share of the normal slip allowance left at full pedal, in per cent. 100 is the rule doing nothing, 60 lets the
-        // wheel open to three fifths of its allowance under power. Ships at 60.
+
         public static int OpenUpOnThrottleFloorPct = 60;
         public static readonly string[] OpenUpFloorChoices = { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" };
-        // Which source the front-slip limiter reads: true takes the tyres' side slip from the wheel memory, false derives the
-        // demand from the car's own geometry and grip. Same limiter, same scale, different numerator.
+
         public static bool SlipFromMemory = true;
-        // TCS caps AI throttle against measured wheelspin. Off removes that cap entirely.
+
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = false;
-        // Flat mph added to the corner plan; Road Curvature Offset is the same knob for the route term.
+
         public static int CornerOffsetMph = 4;
         public static int RouteOffsetMph = 2;
         public static float SteerDampingGain = 0.5f;
-        // How far past neutral the damper may countersteer, in degrees. 0 means it can only cancel the command.
+
         public static float DamperCountersteerMaxDeg = 2f;
         public static float SteerCeilingFactor = 0.9f;
-        // The deepest the slip cut may take the wheel: 0.40 keeps 40% of what the car asked for, 0.00 can remove the request entirely.
+
         public static float SlipCutFloor = 0.4f;
-        // The slip the tyres reach peak traction at, in the field's own units: the curve is indexed from the
-        // field at x sfTractionMinAngle with its peak at argument 1.0, and the engine's own below-the-peak test
-        // compares the field against sfTractionPeakAngle x sfTractionMinAngleInv = 0.4 (wheel.cpp:4465, :4497).
+
         public const float SlipPeakRatio = 0.4f;
-        // The TCS pair as a share of that peak: the limit is where the cut begins, the span how much further
-        // past it the throttle takes to reach its floor.
+
         public static int TcsSlipLimitPct = 100;
         public static int TcsTaperSpanPct = 50;
-        // The maximum crest lift (gs reading at the 1.0s-ahead sample) the car is allowed to feel
-        // before the no-fly gate forces a slow-down. The speed factor is sqrt(MaxCrestLift / |gs|),
-        // so 1.0g means the car always slows until the gs at the sample is 1.0g or less. 0.1g is
-        // very conservative; 2.0g only fires for the sharpest crests. Dips are ignored -- they load
-        // the tyres, not unload.
+
         public static float MaxCrestLift = 0.4f;
         public static float HillGripEffect = 1f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
-        // Show or hide the staged Load Track / Build Grid items in the Race menu.
+
         public static bool StagedSpawns = false;
         public static bool HotkeysEnabled = true;
         public static Keys MenuModifierKey = Keys.LShiftKey;
@@ -218,9 +178,8 @@ namespace ARS
         public static readonly string[] MenuHotkeyValues = MenuHotkeyKeys.Select(key => ((int)key).ToString(CultureInfo.InvariantCulture)).ToArray();
         public static LogImportance LogLevel = LogImportance.Error;
 
-        // Per-frame debug focus: the AI racer closest to the player owns the ShowInputs and ShowTrackAnalysis visuals.
         public static Racer DebugFocusRacer;
-        // The player's racer on the current grid; re-resolved only when it is missing from the list.
+
         public static Racer PlayerRacer;
 
         public static Dictionary<Options, bool> DebugToggles = new Dictionary<Options, bool>()
@@ -244,12 +203,8 @@ namespace ARS
         { Options.ShowRouteRadius, false }
     };
 
-        // Spectator apex-checkpoint radius (world distance) when the player is off the grid but a race is live.
         public const float SpectateCheckpointRadiusMeters = 400f;
 
-
-        // Exponent of the lane-pursuit gain curve (x^exp). Below 1 boosts small errors
-        // (punchier), 1 is linear, above 1 damps them (softer).
         public static float LaneGainExponent = 1f;
 
         public static List<Prop> CustomProps = new List<Prop>();
@@ -257,32 +212,27 @@ namespace ARS
 
         public static List<Racer> LeaderboardFinish = new List<Racer>();
 
-        
         public static Prop FreeCamRide = null;
 
         public static PedHash[] StreetRacerModels = { PedHash.Car3Guy2, PedHash.Vinewood02AFY, PedHash.Stwhi02AMY, PedHash.StrPunk02GMY, PedHash.Stbla02AMY };
 
-
         public static RaceState RaceStatus = RaceState.None;
-        // The one gate for "a race is under way": the HUD, the nitrous top-ups and the Reset To Track item all read it.
+
         public static bool RaceIsRunning { get { return RaceStatus == RaceState.Countdown || RaceStatus == RaceState.InProgress; } }
         public static int RaceStartTime = 0;
-        // Cars taken out of a race with a dead engine, parked along the shoulder in the order they died.
+
         public static int ParkedDNFs = 0;
-        // DNF cars are dropped below the surface, frozen and invisible, and the AI ignores them entirely.
+
         public static bool DNFUnderTrack = true;
-        // No-collision race: the racers do not detect each other and pass through each other.
+
         public static bool NoCollision = false;
 
-        // Phased race instancing: track which setup phases have been completed.
-        // Reset by CleanRacers (_gridInstanced) and CleanEverything (both).
         bool _trackInstanced;
         bool _gridInstanced;
         int _intendedOpponents = 4;
-        // Grid size offers: 0-6 by 1, on to 18 by 2, to 30 by 4, then by 10 for the masochists.
+
         public static readonly int[] GridSizeChoices = { 0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 22, 26, 30, 40, 50, 60, 70, 80, 90, 100 };
 
-        // Safety net: the slots are built to order, but a short track still yields fewer than were asked for.
         int GridSlotsAvailable => Math.Max(0, GridPositions.Count - 2);
 
         static string[] GridSizeLabels()
@@ -292,7 +242,6 @@ namespace ARS
             return labels;
         }
 
-        // A size stored by an older, denser list may no longer be offered: snap to the nearest one that is.
         static int NearestGridSize(int stored)
         {
             int best = GridSizeChoices[0];
@@ -302,36 +251,26 @@ namespace ARS
         List<int> _flareFx = new List<int>();
         FreeCamController _freeCam;
 
-
-
         public static ulong WheelsPtr = 0x0;
         public static ulong NumWheelsOffset = 0x0;
         static bool _nullCarReported;
         public static ulong WheelPowerOffset = 0x0;
 
-        
         public static List<int> Other = new List<int> { 555004797, -399872228, -1447280105, 722686013 };
-        public static List<int> Road = new List<int> { 1187676648, 282940568, -108464011, 1187676648, -1084640111, };       
+        public static List<int> Road = new List<int> { 1187676648, 282940568, -108464011, 1187676648, -1084640111, };
         public static List<int> Dirt = new List<int> { 1144315879, 510490462, -1907520769, -1885547121, -700658213, 2128369009,
-            -1595148316,-765206029,509508168,1333033863,951832588,-840216541,-1907520769,510490462,-1942898710}; 
+            -1595148316,-765206029,509508168,1333033863,951832588,-840216541,-1907520769,510490462,-1942898710};
         public static List<int> Sand = new List<int> { 1288448767, };
-
-
 
         public static List<string> HelpMessages = new List<string>();
 
-        
         public static List<Racer> Racers = new List<Racer>();
 
+        public static List<Vector3> RouteNodes = new List<Vector3>();
+        public static Dictionary<int, float> NodeHalfWidths = new Dictionary<int, float>();
 
-        
-        public static List<Vector3> RouteNodes = new List<Vector3>(); 
-        public static Dictionary<int, float> NodeHalfWidths = new Dictionary<int, float>(); 
-
-
-        public static List<Prop> StartLineFlares = new List<Prop>(); 
+        public static List<Prop> StartLineFlares = new List<Prop>();
         public static XmlDocument CurrentFile = null;
-
 
         int _raceTimedFinishMs = 0;
         float _timeScale = 1f;
@@ -347,7 +286,7 @@ namespace ARS
             GravelGrass = 2128369009,
             LooseGravel = 510490462,
             Rock = -840216541,
-            MoreTarmac = 1187676648, 
+            MoreTarmac = 1187676648,
             Tarmac = 282940568,
             WetTarmac = 999829011,
             Grass = 1286696947,
@@ -387,11 +326,11 @@ namespace ARS
             }
             else
             {
-                
+
                 BuildPowerCache();
                 RefreshPowerControls();
                 FillCachedCandidates(_intendedOpponents);
-                RefreshTrackList(); // tracks are now discovered in _trackTags. Populate the menu list.
+                RefreshTrackList();
                 Log(LogImportance.Info, "Initialization complete.", true);
                 DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
                 HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARSe~w~ menu.");
@@ -409,27 +348,21 @@ namespace ARS
             KeyDown += OnKeyDown;
             Aborted += OnAbort;
 
-            // Keep the previous session: the crash we most want to read is the one that killed the game, and truncating the log at
-            // startup destroyed the only evidence of it (2026-10-26). One previous file is enough and costs a rename.
             string legacyLogPath = ScriptsFolder + @"\Log.log";
             try { if (File.Exists(legacyLogPath) && !File.Exists(LogPath)) File.Move(legacyLogPath, LogPath); }
             catch (Exception) { }
-            // The build number used to ship as this sidecar; it now lives in the DLL's file version. Remove the
-            // leftover so a folder listing does not suggest a number that nothing reads.
+
             try { string staleBuildNumber = ScriptsFolder + @"\build-number.txt"; if (File.Exists(staleBuildNumber)) File.Delete(staleBuildNumber); }
             catch (Exception) { }
             try { if (File.Exists(LogPath)) File.Copy(LogPath, PreviousLogPath, true); }
             catch (Exception) { }
             File.WriteAllText(LogPath, "----------------------------");
-            // Forced: this runs before LoadSettings, so LogLevel is still the field default (Error) and would swallow it - the
-            // one line that says which build booted is the one line a log must never omit. The build number rides in the
-            // assembly, so a log file names its own build even when it is read away from the game folder.
+
             Log(LogImportance.Info, "Script initialized - " + DateTime.Now + " - build " + ReadBuildNumber(), true);
             File.AppendAllText(LogPath, "\n----------------------------");
             VerifyScriptBridge();
             LoadSettings();
-            // A menu that throws used to take the whole mod down with it, and only the driver could see it. Now the failure is
-            // written at Error - the shipped default level - so the log names it even when the menu did not come up.
+
             try
             {
                 InitializeMenu();
@@ -439,27 +372,21 @@ namespace ARS
                 Log(LogImportance.Error, "Menu build failed: " + menuError);
             }
 
-
             string scriptName = "ARS";
             string scriptVer = "0.0.0.0";
             string scriptDate = "30/09/2018";
 
-            
             Assembly assem = Assembly.GetExecutingAssembly();
             AssemblyName assemName = assem.GetName();
             Version ver = assemName.Version;
             scriptVer = ver.ToString() + " ~o~[PUBLIC BETA]~w~";
             scriptDate = File.GetLastWriteTimeUtc(ScriptsFolder + @"\ARS.dll").ToString();
 
-
             UI.Notify("~b~" + scriptName + "~g~e~w~" + "~y~ " + scriptVer + "~n~Build: ~g~" + ReadBuildNumber() + " ~w~(" + scriptDate + ")");
 
             UpdateChecker.CheckLatestRelease();
         }
 
-        // The build number travels inside the DLL: the GenerateBuildInfo target writes AssemblyFileVersion as
-        // 0.9.0.<build>, so the banner and the file's Windows properties report the same thing and a DLL copied
-        // without its neighbours still knows which build it is. AssemblyVersion stays the hand-moved release identity.
         static string ReadBuildNumber()
         {
             try
@@ -473,7 +400,6 @@ namespace ARS
             catch (Exception) { return "?"; }
         }
 
-        // SHVDN's asi and API dll are a matched pair; a mismatch throws inside the API's native bridge.
         static void VerifyScriptBridge()
         {
             try
@@ -499,8 +425,7 @@ namespace ARS
             foreach (string dir in folders)
             {
                 int count = 0;
-                // Only track files, and one bad one must not stop the mod: discovery used to enumerate every file in Tracks\
-                // and its subfolders and parse each twice with no guard, so a stray or truncated file threw out of startup.
+
                 foreach (string st in Directory.EnumerateFiles(dir, "*.xml"))
                 {
                     string n = System.IO.Path.GetFileName(st);
@@ -532,11 +457,6 @@ namespace ARS
             Log(LogImportance.Info, "-------------");
         }
 
-
-
-
-        // Clears the learned stat caches and re-discovers the vehicle pool + track folder.
-        // Runs on the background load task, so it must not call natives.
         public void RefreshCatalogs()
         {
             ModelGripCache.Clear();
@@ -553,16 +473,12 @@ namespace ARS
             Log(LogImportance.Info, "-------------");
         }
 
-        // Called on the main script thread, NOT from the background load task: GTA natives hard-crash the game off
-        // the main thread, so the stat caches are filled here rather than during the pool scan.
         public void BuildPowerCache()
         {
             VehicleCatalog.BuildPowerCache(_vehiclePool, ModelGripCache, ModelTopSpeedMphCache, ModelAccelCache, ModelElectricCache, ModelNameCache, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
             BuildPaceIndex();
         }
 
-        // Second pass over the raw stat caches: the raw pace score per model (see ComputePaceIndex).
-        // Only finite scores enter — a NaN key would rank first in the closest-N fill.
         void BuildPaceIndex()
         {
             ModelPaceIndexCache.Clear();
@@ -579,21 +495,19 @@ namespace ARS
                 bool isElectric = false;
                 ModelElectricCache.TryGetValue(kv.Key, out isElectric);
                 float pace = ComputePaceIndex(mph, grip, accel, isElectric);
-                if (float.IsNaN(pace) || float.IsInfinity(pace)) continue; // accel is the one raw stat with no filter of its own
+                if (float.IsNaN(pace) || float.IsInfinity(pace)) continue;
                 ModelPaceIndexCache[kv.Key] = pace;
                 indexed++;
             }
             Log(LogImportance.Info, "BuildPaceIndex: " + indexed + " models indexed.");
         }
 
-        // The SHVDN member name is the model name in most cases; keep it only when it hashes to that model.
         static string RosterKeyFor(VehicleHash hash)
         {
             string name = hash.ToString().ToLowerInvariant();
             return Game.GenerateHash(name) == (int)hash ? name : ((int)hash).ToString();
         }
 
-        // A regenerated roster takes effect without a reload: the same three steps the load task runs.
         void RefreshRoster()
         {
             RefreshCatalogs();
@@ -601,7 +515,6 @@ namespace ARS
             RefreshPowerControls();
         }
 
-        // The Vehicles folder is scanned once at init, so the Car Roster item re-checks it every time its menu opens.
         void RefreshCarPoolItem(NativeListItem<string> item)
         {
             List<string> files = VehicleCatalog.ListRosterFiles().Select(VehicleCatalog.PoolLabel).ToList();
@@ -613,7 +526,7 @@ namespace ARS
             _carPoolFiles = files;
             bool lost = target == null;
             if (lost) { target = files.Find(f => string.Equals(f, VehicleCatalog.PoolLabel("cars.txt"), StringComparison.OrdinalIgnoreCase)); if (target == null) target = files[0]; }
-            // The index is parked on a valid entry before the swap, because the Items setter reads Items[index] as it lands.
+
             _carPoolRefreshing = true;
             try
             {
@@ -636,7 +549,6 @@ namespace ARS
 
         }
 
-        
         public static Vector3 EntityRelativeOffset(Entity reference, Entity ent)
         {
             Vector3 pos = ent.Position;
@@ -649,14 +561,9 @@ namespace ARS
 
         public static float EngineTopSpeed(Vehicle v)
         {
-            // GET_VEHICLE_ESTIMATED_MAX_SPEED (0x53AF...) returns, for a ground vehicle, the handling's
-            // fInitialDriveMaxFlatVel converted to m/s - commands_vehicle.cpp: CommandGetVehicleEstimatedMaxSpeed hands
-            // back m_Transmission.GetDriveMaxFlatVelocity, and that is the geared ceiling before any drag. No car reaches
-            // it. The model flavour below runs the game's own drag quadratic (CVehicleModelInfo::CalculateMaxFlatVelocityEstimate)
-            // and returns the speed the car actually settles at, which is the number "how much room is left" wants.
+
             return Function.Call<float>((Hash)0xF417C2502FFFED43, Function.Call<int>(Hash.GET_ENTITY_MODEL, v));
         }
-
 
         public static float Remap(float x, float in_min, float in_max, float out_min, float out_max, bool clamp = false)
         {
@@ -696,12 +603,6 @@ namespace ARS
             return (float)(Math.PI * angle / 180.0f);
         }
 
-        
-
-        
-
-
-
         int _countdownTickMs = 0;
         int _maxCountdown = 7;
         int _countdown = 7;
@@ -712,33 +613,24 @@ namespace ARS
         public static Scaleform Floatingtext = new Scaleform("HUD_FLOATING_HELP_TEXT");
         public static Scaleform CountdownScaleform = new Scaleform("MP_BIG_MESSAGE_FREEMODE");
 
-
-
         public static float PowerTargetScale = 0.52f;
-        // Relative resolves the target from the player's car + offset at Spawn Grid; Absolute uses the
-        // fixed target. Neither writes back here.
+
         public static PaceMode CurrentPaceMode = PaceMode.RelativeToMine;
         public static float PaceOffsetScale = 0f;
-        // 0 = no limit: the grid takes the closest PIs in the pool however far they sit from the target.
+
         public static int PaceDeviationLimit = 0;
-        // Default script folder under GTA's `scripts\` (Tracks/, Vehicles/cars.txt, sillynames.txt,
-        // pidump.txt, etc.). All path constants below derive from this so the folder name lives in one place.
+
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
-        // Config .ini files (Options/DevConfig) live in a
-        // dedicated Settings subfolder, derived from ScriptsFolder so the base stays in one place.
+
         public static string SettingsFolder => ScriptsFolder + @"\Settings";
-        // The log sits at the game root beside asiloader.log and ScriptHookV.log, not inside the mod folder: that is where
-        // every other tool writes it and where a player looks first (owner, 2026-10-26). Derived from ScriptsFolder so the
-        // one relative anchor still resolves every path in this file.
+
         public static string LogPath => Path.GetFullPath(Path.Combine(ScriptsFolder, "..", "..", "ARS.log"));
         public static string PreviousLogPath => Path.GetFullPath(Path.Combine(ScriptsFolder, "..", "..", "ARS.prev.log"));
-        // Temp: bypass pace matching entirely and load only these models into the grid.
-        // Set to null (or empty list) to re-enable pace-matched selection.
+
         public static List<string> HardcodedRoster = null;
 
-        // The vehicle pool: the selected roster's model keys, discovered by RefreshCatalogs on the load thread.
         List<string> _vehiclePool = new List<string>();
-        // The Car Roster item's current listing, and the guard that hides its own rebuild from its ItemChanged.
+
         List<string> _carPoolFiles = new List<string>();
         bool _carPoolRefreshing;
         public static int TrackListPos = 0;
@@ -746,9 +638,8 @@ namespace ARS
         NativeMenu _arsMenu;
         NativeMenu _raceMenu;
 
-        // Menu track selector: the user picks a race from the list and Start Race uses it.
         NativeListItem<string> _trackListItem;
-        readonly List<string> _trackListPaths = new List<string>(); // parallel to _trackListItem.Items
+        readonly List<string> _trackListPaths = new List<string>();
         string _selectedTrackPath = null;
         NativeListItem<string> _gridSizeItem;
         NativeListItem<string> _powerTargetItem;
@@ -756,15 +647,11 @@ namespace ARS
         NativeListItem<string> _paceOffsetItem;
         readonly List<float> _powerTargetValues = new List<float>();
         readonly List<float> _paceOffsetValues = new List<float>();
-        // Effective pace target resolved at Spawn Grid from Pace Mode — never written back into PowerTargetScale.
+
         float _resolvedPaceTarget = 0.52f;
-        // Most recent valid player-vehicle pace reading; relative-mode fallback when the player has no vehicle.
+
         float _lastKnownPlayerPace = float.NaN;
 
-        // Every submenu's black bar carries its full trail (ARS > RIVALS > RIVAL TRACTION), and the row that opens it in the
-        // parent stays short. AddSub only records the edge: the trails are written in one pass once the whole tree exists,
-        // because the menus are built children-first - a submenu is filled before it is attached, so computing the trail while
-        // linking it asked for a parent's trail that did not exist yet.
         readonly Dictionary<NativeMenu, NativeMenu> _menuParents = new Dictionary<NativeMenu, NativeMenu>();
         NativeSubmenuItem AddSub(NativeMenu parent, NativeMenu child)
         {
@@ -796,7 +683,6 @@ namespace ARS
                 Alignment = Alignment.Right
             };
 
-            // ── Race submenu ──
             _raceMenu = new NativeMenu("Race", "Race")
             {
                 UseMouse = false,
@@ -804,7 +690,6 @@ namespace ARS
                 Alignment = Alignment.Right
             };
 
-            // ── Track items (flattened into Race) ──
             _trackListItem = new NativeListItem<string>("Select Track", "Pick the race to instance.", Array.Empty<string>());
             _trackListItem.ItemChanged += (sender, args) =>
             {
@@ -824,7 +709,6 @@ namespace ARS
             _raceMenu.Add(lapsItem);
             HookListTextPicker(lapsItem);
 
-            // Reverse Route: player-facing race option, persisted in Menu-Race.ini.
             AddDebugCheckbox(_raceMenu, Options.ReverseRoute, "Reverse Route", "Race the loaded route in reverse.", null, RaceMenuStore);
 
             NativeItem instanceTrackItem = new NativeItem("Load Track", "Load the selected track and teleport to it.");
@@ -836,7 +720,6 @@ namespace ARS
             };
             _raceMenu.Add(instanceTrackItem);
 
-            // ── Grid items (flattened into Race) ──
             _gridSizeItem = new NativeListItem<string>("Target Grid Size", "Target number of AI opponents for the grid. 0 races the track alone.", GridSizeLabels());
             _gridSizeItem.ItemChanged += (sender, args) =>
             {
@@ -849,7 +732,6 @@ namespace ARS
             _raceMenu.Add(_gridSizeItem);
             HookListTextPicker(_gridSizeItem);
 
-            // ── PI Settings submenu — the performance index the grid is drawn from (Race owns its keys) ──
             NativeMenu piSettingsMenu = new NativeMenu("PI Settings", "PI Settings", "The performance index the grid is drawn from, and how close to it a rival may sit.")
             {
                 UseMouse = false,
@@ -866,7 +748,6 @@ namespace ARS
             piSettingsMenu.Add(_paceModeItem);
             HookListTextPicker(_paceModeItem);
 
-            // ── PI offset / target (merged Council design; the mode above decides which one governs) ──
             _paceOffsetItem = new NativeListItem<string>("PI Offset", "Field PI = your car's PI plus this offset, resolved when the grid spawns.", Array.Empty<string>());
             for (int offset = -10; offset <= 10; offset++)
             {
@@ -908,7 +789,6 @@ namespace ARS
             HookListTextPicker(paceDeviationItem);
             AddSub(_raceMenu, piSettingsMenu);
 
-            // Set last: assigning SelectedIndex fires ItemChanged, and the mode's handler rewrites both PI items.
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
 
             NativeItem instanceGridItem = new NativeItem("Build Grid", "Spawn the AI grid with current settings. Hit again to re-instance after changing PI/size.");
@@ -920,11 +800,9 @@ namespace ARS
             };
             _raceMenu.Add(instanceGridItem);
 
-            // Slots to restore into when StagedSpawns is re-enabled: Add() alone appends past LemonUI's 10-row window.
             int spawnTrackSlot = _raceMenu.Items.IndexOf(instanceTrackItem);
             int spawnGridSlot = _raceMenu.Items.IndexOf(instanceGridItem);
 
-            // Start: add player to grid, place cars, tune, countdown. Lives at the end of Race.
             NativeItem startItem = new NativeItem("Start Race", "Starts the race, loading the track and building the grid first if needed. You race from the grid or watch from the sideline.");
             startItem.Activated += (sender, args) =>
             {
@@ -933,7 +811,6 @@ namespace ARS
             };
             _raceMenu.Add(startItem);
 
-            // Restart: same cars, re-placed on the grid; falls back to a fresh start when no race is running.
             NativeItem restartItem = new NativeItem("Restart Race", "Re-place the same cars on the grid and restart the race.");
             restartItem.Activated += (sender, args) =>
             {
@@ -944,7 +821,6 @@ namespace ARS
             };
             _raceMenu.Add(restartItem);
 
-            // Reset: teleport the player's car to the side of the closest track node, moving forward at low speed.
             NativeItem resetItem = new NativeItem("Reset To Track", "Teleport your car beside the closest track node at 10 mph, facing the route. Races only.");
             resetItem.Activated += (sender, args) =>
             {
@@ -952,9 +828,7 @@ namespace ARS
                 ResetToTrack();
             };
             _arsMenu.Shown += (sender, args) => resetItem.Enabled = RaceIsRunning;
-            // ── Root-level actions ──
 
-            // End Race: tear down race, clean everything. Listed last in the root.
             NativeItem endItem = new NativeItem("End Race", "Tear down the current race and clean everything.");
             endItem.Activated += (sender, args) =>
             {
@@ -962,7 +836,6 @@ namespace ARS
                 CleanEverything();
             };
 
-            // ── Track Creator submenu (root) — the route editor's only entry point ──
             NativeMenu creatorMenu = new NativeMenu("Track Creator", "Track Creator", "Record a new race route with the free camera.")
             {
                 UseMouse = false,
@@ -993,7 +866,6 @@ namespace ARS
             };
             creatorMenu.Add(exitCreatorItem);
 
-            // ── Rivals (root) — who races against you, and how they drive ──
             NativeMenu rivalsMenu = new NativeMenu("Rivals", "Rivals", "The rivals' cars, how they look, and how they drive.")
             {
                 UseMouse = false,
@@ -1007,8 +879,6 @@ namespace ARS
             rivalsMenu.Add(gridSortItem);
             HookListTextPicker(gridSortItem);
 
-            // ── Car pool: which Vehicles\*.txt roster the grid draws from ──
-            // Listed without the extension; the ini keeps the file name.
             List<string> poolFiles = VehicleCatalog.ListRosterFiles();
             string storedPool = SettingsMenuStore.Get("VehiclePool", "cars.txt");
             if (!poolFiles.Contains(storedPool, StringComparer.OrdinalIgnoreCase)) { storedPool = "cars.txt"; SaveRacerSetting("VehiclePool", storedPool); }
@@ -1024,7 +894,7 @@ namespace ARS
                 RefreshRoster();
                 UI.Notify("~b~[ARS]:~w~ Car pool: " + carPoolItem.Items[args.Index] + " (" + _vehiclePool.Count + " cars).");
             };
-            // The index below only restores the stored pool, so it must not read as a user change.
+
             _carPoolRefreshing = true;
             string currentPool = VehicleCatalog.PoolLabel(VehicleCatalog.SelectedRosterFile);
             carPoolItem.SelectedIndex = Math.Max(0, carPoolItem.Items.FindIndex(i => string.Equals(i, currentPool, StringComparison.OrdinalIgnoreCase)));
@@ -1049,7 +919,6 @@ namespace ARS
             };
             rivalsMenu.Add(tuningItem);
 
-            // ── Menyoo vehicle skins on grid cars ──
             NativeCheckboxItem menyooItem = new NativeCheckboxItem("Menyoo Skins", "Cosmetic only, and only on the cars ARS spawns: your own car is never touched.", UseMenyooSkins);
             menyooItem.CheckboxChanged += (sender, args) =>
             {
@@ -1058,7 +927,6 @@ namespace ARS
             };
             rivalsMenu.Add(menyooItem);
 
-            // ── Rival behaviour submenus: pace, traction, steering ──
             NativeMenu rivalPaceMenu = new NativeMenu("Rival Pace", "Rival Pace", "For rivals that brake too early or arrive too hot.")
             {
                 UseMouse = false,
@@ -1185,9 +1053,6 @@ namespace ARS
             rivalTractionMenu.Add(tcsSpanItem);
             HookListTextPicker(tcsSpanItem);
 
-            // Live again (owner, 2026-10-26): the row was greyed while the native-ABS question was open, and the owner watched AI
-            // cars lock their wheels at full brake, which is the symptom the switch exists for. GTA re-grants WF_ABS to every
-            // non-player car each tick, so this may still be out-braked by the engine's own clamp - that is what a drive settles.
             NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "GTA forces native ABS on non-player driven cars. I'm working on undoing that.", AbsEnabled);
             absItem.CheckboxChanged += (sender, args) =>
             {
@@ -1237,7 +1102,6 @@ namespace ARS
             rivalSteeringMenu.Add(slipCutFloorItem);
             HookListTextPicker(slipCutFloorItem);
 
-            // ── Race Rules (root) — rules that apply to every race ──
             NativeMenu rulesMenu = new NativeMenu("Race Rules", "Race Rules", "Rules that apply to every race: timing, damaged and dead cars, field pace, collision, nitrous and downforce.")
             {
                 UseMouse = false,
@@ -1294,7 +1158,6 @@ namespace ARS
             };
             rulesMenu.Add(noCollisionItem);
 
-            // ── Nitrous ──
             NativeCheckboxItem nitroItem = new NativeCheckboxItem("Nitrous", "A fresh nitrous bottle each lap. Rivals fire on straights; you fire manually.", NitrousEnabled);
             nitroItem.CheckboxChanged += (sender, args) =>
             {
@@ -1304,9 +1167,7 @@ namespace ARS
             rulesMenu.Add(nitroItem);
 
             NativeListItem<string> aiNitroItem = new NativeListItem<string>("AI Nitrous Power (%)", "The AI's bottle as a percentage of yours: 100 the same, 200 twice. Your own burn is unchanged.", AiNitroValues);
-            // Seeded from the repaired store, not the load-time static: a value the repair snapped must be what both
-            // the item shows and this session runs on, and the static is written to match before the handler lands so
-            // the seed itself changes nothing.
+
             aiNitroItem.SelectedIndex = Math.Max(0, aiNitroItem.Items.IndexOf(SettingsMenuStore.GetInt("AiNitroPct", AiNitroPct).ToString(CultureInfo.InvariantCulture)));
             AiNitroPct = int.Parse(aiNitroItem.Items[aiNitroItem.SelectedIndex], CultureInfo.InvariantCulture);
             aiNitroItem.ItemChanged += (sender, args) =>
@@ -1320,7 +1181,6 @@ namespace ARS
 
             AddDebugCheckbox(rulesMenu, Options.HighDownforceOnline, "Online Downforce Curve", "For downforce >100, use the full online scaling; off = fall back to the 0.3 singleplayer default.");
 
-            // ── Interface (root) — what the mod shows you, and the free camera ──
             NativeMenu interfaceMenu = new NativeMenu("Interface", "Interface", "What the mod shows you, and the free camera.")
             {
                 UseMouse = false,
@@ -1328,7 +1188,6 @@ namespace ARS
                 Alignment = Alignment.Right
             };
 
-            // ── Racing tips, shown through the help box after an apex ──
             NativeListItem<string> tipRateItem = new NativeListItem<string>("Racing Tips", "How often a tip is shown when you pass an apex. The tips themselves are in Settings\\tips.txt.", EnumLabels<TipFrequency>());
             tipRateItem.ItemChanged += (sender, args) =>
             {
@@ -1345,8 +1204,6 @@ namespace ARS
             AddDebugCheckbox(interfaceMenu, Options.ShowDriverNames, "Show Driver Names", "The leaderboard names the driver instead of the car: the rival's name, the player's own for their row. Off shows the car model only.");
             AddDebugCheckbox(interfaceMenu, Options.ShowAiLapTimes, "Show Rival Lap Times", "Announce each AI lap time as it crosses the line. One per racer per lap, so a full grid is a lot of them.");
 
-            // Off and greyed: Load Track and Build Grid stay out of the Race menu, and the row cannot be turned back on.
-            // The stored key is ignored at load because the switch that would honour it cannot be reached.
             NativeCheckboxItem stagedSpawnsItem = new NativeCheckboxItem("Show Track & Grid Rows", "Load Track and Build Grid in the Race menu. Off and not changeable.", false);
             stagedSpawnsItem.Enabled = false;
             stagedSpawnsItem.CheckboxChanged += (sender, args) =>
@@ -1374,7 +1231,6 @@ namespace ARS
             };
             interfaceMenu.Add(freecamItem);
 
-            // ── Controls (root) — the keys that open the ARS menu ──
             NativeMenu controlsMenu = new NativeMenu("Controls", "Controls", "The keys that open the ARS menu.")
             {
                 UseMouse = false,
@@ -1412,7 +1268,6 @@ namespace ARS
             controlsMenu.Add(menuKeyItem);
             HookListTextPicker(menuKeyItem);
 
-            // ── Debug (root) — developer visuals, lane experiments and logging ──
             NativeMenu debugMenu = new NativeMenu("Debug", "Debug", "Developer visuals, lane experiments and logging.")
             {
                 UseMouse = false,
@@ -1440,9 +1295,6 @@ namespace ARS
             debugMenu.Add(logLevelItem);
             HookListTextPicker(logLevelItem);
 
-            // The corner ceiling, owned by this menu: a change rebuilds the derived table at once, so it can be
-            // judged mid-race. Seeded from the repaired store, and the static is written to that same value before
-            // the handler lands, so the item, the session and the file agree even when the repair moved the number.
             NativeListItem<string> cornerCeilingItem = new NativeListItem<string>("Corner Ceiling", "The radius treated as a straight: regions are cut where the road opens past it. A change rebuilds the table at once.", CornerCeilingValues);
             cornerCeilingItem.SelectedIndex = Math.Max(0, cornerCeilingItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerCeiling", CornerCeilingMeters).ToString(CultureInfo.InvariantCulture)));
             CornerCeilingMeters = int.Parse(cornerCeilingItem.Items[cornerCeilingItem.SelectedIndex], CultureInfo.InvariantCulture);
@@ -1463,10 +1315,8 @@ namespace ARS
                 _raceMenu.Remove(instanceGridItem);
             }
 
-            // End Race goes at the tail of the Race menu
             _raceMenu.Add(endItem);
 
-            // Link Race, Rivals, Race Rules, Interface, Controls, Debug and Track Creator as submenus of root
             NativeMenu developmentMenu = new NativeMenu("Development", "Development", "Test-only levers, for probing one car on track.")
             {
                 UseMouse = false,
@@ -1505,19 +1355,15 @@ namespace ARS
             AddSub(_arsMenu, controlsMenu);
             AddSub(_arsMenu, debugMenu);
             NativeSubmenuItem developmentEntry = AddSub(_arsMenu, developmentMenu);
-            // A single car on track is the whole point of these levers, and that is usually one AI while the player
-            // watches, so the gate counts racers and does not look at PlayerParticipating: the player is only in
-            // Racers when they are on the grid, and requiring them there would lock the menu out of its own test.
+
             developmentEntry.Enabled = false;
             _arsMenu.Shown += (sender, args) => developmentEntry.Enabled = RaceIsRunning && Racers.Count == 1;
             AddSub(_arsMenu, creatorMenu);
 
-            // One pass, after the last edge: the root keeps its own subtitle (RACING) and every menu under it gets its trail.
             int trails = ApplyMenuTrails(_arsMenu, _arsMenu.Subtitle);
             Log(LogImportance.Info, "Menu built: " + _menuParents.Count + " submenus, " + trails + " trails");
             _arsMenu.Add(resetItem);
 
-            // Register all menus in the pool
             _menuPool.Add(_arsMenu);
             _menuPool.Add(_raceMenu);
             _menuPool.Add(piSettingsMenu);
@@ -1552,8 +1398,7 @@ namespace ARS
         {
             DebugMenuStore.Set(option.ToString(), value.ToString());
         }
-        // Hook Enter on a list item to open Game.GetUserInput and substring-match against the items. First match wins
-        // (case-insensitive). Selecting the matched index fires the existing ItemChanged handler, so persistence runs.
+
         void HookListTextPicker(NativeListItem<string> item)
         {
             item.Activated += (sender, args) =>
@@ -1570,9 +1415,7 @@ namespace ARS
                 item.SelectedIndex = match;
             };
         }
-        // ── Phased race instancing: each phase is a self-contained method, callable on its own or chained. ──
 
-        // Phase 1: load the selected track, compute route/corners, teleport the player.
         public void InstanceTrack()
         {
             CleanRacers();
@@ -1597,8 +1440,6 @@ namespace ARS
             Log(LogImportance.Info, "Track instanced");
         }
 
-        // Phase 2: spawn the AI grid with current pace/grid settings. Repeatable —
-        // calling again tears down the old grid and respawns with updated settings.
         public void InstanceGrid()
         {
             if (!_trackInstanced)
@@ -1609,37 +1450,28 @@ namespace ARS
 
             if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_OUT, 200);
 
-            // Tear down any existing AI grid (player is not a racer yet at this point).
             CleanRacers();
 
-            // Resolve the effective pace target once per grid from Pace Mode — the menu is the only authority on the anchor.
-            // An anchor outside the fleet span is harmless: the ranking starts from the closest end.
             ResolvePaceTargetForGrid();
 
-
             Log(LogImportance.Info, "Grid: ranking " + _vehiclePool.Count + " pool files, target " + _resolvedPaceTarget.ToString(CultureInfo.InvariantCulture));
-            // Ask for one more car than the AI count: AddPlayerToGrid puts the player's racer on top of these
-            // later, and the clamp below is measured against what the track can really yield.
+
             TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, _intendedOpponents + 1, GridPositions);
             int gridSize = Math.Min(_intendedOpponents, Math.Max(0, GridSlotsAvailable - 1));
             if (gridSize != _intendedOpponents) Log(LogImportance.Info, "Grid: the track only yielded " + GridSlotsAvailable + " slots, so " + _intendedOpponents + " was capped to " + gridSize);
             GridFill fill = FillCachedCandidates(gridSize);
             LoadGrid(gridSize);
 
-            // Zero opponents is a solo race, not a roster failure.
             if (Racers.Count == 0 && _intendedOpponents > 0)
             {
-                // The player is told which of the three causes it was, and the PI one names the band it could not fill: the
-                // old message sent them to the Vehicles folder even when 472 models were indexed and the folder was fine.
+
                 if (fill == GridFill.NoneInBand)
                     UI.Notify("~o~No car within " + PaceDeviationLimit + " PI of " + Math.Round(_resolvedPaceTarget) + ": nothing to build a grid from. Widen Max PI Deviation, or pick a PI target the pool can reach.");
                 else if (fill == GridFill.NoPaceIndex)
                     UI.Notify("~o~No pace index for any car in the pool: check the Vehicles folder.");
                 else
                     UI.Notify("~o~The grid came back empty.");
-                // A failed Start Race must not leave the world half-built: the track was instanced before this call, so its flares,
-                // its generated props and its custom props are all still in the world with no race to belong to. They go, and the
-                // track counts as not instanced so the next attempt rebuilds it.
+
                 foreach (Prop p in StartLineFlares) if (CanWeUse(p)) p.Delete();
                 StartLineFlares.Clear();
                 foreach (Prop p in AutoGeneratedProps) if (CanWeUse(p)) p.Delete();
@@ -1652,8 +1484,6 @@ namespace ARS
                 return;
             }
 
-            // Place AI cars on grid positions so the player can see the field.
-            // PlaceCars also calls Initialize() which puts them in GridWait (handbrake on).
             PlaceCars();
 
             _gridInstanced = true;
@@ -1661,17 +1491,6 @@ namespace ARS
             if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
         }
 
-        // All-in-one chain: runs all three phases back-to-back with no UI stops.
-        // Used by future presets; also the backward-compatible single-call path.
-        // Phase 1 of the preflight: everything that can fail is asked BEFORE anything is torn down. InstanceTrack deletes the
-        // previous track's props, fades the screen and kills the racers before it has parsed a single route, so a bad file or an
-        // empty pool used to leave the world half-rebuilt. This resolves the cheap half - the file parses, the route is long
-        // enough, the pace target resolves and the pool yields a car - and refuses the start without touching the world.
-        //
-        // It does NOT replace the checks inside the instance path, and it cannot: the definitive slot count needs the densified
-        // route, which only the loader produces. See docs/audit/200-audit-0.9.0.md's B6 and the 304 findings.
-        // One writer for the grid's pace target: the preflight needs the same answer before anything is instanced, and the
-        // grid needs it a moment later.
         void ResolvePaceTargetForGrid()
         {
             _resolvedPaceTarget = PowerTargetScale;
@@ -1687,15 +1506,11 @@ namespace ARS
         {
             reason = null;
 
-            // The refusal must be provable from the log alone: without this, 'it instanced anyway' is a guess about which of five
-            // conditions said yes.
             Log(LogImportance.Info, "Preflight: paceMode=" + CurrentPaceMode + " participating=" + PlayerParticipating
                 + " inCar=" + (Game.Player.Character.CurrentVehicle != null)
                 + " canReadPace=" + TryComputePlayerCarPaceIndex(out float _)
                 + " lastKnown=" + _lastKnownPlayerPace);
 
-            // A build missing either signature runs a race it cannot drive: every car sits still, the player reads 0th,
-            // and each racer throws once per tick. Refused here, before the track or the grid is instanced.
             string unsupported = VehicleMemory.UnsupportedBuildReason();
             if (unsupported != null) { reason = unsupported; return false; }
 
@@ -1717,17 +1532,12 @@ namespace ARS
                 return false;
             }
 
-            // Pace mode Relative reads the PLAYER'S car: on foot there is nothing to read, and the grid would fall back to a target the
-            // player never chose - which is what produced an empty band they could not explain. Refused at the action rather than
-            // greyed in the menu, because the same entry point is reached from the world join prompt, where no row exists.
             if (CurrentPaceMode == PaceMode.RelativeToMine && !TryComputePlayerCarPaceIndex(out float _))
             {
                 reason = "Pace Mode is Relative, and you are not in a car: get in one, or pick a fixed PI target.";
                 return false;
             }
 
-            // The pool: the same selection the grid will run, asked for one more car than the AI count. An empty answer here is the
-            // failure the player was being sent to the wrong folder for.
             if (_intendedOpponents > 0)
             {
                 ResolvePaceTargetForGrid();
@@ -1745,7 +1555,7 @@ namespace ARS
 
         public void StartRaceFromMenu()
         {
-            // The refusal happens before any world work: no props, no fade, no racers torn down.
+
             string refusal;
             if (!PreflightStartRace(out refusal))
             {
@@ -1786,7 +1596,6 @@ namespace ARS
             car.Velocity = direction * MphToMps(10f);
         }
 
-        // Must run after FillKnownTracks has populated _trackTags (that is, after the load task completes).
         void SelectTrackInMenu(string path)
         {
             if (_trackListItem == null || _trackListPaths.Count == 0 || string.IsNullOrEmpty(path)) return;
@@ -1800,7 +1609,6 @@ namespace ARS
         {
             if (_trackListItem == null) return;
 
-            // Preserve the chosen path if its file is still among the discovered tracks.
             string chosen = _selectedTrackPath;
             string keepVisible = chosen != null ? System.IO.Path.GetFileNameWithoutExtension(chosen) : null;
 
@@ -1810,13 +1618,10 @@ namespace ARS
             _trackListPaths.Clear();
             for (int i = 0; i < sorted.Count; i++) _trackListPaths.Add(sorted[i]);
 
-            // Items are file names while _trackListPaths holds the full paths in the same order, and the property
-            // setter is used (not .Items) so LemonUI's UpdateIndex() fires.
             List<string> names = new List<string>();
             foreach (string path in sorted)
                 names.Add(System.IO.Path.GetFileNameWithoutExtension(path));
-            // The index is parked before the swap (the Items setter reads Items[index] as it lands), which also clears
-            // the stale field an empty pass leaves behind, since an empty list cannot have its index set at all.
+
             if (_trackListItem.Items.Count > 0) _trackListItem.SelectedIndex = 0;
             _trackListItem.Items = names;
 
@@ -1845,7 +1650,6 @@ namespace ARS
         {
             if (_powerTargetItem == null) return;
 
-            // Take the actual cache span so the Pace Target list doesn't offer values no car can match.
             float min = float.MaxValue;
             float max = float.MinValue;
             foreach (float pace in ModelPaceIndexCache.Values)
@@ -1862,7 +1666,7 @@ namespace ARS
 
             _powerTargetValues.Clear();
             AddPowerValues(_powerTargetValues, min, max, 2.0f);
-            // A span narrower than the step offers no grid point, and LemonUI throws on SelectedIndex when an item has none.
+
             if (_powerTargetValues.Count == 0) _powerTargetValues.Add(RoundToNearestEven(Clamp(PowerTargetScale, min, max)));
             Log(LogImportance.Info, "Pace span " + min.ToString("0.0") + ".." + max.ToString("0.0") + " over " + ModelPaceIndexCache.Count + " models, " + _powerTargetValues.Count + " PI Target value(s).", true);
 
@@ -1881,7 +1685,7 @@ namespace ARS
 
         void ApplyPaceModeUI()
         {
-            // The offset and target handlers call this, and they can fire while the menu is still being built.
+
             if (_powerTargetItem == null || _paceOffsetItem == null) return;
             float playerPace;
             bool hasPlayerPace = TryComputePlayerCarPaceIndex(out playerPace);
@@ -1891,14 +1695,11 @@ namespace ARS
             _paceOffsetItem.Description = WithBallpark(CurrentPaceMode == PaceMode.RelativeToMine ? "Field PI = your car's performance index + this offset, resolved at Spawn Grid." : "Disabled in Absolute mode - the fixed PI Target governs.", hasPlayerPace ? BallparkText(playerPace + PaceOffsetScale) : null);
         }
 
-        // The example cars ride on the end of the item's own description.
         static string WithBallpark(string description, string ballpark)
         {
             return ballpark == null ? description : description + " " + ballpark;
         }
 
-        // Three cars that bracket a performance index: the nearest at or below it, the nearest overall,
-        // and the nearest at or above - so the trio reads as what a grid at that PI looks like.
         string BallparkText(float pi)
         {
             if (ModelPaceIndexCache.Count == 0) return null;
@@ -1929,8 +1730,7 @@ namespace ARS
 
         static void AddPowerValues(List<float> values, float min, float max, float step)
         {
-            // Anchor at clean multiples of the step rather than the raw cache min, so every offered value is
-            // rounded and the default lands exactly on a grid point.
+
             int startIndex = (int)Math.Ceiling(min / step);
             int endIndex = (int)Math.Floor(max / step);
             for (int i = startIndex; i <= endIndex; i++)
@@ -1958,12 +1758,7 @@ namespace ARS
         {
             return (float)Math.Round(mph * 0.44704f, 3);
         }
-        // No-collision mode: a racer passes through its rivals, world collision untouched. The engine stores one
-        // partner per entity (fwDynamicEntityComponent::m_pNoCollisionEntity), but a pair is rejected when either
-        // side stores the other, so a car that several rivals hold as their nearest passes through all of them —
-        // one outgoing slot each is the whole constraint. Every car spends its slot on its nearest, re-asserted
-        // every tick because the nearest changes. The third argument is a mode: false is PERMENANT, true lets the
-        // pair clear once it stops impacting (commands_entity.cpp:5839).
+
         void ApplyNoCollision(bool enable)
         {
             for (int i = 0; i < Racers.Count; i++)
@@ -2063,37 +1858,19 @@ namespace ARS
 
                 TrackLoader.TickQueuedFlares(FlareEffects);
 
-                
-
-
-
-
-
-
-
-
-
-
-
-
-
                 _menuPool.Process();
                 HandleTrackCreator();
 
-
-                
                 if (!CanWeUse(FreeCamRide))
                 {
                     FreeCamRide = World.CreateProp("ba_prop_battle_drone_quad_static", Game.Player.Character.Position + new Vector3(0, 0, 10), true, false);
-                                                                                                                                                             
+
                     if (CanWeUse(FreeCamRide)) FreeCamRide.HasGravity = false;
                     Log(LogImportance.Info, "Creating needed freecam object.");
                 }
 
-
                 _freeCam.Update(_routeEditorActive, RouteNodes.Count);
 
-                
                 if (_routeEditorActive) TrackVisuals.DrawRoute(RouteNodes, NodeHalfWidths, _routeEditorActive);
                 if (PlayerRacer == null || !Racers.Contains(PlayerRacer)) PlayerRacer = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
                 bool raceLive = RaceIsRunning;
@@ -2131,9 +1908,7 @@ namespace ARS
                     Vehicle gLineCar = player.Character.CurrentVehicle;
                     if (CanWeUse(gLineCar)) UpdatePlayerGLine(gLineCar);
                 }
-                // Live card read-out: what every nearby rival is playing at this instant, in the world, over its roof.
-                // Behind Show Rivalry: it was written as always-on on the argument that a card lasts a second, but four
-                // labels over four roofs is clutter the moment you are trying to read the walls.
+
                 if (DebugToggles[Options.ShowRivalry])
                 {
                     foreach (Racer cardRacer in Racers)
@@ -2191,24 +1966,19 @@ namespace ARS
                             Vector3 dir = ARS.TrackPoints[node].Direction;
                             Vector3 right = Vector3.Cross(dir, Vector3.WorldUp).Normalized;
 
-                            // White: center of road
                             Vector3 whiteFrom = pos + new Vector3(0, 0, LaneHeightCentre);
                             Vector3 whiteTo = nextPos + new Vector3(0, 0, LaneHeightCentre);
                             DrawLine(whiteFrom, whiteTo, Color.White);
 
-                            // Green: current lane deviation
                             Vector3 greenFrom = pos + right * nodeOffset + new Vector3(0, 0, LaneHeightCurrent);
                             Vector3 greenTo = nextPos + right * nodeOffset + new Vector3(0, 0, LaneHeightCurrent);
                             DrawLine(greenFrom, greenTo, Color.Green);
 
-                            // Black when there is no aim at all; otherwise the colour names why the lane is where it is.
                             Color carriedColor = Math.Abs(carriedOffset) < 0.01f ? Color.Black : Racer.LaneReasonColor(racer.LaneRequestReason);
                             Vector3 intendedFrom = pos + right * carriedOffset + new Vector3(0, 0, LaneHeightCarried);
                             Vector3 intendedTo = nextPos + right * carriedOffset + new Vector3(0, 0, LaneHeightCarried);
                             DrawLine(intendedFrom, intendedTo, carriedColor);
 
-                            // Dashed and dimmed, so the ask cannot be mistaken for the aim it is carried onto: this is what
-                            // the chain answered this tick, and the solid line is where the mover has got to so far.
                             if (i % 2 == 0)
                             {
                                 Vector3 requestFrom = pos + right * requestOffset + new Vector3(0, 0, LaneHeightRequest);
@@ -2216,9 +1986,7 @@ namespace ARS
                                 DrawLine(requestFrom, requestTo, requestColor);
                             }
                         }
-                        // A white diagonal from the car to the centre of the apex node the line has adopted. The lane geometry is
-                        // gradual and hard to read on its own; the identity is not, and a diagonal that jumps to a far corner is the
-                        // whole bug in one glance.
+
                         int adoptedNode = racer.LineCornerNode;
                         if (adoptedNode >= 0 && adoptedNode < ARS.TrackPoints.Count)
                         {
@@ -2229,17 +1997,11 @@ namespace ARS
 
                     }
 
-                    // The no-fly gate is per-racer (it's a Racer.cs function on the racer being
-                    // controlled). On a fresh ShowTrackAnalysis toggle DebugFocusRacer defaults to
-                    // the nearest AI, so prefer the player and fall back to the focus racer only if
-                    // the player isn't on the track.
                     Racer liveCrestRacer = PlayerRacer ?? DebugFocusRacer;
                     if (liveCrestRacer != null)
                         TrackVisuals.DrawLiveCrestChecks(liveCrestRacer, ARS.TrackPoints);
                 }
 
-                // Rival walls: one straight line per wall, from the car's node to one second of travel ahead. Red while a
-                // rival holds the wall in; blue once it has been released and is moving back out.
                 if (DebugToggles[Options.ShowRivalry] && DebugFocusRacer != null && DebugFocusRacer.WallRoadWide > 0.01f)
                 {
                     Racer racer = DebugFocusRacer;
@@ -2248,7 +2010,6 @@ namespace ARS
                     Color leftColor = racer.LeftWallHeld ? Color.Red : Color.DodgerBlue;
                     Color rightColor = racer.RightWallHeld ? Color.Red : Color.DodgerBlue;
 
-                    // One second of travel, walked in track nodes so the far end sits where the car will be, not at a fixed count.
                     float lookAheadMeters = racer.Car.Velocity.Length();
                     int endNode = wallNode;
                     float walked = 0f;
@@ -2273,18 +2034,11 @@ namespace ARS
                     DrawLine(startPos + startRight * racer.AvoidLeftWall + lift, endPos + endRight * racer.AvoidLeftWall + lift, leftColor);
                     DrawLine(startPos + startRight * racer.AvoidRightWall + lift, endPos + endRight * racer.AvoidRightWall + lift, rightColor);
 
-                    // The car sits at the near end and the walls at the far one: this pair is the "\./" of the shape, so the
-                    // corridor reads as an opening cone from the car rather than two floating lines.
                     Vector3 carPos = racer.Car.Position + lift;
                     DrawLine(carPos, endPos + endRight * racer.AvoidLeftWall + lift, leftColor);
                     DrawLine(carPos, endPos + endRight * racer.AvoidRightWall + lift, rightColor);
                 }
 
-                // Player nitro: fire on key press, one bottle a lap. The fire charges the bottle itself, so there is
-                // no top-up loop and no state between the press and the burn — the AI's card works the same way.
-                // The pad has no binding of its own here: X is a keyboard key, so a gamepad player could not fire at all.
-                // Measured on a pad: duck fires, the horn does not (its control never reached this check), so duck is the
-                // binding and the horn was removed rather than left as a second trigger that answers nothing.
                 if (NitrousEnabled && PlayerRacer != null
                     && (Game.IsKeyPressed(Keys.X) || Game.IsControlJustPressed(2, GTA.Control.VehicleDuck)))
                     PlayerRacer.TryFireNitrous();
@@ -2303,7 +2057,7 @@ namespace ARS
                             DisplayHelpTextThisFrame("Press ~INPUT_CONTEXT~ to race at ~b~" + Path.GetFileNameWithoutExtension(nearest.TrackPath) + "~w~.");
                             if (!_arsMenu.Visible && CanWeUse(Game.Player.Character.CurrentVehicle) && !IsMenuHotkeyPressed() && Game.IsControlJustPressed(2, GTA.Control.Context))
                             {
-                                // Pace Mode governs this grid like any other — the join adds no pace override of its own.
+
                                 SelectTrackInMenu(nearest.TrackPath);
                                 StartRaceFromMenu();
                             }
@@ -2311,23 +2065,8 @@ namespace ARS
                     }
                 }
 
-
-                
                 if (CountdownScaleform.IsLoaded && _countdown != _maxCountdown) CountdownScaleform.Render2D();
 
-                
-
-
-
-
-                
-
-
-                
-                
-
-                
-                // Suppress all ambient traffic while a track is loaded — AI racers cannot avoid it.
                 if (_routeEditorActive || RouteNodes.Count > 0)
                 {
                     Function.Call(Hash.SET_VEHICLE_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
@@ -2338,13 +2077,11 @@ namespace ARS
                     Function.Call(Hash.SET_SCENARIO_PED_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
                 }
 
-                
                 if (!_menuPool.AreAnyVisible && WasCheatStringJustEntered("arsmenu"))
                 {
                     _arsMenu.Visible = true;
                 }
 
-                
                 if (RaceStatus != RaceState.Countdown && _countdownTickMs - Game.GameTime > 5000) _countdown = _maxCountdown - 1;
                 if (RaceStatus == RaceState.NotInitiated)
                 {
@@ -2359,7 +2096,6 @@ namespace ARS
                 {
                     _countdownTickMs = Game.GameTime + 1000;
 
-                    
                     Vehicle jack = Game.Player.Character.GetVehicleIsTryingToEnter();
                     if (_countdown > 0 && Racers.Count > 0 && CanWeUse(jack) && jack != Game.Player.Character.LastVehicle && !jack.IsSeatFree(VehicleSeat.Driver) && jack.Handle == Racers.OrderBy(c => c.Car.Position.DistanceTo(Game.Player.Character.Position)).ToList()[0].Car.Handle)
                     {
@@ -2374,8 +2110,6 @@ namespace ARS
 
                         if (_countdown <= 3)
                         {
-                            
-
 
                             Game.PlaySound("3_2_1", "HUD_MINI_GAME_SOUNDSET");
 
@@ -2402,18 +2136,15 @@ namespace ARS
                     }
                 }
 
-
                 if (Racers.Count > 0)
                 {
                     if (_gameTimeNextInLine <= Game.GameTime)
                     {
-                        // Six racers per frame, so a core tick lands every ceil(Racers.Count / 6) frames — this
-                        // batch is what paces the AI; the interval below is always under a frame and gates nothing.
+
                         int count = (int)Clamp(Racers.Count, 1, 6);
                         for (int i = 0; i < count; i++)
                         {
-                            // Wrap before indexing, not after: Racers shrinks between races, and a leftover
-                            // cursor past the end threw out of OnTick, skipping the rest of the tick.
+
                             if (_nextInLine >= Racers.Count) _nextInLine = 0;
                             Racers[_nextInLine]?.RunTimedCore();
                             _nextInLine++;
@@ -2424,8 +2155,6 @@ namespace ARS
                     if (NoCollision) ApplyNoCollision(true);
                 }
 
-                
-                // Only the debug visuals read the focus racer, so the scan and its sort run only for them.
                 if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
                 {
                     Vector3 focusPos = Game.Player.Character.Position;
@@ -2436,8 +2165,7 @@ namespace ARS
                 foreach (Racer racer in Racers)
                 {
                     racer.ProcessTick();
-                    // Lap is 1-based and counts the lap being driven, so a full race reaches raceLaps + 1; this
-                    // gate alone once ended the race a lap early.
+
                     if (((!IsPointToPoint && racer.Lap > raceLaps) || (IsPointToPoint && racer.Lap > 1)) && !LeaderboardFinish.Contains(racer))
                     {
                         if (racer.Car.CurrentBlip != null) racer.Car.CurrentBlip.Color = BlipColor.Green;
@@ -2451,8 +2179,6 @@ namespace ARS
                     }
                 }
 
-
-                
                 if (_posUpdateTickMs < Game.GameTime)
                 {
                     _posUpdateTickMs = Game.GameTime + 200;
@@ -2468,11 +2194,6 @@ namespace ARS
                     }
                 }
 
-                
-                // A real race-completion signal: someone has crossed the line OR the timeout has fired.
-                // The earlier 'allRacersParked = Racers.Count(r => !r.IsDNF) == 0' was a false positive
-                // out of a race (no racers = 'all parked') that fired CleanEverything every tick, killing
-                // the Start Creator the moment the user opened it.
                 bool raceCompleted = LeaderboardFinish.Count > 0 || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs);
                 if (raceCompleted && (LeaderboardFinish.Count == Racers.Count(r => !r.IsDNF) || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs)))
                 {
@@ -2527,7 +2248,6 @@ namespace ARS
         {
             Racer player = PlayerRacer;
 
-            // Leaderboard draws even when the player is off the grid (spectating), gated by the toggle.
             if (DebugToggles[Options.ShowLeaderboard] && !HideHudMode) DrawLeaderboard();
 
             if (player == null) return;
@@ -2547,13 +2267,8 @@ namespace ARS
             DrawText(new Vector2(leftX, 0.87f), "TIME    " + totalTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
         }
 
-        // The lap's peak physics columns — accel, decel, lateral G and top speed. Parked, not removed: the racer still
-        // records the peaks (the lap-time log line reads them) and the column code below is intact; flip this to true
-        // to put the four columns back on the board.
         const bool ShowPeakStats = false;
 
-        // The row's name column: the driver when the option is on, the car otherwise. A rival with no name assigned yet falls back to the
-        // car, so the column is never blank.
         static string BoardRowName(Racer r)
         {
             if (DebugToggles[Options.ShowDriverNames] && !string.IsNullOrEmpty(r.DriverName)) return r.DriverName;
@@ -2562,8 +2277,7 @@ namespace ARS
 
         static void DrawLeaderboard()
         {
-            // 0.18 clears a three-line tip: the tips ride the help box in this same corner, the longest is 94 characters,
-            // and 0.11 cleared only the single-line hints the board was first moved for.
+
             const float headerY = 0.18f;
             const float step = 0.031f;
             const float colPos = 0.02f;
@@ -2578,7 +2292,6 @@ namespace ARS
             const DrawTextFont font = DrawTextFont.Standard;
             Color hCol = Color.FromArgb(180, 180, 180);
 
-            // Header
             DrawText(new Vector2(colPos, headerY), "POS", hCol, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colPI, headerY), "PI", hCol, font, DrawTextAlign.Left, scale);
             DrawText(new Vector2(colCar, headerY), DebugToggles[Options.ShowDriverNames] ? "DRIVER" : "CAR", hCol, font, DrawTextAlign.Left, scale);
@@ -2594,7 +2307,6 @@ namespace ARS
             float y = headerY + step;
             int pos = 1;
 
-            // Frozen block: finishers in finish order, positions locked.
             foreach (Racer r in LeaderboardFinish)
             {
                 Color c = r.Driver != null && r.Driver.IsPlayer ? Color.Yellow : Color.White;
@@ -2606,7 +2318,6 @@ namespace ARS
                 pos++;
             }
 
-            // Still racing: ordered by live progress.
             List<Racer> racing = Racers.Where(v => v.FinalPosition == 0).OrderByDescending(v => v.RaceProgress).ToList();
             foreach (Racer r in racing)
             {
@@ -2620,7 +2331,6 @@ namespace ARS
             }
         }
 
-        // Best lap time beside the peaks of the lap in progress: those live on the racer and reset at the line.
         static void DrawLapStats(Racer r, float y, Color c, DrawTextFont font, float scale, float colBest, float colAcc, float colDec, float colLat, float colTop)
         {
             TimeSpan? best = r.BestLap();
@@ -2639,15 +2349,6 @@ namespace ARS
         {
             try { foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (state) p.Alpha = 255; else p.Alpha = 0; } catch (Exception) { }
         }
-
-
-        
-        
-
-
-        
-
-        
 
         public static Color GradientAtoBtoC(Color A, Color B, Color C, float percentage)
         {
@@ -2685,15 +2386,10 @@ namespace ARS
             Function.Call(Hash._0xBD12F8228410D9B4, 5);
         }
 
-
-
-
         public void StartRace()
         {
             Log(LogImportance.Info, "Starting race");
 
-            // The Race menu's Start Race comes straight here (handler at the menu build) and NEVER through StartRaceFromMenu, so the
-            // refusal has to sit at this door as well: this is the method that instances a track when nothing is built yet.
             string refusal;
             if (!PreflightStartRace(out refusal))
             {
@@ -2702,20 +2398,16 @@ namespace ARS
                 return;
             }
 
-            // Auto-call missing phases: if no track, instance one; if no grid, spawn one.
-            // InstanceGrid already requires the track, so order is implicit.
             if (!_trackInstanced)
             {
                 InstanceTrack();
-                if (!_trackInstanced) return; // InstanceTrack failed (e.g. no tracks available).
+                if (!_trackInstanced) return;
             }
             if (!_gridInstanced)
             {
                 InstanceGrid();
-                if (!_gridInstanced) return; // InstanceGrid failed (e.g. no candidates).
+                if (!_gridInstanced) return;
             }
-
-           
 
             Log(LogImportance.Info, "Adding player to grid");
             AddPlayerToGrid();
@@ -2734,8 +2426,6 @@ namespace ARS
             if (!_freeCam.IsActive || Game.IsScreenFadedIn) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
             Game.SetControlNormal(2, GTA.Control.VehicleLookBehind, 1f);
 
-
-            // Race is now in the countdown/in-progress flow — clear setup flags.
             _trackInstanced = false;
             _gridInstanced = false;
             Log(LogImportance.Info, "Started race");
@@ -2750,8 +2440,7 @@ namespace ARS
                 r.Delete();
             }
             Racers.Clear();
-            // The batch cursor indexes Racers, so it dies with the list; a stale one is out of range for the
-            // next grid, which is only guaranteed to be smaller.
+
             _nextInLine = 0;
             _raceTimedFinishMs = 0;
             _gameTimeNextInLine = 0;
@@ -2759,7 +2448,6 @@ namespace ARS
             RaceStatus = RaceState.None;
             _gridInstanced = false;
         }
-
 
         bool AddPlayerToGrid()
         {
@@ -2778,18 +2466,14 @@ namespace ARS
             GridSort sort = GridSort.Power;
             string setting = SettingsMenuStore.Get("GridSorting", "Random");
             if (!Enum.TryParse(setting, true, out sort)) sort = GridSort.Power;
-            // Rebuilt here for the count actually being placed: the player's racer joined after the grid was
-            // sized, and GridBuilder.Place reads two slots past each car.
+
             TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, Racers.Count, GridPositions);
             GridBuilder.Place(Racers, GridPositions, RouteNodes, IsPointToPoint, sort);
         }
 
-
         public void SetupRace(bool placecars, bool tunecars)
         {
-            // The grace deadline belongs to one race. A race started from the menu after another one had a finisher used to
-            // inherit that race's deadline and end itself the moment the old clock reached zero - sometimes before its own
-            // countdown finished. SetupRace is where a race begins, so it is where the clock is cleared.
+
             _raceTimedFinishMs = 0;
             LeaderboardFinish.Clear();
             Log(LogImportance.Info, "Initializing racers");
@@ -2797,28 +2481,6 @@ namespace ARS
             {
                 r.Initialize();
             }
-
-            
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
             if (placecars)
             {
@@ -2842,9 +2504,7 @@ namespace ARS
         {
             HelpMessages.Add("The prize is: ~g~" + RaceReward.ToString() + "~w~$.");
 
-            
-            
-            int aiCount = Racers.Count - 1; 
+            int aiCount = Racers.Count - 1;
             int aiIndex = 0;
             foreach (Racer r in Racers)
             {
@@ -2859,9 +2519,7 @@ namespace ARS
             _countdown = _maxCountdown;
 
         }
-        // A miss reads as `didhit` false, and a test that has not resolved leaves the outputs unwritten so it fails the
-        // same way; the status only rejects a handle the shape test refused. Material id zero is the default material,
-        // not a miss, so `didhit` alone decides.
+
         public static bool TryGetSurfaceHash(Vector3 start, Vector3 end, Entity ignore, out int materialId, out Vector3 normal)
         {
             materialId = 0;
@@ -2883,19 +2541,10 @@ namespace ARS
             normal = snormal.GetResult<Vector3>();
             return true;
         }
-        
-
-
 
         static public List<Vector3> GridPositions = new List<Vector3>();
         static public bool IsPointToPoint = false;
 
-
-        
-
-
-        // One row per cached model, so electrics can be weighed against ICE cars of the same class. electricNative
-        // is the game's own GET_IS_VEHICLE_ELECTRIC; cacheFlag is the old flag, kept for comparison.
         void DumpPaceIndex()
         {
             List<string[]> rows = new List<string[]>();
@@ -2952,8 +2601,7 @@ namespace ARS
                 }
             }
             bool[] rightAligned = { false, true, false, true, true, true, true, true, true, false };
-            // The header is the schema line and stays unpadded: Import-Csv takes a padded cell as the column's name,
-            // so a padded "model" stops resolving as model.
+
             List<string> lines = new List<string>();
             lines.Add(string.Join("\t", rows[0]));
             for (int r = 1; r < rows.Count; r++)
@@ -2970,8 +2618,6 @@ namespace ARS
             UI.Notify("~b~[ARS]:~w~ pidump.txt - " + (rows.Count - 1) + " models, " + electricCount + " electric by GET_IS_VEHICLE_ELECTRIC" + (probeErrors > 0 ? ", " + probeErrors + " probe errors" : ""));
         }
 
-        // The roster from modeldump.txt - a comma/whitespace separated list of model names, already lowercase in
-        // practice but normalised here so a hand-edited dump cannot smuggle in a key the catalog will not match.
         void BuildRosterFromDumpFile()
         {
             UI.Notify("~b~[ARS]:~w~ Generating the car list from modeldump.txt.");
@@ -2999,8 +2645,6 @@ namespace ARS
             }
         }
 
-        // The roster from the game's own VehicleHash enum: every model SHVDN knows that can race, yielded every
-        // 25 models so a synchronous scan of the whole enum cannot stall the frame.
         void BuildRosterFromEnum()
         {
             UI.Notify("~b~[ARS]:~w~ Generating the car list for all SHVDN known vehicles in the game.");
@@ -3025,8 +2669,6 @@ namespace ARS
 
             if (WasCheatStringJustEntered("arsbuilddumpcarlist")) BuildRosterFromDumpFile();
         }
-        
-
 
         public static bool NodeExists(XmlNode node, string name)
         {
@@ -3044,7 +2686,7 @@ namespace ARS
             if (node.HasAttribute(name)) return node.GetAttribute(name);
             return "";
         }
-        // Walk the track in 30m chunks. Pick the tightest node in each chunk as the apex.
+
         static TrackStartInfo FindNearestTrackStartInfo(Vector3 position)
         {
             TrackStartInfo nearest = null;
@@ -3061,8 +2703,6 @@ namespace ARS
             return nearest;
         }
 
-        // Nearest node to a point, searched in a window around the reference node. Circuits wrap, so a
-        // window spanning the start line still resolves; point-to-point clamps at the ends.
         public static TrackPoint FindNearestTrackPoint(Vector3 position, int referenceNode, int behind, int ahead)
         {
             int count = ARS.TrackPoints.Count;
@@ -3094,7 +2734,6 @@ namespace ARS
         {
             if (velocity <= 0f) return 0f;
 
-            
             float s0 = 0f;
             float s1 = Vector2.Distance(new Vector2(start.X, start.Y), new Vector2(midpoint.X, midpoint.Y));
             float s2 = s1 + Vector2.Distance(new Vector2(midpoint.X, midpoint.Y), new Vector2(end.X, end.Y));
@@ -3105,7 +2744,6 @@ namespace ARS
             Vector2 p1 = new Vector2(s1, midpoint.Z);
             Vector2 p2 = new Vector2(s2, end.Z);
 
-            
             Vector2 ab = p1 - p0;
             Vector2 bc = p2 - p1;
             Vector2 ac = p2 - p0;
@@ -3126,9 +2764,6 @@ namespace ARS
             return deltaGs;
         }
 
-        // The local road grade along the segment from a to b: vertical rise over ground-plane run. Returns
-        // 0 on a degenerate segment (zero distance). A positive grade is an ascent, a negative grade is a
-        // descent, 0 is flat. The simple sign change in this grade is the scanner's only signal.
         public static float LocalSlope(Vector3 a, Vector3 b)
         {
             float dx = b.X - a.X;
@@ -3138,10 +2773,6 @@ namespace ARS
             return (b.Z - a.Z) / ground;
         }
 
-        
-
-        
-        
         public static float GetHillGsLossAtCurrentTrackPoint(Racer r)
         {
             if (r == null || !CanWeUse(r.Car) || TrackPoints.Count < 2) return 0f;
@@ -3167,10 +2798,6 @@ namespace ARS
             return Clamp(lossGs, 0f, 2f);
         }
 
-        
-        
-        
-        
         public static float GetHillGsLossAtCurrentVelocityVector(Racer r)
         {
             if (r == null || !CanWeUse(r.Car)) return 0f;
@@ -3189,11 +2816,6 @@ namespace ARS
             return Clamp(lossGs, 0f, 2f);
         }
 
-        
-        
-        
-        
-        
         public static float GetHillGripMultiplierAtCurrentTrackPoint(Racer r, float factor = 1f)
         {
             if (r == null || !CanWeUse(r.Car) || TrackPoints.Count < 2) return 1f;
@@ -3212,18 +2834,13 @@ namespace ARS
 
             float climbAngleRad = (float)Math.Atan2(to.Z - from.Z, horizontalDistance);
             float slopeAngleRad = Math.Abs(climbAngleRad);
-            float normalizedSlope = slopeAngleRad / ((float)Math.PI * 0.5f); 
+            float normalizedSlope = slopeAngleRad / ((float)Math.PI * 0.5f);
             float loss = normalizedSlope * factor;
             float multiplier = 1f - loss;
             if (float.IsNaN(multiplier) || float.IsInfinity(multiplier)) return 1f;
             return Clamp(multiplier, 0f, 1f);
         }
 
-        
-        
-        
-        
-        
         public static float HillGripMultiplierFromVelocity(Racer r, float factor = 1f)
         {
             if (r == null || !CanWeUse(r.Car)) return 1f;
@@ -3235,16 +2852,15 @@ namespace ARS
 
             float climbAngleRad = (float)Math.Atan2(v.Z, horizontalSpeed);
             float slopeAngleRad = Math.Abs(climbAngleRad);
-            float normalizedSlope = slopeAngleRad / ((float)Math.PI * 0.5f); 
+            float normalizedSlope = slopeAngleRad / ((float)Math.PI * 0.5f);
             float loss = normalizedSlope * factor;
             float multiplier = 1f - loss;
             if (float.IsNaN(multiplier) || float.IsInfinity(multiplier)) return 1f;
             return Clamp(multiplier, 0f, 1f);
         }
 
-        // Exponential hill-grip loss, scaled by vehicle gravity.
-        const float HillGripKPerDegree = 0.693147f / 15f; // ln(0.5)/15  ->  15 degrees halves grip
-        const float HillGripMin = 0.5f;                  // never remove more than 50% of grip on a hill
+        const float HillGripKPerDegree = 0.693147f / 15f;
+        const float HillGripMin = 0.5f;
         public static float HillGripFactorFromPitchAngle(float pitchDegrees, Racer r)
         {
             float gravityRatio = (r != null && r.Handling != null) ? (r.Handling.Gravity / 9.8f) : 1f;
@@ -3257,14 +2873,12 @@ namespace ARS
 
         public static float CornerApexSpeed(CornerPoint c, Racer r)
         {
-            
+
             float radius = c.DetectedRadius;
             if (radius <= 0f) radius = c.GetPreciseRadius();
 
-            
             if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AiConstants.MaxSpeed;
 
-            
             float vehicleGripGs = r.VehicleData.CurrentMechanicalGrip;
 
             float baseSpd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * radius);
@@ -3273,13 +2887,10 @@ namespace ARS
             return ARS.Clamp(baseSpd, AiConstants.MinSpeed, AiConstants.MaxSpeed);
         }
 
-        
         static public float SlidingBoundingBoxWidth(Entity e)
         {
             if (!CanWeUse(e)) return 0f;
-            // A genuinely descending mapping when a model is longer than it is wide - which every car is, and no vehicle has
-            // to be. So the input is clamped and the remap runs unclamped, the form that holds whatever the model measures:
-            // Remap's own clamp would return a constant if the two dimensions ever swapped order.
+
             return ARS.Remap(ARS.Clamp(Vector3.Angle(e.ForwardVector, e.Velocity.Normalized), 0f, 90f), 0f, 90f, e.Model.GetDimensions().X, e.Model.GetDimensions().Y);
         }
 
@@ -3287,7 +2898,6 @@ namespace ARS
         const float MinWheelBase = 1f;
         const float MaxWheelBase = 6f;
 
-        // Wheelbase from the wheel bones: the two axle centres projected on the car's forward axis.
         static public float GetWheelBase(Vehicle vehicle)
         {
             if (!CanWeUse(vehicle)) return DefaultWheelBase;
@@ -3299,7 +2909,6 @@ namespace ARS
             return length;
         }
 
-        // Mean of one axle's two wheel bones; averaging cancels the offset steering puts on the front pair.
         static bool WheelAxleCentre(Vehicle vehicle, string leftBone, string rightBone, out Vector3 centre)
         {
             bool hasLeft = vehicle.HasBone(leftBone);
@@ -3311,9 +2920,6 @@ namespace ARS
             return hasLeft || hasRight;
         }
 
-        
-        // Once per session: a missing handle used to be one NullReferenceException per racer per tick - 12,434 of them in
-        // eleven minutes on a build the mod could not drive - and the tick it killed is the one that would have driven.
         static void ReportNullCar()
         {
             if (_nullCarReported) return;
@@ -3337,8 +2943,7 @@ namespace ARS
                 }
                 else
                 {
-                    // Unknown layout: returning the vehicle's own first bytes as a "wheels pointer" is how a miss used to
-                    // become an unbounded dereference loop. Zero means no answer, and every caller treats it as no wheels.
+
                     Log(LogImportance.Error, "[MEMORY] Wheels offset not found on this game build; wheel reads disabled.");
                     return 0;
                 }
@@ -3373,8 +2978,7 @@ namespace ARS
             var wheelPtr = GetWheelsPtr(handle);
             var numWheels = GetNumWheels(handle);
             List<ulong> wheelPtrs = new List<ulong>();
-            // Both can be 0 when the pattern was not found; a count read off the wrong offset walked the loop off the
-            // end of memory. Eight is more wheels than any GTA vehicle has.
+
             if (wheelPtr == 0 || numWheels <= 0 || numWheels > 8) return wheelPtrs;
             for (int i = 0; i < numWheels; i++)
             {
@@ -3384,15 +2988,10 @@ namespace ARS
             return wheelPtrs;
         }
 
-
-        
-
-        // Mean grip multiplier across the wheels, which is all the one caller ever wanted: the per-wheel
-        // list it used to build cost two allocations a call plus a boxed enumerator in Average().
         static public unsafe float MeanWheelGripMultiplier(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            if (wheelPtrs.Count == 0) return 1f;   // unknown, not "no grip": zero would brick the car
+            if (wheelPtrs.Count == 0) return 1f;
             ulong offset = 0x198;
             double total = 0d;
             foreach (var wheel in wheelPtrs)
@@ -3402,10 +3001,6 @@ namespace ARS
             return (float)(total / wheelPtrs.Count);
         }
 
-        
-
-        // Largest per-wheel slip ratio in the BRAKING direction: spin reads negative and a locked wheel positive, so the
-        // max across wheels - not the max magnitude - is the wheel that is closest to locking. 0 when nothing is dragging.
         static public unsafe float BrakeLockSlip(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
@@ -3431,15 +3026,11 @@ namespace ARS
             return w;
         }
 
-        // Per-wheel drive power in raw Gs; sum the driven wheels for total wheel-pushed accel. The offset is
-        // learned at runtime by the scan below and cached, falling back to the b2060 value if the pattern misses.
-        // Source: ikt32/GTAVManualTransmission VehicleExtensions.
         static public unsafe List<float> WheelPowers(Vehicle handle)
         {
             if (WheelPowerOffset == 0x0)
             {
-                // Pattern: COMISS xmm, [r/m+disp32] ; SETNBE al ; JMP short ; (SHL/SHR) — FiveM >= b2060.
-                // The 4-byte displacement at +3 is wheelSteeringAngleOffset; +8 = wheelPowerOffset.
+
                 IntPtr addr = (IntPtr)VehicleMemory.FindPattern(
                     "\x0F\x2F\x00\x00\x00\x00\x00\x0F\x97\xC0\xEB\x00\xD1",
                     "xx???xx???x?x");
@@ -3451,7 +3042,7 @@ namespace ARS
                 }
                 else
                 {
-                    WheelPowerOffset = 0x1D8; // b2060 fallback
+                    WheelPowerOffset = 0x1D8;
                     Log(LogImportance.Info, "[MEMORY] Wheel power pattern not found, using fallback 0x1D8");
                 }
             }
@@ -3466,9 +3057,6 @@ namespace ARS
             return powers;
         }
 
-        // Per-wheel angular velocity (`m_fRotAngVel`, rad/s, at wheel+0x170) against a floor: zero rotation with the
-        // car moving is a locked wheel, and unlike the ratio at +0x174 this field is not clamped by the engine's own
-        // ABS. The absolute value is what the test wants, since a reversing car spins them negative.
         static public unsafe bool AnyWheelRotationBelow(Vehicle handle, float minRadPerSecond)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
@@ -3480,9 +3068,6 @@ namespace ARS
             return false;
         }
 
-        // Smallest per-wheel angular velocity in rad/s, and +inf when the wheel list is empty. The absolute value, since a
-        // reversing car spins them negative. This is the reading the lock guard acts on, published so the log can say HOW
-        // locked a wheel was rather than only that it crossed the floor.
         static public unsafe float MinWheelRotation(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
@@ -3495,8 +3080,6 @@ namespace ARS
             return min;
         }
 
-        // Largest per-wheel side-slip angle on the traction curve's own axis, where 1.0 is the peak. Reads every
-        // wheel rather than the front pair: the wheel array's order is not something a driving law should depend on.
         static public unsafe float MaxWheelSideSlip(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
@@ -3509,8 +3092,6 @@ namespace ARS
             return w;
         }
 
-        // A wheel out of contact reads exactly zero on the side-slip axis, so the zeroes are the wheels off the
-        // ground. The longitudinal ratio cannot serve this: a decompressed tyre still reads ~0 there.
         static public unsafe int WheelsOffGround(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
@@ -3522,9 +3103,6 @@ namespace ARS
             return off;
         }
 
-        // Per-wheel side-slip angle on the traction curve's own axis (peaks at 1.0, flat from 2.5). The offset is
-        // derived from the leaked CWheel member order and pinned by the neighbours already known on this build:
-        // rot slip 0x174, material grip 0x198, steer angle 0x1CC, drive force 0x1D4.
         static public unsafe List<float> WheelSideSlipAngles(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
@@ -3536,10 +3114,6 @@ namespace ARS
             return slips;
         }
 
-        // Per-wheel slip ratio (offset 0x174, same data TCS uses) - a dimensionless rotational slip ratio, not a
-        // slip angle (leaked wheel.cpp:94-97, the traction curve's own argument, peaks at 1.0 and flat from 2.5).
-        // A lifted wheel reads 0.00 slip, so
-        // counting wheels with ~0 slip detects ground contact for the stability factor.
         static public unsafe List<float> WheelSlips(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
@@ -3552,21 +3126,6 @@ namespace ARS
             }
             return slips;
         }
-
-        
-
-        
-
-        
-
-
-        
-
-        
-
-        
-        
-
 
         public static int ClosestNodeToPlace(Vector3 v, List<Vector3> PathRoute)
         {
@@ -3581,31 +3140,16 @@ namespace ARS
             }
             return closest;
         }
-        
-
-
-        
-        
-        
-
-        
-        
-        
-
-        
 
         static Random _random = new Random();
-        // Random.Next semantics: max is exclusive, so an index bound is the length itself, never length - 1.
+
         public static int GetRandomInt(int min, int max)
         {
             return _random.Next(min, max);
         }
 
-        // The lane chain draws four lines over the same strip of road, so each colour gets its own height or two of them
-        // bleed into one where the offsets agree. One step of 0.025 per lane, in chain order, and the whole ladder stays
-        // low: these lines are read against the road, not stacked above it.
         const float LaneHeightCentre = 0.075f;
-        // The debug diagonal flies above every lane line and every chevron, so it is never confused with a lane.
+
         const float ApexMarkHeight = 1.6f;
         const float LaneHeightCurrent = 0.100f;
         const float LaneHeightCarried = 0.125f;
@@ -3617,7 +3161,6 @@ namespace ARS
             Function.Call(Hash.DRAW_LINE, from.X, from.Y, from.Z, to.X, to.Y, to.Z, color.R, color.G, color.B, color.A);
         }
 
-        // A racer's 20 ms window needs a Racer, and outside a race there is none, so the player's car samples its own.
         const float GLineMetresPerG = 1f;
         const float GLineMaxGs = 4f;
         const int GLineRestartMs = 200;
@@ -3627,8 +3170,6 @@ namespace ARS
         int _playerAccelSampleTime;
         Vector3 _playerLastSpeed;
 
-        // Direction is the horizontal acceleration the car is pulling, so a left-hander points at the apex centre;
-        // the cross at the tail is what makes a bare line a vector.
         void UpdatePlayerGLine(Vehicle car)
         {
             Vector3 speed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, car, false);
@@ -3667,12 +3208,9 @@ namespace ARS
             DrawText(tip + Vector3.WorldUp * 0.15f, magnitude.ToString("0.0", CultureInfo.InvariantCulture) + "Gs", Color.Cyan, 0.45f);
         }
 
-        
         void OnAbort(object sourc, EventArgs e)
         {
-            // A reload (SHVDN's Insert) tears the script down while a tick may still be running: the roster walk yields inside
-            // its own enumeration and a throw here has no caller to catch it. The teardown is therefore best-effort and cannot
-            // throw out, and it ENDS the race rather than leaving a half-reset state for the next load to resume.
+
             try
             {
             World.RenderingCamera = null;
@@ -3683,7 +3221,6 @@ namespace ARS
 
             }
             Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
-
 
             foreach (int fx in _flareFx) Function.Call(Hash.STOP_PARTICLE_FX_LOOPED, fx);
             if (CanWeUse(FreeCamRide)) FreeCamRide.Delete();
@@ -3705,22 +3242,19 @@ namespace ARS
             }
             InstructionalScaleform.Unload();
             InstructionalScaleform.Dispose();
-            InstructionalScaleform = null;   // the freecam re-creates it on demand
+            InstructionalScaleform = null;
             Function.Call(Hash._0x10D373323E5B9C0D);
             Game.Player.Character.HasGravity = true;
 
             }
             catch (Exception abortError)
             {
-                // Logging can itself fail during an abort; a swallowed teardown error is better than a dead game.
+
                 try { Log(LogImportance.Error, "Abort teardown failed: " + abortError.Message); } catch { }
             }
             finally
             {
-                // The race is over, not paused: nothing of it may survive into the next load, or a reload resumes a race on a
-                // half-reset state and that race can no longer be timed out.
-                // The pedals live in the vehicle's own memory and are written every frame, so a car caught mid-throttle would drive
-                // away from the teardown on its own. Hand it back neutral: that is what "as if the script had never loaded" means here.
+
                 if (CanWeUse(Game.Player.Character.CurrentVehicle))
                 {
                     Vehicle vehicle = Game.Player.Character.CurrentVehicle;
@@ -3737,18 +3271,12 @@ namespace ARS
                 _routeEditorActive = false;
             }
         }
-        
 
-        
         public static bool WasCheatStringJustEntered(string cheat)
         {
             return Function.Call<bool>(Hash._0x557E43C447E700A8, Game.GenerateHash(cheat));
         }
 
-        
-        // The TCS pair was stored in raw slip units before it was stated as a share of the peak slip: the old
-        // value times 100 / SlipPeakRatio is the share, and the ladder's nearest offer keeps it in the domain.
-        // Ties round to the lower offer, the tighter of the two.
         static string TcsShareFromSlip(string[] offers, string rawSlip)
         {
             float raw;
@@ -3767,13 +3295,11 @@ namespace ARS
             Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
             Log(LogImportance.Info, "Checking the Settings folder ...");
-            // Every legacy read happens before the prune pass below, which drops keys the schema no longer declares.
-            // Menu-DevSettings.ini held Brake Learning and Staged Spawns before they moved to the Settings file.
+
             ScriptSettings retiredDevToggles = ScriptSettings.Load(SettingsFolder + @"\Menu-DevSettings.ini");
             string legacyBrakeLearning = retiredDevToggles.GetValue<string>("MENU", "BrakeLearning", null);
             string legacyStagedSpawns = retiredDevToggles.GetValue<string>("MENU", "StagedSpawns", null);
-            // Menu-Settings.ini held the single Pace Mode key before that name was reused for the Settings file,
-            // and the TCS pair in raw slip units before they were stated as a share of the peak slip.
+
             ScriptSettings retiredPaceSettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Settings.ini");
             string legacyPaceMode = retiredPaceSettings.GetValue<string>("MENU", "PaceMode", null);
             string legacyTcsLimit = retiredPaceSettings.GetValue<string>("MENU", "TcsSlipThreshold", null);
@@ -3787,16 +3313,13 @@ namespace ARS
             DebugMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Debug.ini");
             DevelopmentMenuStore = new MenuSettings(SettingsFolder + @"\Menu-Development.ini");
 
-            // One-time unit change: a raw slip becomes a share of the peak slip, and only while the new key is
-            // absent, so a value chosen after this load is never overwritten.
             SettingsMenuStore.Migrate("TcsSlipLimitPct", TcsShareFromSlip(SettingsRepair.OptionsFor("TcsSlipLimitPct"), legacyTcsLimit));
             SettingsMenuStore.Migrate("TcsTaperSpanPct", TcsShareFromSlip(SettingsRepair.OptionsFor("TcsTaperSpanPct"), legacyTcsSpan));
-            // The overspeed checkbox became a rate ladder: a stored False becomes Off, a stored True the default rate.
+
             SettingsMenuStore.Migrate("OverspeedCut", legacyOverspeed == null ? null : (legacyOverspeed.Equals("True", StringComparison.OrdinalIgnoreCase) ? "0.2" : "Off"));
 
             Log(LogImportance.Info, "Loading per-menu settings (Menu-*.ini) ...");
-            // The Settings menu's items lived in Menu-Racers.ini and the debug toggles in Menu-DevSettings.ini
-            // until both files were renamed after the menu they serve.
+
             ScriptSettings legacySettings = ScriptSettings.Load(SettingsFolder + @"\Menu-Racers.ini");
             foreach (string key in SettingsRepair.DeclaredKeys("Menu-Settings.ini"))
                 SettingsMenuStore.Migrate(key, legacySettings.GetValue<string>("MENU", key, null));
@@ -3804,19 +3327,16 @@ namespace ARS
             foreach (Options option in DebugToggles.Keys.ToArray())
                 DebugMenuStore.Migrate(option.ToString(), legacyDebug.GetValue<string>("MENU", option.ToString(), null));
             ScriptSettings legacyRacers = ScriptSettings.Load(SettingsFolder + @"\Settings.ini");
-            // Every legacy read below passes a null fallback, so Migrate's contract - seed only when the old key is really
-            // there - holds. An int or a bool with a fallback always returns something, so a machine that never had the
-            // old file was seeded from a number copied by hand; that is how TimeoutSeconds shipped 60 over the spec's 30.
+
             SettingsMenuStore.Migrate("GridSorting", legacyRacers.GetValue<string>("RACERS", "GridSorting", null));
             SettingsMenuStore.Migrate("TimeoutSeconds", legacyRacers.GetValue<string>("RACERS", "TimeoutSeconds", null));
             SettingsMenuStore.Migrate("AIRacerAutofix", legacyRacers.GetValue<string>("RACERS", "AIRacerAutofix", null));
-            // The option was a number before it was named; rewrite it so the repair pass cannot reset a stored choice.
+
             string storedAutofix = SettingsMenuStore.Get("AIRacerAutofix", null);
             if (storedAutofix == "0") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Off.ToString());
             else if (storedAutofix == "1") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.AutoRepair.ToString());
             else if (storedAutofix == "2") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.Invincible.ToString());
-            // The middle mode was DamageResistant, which resisted and never repaired. It is AutoRepair now, and a stored
-            // name from an older session lands on the behaviour that replaced it rather than falling back to the default.
+
             else if (storedAutofix == "DamageResistant") SettingsMenuStore.Set("AIRacerAutofix", AutofixMode.AutoRepair.ToString());
             Autofix = ParseEnum(SettingsMenuStore.Get("AIRacerAutofix", AutofixMode.AutoRepair.ToString()), AutofixMode.AutoRepair);
             SettingsMenuStore.Migrate("UseMenyooSkins", legacyRacers.GetValue<string>("RACERS", "UseMenyooSkins", null));
@@ -3848,11 +3368,7 @@ namespace ARS
             DNFUnderTrack = SettingsMenuStore.GetBool("DNFUnderTrack", DNFUnderTrack);
             NoCollision = SettingsMenuStore.GetBool("NoCollision", NoCollision);
             MaxCrestLift = SettingsMenuStore.GetFloat("MaxCrestLift", MaxCrestLift);
-            // Old 'Crest Loss' was a 0-200% multiplier on a 0.2g fixed cap; the new setting is an
-            // absolute gs threshold. Read the retired key via ScriptSettings (bypassing the schema
-            // store so the SettingsRepair schema check does not flag it as an undeclared read) and
-            // map it to the new shape: CrestEffect=100 -> 0.2g cap, 50 -> 0.1g, 200 -> 0.4g. The
-            // 0.1-step menu values round the migration target to one slot.
+
             int legacyCrestEffect = retiredPaceSettings.GetValue<int>("MENU", "CrestEffect", -1);
             if (legacyCrestEffect > 0)
             {
@@ -3864,12 +3380,11 @@ namespace ARS
             HillGripEffect = SettingsMenuStore.GetInt("HillGripEffect", 100) * 0.01f;
             RubberbandingPct = SettingsMenuStore.GetInt("Rubberbanding", 100);
             CurrentRubberbandMode = ParseEnum(SettingsMenuStore.Get("RubberbandMode", CurrentRubberbandMode.ToString()), CurrentRubberbandMode);
-            // Forced off: the checkbox is greyed, so a stored true would restore two rows behind a switch nobody can reach.
+
             StagedSpawns = false;
             TipRate = ParseEnum(SettingsMenuStore.Get("TipRate", TipRate.ToString()), TipRate);
             RaceMenuStore.Migrate("PaceMode", legacyPaceMode);
-            // The mode's option was relabelled and then re-spelled as an enum name; rewrite either older
-            // spelling so the repair pass cannot reset a stored mode to the default.
+
             string storedMode = RaceMenuStore.Get("PaceMode", null);
             if (string.Equals(storedMode, "Relative", StringComparison.OrdinalIgnoreCase) || string.Equals(storedMode, "Relative To Mine", StringComparison.OrdinalIgnoreCase)) RaceMenuStore.Set("PaceMode", PaceMode.RelativeToMine.ToString());
             CurrentPaceMode = ParseEnum(RaceMenuStore.Get("PaceMode", CurrentPaceMode.ToString()), CurrentPaceMode);
@@ -3897,29 +3412,23 @@ namespace ARS
             SettingsRepair.DeleteLegacyFiles();
             Log(LogImportance.Info, "Checked the Settings folder.");
         }
-        // None sits last on purpose: Log() returns when `LogLevel > i`, so the highest value silences every level
-        // without a second test. Forced calls still write — a silent install failure is worse than a log line.
+
         public enum LogImportance { Info, Error, Fatal, None }
 
-        // The rivals' damage handling, cached where the key is loaded and written so the per-tick damage gate
-        // reads a field rather than walking the store for every car.
         public static AutofixMode Autofix = AutofixMode.AutoRepair;
 
-        // Off is the off state and everything else is PI units; an unknown spelling falls back to off.
         static int ParseDeviationLimit(string value)
         {
             int limit;
             return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out limit) && limit > 0 ? limit : 0;
         }
 
-        // Stored text -> throttle lifted per 0.1 G. Off, zero and unparseable text all mean no correction.
         static float ParseOverspeedCut(string value)
         {
             float rate;
             return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out rate) && rate > 0f ? rate : 0f;
         }
 
-        // Stored text -> enum value; unknown or undefined text falls back.
         static T ParseEnum<T>(string value, T fallback) where T : struct
         {
             T parsed;
@@ -3946,8 +3455,6 @@ namespace ARS
             return EnumLabel(key) + " (" + keyCode + ")";
         }
 
-        // The menu shows a member's name spaced out: "RelativeToMine" -> "Relative To Mine". The stored value
-        // stays the enum name, so a label may be reworded freely; only renaming a member needs a migration.
         static string EnumLabel(Enum value)
         {
             string name = value.ToString();
@@ -3960,7 +3467,6 @@ namespace ARS
             return label.Replace("Descendent", "Descending");
         }
 
-        // One menu option per member, in declaration order.
         static string[] EnumLabels<T>() where T : struct
         {
             Array values = Enum.GetValues(typeof(T));
@@ -3971,20 +3477,17 @@ namespace ARS
 
         public static void Log(LogImportance i, string text, bool forced = false)
         {
-            // LogLevel is a floor, not a switch: None (highest value) fails every level test and returns here.
+
             if (LogLevel > i && !forced) return;
             string log = "\n[" + DateTime.Now + "](" + i.ToString() + "): " + text;
             File.AppendAllText(LogPath, log);
         }
-
-        
 
         public static bool CanWeUse(Entity entity)
         {
             return entity != null && entity.Exists();
         }
 
-        // Actual pace-score span of the indexed fleet; the honest clamp bounds for resolved targets.
         void GetPaceSpan(out float min, out float max)
         {
             min = float.MaxValue; max = float.MinValue;
@@ -3996,8 +3499,6 @@ namespace ARS
             if (min > max) { min = 0f; max = 200f; }
         }
 
-        // True when the player's current vehicle pace resolves: cache first (same authority as the
-        // grid), then model-level natives. Zero native readings mean an unresolvable model — invalid.
         bool TryComputePlayerCarPaceIndex(out float pace)
         {
             pace = 0f;
@@ -4014,8 +3515,6 @@ namespace ARS
             return !float.IsNaN(pace) && !float.IsInfinity(pace);
         }
 
-
-
         void DisplayHelpTextThisFrame(string text)
         {
             if (HelpMessages.Count > 0) return;
@@ -4023,7 +3522,6 @@ namespace ARS
             Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, text);
             Function.Call(Hash._DISPLAY_HELP_TEXT_FROM_STRING_LABEL, 0, false, false, -1);
         }
-
 
         static bool World3DToScreen2d(Vector3 pos, out Vector2 screen)
         {
@@ -4036,11 +3534,9 @@ namespace ARS
         }
 
         public enum DrawTextAlign { Center, Left, Right }
-        // Font IDs are GTA V's own FONT_STYLE enum (src\dev_ng\game\text\text.h); only the members the HUD uses
-        // are declared below.
+
         public enum DrawTextFont { Standard = 0, Cursive = 1, Leaderboard = 3, Condensed = 4, FixedWidthNumbers = 5, Pricedown = 7 }
-        // The card as it reads over a roof: short, upper case, and the card's own number on a second line when it has
-        // one worth reading. ~n~ is the break: the text entry is STRING, so a raw newline would not survive.
+
         static string CardLabel(Racer racer)
         {
             ManeuverType type = racer.ActiveManeuver.Type;
@@ -4067,7 +3563,6 @@ namespace ARS
             Function.Call(Hash._DRAW_TEXT, screenInfo.X, screenInfo.Y);
         }
 
-
         public static void DrawText(Vector2 pos, string t, Color c, DrawTextFont font, DrawTextAlign align, float scale)
         {
             Function.Call(Hash._SET_TEXT_ENTRY, "STRING");
@@ -4080,14 +3575,6 @@ namespace ARS
             Function.Call(Hash._DRAW_TEXT, pos.X, pos.Y);
         }
 
-
-        
-
-
-        // Downforce grip: forward speed scales how strong it can be, centripetal v²/r how much of it lands. The
-        // lateral input is v²/r rather than world-frame velocity·right because ARS drives by pure pursuit and
-        // rarely slides, which would zero the bonus. Engine reference: wheel.cpp UpdateDownforce() 7625-7670 with
-        // the per-tick application at 8194-8199. forwardMs is |velocity·forward| (m/s); returns extra grip in Gs.
         public static float GetDownforceGsAtSpeed(Racer r, float forwardMs, float lateralMs)
         {
             if (lateralMs <= 0f || float.IsNaN(lateralMs)) return 0f;
@@ -4125,13 +3612,11 @@ namespace ARS
             bool hasSpoiler = r.Car.HasBone("spoiler") && !r.Car.HasBone("spflap_l") && !r.Car.HasBone("spflap_r");
             float perWheel = hasSpoiler ? 0.035f + 0.070f * downForceScale : 0.035f * downForceScale;
 
-            // perWheel (unitless) × lateralMs (m/s²) → m/s² of downforce acceleration → /9.8 for Gs.
             return GsOrZero(perWheel * lateralMs / 9.8f);
         }
 
         private static float GsOrZero(float gs) => (float.IsNaN(gs) || gs > 5f) ? 0f : gs;
 
-        // Engine uses |velocity·right| as the lateral component for downforce application (wheel.cpp:8194-8199).
         public static float GetLateralSpeed(Vehicle v)
         {
             if (!CanWeUse(v)) return 0f;
@@ -4154,8 +3639,6 @@ namespace ARS
             return Vector3.Dot(v.Velocity, forward);
         }
 
-
-        
         static public void DisplayHelpTextTimed(string text, int time)
         {
 
@@ -4176,8 +3659,6 @@ namespace ARS
 
         List<string> _cachedCandidates = new List<string>();
 
-        // Why a grid fill produced nothing. The three causes are told apart here because the player is told about them, and
-        // one message for all of them named a folder that was never the problem.
         enum GridFill { Filled, NoPaceIndex, NoneInBand }
 
         GridFill FillCachedCandidates(int maxcars)
@@ -4188,7 +3669,7 @@ namespace ARS
             }
             else
             {
-                // Ranking is invariant to an anchor outside the fleet span — it just starts from the closest end.
+
                 GetPaceSpan(out float paceMin, out float paceMax);
                 if (ModelPaceIndexCache.Count > 0 && !ARS.IsBetween(_resolvedPaceTarget, paceMin, paceMax))
                     Log(LogImportance.Info, "Pace target " + _resolvedPaceTarget + " outside fleet span " + paceMin + ".." + paceMax + " - ranking from the closest end");
@@ -4197,7 +3678,7 @@ namespace ARS
                 Log(LogImportance.Info, "Ranking took " + (int)(DateTime.UtcNow - rankingStarted).TotalMilliseconds + " ms for " + _vehiclePool.Count + " pool files");
                 if (_cachedCandidates.Count == 0 && maxcars > 0)
                 {
-                    // A solo grid asks for no rivals, so an empty result there is not a failure and must not be logged as one.
+
                     if (PaceDeviationLimit > 0 && ModelPaceIndexCache.Count > 0)
                     {
                         Log(LogImportance.Error, "No vehicles within " + PaceDeviationLimit + " PI of the target " + Math.Round(_resolvedPaceTarget) + " - widen Max PI Deviation or the pool");
@@ -4214,13 +3695,12 @@ namespace ARS
         static readonly List<string> _sillyNames = new List<string>();
         static readonly Random _sillyNameRandom = new Random();
 
-        // Reloads Drivers\names.txt and reshuffles the pick pool each race; players edit the file in the script folder.
         static void ResetSillyNames()
         {
             _sillyNames.Clear();
             try
             {
-                // Drivers\names.txt, with the old root file still read so an install that has not been reorganised keeps working.
+
                 string names = Path.Combine(ScriptsFolder, "Drivers", "names.txt");
                 if (!File.Exists(names)) names = Path.Combine(ScriptsFolder, "sillynames.txt");
                 _sillyNames.AddRange(File.ReadAllLines(names).Select(l => l.Trim()).Where(l => l.Length > 0));
@@ -4270,7 +3750,7 @@ namespace ARS
                     Script.Wait(10);
                     loadTries++;
                 }
-                
+
                 if (!vehicleModel.IsLoaded)
                 {
                     Log(LogImportance.Error, "Model " + modelName + " failed to load after 5s, skipping.", true);
@@ -4280,7 +3760,6 @@ namespace ARS
                 return vehicleModel;
             }
 
-            // Roster cars carry no appearance data: they get the random colour combination they always did.
             void RandomizeCarColour(Vehicle car)
             {
                 if (car.ColorCombinationCount > 2) car.ColorCombination = GetRandomInt(0, car.ColorCombinationCount);
@@ -4322,7 +3801,7 @@ namespace ARS
                     }
                     catch (Exception)
                     {
-                        
+
                     }
                     p++;
                 }
@@ -4338,24 +3817,15 @@ namespace ARS
 
                     if (car == Game.Player.Character.CurrentVehicle) r.Name = Game.Player.Name;
                     else r.Name = NextSillyName() ?? r.Name;
-                    // The clean name follows whatever was assigned, so the board never prints the PI suffix.
+
                     r._baseName = r.Name;
                     r.DriverName = r.Name;
                     r._baseName = r.Name;
-
-                    
-
-
-
-
-
 
                     Racers.Add(r);
                 }
             }
 
-            // One model -> at most one racer. The live count is the honest answer: a model that would not load,
-            // a driver ped that would not spawn and a car the game handed back unusable all add nobody.
             bool SpawnRacer(string modelKey)
             {
                 int before = Racers.Count;
@@ -4377,8 +3847,7 @@ namespace ARS
                     RandomizeCarColour(car);
                     if (UseMenyooSkins)
                     {
-                        // Menyoo livery override: if a matching Menyoo tuning file exists for this model,
-                        // apply one at random (cosmetic only, separate from the ARS roster).
+
                         MenyooAppearance.Apply(car);
                     }
 
@@ -4406,8 +3875,6 @@ namespace ARS
                 if (SpawnRacer(modelKey)) spawnedKeys.Add(modelKey);
             }
 
-            // Force-Fill repeats the models that did spawn until the grid target is met, so a pool smaller than the
-            // grid still fields a full one; a model that spawned nobody is never retried.
             int cycle = 0;
             int failures = 0;
             while (ForceFillGrid && Racers.Count < maxcars && failures < spawnedKeys.Count)
@@ -4419,8 +3886,6 @@ namespace ARS
             if (Racers.Count < maxcars) Log(LogImportance.Info, "Grid: " + Racers.Count + " of " + maxcars + " cars spawned from " + _cachedCandidates.Count + " candidate(s), Force-Fill " + (ForceFillGrid ? "on" : "off") + ".");
             else if (cycle > 0) Log(LogImportance.Info, "Force-Fill: repeated the pool's models " + cycle + " time(s) to reach the grid target of " + maxcars + ".");
 
-            // Stay in None — the race isn't ready to start until SetupRace (phase 3)
-            // explicitly moves to NotInitiated. Setting it here caused auto-start.
             RaceStatus = RaceState.None;
             PlayerParticipating = Racers.Any(r => r.Driver != null && r.Driver.IsPlayer);
             Function.Call(Hash._0x10D373323E5B9C0D);
@@ -4429,4 +3894,3 @@ namespace ARS
     }
 
 }
-

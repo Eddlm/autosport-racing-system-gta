@@ -1,10 +1,11 @@
+// The tip lines the HUD rotates through.
 using System;
 using System.Collections.Generic;
 using System.IO;
 
 namespace ARS
 {
-    // How often a passed apex rolls for a tip.
+
     public enum TipFrequency
     {
         High,
@@ -12,10 +13,9 @@ namespace ARS
         Low
     }
 
-    // One roll per apex the player passes; the tip goes out through the HelpMessages queue.
     public static class Tips
     {
-        // The fallback list, written as the same tagged lines tips.txt ships with.
+
         static readonly string[] BuiltInTips =
         {
             "[circuit] ARS hands you a fresh nitrous bottle every lap - spend the one you have.",
@@ -36,7 +36,6 @@ namespace ARS
             public Func<bool> Applies;
         }
 
-        // An optional leading tag limits when a tip may appear; no tag means any race.
         class TipTag
         {
             public string Tag;
@@ -54,7 +53,6 @@ namespace ARS
         static readonly List<Tip> _deck = new List<Tip>();
         static readonly Random _random = new Random();
 
-        // Reloaded per grid, so an edited tips.txt applies to the next race without a restart.
         public static void Reset()
         {
             _all.Clear();
@@ -66,12 +64,11 @@ namespace ARS
             Refill();
         }
 
-        // The file wins when it is there; the shipped list keeps tips alive when it is not.
         static string[] TipLines()
         {
             try
             {
-                // Settings\tips.txt, with the old root file still read so an existing install keeps its edited tips.
+
                 string path = Path.Combine(ARS.ScriptsFolder, "Settings", "tips.txt");
                 if (!File.Exists(path)) path = Path.Combine(ARS.ScriptsFolder, "tips.txt");
                 if (File.Exists(path)) return File.ReadAllLines(path);
@@ -95,7 +92,6 @@ namespace ARS
             return text.Length == 0 ? null : new Tip { Text = text, Applies = applies };
         }
 
-        // Only the tips that apply to this race, shuffled, popped without replacement.
         static void Refill()
         {
             _deck.Clear();
@@ -128,13 +124,12 @@ namespace ARS
         public static void ApexPassed(int passedApexes)
         {
             if (ARS.RaceStatus != RaceState.InProgress) return;
-            // Once the winner is in, the help box belongs to the timeout countdown.
+
             if (ARS.LeaderboardFinish.Count > 0) return;
-            // No help-message gate: the tip is appended to the queue, so it plays after whatever is already waiting
-            // instead of being dropped for not finding the box empty.
+
             for (int i = 0; i < passedApexes; i++)
             {
-                // Next(1, n + 1) so the draw is 1..n and the odds are exactly 1 in n, not 1 in n - 1.
+
                 if (ARS.GetRandomInt(1, Denominator + 1) != 1) continue;
                 string tip = NextTip();
                 if (tip == null) return;
@@ -143,7 +138,6 @@ namespace ARS
             }
         }
 
-        // A repeat waits for the whole applicable list to be shown once.
         static string NextTip()
         {
             if (_deck.Count == 0) Refill();

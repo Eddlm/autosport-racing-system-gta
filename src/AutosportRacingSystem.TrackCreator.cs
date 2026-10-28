@@ -1,3 +1,4 @@
+// Builds a route from recorded nodes or a saved file and hands it to the loader.
 using GTA;
 using GTA.Math;
 using System;
@@ -6,22 +7,19 @@ using System.Drawing;
 
 namespace ARS
 {
-    // The in-game track creator (route editor). StartTrackCreator is the entry point, reached from the Track
-    // Creator submenu, and it takes over the free camera because that camera is the editing surface:
-    // HandleTrackCreator records only while it is active.
+
     public partial class ARS
     {
         public static Dictionary<int, float> EditNodeHalfWidths = new Dictionary<int, float>();
         static bool _routeEditorActive = false;
         List<Vector3> _routeSection = new List<Vector3>();
         int _pathWidth = 5;
-        // The pending section is rebuilt only when its aim, the route end or the width moves.
+
         Vector3 _previewAim = Vector3.Zero;
         int _previewRouteNodes = -1;
         int _previewWidth = 0;
         const float PreviewRebuildDistance = 1f;
 
-        // CleanEverything tears down any loaded track and clears the route statics, so it must run first.
         void StartTrackCreator()
         {
             if (!CanWeUse(FreeCamRide))
@@ -37,7 +35,6 @@ namespace ARS
             if (!_freeCam.IsActive) _freeCam.Toggle();
         }
 
-        // SaveRoute always builds a fresh document, so this is the new-track path only.
         void SaveTrackFromCreator()
         {
             if (!_routeEditorActive)
@@ -45,8 +42,7 @@ namespace ARS
                 UI.Notify("~r~Start the track creator before saving a route.");
                 return;
             }
-            // Six, not two: the loader reads nodes 0, 2, 3 and 5 to place the car, so a two-node route saved here throws
-            // ArgumentOutOfRangeException after the screen has already faded out, and the player keeps a black screen.
+
             if (RouteNodes.Count < 6)
             {
                 UI.Notify("~r~A route needs at least six nodes: " + RouteNodes.Count + " so far. Place the start line, then draw a section.");
@@ -60,7 +56,6 @@ namespace ARS
         void HandleTrackCreator()
         {
 
-            
             int cool = -1;
             int rebuildFrom = -1;
             int routeCountAtStart = RouteNodes.Count;
@@ -98,30 +93,23 @@ namespace ARS
                     }
                 }
             }
-            // Draw the pending section until the circuit closes.
+
             if (cool < 1) DrawSection(_routeSection, EditNodeHalfWidths);
 
-            
-            // Route editing is available only from freecam.
             if (_routeEditorActive && _freeCam.IsActive)
             {
                 RaycastResult ray = World.Raycast(GameplayCamera.Position, GameplayCamera.Position + ((GameplayCamera.Direction.Normalized) * 100), IntersectOptions.Everything);
 
-                // Width is the only knob the geometry leaves open — the arc always runs to the aim point, so the
-                // old reach multiplier has nothing left to scale. The floor is applied after adjusting, not before.
                 if (Game.IsControlJustPressed(2, GTA.Control.NextWeapon)) _pathWidth--;
                 if (Game.IsControlJustPressed(2, GTA.Control.PrevWeapon)) _pathWidth++;
                 if (_pathWidth < 1) _pathWidth = 1;
-                
+
                 if (RouteNodes.Count > 0)
                 {
                     if (cool == -1) DisplayHelpTextThisFrame("Create the rest of the route. ~n~- Looped: ~b~Circuit~n~~w~- Open: ~b~Point to Point");
                     if (cool == 0) DisplayHelpTextThisFrame("Close the circuit near the ~b~Start Line.");
                     if (cool == 1) DisplayHelpTextThisFrame("~g~The circuit is closed.");
 
-
-                    
-                    // Aim removes one node; Sprint + Aim removes up to ten.
                     if (Game.IsControlJustPressed(2, GTA.Control.Aim))
                     {
                         if (RouteNodes.Count > 2)
@@ -149,7 +137,6 @@ namespace ARS
                         }
                     }
 
-                    
                     if (Game.IsControlJustPressed(2, GTA.Control.Attack) && cool < 1)
                     {
                         rebuildFrom = RouteNodes.Count;
@@ -159,23 +146,18 @@ namespace ARS
                         }
                     }
                 }
-                else 
+                else
                 {
                     DisplayHelpTextThisFrame("Place the ~b~Start Line.");
                 }
 
-
-
-                
                 if (RouteNodes.Count > 1)
                 {
                     if (ray.DitHitAnything && cool < 1)
                     {
-                        
+
                         World.DrawMarker(MarkerType.DebugSphere, ray.HitCoords, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.25f, 0.25f, 0.25f), Color.Blue);
 
-                        // GenerateBezier probes the ground under every point, so it runs only when the aim has
-                        // moved a metre, the route end changed or the width did - what is drawn is what applies.
                         bool aimMoved = _previewRouteNodes != RouteNodes.Count || Vector3.Distance(_previewAim, ray.HitCoords) > PreviewRebuildDistance;
                         if (aimMoved)
                         {
@@ -237,7 +219,6 @@ namespace ARS
                     }
                 }
 
-                // Keep one half-width entry for every route segment; the fill only runs while it is short.
                 if (NodeHalfWidths.Count - 1 < RouteNodes.Count - 1)
                 {
                     for (int i = 0; i < RouteNodes.Count - 1; i++)
@@ -254,31 +235,21 @@ namespace ARS
                     NodeHalfWidths.Remove(NodeHalfWidths.Count - 1);
                 }
 
-                // The width fill above is what a rebuild has to see, so this is the first point it can run. A delete
-                // is read off the count rather than its own branch, because that branch can also clear the route.
                 if (rebuildFrom < 0 && RouteNodes.Count < routeCountAtStart) rebuildFrom = Math.Max(0, RouteNodes.Count - 1);
-                // Attack and Aim can both land in one frame; the lower anchor is the one that sees every changed node.
+
                 if (rebuildFrom >= 0 && RouteNodes.Count > 0) TrackLoader.RebuildRouteInfo(Math.Min(rebuildFrom, RouteNodes.Count - 1), RouteNodes.Count - 1);
 
             }
         }
 
-        // A quadratic bezier from the route end to the aim point, leaving that end tangent to the incoming
-        // heading. The two control points are sStart - middlePoint and (sEnd - middlePoint).Normalized *
-        // (sScale / 2), so the curve has a definite narrower middle that the apex search can latch onto. Plan-view
-        // throughout, because that is the plane the racing system measures.
         public static List<Vector3> GenerateBezier(Vector3 sStart, Vector3 sDirection, Vector3 sEnd, float sScale)
         {
             List<Vector3> points = new List<Vector3>();
             sScale = sStart.DistanceTo2D(sEnd) * Remap(Vector3.Angle((sEnd - sStart).Normalized, sDirection), 0f, 90f, 1f, 1.5f, true);
 
-
             Vector3 middlePoint = sStart + (sDirection * (sScale / 2));
             Vector3 directionStart = sStart - middlePoint;
             Vector3 directionEnd = ((sEnd) - middlePoint).Normalized * (sScale / 2f);
-
-
-
 
             float separationDist = 1f;
 
@@ -312,8 +283,6 @@ namespace ARS
                 }
                 stepLerp += addition + scaleAdjust;
 
-
-
                 if (!Game.IsControlPressed(2, GTA.Control.Sprint))
                 {
                     RaycastResult toGround = World.Raycast(addPos + new Vector3(0, 0, 2f), addPos + (Vector3.WorldDown * 30f), IntersectOptions.Map);
@@ -325,15 +294,11 @@ namespace ARS
             return points;
         }
 
-        // The cubic is unused; the quadratic from a single anchor and direction is the shape the creator wants.
         public static Vector3 Bezier2(Vector3 Start, Vector3 End, float t)
         {
             return (((1 - t) * (1 - t)) * Start) + (2 * t * (1 - t) * Vector3.Zero) + ((t * t) * End);
         }
 
-        // The probe starts well above the point: anchored below the surface it finds nothing and the point keeps
-        // a stale height. Over a road the topmost hit is a bridge deck, so when the first hit is nowhere near the
-        // expected height, walk down the stacked surfaces and take the nearest - the common case stops at the first.
         static bool TryResolveGround(Vector3 point, out float ground)
         {
             const float probeUpMeters = 50f;
@@ -371,13 +336,6 @@ namespace ARS
             return World.RenderingCamera.Position.DistanceTo(pos) < dist;
         }
 
-                            
-
-                                        
-                                        
-                                        
-                                                                                                                                                                                      
-                                
         public void DrawSection(List<Vector3> nodes, Dictionary<int, float> widedict)
         {
             if (nodes.Count == 0) return;
@@ -406,16 +364,11 @@ namespace ARS
 
                             Color col = Color.Green;
 
-
-                            
-
-
                             if (w != 0f)
                             {
 
                                 if (_routeEditorActive)
                                 {
-                                    
 
                                     if (ph == end - 1)
                                     {
@@ -429,12 +382,9 @@ namespace ARS
                                         if (pos != nodes[0] && ph % 6 == 0)
                                         {
 
-
                                             World.DrawMarker(MarkerType.DebugSphere, lWidepos + new Vector3(0f, 0f, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Green);
                                             World.DrawMarker(MarkerType.DebugSphere, rWidepos + new Vector3(0f, 0f, 0.5f), new Vector3(0, 0, 0), new Vector3(0, 0, 0), new Vector3(0.2f, 0.2f, 0.2f), Color.Green);
                                             DrawLine(lWidepos + new Vector3(0f, 0f, 0.5f), rWidepos + new Vector3(0f, 0f, 0.5f), Color.Green);
-
-
 
                                         }
                                 }

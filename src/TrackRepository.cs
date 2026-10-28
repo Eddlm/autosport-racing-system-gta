@@ -1,3 +1,4 @@
+// Where tracks live on disk and what the loader is offered.
 using GTA.Math;
 using System;
 using System.Collections.Generic;
@@ -16,8 +17,6 @@ namespace ARS
             return document;
         }
 
-        // Pure helper: compute the world position left of a track's start line by half its width.
-        // Does not mutate global ARS state. For circuits the +/-5 indices wrap; for point-to-point they clamp.
         public static TrackStartInfo ComputeTrackStartInfo(string path)
         {
             XmlDocument document = Load(path);

@@ -1,3 +1,4 @@
+// Slots the grid: lane, stagger and heading, from the route's own geometry.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -20,7 +21,7 @@ namespace ARS
             Racer player = racers.FirstOrDefault(r => r.Driver.IsPlayer);
             if (player != null) { racers.Remove(player); racers.Add(player); }
             if (pointToPoint) positions.Reverse();
-            // No slots means no grid: placing a car would index an empty list. The caller reports the failure.
+
             if (positions.Count == 0) return;
             for (int index = 0; index < racers.Count && index < positions.Count; index++)
             {
@@ -28,8 +29,6 @@ namespace ARS
                 racer.Initialize();
                 racer.Car.Position = positions[index];
 
-                // Heading from the neighbouring slots. The two-ahead reference is the normal one; it falls back
-                // to the slot behind when it would run off the end, so a short grid cannot throw here.
                 Vector3 gridDirection;
                 if (index > positions.Count - 2) gridDirection = positions[Math.Max(0, index - 2)] - positions[index];
                 else if (index + 2 < positions.Count) gridDirection = positions[index] - positions[index + 2];

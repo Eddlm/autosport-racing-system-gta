@@ -1,3 +1,4 @@
+// Applies a Menyoo appearance preset to a spawned car. Optional: absent, the car keeps its own.
 using GTA;
 using GTA.Native;
 using System;
@@ -9,8 +10,7 @@ using System.Xml;
 
 namespace ARS
 {
-    // Purely cosmetic - no handling or stat tuning - and separate from ARS's own Vehicles\*.xml pool. Several
-    // files can match one model (one per livery), so the pick is random rather than first.
+
     public static class MenyooAppearance
     {
         private const string MenyooSubPath = @"menyooStuff\Vehicle";
@@ -43,11 +43,11 @@ namespace ARS
 
         private static string GameRoot()
         {
-            // The script's working directory (and ScriptsFolder's parent) is the game install root.
+
             try
             {
                 string scripts = Path.GetFullPath(ARS.ScriptsFolder);
-                // ScriptsFolder is "scripts\AutosportRacingSystem" — the game root is two levels up.
+
                 return Directory.GetParent(Directory.GetParent(scripts)?.FullName)?.FullName;
             }
             catch (Exception) { return null; }
@@ -88,8 +88,6 @@ namespace ARS
             return matches;
         }
 
-        // Apply the tuning of one randomly-picked matching file to the given vehicle.
-        // No-op if the vehicle model has no matching Menyoo file.
         public static void Apply(Vehicle car)
         {
             if (car == null || !car.Exists()) return;
@@ -164,7 +162,6 @@ namespace ARS
                     continue;
                 }
 
-                // Menyoo stores "value,variant"; the trailing variant is the custom-flag.
                 int variant = 0;
                 if (valueText.Contains(","))
                 {
@@ -214,9 +211,9 @@ namespace ARS
 
     static class FunctionWrapper
     {
-        // SET_VEHICLE_NEON_ENABLED (vehicle, frontLeft, frontRight, rearLeft, rearRight)
+
         const int NeonEnabledHash = unchecked((int)0x2AA720E4287BF269);
-        // SET_VEHICLE_NEON_COLOUR (vehicle, r, g, b)
+
         const int NeonColorHash = unchecked((int)0x8E0A58289A6BAAAB);
 
         public static void SetNeonEnabled(Vehicle car, bool left, bool right, bool front, bool back)

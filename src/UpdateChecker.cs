@@ -1,3 +1,4 @@
+// Version check on start. In-process, advisory only.
 using System;
 using System.IO;
 using System.Net;
@@ -38,9 +39,7 @@ namespace ARS
                     using (StreamReader reader = new StreamReader(stream))
                     {
                         string json = reader.ReadToEnd();
-                        // The release's own title when it has one, so the notice can carry the build number the
-                        // banner already shows and a player can compare the two. An untitled release falls back
-                        // to the tag, which is what every release before the titles did.
+
                         Match match = Regex.Match(json, "\"name\"\\s*:\\s*\"([^\"]+)\"");
                         if (!match.Success) match = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
                         if (match.Success) _latestTag = match.Groups[1].Value;

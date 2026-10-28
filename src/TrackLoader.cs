@@ -1,3 +1,6 @@
+// Route geometry. Angle is the signed turn from the incoming to the outgoing direction, so -cornerDir is the inside of
+// every bend. Radii are circumcircles over 2/4/10-node windows, 999 meaning no bend. Angles are flattened to Z=0: the
+// route carries grade, and a 3D angle reads the slope as steering.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -13,8 +16,7 @@ namespace ARS
 {
     public static class TrackLoader
     {
-        // Corners are not recognised this close to the start/finish line, counted the short way round on a circuit: a corner that
-        // straddles the line makes the plan brake while the grid is still leaving it.
+
         const int ApexStartLineClearanceNodes = 30;
 
         public static XmlDocument LoadTrackFile(string trackname = null)
@@ -138,14 +140,9 @@ namespace ARS
                 i++;
             }
 
-            // Detect circuit vs point-to-point BEFORE GenerateRouteInfo so the geometry pass and BuildApexTable can
-            // wrap node indices across the start/finish seam; without it, a corner sitting on the finish line is
-            // invisible to the apex table on circuits.
             RefreshRouteTopology();
             DensifyRoute();
 
-            // A file can be well-formed and still carry no route: the creator refuses below six nodes, but a hand-edited or
-            // truncated track does not pass through the creator. Six is the highest index the spawn below reads.
             if (ARS.RouteNodes.Count < 6)
             {
                 ARS.Log(ARS.LogImportance.Error, "Track refused: " + ARS.RouteNodes.Count + " route nodes, six needed");
@@ -166,8 +163,7 @@ namespace ARS
             }
             else
             {
-                // A hand-written or old file can still be shorter than the indices the spawn wants; clamping is what keeps a
-                // short route loading somewhere instead of taking the screen down after the fade.
+
                 int last = ARS.RouteNodes.Count - 1;
                 Vector3 pos = ARS.RouteNodes[Math.Min(2, last)];
                 Vector3 dir = ARS.RouteNodes[Math.Min(3, last)] - ARS.RouteNodes[Math.Min(1, last)];
@@ -206,13 +202,8 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Info, "Route generated");
         }
 
-        // One node's plan-view geometry, shared by the load pass and the creator's incremental rebuild so the two
-        // cannot disagree. The angle window is a flat ten nodes: it used to read TrackHalfWidth, which on a full pass
-        // is still the fresh object's default because the width is written *below* this call, so the read only ever
-        // saw ten — an incremental pass over already-written points would have widened it silently.
         const int GeometryWindowNodes = 10;
-        // The point-to-point end band, where a node has no usable window. Its boundary is the route count minus this,
-        // so an append or a delete anywhere moves it — the band is invalidated as a whole by any change.
+
         const int PointToPointEndBandNodes = 50;
 
         static void ComputePointGeometry(TrackPoint point, int nodeCount)
@@ -238,8 +229,7 @@ namespace ARS
             }
             else
             {
-                // The point-to-point end band has no usable window, and a rebuilt point would otherwise keep the
-                // previous pass's radii: SmoothedRadius skips 999, so a stale value below it would read as curvature.
+
                 point.Angle = 0f;
                 point.Direction = nodeCount > 10 ? (ARS.RouteNodes[10] - ARS.RouteNodes[5]).Normalized : Vector3.Zero;
                 point.Elevation = 0f;
@@ -263,16 +253,11 @@ namespace ARS
             ARS.RouteLengthMeters = cumulative;
         }
 
-        // Topology belongs to the route, not to the load: the last node within 20 m of the first closes the circuit.
-        // It has to be recomputed wherever the route changes, or a session inherits the flag from the last track it
-        // loaded, and every node window, the seam and the corner scan then run under the wrong assumption.
         public static void RefreshRouteTopology()
         {
             ARS.IsPointToPoint = ARS.RouteNodes.Count > 1 && ARS.RouteNodes[0].DistanceTo(ARS.RouteNodes[ARS.RouteNodes.Count - 1]) > 20f;
         }
 
-        // The derived table of a route that no longer exists. The creator clears it on entry, or the first apply
-        // would rebuild against the previous track's points and corners.
         public static void ClearRouteInfo()
         {
             ARS.TrackPoints.Clear();
@@ -283,10 +268,6 @@ namespace ARS
             ARS.CornersRevision++;
         }
 
-        // The creator appends and deletes at the tail, so the *geometry* only needs rebuilding around the change —
-        // every node-local read is within ten nodes. The apex table is rebuilt whole on purpose: its scan start is a
-        // whole-route search, corners merge against the previous one, the table is cyclic on a circuit and the bump
-        // seam spans the route, so no window of it is local. Both halves run the load pass's own rules.
         public static void RebuildRouteInfo(int firstChanged, int lastChanged)
         {
             bool wasPointToPoint = ARS.IsPointToPoint;
@@ -303,7 +284,7 @@ namespace ARS
             long started = ARS.LogLevel <= ARS.LogImportance.Info ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
             if (flipped)
             {
-                // A flip moves every node between the two window laws, so nothing short of a full recompute is right.
+
                 for (int node = 0; node < count; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
             }
             else
@@ -315,13 +296,12 @@ namespace ARS
 
                 if (!ARS.IsPointToPoint)
                 {
-                    // A circuit wraps, so a change at the tail also moves the head, which reads across the seam.
+
                     for (int node = 0; node <= GeometryWindowNodes && node < count; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
                 }
                 else
                 {
-                    // The band's boundary is the count minus a constant, so any change moves it: both bands are
-                    // invalidated by an append or a delete, wherever it lands.
+
                     for (int node = 0; node <= PointToPointEndBandNodes && node < count; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
                     for (int node = Math.Max(0, count - 1 - PointToPointEndBandNodes); node < count; node++) ComputePointGeometry(ARS.TrackPoints[node], count);
                 }
@@ -332,9 +312,6 @@ namespace ARS
             if (ARS.LogLevel <= ARS.LogImportance.Info) LogRebuildAndVerify(started);
         }
 
-        // Test-only, and gated *before* any work is prepared: Log cannot suppress its own arguments, so the check
-        // returns early rather than being wrapped around a call. It times the local rebuild that just ran and then
-        // re-runs the load pass over the same route, so the incremental table is proved against the reference.
         static void LogRebuildAndVerify(long started)
         {
             long localMs = (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000L / System.Diagnostics.Stopwatch.Frequency;
@@ -382,8 +359,6 @@ namespace ARS
             const int minimumCornerNodes = 25;
             const float closeCornerSeconds = 2f;
 
-            // Start a circuit scan on a straight so a corner crossing the node-zero boundary
-            // is detected as one region rather than split between the end and beginning.
             int scanStart = 0;
             if (!ARS.IsPointToPoint)
             {
@@ -462,14 +437,12 @@ namespace ARS
             foreach (CornerPoint counted in ARS.Corners) widestApexRadius = Math.Max(widestApexRadius, counted.SupposedRadius);
             ARS.Log(ARS.LogImportance.Info, "Apex table: " + ARS.Corners.Count + " corners, widest apex radius " + widestApexRadius.ToString("0") + "m");
 
-            // A chicane turns the heading back on itself, so the headings either side of the apex lie on the same
-            // side of the apex direction and the signed angles match. A single corner keeps turning, so they differ.
             int nodeCount = ARS.TrackPoints.Count;
             for (int i = 0; i < ARS.Corners.Count; i++)
             {
                 CornerPoint corner = ARS.Corners[i];
                 int apex = corner.Node;
-                int walkDist = (int)(ARS.TrackPoints[apex].TrackHalfWidth * 4f); // full width × 2
+                int walkDist = (int)(ARS.TrackPoints[apex].TrackHalfWidth * 4f);
                 Vector3 apexDir = ARS.TrackPoints[apex].Direction;
 
                 int backNode = apex - walkDist;
@@ -480,7 +453,6 @@ namespace ARS
                 if (!ARS.IsPointToPoint) fwdNode = fwdNode % nodeCount;
                 if (fwdNode < 0 || fwdNode >= nodeCount) continue;
 
-                // Flat: the two nodes are walkDist apart in the world and a chicane is a horizontal reversal, not a grade change.
                 Vector3 apexFlat = new Vector3(apexDir.X, apexDir.Y, 0f);
                 Vector3 backFlat = new Vector3(ARS.TrackPoints[backNode].Direction.X, ARS.TrackPoints[backNode].Direction.Y, 0f);
                 Vector3 fwdFlat = new Vector3(ARS.TrackPoints[fwdNode].Direction.X, ARS.TrackPoints[fwdNode].Direction.Y, 0f);
@@ -506,19 +478,11 @@ namespace ARS
         const float BumpMaxRunMeters = 8f;
         const float BumpMinDepartureGrade = 0.03f;
         const float BumpMinLipDrop = 0.02f;
-        // A seam is distrusted as soon as it is steep enough to nominate a lip on its own.
+
         const float BumpSeamMaxGrade = BumpMinDepartureGrade;
-        // A compared grade on a three-metre rung carries about 0.007 of rounding error at worst, so this drop clears it,
-        // and a second sample that fails to fall ends the run so a lone noise uptick cannot.
+
         const float BumpRiseGradeDrop = 0.01f;
 
-        // A bump is a short convex break in the route where a car at speed goes light: the road may drop away after it
-        // or only ease, and either way the curvature launches the car. The run lengths it reports are node-quantised,
-        // so a coarse track resolves them to half a node. Scanned on the route line only; the raycast that reads the
-        // real surface, and the lane-local case with it, come later.
-        // The step search can miss and leave a two-metre gap, which the curvature law reads as one metre: it advances by
-        // node index. The fix is the metre the file promises - any longer segment is resampled here, before anything
-        // derives an index from it, so the geometry pass, the apex table, the crests and the grid all see one spacing.
         const float DensifyAboveMeters = 1.5f;
 
         static void DensifyRoute()
@@ -562,8 +526,6 @@ namespace ARS
             ARS.Bumps.Clear();
             if (count < 8) return;
 
-            // The route's first and last nodes are one edge apart, and where that edge steps in height the difference
-            // reads as grade. A broken seam therefore takes no lip within a run's length of it.
             bool seamOk = true;
             float seamGrade = 0f;
             if (!ARS.IsPointToPoint)
@@ -612,12 +574,6 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Info, "Bumps: " + ARS.Bumps.Count + " lips, minimum departure grade " + BumpMinDepartureGrade.ToString("0.000") + ", run " + BumpMinRunMeters.ToString("0.0") + "-" + BumpMaxRunMeters.ToString("0.0") + "m");
         }
 
-        // A bump or a crest before a corner unloads the tyres exactly where the car wants to brake, so the entrance
-        // moves back and the car reaches the feature already slow: FeatureEntranceBackNodes, or onto the feature when
-        // it is nearer. The region the detector found is not a road limit and does not hold it back — the apex cap and
-        // the previous corner's exit do, in that order. When several qualify, the one farthest from the apex wins: it
-        // is the first the car meets, so the span has to start before that one. Dips never qualify; they load the
-        // tyres instead of unloading them, which is why the no-fly gate ignores them too.
         const int FeatureEntranceBackNodes = 100;
         const int FeatureEntranceSearchNodes = 100;
 
@@ -669,10 +625,6 @@ namespace ARS
             }
         }
 
-        // Walks back from the lip while the surface is still climbing, so the run it returns is the rise itself. The
-        // base is where the grade stops falling, read on the longer rung because a shorter one is too noisy to compare,
-        // and one sample that fails to fall is passed over as noise. A climb longer than the cap is a slope, not a
-        // bump, and reports -1.
         static int RiseStartNode(int lip, int count, out float meters)
         {
             meters = 0f;
@@ -744,53 +696,33 @@ namespace ARS
             return (float)Math.Sqrt(dx * dx + dy * dy);
         }
 
-        // Scanned once here, after the merges, because every rule that rewrites the entrance has to have settled first.
-        // This table is data only: no entrance moves for a crest, unlike a bump, which MoveEntrancesForBumps acts on.
-        // The scan is deliberately boundary-free, so a crest that belongs to a corner outside the region is still found.
-        // Route-wide scan for crests and dips. A crest is where the road is climbing and then descending
-        // (top of a hill, the local maximum of altitude); a dip is where it's descending and then
-        // climbing (bottom of a valley, the local minimum). The signal is the local grade on each
-        // side of the node: if the grade before the node is positive and the grade after is negative,
-// the node is a crest; the opposite is a dip. The sample window is window nodes on each side.
-// No entry/exit walk, no activation speed, no gs formula -- a sign change is the only criterion.
         static void AssignCrests(int count)
         {
-            const int window = 6;        // each grade sample looks window nodes back and forward
-            const int skipAfterPeak = 5;        // after a sign change, advance 5 nodes before testing the next one (dedup)
+            const int window = 6;
+            const int skipAfterPeak = 5;
 
             ARS.Crests.Clear();
             for (int node = 0; node < count; node++)
             {
                 if (!TryResolveNode(node - window, count, out int before)) continue;
                 if (!TryResolveNode(node + window, count, out int after)) continue;
-                if (after == before) continue;       // degenerate: zero-distance segment
+                if (after == before) continue;
 
                 float gradeBefore = ARS.LocalSlope(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position);
                 float gradeAfter = ARS.LocalSlope(ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position);
 
                 CrestType type;
-                if (gradeBefore > 0f && gradeAfter < 0f) type = CrestType.Crest;     // climbing then descending = hilltop
-                else if (gradeBefore < 0f && gradeAfter > 0f) type = CrestType.Dip;  // descending then climbing = valley
-                else continue;                                                       // no sign change: not a peak
+                if (gradeBefore > 0f && gradeAfter < 0f) type = CrestType.Crest;
+                else if (gradeBefore < 0f && gradeAfter > 0f) type = CrestType.Dip;
+                else continue;
 
-                // The centripetal gs the car would experience crossing the peak at 100mph, taken as
-                // a magnitude. HillGripDeltaGs uses the same 6-node sample the grade is computed on,
-                // so the value is local to the peak -- a small hill with a steep top reads high here
-                // even if the surrounding road is flat.
                 float gsAt100 = ARS.HillGripDeltaGs(ARS.TrackPoints[before].Position, ARS.TrackPoints[node].Position, ARS.TrackPoints[after].Position, 45f);
                 float gsMag = Math.Abs(gsAt100);
 
-                // The 1g mark is the physical ceiling: at gs = 1.0 the tyres need a horizontal force
-                // equal to the car's weight to track the curve, with no vertical grip left. Below 1g
-                // the road car is at safe_v = 100mph / sqrt(gs), so a 0.5g peak only forces the car to
-                // 141mph -- a 0.8g peak only forces it to 112mph. None of these need the driver to
-                // change plans. Filter them out so the table only lists features that affect the
-                // brake plan.
                 if (gsMag < 1f) { node += skipAfterPeak; continue; }
 
                 ARS.Crests.Add(new Crest { Node = node, Type = type, GsAt100Mph = gsMag });
-                // Skip the next few nodes: a gradual sign change covers many adjacent nodes, and the same
-                // physical hill registers as multiple peaks at slightly different centres otherwise.
+
                 node += skipAfterPeak;
             }
 
@@ -831,9 +763,7 @@ namespace ARS
             {
                 float radius = ARS.TrackPoints[scanNodes[position]].PreciseCurveRadius;
                 if (radius < tightestRadius) tightestRadius = radius;
-                // The apex is the smoothed minimum, not the tightest node: the precise radius is a three-point
-                // circumradius over the node and its +/-4-node samples, so on a wide corner its noise sits at the
-                // file's decimal quantum and the tightest node lands tens of metres off the real apex.
+
                 float smoothed = SmoothedRadius(scanNodes[position], count, smoothingNodes);
                 if (smoothed < detectedRadius)
                 {
@@ -846,18 +776,13 @@ namespace ARS
 
             int apexNode = scanNodes[apexPosition];
 
-            // A corner whose apex sits on the line is not one the car can use: the plan brakes for it while the grid is still
-            // leaving it, and on a circuit the region straddles the wrap. El Burro Rally produced exactly that, with its apex on
-            // node 0 and its entrance at the end of the route. Anything inside the clearance is not a corner, it is the line.
             int lineDistance = ARS.IsPointToPoint ? apexNode : Math.Min(apexNode, count - apexNode);
             if (lineDistance < ApexStartLineClearanceNodes)
             {
                 ARS.Log(ARS.LogImportance.Info, "Corner skipped: apex=" + apexNode + " is " + lineDistance + " nodes from the line (clearance " + ApexStartLineClearanceNodes + ")");
                 return;
             }
-            // A span is capped at a hard node count each way rather than by the corner's own size: offroad the radius
-            // never settles, so without a cap the walk runs all the way out to the region bound. The step is also capped
-            // by what the scan list holds, because the walk returns a step count and these are list positions.
+
             int spanLimit = Math.Min(SpanNodeLimit, count - 1);
             int entranceMaxStep = Math.Min(spanLimit, apexPosition);
             int exitMaxStep = Math.Min(spanLimit, scanNodes.Count - 1 - apexPosition);
@@ -867,19 +792,11 @@ namespace ARS
             int unclampedEnd = apexPosition + exitStep;
             startPosition = Math.Max(regionStart, unclampedStart);
             endPosition = Math.Min(regionEnd, unclampedEnd);
-            // Diagnostic: log every corner's region bounds, walk direction, and where the clamping actually happens.
-            // The user observed that one corner's entrance lands at regionStart regardless of the multiple — confirm.
+
             ARS.Log(ARS.LogImportance.Info, "Corner add: apex=" + apexNode + " angle=" + ARS.TrackPoints[apexNode].Angle.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " region=" + regionStart + "-" + regionEnd + " entranceStep=" + entranceStep + "/" + entranceMaxStep + (entranceStep >= entranceMaxStep ? " (at cap)" : "") + " unclampedStart=" + unclampedStart + " start=" + startPosition + (startPosition > unclampedStart ? " (clamped to regionStart)" : (startPosition == unclampedStart ? " (walk stop)" : "")) + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " (at cap)" : "") + " unclampedEnd=" + unclampedEnd + " end=" + endPosition);
-            // Flat rather than the apex radius: scaling it gave a sweeper a span of twice its own radius, so the cars
-            // prepared across the whole corner.
+
             float minEntranceExit = Math.Min(SpanMinimumMeters, spanLimit);
-            // Rule 5 disabled while the cap is the user-facing rule: the floor pulled the entrance to 20m on
-            // any corner where the walk returned a small step, which fought the cap and made the bound meaningless.
-            // if (apexPosition - startPosition < minEntranceExit) startPosition = Math.Max(regionStart, apexPosition - (int)minEntranceExit);
-            // if (endPosition - apexPosition < minEntranceExit) endPosition = Math.Min(regionEnd, apexPosition + (int)minEntranceExit);
-            // Outer bound on entrance/exit distance from apex: the walk's uncapped step is hard-clamped at SpanMaxDistanceNodes,
-            // regardless of region bounds or the multiple-based walk stop. If the cap binds, log a detailed line so the
-            // road geometry that triggered it is visible.
+
             if (apexPosition - startPosition > SpanMaxDistanceNodes)
             {
                 int priorStart = startPosition;
@@ -892,33 +809,19 @@ namespace ARS
                 endPosition = apexPosition + SpanMaxDistanceNodes;
                 ARS.Log(ARS.LogImportance.Info, "Corner add CAP: apex=" + apexNode + " side=exit priorEnd=" + priorEnd + " (distance=" + (priorEnd - apexPosition) + ") clamped to end=" + endPosition + " (distance=" + (endPosition - apexPosition) + "); region=" + regionStart + "-" + regionEnd + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " walkAtCap" : " walkStoppedEarly") + " unclampedEnd=" + unclampedEnd);
             }
-            // The entry and the exit may not sit closer to the apex than the road is WIDE there. A corner whose green entry is a few
-            // metres from its own apex describes a bend the car is already inside, and the manoeuvre built on it opens and closes inside
-            // a car's length. Measured in track nodes, which is what the distances between nodes are: metres.
+
             int widthNodes = (int)Math.Ceiling(2f * ARS.TrackPoints[apexNode].TrackHalfWidth);
-            // Measured in scan steps, never in node numbers: scanNodes is a rotated list, so its entries wrap and an absolute
-            // apex minus a wrapped entry is nonsense - with the apex at node 0 and the scan starting at 37 the walk opened the
-            // entry all the way to position 0, which made IsWithinCorner true for 1696 of 1701 nodes of El Burro Rally. The
-            // step counts are the same quantity as LengthStart and LengthEnd below, which is what every consumer reads.
+
             while (startPosition > 0 && apexPosition - startPosition < widthNodes) startPosition--;
             while (endPosition < scanNodes.Count - 1 && endPosition - apexPosition < widthNodes) endPosition++;
             startPosition = Math.Max(0, Math.Min(startPosition, apexPosition));
             endPosition = Math.Min(scanNodes.Count - 1, Math.Max(endPosition, apexPosition));
 
-            // Gates the corner: how far the road runs before it opens to twice the apex's smoothed radius. Measured
-            // over the walk's whole length, not over the 40-node span the corner is placed with, so it can say "never
-            // within 500 nodes" where LengthEnd can only ever say 40.
-            // The blur walk is bounded by the road, not by the scan list. On a circuit IsOpenedFor wraps, so an apex
-            // near the end of the rotated list can still be judged over the full span; using exitMaxStep here would
-            // admit every corner landing within 60 nodes of the list end, one per circuit, without a measurement.
             int blurMaxStep = ARS.IsPointToPoint ? exitMaxStep : Math.Min(SpanNodeLimit, count - 1);
             int nodesToDouble = detectedRadius < 999f
                 ? NodesToDoubleRadius(apexNode, detectedRadius, blurMaxStep, count)
                 : blurMaxStep;
-            // A corner is a feature with an end: if the road has not opened to twice its radius within this many
-            // nodes, what we would call an exit is arbitrary and the corner is a bend the route already governs.
-            // The number comes from 32 corners over three tracks, where the distribution splits between 52 and 70
-            // nodes; it is a measured starting point, not a law, and wants re-reading as tracks are added.
+
             if (nodesToDouble > SpanBlurNodes)
             {
                 ARS.Log(ARS.LogImportance.Info, "Corner blur: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " nodesToDouble=" + nodesToDouble + " > " + SpanBlurNodes + "; not a corner");
@@ -939,36 +842,23 @@ namespace ARS
                 Speed = (float)Math.Sqrt(9.81f * tightestRadius)
             };
 
-            // Coexistence is a question of time, not distance: the outside-approach window is a few seconds long, so
-            // two apexes the car reaches within this many seconds fight over the same stretch. The table has no car
-            // in it, so the corners' own 1 g apex speeds stand in — which is how the radius drives the decision.
-            // Keeping the slower of the pair is deliberate, and it reads the smoothed radius because the survivor is
-            // what every later consumer keys on. The survivor's extensions are then re-walked over the region it
-            // absorbed: leaving them alone registers no corner where the car actually is.
             if (ARS.Corners.Count > 0)
             {
                 CornerPoint previous = ARS.Corners[ARS.Corners.Count - 1];
                 int gap = ARS.IsPointToPoint ? corner.Node - previous.Node : Wrap(corner.Node - previous.Node, count);
                 float referenceSpeed = Math.Max(previous.Speed, corner.Speed);
                 float gapSeconds = gap / Math.Max(referenceSpeed, 1f);
-                // A fast kink seconds before a slow corner is one the car clears before it can react to the next: where
-                // the two aim the same way there is no S to drive, so the slower apex should own the whole bend. The
-                // window stays short of the time a U-turn's two apexes take to be planned separately, or the second
-                // absorbs the first, and it stays under the gap two similar corners half a lap apart would show.
+
                 bool sameBend = gapSeconds < AlignedCornerSeconds && AimsSameWay(previous, corner, AlignedCornerDegrees);
                 if (gapSeconds < closeCornerSeconds || sameBend)
                 {
-                    // The radii differ by more than the gate: the two corners are unrelated bends, not the same
-                    // bend with a kink. Skip the merge and drop the bigger-radius one -- the walker's walked
-                    // bounds for the surviving smaller corner are kept, and the lost corner stays out of the list.
-                    // 'fast corner followed by slow corner' -- drop the previous fast corner, keep the new slow one.
+
                     if (Math.Abs(corner.DetectedRadius - previous.DetectedRadius) > SpanMergeRadiusGate)
                     {
                         CornerPoint loser = corner.DetectedRadius < previous.DetectedRadius ? previous : corner;
                         bool dropPrevious = loser.Node == previous.Node;
                         ARS.Log(ARS.LogImportance.Info, "Corner skipped (radii differ by >" + SpanMergeRadiusGate.ToString("0") + "m): previousR=" + previous.DetectedRadius.ToString("0.0") + " cornerR=" + corner.DetectedRadius.ToString("0.0") + " loserApex=" + loser.Node + (dropPrevious ? " (previous)" : " (new)"));
-                        // The smaller-radius corner wins. If the previous is the loser, drop it and add the new
-                        // corner in its place; if the new is the loser, leave the previous as-is.
+
                         if (dropPrevious)
                         {
                             ARS.Corners.RemoveAt(ARS.Corners.Count - 1);
@@ -991,8 +881,6 @@ namespace ARS
             ARS.Corners.Add(corner);
         }
 
-        // Whether one corner's exit aims where the next one's entrance aims: joined by a straight or a steady curve, so
-        // the pair is really one bend rather than an S.
         static bool AimsSameWay(CornerPoint previous, CornerPoint corner, float degrees)
         {
             if (previous.EndNode < 0 || corner.StartNode < 0) return false;
@@ -1002,18 +890,10 @@ namespace ARS
             return !float.IsNaN(angle) && !float.IsInfinity(angle) && Math.Abs(angle) <= degrees;
         }
 
-        // A span end is where the road has held itself open for a stretch, so the entrance or exit cannot chatter
-        // against a single noisy reading. The criterion is N consecutive PreciseCurveRadius values all above
-        // multiple * SupposedRadius, with the walk step being the first one whose N consecutive ahead are open.
-        // The walk is capped by the region the detector already found, because a corner whose approach is all
-        // tighter than the multiple would otherwise run to the node cap.
         const int SpanConsecutiveNodes = 8;
-        // How far the road runs before its radius doubles the apex's. Counted from the smoothed radius rather than
-        // the raw tightest node, because on a wide corner that minimum is noise and a noisy base makes every sweep
-        // look like it opens early. Small is a corner; large is a bend the route already governs on its own.
+
         const float SpanDoublingMultiple = 2f;
-        // Nodes the road may take to double the apex radius before the corner is called a bend. Measured, not
-        // derived: see the note on the gate in AddCorner.
+
         const int SpanBlurNodes = 60;
 
         static int NodesToDoubleRadius(int apexNode, float apexRadius, int maxStep, int count)
@@ -1039,22 +919,14 @@ namespace ARS
         const float SpanMinimumMeters = 20f;
         const float SpanEntranceRadiusMultiple = 1.5f;
         const float SpanExitRadiusMultiple = 1.5f;
-        // Two apexes whose DetectedRadius differ by more than this are unrelated bends, not a kink in the same bend:
-        // merging them drags the survivor's walked entrance to the looser corner's bound, which can produce an
-        // entrance tens of nodes too far back on the apex the racer actually plans around. Skip the merge and drop
-        // the bigger-radius corner instead.
+
         const float SpanMergeRadiusGate = 50f;
         const int SpanNodeLimit = 500;
-        // Outer bound on how far from the apex an entrance or exit may land. The walk can otherwise run to its step
-        // cap on long gentle approaches whose SmoothedRadius never opens past the multiple (a regime the b587cc5f
-        // commit warned about), and the previous bound -- regionStart -- followed the detection sweep's tolerance,
-        // which on Figureight reaches 100+ nodes. This cap is the user-facing rule: the entrance or exit cannot be
-        // further than this many nodes from the apex; if the walk's unclamped step exceeds it, we clamp and log.
+
         const int SpanMaxDistanceNodes = 40;
         const float AlignedCornerSeconds = 3f;
         const float AlignedCornerDegrees = 15f;
 
-        // The exit is the entrance's mirror, walked forward on the looser multiple.
         static int ExitStep(int apexNode, float apexRadius, int maxStep, int count)
         {
             float threshold = apexRadius * SpanExitRadiusMultiple;
@@ -1065,9 +937,6 @@ namespace ARS
             return maxStep;
         }
 
-        // True when N consecutive nodes from (apexNode + direction * step) onward (going the same direction) are
-        // all above the threshold. The walk step is the first one where this holds, so the entrance or exit lands
-        // where the road has held itself open rather than on a single noisy reading.
         static bool IsOpenedFor(int apexNode, int direction, int step, int consecutive, int count, float threshold)
         {
             for (int offset = 0; offset < consecutive; offset++)
@@ -1082,15 +951,6 @@ namespace ARS
             return true;
         }
 
-        // A merged survivor's extensions, re-walked rather than inherited: the entrance runs in over the absorbed
-        // region to the same hard node limit a fresh region uses, and the exit is re-derived from the apex the
-        // same way a fresh region's is, bounded by the absorbed region's end. The floor is capped by what is left of
-        // each bound, so neither walk can pass it and a chain of merges stops at the first corner of the complex.
-        // A survivor owns the whole bend it absorbed, so its span is the union of the two: the entrance reaches the
-        // absorbed corner's entrance and the exit the new corner's exit, bounded only by the same hard node limit a
-        // fresh region uses. The radius walk is deliberately not consulted — it reads around the survivor's own apex,
-        // and since the survivor is usually the tighter corner its threshold is the smaller one, so a walk here could
-        // cover less road than the two corners did separately and leave the first corner's braking zone unrecorded.
         static void ExtendMergedCorner(CornerPoint survivor, int unionStart, int unionEnd, int count)
         {
             int spanLimit = Math.Min(SpanNodeLimit, count - 1);
@@ -1127,11 +987,6 @@ namespace ARS
             return Circumradius2D(new Vector2(a.X, a.Y), new Vector2(b.X, b.Y), new Vector2(midpoint.X, midpoint.Y));
         }
 
-        // Least-squares circle through four plan-view points: the four-point generalisation of a circumradius, since
-        // four points rarely lie on one circle and no exact radius exists. Kasa's algebraic fit, mean-centred for
-        // conditioning. 999 when the points are collinear or the normal equations are singular - the same sentinel
-        // the exact three-point solve returns, so the caller keeps one convention. Four Vector3 on the stack via a
-        // local array is the only allocation, once per racer per tick.
         public static float FittedCircleRadius(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
         {
             float mx = (a.X + b.X + c.X + d.X) * 0.25f;
@@ -1152,7 +1007,6 @@ namespace ARS
                 svuu += v * u * u;
             }
 
-            // Normal equations of the algebraic fit, solved for the centre offset from the mean.
             float determinant = suu * svv - suv * suv;
             if (Math.Abs(determinant) < 1e-6f) return 999f;
 
@@ -1199,8 +1053,6 @@ namespace ARS
             Function.Call(Hash.CLEAR_FOCUS);
         }
 
-        // Built to order rather than to a fixed ceiling: the grid needs slots for the size being spawned plus two
-        // that GridBuilder.Place reads ahead into, and the size can change between spawns, so it is redone each time.
         public static void BuildGridSlots(List<Vector3> nodes, Dictionary<int, float> widths, bool isPointToPoint, int wantedCars, List<Vector3> grid)
         {
             grid.Clear();
@@ -1213,14 +1065,14 @@ namespace ARS
 
         static void SpawnStartGates(List<Vector3> nodes, Dictionary<int, float> widths, List<Prop> limits, Color color)
         {
-            // The line is the last node in both modes: a circuit wraps there and a point-to-point finishes across it.
+
             int last = nodes.Count - 1;
             SpawnGatePair(nodes[last], nodes[last] - nodes[Wrap(last - 1, nodes.Count)], widths.ContainsKey(last) ? widths[last] : widths[0], limits, color);
         }
 
         static void SpawnGatePair(Vector3 position, Vector3 direction, float width, List<Prop> limits, Color color)
         {
-            // Offsets come from the direction, never from the prop's own right vector: that one is parallel to the track once its heading has been turned 90.
+
             Vector3 across = Quaternion.RotationAxis(Vector3.WorldUp, (float)Math.PI / 180f * -90f) * new Vector3(direction.X, direction.Y, 0f).Normalized;
             for (int side = -1; side <= 1; side += 2)
             {
@@ -1234,13 +1086,12 @@ namespace ARS
 
         static void BuildPointToPointGrid(List<Vector3> nodes, Dictionary<int, float> widths, List<Vector3> grid, int slotCount)
         {
-            // The start index is clamped to what the route can hold: with a fixed slotCount+1 a short route produced no slots at
-            // all, where a circuit at least degrades. Now both builders yield what the road allows.
+
             int first = Math.Max(2, Math.Min(slotCount + 1, nodes.Count / 3));
             for (int i = first; i > 1 && i * 3 < nodes.Count; i--)
             {
                 Vector3 point = nodes[i * 3];
-                // Rotation about WorldUp preserves Z, so an unflattened direction pushes each slot up or down the grade.
+
                 Vector3 direction = new Vector3(point.X - nodes[i * 3 - 1].X, point.Y - nodes[i * 3 - 1].Y, 0f).Normalized;
                 grid.Add(point - Quaternion.RotationAxis(Vector3.WorldUp, (float)Math.PI / 180f * -90f) * (direction * ((i % 2 == 1) ? widths[0] * 0.45f : -widths[0] * 0.45f)));
             }
@@ -1249,8 +1100,7 @@ namespace ARS
         static void BuildCircuitGrid(List<Vector3> nodes, Dictionary<int, float> widths, List<Vector3> grid, int slotCount)
         {
             int reference = nodes.Count - 1;
-            // The floor is a quarter of the route, capped at the old 50: a fixed 50 left any route densified to 57 nodes or
-            // fewer with ZERO slots, and the caller then indexed an empty list and the race died at its own lights.
+
             int floor = Math.Min(50, Math.Max(1, nodes.Count / 4));
             for (int i = nodes.Count - 1; i > floor && grid.Count < slotCount; i--)
             {
@@ -1273,7 +1123,6 @@ namespace ARS
         const string FlarePtfxEffect = "scr_finders_package_flare";
         static readonly List<KeyValuePair<Prop, Color>> QueuedFlares = new List<KeyValuePair<Prop, Color>>();
 
-        // A named ptfx asset streams over frames, so the effect cannot start in the same tick it is requested.
         static void QueueFlare(Prop prop, Color color)
         {
             QueuedFlares.Add(new KeyValuePair<Prop, Color>(prop, color));

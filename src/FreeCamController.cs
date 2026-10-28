@@ -1,3 +1,4 @@
+// Free camera for the debug views.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -35,9 +36,6 @@ namespace ARS
                 return;
             }
 
-            // The mode writes the ped's position every active frame, so anything the game does to that ped is undone next tick: a
-            // player who dies, respawns or gets into a car during freecam is dragged back under the drone, and a mounted ped is warped
-            // out of its vehicle. Leaving is the only safe answer, and Toggle restores gravity, collision, visibility and the view mode.
             Ped ped = Game.Player.Character;
             if (ped == null || !ped.Exists() || ped.IsDead || ped.IsInVehicle())
             {
@@ -143,7 +141,7 @@ namespace ARS
             if (_isActive)
             {
                 _isActive = false;
-                // The ride borrows the player's first-person camera, so the player's own mode has to come back.
+
                 if (_previousViewMode >= 0)
                 {
                     Function.Call(Hash.SET_FOLLOW_PED_CAM_VIEW_MODE, _previousViewMode);
@@ -161,8 +159,7 @@ namespace ARS
 
             if (!ARS.CanWeUse(ARS.FreeCamRide)) return;
             _previousViewMode = Function.Call<int>(Hash.GET_FOLLOW_PED_CAM_VIEW_MODE);
-            // Forced only when the reading is a real mode: a -1 cannot be restored on the way out, so forcing 4 over it would leave
-            // the player's camera on the drone's mode for good.
+
             if (_previousViewMode >= 0 && _previousViewMode != 4)
                 Function.Call(Hash.SET_FOLLOW_PED_CAM_VIEW_MODE, 4);
 

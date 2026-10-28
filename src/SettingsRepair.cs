@@ -1,3 +1,4 @@
+// Rewrites a settings file that cannot be parsed, keeping every value it can still read.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -7,15 +8,11 @@ using System.Windows.Forms;
 
 namespace ARS
 {
-    // The three passes run in this order on purpose: files must exist before pruning, and pruning must finish
-    // before keys are completed, or a default would shadow a migration. Known limit: an optional key holding a
-    // value of the wrong type is left alone, since there is no default to repair it to.
+
     static class SettingsRepair
     {
         enum Kind { Text, Bool, Number }
 
-        // One declared key: its default (null = optional, absence is a valid state), its type, and —
-        // for list-backed keys — the spellings the menu (and so the file) is allowed to hold.
         class KeySpec
         {
             public readonly string Key;
@@ -36,7 +33,6 @@ namespace ARS
                 _max = max;
             }
 
-            // The value this key must hold instead of current, or null when current is already fine.
             public string Repair(string current)
             {
                 if (current == null) return Default;
@@ -45,7 +41,7 @@ namespace ARS
                 {
                     float value;
                     if (!float.TryParse(current, NumberStyles.Float, CultureInfo.InvariantCulture, out value)) return Default;
-                    if (float.IsNaN(value) || float.IsInfinity(value)) return Default;   // a non-finite number is not a value
+                    if (float.IsNaN(value) || float.IsInfinity(value)) return Default;
                     string snapped = SnappedToList(value);
                     if (snapped != null) return snapped;
                     if (_max > _min && (value < _min || value > _max)) return Clamp(value).ToString("0.###", CultureInfo.InvariantCulture);
@@ -57,7 +53,6 @@ namespace ARS
                 return canonical ?? Default;
             }
 
-            // A key the schema cannot repair (no default to fall back on) has to hold a finite number, or its line goes.
             public bool HasUnusableValue(string text)
             {
                 if (Default != null || _kind != Kind.Number) return false;
@@ -65,8 +60,6 @@ namespace ARS
                 return !float.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) || float.IsNaN(value) || float.IsInfinity(value);
             }
 
-            // Numeric keys the menu offers as a fixed list snap to the nearest offered value, so the
-            // menu keeps showing what the file holds instead of silently falling back to its first entry.
             string SnappedToList(float value)
             {
                 if (_domain == null) return null;
@@ -107,7 +100,6 @@ namespace ARS
             public string Path { get { return ARS.SettingsFolder + @"\" + Name; } }
         }
 
-
         static List<FileSpec> _schema;
 
         static List<FileSpec> Schema { get { return _schema ?? (_schema = BuildSchema()); } }
@@ -122,19 +114,19 @@ namespace ARS
             List<FileSpec> files = new List<FileSpec>();
 
             FileSpec race = Owned("Menu-Race.ini");
-            race.Specs.Add(new KeySpec("Track", null));                     // optional: absent = no track chosen yet
-            race.Specs.Add(new KeySpec("Laps", "6", Kind.Number, new[] { "2", "4", "6", "8", "10" }));   // numeric: a retired lap count snaps to the nearest offer instead of resetting
+            race.Specs.Add(new KeySpec("Track", null));
+            race.Specs.Add(new KeySpec("Laps", "6", Kind.Number, new[] { "2", "4", "6", "8", "10" }));
             race.Specs.Add(new KeySpec("GridSize", "8", Kind.Number, Array.ConvertAll(ARS.GridSizeChoices, v => v.ToString()), 0f, ARS.GridSizeChoices[ARS.GridSizeChoices.Length - 1]));
             race.Specs.Add(new KeySpec("PaceMode", PaceMode.RelativeToMine.ToString(), Kind.Text, Enum.GetNames(typeof(PaceMode))));
             race.Specs.Add(new KeySpec("PaceOffset", "0", Kind.Number, new[] { "-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }));
-            race.Specs.Add(new KeySpec("PaceTarget", null, Kind.Number));   // optional: absent triggers the fleet-span middle autoselect
-            race.Specs.Add(new KeySpec("PaceDeviation", "Off", Kind.Text, new[] { "Off", "2", "4", "6", "8" }));   // text so the off state reads Off rather than 0
+            race.Specs.Add(new KeySpec("PaceTarget", null, Kind.Number));
+            race.Specs.Add(new KeySpec("PaceDeviation", "Off", Kind.Text, new[] { "Off", "2", "4", "6", "8" }));
             race.Specs.Add(new KeySpec("ReverseRoute", "False", Kind.Bool));
             files.Add(race);
 
             FileSpec settings = Owned("Menu-Settings.ini");
             settings.Specs.Add(new KeySpec("GridSorting", GridSort.Random.ToString(), Kind.Text, Enum.GetNames(typeof(GridSort))));
-            settings.Specs.Add(new KeySpec("VehiclePool", "cars.txt"));   // any Vehicles\*.txt; free text by design (the file list is dynamic)
+            settings.Specs.Add(new KeySpec("VehiclePool", "cars.txt"));
             settings.Specs.Add(new KeySpec("TimeoutSeconds", "30", Kind.Number, new[] { "15", "30", "45", "60" }));
             settings.Specs.Add(new KeySpec("AIRacerAutofix", AutofixMode.AutoRepair.ToString(), Kind.Text, Enum.GetNames(typeof(AutofixMode))));
             settings.Specs.Add(new KeySpec("CornerOffset", "4", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
@@ -144,13 +136,11 @@ namespace ARS
             settings.Specs.Add(new KeySpec("TipRate", TipFrequency.High.ToString(), Kind.Text, Enum.GetNames(typeof(TipFrequency))));
             settings.Specs.Add(new KeySpec("UseMenyooSkins", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("ForceFillGrid", "True", Kind.Bool));
-            settings.Specs.Add(new KeySpec("OverspeedCut", "0.2", Kind.Text, new[] { "Off", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" }));   // text so the off state reads Off rather than 0
+            settings.Specs.Add(new KeySpec("OverspeedCut", "0.2", Kind.Text, new[] { "Off", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" }));
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TcsEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("AbsEnabled", "False", Kind.Bool));
-            // The TCS pair is a share of the slip the tyres reach peak traction at, not a raw slip: the peak is
-            // 0.4 in the field the car reads (wheel.cpp:4465), so 100% is the peak and 200% is twice it. One
-            // ladder serves both knobs.
+
             settings.Specs.Add(new KeySpec("TcsSlipLimitPct", "100", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
             settings.Specs.Add(new KeySpec("TcsTaperSpanPct", "50", Kind.Number, new[] { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120", "130", "140", "150", "160", "170", "180", "190", "200" }));
             settings.Specs.Add(new KeySpec("DNFUnderTrack", "True", Kind.Bool));
@@ -180,7 +170,6 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             development.Specs.Add(new KeySpec("SlipFromMemory", "True", Kind.Bool));
             files.Add(development);
 
-            // The debug key set is the toggle table itself: retiring a toggle retires its key.
             FileSpec debug = Owned("Menu-Debug.ini");
             foreach (Options option in ARS.DebugToggles.Keys)
                 debug.Specs.Add(new KeySpec(option.ToString(), ARS.DebugToggles[option].ToString(), Kind.Bool));
@@ -188,13 +177,12 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             return files;
         }
 
-        // Pass 1: Settings\ exists and the old dev file receives its migration name.
         public static void CreateMissingFiles()
         {
             try
             {
                 Directory.CreateDirectory(ARS.SettingsFolder);
-                // The dev config was DevSettings.ini before the menu-scoped naming: a move keeps its comments.
+
                 string legacyDevConfig = ARS.SettingsFolder + @"\DevSettings.ini";
                 string devConfig = ARS.SettingsFolder + @"\DevConfig.ini";
                 if (File.Exists(legacyDevConfig) && !File.Exists(devConfig))
@@ -209,7 +197,6 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             }
         }
 
-        // Pass 2: an owned file may only hold declared keys. Foreign sections and comments are preserved.
         public static void PruneOwnedFiles()
         {
             foreach (FileSpec file in Schema)
@@ -249,8 +236,6 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             }
         }
 
-        // Pass 3: every declared key exists and holds a value the schema accepts. Runs after the legacy
-        // migrations, so a repaired default can never shadow a value carried over from an older install.
         public static void CompleteOwnedKeys(MenuSettings race, MenuSettings settings, MenuSettings debug, MenuSettings development)
         {
             Dictionary<string, MenuSettings> stores = new Dictionary<string, MenuSettings>(StringComparer.OrdinalIgnoreCase)
@@ -283,7 +268,6 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             }
         }
 
-        // The declared key names of one owned file, so a rename migration walks the schema instead of a copy of it.
         public static List<string> DeclaredKeys(string fileName)
         {
             foreach (FileSpec file in Schema)
@@ -306,8 +290,7 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
                 _declaredKeys = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
                 foreach (FileSpec file in Schema)
                 {
-                    // Case-insensitive, matching the prune's own comparer: a hand-edited ini key in the
-                    // wrong case is kept by the prune, so the store has to keep reading it too.
+
                     HashSet<string> keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (KeySpec spec in file.Specs) keys.Add(spec.Key);
                     _declaredKeys[file.Name] = keys;
@@ -316,14 +299,12 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             }
         }
 
-        // The schema owns which keys exist, so this is the one question a store asks before touching a file.
         public static bool IsDeclared(string fileName, string key)
         {
             HashSet<string> keys;
             return DeclaredKeySets.TryGetValue(fileName, out keys) && keys.Contains(key);
         }
 
-        // So a menu offers exactly what the file will keep: the schema's own domain, never a second copy of it.
         public static string[] OptionsFor(string key)
         {
             foreach (FileSpec file in Schema)
@@ -334,15 +315,12 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
 
         static readonly HashSet<string> ReportedUndeclared = new HashSet<string>(StringComparer.Ordinal);
 
-        // Once per key, not once per call: a key read inside the race loop would otherwise bury the log
-        // it is trying to be noticed in.
         public static void ReportUndeclared(string fileName, string key, string operation)
         {
             if (!ReportedUndeclared.Add(fileName + "|" + key)) return;
             ARS.Log(ARS.LogImportance.Error, "Settings: " + fileName + " declares no key '" + key + "', so the menu's " + operation + " was refused - an undeclared key is dropped on the next load, which would revert the setting silently.", true);
         }
 
-        // Retired files are removed only after any values they still carry have been migrated to menu settings.
         public static void DeleteLegacyFiles()
         {
             foreach (string name in new[] { "Settings.ini", "Options.ini", "DevSettings.ini", "DevConfig.ini", "MemoryOffsets.ini", "Menu-Racers.ini", "Menu-DevSettings.ini" })
@@ -367,7 +345,6 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             return trimmed.Substring(1, trimmed.Length - 2).Trim();
         }
 
-        // The one atomic writer, for the repair pass and for every menu save: a settings file is never left half-written.
         public static void WriteAtomic(string path, List<string> lines)
         {
             string temporary = path + ".repair";

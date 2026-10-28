@@ -1,3 +1,4 @@
+// The pool of cars the mod can spawn, indexed once from the roster files.
 using GTA;
 using GTA.Native;
 using System;
@@ -9,8 +10,7 @@ namespace ARS
 {
     public static class VehicleCatalog
     {
-        // The roster is one flat file: one model key per line, blank lines and # comments ignored, and a key is
-        // either a model name or a hash. Every *.txt in the Vehicles folder is a pool; SelectedRosterFile picks one.
+
         public static string RosterFolder { get { return ARS.ScriptsFolder + @"\Vehicles"; } }
         public static string SelectedRosterFile { get; private set; }
 
@@ -23,7 +23,6 @@ namespace ARS
             SelectedRosterFile = name;
         }
 
-        // The menu lists a pool without its extension; the file name is what gets stored and read back.
         public static string PoolLabel(string fileName)
         {
             string name = (fileName ?? "").Trim();
@@ -36,7 +35,6 @@ namespace ARS
             return name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ? name : name + ".txt";
         }
 
-        // Discovery only — pure file I/O, safe on the background load thread.
         public static List<string> ListRosterFiles()
         {
             try
@@ -50,7 +48,6 @@ namespace ARS
 
         public static string RosterPath { get { return RosterFolder + @"\" + SelectedRosterFile; } }
 
-        // Discovery only — no natives, so it is safe on the background load thread.
         public static void FillPool(List<string> pool)
         {
             pool.Clear();
@@ -64,9 +61,6 @@ namespace ARS
             }
         }
 
-        // Called on the main script thread, NOT from the background load task: GTA natives hard-crash the game off
-        // the main thread, so the stat reads live here. The pool is rewritten in place to canonical hash-string
-        // keys, which the pace cache and grid selection are keyed by; unresolvable roster lines are dropped.
         public static void BuildPowerCache(List<string> pool, Dictionary<string, float> gripByModel, Dictionary<string, float> topSpeedMphByModel, Dictionary<string, float> accelByModel, Dictionary<string, bool> electricByModel, Dictionary<string, string> nameByModel, HashSet<VehicleClass> blacklistedClasses, Action<string> log)
         {
             gripByModel.Clear();
@@ -74,8 +68,7 @@ namespace ARS
             accelByModel.Clear();
             electricByModel.Clear();
             nameByModel.Clear();
-            // GET_IS_VEHICLE_ELECTRIC (0x1FCB07FE230B6639) only exists from game build 3258. Probed once so an
-            // older build degrades to ICE rather than throwing inside the loop and losing that model's stats.
+
             bool canAskElectric = true;
             try { Function.Call<int>((Hash)0x1FCB07FE230B6639, new Model(VehicleHash.Adder).Hash); }
             catch (Exception)
@@ -90,7 +83,7 @@ namespace ARS
                 string entry = pool[i];
                 int hash;
                 if (!int.TryParse(entry, out hash)) hash = Game.GenerateHash(entry);
-                // Never null an entry: a dropped name simply misses the pace index, and a null key throws in TryGetValue.
+
                 if (hash == 0) continue;
                 string key = hash.ToString();
                 pool[i] = key;
@@ -98,10 +91,7 @@ namespace ARS
                 Model model = new Model(hash);
                 if (!model.IsCar || !model.IsValid)
                 {
-                    // No request and no wait. A menu callback runs inside OnTick, so the wait was legal - it was expensive: up to a second
-                    // per dropped entry, and cars.txt drops about 185 of them, which freezes the script for minutes on a roster change.
-                    // It was written for a DLC-streaming theory the roster has since contradicted.
-                    // A dropped entry is NOT nulled: it simply misses the pace index, and a null key throws in TryGetValue.
+
                     log("  dropped " + entry + (model.IsInCdImage ? ": not a car" : ": not in the cdimage"));
                     continue;
                 }
@@ -121,8 +111,7 @@ namespace ARS
                     topSpeedMphByModel[key] = topSpeedMph;
                     accelByModel[key] = accel;
                     electricByModel[key] = isElectric;
-                    // The model native hands back a GXT label ("SABREGT"); the readable name is the label
-                    // resolved. An add-on the game knows nothing about falls back to its roster line.
+
                     string label = Function.Call<string>(Hash.GET_DISPLAY_NAME_FROM_VEHICLE_MODEL, model.Hash);
                     string friendly = string.IsNullOrWhiteSpace(label) ? null : Game.GetGXTEntry(label);
                     if (string.IsNullOrWhiteSpace(friendly) || string.Equals(friendly, label, StringComparison.OrdinalIgnoreCase)) friendly = null;
@@ -135,7 +124,6 @@ namespace ARS
             log("BuildPowerCache: cached grip+topspeed+power for " + cached + " road cars.");
         }
 
-        // A model key is a name ("sabregt") or a hash; both canonicalise to the same hash string.
         static string CanonicalKey(string entry)
         {
             int hash;
@@ -143,8 +131,6 @@ namespace ARS
             return hash == 0 ? null : hash.ToString();
         }
 
-        // The build cheats only ever add lines that are missing, so a hand-edited roster survives a rebuild.
-        // Returns how many lines were added. Requires natives, so it belongs on the main thread.
         public static int AddToRoster(IEnumerable<string> keys)
         {
             HashSet<string> known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

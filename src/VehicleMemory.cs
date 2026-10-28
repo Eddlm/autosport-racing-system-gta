@@ -1,3 +1,5 @@
+// What the game build actually exposes: native patterns are probed once and a build that lacks one is refused before
+// the grid is built, rather than throwing every tick.
 using GTA;
 using System;
 using System.Collections.Generic;
@@ -16,8 +18,6 @@ namespace ARS
         static bool _controlPatternReported;
         static bool _handlingPatternReported;
 
-        // The two signatures a drivable build must carry: the control field ARS writes, and the handling pointer it
-        // reads. Hoisted out of their two readers so the preflight asks the same question the drivers ask later.
         const string ControlPattern = "\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25";
         const string ControlMask = "xxxxx?????xx";
         const string HandlingPattern = "\x3C\x03\x0F\x85\x00\x00\x00\x00\x48\x8B\x41\x20\x48\x8B\x88";
@@ -28,7 +28,6 @@ namespace ARS
         public static void SetThrottle(Vehicle vehicle, float value) => WriteInput(vehicle, value, ref _throttleOffset, 0x10, "throttle");
         public static void SetBrakes(Vehicle vehicle, float value) => WriteInput(vehicle, value, ref _brakeOffset, 0x14, "brake");
 
-        // What the last frame actually left in the control field; an unknown offset reads as uncut.
         public static float GetThrottle(Vehicle vehicle)
         {
             if (!ARS.CanWeUse(vehicle) || _throttleOffset == 0) return 1f;
@@ -38,8 +37,7 @@ namespace ARS
         public static float GetLateralTraction(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0098);
         public static float GetSteerLock(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0080);
         public static float GetDriveBiasFront(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0048);
-        // fInitialDriveForce: the member count from the verified 0x48 bias lands the block at 0x60 (bias 0x48,
-        // biasRear 0x4C, the u8 gear count at 0x50, inertia 0x54, the two clutch scales, then the force).
+
         public static float GetInitialDriveForce(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0060);
         public static float GetDownforce(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0014);
         public static int GetHandlingFlags(Vehicle vehicle)
@@ -66,7 +64,6 @@ namespace ARS
             *((float*)((ulong)vehicle.MemoryAddress + offset)) = value;
         }
 
-        // Once per session, forced: at Log Level None this is the only way a user learns why the cars never move.
         static void ReportMissingControlPattern()
         {
             if (_controlPatternReported) return;
@@ -81,8 +78,6 @@ namespace ARS
             ARS.Log(ARS.LogImportance.Error, "[MEMORY] The handling-pointer pattern was not found on game build " + Game.Version + "; grip, steering lock, downforce and handling flags all read as zero.", true);
         }
 
-        // The build test the preflight runs before anything is torn down. A race started without these two runs with
-        // dead cars, the player in 0th, and one NullReferenceException per racer per tick.
         public static string UnsupportedBuildReason()
         {
             if (FindPattern(ControlPattern, ControlMask) == null)
@@ -114,8 +109,6 @@ namespace ARS
             return _handlingOffset == 0 ? 0 : *((ulong*)((ulong)vehicle.MemoryAddress + _handlingOffset));
         }
 
-        // Memoized: a pattern miss used to buy a full module walk on every single call, from every
-        // per-tick consumer (control writes, grip, steering lock, downforce, flags, wheel pointers).
         public static byte* FindPattern(string pattern, string mask)
         {
             string key = pattern + "|" + mask;
