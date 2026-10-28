@@ -4147,18 +4147,25 @@ namespace ARS
         // this tick. 1.00 leaves the steering alone; 0.60 removes two fifths of it.
         void DrawFrontSlipReadout()
         {
-            // One dimensionless number: what the car asked for over what the ceiling allows. 1.00 means the clamp is just
-            // touching, 2.00 means the request was twice the allowed angle, and the value falls below 1 once it stops biting.
-            // Theory source: the only number worth seeing is whether the applied clamp has arrived at the target. Over 100% the
-            // gate is still closing onto it; 100% means it sits where the law says. Nothing else is printed in this mode.
+            // One reading while the law is being tuned: how far the applied clamp sits from its own target, and the target
+            // itself in degrees. The target carries every setting that moves it (the slip cut and Open Up on Throttle), so
+            // printing it is what stops a percentage from being read against a denominator nobody can see. Over the target
+            // the gate is still closing; under it, still opening.
             if (!ARS.SlipFromMemory)
             {
                 float target = _clampTargetDeg;
                 float applied = _chasingClampDeg;
-                string proportion = (float.IsNaN(target) || float.IsNaN(applied) || target < 0.01f)
-                    ? "--"
-                    : (100f * applied / target).ToString("0") + "%";
-                UI.ShowSubtitle(proportion, 50);
+                if (float.IsNaN(target) || float.IsNaN(applied) || target < 0.01f)
+                {
+                    UI.ShowSubtitle("--", 50);
+                    return;
+                }
+                float deviation = 100f * (applied - target) / target;
+                string reading = Math.Abs(deviation) < 0.5f
+                    ? "on target"
+                    : (deviation > 0f ? "+" : "-") + Math.Abs(deviation).ToString("0")
+                        + "% " + (deviation > 0f ? "over" : "under") + " target";
+                UI.ShowSubtitle(reading + " (" + target.ToString("0.0") + "°)", 50);
                 return;
             }
 
