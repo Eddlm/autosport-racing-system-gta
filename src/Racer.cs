@@ -205,38 +205,14 @@ namespace ARS
         // Lateral offset of the aim from the car's own axis, raw and smoothed: the step size in METRES, which is what tells a node
         // step (about a metre) from the lookahead index jumping (metres).
         float _pursuitAimLateralM;
-        // The corner whose adoption seeded this line, and which way round it turns.
-        int _linePhaseNode = -1;
-
-        // The apex this line last seeded its phase for, and when. A corner the picker drops and re-adopts a tick later must not be re-seeded:
-        // that would push the demand back outward mid-manoeuvre.
-        int _linePhaseSeededNode = -1;
-        int _linePhaseSeededAt = 0;
-        const int LinePhaseReseedBlockMs = 5000;
         // This car's own pull-in for the outside line, rolled once per corner and held until the car passes it.
         int _lineBiasNode = -1;
         float _lineBiasMeters;
         // The corner that owns the apex line until its apex is passed. NearestApexAhead keeps handing this back while it is the
         // nearest, which is what stops two close apexes from taking the line off each other mid-manoeuvre.
         int _lineCornerNode = -1;
-        // The speed the car carried when it entered this corner's out-in window, frozen for the whole manoeuvre: the clock then says the
-        // same thing every lap, and braking, traffic or a throttle cut can no longer move where the blend opens.
-        int _lineClockNode = -1;
-        // Tick at which the corner's clock was armed.
-        int _lineBlendStartAt;
-        float _lineBlendSeconds;
-        // The clock follows the car's own braking, a little: a car that is shedding speed will reach the apex later than the cached entry
-        // speed says, so the line is allowed to slow with it. 0.1 mph per 0.1 g, and never more than a mile an hour either way.
-        const float LineClockBrakeMphPerG = 2f;
-        const float LineClockBrakeCapMph = 10f;
-        float _lineAlongPrev;
-        float _lineDecelG;
-        float _lineClockMps;
         // One log a second at most, so a rule that fires rarely does not flood the file when it does.
         int _laneCrossLoggedAt;
-        // The direction the latched phase belongs to: a second apex in the same bend keeps the latch, a bend the other way starts
-        // again from the outside.
-        float _linePhaseDir;
         // The lean's approach speed in m/s: CurveLeanWidthScale × track width / radius — the tighter the bend, the faster.
         float _leanApproachMps;
         float _laneRequest = 0f;
@@ -244,14 +220,7 @@ namespace ARS
         float _laneRequestPrev = 0f;
         float _laneRate = 0f;
         float _laneMoverLoggedAt = 0f;
-        // The apex whose demand has already crossed to the inside of the car: from then on it may hold but never pull
-        // outward. Keyed by node rather than reset, so a new corner starts with the approach it is owed.
-        int _apexLineInsideNode = -1;
-        float _apexLineInsideCornerDir = 0f;
-        bool _apexInsideNow = false;
-        int _laneGuardLoggedAt = 0;
         int _cornerLineLoggedAt = 0;
-        float _cornerRefusalLoggedAt = 0f;
         bool _laneSnap = false;
         bool _laneOverride = false;
         public float CarriedLane { get { return _carriedLane; } }
@@ -854,7 +823,6 @@ namespace ARS
             bool cornerLineActive = false;
             if (lineCorner != null && Lap > 0)
                 cornerLane = ComputeCornerLane(steerRefPoint, speedMps, Brain.CurrentPerception.CurrentNodeOffset, lineCorner, out cornerReason, out cornerLineActive);
-            else _apexInsideNow = false;   // no corner is being evaluated, so nothing may keep the inside guard armed
             if (!cornerLineActive && TryComputeCurveLean(speedMps, steerRefOffset, drivableEdge, roadWide * 2f, out float curveLean)) { laneRequest = curveLean; laneReason = LaneReason.CurveLean; }
             if (cornerLane != 0f) { laneRequest = cornerLane; laneReason = cornerReason; }
             float avoidAheadLane = ComputeAvoidanceLane(roadWide);
@@ -1228,10 +1196,9 @@ namespace ARS
         // corner at its own limit — so the cap has to sit above the line's own rate and the acceleration is the only
         // lunge knob. At the shipped 40 the aim tracks the line inside a centimetre, and a 6 m request valid for half a second moves 3.4 m
         // where it used to step the whole way.
-        // Sized from the line's own geometry, not by feel: the outside-inside traversal is up to 18 m, and the gate it has to happen
-        // inside is the blend's own six-to-one-width span, whose duration falls as the car speeds up. At 40 the aim still tracks a
-        // normal 6 m move inside that span and lags only on the widest traversals; raising this is the knob if the line is seen
-        // arriving late on a wide track.
+        // Sized from the line's own geometry, not by feel: the outside-to-inside traversal is up to the track's width, and
+        // the gate it has to happen inside is six widths of road. At 40 the aim tracks a normal 6 m move inside that span and
+        // lags only on the widest traversals; raising this is the knob if the line is seen arriving late on a wide track.
         const float LaneMoverAccelMps2 = 40f;
         const float LaneMoverSpeedCapMps = 24f;
         // A tick that arrives after a stall must not integrate the whole gap, or the aim is thrown to the edge clamp
@@ -1252,26 +1219,9 @@ namespace ARS
         // smoothly is tracked without the v^2/2a lag a pure arrival law would leave (2 m at 5 m/s).
         void UpdateLaneMover(float steerRefOffset, float laneEdge)
         {
-            // Inside mode, applied at the last point before the car moves: once the demand has crossed to the apex side
-            // of the car, a request that points outward is not applied - whatever produced it. That is the guard the
-            // chain cannot give, because every tick the request is rebuilt and any reason along the way can hand over a
-            // value the corner would not have asked for.
-            // The objective carries the guard: a lane may never name the track's very edge, only where the car's CENTRE can
-            // sit, so the demand handed to the mover is already roadWide - carHalfWidth and every step toward it is legal.
+            // A lane may never name the track's very edge, only where the car's CENTRE can sit, so the demand handed to
+            // the mover is already roadWide - carHalfWidth and every step toward it is legal.
             float request = ARS.Clamp(_laneRequest, -laneEdge, laneEdge);
-            if (_apexInsideNow && _apexLineInsideCornerDir != 0f && OutOfTrackDistance() <= 0f)
-            {
-                float inward = -_apexLineInsideCornerDir;
-                if ((request - steerRefOffset) * inward < 0f)
-                {
-                    if (Game.GameTime > _laneGuardLoggedAt)
-                    {
-                        _laneGuardLoggedAt = Game.GameTime + 1000;
-                        ARS.Log(ARS.LogImportance.Info, "Lane guard " + Name + ": held at " + steerRefOffset.ToString("0.00") + ", request was " + request.ToString("0.00") + ", inside dir " + inward.ToString("0") + ", carrier " + _carriedLane.ToString("0.00"));
-                    }
-                    request = ARS.Clamp(steerRefOffset, -laneEdge, laneEdge);
-                }
-            }
 
             float gap = request - _carriedLane;
             if (float.IsNaN(gap) || float.IsInfinity(gap)) return;
@@ -1365,26 +1315,11 @@ namespace ARS
         // How far ahead of a corner the car decides whether it wants to position or brake for it.
         const float RequirementLookaheadSeconds = 3.95f;
 
-        // The chord meets the outside edge at the lead, and a car cannot change heading at the rate that implies, so
-        // the blend is stretched past the geometric lead: the endpoints stay where the chord put them, the rate of
-        // change falls as one over the multiple, and the path's curvature as one over its square.
-        // The profile is geometric - no time in it - but the car arrives late to it, so the whole line is pulled this
-        // far toward the apex in travel: half a second at the car's own speed, which is what the steering needs to
-        // actually reach the inside before the apex passes.
-        // Apex at T0, the outside-inside movement at T-1.5. That is the whole shape: the ramp runs from two seconds out to
-        // the apex, and the outside needs no constant of its own because everything beyond the ramp's start is already the
-        // outer clamp - the platform IS the clamp. It was being eaten because the clock ran on the apex's speed, which
-        // measures a slow corner's window in metres too short for a fast car to reach the clamp in time.
         // How far before the apex the corner starts asking for the outside at all: IdealLineWindowMeters of route, room for the car
-        // to get out there and hold the clamp before the blend begins.
-        // The two halves need room, and room on this road is measured in metres: the line exists inside IdealLineWindowMeters of
-        // them, the outside holds the clamp until the gate, and the ramp runs from six widths out to one.
+        // to get out there and hold the clamp before the gate.
         // The outside is a distance decision and the apex is not. Placing the car on the outer edge is done with room to spare
         // and does not change with speed, so the window and the plateau stay in metres of route.
         const float IdealLineWindowMeters = 300f;
-        // The out-in blend is switched off by decision: the outside holds to the gate, and past it the corner answers zero so
-        // the chain hands the lane back and the lean attacks the inside with its own dynamics.
-        const bool ApexLineEnabled = false;
         // Clearance from the edges, and the personal bias. The outside line keeps half a metre from the outer edge; the lean keeps a
         // full metre from the inner one. Each car also rolls its own bias of +/-LaneBiasMaxMeters, once per corner and held until it passes,
         // so a field does not stack itself on one line: half a metre either side of the same outside, never the four it used to draw.
@@ -1394,29 +1329,19 @@ namespace ARS
         // How much nearer another corner must be before it takes the line away from the one already adopted. A few metres of
         // hysteresis is enough: two apexes that swap places tick after tick do so by less than that.
         const float LineApexStickyMeters = 30f;
-        // Moving from the outside to the inside is a POSITION on the track, and that position scales with the road: the blend starts at this
-        // many times the track's full width before the apex (six widths: 72 m on a 12 m road, 132 m on a 22 m one), floored so a narrow
-        // lane does not start it on top of the apex. The inside is forced from IdealLineBlendEndWidthFactor widths out and held from there.
+        // Where the corner stops holding the outside, as a POSITION on the track and therefore scaled by the road: this many
+        // times the track's full width before the apex (six widths: 72 m on a 12 m road, 132 m on a 22 m one), floored so a
+        // narrow lane does not start it on top of the apex.
         const float IdealLineBlendWidthFactor = 6f;
         const float IdealLineBlendMinMeters = 20f;
-        // The end scales with the road too, at one width: 12 m before the apex on a 12 m road, 22 m on a 22 m one.
-        const float IdealLineBlendEndWidthFactor = 1f;
         const float IdealLineMaxRadiusMeters = 50f;
         // How far under the apex speed a car may be and still be given the outside. Off the grid every car is under it, which is
         // the point: they crawl to the first corner instead of diving for the outer edge.
         const float IdealLineSpeedMarginMph = 15f;
 
-        // The ideal line is the widest one that still grazes the inside edge at the apex, and widening the arc until it
-        // touches the outside answers that with a straight chord - whose outer end meets the outside edge at an angle,
-        // which puts a corner in the target exactly where the car is settling onto it. So the chord supplies the two
-        // ends - the outside edge a lead before the apex, the inside edge at it - and the blend between them leaves and
-        // meets both edges flat, which is the part a car at speed can actually follow.
-        // Nearest corner by absolute distance, passed or not. The profile is symmetric in the distance to the apex, so it
-        // opens back outward by itself on the way out - which is the exit half of the outside-inside line. Choosing only
-        // corners still ahead cut that half off at the apex and handed the request straight to the next corner, whose
-        // demand at that distance is the outer clamp: a step from the inside edge to the outside edge, taken at the one
-        // moment the car is loading the tyre hardest. The crossover is where the two are equidistant, so the blend is
-        // continuous across the whole corner instead of resetting on it.
+        // Nearest corner by absolute distance, passed or not: the corner already adopted keeps the line until another is
+        // meaningfully nearer, so a pair of apexes a few metres apart cannot swap identity tick after tick. A swap would
+        // restart the outside ask from wherever the car is, which reads from the seat as a swerve.
         CornerPoint NearestApexAhead()
         {
             int count = ARS.TrackPoints.Count;
@@ -1440,7 +1365,7 @@ namespace ARS
                 best = corner;
             }
             // The corner the line is already working on keeps it until another is this much nearer. Without it a pair of apexes a
-            // few metres apart - a chicane, a bend detected twice - swap identity tick after tick, and a swap resets the blend.
+            // few metres apart - a chicane, a bend detected twice - swap identity tick after tick, and a swap restarts the ask.
             if (adopted != null && adoptedMeters <= bestMeters + LineApexStickyMeters) return adopted;
             return best;
         }
@@ -1449,27 +1374,17 @@ namespace ARS
         {
             reason = LaneReason.OwnLane;
             lineActive = false;
-            // Reset every pass, then let the inside branch set it again. The flag is READ unconditionally by the mover, so a
-            // value left over from the last corner kept refusing outward asks on a corner the car had not even reached yet.
-            _apexInsideNow = false;
             // The lane belongs to the corner the car is approaching, never to the head of the plan's queue. That queue
             // looks past a corner it has flagged as trivial, which swapped the head for the next apex while the car was
             // still inside the flagged one's window: the profile then read as "far away" and the line went back to the
             // outer clamp, so the car stopped turning in with the apex still ahead. Only passing the apex ends a line.
-            float alongNow = AlongTrackSpeed;
-            if (TickScale > 0.0001f) _lineDecelG = Math.Max(0f, (_lineAlongPrev - alongNow) / TickScale / 9.81f);
-            _lineAlongPrev = alongNow;
             CornerPoint c = lineCorner;
             if (c == null) return 0f;
             int apexNode = c.Node;
 
-            // The line is a function of the distance to the apex, so no time enters the geometry - and it is measured
-            // at the point the offset is applied to, or the profile is one lookahead stale. The reference sits ahead
-            // of the car, though, so in the last lookahead before an apex it is already past one while the car is
-            // not: falling back to the car's own distance there keeps the entry branch driving to the inside, where
-            // reading the reference would open the profile outward at the apex.
-            // Signed, and negative once the apex is behind: the blend reads it as "nodes to go", so a wrapped forward
-            // distance would hand it a near-full lap and open the line outward on the exit half.
+            // The line is a function of the distance to the apex, so no time enters the geometry. Signed, and negative once
+            // the apex is behind: a wrapped forward distance would hand the gate a near-full lap and hold the outside on the
+            // exit half.
             int count = ARS.TrackPoints.Count;
             // Metres along the route, not nodes, and measured from the CAR: the reference point sits a lookahead ahead, so
             // reading the window there opened it early and killed it a lookahead before the apex - a distance that moved with
@@ -1483,10 +1398,9 @@ namespace ARS
             if (cornerDir == 0f) return 0f;
 
             float halfWidth = steerRefPoint.TrackHalfWidth;
-            // The blend's gate, in metres of this road: six full widths before the apex, with a floor. Every car on the same corner starts
-            // closing at the same place, and a wide road gets the longer run-in its wider traverse needs.
-            float blendStartMeters = Math.Max(2f * halfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
-            float blendEndMeters = 2f * halfWidth * IdealLineBlendEndWidthFactor;
+            // The gate, in metres of this road: six full widths before the apex, with a floor, so a wide road gets the
+            // longer run-in its wider traverse needs.
+            float gateMeters = Math.Max(2f * halfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
             float safeBound = Math.Max(halfWidth - carHalfWidth, 0f);
 
@@ -1501,7 +1415,7 @@ namespace ARS
             float outsideBound = Math.Max(safeBound - LaneOutsideGapMeters - _lineBiasMeters, 0f);
             // Corner-commit: hold the defend/dive line for the card's whole life, but only on the corner the card was armed
             // for. Without the window test EVERY corner came back as CommitCard while any card was alive, because the branch
-            // returns before the apex line is ever computed - three to four seconds of no outside on whatever corner the car
+            // returns before the outside is ever computed - three to four seconds of no outside on whatever corner the car
             // happened to reach, which is exactly the intermittent blackout the driver reported.
             bool isCornerCommit = ActiveManeuver.Target != null
                 && (ActiveManeuver.Type == ManeuverType.DefendLane || ActiveManeuver.Type == ManeuverType.DiveBomb)
@@ -1518,172 +1432,44 @@ namespace ARS
                 }
             }
 
-            // The line lives for the whole approach and stops at the apex, nothing else. It used to end twenty miles an
-            // hour above the apex speed, which dropped it exactly while the car was still closing: the entry went out to
-            // the clamp, reached the inside and then let go twenty short, so the car stopped turning toward the apex with
-            // its speed still to lose.
-            // The window is TIME to the apex, and the only thing that opens it is being inside it. `RequiresPositioning` used
-            // to gate this as well and it armed only on a corner that was TIGHT and where the car arrived ten miles an hour
-            // over - so once the braking plan got good enough to arrive on speed, the line stopped existing: 65 % of the
-            // samples in one session read armed=False, started=False. The outside is not a correction for overspeed, it is
-            // the first half of the line, and a corner asks for it because it is a corner.
-            // Only corners with a real apex get a line: past this radius the bend is a kink the car takes without moving
-            // off its lane, and asking for an outside there was noise.
-            // A car that is not going to reach the corner fast enough to need an outside does not get one. Without this, an apex
-            // near the start line has every car diving for the outer edge off the grid: the window is metres, and a car at 30 km/h
-            // is inside it for ten seconds. The margin is measured under the apex speed, so a car already slowed for the corner
-            // keeps the line it is committed to.
+            // A corner asks for the outside because it is a corner, not as a correction for overspeed, and the ask ends at
+            // the apex and nowhere else. Only corners with a real apex get one: past IdealLineMaxRadiusMeters the bend is a
+            // kink the car takes without moving off its lane. And a car that cannot reach the corner fast enough gets none
+            // either, or every car dives for the outer edge off the grid: the window is metres, and a car at 30 km/h is
+            // inside it for ten seconds.
             bool fastEnoughForLine = speedMps > ApexSpeedWithDownforce(c.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph);
             bool wantsPosition = metresToApex >= 0 && metresToApex <= IdealLineWindowMeters
                 && c.DetectedRadius < IdealLineMaxRadiusMeters && fastEnoughForLine;
             bool entryActive = wantsPosition && !HasPassedApex(apexNode);
             lineActive = wantsPosition;
             if (wantsPosition) _lineCornerNode = apexNode;
-            // The inside guard ends with its apex - including on the tick the car passes it, when this corner stops being the nearest
-            // one ahead and the ApexLine branch below no longer runs. Clearing it there alone was unreachable, so the field survived
-            // the race and armed lap 2's guard before lap 2's demand had gone inside.
-            if (_apexLineInsideNode >= 0 && HasPassedApex(_apexLineInsideNode)) _apexLineInsideNode = -1;
-            // The phase names the offset: +halfWidth is the outer edge, -halfWidth the inner one. Both are the RAW half width;
-            // the mover's own guard (roadWide - carHalfWidth) is what finally places the car's CENTRE, so the body may still
-            // overhang the white line at the apex - which is the point of an apex. The inside extreme is reached when the blend
-            // ends, before the apex, so the car is already at the inside when it gets there instead of arriving on the way out.
-            // The clock is the speed the car carries at the gate, latched once per corner, so the manoeuvre's duration cannot
-            // drift with the braking, the traffic or a width change that lands mid-sweep.
 
-            if (_lineClockNode != apexNode) { _lineClockNode = apexNode; _lineClockMps = 0f; _lineBlendStartAt = 0; _lineBlendSeconds = 0f; }
-            // Frozen at the gate: the speed the car carries there sets how long gate-to-landing takes, and the duration is
-            // latched for the whole manoeuvre, so the line sweeps on its own clock whatever the car does behind it.
-            if (_lineClockMps <= 0f && metresToApex >= 0f && metresToApex <= blendStartMeters)
-            {
-                _lineClockMps = Math.Max(speedMps, 1f);
-                _lineBlendSeconds = Math.Max(Math.Max(blendStartMeters - blendEndMeters, 0.01f) / _lineClockMps, 0.1f);
-                _lineBlendStartAt = Game.GameTime;
-            }
-            float clockBoostMph = ARS.Clamp(_lineDecelG * LineClockBrakeMphPerG, -LineClockBrakeCapMph, LineClockBrakeCapMph);
-            float secondsToApex = metresToApex / Math.Max(_lineClockMps + ARS.MphToMps(clockBoostMph), 1f);
-            // The sweep is a clock, not a position: the phase runs on the duration latched at the gate, so the line goes from
-            // the outside to the inside in exactly the time the gate speed marked, independent of the car. Gate minus end is
-            // the span that tempo is measured over, and apexCommitted below remains the backstop.
-
-            float linePhase = _lineBlendStartAt > 0
-                ? ARS.Clamp((Game.GameTime - _lineBlendStartAt) / 1000f / Math.Max(_lineBlendSeconds, 0.01f), 0f, 1f)
-                : 0f;
-
-            // Blend off: at and past the gate the corner has no opinion, and a zero is what hands the lane to the lean. Before
-            // the gate the outside still holds, which is the half of the line this experiment keeps.
-            if (!ApexLineEnabled && metresToApex <= blendStartMeters)
+            // The corner's opinion ends at the gate: past it the answer is zero, which is what hands the lane back so the lean
+            // attacks the inside with its own dynamics.
+            if (metresToApex <= gateMeters)
             {
                 reason = LaneReason.OwnLane;
                 lineActive = false;
                 return 0f;
             }
 
-            // The line never backs out of the apex: the duration is latched, so nothing the car does after the gate can reopen it.
-            // A new corner starts from the outside because its own gate does, not because anything is held from the last one.
-            // The armour exists only where the blend exists: inside the last blendStartMeters before the apex. Before that
-            // the line is asking for the outside and there is nothing to ratchet, and a direction latched 300 m out would follow the
-            // car into situations the corner knows nothing about. The SPEED floor is deliberately not part of this test: it moves with
-            // mechanical grip and downforce, and one tick under it used to sweep the ratchet away mid-corner.
-            bool inBlendWindow = metresToApex >= 0 && metresToApex <= IdealLineWindowMeters
-                && c.DetectedRadius < IdealLineMaxRadiusMeters && !HasPassedApex(apexNode)
-                && metresToApex <= blendStartMeters;
-            if (inBlendWindow)
-            {
-                // A different corner always starts from the outside. The old rule kept the latch when the handedness matched, so
-                // that two apexes of the same bend could not reset each other - NearestApexAhead's hysteresis does that now, and it
-                // does it before the identity can change, so keeping the phase here would only make a real next corner start inside.
-                if (_linePhaseNode != apexNode)
-                {
-                    bool seedFromLane = metresToApex <= blendStartMeters
-                        && !(_linePhaseSeededNode == apexNode && Game.GameTime - _linePhaseSeededAt < LinePhaseReseedBlockMs);
-                    _linePhaseNode = apexNode;
 
-                    // A corner adopted already inside the blend has no outside left to run: seeding the latch from the car's own lane stops
-                    // the line asking for an outside it has already passed, which is a swerve out on a corner just met. The lane is read in
-                    // the same frame as the demand - cornerDir * ownLane - so the two are comparable.
-                    // The seed is refused for an apex this line already seeded recently: a picker that drops a corner and comes back a tick
-                    // later would otherwise re-inject the phase mid-manoeuvre. That is what the timestamp is for.
-                    if (seedFromLane)
-                    {
-                        linePhase = Math.Max(linePhase, ARS.Clamp((outsideBound - cornerDir * ownLane) / Math.Max(outsideBound + safeBound, 0.01f), 0f, 1f));
-                        _linePhaseSeededNode = apexNode;
-                        _linePhaseSeededAt = Game.GameTime;
-                    }
-                    _linePhaseDir = cornerDir;
-                }
-
-                // Closer to the apex only: a sign that flips - a second corner of the other handedness adopted for a tick, an angle
-                // read on the wrong node - cannot throw the demand to the far side of the road once the blend has started.
-                cornerDir = _linePhaseDir != 0f ? _linePhaseDir : cornerDir;
-            }
-            // Nothing to clear: the phase is recomputed from the distance every tick, so a window that flickers cannot reset it.
-
-
-            // The last width is a commitment, not a preference. Whatever the blend managed by now - a short window at speed, a lean
-            // contesting the lane, a speed floor that dropped out under braking - inside them the target IS the inside extreme, and the line is
-            // active so that nothing else can claim the lane from it.
-            bool apexCommitted = metresToApex <= blendEndMeters && !HasPassedApex(apexNode);
-            if (apexCommitted)
-            {
-                linePhase = 1f;
-                lineActive = true;
-            }
-            float offset = (entryActive || apexCommitted) ? outsideBound - (outsideBound + safeBound) * linePhase : 0f;
-            // Temporary: why the apex line is or is not being asked for, for the cars the driver can see, once a second.
+            float offset = entryActive ? outsideBound : 0f;
+            // Temporary: why the outside line is or is not being asked for, for the cars the driver can see, once a second.
             if (ARS.DebugToggles[Options.ShowTrackAnalysis] && Car.Position.DistanceTo(Game.Player.Character.Position) < 60f
                 && Game.GameTime > _cornerLineLoggedAt)
             {
                 _cornerLineLoggedAt = Game.GameTime + 1000;
                 ARS.Log(ARS.LogImportance.Info, "Corner line " + Name + ": R " + c.DetectedRadius.ToString("0.0") + (c.DetectedRadius < CornerTightRadius ? " tight" : " WIDE")
                     + " wants=" + wantsPosition
-                    + " entry=" + entryActive + " t=" + secondsToApex.ToString("0.0") + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
+                    + " entry=" + entryActive + " d=" + metresToApex.ToString("0.0") + " demand=" + (cornerDir * offset).ToString("0.00")
                     + " own=" + ownLane.ToString("0.00") + " out=" + outsideBound.ToString("0.00")
                     + " bias=" + _lineBiasMeters.ToString("0.00") + " in=" + safeBound.ToString("0.00")
-                    + " clock=" + ARS.MpsToMph(_lineClockMps + ARS.MphToMps(clockBoostMph)).ToString("0") + "mph"
-                    + " br=" + _lineDecelG.ToString("0.00") + "g"
                     + " apex=" + apexNode + " dir=" + cornerDir.ToString("0"));
             }
-            // The profile's far clamp is the outer edge, so the offset itself names the phase: at the clamp it holds the
-            // outside line, and everything below it is the blend toward the apex.
-            if (entryActive) reason = linePhase <= 0f ? LaneReason.OutsideLine : LaneReason.ApexLine;
+            // The corner's only demand is the outside line, held until the gate hands the lane to the lean.
+            if (entryActive) reason = LaneReason.OutsideLine;
 
-            // The blend may only pull toward the apex: a car already inside the demand is never sent back out to meet it,
-            // or the entry reads as out and then in. Three things are exempt by design - the hold at the clamp, because
-            // reaching the outer edge is what the outside approach is for; every reason that is not the blend; and a car
-            // off the road, whose way back is this line. The comparison is made against the car's own lane rather than
-            // the reference frame's, which reads inward by the bend's sagitta and would refuse the line outright on the
-            // fast tight corners it exists for.
-            // The pull may open the car outward only while the demand is still outside it: that is the approach, the
-            // half of the line that puts the car wide. The moment the demand crosses to the inside of the car, the
-            // apex side is where it lives, and no later demand may drag the car back out - which is what a re-read of
-            // a corner, a wrapped distance or a profile step up can produce, and what reads from the seat as the line
-            // snapping the car outward mid-corner. The latch is keyed by apex node, so a new corner starts clean and
-            // the only thing that ends the inside line is passing its apex.
-            if (reason == LaneReason.ApexLine)
-            {
-                // Inside, measured in the corner's own frame: -cornerDir points at the apex side on either hand. Comparing
-                // cornerDir*offset with cornerDir*ownLane only means "inside" on a LEFT corner - on a right one it means the
-                // opposite, so the guard never armed and the whole inside mode was left-hand only. Running a track backwards
-                // swapped the corners that misbehaved, which is exactly what that asymmetry looks like from the seat.
-                bool demandInside = (cornerDir * offset - ownLane) * -cornerDir > 0f;
-                if (demandInside)
-                {
-                    _apexLineInsideNode = apexNode;
-                    _apexLineInsideCornerDir = cornerDir;
-                }
-                // The guard ends with the apex, and must: past it the same profile opens back outward, which is the
-                // exit half of the line. Holding the guard there would pin the car to the inside all the way out.
-                _apexInsideNow = _apexLineInsideNode == apexNode;
-                if (!demandInside && _apexInsideNow && OutOfTrackDistance() <= 0f)
-                {
-                    if (Game.GameTime > _cornerRefusalLoggedAt)
-                    {
-                        _cornerRefusalLoggedAt = Game.GameTime + 1000;
-                        ARS.Log(ARS.LogImportance.Info, "Corner line held " + Name + ": demand " + (cornerDir * offset).ToString("0.00") + ", own " + ownLane.ToString("0.00") + ", " + metresToApex.ToString("0.0") + "m to apex, R " + c.DetectedRadius.ToString("0.0") + ", " + ARS.MpsToMph(speedMps).ToString("0") + " mph");
-                    }
-                    return ownLane;
-                }
-            }
 
             return cornerDir * offset;
         }
@@ -2431,19 +2217,9 @@ namespace ARS
             _avoidHoldActive = false;
             _avoidHoldLane = 0f;
             _avoidHoldUntil = 0;
-            _apexInsideNow = false;
-            _apexLineInsideNode = -1;
-            // The blend's ratchet is state too, and it is keyed by node INDEX: kept across a restart it can arm the inside extreme
-            // on the first corner of the next race from an index that belongs to a different track.
-            _linePhaseNode = -1;
-
-            _linePhaseDir = 0f;
             // The outside bias is rolled per corner, so a restart must not inherit the previous race's pull-in.
             _lineBiasNode = -1;
             _lineCornerNode = -1;
-            _lineClockNode = -1;
-            _lineClockMps = 0f;
-            _lineAlongPrev = 0f;
             Control.ThrottleReasonLevel = 1f;
             Control.BrakeReason = BrakeReason.Plan;
             Control.BrakeReasonLevel = 1f;
@@ -4256,7 +4032,6 @@ namespace ARS
             {
                 case LaneReason.CurveLean: return GripReasonColor;
                 case LaneReason.OutsideLine: return LaneReasonOutsideColor;
-                case LaneReason.ApexLine: return LaneReasonApexColor;
                 case LaneReason.CommitCard: return LaneReasonCommitColor;
                 case LaneReason.Avoidance: return NonDangerousReasonColor;
                 case LaneReason.RecoveryEdge: return RecoveryReasonColor;
