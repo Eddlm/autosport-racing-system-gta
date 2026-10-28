@@ -4166,7 +4166,9 @@ namespace ARS
             float asked = Math.Abs(_steerPreLimitDegrees);
             float mph = ARS.MpsToMph(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
             float share = Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(ARS.MphToMps(mph));
-            UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.00") + "   "
+            // One decimal on the ratio: it swings between 1 and 3, and the tick moves it further than a hundredth.
+            // The cut factor keeps two, because it lives between 0.10 and 1.00 and is tuned at that resolution.
+            UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.0") + "   "
                 + _slipFactor.ToString("0.00") + "   " + mph.ToString("0") + "mph"
                 + "   F " + _slip.InnerPct.ToString("0") + "   R " + _slip.RearPct.ToString("0")
                 // The percentages are normalised against the share in force: the menu's factor times the slow-corner allowance. The token
