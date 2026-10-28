@@ -4147,25 +4147,17 @@ namespace ARS
         // this tick. 1.00 leaves the steering alone; 0.60 removes two fifths of it.
         void DrawFrontSlipReadout()
         {
-            // One reading while the law is being tuned: how far the applied clamp sits from its own target, and the target
-            // itself in degrees. The target carries every setting that moves it (the slip cut and Open Up on Throttle), so
-            // printing it is what stops a percentage from being read against a denominator nobody can see. Over the target
-            // the gate is still closing; under it, still opening.
+            // One reading while the law is being tuned: the applied clamp as a share of its own target, and the target
+            // itself in degrees. The target carries every setting that moves it (the slip cut and Open Up on Throttle),
+            // so printing it is what stops a percentage from being read against a denominator nobody can see.
             if (!ARS.SlipFromMemory)
             {
                 float target = _clampTargetDeg;
                 float applied = _chasingClampDeg;
-                if (float.IsNaN(target) || float.IsNaN(applied) || target < 0.01f)
-                {
-                    UI.ShowSubtitle("--", 50);
-                    return;
-                }
-                float deviation = 100f * (applied - target) / target;
-                string reading = Math.Abs(deviation) < 0.5f
-                    ? "on target"
-                    : (deviation > 0f ? "+" : "-") + Math.Abs(deviation).ToString("0")
-                        + "% " + (deviation > 0f ? "over" : "under") + " target";
-                UI.ShowSubtitle(reading + " (" + target.ToString("0.0") + "°)", 50);
+                string reading = (float.IsNaN(target) || float.IsNaN(applied) || target < 0.01f)
+                    ? "--"
+                    : (100f * applied / target).ToString("0") + "% of " + target.ToString("0.0") + "°";
+                UI.ShowSubtitle(reading, 50);
                 return;
             }
 
