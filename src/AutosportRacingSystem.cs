@@ -1934,15 +1934,18 @@ namespace ARS
                 }
                 if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
                 {
-                    if (PlayerRacer != null)
-                        TrackVisuals.DrawCornerRegions(PlayerRacer, ARS.Corners, ARS.TrackPoints);
-                    else if (raceLive)
-                        TrackVisuals.DrawCornerRegions(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
+                    if (DrawTrackAnalysisExtras)
+                    {
+                        if (PlayerRacer != null)
+                            TrackVisuals.DrawCornerRegions(PlayerRacer, ARS.Corners, ARS.TrackPoints);
+                        else if (raceLive)
+                            TrackVisuals.DrawCornerRegions(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
 
-                    if (PlayerRacer != null)
-                        TrackVisuals.DrawCrests(PlayerRacer, ARS.Crests, ARS.TrackPoints);
-                    else if (raceLive)
-                        TrackVisuals.DrawCrests(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Crests, ARS.TrackPoints);
+                        if (PlayerRacer != null)
+                            TrackVisuals.DrawCrests(PlayerRacer, ARS.Crests, ARS.TrackPoints);
+                        else if (raceLive)
+                            TrackVisuals.DrawCrests(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Crests, ARS.TrackPoints);
+                    }
 
                     if (DebugFocusRacer != null)
                     {
@@ -1952,8 +1955,11 @@ namespace ARS
                         float nodeOffset = racer.Brain.CurrentPerception.CurrentNodeOffset;
                         float carriedOffset = racer.CarriedLane;
                         float requestOffset = racer.LaneRequest;
-                        Color requestColor = Math.Abs(requestOffset) < 0.01f ? Color.Black : Racer.LaneReasonColor(racer.LaneRequestReason);
-                        requestColor = Color.FromArgb(120, requestColor.R, requestColor.G, requestColor.B);
+                        Color laneColor = Racer.LaneMotionColor(racer.LaneRequestReason, racer.LaneRate, racer.LaneCornerDir);
+                        Color requestColor = Color.FromArgb(120, laneColor.R, laneColor.G, laneColor.B);
+                        // Visual only: the lines follow the road's own profile and keep the car's height above it, so a crest or a
+                        // bridge bends them with the surface instead of leaving them flat.
+                        float carLift = racer.Car.Position.Z - racer.CurrentTrackPoint.Position.Z;
 
                         for (int i = 0; i < 40; i++)
                         {
@@ -1966,23 +1972,19 @@ namespace ARS
                             Vector3 dir = ARS.TrackPoints[node].Direction;
                             Vector3 right = Vector3.Cross(dir, Vector3.WorldUp).Normalized;
 
-                            Vector3 whiteFrom = pos + new Vector3(0, 0, LaneHeightCentre);
-                            Vector3 whiteTo = nextPos + new Vector3(0, 0, LaneHeightCentre);
-                            DrawLine(whiteFrom, whiteTo, Color.White);
-
-                            Vector3 greenFrom = pos + right * nodeOffset + new Vector3(0, 0, LaneHeightCurrent);
-                            Vector3 greenTo = nextPos + right * nodeOffset + new Vector3(0, 0, LaneHeightCurrent);
+                            Vector3 greenFrom = pos + right * nodeOffset; greenFrom.Z = pos.Z + carLift + LaneHeightCurrent;
+                            Vector3 greenTo = nextPos + right * nodeOffset; greenTo.Z = nextPos.Z + carLift + LaneHeightCurrent;
                             DrawLine(greenFrom, greenTo, Color.Green);
 
-                            Color carriedColor = Math.Abs(carriedOffset) < 0.01f ? Color.Black : Racer.LaneReasonColor(racer.LaneRequestReason);
-                            Vector3 intendedFrom = pos + right * carriedOffset + new Vector3(0, 0, LaneHeightCarried);
-                            Vector3 intendedTo = nextPos + right * carriedOffset + new Vector3(0, 0, LaneHeightCarried);
+                            Color carriedColor = laneColor;
+                            Vector3 intendedFrom = pos + right * carriedOffset; intendedFrom.Z = pos.Z + carLift + LaneHeightCarried;
+                            Vector3 intendedTo = nextPos + right * carriedOffset; intendedTo.Z = nextPos.Z + carLift + LaneHeightCarried;
                             DrawLine(intendedFrom, intendedTo, carriedColor);
 
-                            if (i % 2 == 0)
+                            if (DrawLaneRequest && i % 2 == 0)
                             {
-                                Vector3 requestFrom = pos + right * requestOffset + new Vector3(0, 0, LaneHeightRequest);
-                                Vector3 requestTo = nextPos + right * requestOffset + new Vector3(0, 0, LaneHeightRequest);
+                                Vector3 requestFrom = pos + right * requestOffset; requestFrom.Z = pos.Z + carLift + LaneHeightRequest;
+                                Vector3 requestTo = nextPos + right * requestOffset; requestTo.Z = nextPos.Z + carLift + LaneHeightRequest;
                                 DrawLine(requestFrom, requestTo, requestColor);
                             }
                         }
@@ -1991,14 +1993,17 @@ namespace ARS
                         if (adoptedNode >= 0 && adoptedNode < ARS.TrackPoints.Count)
                         {
                             Vector3 apexPos = ARS.TrackPoints[adoptedNode].Position + Vector3.WorldUp * ApexMarkHeight;
-                            DrawLine(racer.Car.Position + Vector3.WorldUp * 1.0f, apexPos, Color.White);
-                            DrawText(apexPos + Vector3.WorldUp * 0.5f, "apex " + adoptedNode, Color.White, 0.5f);
+                            int cornerIndex = ARS.Corners.FindIndex(c => c.Node == adoptedNode);
+                            int apexNumber = cornerIndex >= 0 ? cornerIndex + 1 : 0;
+                            float apexRadius = cornerIndex >= 0 ? ARS.Corners[cornerIndex].DetectedRadius : ARS.TrackPoints[adoptedNode].PreciseCurveRadius;
+                            DrawText(apexPos, apexNumber > 0 ? "Apex #" + apexNumber : "Apex", Color.White, 0.5f);
+                            DrawText(apexPos + Vector3.WorldUp * 0.4f, Math.Round(apexRadius) + "r", Color.White, 0.5f);
                         }
 
                     }
 
                     Racer liveCrestRacer = PlayerRacer ?? DebugFocusRacer;
-                    if (liveCrestRacer != null)
+                    if (DrawTrackAnalysisExtras && liveCrestRacer != null)
                         TrackVisuals.DrawLiveCrestChecks(liveCrestRacer, ARS.TrackPoints);
                 }
 
@@ -3148,12 +3153,14 @@ namespace ARS
             return _random.Next(min, max);
         }
 
-        const float LaneHeightCentre = 0.075f;
-
         const float ApexMarkHeight = 1.6f;
         const float LaneHeightCurrent = 0.100f;
         const float LaneHeightCarried = 0.125f;
         const float LaneHeightRequest = 0.150f;
+        // The demand is not drawn for now: the aim alone says where the lane is, and two lines of one colour read as one.
+        const bool DrawLaneRequest = false;
+        // Track analysis keeps the lane and drops the rest: corner regions, crests and the live crest checks are off.
+        const bool DrawTrackAnalysisExtras = false;
         const float LaneHeightWalls = 0.175f;
 
         public static void DrawLine(Vector3 from, Vector3 to, Color color)

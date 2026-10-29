@@ -1,7 +1,7 @@
 // Lane law: one line in two states. OUT names the outer edge at a fixed 6 m/s between the 300 m window and the gate six
-// track widths out; the base state names the inside at 10 x track width / radius, and holds on the car's own lane while
-// the car still leans out of the corner. The mover shapes every move: 40 m/s^2 and 24 m/s, halved outward. Corridor, walls,
-// avoidance and recovery write the same request, last writer winning.
+// track widths out; the base state names the inside at 10 x track width / radius, and holds to a quarter of a metre of lead
+// while the car still leans 10 deg out of the corner. The mover shapes every move: 40 m/s^2 and 24 m/s, halved outward.
+// Corridor, walls, avoidance and recovery write the same request, last writer winning.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -189,6 +189,7 @@ namespace ARS
         LaneReason _laneRequestReason = LaneReason.OwnLane;
 
         bool _laneRequestOutward;
+        int _laneCornerDir;
         float _laneRequestPrev = 0f;
         float _laneRate = 0f;
         float _laneMoverLoggedAt = 0f;
@@ -201,6 +202,7 @@ namespace ARS
         public LaneReason LaneRequestReason { get { return _laneRequestReason; } }
         public float LaneRequest { get { return _laneRequest; } }
         public float LaneRate { get { return _laneRate; } }
+        public int LaneCornerDir { get { return _laneCornerDir; } }
 
         float _cornerSpd = 999f;
 
@@ -886,17 +888,21 @@ namespace ARS
             return correction;
         }
 
-                // A line exists at all only under this radius.
+        // A line exists at all only under this radius.
         const float CurveLeanRadiusMeters = 900f;
         const float CurveLeanChordSeconds = 1.01f;
-                // The base rate: width over radius, 10 m/s when the radius equals the width.
+        // The base rate: width over radius, 10 m/s when the radius equals the width.
         const float CurveLeanWidthScale = 10f;
 
-                // OUT ignores the bend: 6 m/s, straight or curve.
+        // OUT ignores the bend: 6 m/s, straight or curve.
         const float CurveLeanOutMps = 6f;
 
-                // Outward lean that holds the line on the car: no inward pull against a car going wide.
-        const float CurveLeanInwardHoldDegrees = 1.5f;
+        // How far the heading must lean out before the line stops pulling in. At 10 deg the car is genuinely going wide:
+        // 5.2 m/s of lateral drift at 30 m/s, well past a car merely following the bend.
+        const float CurveLeanInwardHoldDegrees = 10f;
+        // How far inside the car the aim may still sit while that hold is on: a quarter of a metre, so the line keeps
+        // pointing at the inside without pulling the car there.
+        const float CurveLeanInwardHoldLeadMeters = 0.25f;
 
         const float LaneLockTestOffsetMeters = 0.1f;
 
@@ -906,7 +912,7 @@ namespace ARS
 
         const float SmallAimBearingDegrees = 1f;
 
-                // Crossing scale for the steering ask. Off: the mover upstream may make it redundant.
+        // Crossing scale for the steering ask. Off: the mover upstream may make it redundant.
         const float LaneCrossingLateralSpeedMps = 1f;
 
         static readonly bool LaneCrossingScale = false;
@@ -996,11 +1002,13 @@ namespace ARS
         {
             lane = 0f;
             outward = false;
+            _laneCornerDir = 0;
 
             if (TryGetOutsideLane(lineCorner, steerRefPoint, speedMps, out float outsideLane))
             {
                 lane = outsideLane;
                 outward = true;
+                _laneCornerDir = Math.Sign(lineCorner.Angle);
                 _leanApproachMps = CurveLeanOutMps;
                 return true;
             }
@@ -1019,15 +1027,20 @@ namespace ARS
             if (cornerDir == 0f) return false;
 
             _leanApproachMps = CurveLeanWidthScale * trackWidthMeters / Math.Max(ahead.PreciseCurveRadius, 5f);
+            _laneCornerDir = (int)cornerDir;
             lane = -cornerDir * Math.Max(laneEdge - LaneInsideGapMeters, 0f);
 
-            if (lane * cornerDir < ownLane * cornerDir && HeadingLeansOut(cornerDir)) lane = ownLane;
+            if (lane * cornerDir < ownLane * cornerDir && HeadingLeansOut(cornerDir))
+            {
+                float held = ownLane - cornerDir * CurveLeanInwardHoldLeadMeters;
+                if (held * cornerDir > lane * cornerDir) lane = held;
+            }
             return true;
         }
 
         const float LaneOverrideHoldMeters = 0.1f;
 
-                // The mover: 40 m/s^2, 24 m/s, half of both outward. The cap bounds the lunge, the acceleration the reversal.
+        // The mover: 40 m/s^2, 24 m/s, half of both outward. The cap bounds the lunge, the acceleration the reversal.
         const float LaneMoverAccelMps2 = 40f;
         const float LaneMoverSpeedCapMps = 24f;
 
@@ -1035,7 +1048,7 @@ namespace ARS
 
         const float LaneCrossMinMeters = 0.1f;
 
-                // Leash: the aim leads the car, it does not run away from it.
+        // Leash: the aim leads the car, it does not run away from it.
         const float LaneTaperNearMeters = 2f;
         const float LaneTaperFarMeters = 4f;
         const float LaneTaperCapShare = 0.8f;
@@ -1112,7 +1125,7 @@ namespace ARS
 
         const float RequirementLookaheadSeconds = 3.95f;
 
-                // OUT window: from here to the gate the line names the outer edge.
+        // OUT window: from here to the gate the line names the outer edge.
         const float IdealLineWindowMeters = 300f;
 
         const float LaneOutsideGapMeters = 0.5f;
@@ -1121,10 +1134,10 @@ namespace ARS
 
         const float LineApexStickyMeters = 30f;
 
-                // The gate: six track widths before the apex, floored at 20 m.
+        // The gate: six track widths before the apex, floored at 20 m.
         const float IdealLineBlendWidthFactor = 6f;
         const float IdealLineBlendMinMeters = 20f;
-                // Beyond this radius a bend is a kink and gets no outside.
+        // Beyond this radius a bend is a kink and gets no outside.
         const float IdealLineMaxRadiusMeters = 50f;
 
         const float IdealLineSpeedMarginMph = 15f;
@@ -2942,12 +2955,16 @@ namespace ARS
             return new Vector3(v.X * cos - v.Y * sin, v.X * sin + v.Y * cos, v.Z);
         }
 
+        // Input visuals are parked: the steer fan and the throttle and brake bars that hang off it are off, while the pedal
+        // trail of chevrons stays. Flip this one flag to bring all three back; no setting has to change.
+        const bool DebugInputVisuals = false;
+
         void DrawDebug()
         {
             if (ControlledByPlayer || ARS.DebugFocusRacer != this) return;
 
             if (ARS.DebugToggles[Options.ShowInputs]) DrawInputTrail();
-            if (ARS.DebugToggles[Options.ShowTrackAnalysis]) DrawSteerAngles();
+            if (DebugInputVisuals && ARS.DebugToggles[Options.ShowTrackAnalysis]) DrawSteerAngles();
             if (ARS.DebugToggles[Options.ShowWheelSlip]) DrawWheelSlip();
             if (ARS.DebugToggles[Options.ShowFrontSlip]) DrawFrontSlipReadout();
             if (ARS.DebugToggles[Options.ShowGsProjection]) DrawGsProjection();
@@ -3166,23 +3183,16 @@ namespace ARS
         static readonly Color StabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
         static readonly Color RecoveryReasonColor = Color.Cyan;
 
-        static readonly Color LaneReasonOutsideColor = Color.Orange;
-        static readonly Color LaneReasonApexColor = Color.FromArgb(255, 255, 60, 200);
-        static readonly Color LaneReasonCommitColor = Color.FromArgb(255, 0, 200, 120);
-        static readonly Color LaneReasonBoundColor = Color.FromArgb(255, 170, 170, 170);
 
-        public static Color LaneReasonColor(LaneReason reason)
+        // The lane's colour says what it is doing, not who asked: grey with nothing asking, blue with an aim that is not
+        // moving, green while it moves inward, yellow while it moves outward.
+        const float LaneStillMps = 0.05f;
+
+        public static Color LaneMotionColor(LaneReason reason, float rateMps, int cornerDir)
         {
-            switch (reason)
-            {
-                case LaneReason.CurveLean: return GripReasonColor;
-                case LaneReason.CommitCard: return LaneReasonCommitColor;
-                case LaneReason.Avoidance: return NonDangerousReasonColor;
-                case LaneReason.RecoveryEdge: return RecoveryReasonColor;
-                case LaneReason.WallClamp: return LaneReasonBoundColor;
-                case LaneReason.DebugLock: return LaneReasonBoundColor;
-            }
-            return Color.Red;
+            if (reason == LaneReason.OwnLane) return Color.Gray;
+            if (cornerDir == 0 || Math.Abs(rateMps) < LaneStillMps) return Color.DodgerBlue;
+            return rateMps * cornerDir < 0f ? Color.Lime : Color.Yellow;
         }
 
         struct PedalLimitSphere
