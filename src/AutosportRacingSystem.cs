@@ -1956,7 +1956,11 @@ namespace ARS
                         float carriedOffset = racer.CarriedLane;
                         float requestOffset = racer.LaneRequest;
                         Color laneColor = Racer.LaneMotionColor(racer.LaneRequestReason, racer.LaneRate, racer.LaneCornerDir);
+                        // A lead past the leash's near end blinks white: 200 ms on, 200 off, so the stretch is unmistakable.
+                        if (Math.Abs(carriedOffset - nodeOffset) > Racer.LaneTaperNearMeters && Game.GameTime % LaneBlinkPeriodMs < LaneBlinkOnMs) laneColor = Color.White;
                         Color requestColor = Color.FromArgb(120, laneColor.R, laneColor.G, laneColor.B);
+                        // The car's own lane wears the pedal trail's colours: green on throttle, yellow neutral, red on the brake.
+                        Color ownLaneColor = Racer.InputColour(racer.Control.Throttle - racer.Control.Brake);
                         // Visual only: the lines follow the road's own profile and keep the car's height above it, so a crest or a
                         // bridge bends them with the surface instead of leaving them flat.
                         float carLift = racer.Car.Position.Z - racer.CurrentTrackPoint.Position.Z;
@@ -1972,9 +1976,9 @@ namespace ARS
                             Vector3 dir = ARS.TrackPoints[node].Direction;
                             Vector3 right = Vector3.Cross(dir, Vector3.WorldUp).Normalized;
 
-                            Vector3 greenFrom = pos + right * nodeOffset; greenFrom.Z = pos.Z + carLift + LaneHeightCurrent;
-                            Vector3 greenTo = nextPos + right * nodeOffset; greenTo.Z = nextPos.Z + carLift + LaneHeightCurrent;
-                            DrawLine(greenFrom, greenTo, Color.Green);
+                            Vector3 ownFrom = pos + right * nodeOffset; ownFrom.Z = pos.Z + carLift + LaneHeightCurrent;
+                            Vector3 ownTo = nextPos + right * nodeOffset; ownTo.Z = nextPos.Z + carLift + LaneHeightCurrent;
+                            DrawLine(ownFrom, ownTo, ownLaneColor);
 
                             Color carriedColor = laneColor;
                             Vector3 intendedFrom = pos + right * carriedOffset; intendedFrom.Z = pos.Z + carLift + LaneHeightCarried;
@@ -1996,8 +2000,7 @@ namespace ARS
                             int cornerIndex = ARS.Corners.FindIndex(c => c.Node == adoptedNode);
                             int apexNumber = cornerIndex >= 0 ? cornerIndex + 1 : 0;
                             float apexRadius = cornerIndex >= 0 ? ARS.Corners[cornerIndex].DetectedRadius : ARS.TrackPoints[adoptedNode].PreciseCurveRadius;
-                            DrawText(apexPos, apexNumber > 0 ? "Apex #" + apexNumber : "Apex", Color.White, 0.5f);
-                            DrawText(apexPos + Vector3.WorldUp * 0.4f, Math.Round(apexRadius) + "r", Color.White, 0.5f);
+                            DrawText(apexPos + Vector3.WorldUp * 3f, (apexNumber > 0 ? "Apex #" + apexNumber : "Apex") + "~n~" + Math.Round(apexRadius) + "r", Color.White, 0.5f);
                         }
 
                     }
@@ -3154,6 +3157,8 @@ namespace ARS
         }
 
         const float ApexMarkHeight = 1.6f;
+        const int LaneBlinkPeriodMs = 400;
+        const int LaneBlinkOnMs = 200;
         const float LaneHeightCurrent = 0.100f;
         const float LaneHeightCarried = 0.125f;
         const float LaneHeightRequest = 0.150f;

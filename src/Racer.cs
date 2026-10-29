@@ -680,15 +680,17 @@ namespace ARS
             if (Car.Velocity.LengthSquared() > 0.01f) courseDir = Car.Velocity.Normalized;
 
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-            float drivableEdge = Math.Max(roadWide - carHalfWidth, 0f);
+            // The one bound every writer obeys: half the road, less the car's half width, less the buffer.
+            float laneLimit = Math.Max(roadWide - carHalfWidth - LaneEdgeBufferMeters, 0f);
 
             float steerRefOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
 
             float laneRequest = steerRefOffset;
             LaneReason laneReason = LaneReason.OwnLane;
 
+            AdvancePastApex();
             CornerPoint lineCorner = NearestApexAhead();
-            if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, steerRefOffset, drivableEdge, roadWide * 2f, out float curveLean, out bool leanOutward))
+            if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, steerRefOffset, laneLimit, roadWide * 2f, out float curveLean, out bool leanOutward))
             {
                 laneRequest = curveLean;
                 laneReason = LaneReason.CurveLean;
@@ -696,14 +698,14 @@ namespace ARS
             }
             float avoidAheadLane = ComputeAvoidanceLane(roadWide);
             if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
-            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { laneRequest = NearestEdgeLane(steerRefOffset, drivableEdge); laneReason = LaneReason.RecoveryEdge; }
+            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { laneRequest = NearestEdgeLane(steerRefOffset, laneLimit); laneReason = LaneReason.RecoveryEdge; }
             float walledLane = ApplyRivalWalls(laneRequest, roadWide);
             if (walledLane != laneRequest) laneReason = LaneReason.WallClamp;
             laneRequest = walledLane;
             if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneReason = LaneReason.DebugLock; }
             _laneRequest = laneRequest;
             _laneRequestReason = laneReason;
-            UpdateLaneMover(steerRefOffset, drivableEdge);
+            UpdateLaneMover(steerRefOffset, laneLimit);
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
@@ -983,7 +985,7 @@ namespace ARS
                 _lineBiasMeters = ARS.GetRandomInt(-(int)(LaneBiasMaxMeters * 100f), (int)(LaneBiasMaxMeters * 100f) + 1) / 100f;
             }
             _lineCornerNode = apexNode;
-            float safeBound = Math.Max(steerRefPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f);
+            float safeBound = Math.Max(steerRefPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f - LaneEdgeBufferMeters, 0f);
             lane = Math.Sign(lineCorner.Angle) * Math.Max(safeBound - LaneOutsideGapMeters - _lineBiasMeters, 0f);
             return true;
         }
@@ -1048,10 +1050,12 @@ namespace ARS
 
         const float LaneCrossMinMeters = 0.1f;
 
-        // Leash: the aim leads the car, it does not run away from it.
-        const float LaneTaperNearMeters = 2f;
-        const float LaneTaperFarMeters = 4f;
-        const float LaneTaperCapShare = 0.8f;
+        // Elastic: the lane leads the car at full rate up to 2.5 m, fades to a stop at 5 m, and past 5 it comes back, at full
+        // pull by 6 m. The aim is a leash, never a rope.
+        public const float LaneTaperNearMeters = 2.5f;
+        const float LaneTaperFarMeters = 5f;
+        const float LaneTaperCapShare = 0f;
+        const float LaneElasticReturnEnd = 6f;
 
         void UpdateLaneMover(float steerRefOffset, float laneEdge)
         {
@@ -1109,12 +1113,21 @@ namespace ARS
             float arrivalRate = Math.Sign(gap) * Math.Min(moverSpeedCap, (float)Math.Sqrt(2f * moverAccel * Math.Abs(gap)));
             float desiredRate = requestRate + arrivalRate;
 
+            // Past the far end the aim stops being led and returns to the car, harder the further out it sits.
+            if (awayFromCar > LaneTaperFarMeters)
+            {
+                float pull = ARS.Clamp((awayFromCar - LaneTaperFarMeters) / (LaneElasticReturnEnd - LaneTaperFarMeters), 0f, 1f);
+                float returnMps = Math.Min(LaneMoverSpeedCapMps, (float)Math.Sqrt(2f * moverAccel * (awayFromCar - LaneTaperFarMeters)));
+                desiredRate = Math.Sign(steerRefOffset - _carriedLane) * pull * returnMps;
+            }
+
             if (desiredRate * _laneRate < 0f) _laneRate = 0f;
             float rateStep = moverAccel * dt;
             _laneRate += ARS.Clamp(desiredRate - _laneRate, -rateStep, rateStep);
             float step = _laneRate * dt;
 
             _carriedLane += step;
+            _carriedLane = ARS.Clamp(_carriedLane, -laneEdge, laneEdge);
 
             if (Math.Abs(_laneRate) > 0.2f && Game.GameTime > _laneMoverLoggedAt)
             {
@@ -1129,6 +1142,8 @@ namespace ARS
         const float IdealLineWindowMeters = 300f;
 
         const float LaneOutsideGapMeters = 0.5f;
+        // The lane never leaves the road: whatever asks for it, the aim keeps the car's half width plus this buffer from the edge.
+        const float LaneEdgeBufferMeters = 0.5f;
         const float LaneInsideGapMeters = 1f;
         const float LaneBiasMaxMeters = 0.5f;
 
@@ -3186,7 +3201,9 @@ namespace ARS
 
         // The lane's colour says what it is doing, not who asked: grey with nothing asking, blue with an aim that is not
         // moving, green while it moves inward, yellow while it moves outward.
-        const float LaneStillMps = 0.05f;
+        // Blue means "asking, but the aim is not going anywhere": the same rate the mover treats as quiet in its own log,
+        // so the two never disagree about whether the lane is moving.
+        const float LaneStillMps = 0.2f;
 
         public static Color LaneMotionColor(LaneReason reason, float rateMps, int cornerDir)
         {
@@ -3249,7 +3266,7 @@ namespace ARS
             }
         }
 
-        static Color InputColour(float input)
+        public static Color InputColour(float input)
         {
             float v = ARS.Clamp(input, -1f, 1f);
             return Color.FromArgb((int)(255f * (1f - Math.Max(v, 0f))), (int)(255f * (1f + Math.Min(v, 0f))), 0);
@@ -3882,6 +3899,22 @@ namespace ARS
             }
         }
 
+        // The corner the line works is let go once the car is this many nodes past its apex: until then it keeps the reference
+        // it earned on the way in, and after it the label and the next corner's stickiness move on together.
+        const int ApexAdvanceNodes = 10;
+
+        void AdvancePastApex()
+        {
+            if (_lineCornerNode < 0 || !HasPassedApex(_lineCornerNode)) return;
+            int count = ARS.TrackPoints.Count;
+            int since = CurrentTrackPoint.Node - _lineCornerNode;
+            if (!ARS.IsPointToPoint) since = ((since % count) + count) % count;
+            if (since <= ApexAdvanceNodes) return;
+            _lineCornerNode = -1;
+            CornerPoint nextAhead = NearestApexAhead();
+            _lineCornerNode = nextAhead != null ? nextAhead.Node : -1;
+        }
+
         bool HasPassedApex(int apexNode)
         {
             if (apexNode < 0) return false;
@@ -4298,9 +4331,9 @@ namespace ARS
             if (RecoveryExitHolds()) FinishStuckRecovery();
         }
 
-        float NearestEdgeLane(float steerRefOffset, float drivableEdge)
+        float NearestEdgeLane(float steerRefOffset, float laneLimit)
         {
-            return steerRefOffset >= 0f ? drivableEdge : -drivableEdge;
+            return steerRefOffset >= 0f ? laneLimit : -laneLimit;
         }
 
         float KickCloseSeconds()
