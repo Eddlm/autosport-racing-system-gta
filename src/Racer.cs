@@ -148,14 +148,15 @@ namespace ARS
         public float RouteLookaheadSizeSeconds = 2.0f;
 
         const float SteerPreviewSeconds = 0.5f;
-        const float SteerLookaheadMinMeters = 8f;
-        public const float SteerLookaheadMaxMeters = 90f;
+        const float SteerLookaheadMinNodes = 8f;
+        public const float SteerLookaheadMaxNodes = 90f;
 
-        // How far ahead the car is aimed: half a second of travel, floored and capped. The debug ribbon ends here too, so the
-        // two lookaheads cannot drift apart.
-        public static float SteerLookaheadMeters(float speedMps)
+        // How far ahead the car is aimed: half a second of travel, floored and capped, read as a NODE count by the aim and by
+        // the debug ribbon, so the two ends agree with each other. Nodes are at most 1.5 m apart, so the same speed aims
+        // further on a coarsely sampled route: the number is nodes, not metres, and always was.
+        public static float SteerLookaheadNodes(float speedMps)
         {
-            return ARS.Clamp(speedMps * SteerPreviewSeconds, SteerLookaheadMinMeters, SteerLookaheadMaxMeters);
+            return ARS.Clamp(speedMps * SteerPreviewSeconds, SteerLookaheadMinNodes, SteerLookaheadMaxNodes);
         }
 
         const float GsPreviewBlend = 0.5f;
@@ -370,6 +371,11 @@ namespace ARS
 
         bool CornerRequiresBraking(int apexNode) => apexNode >= 0 && TryGetCornerContext(apexNode, out CornerContext context) && context.RequiresBraking;
 
+        // A corner that asks for nothing gets no card: no draft, no defence, no concession. Read from the apex speed the
+        // picker already worked out against the speed we carry now, so it answers on approach. The braking latch cannot:
+        // it only trips once we are already inside braking range and arriving too fast, which is most of the way in.
+        bool CornerAsksForBraking() => Brain.Corner != null && Brain.Corner.Speed < Car.Velocity.Length();
+
         CornerContext CornerContextForWrite(int apexNode)
         {
             if (!TryGetCornerContext(apexNode, out CornerContext context))
@@ -425,10 +431,9 @@ namespace ARS
 
         const float DivebombReleaseGapMeters = 40f;
 
-        const float DefendThreatMarginSeconds = 0.5f;
         // How much later than me a rival may still reach the corner entrance and remain worth defending against.
         const float DefendLaterMarginSeconds = 1f;
-        // A rival this close is worth defending against even if it is not closing: 20 nodes plus both cars' length.
+        // A rival this close is worth defending against even if it is not closing: 20 metres plus both cars' length.
         const float DefendCloseBehindMeters = 20f;
         const float DivebombReleaseAngleDegrees = 25f;
         const int CardMinDwellMs = 1000;
@@ -451,6 +456,10 @@ namespace ARS
         const float SideBySideAssistRangeExtra = 3f;
         const float SideBySideFullAssistExtraGap = 1f;
         const float SideBySideMinimumAssist = 0.1f;
+        const float SideBySideHeadingShare = 0.5f;
+        // Two cars are only in the same race for space if they are at the same level: on a figure-eight the car on the bridge
+        // passes a couple of metres above the one underneath, and proximity alone reads that as a car alongside.
+        const float RivalHeightGateMeters = 2f;
         const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
         const ulong CheatPowerIncreaseHash = 0xB59E4BD37AE292DB;
         const ulong MaxDriveGearHash = 0x24910C3D66BA770D;
@@ -486,7 +495,6 @@ namespace ARS
         float _overspeedPowerLevel = 1f;
         float _countersteerAssistDeg = 0f;
         int _cornerLiftApex = -1;
-        int _defendEntranceNode = -1;
         float _defendLaneOffset = 0f;
         float _avoidHoldLane = 0f;
         bool _avoidHoldActive = false;
@@ -708,7 +716,7 @@ namespace ARS
                 laneReason = LaneReason.CurveLean;
                 _laneRequestOutward = leanOutward;
             }
-            if (ActiveManeuver.Type == ManeuverType.DefendLane && _defendEntranceNode >= 0 && !HasPassedApex(_defendEntranceNode))
+            if (ActiveManeuver.Type == ManeuverType.DefendLane && MetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
             {
                 laneRequest = ARS.Clamp(_defendLaneOffset, -laneLimit, laneLimit);
                 laneReason = LaneReason.CommitCard;
@@ -762,6 +770,7 @@ namespace ARS
             {
                 if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
                 Vector3 delta = r.RivalRacer.Car.Position - Car.Position;
+                if (Math.Abs(delta.Z) > RivalHeightGateMeters) continue;
                 float longDist = Math.Abs(Vector3.Dot(delta, velDir));
                 float latDist = Math.Abs(Vector3.Dot(delta, velRight));
                 float longGate = (VehicleData.ModelDimensions.Y + r.RivalRacer.VehicleData.ModelDimensions.Y) * 0.5f + 1f;
@@ -880,6 +889,7 @@ namespace ARS
                 if (rival.RivalRacer == null || !rival.RivalRacer.Car.Exists()) continue;
 
                 Vector3 relativeOffset = ARS.EntityRelativeOffset(Car, rival.RivalRacer.Car);
+                if (Math.Abs(relativeOffset.Z) > RivalHeightGateMeters) continue;
 
                 float bodyHalfSum = (VehicleData.ModelDimensions.Y + rival.RivalRacer.VehicleData.ModelDimensions.Y) * 0.5f;
                 if (Math.Abs(relativeOffset.Y) > bodyHalfSum) continue;
@@ -902,7 +912,8 @@ namespace ARS
                 float headingDifference = -Vector3.SignedAngle(rivalFlat, courseFlat, Vector3.WorldUp);
                 if (float.IsNaN(headingDifference) || float.IsInfinity(headingDifference)) continue;
 
-                correction += headingDifference * proximity;
+                // Half his heading error, not a fixed nudge: the assist scales with how hard he is angling, and there is no cap.
+                correction += headingDifference * SideBySideHeadingShare * proximity;
             }
             return correction;
         }
@@ -989,11 +1000,9 @@ namespace ARS
             if (!(lineCorner.DetectedRadius < IdealLineMaxRadiusMeters)) return false;
             if (!(speedMps > ApexSpeedWithDownforce(lineCorner.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph))) return false;
 
-            float metresToApex = ARS.TrackPoints[apexNode].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
-            if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metresToApex) > ARS.RouteLengthMeters * 0.5f)
-                metresToApex -= Math.Sign(metresToApex) * ARS.RouteLengthMeters;
+            float metresToApex = MetresToNode(apexNode);
 
-            float gateMeters = Math.Max(2f * steerRefPoint.TrackHalfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
+            float gateMeters = OutsideGateMeters(steerRefPoint);
             if (!(metresToApex <= IdealLineWindowMeters && metresToApex > gateMeters)) return false;
 
             if (_lineBiasNode != apexNode)
@@ -1186,9 +1195,7 @@ namespace ARS
             foreach (CornerPoint corner in ARS.Corners)
             {
                 if (corner.DetectedRadius >= IdealLineMaxRadiusMeters) continue;
-                float metres = ARS.TrackPoints[corner.Node].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
-                if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metres) > ARS.RouteLengthMeters * 0.5f)
-                    metres -= Math.Sign(metres) * ARS.RouteLengthMeters;
+                float metres = MetresToNode(corner.Node);
                 if (corner.Node == _lineCornerNode && metres >= 0f) { adopted = corner; adoptedMeters = metres; }
                 if (metres < 0f || metres >= bestMeters) continue;
                 bestMeters = metres;
@@ -1203,7 +1210,10 @@ namespace ARS
 
         const float SameSectionMaxGapMeters = 30f;
 
-        const float WallApproachSeconds = 3f;
+        // The same five seconds the avoidance lane arms on: a rival we are catching has to keep the corridor closed until
+        // the avoidance lane has taken over from it. Retiring the wall at three left a two second band in which the corridor
+        // was open, the avoidance lane was not yet the request, and the lean was free to aim at the car ahead.
+        const float WallApproachSeconds = 5f;
 
         const float EngineHealthHalf = 500f;
 
@@ -1257,8 +1267,11 @@ namespace ARS
             Rival target = Brain.AvoidanceTarget;
             if (target == null || target.RivalRacer == null) { _passLaneLatched = false; return 0f; }
 
-            bool bodiesSideBySide = Math.Abs(target.NodeOffset - nodeOffset) < target.CombinedWidth;
-            if (bodiesSideBySide && _passLaneLatched && _passLaneTarget == target.RivalRacer) return _passLaneValue;
+            // A pass lane is a decision, not a shadow: once chosen it holds while the target persists, so a rival drifting down
+            // the road no longer drags our line with him. It is recomputed when he is no longer clear of the latched lane.
+            bool latchHolds = _passLaneLatched && _passLaneTarget == target.RivalRacer
+                && Math.Abs(_passLaneValue - target.NodeOffset) >= target.CombinedWidth;
+            if (latchHolds) return _passLaneValue;
 
             if (!TryPickAvoidanceSide(target, trackBound, aggroBuffer, carHalfWidth, nodeOffset, out float avoidanceLane, out bool targetGoLeft))
             {
@@ -2646,20 +2659,26 @@ namespace ARS
                         hisTimeToReachMe = back.TimeToReach;
                         break;
                     }
-                    float myTime = _defendEntranceNode >= 0 ? ForwardNodeDistance(_defendEntranceNode) / Math.Max(Car.Velocity.Length(), 1f) : 0f;
-                    float hisTime = _defendEntranceNode >= 0 ? r.RivalRacer.ForwardNodeDistance(_defendEntranceNode) / Math.Max(r.Speed, 1f) : 0f;
-                    threatGone = float.IsPositiveInfinity(hisTimeToReachMe) || hisTime > myTime + DefendThreatMarginSeconds;
+                    float combinedLength = Math.Abs(VehicleData.ModelDimensions.Y) + Math.Abs(r.RivalRacer.VehicleData.ModelDimensions.Y);
+                    // Gone when he is neither closing nor close: the same pair that let him in. Closure alone cannot decide it,
+                    // since a rival holding station behind never shows a closing time, and arrival time cannot either, since a
+                    // car behind always reaches the entrance later than us and the test would fire on the very first tick.
+                    bool stillClosing = !float.IsPositiveInfinity(hisTimeToReachMe);
+                    bool stillClose = r.Distance < DefendCloseBehindMeters + combinedLength;
+                    threatGone = !stillClosing && !stillClose;
                     break;
                 }
                 bool lostTarget = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || !targetTrails;
-                // The promise lasts to the corner's entrance; past it the card is spent.
-                bool atEntrance = _defendEntranceNode >= 0 && HasPassedApex(_defendEntranceNode);
+                // The defence ends where the out state does, so the base behaviour takes the line back and the car turns in for
+                // the apex when it should. The writer reads the same gate at the steer node and this one reads it at the car's
+                // node: where the road changes width between them the slot can free a few metres early or late, which costs
+                // nothing because this only frees the slot.
+                bool outsideOver = MetresToNode(_defendApexNode) <= OutsideGateMeters(CurrentTrackPoint);
 
-                if ((lostTarget || threatGone || atEntrance || HasPassedApex(_defendApexNode)) && CardMayEnd)
+                if ((lostTarget || threatGone || outsideOver || HasPassedApex(_defendApexNode)) && CardMayEnd)
                 {
                     EndCard();
                     _defendApexNode = -1;
-                    _defendEntranceNode = -1;
                 }
             }
 
@@ -2701,6 +2720,19 @@ namespace ARS
             if (!ARS.IsPointToPoint && fwd < 0) fwd += ARS.TrackPoints.Count;
             return fwd;
         }
+
+        // Metres from the car to a node along the route, wrapped for a loop and negative once it is behind us.
+        float MetresToNode(int node)
+        {
+            if (node < 0 || node >= ARS.TrackPoints.Count) return 0f;
+            float metres = ARS.TrackPoints[node].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
+            if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(metres) > ARS.RouteLengthMeters * 0.5f)
+                metres -= Math.Sign(metres) * ARS.RouteLengthMeters;
+            return metres;
+        }
+
+        // Where the out state hands the line back: the same gate the lean uses, read at the node each caller has at hand.
+        float OutsideGateMeters(TrackPoint at) => Math.Max(2f * at.TrackHalfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
 
         bool IsWithinCorner(CornerPoint corner)
         {
@@ -2782,7 +2814,7 @@ namespace ARS
         {
             if (!CardCooled(ManeuverType.DiveBomb)) return false;
             if (Brain.Corner == null) return false;
-            if (!CornerRequiresBraking(Brain.Corner.Point.Node)) return false;
+            if (!CornerAsksForBraking()) return false;
             if (Control.Throttle < DivebombFullThrottle) return false;
             if (_activeRivalWallCount > 1) return false;
 
@@ -2826,13 +2858,16 @@ namespace ARS
         {
             if (!CardCooled(ManeuverType.DefendLane)) return false;
             if (Brain.Corner == null) return false;
-            if (!CornerRequiresBraking(Brain.Corner.Point.Node)) return false;
+            if (!CornerAsksForBraking()) return false;
 
             int apexNode = Brain.Corner.Point.Node;
             int entranceNode = CornerEntranceNode(Brain.Corner.Point, apexNode);
             if (entranceNode < 0) return false;
             float myTimeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
             if (!ARS.IsBetween(myTimeToEntrance, FightWindowMinSeconds, FightWindowMaxSeconds)) return false;
+            // Armed inside the out state's own gate the card could never move the car: the lane writer holds the defend
+            // offset only while the apex is still beyond that gate.
+            if (MetresToNode(apexNode) <= OutsideGateMeters(CurrentTrackPoint)) return false;
 
             Rival defenderTarget = null;
             float nearestDefender = float.MaxValue;
@@ -2868,18 +2903,26 @@ namespace ARS
             int defendTurn = Math.Sign(Brain.Corner.Point.Angle);
             if (defendTurn == 0) return false;
 
-            ActiveManeuver.Type = ManeuverType.DefendLane;
-            ActiveManeuver.Target = defenderTarget.RivalRacer;
-            ActiveManeuver.LastEnabled = Game.GameTime;
-            _defendApexNode = apexNode;
-            _defendEntranceNode = entranceNode;
-
-            // His lane, one combined width towards the corner's inside, so the line sits nearer the apex than he does.
-            // Taken once when the card is played: a defence is a promise about where the car will be, not a chase.
             Racer defender = defenderTarget.RivalRacer;
             float hisLane = ARS.SignedLaneOffset(defender.Car.Position, defender.CurrentTrackPoint.Position, defender.CurrentTrackPoint.Direction);
             float combinedWidth = Math.Abs(VehicleData.ModelDimensions.X) + Math.Abs(defender.VehicleData.ModelDimensions.X);
-            _defendLaneOffset = hisLane - defendTurn * combinedWidth;
+            float clearance = (Math.Abs(VehicleData.BoundingBox) + Math.Abs(defender.VehicleData.BoundingBox)) * 0.5f;
+            float reachable = Math.Abs(CurrentTrackPoint.TrackHalfWidth) - Math.Abs(VehicleData.BoundingBox) * 0.5f - LaneEdgeBufferMeters;
+            float inward = -defendTurn;
+
+            // If the road leaves no room to be clear of him on the inside, the card is not played: a target that clamps back
+            // onto his outside would hand him the apex. The target itself may still be cut back to the road edge, which only
+            // brings the line nearer the gate he is already on.
+            if (Math.Abs(hisLane + inward * clearance) > reachable) return false;
+
+            ActiveManeuver.Type = ManeuverType.DefendLane;
+            ActiveManeuver.Target = defender;
+            ActiveManeuver.LastEnabled = Game.GameTime;
+            _defendApexNode = apexNode;
+
+            // His lane, one combined width towards the corner's inside, so the line sits nearer the apex than he does.
+            // Taken once when the card is played: a defence is a promise about where the car will be, not a chase.
+            _defendLaneOffset = ARS.Clamp(hisLane + inward * combinedWidth, -reachable, reachable);
             return true;
         }
 
@@ -2887,7 +2930,7 @@ namespace ARS
         {
             if (!CardCooled(ManeuverType.Yield)) return false;
             if (Brain.Corner == null) return false;
-            if (!CornerRequiresBraking(Brain.Corner.Point.Node)) return false;
+            if (!CornerAsksForBraking()) return false;
 
             Rival closestRival = NearestRival();
             if (closestRival == null) return false;
@@ -3576,7 +3619,7 @@ namespace ARS
             float speed = velocity.Length();
             AlongTrackSpeed = Vector3.Dot(velocity, CurrentTrackPoint.Direction);
 
-            int steerRef = (int)SteerLookaheadMeters(speed);
+            int steerRef = (int)SteerLookaheadNodes(speed);
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
             int threeQuarterSec = (int)(speed * 0.75f);

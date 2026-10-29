@@ -1964,12 +1964,12 @@ namespace ARS
                         // Visual only: the lines follow the road's own profile and keep the car's height above it, so a crest or a
                         // bridge bends them with the surface instead of leaving them flat.
                         float carLift = racer.Car.Position.Z - racer.CurrentTrackPoint.Position.Z;
-                        // Both lookaheads end together: the ribbon stops where the car is aimed.
-                        float laneLookahead = Racer.SteerLookaheadMeters(racer.Car.Velocity.Length());
-                        float walked = 0f;
+                        // The ribbon ends on the same node the aim uses, one short of it. The lookahead is a node offset, so
+                        // counting nodes here is what keeps both ends together; walking metres would drift with node spacing.
+                        int laneSpan = (int)Racer.SteerLookaheadNodes(racer.Car.Velocity.Length());
                         Vector3 laneEnd = Vector3.Zero;
 
-                        for (int i = 0; i < LaneDebugNodes; i++)
+                        for (int i = 0; i < laneSpan - 1; i++)
                         {
                             int node = ARS.IsPointToPoint ? currentNode + i : (currentNode + i) % count;
                             int nextNode = ARS.IsPointToPoint ? currentNode + i + 1 : (currentNode + i + 1) % count;
@@ -1979,17 +1979,13 @@ namespace ARS
                             Vector3 nextPos = ARS.TrackPoints[nextNode].Position;
                             Vector3 dir = ARS.TrackPoints[node].Direction;
                             Vector3 right = Vector3.Cross(dir, Vector3.WorldUp).Normalized;
-                            // Stop one node before the end: the segment that would cross the lookahead is not drawn.
-                            float segment = (nextPos - pos).Length();
-                            if (walked + segment > laneLookahead) break;
 
                             Vector3 ownFrom = pos + right * nodeOffset; ownFrom.Z = pos.Z + carLift + LaneHeightCurrent;
                             Vector3 ownTo = nextPos + right * nodeOffset; ownTo.Z = nextPos.Z + carLift + LaneHeightCurrent;
                             DrawLine(ownFrom, ownTo, ownLaneColor);
 
-                            Color carriedColor = laneColor;
-                            float t0 = ARS.Clamp(walked / laneLookahead, 0f, 1f);
-                            float t1 = ARS.Clamp((walked + segment) / laneLookahead, 0f, 1f);
+                            float t0 = i / (float)laneSpan;
+                            float t1 = (i + 1) / (float)laneSpan;
                             Vector3 intendedFrom = pos + right * (nodeOffset + (carriedOffset - nodeOffset) * t0);
                             intendedFrom.Z = pos.Z + carLift + LaneHeightCarried;
                             Vector3 intendedTo = nextPos + right * (nodeOffset + (carriedOffset - nodeOffset) * t1);
@@ -2004,11 +2000,10 @@ namespace ARS
                                 DrawLine(requestFrom, requestTo, requestColor);
                             }
 
-                            walked += segment;
                         }
 
                         // A black ball marks the far end when the lookahead is at its cap, so a capped line reads as capped.
-                        if (laneLookahead >= Racer.SteerLookaheadMaxMeters)
+                        if (laneSpan >= (int)Racer.SteerLookaheadMaxNodes)
                             World.DrawMarker(MarkerType.DebugSphere, laneEnd, Vector3.Zero, Vector3.Zero, new Vector3(0.35f, 0.35f, 0.35f), Color.Black);
 
                         int adoptedNode = racer.LineCornerNode;
@@ -3175,7 +3170,6 @@ namespace ARS
         }
 
         const float ApexMarkHeight = 1.6f;
-        const int LaneDebugNodes = 40;
         const int LaneBlinkPeriodMs = 400;
         const int LaneBlinkOnMs = 200;
         const float LaneHeightCurrent = 0.100f;
