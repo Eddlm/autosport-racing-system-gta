@@ -149,7 +149,14 @@ namespace ARS
 
         const float SteerPreviewSeconds = 0.5f;
         const float SteerLookaheadMinMeters = 8f;
-        const float SteerLookaheadMaxMeters = 30f;
+        public const float SteerLookaheadMaxMeters = 90f;
+
+        // How far ahead the car is aimed: half a second of travel, floored and capped. The debug ribbon ends here too, so the
+        // two lookaheads cannot drift apart.
+        public static float SteerLookaheadMeters(float speedMps)
+        {
+            return ARS.Clamp(speedMps * SteerPreviewSeconds, SteerLookaheadMinMeters, SteerLookaheadMaxMeters);
+        }
 
         const float GsPreviewBlend = 0.5f;
 
@@ -419,6 +426,10 @@ namespace ARS
         const float DivebombReleaseGapMeters = 40f;
 
         const float DefendThreatMarginSeconds = 0.5f;
+        // How much later than me a rival may still reach the corner entrance and remain worth defending against.
+        const float DefendLaterMarginSeconds = 1f;
+        // A rival this close is worth defending against even if it is not closing: 20 nodes plus both cars' length.
+        const float DefendCloseBehindMeters = 20f;
         const float DivebombReleaseAngleDegrees = 25f;
         const int CardMinDwellMs = 1000;
         const int CardCooldownMs = 1000;
@@ -476,6 +487,7 @@ namespace ARS
         float _countersteerAssistDeg = 0f;
         int _cornerLiftApex = -1;
         int _defendEntranceNode = -1;
+        float _defendLaneOffset = 0f;
         float _avoidHoldLane = 0f;
         bool _avoidHoldActive = false;
 
@@ -695,6 +707,11 @@ namespace ARS
                 laneRequest = curveLean;
                 laneReason = LaneReason.CurveLean;
                 _laneRequestOutward = leanOutward;
+            }
+            if (ActiveManeuver.Type == ManeuverType.DefendLane && _defendEntranceNode >= 0 && !HasPassedApex(_defendEntranceNode))
+            {
+                laneRequest = ARS.Clamp(_defendLaneOffset, -laneLimit, laneLimit);
+                laneReason = LaneReason.CommitCard;
             }
             float avoidAheadLane = ComputeAvoidanceLane(roadWide);
             if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
@@ -1695,6 +1712,7 @@ namespace ARS
             ActiveManeuver.Target = null;
             _divebombApexNode = -1;
             _defendApexNode = -1;
+            _defendLaneOffset = 0f;
             NextApexNode = -1;
             NextApexRadius = 999f;
             NextApexSpeed = 999f;
@@ -2634,8 +2652,10 @@ namespace ARS
                     break;
                 }
                 bool lostTarget = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || !targetTrails;
+                // The promise lasts to the corner's entrance; past it the card is spent.
+                bool atEntrance = _defendEntranceNode >= 0 && HasPassedApex(_defendEntranceNode);
 
-                if ((lostTarget || threatGone || HasPassedApex(_defendApexNode)) && CardMayEnd)
+                if ((lostTarget || threatGone || atEntrance || HasPassedApex(_defendApexNode)) && CardMayEnd)
                 {
                     EndCard();
                     _defendApexNode = -1;
@@ -2762,6 +2782,7 @@ namespace ARS
         {
             if (!CardCooled(ManeuverType.DiveBomb)) return false;
             if (Brain.Corner == null) return false;
+            if (!CornerRequiresBraking(Brain.Corner.Point.Node)) return false;
             if (Control.Throttle < DivebombFullThrottle) return false;
             if (_activeRivalWallCount > 1) return false;
 
@@ -2805,6 +2826,7 @@ namespace ARS
         {
             if (!CardCooled(ManeuverType.DefendLane)) return false;
             if (Brain.Corner == null) return false;
+            if (!CornerRequiresBraking(Brain.Corner.Point.Node)) return false;
 
             int apexNode = Brain.Corner.Point.Node;
             int entranceNode = CornerEntranceNode(Brain.Corner.Point, apexNode);
@@ -2818,9 +2840,7 @@ namespace ARS
             {
                 if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
                 if (r.RivalRacer.ActiveManeuver.Type == ManeuverType.DiveBomb || r.RivalRacer.ActiveManeuver.Type == ManeuverType.DefendLane) continue;
-                bool closes = r.RelativePosition == RelativePos.Behind && r.ForwardSpeedGap < 0f;
-                bool arrivesNoLater = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f) <= myTimeToEntrance;
-                if (!closes || !arrivesNoLater) continue;
+                if (r.RelativePosition != RelativePos.Behind) continue;
 
                 float timeToReachMe = float.PositiveInfinity;
                 foreach (Rival back in r.RivalRacer.Brain.Rivals)
@@ -2829,16 +2849,37 @@ namespace ARS
                     timeToReachMe = back.TimeToReach;
                     break;
                 }
-                if (!ARS.IsBetween(timeToReachMe, 3f, 6f)) continue;
+
+                // He counts if he is closing on me, or if he is simply close behind: the case the card exists for. A rival
+                // that is merely close never shows a closing time, so the two tests have to be alternatives, not a chain.
+                float combinedLength = Math.Abs(VehicleData.ModelDimensions.Y) + Math.Abs(r.RivalRacer.VehicleData.ModelDimensions.Y);
+                bool closesSoon = ARS.IsBetween(timeToReachMe, 3f, 6f);
+                bool closeBehind = r.Distance < DefendCloseBehindMeters + combinedLength;
+                if (!closesSoon && !closeBehind) continue;
+
+                // And he has to still be arriving: a rival who reaches the entrance long after me threatens nothing.
+                float hisTimeToEntrance = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f);
+                if (hisTimeToEntrance > myTimeToEntrance + DefendLaterMarginSeconds) continue;
+
                 if (r.Distance < nearestDefender) { nearestDefender = r.Distance; defenderTarget = r; }
             }
             if (defenderTarget == null) return false;
+
+            int defendTurn = Math.Sign(Brain.Corner.Point.Angle);
+            if (defendTurn == 0) return false;
 
             ActiveManeuver.Type = ManeuverType.DefendLane;
             ActiveManeuver.Target = defenderTarget.RivalRacer;
             ActiveManeuver.LastEnabled = Game.GameTime;
             _defendApexNode = apexNode;
             _defendEntranceNode = entranceNode;
+
+            // His lane, one combined width towards the corner's inside, so the line sits nearer the apex than he does.
+            // Taken once when the card is played: a defence is a promise about where the car will be, not a chase.
+            Racer defender = defenderTarget.RivalRacer;
+            float hisLane = ARS.SignedLaneOffset(defender.Car.Position, defender.CurrentTrackPoint.Position, defender.CurrentTrackPoint.Direction);
+            float combinedWidth = Math.Abs(VehicleData.ModelDimensions.X) + Math.Abs(defender.VehicleData.ModelDimensions.X);
+            _defendLaneOffset = hisLane - defendTurn * combinedWidth;
             return true;
         }
 
@@ -2846,6 +2887,7 @@ namespace ARS
         {
             if (!CardCooled(ManeuverType.Yield)) return false;
             if (Brain.Corner == null) return false;
+            if (!CornerRequiresBraking(Brain.Corner.Point.Node)) return false;
 
             Rival closestRival = NearestRival();
             if (closestRival == null) return false;
@@ -3534,7 +3576,7 @@ namespace ARS
             float speed = velocity.Length();
             AlongTrackSpeed = Vector3.Dot(velocity, CurrentTrackPoint.Direction);
 
-            int steerRef = (int)ARS.Clamp(speed * SteerPreviewSeconds, SteerLookaheadMinMeters, SteerLookaheadMaxMeters);
+            int steerRef = (int)SteerLookaheadMeters(speed);
             int quarterSec = (int)(speed * 0.25f);
             int halfSec = (int)(speed * 0.5f);
             int threeQuarterSec = (int)(speed * 0.75f);

@@ -1964,8 +1964,12 @@ namespace ARS
                         // Visual only: the lines follow the road's own profile and keep the car's height above it, so a crest or a
                         // bridge bends them with the surface instead of leaving them flat.
                         float carLift = racer.Car.Position.Z - racer.CurrentTrackPoint.Position.Z;
+                        // Both lookaheads end together: the ribbon stops where the car is aimed.
+                        float laneLookahead = Racer.SteerLookaheadMeters(racer.Car.Velocity.Length());
+                        float walked = 0f;
+                        Vector3 laneEnd = Vector3.Zero;
 
-                        for (int i = 0; i < 40; i++)
+                        for (int i = 0; i < LaneDebugNodes; i++)
                         {
                             int node = ARS.IsPointToPoint ? currentNode + i : (currentNode + i) % count;
                             int nextNode = ARS.IsPointToPoint ? currentNode + i + 1 : (currentNode + i + 1) % count;
@@ -1975,15 +1979,23 @@ namespace ARS
                             Vector3 nextPos = ARS.TrackPoints[nextNode].Position;
                             Vector3 dir = ARS.TrackPoints[node].Direction;
                             Vector3 right = Vector3.Cross(dir, Vector3.WorldUp).Normalized;
+                            // Stop one node before the end: the segment that would cross the lookahead is not drawn.
+                            float segment = (nextPos - pos).Length();
+                            if (walked + segment > laneLookahead) break;
 
                             Vector3 ownFrom = pos + right * nodeOffset; ownFrom.Z = pos.Z + carLift + LaneHeightCurrent;
                             Vector3 ownTo = nextPos + right * nodeOffset; ownTo.Z = nextPos.Z + carLift + LaneHeightCurrent;
                             DrawLine(ownFrom, ownTo, ownLaneColor);
 
                             Color carriedColor = laneColor;
-                            Vector3 intendedFrom = pos + right * carriedOffset; intendedFrom.Z = pos.Z + carLift + LaneHeightCarried;
-                            Vector3 intendedTo = nextPos + right * carriedOffset; intendedTo.Z = nextPos.Z + carLift + LaneHeightCarried;
-                            DrawLine(intendedFrom, intendedTo, carriedColor);
+                            float t0 = ARS.Clamp(walked / laneLookahead, 0f, 1f);
+                            float t1 = ARS.Clamp((walked + segment) / laneLookahead, 0f, 1f);
+                            Vector3 intendedFrom = pos + right * (nodeOffset + (carriedOffset - nodeOffset) * t0);
+                            intendedFrom.Z = pos.Z + carLift + LaneHeightCarried;
+                            Vector3 intendedTo = nextPos + right * (nodeOffset + (carriedOffset - nodeOffset) * t1);
+                            intendedTo.Z = nextPos.Z + carLift + LaneHeightCarried;
+                            DrawLine(intendedFrom, intendedTo, laneColor);
+                            laneEnd = intendedTo;
 
                             if (DrawLaneRequest && i % 2 == 0)
                             {
@@ -1991,7 +2003,13 @@ namespace ARS
                                 Vector3 requestTo = nextPos + right * requestOffset; requestTo.Z = nextPos.Z + carLift + LaneHeightRequest;
                                 DrawLine(requestFrom, requestTo, requestColor);
                             }
+
+                            walked += segment;
                         }
+
+                        // A black ball marks the far end when the lookahead is at its cap, so a capped line reads as capped.
+                        if (laneLookahead >= Racer.SteerLookaheadMaxMeters)
+                            World.DrawMarker(MarkerType.DebugSphere, laneEnd, Vector3.Zero, Vector3.Zero, new Vector3(0.35f, 0.35f, 0.35f), Color.Black);
 
                         int adoptedNode = racer.LineCornerNode;
                         if (adoptedNode >= 0 && adoptedNode < ARS.TrackPoints.Count)
@@ -3157,6 +3175,7 @@ namespace ARS
         }
 
         const float ApexMarkHeight = 1.6f;
+        const int LaneDebugNodes = 40;
         const int LaneBlinkPeriodMs = 400;
         const int LaneBlinkOnMs = 200;
         const float LaneHeightCurrent = 0.100f;
