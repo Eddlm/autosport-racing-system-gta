@@ -28,5 +28,8 @@ Tracks, car rosters and drivers live inside AutosportRacingSystem\.
 Nothing here needs a settings file: the mod writes the missing keys on its
 first load.
 
+Licence: personal use and personal modification only — no redistribution of the
+source or of any build, modified or not. Full terms in LICENSE, beside this file.
+
 If the mod does not appear, read ARS.log in the game folder, beside GTA5.exe - the first lines
 say what it found and what it refused.

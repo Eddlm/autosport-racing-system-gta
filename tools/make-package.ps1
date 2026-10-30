@@ -37,7 +37,8 @@ try {
         @{ Path = 'Dist\AutosportRacingSystem'; Dir = 'AutosportRacingSystem' },
         @{ Path = 'bin\Release\ARS.dll';        Dir = 'AutosportRacingSystem' },
         @{ Path = 'libs\LemonUI.SHVDN2.dll';    Dir = 'AutosportRacingSystem' },
-        @{ Path = 'tools\PACKAGE-README.txt';   Dir = 'AutosportRacingSystem'; Rename = 'README.txt' }
+        @{ Path = 'tools\PACKAGE-README.txt';   Dir = 'AutosportRacingSystem'; Rename = 'README.txt' },
+        @{ Path = 'LICENSE';                    Dir = 'AutosportRacingSystem' }
     )
     foreach ($s in $sources) {
         if (-not (Test-Path $s.Path)) { throw "missing input: $($s.Path)" }

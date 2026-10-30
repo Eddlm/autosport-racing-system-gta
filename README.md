@@ -54,4 +54,17 @@ SHVDNE is safe for your other SHVDN scripts, it's built on top of SHVDN and can 
 | ikt | Referencing [Manual Transmission](https://github.com/ikt32/GTAVManualTransmission) helped me inmensely at the start, to control the cars and read/apply raw data to memory. |
 | JustALemon | His work on [LemonUi](https://github.com/LemonUIbyLemon) and letting me bundle it in. Less steps for the players to take. |
 | ItsJustCurtis | Keeping [MenyooSP](https://github.com/itsjustcurtis/MenyooSP) alive. ARS directly benefits from it.|
-| Vanillaworks & Co. | Helping me in a myriad random ways along the years as I iterated on solutions to my problems devving ARS.|
+| Vanillaworks & Co. | Helping me in a myriad random ways along the years as I iterated on solutions to my problems devving ARS. |
+
+# License
+
+**Personal use, no redistribution.** You may install, play and modify ARS for your own
+personal, non-commercial use, including reading and forking the source to change it on your
+own machine. You may **not** republish it: no reuploads of the source or of any build,
+modified or not, no bundling into mod packs or server packages, free or paid, without
+written permission. Credit and a link back are asked for any video or screenshots of it
+running. Full terms, including the third-party notices and the warranty disclaimer, are in
+[LICENSE](LICENSE).
+
+This is a source-available licence, not an open-source one — deliberately: the source is
+here to be read and learned from, not to be redistributed as someone else's build.
