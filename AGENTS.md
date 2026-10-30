@@ -28,7 +28,7 @@ No memory survives between sessions; this is the durable record, so save to it a
 
 ## Coding style
 - Keep consecutive `&&` / `||` conditions on one line; do not break them across lines.
-- Use `ARS.IsBetween` (`AutosportRacingSystem.cs:542`) for inclusive range checks.
+- Use `ARS.IsBetween` (`AutosportRacingSystem.cs:601`) for inclusive range checks.
 - **Method names must be honest** — extra filtering/computing → refactor.
 - **Do not use scripts to edit code files** — direct file tools only (scripts OK for XML/meta).
 - **C# 7.3 ceiling** (no `LangVersion` override): no switch expressions, records, init-only properties, top-level statements or `??=`.

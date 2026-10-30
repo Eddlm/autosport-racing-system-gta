@@ -4,6 +4,82 @@
 
 > Conventions. Every item carries a stable kebab-case slug beside its rank number — the number is rank and may move, the slug never does; other files cite the slug only and write nothing else about the item. Tiers rank simplest → most complex; 0-2 need no wheel time, 3+ need the user driving or a design call first. **Docs drift — the code wins**: check a claim against the source, and correct the line you are touching rather than reconciling the file wholesale. Renumbering the ladder must remap its own `item N` references in the same pass — park every old reference on a placeholder first, because a direct replace cascades when one entry's target string is another's source.
 
+## 2026-10-30 — the hunt's decisions, urgency first
+
+Eight read-only themes (start/teardown, settings, cards, state lifetime, lane, pedals, menus, docs) were reviewed by subagents
+and **every claim re-read in the source before it was believed**: 88 claims, 76 real, 12 discarded. Six commits
+`8a5702d`…`624dea5` (builds 1375 → 1380) and six of them driver-verified the same morning. The long version — per-theme
+tables, what was fixed, what was refused, and the numbers — is `docs/audit/410-hunt-2026-10-30.md`, with the eight reviewer
+reports `410-`…`417-` (untracked, like the rest of `docs/audit/`). Each slug below carries the ledger's decision id.
+
+**Faces the player — release-note, decide before the tag**
+- `no-collision-polarity` — **open (D-T4-1)**: `ApplyNoCollision` calls `SET_ENTITY_NO_COLLISION_ENTITY(a, b, !enable)` and its
+  three call sites disagree with the native's own name, so the menu row is inert and the cleanup points the wrong way. Two
+  further faults: it pairs each car with its **nearest** rival only, and the cleanup runs after `CleanRacers` empties the list.
+- `open-up-inert` — **open (D-T6-1)**: `_clampTargetDeg *= OpensUpClampScale()` scales the copy the readout prints
+  (`Racer.cs:3256`) while the limiter chases the unscaled local, so the row never reaches the wheel and the subtitle can print
+  a ratio above one. One line: scale the local, then assign it.
+- `abs-tooltip` — **open (D-T7-1)**: the row works (a brake taper on a locking wheel); the tooltip still says the undoing of
+  native ABS is being worked on.
+- `features-nitrous-claims` — **open (D-T8-1, D-T8-2)**: `FEATURES.md` sells the player's bottle as *"Coming soon"* (it fires on
+  `X`/duck, once per lap) and calls the AI's power *"a percentage of yours"* (`NitrousPowerMultiplier = 5f` against the
+  player's `1f`). The 5×/1× gap itself is a balance question nobody has answered.
+- `lane-mover-cap-99` — **open (D-T5-4)**: `LaneMoverSpeedCapMps` ships `99f` under a comment naming 24 m/s, so the cap that
+  bounds the lane's lunge cannot bind.
+- `features-driving-claims` — **open (D-T8-4)**: the same page says the player's power "sits at its resting value in normal
+  driving" while `OverspeedCut` ships at `0.2` and cuts the player's throttle.
+
+**Pipeline, teardown and state — file**
+- `one-bound-five-places` (**D-T5-1**) · `clean-everything-finally` (**D-T1-1**) · `abort-racers-clear` (**D-T1-3**) ·
+  `init-menu-swallow` (**D-T1-4**) · `context-admits-notinitiated` (**D-T1-5**) · `race-state-finished` (**D-T1-2**) ·
+  `parked-dnfs-restart` (**D-T4-4**) · `last-core-tick-unseeded` (**D-T4-5**) · `countdown-tick-two-writers` (**D-T4-3**) ·
+  `countdown-reset-reversed` (**D-T4-2**) — each **open (file)**, shape in the ledger at the id given.
+- `player-participating-three-writers` (**D-T1-6**) · `player-nitrous-5x-gap` (**D-T8-2**) — **open, needs a design call**.
+
+**Cards and per-car state — file**
+- `yield-band-inverted` (**D-T3-1**): entry admits 20 m, the exit ends at 10 m, so a card played in that band dies on the next
+  tick. `yield-cooldown-dead-gate` (**D-T3-2**): `EndCard` skips Yield's cooldown and nothing else writes it, so the entry's
+  `CardCooled(Yield)` is always true — two readings, delete the gate or give the card a cooldown.
+- `nitrous-survives-initialize` (**D-T3-3**): `Initialize` re-runs on live objects and does not clear the burn. Zeroing the
+  deadline alone would leave the native override armed, so the fix goes through `StopNitrous`, whose native call resets the
+  level of every car at race start.
+- `pressure-paced-by-cadence` (**D-T3-4**): a per-tick delta integrated behind a 500 ms gate.
+
+**Settings — file**
+- `repair-before-read` (**D-T2-1**): the statics are seeded before `CompleteOwnedKeys`, so the repair reaches the file and the
+  menu but not the session; a clean cut does not exist because `Migrate` and the reads are interleaved.
+  `crest-migration-shadowed` (**D-T2-2**): `GetFloat("MaxCrestLift")` seeds the key before `Migrate` looks at it, so the legacy
+  crest setting is never carried over. `save-versus-prune` (**D-T2-3**): `MenuSettings.Save()` writes `[MENU]` plus declared
+  keys, so it destroys what the prune deliberately preserves — **a comment in the ini survives the prune and dies on the first
+  `Set()`**, which is what a driver test on 1380 showed. `set-swallows-failed-write` (**D-T2-4**).
+  `create-missing-files-misnamed` (**D-T2-5**).
+
+**Pedals and grip — file**
+- `projection-brake-bypasses-route-cap` (**D-T6-3**) · `projection-cap-after-composition` (**D-T6-4**) ·
+  `route-cap-stale-on-early-return` (**D-T6-5**) · `countersteer-cap-cannot-bind` (**D-T6-6**) · `gs-floor-after-slew`
+  (**D-T6-8**) · `slew-framerate-dependent` (**D-T6-9**) — **open (file)**, shapes in the ledger.
+- `wheels-offground-equality` (**D-T6-2**) — **open, measure first**: the count is an exact `== 0f` on the same field the file
+  reads as the side-slip angle, so a wheel with no contact may be the only one counted, or every straight-line wheel is. One
+  log line on a flat straight at 50 mph settles it; the fleet drives, which argues the field does zero when airborne.
+
+**Lane and geometry — file**
+- `metres-to-node-zero` (**D-T5-5**: a node that does not exist answers "zero metres, right here") · `lane-nan-guard`
+  (**D-T5-6**: `Clamp(NaN)` is the min bound, i.e. a full-width request to the opposite edge) · `forward-node-distance-unit`
+  (**D-T5-3**: nodes compared to metres, true only because a node is about a metre) — **open (file)**.
+
+**Dead code and docs — file**
+- `dead-code-batch-1030` (**D-T1-7**): `Vehicle v` in `OnTick`, `GetThrottle` + `_appliedThrottleLastFrame`, `Racertext`,
+  `_cornerLineLoggedAt`, `Control.MaxBrake` (three writers, no reader), four CS0162 sites, `ChillOutEnabled = false` with its
+  cap/exit/standoff/label, `avoidHoldEnabled = false` with the whole pass-lane hold and its 8 s backstop (which retires the
+  `avoid-hold-timeout` drive owed since `5ad52c1`), the `Show Track & Grid Rows` row with its unreachable handler, and the
+  3D `SignedAngle` inside the `LaneCrossingScale = false` block.
+- `comment-budget-2x` (**D-T8-6**): **12,058** characters of `//` across `src/` against an allowance of about 5,000.
+- `anchors-drifted` (**D-T8-5**) · `backlog-closed-slugs` (**D-T8-7**: 32 of 76 slugs are closed by their own tag) ·
+  `test-plan-dead-row` (**D-T8-3**: a `Steer Limit At Speed` row that no longer exists, and a closed item stating 0.05-1.25).
+
+**Owed drives from this pass**: `docs/VERIFY-NOW.md` section H — six of ten verified on build 1380, `Restart tras Load Track`
+unreachable by design (`StagedSpawns` is forced false), `lane on a grade` not worth a run.
+
 ## The ladder — open items, simplest → most complex
 
 **Tier 0 — decisions, no code**
@@ -17,7 +93,7 @@
   them treated a lateral displacement that did not exist.
 
 - `speed-steer-ceiling` — **ZOMBIE CODE, revisit 0.11.0 (driver, 2026-10-26)**: `SpeedSteerCeiling` (a `static readonly bool`,
-  `Racer.cs:2083`) is false, so `ResolveSteerCeiling` returns `VehicleData.SteeringLock` on its first line and this whole law is
+  `Racer.cs:1657`) is false, so `ResolveSteerCeiling` returns `VehicleData.SteeringLock` on its first line and this whole law is
   compiled but inert: `PeakSlipCeilingAt`, `GeometrySteerCeiling`, `ManeuverRamp`, `SteerLimitRampStartMph = 5`,
   `SteerLimitRampEndMph = 30`. The setting that drives it is STILL IN THE MENU (`Rival Steering > Steer Limit At Speed`,
   `SteerCeilingFactor = 0.90`, steps 0.05..2.00, persisted with its own KeySpec) and moved nothing - a knob wired to a motor that
@@ -44,7 +120,7 @@
 - `update-checker` — **DECLINED (driver)**: the checker stays in-process. It is exclusive to ARS, so a second assembly buys nothing the mod can feel while adding a package member and an install failure mode — a missing or stale companion stops the script loading — and the estimate ran the wrong way: ~3 h for the single-project route (a seam refactor first, because `UpdateChecker` calls `ARS.Log` and a direct reference would be circular, then a conditioned configuration, guarded targets and a recursive build before `ResolveAssemblyReferences`) against ~45 min for a second csproj. The seam-only version is declined with it.
 - `slide-limit-raise-removal` — deleted (`ebb3178`); the countersteer allowance and damper bypass stay.
 - `emergency-siren-cut` — **reported, not reproduced** (RPH, 0.9.0). The siren of an emergency vehicle in the race cuts out, and the tester
-  suspects the seat move. Code: `Racer.cs:4151` puts the AI driver in the passenger seat (`_isPassengerized`) and `2237` sets
+  suspects the seat move. Code: `Racer.cs:3443` puts the AI driver in the passenger seat (`_isPassengerized`) and `1826` sets
   `Car.SirenActive = true` once, so the seat change leaves nothing re-asserting it. Candidate fix: re-assert the siren every tick while
   `_isPassengerized` on a `Team.Cop` car, or stop passengerizing emergency vehicles at all. Confirm the mechanism with one drive carrying an
   emergency vehicle before touching it.
@@ -133,7 +209,7 @@
 - `ceiling-factor-review` — closed (`0dfbf53`): reverted the midpoint to the outer wheel; the outer reference has since been driven. **closed**
 - `steer-slip-allowance` — **closed (driver)**: the allowance is a switch and nothing more (`SlipPeakCeiling`, `Racer.cs`, off, and the update returns early so reviving it is one flag), and the question the item called open — what the ceiling should be stated against — was settled at the **outer wheel** (driver-verified, `0dfbf53`), the loaded wheel that does reach the peak. **closed**
 - `wheel-contact-count` — **driver-verified (dev build 617 onward)**, as the **Stability** measure: the count of wheels reading zero on the **lateral** side-slip axis (`ARS.WheelsOffGround`, `wheel+0x1C4`) sets a target of 1.0 less a quarter per wheel out of contact, glided onto the throttle cap at 2/s in and 1/s out (`Glide`, with stability's own rate pair so the other reason caps are untouched), and the three arms of the old `IsUnstable()` — ride height above rest, yaw demand past grip — are **removed** with `InstabilityRideHeightMargin`, `InstabilityMinSpeedMps` and `InstabilityYawTolerance`; `ThrottleReason.Stability`, `MaxThrottleFromStability` and the pedal-bar colour follow the rename. **Precedence:** the same factor ran at `cead3dd` on the **longitudinal** field and was removed at `c18444a` because that detector "was unreliable and triggered on decompression" — the lateral axis does not repeat it, which the drive showed. **closed (driver)**
-- `ceiling-factor-range` — closed (`29b267b`): the domain is 0.05 to 1.25 in 0.05 steps. **closed**
+- `ceiling-factor-range` — closed (`29b267b`): the domain is 0.05 to 2.00 in 0.05 steps, default 0.90. **closed**
 - `tcs-cap-floor-setting` — **DECIDED (driver): no menu item, and the throttle floor under a TCS cut is 0.2** (`TcsCapFloor`, `Racer.cs`, read by `TcsCapLevel`). The limit and the softness stay the policy's only knobs; the floor is a floor rather than a preference, so it does not earn a row.
 - `overspeed-thresholds-setting` — **BUILT (compile-verified, dev build 616), drive owed**: `Overspeed Correction` is a list now — `Off`, then `0.1` to `1.0` in 0.1 steps, default `0.2` — where the number is the throttle lifted per 0.1 G of surplus over the fixed 0.2 G threshold, so the cut completes at `0.2 + 0.1 / value` (`0.1` reproduces the shape driven at build 612, `1.0` completes at 0.30 G). `OverspeedEnabled` is retired and carried (False → Off, True → the default); the arm trio stays const. The drive it owes is the overspeed section of `docs/TEST-PLAN.md`.
 - `corner-record-dormant-fields` — **deleted (dev build 614)**: `RequiresEarlyBrake` and `RampEndNode` had no writer anywhere and their only reader was the dead `MaxSpeedForBrakingDistance`, so both went with it. **closed**
