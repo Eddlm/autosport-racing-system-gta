@@ -12,6 +12,15 @@ No memory survives between sessions; this is the durable record, so save to it a
 - **Every pointer carries its filename** (`Racer.cs:391`), so it can be jumped to and machine-checked. Lines are anchors, not contracts — grep the symbol if one misses.
 - **Size**: DSH truncates this file at ~65 KB and drops the tail. Pointers here, depth in a companion; a block that outgrows a few lines moves out whole.
 
+## How this tree is sized and split
+The goal: every file can be ingested whole. Size is the symptom, never the trigger — the trigger is a second question.
+- **One file, one question.** The `read this when` line in a file's head *is* its definition: a branch answering two questions is the split, and kilobytes never are.
+- **Depth never lives inside a register.** An entry is one line; when it outgrows that, its detail moves to a companion and the entry keeps the pointer. A ladder entry carrying its own essay is how the backlog reached 66 KB.
+- **One mechanical ceiling, no second opinion.** 40 KB for anything read whole, 65 KB absolute for this file (DSH truncates it there). **Frozen records are exempt**: a log nobody ingests may weigh what it likes.
+- **A split ships three things in one commit** — the index line in the parent, the child's `read this when`, and every anchor re-pointed. Miss one and the split creates the debt it was meant to pay; this tree has already carried anchors four hundred lines wrong.
+- **One home per fact.** Siblings point, never duplicate. `docs/FEATURES.md` is the counterexample: a second home for facts the code owns, and it duly drifted.
+- The check is `wc -c` over the registers in the three-day cron: past 40 KB it is *reported*, never blocked.
+
 ## Companion memory files (NOT auto-loaded — read when the topic matches)
 **Convention**: this file orients; a companion carries the depth. Each line leads with its **trigger vocabulary** — when a request, the code or the bug touches those words, open that file *before* answering.
 - `AGENTS/AGENTS-DUEL.md` — **rivals, overtaking, side-by-side, cards, maneuvers, DiveBomb / DefendLane / Yield / ChillOut, nitro, time-to-apex**: the Duel model design. Status: designed, **not implemented**.
