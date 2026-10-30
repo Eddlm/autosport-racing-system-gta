@@ -19,7 +19,7 @@ The goal: every file can be ingested whole. Size is the symptom, never the trigg
 - **One mechanical ceiling, no second opinion.** 40 KB for anything read whole, 65 KB absolute for this file (DSH truncates it there). **Frozen records are exempt**: a log nobody ingests may weigh what it likes.
 - **A split ships three things in one commit** — the index line in the parent, the child's `read this when`, and every anchor re-pointed. Miss one and the split creates the debt it was meant to pay; this tree has already carried anchors four hundred lines wrong.
 - **One home per fact.** Siblings point, never duplicate. `docs/FEATURES.md` is the counterexample: a second home for facts the code owns, and it duly drifted.
-- The check is `wc -c` over the registers in the three-day cron: past 40 KB it is *reported*, never blocked.
+- The check is `wc -c` over the registers when a session starts work on the tree: past 40 KB it is *reported*, never blocked. No cron, no hook — it is a habit, and the user carries the reminder.
 
 ## Companion memory files (NOT auto-loaded — read when the topic matches)
 **Convention**: this file orients; a companion carries the depth. Each line leads with its **trigger vocabulary** — when a request, the code or the bug touches those words, open that file *before* answering.
