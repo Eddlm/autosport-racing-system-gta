@@ -1783,6 +1783,7 @@ namespace ARS
             CanRegisterNewLap = false;
             _previousNode = -1;
             Pressure = 0f;
+            _chasingClampDeg = float.NaN;
 
             float restHeight = Car.HeightAboveGround;
             if (restHeight > 0f) _restHeightAboveGround = restHeight;
