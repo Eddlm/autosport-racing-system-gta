@@ -334,7 +334,7 @@ namespace ARS
                     RefreshTrackList();
                     Log(LogImportance.Info, "Initialization complete.", true);
                     DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
-                    HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARSe~w~ menu.");
+                    HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARS~w~ menu.");
                     _loaded = true;
                 }
                 catch (Exception loadError)
