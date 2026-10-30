@@ -2481,6 +2481,7 @@ namespace ARS
             _gameTimeNextInLine = 0;
             LeaderboardFinish.Clear();
             RaceStatus = RaceState.None;
+            PlayerParticipating = false;
             _gridInstanced = false;
         }
 

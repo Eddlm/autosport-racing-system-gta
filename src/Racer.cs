@@ -1786,6 +1786,7 @@ namespace ARS
 
             float restHeight = Car.HeightAboveGround;
             if (restHeight > 0f) _restHeightAboveGround = restHeight;
+            Control.HandBrakeTime = 0;
             Control.MaxThrottle = 1f;
             Control.MaxBrake = 1f;
             Control.MaxBrakeFromABS = 1f;
