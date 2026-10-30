@@ -25,13 +25,13 @@ namespace ARS
             return TrackRepository.Load(trackname);
         }
 
-        public static void LoadTrack(ARS ars, XmlDocument xmlFile)
+        public static bool LoadTrack(ARS ars, XmlDocument xmlFile)
         {
             ARS.Log(ARS.LogImportance.Info, "Loading track");
             if (xmlFile == null)
             {
                 UI.Notify("~r~Invalid track file.");
-                return;
+                return false;
             }
             if (!ars.IsFreeCamActive) Function.Call(Hash.DO_SCREEN_FADE_OUT, 200);
             ars.SetLoadingPromptText("Loading track...");
@@ -147,7 +147,7 @@ namespace ARS
             {
                 ARS.Log(ARS.LogImportance.Error, "Track refused: " + ARS.RouteNodes.Count + " route nodes, six needed");
                 GTA.UI.Notify("~r~That track has no usable route: six nodes minimum.");
-                return;
+                return false;
             }
 
             GenerateRouteInfo();
@@ -181,6 +181,7 @@ namespace ARS
             ars.SetSPLVisibility(false);
 
             ARS.Log(ARS.LogImportance.Info, "Loaded track");
+            return true;
         }
 
         public static void GenerateRouteInfo()

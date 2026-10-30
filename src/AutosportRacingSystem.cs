@@ -326,15 +326,23 @@ namespace ARS
             }
             else
             {
-
-                BuildPowerCache();
-                RefreshPowerControls();
-                FillCachedCandidates(_intendedOpponents);
-                RefreshTrackList();
-                Log(LogImportance.Info, "Initialization complete.", true);
-                DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
-                HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARSe~w~ menu.");
-                _loaded = true;
+                try
+                {
+                    BuildPowerCache();
+                    RefreshPowerControls();
+                    FillCachedCandidates(_intendedOpponents);
+                    RefreshTrackList();
+                    Log(LogImportance.Info, "Initialization complete.", true);
+                    DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
+                    HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARSe~w~ menu.");
+                    _loaded = true;
+                }
+                catch (Exception loadError)
+                {
+                    _loaded = false;
+                    Log(LogImportance.Error, "Initialization failed after the background load: " + loadError.Message, true);
+                    DisplayHelpTextTimed("~r~ARS failed to load. Check log.", 4000);
+                }
             }
 
             _isLoadingScript = false;
@@ -1432,9 +1440,15 @@ namespace ARS
                 trackPath = _trackListPaths[0];
             }
 
-            TrackLoader.LoadTrack(this, TrackLoader.LoadTrackFile(trackPath));
+            bool loaded = TrackLoader.LoadTrack(this, TrackLoader.LoadTrackFile(trackPath));
 
             if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+
+            if (!loaded)
+            {
+                _trackInstanced = false;
+                return;
+            }
 
             _trackInstanced = true;
             Log(LogImportance.Info, "Track instanced");
@@ -2076,7 +2090,7 @@ namespace ARS
                         if (dist <= 5f)
                         {
                             DisplayHelpTextThisFrame("Press ~INPUT_CONTEXT~ to race at ~b~" + Path.GetFileNameWithoutExtension(nearest.TrackPath) + "~w~.");
-                            if (!_arsMenu.Visible && CanWeUse(Game.Player.Character.CurrentVehicle) && !IsMenuHotkeyPressed() && Game.IsControlJustPressed(2, GTA.Control.Context))
+                            if ((_arsMenu == null || !_arsMenu.Visible) && CanWeUse(Game.Player.Character.CurrentVehicle) && !IsMenuHotkeyPressed() && Game.IsControlJustPressed(2, GTA.Control.Context))
                             {
 
                                 SelectTrackInMenu(nearest.TrackPath);
@@ -3269,7 +3283,6 @@ namespace ARS
             InstructionalScaleform.Dispose();
             InstructionalScaleform = null;
             Function.Call(Hash._0x10D373323E5B9C0D);
-            Game.Player.Character.HasGravity = true;
 
             }
             catch (Exception abortError)
@@ -3279,21 +3292,31 @@ namespace ARS
             }
             finally
             {
-
-                if (CanWeUse(Game.Player.Character.CurrentVehicle))
-                {
-                    Vehicle vehicle = Game.Player.Character.CurrentVehicle;
-                    VehicleMemory.SetThrottle(vehicle, 0f);
-                    VehicleMemory.SetBrakes(vehicle, 0f);
-                    VehicleMemory.SetSteerInput(vehicle, 0f);
-                    VehicleMemory.SetSteerAngle(vehicle, 0f);
-                }
-
                 RaceStatus = RaceState.None;
                 PlayerParticipating = false;
                 LeaderboardFinish.Clear();
                 _raceTimedFinishMs = 0;
                 _routeEditorActive = false;
+
+                try
+                {
+                    Ped player = Game.Player.Character;
+                    if (player != null)
+                    {
+                        player.HasGravity = true;
+                        Vehicle vehicle = player.CurrentVehicle;
+                        if (CanWeUse(vehicle))
+                        {
+                            VehicleMemory.SetThrottle(vehicle, 0f);
+                            VehicleMemory.SetBrakes(vehicle, 0f);
+                            VehicleMemory.SetSteerInput(vehicle, 0f);
+                            VehicleMemory.SetSteerAngle(vehicle, 0f);
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                }
             }
         }
 
@@ -3845,7 +3868,6 @@ namespace ARS
 
                     r._baseName = r.Name;
                     r.DriverName = r.Name;
-                    r._baseName = r.Name;
 
                     Racers.Add(r);
                 }
