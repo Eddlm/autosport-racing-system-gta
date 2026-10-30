@@ -1,4 +1,5 @@
-// Rewrites a settings file that cannot be parsed, keeping every value it can still read.
+// The schema of every owned ini, and the two passes that keep a file inside it: prune undeclared keys, repair
+// values the menu could not have produced. A file whose keys cannot be parsed is not rewritten as a whole.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -216,7 +217,8 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
                         string opened = SectionNameOf(trimmed);
                         if (opened != null) section = opened;
                         int separator = trimmed.IndexOf('=');
-                        bool isKeyLine = opened == null && separator > 0 && string.Equals(section, "MENU", StringComparison.OrdinalIgnoreCase);
+                        bool isComment = trimmed.Length > 0 && (trimmed[0] == ';' || trimmed[0] == '#');
+                        bool isKeyLine = opened == null && !isComment && separator > 0 && string.Equals(section, "MENU", StringComparison.OrdinalIgnoreCase);
                         if (!isKeyLine) { kept.Add(line); continue; }
                         string key = trimmed.Substring(0, separator).Trim();
                         KeySpec spec;
@@ -226,8 +228,8 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
                     }
                     if (stale.Count == 0 && unusable.Count == 0) continue;
                     WriteAtomic(file.Path, kept);
-                    if (stale.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped stale " + string.Join(", ", stale.ToArray()));
-                    if (unusable.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped unusable " + string.Join(", ", unusable.ToArray()));
+                    if (stale.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped stale " + string.Join(", ", stale.ToArray()), true);
+                    if (unusable.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped unusable " + string.Join(", ", unusable.ToArray()), true);
                 }
                 catch (Exception ex)
                 {
