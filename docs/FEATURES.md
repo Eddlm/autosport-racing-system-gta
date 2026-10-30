@@ -114,7 +114,7 @@ The corner table is rebuilt each time you apply a section or delete a node, so t
 
 ## Making the field yours
 
-The grid draws from a text file of model names in `Vehicles\` — the default list runs to hundreds of cars, and there is a muscle list, a lemons list and room for yours. The menu lists whatever files are in the folder, re-read each time it opens, so adding a roster is dropping in a file. If your list is shorter than the grid you asked for, Repeat Cars To Fill Grid tops it up, and your own car is added last: the back of the grid on a circuit, the front on a point-to-point.
+The grid draws from a text file of model names in `Vehicles\` — the default list runs to hundreds of cars, and there is room for yours. The menu lists whatever files are in the folder, re-read each time it opens, so adding a roster is dropping in a file. If your list is shorter than the grid you asked for, Repeat Cars To Fill Grid tops it up, and your own car is added last: the back of the grid on a circuit, the front on a point-to-point.
 
 Rivals get their names from `Drivers\names.txt`, reshuffled for every grid, and the player keeps their own. Switch rival lap times on in Interface and those names come with them.
 
