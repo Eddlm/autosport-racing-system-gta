@@ -222,6 +222,8 @@ namespace ARS
         const float RouteBrakeCap = 0.2f;
 
         const float GsLaneThrottleMaxFloor = 1f;
+        // At the outer edge the floor keeps half a pedal: lifting there is the one thing that pulls a car further out.
+        const float GsLaneOutsideFloor = 0.5f;
 
         const float ProjectionInputPerSecond = 2f;
         const float ProjectionBrakeFloor = 0.5f;
@@ -700,8 +702,6 @@ namespace ARS
             if (Car.Velocity.LengthSquared() > 0.01f) courseDir = Car.Velocity.Normalized;
 
             float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-            // The one bound every writer obeys: half the road, less the car's half width, less the buffer.
-            float laneLimit = Math.Max(roadWide - carHalfWidth - LaneEdgeBufferMeters, 0f);
 
             float steerRefOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
 
@@ -710,6 +710,10 @@ namespace ARS
 
             AdvancePastApex();
             CornerPoint lineCorner = NearestApexAhead();
+            // The one bound every writer obeys: half the road, less the car's half width, less the buffer. Inside the corner the
+            // car's own width is the whole buffer, so the lane may ask for the inner extreme with its edge on the line; on the
+            // way in the half metre still applies.
+            float laneLimit = Math.Max(roadWide - carHalfWidth - (IsWithinCorner(lineCorner) ? 0f : EdgeEmptySpaceMeters), 0f);
             if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, steerRefOffset, laneLimit, roadWide * 2f, out float curveLean, out bool leanOutward))
             {
                 laneRequest = curveLean;
@@ -920,9 +924,9 @@ namespace ARS
 
         // A line exists at all only under this radius.
         const float CurveLeanRadiusMeters = 900f;
-        const float CurveLeanChordSeconds = 1.01f;
+        const float CurveLeanChordSeconds = 1.25f;
         // The base rate: width over radius, 10 m/s when the radius equals the width.
-        const float CurveLeanWidthScale = 10f;
+        const float CurveLeanWidthScale = 20f;
 
         // OUT ignores the bend: 6 m/s, straight or curve.
         const float CurveLeanOutMps = 6f;
@@ -997,13 +1001,12 @@ namespace ARS
             if (lineCorner == null) return false;
             int apexNode = lineCorner.Node;
             if (HasPassedApex(apexNode)) return false;
+
             if (!(lineCorner.DetectedRadius < IdealLineMaxRadiusMeters)) return false;
             if (!(speedMps > ApexSpeedWithDownforce(lineCorner.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph))) return false;
 
             float metresToApex = MetresToNode(apexNode);
-
-            float gateMeters = OutsideGateMeters(steerRefPoint);
-            if (!(metresToApex <= IdealLineWindowMeters && metresToApex > gateMeters)) return false;
+            if (!(metresToApex <= IdealLineWindowMeters)) return false;
 
             if (_lineBiasNode != apexNode)
             {
@@ -1011,8 +1014,28 @@ namespace ARS
                 _lineBiasMeters = ARS.GetRandomInt(-(int)(LaneBiasMaxMeters * 100f), (int)(LaneBiasMaxMeters * 100f) + 1) / 100f;
             }
             _lineCornerNode = apexNode;
-            float safeBound = Math.Max(steerRefPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f - LaneEdgeBufferMeters, 0f);
-            lane = Math.Sign(lineCorner.Angle) * Math.Max(safeBound - LaneOutsideGapMeters - _lineBiasMeters, 0f);
+            float safeBound = Math.Max(steerRefPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f - EdgeEmptySpaceMeters, 0f);
+            float outsideLane = Math.Sign(lineCorner.Angle) * Math.Max(safeBound - LaneOutsideGapMeters - _lineBiasMeters, 0f);
+            lane = outsideLane;
+
+            int outsideEntranceNode = CornerEntranceNode(lineCorner, apexNode);
+            if (outsideEntranceNode >= 0)
+            {
+                if (ForwardNodeDistance(steerRefPoint.Node) >= ForwardNodeDistance(outsideEntranceNode)) return false;
+
+                // The one release the width can veto: the corner has already begun by heading, so the outside line only lets go
+                // once the car has used the width. What it must reach is whatever the walls leave reachable, not the bare
+                // outside lane: a rival wall can close that lane for the whole corner and waiting for it would never end.
+                float ownLane = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
+                float reachable = ClampLaneToWalls(outsideLane, steerRefPoint.TrackHalfWidth, _leftWallHeld, _rightWallHeld);
+                Vector3 steerFlat = new Vector3(steerRefPoint.Direction.X, steerRefPoint.Direction.Y, 0f);
+                Vector3 entranceFlat = new Vector3(ARS.TrackPoints[outsideEntranceNode].Direction.X, ARS.TrackPoints[outsideEntranceNode].Direction.Y, 0f);
+                if (steerFlat.LengthSquared() > 0.01f && entranceFlat.LengthSquared() > 0.01f
+                    && Vector3.Angle(steerFlat, entranceFlat) < OutReleaseAlignDegrees
+                    && Math.Abs(ownLane - reachable) < OutReleaseReachedMeters) return false;
+            }
+
+            if (metresToApex <= OutsideGateMeters(steerRefPoint)) return false;
             return true;
         }
 
@@ -1056,7 +1079,10 @@ namespace ARS
 
             _leanApproachMps = CurveLeanWidthScale * trackWidthMeters / Math.Max(ahead.PreciseCurveRadius, 5f);
             _laneCornerDir = (int)cornerDir;
-            lane = -cornerDir * Math.Max(laneEdge - LaneInsideGapMeters, 0f);
+            // Inside the corner the lane may ask for the inner extreme; on the way in it keeps the gap, so the line does not hug
+            // the edge a hundred metres before the turn-in.
+            float insideGap = IsWithinCorner(lineCorner) ? 0f : LaneInsideGapMeters;
+            lane = -cornerDir * Math.Max(laneEdge - insideGap, 0f);
 
             if (lane * cornerDir < ownLane * cornerDir && HeadingLeansOut(cornerDir))
             {
@@ -1070,7 +1096,7 @@ namespace ARS
 
         // The mover: 40 m/s^2, 24 m/s, half of both outward. The cap bounds the lunge, the acceleration the reversal.
         const float LaneMoverAccelMps2 = 40f;
-        const float LaneMoverSpeedCapMps = 24f;
+        const float LaneMoverSpeedCapMps = 99f;
 
         const float LaneMoverMaxStepSeconds = 0.1f;
 
@@ -1169,7 +1195,7 @@ namespace ARS
 
         const float LaneOutsideGapMeters = 0.5f;
         // The lane never leaves the road: whatever asks for it, the aim keeps the car's half width plus this buffer from the edge.
-        const float LaneEdgeBufferMeters = 0.5f;
+        const float EdgeEmptySpaceMeters = 0.5f;
         const float LaneInsideGapMeters = 1f;
         const float LaneBiasMaxMeters = 0.5f;
 
@@ -1180,7 +1206,10 @@ namespace ARS
         const float IdealLineBlendMinMeters = 20f;
         // Beyond this radius a bend is a kink and gets no outside.
         const float IdealLineMaxRadiusMeters = 50f;
-
+        // How close the steering lookahead's direction has to be to the entrance's before the out state calls the corner begun.
+        const float OutReleaseAlignDegrees = 10f;
+        // How close to the outside lane the car has to be before the out state is allowed to let go of it.
+        const float OutReleaseReachedMeters = 1f;
         const float IdealLineSpeedMarginMph = 15f;
 
         CornerPoint NearestApexAhead()
@@ -1810,14 +1839,17 @@ namespace ARS
             return Color.Blue;
         }
 
-        const float GsLaneFloorLateralShare = 0.33f;
+        const float GsLaneFloorLateralShare = 0.525f;
 
         float GsLaneThrottleFloorValue(out bool insideRegime)
         {
             insideRegime = false;
             if (!ARS.GsLaneThrottleFloor) return 0f;
 
-            if (_projectionOutsideSeconds > 0f) return 0f;
+            // The projection owns the pedals once it is outside the edge, because it is the one braking for the line: the floor
+            // yields to it whether or not the car is still over its target speed. Waiting on the outside timer was not enough,
+            // since that timer only runs while the car is also faster than the target and re-arms the moment it is not.
+            if (_projectionOutsideMeters > 0f && _projectionWidening) return 0f;
             float theoreticalGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
             if (!(theoreticalGs > 0f)) return 0f;
             if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= GsLaneFloorLateralShare * theoreticalGs) return 0f;
@@ -1833,8 +1865,11 @@ namespace ARS
             float projectedOffset = ARS.SignedLaneOffset(projected, projectedNode.Position, projectedNode.Direction);
 
             float room = Math.Max(projectedNode.TrackHalfWidth - VehicleData.ModelDimensions.X * 0.5f, 1f);
-            float depth = ARS.Clamp(projectedOffset * insideSign / room, 0f, 1f);
-            return GsLaneThrottleMaxFloor * depth;
+            // Full pedal from the inside through the centre, falling to half at the outer edge. Past that edge the off-track
+            // projection owns the braking, so the floor stays put and lets it act.
+            float inward = projectedOffset * insideSign / room;
+            float outerShare = ARS.Clamp(-inward, 0f, 1f);
+            return GsLaneThrottleMaxFloor - (GsLaneThrottleMaxFloor - GsLaneOutsideFloor) * outerShare;
         }
 
         void ConvertSpeedToPedals()
@@ -2907,7 +2942,7 @@ namespace ARS
             float hisLane = ARS.SignedLaneOffset(defender.Car.Position, defender.CurrentTrackPoint.Position, defender.CurrentTrackPoint.Direction);
             float combinedWidth = Math.Abs(VehicleData.ModelDimensions.X) + Math.Abs(defender.VehicleData.ModelDimensions.X);
             float clearance = (Math.Abs(VehicleData.BoundingBox) + Math.Abs(defender.VehicleData.BoundingBox)) * 0.5f;
-            float reachable = Math.Abs(CurrentTrackPoint.TrackHalfWidth) - Math.Abs(VehicleData.BoundingBox) * 0.5f - LaneEdgeBufferMeters;
+            float reachable = Math.Abs(CurrentTrackPoint.TrackHalfWidth) - Math.Abs(VehicleData.BoundingBox) * 0.5f - EdgeEmptySpaceMeters;
             float inward = -defendTurn;
 
             // If the road leaves no room to be clear of him on the inside, the card is not played: a target that clamps back
