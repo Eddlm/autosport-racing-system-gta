@@ -649,6 +649,10 @@ namespace ARS
             Car.FreezePosition = false;
             CanRegisterNewLap = false;
             _previousNode = -1;
+            ActiveManeuver.Type = ManeuverType.None;
+            ActiveManeuver.Target = null;
+            ActiveManeuver.LastEnabled = 0;
+            Array.Clear(_cardCooldownUntil, 0, _cardCooldownUntil.Length);
             _inputTrail.Clear();
             _inputTrailChevronDistance = 0f;
             _restHeightAboveGround = -1f;
