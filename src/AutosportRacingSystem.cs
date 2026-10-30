@@ -550,10 +550,12 @@ namespace ARS
 
         public static float SignedLaneOffset(Vector3 pos, Vector3 refPoint, Vector3 refDir)
         {
+            // Unit axis: the cross of a graded direction with the world's up is horizontal, but its length is the slope's
+            // cosine, so the offset would shrink on a hill while the bands it is compared against do not.
             Vector3 right = Vector3.Cross(refDir, Vector3.WorldUp);
-            Vector3 rPos = pos - refPoint;
+            if (right.LengthSquared() < 0.0001f) return 0f;
 
-            return Vector3.Dot(right, rPos);
+            return Vector3.Dot(right.Normalized, pos - refPoint);
 
         }
 

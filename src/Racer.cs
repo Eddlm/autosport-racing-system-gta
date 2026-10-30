@@ -929,7 +929,7 @@ namespace ARS
         // A line exists at all only under this radius.
         const float CurveLeanRadiusMeters = 900f;
         const float CurveLeanChordSeconds = 1.25f;
-        // The base rate: width over radius, 10 m/s when the radius equals the width.
+        // The base rate: 20 x full width / radius, in m/s: 20 when the radius equals the width.
         const float CurveLeanWidthScale = 20f;
 
         // OUT ignores the bend: 6 m/s, straight or curve.
