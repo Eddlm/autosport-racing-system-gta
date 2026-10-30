@@ -58,13 +58,8 @@ SHVDNE is safe for your other SHVDN scripts, it's built on top of SHVDN and can 
 
 # License
 
-**Personal use, no redistribution.** You may install, play and modify ARS for your own
-personal, non-commercial use, including reading and forking the source to change it on your
-own machine. You may **not** republish it: no reuploads of the source or of any build,
-modified or not, no bundling into mod packs or server packages, free or paid, without
-written permission. Credit and a link back are asked for any video or screenshots of it
-running. Full terms, including the third-party notices and the warranty disclaimer, are in
-[LICENSE](LICENSE).
-
-This is a source-available licence, not an open-source one — deliberately: the source is
-here to be read and learned from, not to be redistributed as someone else's build.
+**PolyForm Noncommercial 1.0.0.** You may use, modify and share ARS — including
+distributing your own modified builds — for any **non-commercial** purpose: playing it,
+learning from the source, tweaking it, publishing a fork. Commercial use of any kind needs
+the author's permission, and anyone you pass a copy to must get these terms and the notice
+above with it. Full terms in [LICENSE](LICENSE).
