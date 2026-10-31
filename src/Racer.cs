@@ -178,13 +178,10 @@ namespace ARS
 
         float _pursuitAimLateralM;
 
-        float _lineBiasMeters;
 
         int _lineCornerNode = -1;
 
-        int _laneCrossLoggedAt;
 
-        float _leanApproachMps;
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
 
