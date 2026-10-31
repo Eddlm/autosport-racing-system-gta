@@ -7,14 +7,14 @@ How the front-slip guard is built today, what each number means, the evidence be
 | Name | What it is | Rate |
 |---|---|---|
 | `capShare` | what counts as "the peak" this tick, as a multiple of the tyre's own peak: `Peak Slip Target (0.90) x slow-corner allowance + Peak Slip Tolerance (°) / peak(v)`. `FrontPct` is normalised against it. | none — physics and settings |
-| `factor` | how much of the request survives: `Clamp(100 / FrontPct, 1 - Deepest Cut %, 1)`. | none — recomputed every tick |
-| `clampTarget` | the angle the wheel is allowed. Above the target (`FrontPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. **`Open Up on Throttle` is out of the tree** (build 1389): the row, its key and `OpensUpClampScale()` are gone because the scale never reached the wheel — `open-up-inert` in the backlog keeps the formula. When it comes back it must scale the clamp and not `capShare`, because `FrontPct` also feeds the throttle cap and scaling it there closed the pedal instead of the wheel. | none — recomputed every tick |
+| `factor` | how much of the request survives: `Clamp(100 / wheelPct, 1 - Deepest Cut %, 1)`, where `wheelPct` is the measurement with the power trim folded in. | none — recomputed every tick |
+| `clampTarget` | the angle the wheel is allowed. Above the target (`FrontPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. **`Target Under Power (%)` moves the aim, not the clamp**: from half pedal to full it blends the wheel's allowance from the target's to that share of the *peak* (45 % ships), so an exit hands back the angle it does not need. It folds into `wheelPct`, a local the wheel alone reads — the throttle band and the readout keep the base allowance, because scaling the shared one would close the pedal instead of the wheel. | none — recomputed every tick |
 | `chasingClamp` | the ceiling actually applied, `min(lock, chasingClamp)`. Born at `clampTarget` the first time the guard can speak, and the **only state** in the system. | closes exponentially, opens linearly (below) |
 
 The steering factor:
 
 ```csharp
-factor = Clamp(100 / FrontPct, 1 - DeepestCutPct / 100, 1)
+factor = Clamp(100 / wheelPct, 1 - DeepestCutPct / 100, 1)
 ```
 
 - `FrontPct` is the **outer** front tyre's side slip, as a percentage of `capShare`: the loaded wheel, steered to 0.75 of the command by Ackermann, so the one that lands on its peak while the inner runs past by design. It is picked by magnitude (`min(|left|, |right|)`), so no index-to-side assumption is baked in.

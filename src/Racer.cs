@@ -1459,6 +1459,20 @@ namespace ARS
             return LateralPeakAtSpeed(fwdSpeed) * AllowedSlipShare(fwdSpeed);
         }
 
+        const float ExitTrimPedalStart = 0.5f;
+
+        // Under power the wheel aims at a share of the PEAK, not of the target: it hands back angle the exit does not need.
+        float AllowedSlipTrim(float fwdSpeed)
+        {
+            float ramp = ARS.Clamp((Control.Throttle - ExitTrimPedalStart) / (1f - ExitTrimPedalStart), 0f, 1f);
+            if (ramp <= 0f) return 1f;
+
+            float baseShare = Math.Max(0.05f, AllowedSlipShare(fwdSpeed));
+            float exitShare = ARS.Clamp(ARS.TargetUnderPowerPct, 5, 100) * 0.01f;
+            float blended = baseShare + (exitShare - baseShare) * ramp;
+            return baseShare / Math.Max(0.05f, blended);
+        }
+
         SlipState MeasureSlipFromMemory(float fwdSpeed)
         {
             SlipState s = new SlipState();
@@ -1556,9 +1570,10 @@ namespace ARS
             if (_slip.Readable && _slip.FrontPct > 0.01f)
             {
 
-                float factor = ARS.Clamp(100f / _slip.FrontPct, 1f - ARS.SlipCutDepthPct * 0.01f, 1f);
+                float wheelPct = _slip.FrontPct * AllowedSlipTrim(fwdSpeed);
+                float factor = ARS.Clamp(100f / wheelPct, 1f - ARS.SlipCutDepthPct * 0.01f, 1f);
 
-                float clampTarget = _slip.FrontPct > 100f
+                float clampTarget = wheelPct > 100f
                     ? Math.Abs(requestedSteer) * factor
                     : VehicleData.SteeringLock;
 
