@@ -384,8 +384,8 @@ namespace ARS
 
                 if (!ARS.IsPointToPoint && corners > 1)
                 {
-                    int previousEnd = ARS.Corners[(c + corners - 1) % corners].EndNode;
-                    if (ArcSpan(previousEnd, entryStart[c], count) > count / 2) entryStart[c] = ArcNode(previousEnd, 1, count);
+                    int previousApex = ARS.Corners[(c + corners - 1) % corners].Node;
+                    if (ArcSpan(previousApex, entryStart[c], count) > count / 2) entryStart[c] = ArcNode(previousApex, 1, count);
                 }
             }
 
@@ -395,10 +395,7 @@ namespace ARS
                 float sign = Math.Sign(corner.Angle);
                 if (sign == 0f) continue;
                 int intoApex = ArcSpan(entryStart[c], corner.Node, count);
-                int outOfApex = rampNodes[c];
-                int nextEntry = entryStart[(c + 1) % corners];
-                outOfApex = Math.Min(outOfApex, Math.Max(2, ArcSpan(corner.Node, nextEntry, count) - 1));
-                if (intoApex < 2 || outOfApex < 2) continue;
+                if (intoApex < 2) continue;
 
                 float cornerRadius = Math.Max(5f, corner.DetectedRadius);
                 float inside = ARS.InsideSign(corner.Angle);
@@ -418,19 +415,21 @@ namespace ARS
                     previous = share;
                     covered[node] = true;
                 }
-                float deficitForward = 2f;
-                previous = inside;
-                for (int step = 0; step <= outOfApex; step++)
+            }
+
+            // Past the apex the line does not open again: every node holds the apex offset until the next
+            // corner's ramp starts, which is clamped so it cannot cross this apex.
+            for (int c = 0; c < corners; c++)
+            {
+                CornerPoint corner = ARS.Corners[c];
+                int holdStop = ArcSpan(corner.Node, corner.EndNode, count) < ArcSpan(corner.Node, entryStart[(c + 1) % corners], count)
+                    ? corner.EndNode : entryStart[(c + 1) % corners];
+                int holdSpan = Math.Min(ArcSpan(corner.Node, holdStop, count) - 1, count / 2);
+                for (int step = 1; step <= holdSpan; step++)
                 {
                     int node = ArcNode(corner.Node, step, count);
-                    float share = inside;
-                    if (step > LaneFieldApexPlateauNodes)
-                    {
-                        deficitForward *= (float)Math.Exp(-NodeRate(node, cornerRadius));
-                        share = ARS.Clamp(outside - (outside - inside) * deficitForward * 0.5f, previous - NodeStep(node, cornerRadius), previous + NodeStep(node, cornerRadius));
-                    }
-                    ARS.TrackPoints[node].LaneLineShare = share;
-                    previous = share;
+                    ARS.TrackPoints[node].LaneLineShare = ARS.TrackPoints[corner.Node].LaneLineShare
+                        * (1f - LaneSmoothStep((float)step / Math.Max(1, holdSpan)));
                     covered[node] = true;
                 }
             }
@@ -458,6 +457,15 @@ namespace ARS
             for (int node = 1; node < count; node++)
                 widestStep = Math.Max(widestStep, Math.Abs(ARS.TrackPoints[node].LaneLineShare - ARS.TrackPoints[node - 1].LaneLineShare));
             ARS.Log(ARS.LogImportance.Info, "Lane field: " + corners + " corner(s), ramps from the radius, widest share step between adjacent nodes " + widestStep.ToString("0.000"));
+            for (int c = 0; c < ARS.Corners.Count; c++)
+            {
+                CornerPoint probe = ARS.Corners[c];
+                ARS.Log(ARS.LogImportance.Info, "lane field apex " + probe.Node
+                    + ": inside " + ARS.InsideSign(probe.Angle).ToString("0.0")
+                    + " | at apex " + ARS.TrackPoints[probe.Node].LaneLineShare.ToString("0.00")
+                    + " | +20 nodes " + ARS.TrackPoints[ArcNode(probe.Node, 20, count)].LaneLineShare.ToString("0.00")
+                    + " | +60 nodes " + ARS.TrackPoints[ArcNode(probe.Node, 60, count)].LaneLineShare.ToString("0.00"));
+            }
         }
 
 
@@ -503,7 +511,7 @@ namespace ARS
         static int ArcNode(int fromNode, int offset, int count)
         {
             int node = fromNode + offset;
-            if (ARS.IsPointToPoint) return Math.Min(node, count - 1);
+            if (ARS.IsPointToPoint) return Math.Max(0, Math.Min(node, count - 1));
             return ((node % count) + count) % count;
         }
 

@@ -709,7 +709,8 @@ namespace ARS
             if (laneCornerInside != null) UpdateApexProbe(laneCornerInside, steerRefOffset);
 
             int laneNode = TrackLoader.NodeAhead(CurrentTrackPoint.Node, speedMps * ARS.LanePreviewSeconds, ARS.TrackPoints.Count);
-            _laneField = ARS.TrackPoints[laneNode].LaneLineShare * laneLimit;
+            float laneEdge = Math.Max(roadWide - carHalfWidth, 0f);
+            _laneField = ARS.TrackPoints[laneNode].LaneLineShare * laneEdge;
             float aimRadius = ARS.TrackPoints[steerRefPoint.Node].PreciseCurveRadius;
             float toApex = lineCorner != null ? MetresToNode(lineCorner.Node) : 0f;
             float prepMetres = speedMps * ARS.LanePrepSeconds;
@@ -721,11 +722,11 @@ namespace ARS
                 laneRequest = _laneField;
                 laneReason = LaneReason.CurveLean;
             }
-            else if (Lap > 0 && lineCorner != null && aimRadius <= ARS.LaneDynamicRadius)
+            else if (Lap > 0 && aimRadius <= ARS.LaneDynamicRadius)
             {
                 float rate = ARS.Clamp(ARS.LaneRatePerRadius / Math.Max(1f, aimRadius), ARS.LaneRateFloor, ARS.LaneRateCeiling);
-                float reach = Math.Min(laneLimit, rate * Math.Max(0f, toApex - ARS.LaneAbsoluteMetres));
-                laneRequest = steerRefOffset + ARS.InsideSign(lineCorner.Angle) * reach;
+                float reach = Math.Min(laneLimit, rate * speedMps * ARS.LanePreviewSeconds);
+                laneRequest = steerRefOffset + ARS.InsideSign(ARS.TrackPoints[steerRefPoint.Node].Angle) * reach;
                 laneReason = LaneReason.CurveLean;
             }
             CornerPoint laneRef = laneCornerInside != null ? laneCornerInside : lineCorner;
@@ -735,7 +736,8 @@ namespace ARS
                 if ((laneRequest - steerRefOffset) * outward > ARS.LaneOutsidePullMetres)
                     laneRequest = steerRefOffset + outward * ARS.LaneOutsidePullMetres;
             }
-            laneRequest = ARS.Clamp(laneRequest, -laneLimit, laneLimit);
+            float requestLimit = absoluteMode ? laneEdge : laneLimit;
+            laneRequest = ARS.Clamp(laneRequest, -requestLimit, requestLimit);
 
             if (ActiveManeuver.Type == ManeuverType.DefendLane && MetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
             {
