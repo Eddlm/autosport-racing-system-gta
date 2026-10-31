@@ -46,7 +46,7 @@ namespace ARS
 
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip, ShowSlideAngle
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip, ShowSlideAngle, ShowLaneField
     }
     public partial class ARS : Script
     {
@@ -198,6 +198,7 @@ namespace ARS
         { Options.ShowWheelSlip, false },
         { Options.ShowFrontSlip, false },
         { Options.ShowSlideAngle, false },
+        { Options.ShowLaneField, false },
         { Options.ShowGsProjection, false },
         { Options.ShowGLine, false },
         { Options.ShowRouteRadius, false }
@@ -1318,6 +1319,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Mark every lip the route scan found with a cyan tick and a line across the road.");
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere over each wheel of the focus car, coloured by side-slip: white at rest, green at the peak, red where grip goes flat.");
             AddDebugCheckbox(debugMenu, Options.ShowFrontSlip, "Show Front Slip", "Read the focus AI car's outer front slip against what the guard allows, in the subtitle: a heading, then the ratio (1.0 sits on the allowance), the speed, and the wheel ceiling in degrees. The same line whichever slip source is on.");
+            AddDebugCheckbox(debugMenu, Options.ShowLaneField, "Show Lane Field", "Draw the precomputed lane field as a row of small black spheres from fifty nodes before the apex to fifty after: each sphere sits at the offset that node asks for, so the line's shape and where it starts moving are both visible at once.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the corner, avoidance and wall systems.");
             AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the focus car's constant-acceleration path from its roof: a line to 0.5 s and another from there to 1 s; the bend is the acceleration. One colour for both, decided where the path is measured: green fading to white as the Gs lane throttle floor lets go (green at the inside edge, white at the centre), red when the path leaves the road and runs further out than the car (or drifts out with the car still on it), yellow when it leaves the road but cuts inside the car, blue otherwise.");
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
@@ -2220,7 +2222,7 @@ namespace ARS
                     if (NoCollision) ApplyNoCollision(true);
                 }
 
-                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowSlideAngle] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
+                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowSlideAngle] || DebugToggles[Options.ShowLaneField] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
                 {
                     Vector3 focusPos = Game.Player.Character.Position;
                     DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
