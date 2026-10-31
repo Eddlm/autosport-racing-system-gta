@@ -120,6 +120,15 @@
     <MakeDir Directories="$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem" />
     <Exec Command="robocopy &quot;$(GtaArsScriptsDir)&quot; &quot;$(MSBuildProjectDirectory)\Dist\AutosportRacingSystem&quot; /E /XD &quot;$(GtaArsScriptsDir)\Settings&quot; &quot;$(GtaArsScriptsDir)\Tracks\testing&quot; /XF *.zip *.log *.bak *.bak-crash pidump.txt build-number.txt /NFL /NDL /NJH /NJS" IgnoreExitCode="true" />
   </Target>
+  <!-- Commit cadence: one commit per ten builds (a number ending in 0) or when the topic changes. The
+       build is the moment that decision comes up, so the numbers that decide it are printed here. The
+       Exec output is captured and re-emitted at high importance, because it is not shown at /v:minimal. -->
+  <Target Name="CommitCadence" AfterTargets="Build">
+    <Exec Command="python &quot;$(MSBuildProjectDirectory)\docs\build-reminder.py&quot;" ConsoleToMsBuild="true" IgnoreExitCode="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="CommitCadenceLine" />
+    </Exec>
+    <Message Importance="high" Text="$(CommitCadenceLine)" />
+  </Target>
   <!-- Development build counter. This is deliberately NOT the assembly version: 0.8.6.0 in
        src\Properties\AssemblyInfo.cs is the release identity and only moves by hand. The counter is a
        separate, auto-incrementing identity that the init banner reports, so two builds of one release
