@@ -384,13 +384,13 @@ namespace ARS
                 for (int i = 0; i <= intoApex; i++)
                 {
                     int node = ArcNode(entryStart[c], i, count);
-                    ARS.TrackPoints[node].LaneLineShare = sign * (1f - 2f * LaneSmoothStep((float)i / intoApex));
+                    ARS.TrackPoints[node].LaneLineShare = sign * (1f - 2f * LaneEaseOut((float)i / intoApex));
                     covered[node] = true;
                 }
                 for (int i = 0; i <= outOfApex; i++)
                 {
                     int node = ArcNode(corner.Node, i, count);
-                    ARS.TrackPoints[node].LaneLineShare = -sign * (1f - LaneSmoothStep((float)i / outOfApex));
+                    ARS.TrackPoints[node].LaneLineShare = -sign * (1f - LaneEaseIn((float)i / outOfApex));
                     covered[node] = true;
                 }
             }
@@ -493,13 +493,13 @@ namespace ARS
             {
                 int node = (startStep + i) % count;
                 if (covered[node]) continue;
-                ARS.TrackPoints[node].LaneLineShare = sign * (1f - 2f * LaneSmoothStep((float)i / intoApex));
+                ARS.TrackPoints[node].LaneLineShare = sign * (1f - 2f * LaneEaseOut((float)i / intoApex));
             }
             for (int i = 0; i <= outOfApex; i++)
             {
                 int node = (apexStep + i) % count;
                 if (covered[node]) continue;
-                ARS.TrackPoints[node].LaneLineShare = -sign * (1f - LaneSmoothStep((float)i / outOfApex));
+                ARS.TrackPoints[node].LaneLineShare = -sign * (1f - LaneEaseIn((float)i / outOfApex));
             }
         }
 
@@ -521,6 +521,21 @@ namespace ARS
         {
             t = ARS.Clamp(t, 0f, 1f);
             return t * t * (3f - 2f * t);
+        }
+
+        // Moves off the far edge at once and arrives at the near one slowing down: that is a turn-in, not a smoothstep's flat ends.
+        static float LaneEaseOut(float t)
+        {
+            t = ARS.Clamp(t, 0f, 1f);
+            float rest = 1f - t;
+            return 1f - rest * rest;
+        }
+
+        // Leaves the apex gently and opens out towards the centre.
+        static float LaneEaseIn(float t)
+        {
+            t = ARS.Clamp(t, 0f, 1f);
+            return t * t;
         }
 
         public static void BuildApexTable()
