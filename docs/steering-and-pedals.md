@@ -21,13 +21,13 @@ factor = Clamp(100 / wheelPct, 1 - DeepestCutPct / 100, 1)
 - The cut stops at **`Deepest Cut (%)`** (`Rival Steering`, 0-100 in steps of 5, ships **60**): the share of the request the guard may remove at the bottom of a slide, so 60 still leaves 40 % of what was asked. There is no second clamp behind it. The row is stated as a *depth* rather than a floor so that its ladder runs with the guard's strength — 0 turns the cut off and 100 leaves nothing — instead of against it, which is what made the old numbers read backwards.
 - The shipped 60 is `1/2.5`, the point where the traction curve stops falling, so the wheel bottoms out just before a deeper cut would buy no more grip (2.25x the physical peak at the shipping 0.90 target, because the floor is measured against the allowance). That is a stop the tyre chooses, not a preference: below it the cut only takes direction away, and it also bounds how far each pulse of the loop can swing when the slip reading trails the wheel by a tick or two.
 
-The pedal, applied to `combinedInput` before it splits into throttle and brake:
+The pedal band, parked on `SlipPedalCut = false` while the wheel law is judged alone. With it on it is applied to `combinedInput` before it splits into throttle and brake:
 
 ```csharp
 if (FrontPct > 100) combinedInput = Min(combinedInput, Max(0, 1 - (FrontPct - 100) / 150));
 ```
 
-Only the throttle, never below zero, closed between 1x and 2.5x the target. Braking is left to the plan.
+Only the throttle, never below zero, closed between 1x and 2.5x the allowance. Braking is left to the plan. It went out on 2026-10-31 because it was the third thing moving the pedal in one test: with the trim handing back angle under power, a band that closed the throttle on the same measurement left no way to tell which of the two was being judged. What would bring it back is a four-wheel slide - both tyres well past 100 - where removing angle buys nothing and only speed does (the 2026-10-25 measurements: `F 312 / R 118` in a corner that did not turn, against `237-257 / 197-204` in one that did).
 
 ## The actuator: close and open
 

@@ -242,6 +242,9 @@ namespace ARS
 
         float _chasingClampDeg = float.NaN;
 
+        // Out while the wheel law is judged alone: it closed the throttle on the same measure the wheel was cut by.
+        static readonly bool SlipPedalCut = false;
+
         const float SlipOpenDegPerSec = 72f;
         const float SlipClosePerSecond = 15f;
         const float SlipCloseMaxDegPerSec = 90f;
@@ -1768,7 +1771,7 @@ namespace ARS
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
 
-            if (_slip.Readable && _slip.FrontPct > 100f)
+            if (SlipPedalCut && _slip.Readable && _slip.FrontPct > 100f)
             {
                 float over = ARS.Clamp((_slip.FrontPct - 100f) / 150f, 0f, 1f);
                 combinedInput = Math.Min(combinedInput, Math.Max(0f, 1f - over));

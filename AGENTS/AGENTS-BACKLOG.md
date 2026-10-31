@@ -29,7 +29,13 @@ reports `410-`…`417-` (untracked, like the rest of `docs/audit/`). Each slug b
   shared one would close the pedal instead of the wheel — the mistake this file already carries. With the floor at 60 %
   the wheel bottoms out in the deep under power, so `Deepest Cut` is the effective knob there and the trim owns the
   shallow end.
-- `gs-lane-throttle-floor` — **PARKED (build 1389, driver: "para que no envenenen el test")**: the corner-exit floor is now
+- `slip-pedal-cut` — **PARKED (build 1394, driver: "desactivemoslo, envenena el test")**: the slip-driven throttle band in
+  `ConvertSpeedToPedals` - `combinedInput = Min(combinedInput, Max(0, 1 - (FrontPct - 100) / 150))` - is now behind
+  `static readonly bool SlipPedalCut = false`. It closed the throttle from 100 % to 250 % of the allowance, the same
+  measure the wheel is cut by, so with the power trim also handing back angle there were two laws moving the pedal in one
+  corner and no way to attribute what the seat felt. Revive by flipping the flag; the band has no setting of its own (its
+  1x-2.5x span is the engine's flat point, `sfTractionMinAngle`), so a row there would be the first. What it is for: a
+  four-wheel slide, where both axles are past 100 and only speed restores grip. the corner-exit floor is now
   `static readonly bool GsLaneThrottleFloor = false`, so `GsLaneThrottleFloorValue` returns 0 on its first line and the
   throttle is never raised above what the slip cut allowed. The row, its `KeySpec` and the `GetBool` are gone, so no ini can
   switch it back on. It poisoned the test twice over: it raised the throttle with `Math.Max` **after** the slip cut had
