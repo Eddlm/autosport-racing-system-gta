@@ -773,7 +773,7 @@ namespace ARS
                     + " ask=" + Control.SteerDegrees.ToString("0.00")
                     + " in=" + ARS.Remap(Control.SteerDegrees, -VehicleData.SteeringLock, VehicleData.SteeringLock, -1f, 1f, true).ToString("0.000")
                     + " yaw=" + VehicleData.YawRotationPerSecondDegrees.ToString("0.0")
-                    + " slip=" + _slip.InnerPct.ToString("0")
+                    + " slip=" + _slip.FrontPct.ToString("0")
                     + " mph=" + ARS.MpsToMph(fwdSpeed).ToString("0")
                     + " cref=" + Vector3.SignedAngle(new Vector3(Car.ForwardVector.X, Car.ForwardVector.Y, 0f), new Vector3(courseDir.X, courseDir.Y, 0f), Vector3.WorldUp).ToString("0.0")
                     + " aimoff=" + aimPointOffset.ToString("0.00")
@@ -1425,7 +1425,7 @@ namespace ARS
 
         public struct SlipState
         {
-            public float InnerPct;
+            public float FrontPct;
             public float RearPct;
             public bool Readable;
         }
@@ -1446,7 +1446,7 @@ namespace ARS
             return 1f + slow;
         }
 
-        // Target x slow-corner allowance + tolerance / peak(v): a share first, absolute degrees second.
+        // Target x slow-corner allowance + tolerance / peak(v), at the outer front wheel: a share first, absolute degrees second.
         float AllowedSlipShare(float fwdSpeed)
         {
             float peakDeg = LateralPeakAtSpeed(fwdSpeed);
@@ -1469,12 +1469,12 @@ namespace ARS
             float rawLeft = Math.Abs(slips[0]);
             float rawRight = Math.Abs(slips[1]);
 
-            float rawInner = Math.Abs(Control.SteerDegrees) < FrontSlipNeutralSteerDeg
+            float rawOuter = Math.Abs(Control.SteerDegrees) < FrontSlipNeutralSteerDeg
                 ? 0.5f * (rawLeft + rawRight)
-                : Math.Max(rawLeft, rawRight);
+                : Math.Min(rawLeft, rawRight);
 
             float capShare = AllowedSlipShare(fwdSpeed);
-            s.InnerPct = 100f * rawInner / capShare;
+            s.FrontPct = 100f * rawOuter / capShare;
             s.RearPct = slips.Count >= 4
                 ? 100f * Math.Max(Math.Abs(slips[2]), Math.Abs(slips[3])) / capShare
                 : 0f;
@@ -1500,7 +1500,7 @@ namespace ARS
                 : float.MaxValue;
             float demand = speed * speed / Math.Max(innerRadius, 0.5f);
 
-            s.InnerPct = 100f * demand / available;
+            s.FrontPct = 100f * demand / available;
             return s;
         }
         float GeometrySteerCeiling(float fwdSpeed)
@@ -1553,12 +1553,12 @@ namespace ARS
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             _slip = MeasureFrontSlip(fwdSpeed);
 
-            if (_slip.Readable && _slip.InnerPct > 0.01f)
+            if (_slip.Readable && _slip.FrontPct > 0.01f)
             {
 
-                float factor = ARS.Clamp(100f / _slip.InnerPct, 1f - ARS.SlipCutDepthPct * 0.01f, 1f);
+                float factor = ARS.Clamp(100f / _slip.FrontPct, 1f - ARS.SlipCutDepthPct * 0.01f, 1f);
 
-                float clampTarget = _slip.InnerPct > 100f
+                float clampTarget = _slip.FrontPct > 100f
                     ? Math.Abs(requestedSteer) * factor
                     : VehicleData.SteeringLock;
 
@@ -1753,9 +1753,9 @@ namespace ARS
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
 
-            if (_slip.Readable && _slip.InnerPct > 100f)
+            if (_slip.Readable && _slip.FrontPct > 100f)
             {
-                float over = ARS.Clamp((_slip.InnerPct - 100f) / 150f, 0f, 1f);
+                float over = ARS.Clamp((_slip.FrontPct - 100f) / 150f, 0f, 1f);
                 combinedInput = Math.Min(combinedInput, Math.Max(0f, 1f - over));
             }
             MeasureProjectionOutside(1f);
@@ -3076,7 +3076,7 @@ namespace ARS
 
             string state = fwdSpeed <= 0f ? "inactive - stopped"
                 : !_slip.Readable ? "no reading"
-                : _slip.InnerPct < 0.5f ? "inactive - straight"
+                : _slip.FrontPct < 0.5f ? "inactive - straight"
                 : null;
 
             if (state != null)
@@ -3087,7 +3087,7 @@ namespace ARS
 
             float cap = _steerGrantedCeiling > 0.01f ? _steerGrantedCeiling : VehicleData.SteeringLock;
 
-            UI.ShowSubtitle("Slip vs Allowed~n~x" + (_slip.InnerPct * 0.01f).ToString("0.0")
+            UI.ShowSubtitle("Slip vs Allowed~n~x" + (_slip.FrontPct * 0.01f).ToString("0.0")
                 + "   " + mph.ToString("0") + "mph"
                 + "   cap " + cap.ToString("0.0") + "°", 50);
         }

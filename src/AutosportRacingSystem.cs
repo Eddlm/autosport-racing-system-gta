@@ -1067,7 +1067,7 @@ namespace ARS
             HookListTextPicker(damperCounterItem);
 
             // The key keeps its legacy name; the row it fills is Peak Slip Target.
-            NativeListItem<string> peakSlipTargetItem = new NativeListItem<string>("Peak Slip Target", "How much of the tyre's peak slip the guard lets it use before it cuts: 100 % aims at the peak, below that the car never reaches its grip, above that it slides. The tolerance row adds absolute degrees on top.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
+            NativeListItem<string> peakSlipTargetItem = new NativeListItem<string>("Peak Slip Target", "How much of the outer front tyre's peak slip the guard lets it use before it cuts: 100 % aims at the peak, below that the car never reaches its grip, above that it slides. It is read on the outer wheel, the loaded one, while the inner runs past by design. The tolerance row adds absolute degrees on top.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
             peakSlipTargetItem.ItemChanged += (sender, args) =>
             {
                 PeakSlipTarget = float.Parse(peakSlipTargetItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1077,7 +1077,7 @@ namespace ARS
             rivalSteeringMenu.Add(peakSlipTargetItem);
             HookListTextPicker(peakSlipTargetItem);
 
-            NativeListItem<string> peakSlipToleranceItem = new NativeListItem<string>("Peak Slip Tolerance (°)", "Extra slip the guard allows on top of the target, in absolute degrees: 0 cuts at the target, 2 lets the tyre run two degrees past it, 6 is past the point where the tyre's force is flat, i.e. no guard at all.", SettingsRepair.OptionsFor("PeakSlipToleranceDeg"));
+            NativeListItem<string> peakSlipToleranceItem = new NativeListItem<string>("Peak Slip Tolerance (°)", "Extra slip the guard allows on top of the target, in absolute degrees of that same outer front wheel: 0 cuts at the target, 2 lets the tyre run two degrees past it, 6 is past the point where the tyre's force is flat, i.e. no guard at all.", SettingsRepair.OptionsFor("PeakSlipToleranceDeg"));
             peakSlipToleranceItem.ItemChanged += (sender, args) =>
             {
                 PeakSlipToleranceDeg = float.Parse(peakSlipToleranceItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -1275,7 +1275,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowRivalry, "Show Rivalry", "Draw the two rival walls from the car's node to one second ahead: red while a rival holds one in, blue once released, plus a line from the car to each far end.");
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Mark every lip the route scan found with a cyan tick and a line across the road.");
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere over each wheel of the focus car, coloured by side-slip: white at rest, green at the peak, red where grip goes flat.");
-            AddDebugCheckbox(debugMenu, Options.ShowFrontSlip, "Show Front Slip", "Read the focus AI car's front slip against what the guard allows, in the subtitle: a heading, then the ratio (1.0 sits on the allowance), the speed, and the wheel ceiling in degrees. The same line whichever slip source is on.");
+            AddDebugCheckbox(debugMenu, Options.ShowFrontSlip, "Show Front Slip", "Read the focus AI car's outer front slip against what the guard allows, in the subtitle: a heading, then the ratio (1.0 sits on the allowance), the speed, and the wheel ceiling in degrees. The same line whichever slip source is on.");
             AddDebugCheckbox(debugMenu, Options.LockLaneCentre, "Lock Lane Centre (test)", "Force every racer's lane target to a fixed near-centre offset, overriding the corner, avoidance and wall systems.");
             AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the focus car's constant-acceleration path from its roof: a line to 0.5 s and another from there to 1 s; the bend is the acceleration. One colour for both, decided where the path is measured: green fading to white as the Gs lane throttle floor lets go (green at the inside edge, white at the centre), red when the path leaves the road and runs further out than the car (or drifts out with the car still on it), yellow when it leaves the road but cuts inside the car, blue otherwise.");
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
