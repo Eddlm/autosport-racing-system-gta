@@ -156,7 +156,8 @@ namespace ARS
         public static float SteerDampingGain = 0.5f;
 
         public static float DamperCountersteerMaxDeg = 2f;
-        public static float SteerCeilingFactor = 0.9f;
+        public static float PeakSlipTarget = 0.9f;
+        public static float PeakSlipToleranceDeg = 0f;
 
         public static float SlipCutFloor = 0.4f;
 
@@ -1091,15 +1092,25 @@ namespace ARS
             rivalSteeringMenu.Add(damperCounterItem);
             HookListTextPicker(damperCounterItem);
 
-            NativeListItem<string> steerCeilingFactorItem = new NativeListItem<string>("Peak Slip Share", "How much of the tyre's peak slip the limiter allows before it cuts: 1.00 cuts exactly at the peak, below 1.00 cuts earlier and the car never uses its grip, above 1.00 lets it slide, 2.00 barely cuts at all.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
-            steerCeilingFactorItem.ItemChanged += (sender, args) =>
+            NativeListItem<string> peakSlipTargetItem = new NativeListItem<string>("Peak Slip Target", "How much of the tyre's peak slip the guard lets it use before it cuts: 100 % aims at the peak, below that the car never reaches its grip, above that it slides. The tolerance row adds absolute degrees on top.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
+            peakSlipTargetItem.ItemChanged += (sender, args) =>
             {
-                SteerCeilingFactor = float.Parse(steerCeilingFactorItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SteerCeilingFactor", steerCeilingFactorItem.Items[args.Index]);
+                PeakSlipTarget = float.Parse(peakSlipTargetItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SteerCeilingFactor", peakSlipTargetItem.Items[args.Index]);
             };
-            steerCeilingFactorItem.SelectedIndex = Math.Max(0, steerCeilingFactorItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor).ToString("0.00", CultureInfo.InvariantCulture)));
-            rivalSteeringMenu.Add(steerCeilingFactorItem);
-            HookListTextPicker(steerCeilingFactorItem);
+            peakSlipTargetItem.SelectedIndex = Math.Max(0, peakSlipTargetItem.Items.IndexOf(SettingsMenuStore.GetFloat("SteerCeilingFactor", PeakSlipTarget).ToString("0.00", CultureInfo.InvariantCulture)));
+            rivalSteeringMenu.Add(peakSlipTargetItem);
+            HookListTextPicker(peakSlipTargetItem);
+
+            NativeListItem<string> peakSlipToleranceItem = new NativeListItem<string>("Peak Slip Tolerance (°)", "Extra slip the guard allows on top of the target, in absolute degrees: 0 cuts at the target, 2 lets the tyre run two degrees past it, 6 is past the point where the tyre's force is flat, i.e. no guard at all.", SettingsRepair.OptionsFor("PeakSlipToleranceDeg"));
+            peakSlipToleranceItem.ItemChanged += (sender, args) =>
+            {
+                PeakSlipToleranceDeg = float.Parse(peakSlipToleranceItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("PeakSlipToleranceDeg", peakSlipToleranceItem.Items[args.Index]);
+            };
+            peakSlipToleranceItem.SelectedIndex = Math.Max(0, peakSlipToleranceItem.Items.IndexOf(SettingsMenuStore.GetFloat("PeakSlipToleranceDeg", PeakSlipToleranceDeg).ToString("0.0", CultureInfo.InvariantCulture)));
+            rivalSteeringMenu.Add(peakSlipToleranceItem);
+            HookListTextPicker(peakSlipToleranceItem);
 
             NativeListItem<string> slipCutFloorItem = new NativeListItem<string>("Slip Cut Floor", "The deepest the limiter may cut the wheel: 0.40 leaves 40% of what was asked, 0.00 removes the request entirely and the car goes straight on."
                 , SettingsRepair.OptionsFor("SlipCutFloor"));
@@ -3402,7 +3413,8 @@ namespace ARS
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
             DamperCountersteerMaxDeg = SettingsMenuStore.GetFloat("DamperCountersteerMaxDeg", DamperCountersteerMaxDeg);
-            SteerCeilingFactor = SettingsMenuStore.GetFloat("SteerCeilingFactor", SteerCeilingFactor);
+            PeakSlipTarget = SettingsMenuStore.GetFloat("SteerCeilingFactor", PeakSlipTarget);
+            PeakSlipToleranceDeg = SettingsMenuStore.GetFloat("PeakSlipToleranceDeg", PeakSlipToleranceDeg);
             SlipCutFloor = SettingsMenuStore.GetFloat("SlipCutFloor", SlipCutFloor);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);

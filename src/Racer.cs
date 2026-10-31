@@ -1572,6 +1572,18 @@ namespace ARS
             return 1f + slow;
         }
 
+        float AllowedSlipShare(float fwdSpeed)
+        {
+            float peakDeg = LateralPeakAtSpeed(fwdSpeed);
+            float toleranceShare = peakDeg > 0.01f ? ARS.PeakSlipToleranceDeg / peakDeg : 0f;
+            return Math.Max(0.05f, ARS.PeakSlipTarget) * SlowCornerSlipShare(fwdSpeed) + toleranceShare;
+        }
+
+        float AllowedSlipDegrees(float fwdSpeed)
+        {
+            return LateralPeakAtSpeed(fwdSpeed) * AllowedSlipShare(fwdSpeed);
+        }
+
         SlipState MeasureSlipFromMemory(float fwdSpeed)
         {
             SlipState s = new SlipState();
@@ -1586,7 +1598,7 @@ namespace ARS
                 ? 0.5f * (rawLeft + rawRight)
                 : Math.Max(rawLeft, rawRight);
 
-            float capShare = Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed);
+            float capShare = AllowedSlipShare(fwdSpeed);
             s.InnerPct = 100f * rawInner / capShare;
             s.RearPct = slips.Count >= 4
                 ? 100f * Math.Max(Math.Abs(slips[2]), Math.Abs(slips[3])) / capShare
@@ -1605,7 +1617,7 @@ namespace ARS
             if (speed < FrontSlipTheoryMinSpeedMps || gripGs <= 0.01f || wheelBase <= 0.5f) return s;
 
             s.Readable = true;
-            float available = gripGs * FrontSlipGravity * Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(fwdSpeed);
+            float available = gripGs * FrontSlipGravity * AllowedSlipShare(fwdSpeed);
 
             float commandDeg = Math.Abs(Control.SteerDegrees);
             float innerRadius = commandDeg > FrontSlipTheoryMinCommandDeg
@@ -1643,13 +1655,12 @@ namespace ARS
         {
 
             if (!SpeedSteerCeiling) return VehicleData.SteeringLock;
-            float ceiling = TRLateralAtSpeed > 0.01f ? PeakSlipCeilingAt(TRLateralAtSpeed) * ARS.SteerCeilingFactor : GeometrySteerCeiling(fwdSpeed);
+            float ceiling = LateralPeakAtSpeed(fwdSpeed) > 0.01f ? PeakSlipCeilingAt(AllowedSlipDegrees(fwdSpeed)) : GeometrySteerCeiling(fwdSpeed);
             float speedMph = ARS.MpsToMph(fwdSpeed);
             if (speedMph >= SteerLimitRampEndMph) return ceiling;
 
             float endSpeed = ARS.MphToMps(SteerLimitRampEndMph);
-            float endPeak = LateralPeakAtSpeed(endSpeed);
-            float endCeiling = endPeak > 0.01f ? PeakSlipCeilingAt(endPeak) * ARS.SteerCeilingFactor : GeometrySteerCeiling(endSpeed);
+            float endCeiling = LateralPeakAtSpeed(endSpeed) > 0.01f ? PeakSlipCeilingAt(AllowedSlipDegrees(endSpeed)) : GeometrySteerCeiling(endSpeed);
 
             return Math.Max(ceiling, ManeuverRamp(speedMph, endCeiling));
         }
@@ -3275,12 +3286,13 @@ namespace ARS
             float clamp = float.IsNaN(_chasingClampDeg) ? _finalCeilingDeg : _chasingClampDeg;
             float asked = Math.Abs(_steerPreLimitDegrees);
             float mph = ARS.MpsToMph(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
-            float share = Math.Max(0.05f, ARS.SteerCeilingFactor) * SlowCornerSlipShare(ARS.MphToMps(mph));
+            float share = AllowedSlipShare(ARS.MphToMps(mph));
+            float cap = PeakSlipCeilingAt(AllowedSlipDegrees(ARS.MphToMps(mph)));
 
             UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.0") + "   "
                 + _slipFactor.ToString("0.00") + "   " + mph.ToString("0") + "mph"
                 + "   F " + _slip.InnerPct.ToString("0") + "   R " + _slip.RearPct.ToString("0")
-
+                + "   cap " + cap.ToString("0.0") + "°"
                 + (Math.Abs(share - 1f) > 0.001f ? "   x" + share.ToString("0.0") : ""), 50);
         }
 

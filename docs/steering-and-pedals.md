@@ -1,12 +1,12 @@
 # Steering and pedal limits
 
-How the front-slip guard is built today, what each number means, the evidence behind it, what was measured on track, and what is still open. Written after the 2026-10-25 session (builds 1050-1089) and rewritten after the 2026-10-26 session, which turned the actuator rates into the law described below (builds 1127-1140).
+How the front-slip guard is built today, what each number means, the evidence behind it, what was measured on track, and what is still open. Written after the 2026-10-25 session (builds 1050-1089) and rewritten after the 2026-10-26 session, which turned the actuator rates into the law described below (builds 1127-1140), and again after 2026-10-31 (build 1382), which split the single share into a target and an absolute tolerance without changing the shipped behaviour.
 
 ## The four pieces
 
 | Name | What it is | Rate |
 |---|---|---|
-| `capShare` | what counts as "the peak" this tick: `Peak Slip Share (0.90) x slow-corner allowance`. `InnerPct` is normalised against it. | none — physics and settings |
+| `capShare` | what counts as "the peak" this tick, as a multiple of the tyre's own peak: `Peak Slip Target (0.90) x slow-corner allowance + Peak Slip Tolerance (°) / peak(v)`. `InnerPct` is normalised against it. | none — physics and settings |
 | `factor` | how much of the request survives: `Clamp(100 / InnerPct, SlipCutFloor, 1)`. | none — recomputed every tick |
 | `clampTarget` | the angle the wheel is allowed. Above the target (`InnerPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. Then scaled by **Open Up on Throttle** (`Development`, 10-100 %, ships 100 = off): the clamp falls to that share of itself by half pedal. It scales the clamp and not `capShare`, because `InnerPct` also feeds the throttle cap and scaling it there closed the pedal instead of the wheel. | none — recomputed every tick |
 | `chasingClamp` | the ceiling actually applied, `min(lock, chasingClamp)`. Born at `clampTarget` the first time the guard can speak, and the **only state** in the system. | closes exponentially, opens linearly (below) |
@@ -73,12 +73,21 @@ Rules the calibration has to respect, learned the hard way:
 - **A relative rule and an absolute cap do not agree.** "500 % arrives in 0.1 s" is true for a 2 deg target and false for a 10 deg one, because 500 % of 10 deg is a 40 deg gap and 40 deg in 0.1 s is 400 deg/s. The measured table above is the honest statement; the percentage alone is not.
 - **Exponential opening was tried and rejected**: its time varied with the gap, so the same manoeuvre looked different depending on how far the clamp had fallen. Linear makes the time proportional to the distance, which is what the car feels.
 
-## Why the floor and the share are settings
+## Why the floor, the target and the tolerance are settings
 
+- **`Peak Slip Target`** (0.05-2.00, ships **0.90**) is how much of the tyre's peak slip the guard lets it use before it cuts. 1.00 aims at the peak, below it the car never reaches its grip, above it the tyre slides, 2.00 barely cuts at all. Being a share it moves with the car and with the speed: the same value means the same thing on an 11 degree car and a 22 degree one.
+- **`Peak Slip Tolerance (°)`** (0-6, steps of 0.5, ships **0**) is extra slip allowed on top, in **absolute degrees**: 0 cuts at the target, 2 lets the tyre run two degrees past it, 6 is past the 2.5x flat point, i.e. no guard at all. Being absolute it weighs more the smaller the peak is, so at speed it dominates the target — 4 degrees against a 2.7 degree peak is 148 % of it.
 - **`Slip Cut Floor`** (0.00-0.90, ships 0.40) is the deepest the cut may go. 0.40 leaves 40 % of the request; 0.00 can remove it entirely and the car goes straight on.
-- **`Peak Slip Share`** (0.05-2.00, ships **0.90**) is how much of the tyre's peak slip the limiter allows before it cuts. 1.00 cuts exactly at the peak, below it the car never reaches its grip, above it the tyre slides, 2.00 barely cuts at all.
 
-Both live in `Rival Steering`. `Peak Slip Share` is the old `SteerCeilingFactor` re-pointed at the live limiter: it used to scale a ceiling in degrees for the speed law, which is parked (see below).
+All three live in `Rival Steering`, and the first two are **one** quantity:
+
+```
+capShare = Peak Slip Target x SlowCornerSlipShare + Peak Slip Tolerance / peak(v)
+```
+
+One writer, one denominator: `capShare` feeds the wheel cut, the throttle band and the readout from the same expression (`AllowedSlipShare`, `Racer.cs`). The tolerance is converted to a share by dividing it by the peak at that speed, which is why it is added *after* the slow-corner allowance rather than scaled by it. **At the shipped `tolerance = 0` the expression is algebraically the old `Peak Slip Share x allowance`**, so the row's arrival changed no behaviour; only moving it does. The row was named `Peak Slip Share` and before that `SteerCeilingFactor`, and the ini key is still `SteerCeilingFactor` — renaming the store would need a migration for a value that already exists in every install.
+
+The speed-derived ceiling the target once scaled is the parked `SpeedSteerCeiling` branch (see below); it now reads the same `AllowedSlipDegrees` so that flipping it carries this pair rather than a second arithmetic.
 
 ## Slow corners
 
@@ -98,7 +107,7 @@ In the **theory** source the allowance is nearly inert: that source cannot be re
 `Slip From Memory` (Development submenu) picks where `InnerPct` comes from:
 
 - **Memory (default)**: the wheel's own side-slip axis, offset `0x1C4`, normalised so 1.0 is the peak and 2.5 the plateau. The inner front wheel is the signal; with the wheel neutral the pair is averaged.
-- **Theory**: lateral demand against available grip, `demand = v^2 / R` with `R` from the *inner* wheel's radius, `available = grip x g x Peak Slip Share x allowance`. Unreadable below 6.7 mph and when the geometry is degenerate.
+- **Theory**: lateral demand against available grip, `demand = v^2 / R` with `R` from the *inner* wheel's radius, `available = grip x g x capShare`, the tolerance riding inside the same share. Unreadable below 6.7 mph and when the geometry is degenerate.
 
 Two different laws on the same scale, by decision. Normalising them means turning a lateral demand back into an equivalent slip angle, i.e. reintroducing a tyre model.
 
@@ -135,13 +144,14 @@ Reading: `R` at ~200 in both is ~0.78 of `F`, i.e. both axles are past their pea
 Memory source:
 
 ```
-ratio   factor   mph   F n   R n   x1.8
+ratio   factor   mph   F n   R n   cap n.n°   x1.8
 ```
 
 - `ratio` = request / `chasingClamp`: above 1 the guard is holding the wheel back.
 - `factor` = the share of the request the cut leaves; 1.00 means no cut.
 - `F` / `R` = worst front and worst rear tyre, as a percentage of `capShare`.
-- `x` = `capShare` itself, shown **only when it is not 1.0** (Peak Slip Share below 1, or the slow-corner allowance, or both). Without it `F 100` would silently stop meaning "at the peak".
+- `cap` = the ceiling the two rows define, in **command degrees**: `allowed slip x 4/3`, clamped to the lock. It is the law's angle, not the rate-limited `chasingClamp`, and it is the number `Peak Slip Target` plus `Peak Slip Tolerance` are actually setting.
+- `x` = `capShare` itself, shown **only when it is not 1.0** (a target below 1, the tolerance, the slow-corner allowance, or all three). Without it `F 100` would silently stop meaning "at the peak".
 
 Theory source (`Slip From Memory` off) shows **one number**: `chasingClamp / clampTarget x 100`. 100 % means the applied clamp sits where the law says; above it, the gate is still closing onto the target; `--` when there is no target yet.
 
@@ -149,11 +159,11 @@ Only an AI racer draws it: `DrawFrontSlipReadout` returns early for the player, 
 
 ## Open items
 
-1. **Brake when both axles are sliding.** The data says a four-wheel slide needs speed removed, not wheel angle. Proposal: if `R > 180` and `F > 200`, let the combined input go negative (to -1 as the excess grows). The earlier brake experiment was rejected as "slow" because it braked in *every* corner, including front-led understeer where it was unnecessary; gating it on `R` fixes that. `R` is normalised against `capShare` too, so the threshold moves with `Peak Slip Share`.
+1. **Brake when both axles are sliding.** The data says a four-wheel slide needs speed removed, not wheel angle. Proposal: if `R > 180` and `F > 200`, let the combined input go negative (to -1 as the excess grows). The earlier brake experiment was rejected as "slow" because it braked in *every* corner, including front-led understeer where it was unnecessary; gating it on `R` fixes that. `R` is normalised against `capShare` too, so the threshold moves with `Peak Slip Target` and the tolerance.
 2. **Never cut below the peak angle.** `Slip Cut Floor` can be set under the angle that produces peak force on a car asking for little; at the shipping 0.40 that is not the case, but the setting allows it.
 3. **Hysteresis.** The close now starts at any gap (exponential) and the open runs at 72 deg/s, so the old 1-2 Hz oscillation at 100 % should be gone — unverified in the car. A dead band (close above 105, open below 95) remains the fallback.
 4. **The measurement lag.** The slip trails the command by 100-200 ms and nothing compensates. A first-order filter on `InnerPct` would remove most of it.
-5. **`SpeedSteerCeiling` is zombie code** (`Racer.cs`, `static readonly bool = false`): `ResolveSteerCeiling`, `PeakSlipCeilingAt`, `GeometrySteerCeiling`, `ManeuverRamp` and the 5-30 mph ramp are compiled but inert, while `Peak Slip Share` — the setting that used to drive them — now drives the live limiter. Decided for **0.11**: revive the law or delete it **and** its leftovers together.
+5. **`SpeedSteerCeiling` is zombie code** (`Racer.cs`, `static readonly bool = false`): `ResolveSteerCeiling`, `PeakSlipCeilingAt`, `GeometrySteerCeiling`, `ManeuverRamp` and the 5-30 mph ramp are compiled but inert, while the target/tolerance pair drives the live limiter. Decided for **0.11**: revive the law or delete it **and** its leftovers together.
 6. **Left/right asymmetry** was reported and never confirmed. The wheel pick is assumption-free (`max` of both fronts), so if it persists the suspects are the countersteer/damper sign path and the AI's own steering.
 7. **The guard disappears when the source cannot answer.** If `InnerPct <= 0.01` or the source is unreadable (theory below 6.7 mph), the block is skipped and the applied ceiling is the lock — i.e. no limit at all, which reads as an instant release. Keeping the last ceiling instead is a one-line change with real consequences in the car, so it waits for a decision.
 
