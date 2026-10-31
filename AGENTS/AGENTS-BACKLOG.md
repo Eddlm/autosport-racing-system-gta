@@ -392,3 +392,44 @@ unreachable by design (`StagedSpawns` is forced false), `lane on a grade` not wo
   arc length) between the straight and the arc, or, equivalently, a curvature-limited offset profile - which is what the
   exponential was accidentally approximating. The exponential (`c/R`, plateau, radius step factor) is what shipped instead:
   builds 1450-1456, reverted to at 1462.
+
+## double-apex-merge — two apexes closer than a ramp are one corner
+
+Measured on Figureight (build 1495 log, two AI laps). Apex separations: 507, 428, 711, **73**, **197** nodes.
+A ramp is `3 + 3.69/(c * stepScale) * R` nodes: 265 at the first apex, 221 at 1881, 72 at 1954 — the last is the
+gap minus one, i.e. cut by the `previousApex` clamp, not by its own radius.
+
+Consequences, confirmed in the log and confirmed by the driver as *not* visible in the car:
+
+- the exit hold of 1881 is **0 nodes**, so 1954 gets no outside plateau at all (`approach = min(180, 1-1) = 0`);
+- the field runs `+5.15 m` at node 1861 (inside of 1881), `-1.45 m` at 1885 (outside of 1954), `+5.65 m` at 1934
+  (inside of 1954): a full-width crossing and return in ~50 nodes between two apexes that turn the **same way**;
+- 2151 has 44 nodes of plateau instead of 180.
+
+The driver's reading is that this is correct behaviour for a double apex — there is no time to prepare between
+them — and that the last three apexes (1881, 1954, 2151) are the cramped ones, near the end of the track.
+Resolved: the runtime decides, not the field. `ChainedApex()` cancels the absolute mode when the apex after
+this one is closer than the preparation distance (speed x 6 s), so the request falls through to the dynamic mode,
+which holds the inside through the pair. The field keeps describing the ideal line, preparation and all; the car
+is the one that judges whether it is worth paying for. Tested by the driver on builds 1499-1500: the inside is no
+longer lost in the pair. Going off the track there is unrelated to this and predates it.
+
+Earlier decision, superseded: do not merge or re-time them now. If it is revisited, the shape of the fix is to treat a run of apexes
+with the same sign and gaps shorter than the ramp as a single corner with several apexes, building one ramp and
+one plateau, and to let the inside be held across the run instead of releasing to the centre between them.
+
+## lane-outside-guard-replaces-the-field — the 1 m pull is the whole approach, and that is accepted
+
+When the request points to the outside and further out than the car already is, it is clamped to 1 m from the
+car's own lane. Read literally that is a cap on the position, and re-based on the car every tick it fires, so
+wherever the field asks for more than a metre the emitted request is always `ownOffset + 1 m` and the field's
+graded ramp never reaches the steering. Measured (build 1495, two AI laps, Figureight):
+
+    n2063  own -1.04  field -4.35  asked -2.04
+    n2091  own +0.57  field -2.88  asked -0.43
+
+One lap of the driver's own: not visible in the car. Accepted as it stands — the field's shape still decides
+*which side* and the pull still lands the car on it, just at the rate the steering loop allows rather than at the
+rate the ramp was drawn. If it is revisited, the shape of the fix is to cap the *change* per tick instead of the
+position (compare against the offset at the lane node rather than at the car), so the field governs once the
+handover is over.

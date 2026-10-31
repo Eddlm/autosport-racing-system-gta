@@ -347,6 +347,7 @@ namespace ARS
 
         // Share of the usable half width the line wants at each node: +1 the outside, -1 the inside, 0 the centre.
         const int LaneFieldApexPlateauNodes = 3;
+        const float LaneFieldApproachNodes = 180f;   // nominal 6 s at 30 m/s
         const float LaneFieldSaturationPerRadian = 0.75f;
         const float LaneFieldReachPerRadian = 3.69f;
         const float LaneFieldRateFloor = 0.25f;
@@ -417,39 +418,34 @@ namespace ARS
                 }
             }
 
-            // Past the apex the line does not open again: every node holds the apex offset until the next
-            // corner's ramp starts, which is clamped so it cannot cross this apex.
+            // The approach and the exit are the corner's own business: the generator writes the outside plateau
+            // before the ramp, and keeps the apex offset to the end of the span, so no node needs a filler.
             for (int c = 0; c < corners; c++)
             {
                 CornerPoint corner = ARS.Corners[c];
+                float outside = -ARS.InsideSign(corner.Angle);
+                int approach = (int)LaneFieldApproachNodes;
+                if (!ARS.IsPointToPoint && corners > 1)
+                    approach = Math.Min(approach, ArcSpan(ARS.Corners[(c + corners - 1) % corners].Node, entryStart[c], count) - 1);
+                for (int step = 1; step <= approach; step++)
+                {
+                    int node = ArcNode(entryStart[c], -step, count);
+                    if (covered[node]) break;
+                    ARS.TrackPoints[node].LaneLineShare = outside;
+                    covered[node] = true;
+                }
+
                 int holdStop = ArcSpan(corner.Node, corner.EndNode, count) < ArcSpan(corner.Node, entryStart[(c + 1) % corners], count)
                     ? corner.EndNode : entryStart[(c + 1) % corners];
                 int holdSpan = Math.Min(ArcSpan(corner.Node, holdStop, count) - 1, count / 2);
                 for (int step = 1; step <= holdSpan; step++)
                 {
                     int node = ArcNode(corner.Node, step, count);
-                    ARS.TrackPoints[node].LaneLineShare = ARS.TrackPoints[corner.Node].LaneLineShare
-                        * (1f - LaneSmoothStep((float)step / Math.Max(1, holdSpan)));
+                    ARS.TrackPoints[node].LaneLineShare = ARS.TrackPoints[corner.Node].LaneLineShare;
                     covered[node] = true;
                 }
             }
 
-            int gaps = ARS.IsPointToPoint ? corners - 1 : corners;
-            for (int c = 0; c < gaps; c++)
-            {
-                CornerPoint corner = ARS.Corners[c];
-                int nextStart = entryStart[(c + 1) % corners];
-                float from = ARS.TrackPoints[corner.EndNode].LaneLineShare;
-                float to = ARS.TrackPoints[nextStart].LaneLineShare;
-                int gap = ArcSpan(corner.EndNode, nextStart, count);
-                if (gap < 2) continue;
-                for (int i = 1; i < gap; i++)
-                {
-                    int node = ArcNode(corner.EndNode, i, count);
-                    if (covered[node]) continue;
-                    ARS.TrackPoints[node].LaneLineShare = from + (to - from) * LaneSmoothStep((float)i / gap);
-                }
-            }
             FollowTargetShape(count);
 
 
@@ -460,11 +456,23 @@ namespace ARS
             for (int c = 0; c < ARS.Corners.Count; c++)
             {
                 CornerPoint probe = ARS.Corners[c];
+                int gapFromPrevious = c == 0 ? -1 : ArcSpan(ARS.Corners[c - 1].Node, probe.Node, count);
+                int intoApex = ArcSpan(entryStart[c], probe.Node, count);
+                int hold = Math.Min(ArcSpan(probe.Node, probe.EndNode, count), ArcSpan(probe.Node, entryStart[(c + 1) % corners], count)) - 1;
                 ARS.Log(ARS.LogImportance.Info, "lane field apex " + probe.Node
                     + ": inside " + ARS.InsideSign(probe.Angle).ToString("0.0")
-                    + " | at apex " + ARS.TrackPoints[probe.Node].LaneLineShare.ToString("0.00")
-                    + " | +20 nodes " + ARS.TrackPoints[ArcNode(probe.Node, 20, count)].LaneLineShare.ToString("0.00")
-                    + " | +60 nodes " + ARS.TrackPoints[ArcNode(probe.Node, 60, count)].LaneLineShare.ToString("0.00"));
+                    + " | ramp " + intoApex + " nodes (entry " + entryStart[c] + ")"
+                    + " | gap to previous apex " + gapFromPrevious
+                    + " | exit hold " + hold
+                    + " | apex " + ARS.TrackPoints[probe.Node].LaneLineShare.ToString("0.00")
+                    + " +20 " + ARS.TrackPoints[ArcNode(probe.Node, 20, count)].LaneLineShare.ToString("0.00")
+                    + " +60 " + ARS.TrackPoints[ArcNode(probe.Node, 60, count)].LaneLineShare.ToString("0.00"));
+                if (intoApex + 2 < rampNodes[c])
+                    ARS.Log(ARS.LogImportance.Info, "lane field: apex " + probe.Node + " ramp cut to " + intoApex
+                        + " of " + rampNodes[c] + " nodes (gap to previous apex " + gapFromPrevious + ")");
+                if (gapFromPrevious >= 0 && intoApex > gapFromPrevious)
+                    ARS.Log(ARS.LogImportance.Info, "lane field CONFLICT: apex " + c + " ramp (" + intoApex
+                        + ") is longer than the gap to the previous apex (" + gapFromPrevious + "): it overwrites it");
             }
         }
 

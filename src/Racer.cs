@@ -715,7 +715,7 @@ namespace ARS
             float toApex = lineCorner != null ? MetresToNode(lineCorner.Node) : 0f;
             float prepMetres = speedMps * ARS.LanePrepSeconds;
             bool apexStillAhead = laneCornerInside != null && MetresToNode(laneCornerInside.Node) > 0f;
-            bool absoluteMode = Lap > 0 && (apexStillAhead
+            bool absoluteMode = Lap > 0 && !ChainedApex(lineCorner, prepMetres) && (apexStillAhead
                 || (lineCorner != null && toApex <= Math.Max(ARS.LaneAbsoluteMetres, prepMetres)));
             if (absoluteMode)
             {
@@ -757,10 +757,16 @@ namespace ARS
             if (Game.GameTime > _laneTraceAt)
             {
                 _laneTraceAt = Game.GameTime + 1000;
+                string mode = absoluteMode ? "ABS" : (laneReason == LaneReason.CurveLean ? "DYN" : "OWN");
                 ARS.Log(ARS.LogImportance.Info, "lane " + Name + ": node " + CurrentTrackPoint.Node
                     + " offset " + steerRefOffset.ToString("0.00")
-                    + ", field " + _laneField.ToString("0.00")
-                    + ", asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + ")");
+                    + ", field " + _laneField.ToString("0.00") + " @lane node " + laneNode
+                    + ", asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + ")"
+                    + " | " + mode
+                    + " inside " + (laneCornerInside != null ? laneCornerInside.Node.ToString() : "-")
+                    + " apexIn " + (lineCorner != null ? toApex.ToString("0") : "-")
+                    + " seenFrom " + (laneCornerInside != null ? MetresToNode(laneCornerInside.Node).ToString("0") : "-")
+                    + " prep " + prepMetres.ToString("0"));
             }
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
@@ -2540,6 +2546,19 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float OutsideGateMeters(TrackPoint at) => Math.Max(2f * at.TrackHalfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
 
+
+
+        // The field says where the ideal line is; this says whether it is worth paying for. An apex whose neighbour
+        // apex is closer than the preparation distance exists in the field, but jumping to the outside and back
+        // inside in less time than that is not worth it, so the car keeps the lane it already has.
+        bool ChainedApex(CornerPoint corner, float prepMetres)
+        {
+            if (corner == null) return false;
+            for (int i = 1; i < ARS.Corners.Count; i++)
+                if (ARS.Corners[i].Node == corner.Node)
+                    return MetresToNode(corner.Node) - MetresToNode(ARS.Corners[i - 1].Node) < prepMetres;
+            return false;
+        }
 
         bool IsWithinCorner(CornerPoint corner)
         {
