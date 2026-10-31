@@ -347,8 +347,6 @@ namespace ARS
 
         // Share of the usable half width the line wants at each node: +1 the outside, -1 the inside, 0 the centre.
         const int LaneFieldEntryScale = 2;
-        const float LaneFieldWideRadiusMeters = 900f;
-        const int LaneFieldWideMinNodes = 10;
 
         static void BuildLaneField(int count)
         {
@@ -384,13 +382,13 @@ namespace ARS
                 for (int i = 0; i <= intoApex; i++)
                 {
                     int node = ArcNode(entryStart[c], i, count);
-                    ARS.TrackPoints[node].LaneLineShare = sign * (1f - 2f * LaneEaseOut((float)i / intoApex));
+                    ARS.TrackPoints[node].LaneLineShare = sign * (1f - 2f * LaneSmoothStep((float)i / intoApex));
                     covered[node] = true;
                 }
                 for (int i = 0; i <= outOfApex; i++)
                 {
                     int node = ArcNode(corner.Node, i, count);
-                    ARS.TrackPoints[node].LaneLineShare = -sign * (1f - LaneEaseIn((float)i / outOfApex));
+                    ARS.TrackPoints[node].LaneLineShare = -sign * (1f - LaneSmoothStep((float)i / outOfApex));
                     covered[node] = true;
                 }
             }
@@ -409,98 +407,13 @@ namespace ARS
                     int node = ArcNode(corner.EndNode, i, count);
                     if (covered[node]) continue;
                     ARS.TrackPoints[node].LaneLineShare = from + (to - from) * LaneSmoothStep((float)i / gap);
-                    covered[node] = true;
                 }
             }
-
-            BuildLaneFieldWide(count, covered);
 
             float widestStep = 0f;
             for (int node = 1; node < count; node++)
                 widestStep = Math.Max(widestStep, Math.Abs(ARS.TrackPoints[node].LaneLineShare - ARS.TrackPoints[node - 1].LaneLineShare));
-            ARS.Log(ARS.LogImportance.Info, "Lane field: " + corners + " corner(s) x" + LaneFieldEntryScale + " plus wide bends under "
-                + LaneFieldWideRadiusMeters.ToString("0") + " m, " + LaneFieldWideMinNodes + "-node floor, widest share step "
-                + widestStep.ToString("0.000"));
-        }
-
-        // Bends the corner table refuses - too wide for the ceiling, or merged away - still get an out-in-out from the per-node radius.
-        static void BuildLaneFieldWide(int count, bool[] covered)
-        {
-            int guard = ARS.IsPointToPoint ? count : count * 2;
-            int start = 0;
-            if (!ARS.IsPointToPoint)
-                for (int node = 0; node < count; node++)
-                    if (ARS.TrackPoints[node].PreciseCurveRadius > LaneFieldWideRadiusMeters) { start = node; break; }
-
-            int runStart = -1;
-            int runSign = 0;
-            int apexStep = -1;
-            float tightest = float.MaxValue;
-
-            for (int step = 0; step <= guard - start; step++)
-            {
-                int absolute = start + step;
-                if (absolute >= guard) break;
-                TrackPoint point = ARS.TrackPoints[absolute % count];
-                int sign = Math.Sign(point.Angle);
-                bool inBend = point.PreciseCurveRadius <= LaneFieldWideRadiusMeters && sign != 0;
-
-                if (inBend && runStart < 0)
-                {
-                    runStart = absolute;
-                    runSign = sign;
-                    apexStep = absolute;
-                    tightest = point.PreciseCurveRadius;
-                    continue;
-                }
-                if (inBend && sign != runSign)
-                {
-                    WriteWideBend(count, covered, runStart, absolute - 1, apexStep, runSign);
-                    runStart = absolute;
-                    runSign = sign;
-                    apexStep = absolute;
-                    tightest = point.PreciseCurveRadius;
-                    continue;
-                }
-                if (inBend)
-                {
-                    if (point.PreciseCurveRadius < tightest)
-                    {
-                        tightest = point.PreciseCurveRadius;
-                        apexStep = absolute;
-                    }
-                    continue;
-                }
-                if (runStart >= 0)
-                {
-                    WriteWideBend(count, covered, runStart, absolute - 1, apexStep, runSign);
-                    runStart = -1;
-                }
-            }
-            if (runStart >= 0) WriteWideBend(count, covered, runStart, guard - 1, apexStep, runSign);
-        }
-
-        static void WriteWideBend(int count, bool[] covered, int startStep, int endStep, int apexStep, int sign)
-        {
-            if (apexStep < startStep || apexStep > endStep) return;
-            if (endStep - startStep + 1 < LaneFieldWideMinNodes) return;
-            for (int i = startStep; i <= endStep; i++)
-                if (covered[i % count]) return;
-
-            int intoApex = apexStep - startStep + 1;
-            int outOfApex = endStep - apexStep + 1;
-            for (int i = 0; i < intoApex; i++)
-            {
-                int node = (startStep + i) % count;
-                if (covered[node]) continue;
-                ARS.TrackPoints[node].LaneLineShare = sign * (1f - 2f * LaneEaseOut((float)i / intoApex));
-            }
-            for (int i = 0; i <= outOfApex; i++)
-            {
-                int node = (apexStep + i) % count;
-                if (covered[node]) continue;
-                ARS.TrackPoints[node].LaneLineShare = -sign * (1f - LaneEaseIn((float)i / outOfApex));
-            }
+            ARS.Log(ARS.LogImportance.Info, "Lane field: " + corners + " corner(s), entry x" + LaneFieldEntryScale + ", widest share step between adjacent nodes " + widestStep.ToString("0.000"));
         }
 
         static int ArcSpan(int fromNode, int toNode, int count)
@@ -521,21 +434,6 @@ namespace ARS
         {
             t = ARS.Clamp(t, 0f, 1f);
             return t * t * (3f - 2f * t);
-        }
-
-        // Moves off the far edge at once and arrives at the near one slowing down: that is a turn-in, not a smoothstep's flat ends.
-        static float LaneEaseOut(float t)
-        {
-            t = ARS.Clamp(t, 0f, 1f);
-            float rest = 1f - t;
-            return 1f - rest * rest;
-        }
-
-        // Leaves the apex gently and opens out towards the centre.
-        static float LaneEaseIn(float t)
-        {
-            t = ARS.Clamp(t, 0f, 1f);
-            return t * t;
         }
 
         public static void BuildApexTable()
