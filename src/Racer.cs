@@ -172,14 +172,12 @@ namespace ARS
 
         float _carriedLane = 0f;
 
-        bool _laneOvershoot;
 
         float _pursuitRawBearingDeg;
         float _pursuitAimDistanceM;
 
         float _pursuitAimLateralM;
 
-        int _lineBiasNode = -1;
         float _lineBiasMeters;
 
         int _lineCornerNode = -1;
@@ -190,16 +188,10 @@ namespace ARS
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
 
-        bool _laneRequestOutward;
         int _laneCornerDir;
-        float _laneRequestPrev = 0f;
-        float _laneRate = 0f;
         float _laneMoverLoggedAt = 0f;
         int _cornerLineLoggedAt = 0;
-        bool _laneSnap = false;
-        bool _laneReset = false;
         CornerPoint _laneCornerInside;
-        float _laneProfile;
         float _probeDeepest;
         int _probeNode = -1;
         float _probeApexOffset;
@@ -237,7 +229,6 @@ namespace ARS
         public int LineCornerNode { get { return _lineCornerNode; } }
         public LaneReason LaneRequestReason { get { return _laneRequestReason; } }
         public float LaneRequest { get { return _laneRequest; } }
-        public float LaneRate { get { return _laneRate; } }
         public int LaneCornerDir { get { return _laneCornerDir; } }
 
         float _cornerSpd = 999f;
@@ -723,15 +714,12 @@ namespace ARS
             }
             if (laneCornerInside != null) UpdateApexProbe(laneCornerInside, steerRefOffset);
 
-            CornerPoint profileCorner = laneCornerInside != null ? laneCornerInside : lineCorner;
-            _laneProfile = LaneProfileOffset(profileCorner, laneLimit);
             _laneField = ARS.TrackPoints[steerRefPoint.Node].LaneLineShare * laneLimit;
             if (Lap > 0)
             {
                 laneRequest = _laneField;
                 laneReason = LaneReason.CurveLean;
             }
-            LogLineVerdict();
             if (ActiveManeuver.Type == ManeuverType.DefendLane && MetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
             {
                 laneRequest = ARS.Clamp(_defendLaneOffset, -laneLimit, laneLimit);
@@ -747,14 +735,12 @@ namespace ARS
             _laneRequest = laneRequest;
             _laneRequestReason = laneReason;
             _carriedLane = laneRequest;
-            _laneRate = 0f;
-            _laneOvershoot = false;
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
             float offsetAtProjection = ARS.SignedLaneOffset(ProjectAhead(SteerPreviewSeconds), steerRefPoint.Position, steerRefPoint.Direction);
 
-            float aimLane = _laneOvershoot ? steerRefOffset : _carriedLane;
+            float aimLane = _carriedLane;
             float aimPointOffset = aimLane - GsPreviewBlend * (offsetAtProjection - steerRefOffset);
             Vector3 aimPoint = steerRefPoint.Position + steerRight * aimPointOffset;
             _pursuitAimLateralM = ARS.SignedLaneOffset(aimPoint, Car.Position, Car.ForwardVector);
@@ -849,7 +835,6 @@ namespace ARS
                     + " aimoff=" + aimPointOffset.ToString("0.00")
                     + " proj=" + offsetAtProjection.ToString("0.00")
                     + " ref=" + steerRefOffset.ToString("0.00")
-                    + " over=" + (_laneOvershoot ? 1 : 0)
                     + " rawbear=" + _pursuitRawBearingDeg.ToString("0.0")
                     + " dist=" + _pursuitAimDistanceM.ToString("0.0")
                     + " lat=" + _pursuitAimLateralM.ToString("0.00"));
@@ -934,11 +919,7 @@ namespace ARS
             }
             return correction;
         }
-        const float CurveLeanRadiusMeters = 900f;
-        const float CurveLeanChordSeconds = 1.25f;
         // 20 x full track width / radius, in m/s; the out state ignores the bend and pulls at 6 m/s.
-        const float CurveLeanWidthScale = 20f;
-        const float CurveLeanOutMps = 6f;
         // 10 deg of lean is 5.2 m/s of lateral drift at 30 m/s, past a car merely following the bend.
         const float LaneLockTestOffsetMeters = 0.1f;
         const float PursuitGain = 2f;
@@ -991,231 +972,18 @@ namespace ARS
             return PursuitSteerFromBearing(bearing, distance);
         }
 
-        int _lineVerdict = 1;
-        int _lineApexNode = -1;
-        float _lineApexRadius;
-        float _lineApexMetres = -1f;
-        float _lineWindowMetres;
-        int _leanVerdict = 2;
-        float _leanSampleRadius;
-        int _lineLogKey = -1;
-        int _lineLogAt;
 
         static readonly string[] LineVerdictNames = { "taken", "no apex", "apex passed", "radius 50 m or wider", "not fast enough", "beyond the window", "past the entrance", "aligned out", "inside the gate" };
         static readonly string[] LeanVerdictNames = { "lean in", "lean out", "lean off" };
 
-        void LogLineVerdict()
-        {
-            int key = (_lineApexNode * 16) + _lineVerdict;
-            if (key == _lineLogKey || Game.GameTime < _lineLogAt) return;
-            _lineLogKey = key;
-            _lineLogAt = Game.GameTime + 500;
-            ARS.Log(ARS.LogImportance.Info, "line apex " + _lineApexNode
-                + " R " + _lineApexRadius.ToString("0.0")
-                + " at " + _lineApexMetres.ToString("0") + " m"
-                + " | outside " + LineVerdictNames[_lineVerdict]
-                + " (window " + _lineWindowMetres.ToString("0") + " m)"
-                + " | " + LeanVerdictNames[_leanVerdict]
-                + " (forward R " + _leanSampleRadius.ToString("0") + ")");
-        }
-
-        bool TryGetOutsideLane(CornerPoint lineCorner, TrackPoint steerRefPoint, float speedMps, out float lane)
-        {
-            lane = 0f;
-            _lineVerdict = 1;
-            _lineApexNode = -1;
-            _lineApexRadius = 0f;
-            _lineApexMetres = -1f;
-            if (lineCorner == null) return false;
-
-            int apexNode = lineCorner.Node;
-            _lineApexNode = apexNode;
-            _lineApexRadius = lineCorner.DetectedRadius;
-            _lineApexMetres = MetresToNode(apexNode);
-            _lineWindowMetres = Math.Max(speedMps, ApexSpeedWithDownforce(lineCorner.DetectedRadius)) * IdealLineWindowSeconds;
-
-            if (HasPassedApex(apexNode)) { _lineVerdict = 2; return false; }
-
-            if (!(lineCorner.DetectedRadius < IdealLineMaxRadiusMeters)) { _lineVerdict = 3; return false; }
-            if (!(speedMps > ApexSpeedWithDownforce(lineCorner.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph))) { _lineVerdict = 4; return false; }
-
-            if (!(_lineApexMetres <= _lineWindowMetres)) { _lineVerdict = 5; return false; }
-
-            if (_lineBiasNode != apexNode)
-            {
-                _lineBiasNode = apexNode;
-                _lineBiasMeters = ARS.GetRandomInt(-(int)(LaneBiasMaxMeters * 100f), (int)(LaneBiasMaxMeters * 100f) + 1) / 100f;
-            }
-            _lineCornerNode = apexNode;
-            float safeBound = Math.Max(steerRefPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f - EdgeEmptySpaceMeters, 0f);
-            float outsideLane = Math.Sign(lineCorner.Angle) * Math.Max(safeBound - LaneOutsideGapMeters - _lineBiasMeters, 0f);
-            lane = outsideLane;
-
-            int outsideEntranceNode = CornerEntranceNode(lineCorner, apexNode);
-            if (outsideEntranceNode >= 0)
-            {
-                if (ForwardNodeDistance(steerRefPoint.Node) >= ForwardNodeDistance(outsideEntranceNode)) { _lineVerdict = 6; return false; }
-
-                float ownLane = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
-                float reachable = ClampLaneToWalls(outsideLane, steerRefPoint.TrackHalfWidth, _leftWallHeld, _rightWallHeld);
-                Vector3 steerFlat = new Vector3(steerRefPoint.Direction.X, steerRefPoint.Direction.Y, 0f);
-                Vector3 entranceFlat = new Vector3(ARS.TrackPoints[outsideEntranceNode].Direction.X, ARS.TrackPoints[outsideEntranceNode].Direction.Y, 0f);
-                if (steerFlat.LengthSquared() > 0.01f && entranceFlat.LengthSquared() > 0.01f
-                    && Vector3.Angle(steerFlat, entranceFlat) < OutReleaseAlignDegrees
-                    && Math.Abs(ownLane - reachable) < OutReleaseReachedMeters) { _lineVerdict = 7; return false; }
-            }
-
-            if (_lineApexMetres <= OutsideGateMeters(steerRefPoint)) { _lineVerdict = 8; return false; }
-
-            _lineVerdict = 0;
-            return true;
-        }
-
-        bool TryComputeCurveLean(CornerPoint lineCorner, TrackPoint steerRefPoint, float speedMps, float laneEdge, float trackWidthMeters, out float lane, out bool outward)
-        {
-            lane = 0f;
-            outward = false;
-            _laneCornerDir = 0;
-            _leanVerdict = 2;
-            _leanSampleRadius = 0f;
-
-            if (TryGetOutsideLane(lineCorner, steerRefPoint, speedMps, out float outsideLane))
-            {
-                lane = outsideLane;
-                outward = true;
-                _laneCornerDir = Math.Sign(lineCorner.Angle);
-                _leanApproachMps = CurveLeanOutMps;
-                _leanVerdict = 1;
-                return true;
-            }
-            int count = ARS.TrackPoints.Count;
-            int fwdNode;
-            int fwdOffset = (int)(speedMps * CurveLeanChordSeconds);
-            if (ARS.IsPointToPoint)
-                fwdNode = (int)ARS.Clamp(CurrentTrackPoint.Node + fwdOffset, 0, count - 1);
-            else
-                fwdNode = ((CurrentTrackPoint.Node + fwdOffset) % count + count) % count;
-
-            TrackPoint ahead = ARS.TrackPoints[fwdNode];
-            _leanSampleRadius = ahead.PreciseCurveRadius;
-            if (!(ahead.PreciseCurveRadius <= CurveLeanRadiusMeters)) { _leanVerdict = 2; return false; }
-
-            float cornerDir = Math.Sign(ahead.Angle);
-            if (cornerDir == 0f) { _leanVerdict = 2; return false; }
-
-            _leanApproachMps = CurveLeanWidthScale * trackWidthMeters / Math.Max(ahead.PreciseCurveRadius, 5f);
-            _laneCornerDir = (int)cornerDir;
-
-            float insideGap = IsWithinCorner(lineCorner) ? 0f : LaneInsideGapMeters;
-            lane = -cornerDir * Math.Max(laneEdge - insideGap, 0f);
-
-            _leanVerdict = 0;
-            return true;
-        }
-        const float LaneOverrideHoldMeters = 0.1f;
-        const float LaneMoverAccelMps2 = 40f;
-        const float LaneMoverSpeedCapMps = 99f;
-        const float LaneMoverMaxStepSeconds = 0.1f;
-        const float LaneCrossMinMeters = 0.1f;
+const float LaneOverrideHoldMeters = 0.1f;
 
         // The leash: full rate to 2.5 m, nothing between 5 and 6, full pull back by 6. The aim leads; it is never a rope.
         public const float LaneTaperNearMeters = 2.5f;
-        const float LaneTaperFarMeters = 5f;
-        const float LaneTaperCapShare = 0f;
-        const float LaneElasticReturnEnd = 6f;
 
-        void UpdateLaneMover(float steerRefOffset, float laneEdge)
-        {
-
-            float request = ARS.Clamp(_laneRequest, -laneEdge, laneEdge);
-
-            float gap = request - _carriedLane;
-            if (float.IsNaN(gap) || float.IsInfinity(gap)) return;
-
-            if (_laneReset)
-            {
-                _laneReset = false;
-                _carriedLane = ARS.Clamp(steerRefOffset, -laneEdge, laneEdge);
-                _laneRequestPrev = _carriedLane;
-                _laneRate = 0f;
-                _laneOvershoot = false;
-                return;
-            }
-
-            if (_laneSnap)
-            {
-                _laneSnap = false;
-                _carriedLane = request;
-                _laneRequestPrev = request;
-                _laneRate = 0f;
-                _laneOvershoot = false;
-                return;
-            }
-
-            float aimFromCar = _carriedLane - steerRefOffset;
-            float askFromCar = request - steerRefOffset;
-
-            bool reversing = gap * _laneRate < 0f;
-            if (reversing && aimFromCar * askFromCar < 0f && Math.Abs(aimFromCar) > LaneCrossMinMeters && Math.Abs(askFromCar) > LaneCrossMinMeters)
-            {
-                if (Game.GameTime > _laneCrossLoggedAt)
-                {
-                    _laneCrossLoggedAt = Game.GameTime + 1000;
-                    ARS.Log(ARS.LogImportance.Info, "Lane cross " + Name + ": aim " + _carriedLane.ToString("0.00") + " to car " + steerRefOffset.ToString("0.00") + ", request " + request.ToString("0.00") + " (" + _laneRequestReason + "), rate " + _laneRate.ToString("0.00"));
-                }
-                _carriedLane = ARS.Clamp(steerRefOffset, -laneEdge, laneEdge);
-                _laneRate = 0f;
-            }
-
-            aimFromCar = _carriedLane - steerRefOffset;
-            askFromCar = request - steerRefOffset;
-            _laneOvershoot = aimFromCar * askFromCar > 0f && Math.Abs(aimFromCar) > Math.Abs(askFromCar) + LaneCrossMinMeters;
-
-            float dt = Math.Min(TickScale, LaneMoverMaxStepSeconds);
-
-            bool toOutside = _laneRequestOutward && _laneRequestReason == LaneReason.CurveLean;
-            float moverAccel = toOutside ? LaneMoverAccelMps2 * 0.5f : LaneMoverAccelMps2;
-
-            if (_laneOvershoot) moverAccel *= 2f;
-            float moverSpeedCap = toOutside ? LaneMoverSpeedCapMps * 0.5f : LaneMoverSpeedCapMps;
-
-            if (_laneRequestReason == LaneReason.CurveLean) moverSpeedCap = Math.Min(moverSpeedCap, _leanApproachMps);
-
-            float awayFromCar = Math.Abs(_carriedLane - steerRefOffset);
-            float leash = ARS.Clamp((awayFromCar - LaneTaperNearMeters) / (LaneTaperFarMeters - LaneTaperNearMeters), 0f, 1f);
-            moverSpeedCap *= 1f + leash * (LaneTaperCapShare - 1f);
-            float requestRate = ARS.Clamp((request - _laneRequestPrev) / dt, -moverSpeedCap, moverSpeedCap);
-            _laneRequestPrev = request;
-
-            float arrivalRate = Math.Sign(gap) * Math.Min(moverSpeedCap, (float)Math.Sqrt(2f * moverAccel * Math.Abs(gap)));
-            float desiredRate = requestRate + arrivalRate;
-
-            if (awayFromCar > LaneTaperFarMeters)
-            {
-                float pull = ARS.Clamp((awayFromCar - LaneTaperFarMeters) / (LaneElasticReturnEnd - LaneTaperFarMeters), 0f, 1f);
-                float returnMps = Math.Min(LaneMoverSpeedCapMps, (float)Math.Sqrt(2f * moverAccel * (awayFromCar - LaneTaperFarMeters)));
-                desiredRate = Math.Sign(steerRefOffset - _carriedLane) * pull * returnMps;
-            }
-
-            if (desiredRate * _laneRate < 0f) _laneRate = 0f;
-            float rateStep = moverAccel * dt;
-            _laneRate += ARS.Clamp(desiredRate - _laneRate, -rateStep, rateStep);
-            float step = _laneRate * dt;
-
-            _carriedLane += step;
-            _carriedLane = ARS.Clamp(_carriedLane, -laneEdge, laneEdge);
-
-            if (Math.Abs(_laneRate) > 0.2f && Game.GameTime > _laneMoverLoggedAt)
-            {
-                _laneMoverLoggedAt = Game.GameTime + 1000;
-                ARS.Log(ARS.LogImportance.Info, "Lane mover " + Name + ": asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + "), aimed " + _carriedLane.ToString("0.00") + ", rate " + _laneRate.ToString("0.00") + ", profile " + _laneProfile.ToString("0.00") + ", field " + _laneField.ToString("0.00"));
-            }
-        }
-        const float RequirementLookaheadSeconds = 3.95f;
+const float RequirementLookaheadSeconds = 3.95f;
         const float IdealLineWindowSeconds = 6f;
-        const float LaneOutsideGapMeters = 0.5f;
         const float EdgeEmptySpaceMeters = 0.5f;
-        const float LaneInsideGapMeters = 1f;
         const float LaneBiasMaxMeters = 0.5f;
         const float LineApexStickyMeters = 30f;
         // The gate: six track widths before the apex, floored at 20 m.
@@ -1800,7 +1568,6 @@ namespace ARS
             _avoidHoldLane = 0f;
             _avoidHoldUntil = 0;
 
-            _lineBiasNode = -1;
             _lineCornerNode = -1;
             Control.ThrottleReasonLevel = 1f;
             Control.BrakeReason = BrakeReason.Plan;
@@ -1815,7 +1582,6 @@ namespace ARS
             _stuckRecoveryCooldownEndTime = 0;
             _stuckMoveSampleTime = 0;
             Control.LastAppliedSteerDegrees = 0f;
-            _laneSnap = true;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
         }
@@ -2747,33 +2513,6 @@ namespace ARS
 
         float OutsideGateMeters(TrackPoint at) => Math.Max(2f * at.TrackHalfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
 
-        float LaneProfileOffset(CornerPoint corner, float laneEdge)
-        {
-            if (corner == null) return 0f;
-            float dir = Math.Sign(corner.Angle);
-            if (dir == 0f) return 0f;
-
-            float toStart = MetresToNode(corner.StartNode);
-            float toApex = MetresToNode(corner.Node);
-            float toEnd = MetresToNode(corner.EndNode);
-            float lengthIn = toApex - toStart;
-            float lengthOut = toEnd - toApex;
-            if (lengthIn <= 1f || lengthOut <= 1f) return 0f;
-
-            float outside = dir * Math.Max(laneEdge - LaneOutsideGapMeters, 0f);
-            float inside = -dir * laneEdge;
-            float travelled = -toStart;
-
-            if (travelled <= 0f) return outside;
-            if (travelled <= lengthIn) return outside + (inside - outside) * LaneSmooth(travelled / lengthIn);
-            return inside * (1f - LaneSmooth(Math.Min(1f, (travelled - lengthIn) / lengthOut)));
-        }
-
-        static float LaneSmooth(float t)
-        {
-            t = ARS.Clamp(t, 0f, 1f);
-            return t * t * (3f - 2f * t);
-        }
 
         bool IsWithinCorner(CornerPoint corner)
         {
@@ -4624,7 +4363,6 @@ namespace ARS
             Car.Position = CurrentTrackPoint.Position + right * laneOffset + new Vector3(0f, 0f, 0.5f);
             Car.Heading = direction.ToHeading();
             Car.Velocity = direction * ARS.MphToMps(10f);
-            _laneSnap = true;
             FinishStuckRecovery();
         }
 

@@ -2002,7 +2002,7 @@ namespace ARS
                         float nodeOffset = racer.Brain.CurrentPerception.CurrentNodeOffset;
                         float carriedOffset = racer.CarriedLane;
                         float requestOffset = racer.LaneRequest;
-                        Color laneColor = Racer.LaneMotionColor(racer.LaneRequestReason, racer.LaneRate, racer.LaneCornerDir);
+                        Color laneColor = Racer.LaneMotionColor(racer.LaneRequestReason, 0f, 0);
 
                         if (Math.Abs(carriedOffset - nodeOffset) > Racer.LaneTaperNearMeters && Game.GameTime % LaneBlinkPeriodMs < LaneBlinkOnMs) laneColor = Color.White;
                         Color requestColor = Color.FromArgb(120, laneColor.R, laneColor.G, laneColor.B);
