@@ -200,6 +200,36 @@ namespace ARS
         bool _laneReset = false;
         CornerPoint _laneCornerInside;
         float _laneProfile;
+        float _probeDeepest;
+        int _probeNode = -1;
+        float _probeApexOffset;
+        bool _probeAtApex;
+
+        void UpdateApexProbe(CornerPoint corner, float ownOffset)
+        {
+            float sign = Math.Sign(corner.Angle);
+            if (sign == 0f) return;
+            float inward = -ownOffset * sign;
+            if (inward > _probeDeepest)
+            {
+                _probeDeepest = inward;
+                _probeNode = CurrentTrackPoint.Node;
+            }
+            if (!_probeAtApex && Math.Abs(CurrentTrackPoint.Node - corner.Node) <= 1)
+            {
+                _probeApexOffset = ownOffset;
+                _probeAtApex = true;
+            }
+        }
+
+        void LogApexProbe(CornerPoint corner)
+        {
+            ARS.Log(ARS.LogImportance.Info, "apex probe " + corner.Node
+                + ": offset at the apex " + (_probeAtApex ? _probeApexOffset.ToString("0.00") : "missed")
+                + ", deepest inward " + _probeDeepest.ToString("0.00")
+                + " at node " + _probeNode
+                + (_probeNode >= 0 ? " (" + (_probeNode - corner.Node) + " nodes past the apex)" : ""));
+        }
         float _laneField;
         bool _laneOverride = false;
         public float CarriedLane { get { return _carriedLane; } }
@@ -682,12 +712,16 @@ namespace ARS
             CornerPoint laneCornerInside = null;
             foreach (CornerPoint watched in ARS.Corners)
                 if (IsWithinCorner(watched)) { laneCornerInside = watched; break; }
-            if (_laneCornerInside != null && laneCornerInside == null)
+            if (laneCornerInside != _laneCornerInside)
             {
-                _laneReset = true;
-                ARS.Log(ARS.LogImportance.Info, "Lane reset " + Name + ": left the corner at node " + CurrentTrackPoint.Node);
+                if (_laneCornerInside != null) LogApexProbe(_laneCornerInside);
+                _laneCornerInside = laneCornerInside;
+                _probeDeepest = 0f;
+                _probeNode = -1;
+                _probeApexOffset = 0f;
+                _probeAtApex = false;
             }
-            _laneCornerInside = laneCornerInside;
+            if (laneCornerInside != null) UpdateApexProbe(laneCornerInside, steerRefOffset);
 
             CornerPoint profileCorner = laneCornerInside != null ? laneCornerInside : lineCorner;
             _laneProfile = LaneProfileOffset(profileCorner, laneLimit);
