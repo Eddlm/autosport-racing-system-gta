@@ -66,9 +66,6 @@ namespace ARS
         public int LiveRouteRadiusNearNode = -1;
         public int LiveRouteRadiusMidNode = -1;
         public int LiveRouteRadiusFarNode = -1;
-        public int LiveRouteRadiusBackNode = -1;
-        public int LiveRouteRadiusFwdNode = -1;
-        public float LiveRouteRadiusCentred = -1f;
 
         public float LiveRouteRadius = -1f;
 
@@ -3578,23 +3575,7 @@ namespace ARS
             }
         }
 
-        // Half the steering lookahead behind, half ahead, with the car as the middle point: it stays tight while the car is still in the bend.
-        float CentredRouteRadius()
-        {
-            int carNode = CurrentTrackPoint.Node;
-            int mid = WrappedNode(carNode);
-            int k = Math.Max(4, (int)(SteerLookaheadNodes(Car.Velocity.Length()) * 0.5f));
-            int back = WrappedNode(carNode - k);
-            int fwd = WrappedNode(carNode + k);
-
-            LiveRouteRadiusBackNode = back;
-            LiveRouteRadiusFwdNode = fwd;
-            if (back == mid || fwd == mid || back == fwd) return 999f;
-
-            float r = ARS.Circumradius3D(ARS.TrackPoints[back].Position, ARS.TrackPoints[fwd].Position, ARS.TrackPoints[mid].Position);
-            if (float.IsNaN(r) || float.IsInfinity(r)) return 999f;
-            return ARS.Clamp(r, 5f, 999f);
-        }
+        const float RouteRadiusSpanSeconds = 2f;
 
         float RouteRadiusSampled()
         {
@@ -3602,23 +3583,24 @@ namespace ARS
             if (count < 10)
             {
                 LiveRouteRadius = 999f;
-                LiveRouteRadiusCentred = 999f;
-                LiveRouteRadiusBackNode = -1;
-                LiveRouteRadiusFwdNode = -1;
+                LiveRouteRadiusNearNode = -1;
+                LiveRouteRadiusMidNode = -1;
+                LiveRouteRadiusFarNode = -1;
                 return 999f;
             }
 
-            float traction = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
-
-            int far = Math.Min((int)(Car.Velocity.Length() * 2f / traction), count - 1);
-            int middleNear = far / 3;
-            int middleFar = (far * 2) / 3;
+            float speed = Car.Velocity.Length();
+            int span = Math.Min((int)(speed * RouteRadiusSpanSeconds), count - 1);
+            int lead = Math.Min((int)(speed * ARS.Clamp(ARS.RouteRadiusLeadSeconds, 1f, RouteRadiusSpanSeconds)), span);
+            int start = lead - span;
+            int middleNear = span / 3;
+            int middleFar = (span * 2) / 3;
 
             int carNode = CurrentTrackPoint.Node;
-            int n0 = WrappedNode(carNode);
-            int n1 = WrappedNode(carNode + middleNear);
-            int n2 = WrappedNode(carNode + middleFar);
-            int n3 = WrappedNode(carNode + far);
+            int n0 = WrappedNode(carNode + start);
+            int n1 = WrappedNode(carNode + start + middleNear);
+            int n2 = WrappedNode(carNode + start + middleFar);
+            int n3 = WrappedNode(carNode + lead);
 
             LiveRouteRadiusNearNode = n1;
             LiveRouteRadiusMidNode = n2;
@@ -3648,10 +3630,6 @@ namespace ARS
             }
 
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
-
-            float centred = CentredRouteRadius();
-            LiveRouteRadiusCentred = centred;
-            if (ARS.CarCentredRadius && centred < r) r = centred;
 
             LiveRouteRadius = ARS.Clamp(r, 5f, 999f);
             return LiveRouteRadius;

@@ -163,7 +163,7 @@ namespace ARS
 
         public static float MaxCrestLift = 0.4f;
         public static float BrakeAimDepth = 0f;
-        public static bool CarCentredRadius = true;
+        public static float RouteRadiusLeadSeconds = 1.5f;
         public static float HillGripEffect = 1f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
@@ -1012,13 +1012,15 @@ namespace ARS
             };
             rivalPaceMenu.Add(gsLaneFloorItem);
 
-            NativeCheckboxItem carCentredRadiusItem = new NativeCheckboxItem("Car-Centred Radius", "Measure the route's bend around the car as well as ahead of it, and let the tighter one set the speed: the ahead-only sample opens onto the straight while the car is still in the corner, which is where the field runs wide. Off is the old behaviour.", CarCentredRadius);
-            carCentredRadiusItem.CheckboxChanged += (sender, args) =>
+            NativeListItem<string> routeRadiusLeadItem = new NativeListItem<string>("Route Radius Lead (s)", "How much of the two-second radius sample lies ahead of the car: 2.0 measures from the car to two seconds ahead, which opens onto the straight while the car is still in the bend; 1.0 pulls the sample back to one second each side, so the bend being driven keeps setting the speed and only the far end looks ahead.", SettingsRepair.OptionsFor("RouteRadiusLeadSeconds"));
+            routeRadiusLeadItem.ItemChanged += (sender, args) =>
             {
-                CarCentredRadius = carCentredRadiusItem.Checked;
-                SaveRacerSetting("CarCentredRadius", CarCentredRadius.ToString());
+                RouteRadiusLeadSeconds = float.Parse(routeRadiusLeadItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("RouteRadiusLeadSeconds", routeRadiusLeadItem.Items[args.Index]);
             };
-            rivalPaceMenu.Add(carCentredRadiusItem);
+            routeRadiusLeadItem.SelectedIndex = Math.Max(0, routeRadiusLeadItem.Items.IndexOf(SettingsMenuStore.GetFloat("RouteRadiusLeadSeconds", RouteRadiusLeadSeconds).ToString("0.0", CultureInfo.InvariantCulture)));
+            rivalPaceMenu.Add(routeRadiusLeadItem);
+            HookListTextPicker(routeRadiusLeadItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "Share of the tuned slope speed cut: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. Pitch counts both ways.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
@@ -1960,8 +1962,7 @@ namespace ARS
                         TrackVisuals.DrawRouteRadiusChecks(radiusRacer, ARS.TrackPoints);
                         if (radiusRacer.LiveRouteRadius > 0f)
                             DrawText(radiusRacer.Car.Position + Vector3.WorldUp * 2.2f,
-                                     Math.Round(radiusRacer.LiveRouteRadius).ToString(CultureInfo.InvariantCulture)
-                                     + " / " + (radiusRacer.LiveRouteRadiusCentred > 0f ? Math.Round(radiusRacer.LiveRouteRadiusCentred).ToString(CultureInfo.InvariantCulture) : "-") + " m",
+                                     Math.Round(radiusRacer.LiveRouteRadius).ToString(CultureInfo.InvariantCulture) + " m",
                                      Color.Magenta, 0.55f);
                     }
                 }
@@ -3420,7 +3421,7 @@ namespace ARS
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
             BrakeAimDepth = SettingsMenuStore.GetFloat("BrakeAimDepth", BrakeAimDepth);
             GsLaneThrottleFloor = SettingsMenuStore.GetBool("GsLaneThrottleFloor", GsLaneThrottleFloor);
-            CarCentredRadius = SettingsMenuStore.GetBool("CarCentredRadius", CarCentredRadius);
+            RouteRadiusLeadSeconds = SettingsMenuStore.GetFloat("RouteRadiusLeadSeconds", RouteRadiusLeadSeconds);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);
