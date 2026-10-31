@@ -137,7 +137,7 @@ namespace ARS
 
         public static bool SteerTrace = false;
 
-        public static readonly bool GsLaneThrottleFloor = true;
+        public static bool GsLaneThrottleFloor = true;
 
         public static int TargetUnderPowerPct = 45;
 
@@ -1002,6 +1002,14 @@ namespace ARS
             brakeAimItem.SelectedIndex = Math.Max(0, brakeAimItem.Items.IndexOf(SettingsMenuStore.GetFloat("BrakeAimDepth", BrakeAimDepth).ToString("0.0", CultureInfo.InvariantCulture)));
             rivalPaceMenu.Add(brakeAimItem);
             HookListTextPicker(brakeAimItem);
+
+            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "Corner exit aid: while the projected path is inside the road and pointing at the inside, the throttle cannot fall below a floor that runs from full at the inside edge to nothing at the outer one. It never exceeds what TCS, stability and the off-track caps allow.", GsLaneThrottleFloor);
+            gsLaneFloorItem.CheckboxChanged += (sender, args) =>
+            {
+                GsLaneThrottleFloor = gsLaneFloorItem.Checked;
+                SaveRacerSetting("GsLaneThrottleFloor", GsLaneThrottleFloor.ToString());
+            };
+            rivalPaceMenu.Add(gsLaneFloorItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "Share of the tuned slope speed cut: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. Pitch counts both ways.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
@@ -3401,6 +3409,7 @@ namespace ARS
             SteerTrace = DevelopmentMenuStore.GetBool("SteerTrace", SteerTrace);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
             BrakeAimDepth = SettingsMenuStore.GetFloat("BrakeAimDepth", BrakeAimDepth);
+            GsLaneThrottleFloor = SettingsMenuStore.GetBool("GsLaneThrottleFloor", GsLaneThrottleFloor);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);

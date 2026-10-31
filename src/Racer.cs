@@ -1740,7 +1740,7 @@ namespace ARS
         {
             _exitRoomArmed = false;
             _exitRoom01 = 0f;
-            if (!ARS.GsLaneThrottleFloor && Control.Throttle <= ExitTrimPedalStart) return;
+            if (!ARS.GsLaneThrottleFloor && !WheelTrimUnderPower) return;
 
             if (_projectionOutsideMeters > 0f && _projectionWidening) return;
             float theoreticalGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;

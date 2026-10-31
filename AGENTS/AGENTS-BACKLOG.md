@@ -37,7 +37,8 @@ reports `410-`…`417-` (untracked, like the rest of `docs/audit/`). Each slug b
   1x-2.5x span is the engine's flat point, `sfTractionMinAngle`), so a row there would be the first. What it is for: a
   four-wheel slide, where both axles are past 100 and only speed restores grip.
 - `gs-lane-throttle-floor` — **LIVE again (build 1396, driver: "quiero que el gas se abra si la proyección lo permite")**:
-  the floor is on with `GsLaneOutsideFloor = 0`, so it keeps the throttle at least at the room - 1 at the inside edge, 0 at
+  the floor is on, with a checkbox of its own since 1398 (`Rival Pace > Gs Lane Throttle Floor`, ships on) and
+  `GsLaneOutsideFloor = 0`, so it keeps the throttle at least at the room - 1 at the inside edge, 0 at
   the outer one - clamped to `Control.MaxThrottle`, which folds every other throttle cap, and zeroed under countersteer
   and while the projection is outside *and* widening. **Its geometry is the part that matters**: `UpdateExitRoom` runs every tick - loaded, in
   the sense that lateral g exceeds `GsLaneFloorLateralShare` (0.525) of the theoretical grip; the projection not

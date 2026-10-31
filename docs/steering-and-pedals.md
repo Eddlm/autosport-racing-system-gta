@@ -104,7 +104,7 @@ In the **theory** source the allowance is nearly inert: that source cannot be re
 
 ## The lane throttle floor
 
-`GsLaneThrottleFloor` is on again (2026-10-31, build 1396) with `GsLaneOutsideFloor = 0`: while the car is loaded, its projected path is inside the road and pointing at the inside, the throttle cannot fall below the room — **1 at the inside edge and 0 at the outer one**. It is a floor, not a cap: it raises a pedal the plan wanted lifted, and it is clamped to `Control.MaxThrottle`, which folds TCS, stability, overspeed, rival, chill-out, yield, off-track and recovery, so every other cap still wins. It is zeroed while countersteering, and while the projection is outside *and* widening — the two cases where accelerating is the wrong answer.
+`GsLaneThrottleFloor` is on again (2026-10-31, build 1396) with `GsLaneOutsideFloor = 0`, and behind a checkbox in `Rival Pace` since build 1398 (ships on): while the car is loaded, its projected path is inside the road and pointing at the inside, the throttle cannot fall below the room — **1 at the inside edge and 0 at the outer one**. It is a floor, not a cap: it raises a pedal the plan wanted lifted, and it is clamped to `Control.MaxThrottle`, which folds TCS, stability, overspeed, rival, chill-out, yield, off-track and recovery, so every other cap still wins. It is zeroed while countersteering, and while the projection is outside *and* widening — the two cases where accelerating is the wrong answer.
 
 The room comes from `UpdateExitRoom`, one computation per tick with one writer; the parked wheel trim read the same field.
 
