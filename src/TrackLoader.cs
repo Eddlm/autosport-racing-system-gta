@@ -356,6 +356,9 @@ namespace ARS
         const float LaneFieldStepWideRadius = 100f;
         const float LaneFieldStepAtTight = 0.5f;
         const float LaneFieldStepAtWide = 1f;
+        const float LaneFieldLateralRatePerRadius = 10f;
+        const float LaneFieldLateralRateCeiling = 1f;
+        const float LaneFieldLateralRateFloor = 0.05f;
         const int LaneFieldRampMinNodes = 6;
         const int LaneFieldRampMaxNodes = 700;
 
@@ -448,11 +451,46 @@ namespace ARS
                     ARS.TrackPoints[node].LaneLineShare = from + (to - from) * LaneSmoothStep((float)i / gap);
                 }
             }
+            FollowTargetShape(count);
+
 
             float widestStep = 0f;
             for (int node = 1; node < count; node++)
                 widestStep = Math.Max(widestStep, Math.Abs(ARS.TrackPoints[node].LaneLineShare - ARS.TrackPoints[node - 1].LaneLineShare));
             ARS.Log(ARS.LogImportance.Info, "Lane field: " + corners + " corner(s), ramps from the radius, widest share step between adjacent nodes " + widestStep.ToString("0.000"));
+        }
+
+
+        // The shape says where the line wants to be; this says how fast the car may get there, from the local radius.
+        // A capped lateral rate turns every sharp corner of the target into a curvature ramp, which is what a clothoid
+        // does and what the raw shape has no way to express.
+        static void FollowTargetShape(int count)
+        {
+            float[] target = new float[count];
+            for (int node = 0; node < count; node++) target[node] = ARS.TrackPoints[node].LaneLineShare;
+
+            int start = 0;
+            if (!ARS.IsPointToPoint)
+            {
+                float straightest = -1f;
+                for (int node = 0; node < count; node++)
+                    if (ARS.TrackPoints[node].PreciseCurveRadius > straightest) { straightest = ARS.TrackPoints[node].PreciseCurveRadius; start = node; }
+            }
+
+            int passes = ARS.IsPointToPoint ? 1 : 2;
+            for (int pass = 0; pass < passes; pass++)
+            {
+                float share = target[start];
+                for (int i = 0; i < count; i++)
+                {
+                    int node = ARS.IsPointToPoint ? Math.Min(start + i, count - 1) : (start + i) % count;
+                    float rate = ARS.Clamp(LaneFieldLateralRatePerRadius / Math.Max(1f, ARS.TrackPoints[node].PreciseCurveRadius), LaneFieldLateralRateFloor, LaneFieldLateralRateCeiling);
+                    float edge = Math.Max(1f, ARS.TrackPoints[node].TrackHalfWidth - 1f);
+                    float step = rate / edge;
+                    share += ARS.Clamp(target[node] - share, -step, step);
+                    ARS.TrackPoints[node].LaneLineShare = share;
+                }
+            }
         }
 
         static int ArcSpan(int fromNode, int toNode, int count)

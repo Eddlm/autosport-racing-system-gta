@@ -163,6 +163,11 @@ namespace ARS
 
         public static float MaxCrestLift = 0.4f;
         public static float BrakeAimDepth = 0f;
+        public const float LaneDynamicRadius = 400f;
+        public const float LaneAbsoluteMetres = 25f;
+        public const float LaneRatePerRadius = 10f;
+        public const float LaneRateFloor = 0.05f;
+        public const float LaneRateCeiling = 1f;
         public static bool RouteRadiusFar = true;
         public static float SlidRadiusLeadSeconds = 0.5f;
         public static float HillGripEffect = 1f;

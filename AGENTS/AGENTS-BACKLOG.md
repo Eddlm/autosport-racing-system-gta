@@ -378,3 +378,17 @@ unreachable by design (`StagedSpawns` is forced false), `lane on a grade` not wo
 - **Steering is closed (driver)** — the limiter, its ramp band, the ceiling and its factor, the damper's crossing with its scale walked back to full authority and its speed axis removed, the slide blend's band and the countersteer's share (**now 0.5**, driven: 1.0 snaps the car back the other way, half recovers slowly and holds), the slew, the lane laws with the lane mover and its target timing, and the contact-avoidance term are all driven and accepted; the slide batch's own verdict and bounds are `docs/TEST-PLAN.md`'s last section.
 - **Pushed**, newest first: `f168b5f..2f78851` (the picker skip with its review fixes, the corner ceiling at 50 m and the live Debug setting); `424f4ad..13c8071` (the AI nitro scale, the damper's scale restored, the outward lead taper — driven in one run); `053146e..ea87461` (the slip axis settled by probe, the TCS pair as shares of the peak, the ABS knee on that peak, the kick and debug trains); `da8a407..053146e` (the lane chain's run); `c2e7e6b..7872758` (the ceiling's midpoint reference, the wheel-slip spheres, the measured-slip allowance built then parked, the settled steering pair); `ac5514b..c2e7e6b` (the debug-visual train, the slide-raise retirement, the ramp/damper batch, the overspeed ramp, the lane base and the Council fixes).
 - **Undriven across those runs**: the divebomb, the kick card and the debug-visual train — the drives owed are the last section of `docs/TEST-PLAN.md`.
+- `geometric-lane-line` — noted 2026-10-31, **built, driven, reverted (builds 1457-1461)** — the field was rewritten from the
+  exponential to the closed-form geometric racing line: `r_line = r_inner + width / (1 - cos(theta/2))`, offset
+  `r - sqrt(r^2 - s^2)` from the apex, amplitude exactly the track width, `theta` integrated from the per-node angle over the
+  corner's span, and a handover that is the weighted sum of every corner's arc (`1 / (1 + (d/reach)^2)`) so that no gap filling
+  or clipping is needed. Two corners turning the same way both ask for the outside at the midpoint; two turning opposite ways
+  cancel and cross the centre, which is exactly an S. It removed thirteen constants. **The driver reports a hard change of
+  direction in the line at every corner**, both before and after the array-misalignment fix (the apex list was filled in a
+  second loop that rejected different corners than the first, so arcs were being measured from the wrong apex — real bug,
+  fixed in 1461, symptom unchanged). Next step if it is revisited: the kink is the *curvature step* of an arc, not a C1 break.
+  An arc has constant curvature and the road has none, so the transition from straight to arc is a step in curvature, which
+  reads as a sudden direction change at one-metre sample spacing. The cure is a clothoid (curvature ramping linearly with
+  arc length) between the straight and the arc, or, equivalently, a curvature-limited offset profile - which is what the
+  exponential was accidentally approximating. The exponential (`c/R`, plateau, radius step factor) is what shipped instead:
+  builds 1450-1456, reverted to at 1462.

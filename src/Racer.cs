@@ -713,10 +713,22 @@ namespace ARS
             if (laneCornerInside != null) UpdateApexProbe(laneCornerInside, steerRefOffset);
 
             _laneField = ARS.TrackPoints[steerRefPoint.Node].LaneLineShare * laneLimit;
-            if (Lap > 0)
+            float aimRadius = ARS.TrackPoints[steerRefPoint.Node].PreciseCurveRadius;
+            float toApex = lineCorner != null ? MetresToNode(lineCorner.Node) : 0f;
+            if (Lap > 0 && lineCorner != null && aimRadius <= ARS.LaneDynamicRadius)
             {
-                laneRequest = _laneField;
-                laneReason = LaneReason.CurveLean;
+                if (toApex <= ARS.LaneAbsoluteMetres)
+                {
+                    laneRequest = _laneField;
+                    laneReason = LaneReason.CurveLean;
+                }
+                else
+                {
+                    float rate = ARS.Clamp(ARS.LaneRatePerRadius / Math.Max(1f, aimRadius), ARS.LaneRateFloor, ARS.LaneRateCeiling);
+                    float reach = Math.Min(laneLimit, rate * Math.Max(0f, toApex - ARS.LaneAbsoluteMetres));
+                    laneRequest = steerRefOffset - Math.Sign(lineCorner.Angle) * reach;
+                    laneReason = LaneReason.CurveLean;
+                }
             }
             if (ActiveManeuver.Type == ManeuverType.DefendLane && MetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
             {
@@ -3001,19 +3013,18 @@ const float RequirementLookaheadSeconds = 3.95f;
                 + "   cap " + cap.ToString("0.0") + "°", 50);
         }
 
-        const int LaneFieldDrawNodes = 100;
+        const int LaneFieldDrawBehindNodes = 20;
+        const int LaneFieldDrawAheadNodes = 40;
         const float LaneFieldDrawHeight = 0.35f;
         const float LaneFieldDrawSize = 0.30f;
 
         void DrawLaneField()
         {
-            CornerPoint corner = _laneCornerInside != null ? _laneCornerInside : NearestApexAhead();
-            if (corner == null) return;
-
             int count = ARS.TrackPoints.Count;
-            for (int step = -LaneFieldDrawNodes; step <= LaneFieldDrawNodes; step++)
+            if (count < 4) return;
+            for (int step = -LaneFieldDrawBehindNodes; step <= LaneFieldDrawAheadNodes; step++)
             {
-                int node = corner.Node + step;
+                int node = CurrentTrackPoint.Node + step;
                 if (ARS.IsPointToPoint)
                 {
                     if (node < 0 || node >= count) continue;
