@@ -197,6 +197,8 @@ namespace ARS
         float _laneMoverLoggedAt = 0f;
         int _cornerLineLoggedAt = 0;
         bool _laneSnap = false;
+        bool _laneReset = false;
+        CornerPoint _laneCornerInside;
         bool _laneOverride = false;
         public float CarriedLane { get { return _carriedLane; } }
 
@@ -674,7 +676,17 @@ namespace ARS
             CornerPoint lineCorner = NearestApexAhead();
 
             float laneLimit = Math.Max(roadWide - carHalfWidth - (IsWithinCorner(lineCorner) ? 0f : EdgeEmptySpaceMeters), 0f);
-            if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, steerRefOffset, laneLimit, roadWide * 2f, out float curveLean, out bool leanOutward))
+
+            CornerPoint laneCornerInside = null;
+            foreach (CornerPoint watched in ARS.Corners)
+                if (IsWithinCorner(watched)) { laneCornerInside = watched; break; }
+            if (_laneCornerInside != null && laneCornerInside == null)
+            {
+                _laneReset = true;
+                ARS.Log(ARS.LogImportance.Info, "Lane reset " + Name + ": left the corner at node " + CurrentTrackPoint.Node);
+            }
+            _laneCornerInside = laneCornerInside;
+            if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, laneLimit, roadWide * 2f, out float curveLean, out bool leanOutward))
             {
                 laneRequest = curveLean;
                 laneReason = LaneReason.CurveLean;
@@ -887,8 +899,6 @@ namespace ARS
         const float CurveLeanWidthScale = 20f;
         const float CurveLeanOutMps = 6f;
         // 10 deg of lean is 5.2 m/s of lateral drift at 30 m/s, past a car merely following the bend.
-        const float CurveLeanInwardHoldDegrees = 10f;
-        const float CurveLeanInwardHoldLeadMeters = 0.25f;
         const float LaneLockTestOffsetMeters = 0.1f;
         const float PursuitGain = 2f;
         const float MaxPursuitBearingDegrees = 90f;
@@ -944,12 +954,13 @@ namespace ARS
         int _lineApexNode = -1;
         float _lineApexRadius;
         float _lineApexMetres = -1f;
+        float _lineWindowMetres;
         int _leanVerdict = 2;
         float _leanSampleRadius;
         int _lineLogKey = -1;
         int _lineLogAt;
 
-        static readonly string[] LineVerdictNames = { "taken", "no apex", "apex passed", "radius 50 m or wider", "not fast enough", "beyond 300 m", "past the entrance", "aligned out", "inside the gate" };
+        static readonly string[] LineVerdictNames = { "taken", "no apex", "apex passed", "radius 50 m or wider", "not fast enough", "beyond the window", "past the entrance", "aligned out", "inside the gate" };
         static readonly string[] LeanVerdictNames = { "lean in", "lean out", "lean off" };
 
         void LogLineVerdict()
@@ -962,6 +973,7 @@ namespace ARS
                 + " R " + _lineApexRadius.ToString("0.0")
                 + " at " + _lineApexMetres.ToString("0") + " m"
                 + " | outside " + LineVerdictNames[_lineVerdict]
+                + " (window " + _lineWindowMetres.ToString("0") + " m)"
                 + " | " + LeanVerdictNames[_leanVerdict]
                 + " (forward R " + _leanSampleRadius.ToString("0") + ")");
         }
@@ -979,13 +991,14 @@ namespace ARS
             _lineApexNode = apexNode;
             _lineApexRadius = lineCorner.DetectedRadius;
             _lineApexMetres = MetresToNode(apexNode);
+            _lineWindowMetres = Math.Max(speedMps, ApexSpeedWithDownforce(lineCorner.DetectedRadius)) * IdealLineWindowSeconds;
 
             if (HasPassedApex(apexNode)) { _lineVerdict = 2; return false; }
 
             if (!(lineCorner.DetectedRadius < IdealLineMaxRadiusMeters)) { _lineVerdict = 3; return false; }
             if (!(speedMps > ApexSpeedWithDownforce(lineCorner.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph))) { _lineVerdict = 4; return false; }
 
-            if (!(_lineApexMetres <= IdealLineWindowMeters)) { _lineVerdict = 5; return false; }
+            if (!(_lineApexMetres <= _lineWindowMetres)) { _lineVerdict = 5; return false; }
 
             if (_lineBiasNode != apexNode)
             {
@@ -1017,17 +1030,7 @@ namespace ARS
             return true;
         }
 
-        bool HeadingLeansOut(float cornerDir)
-        {
-            Vector3 track = new Vector3(CurrentTrackPoint.Direction.X, CurrentTrackPoint.Direction.Y, 0f);
-            Vector3 heading = new Vector3(Car.ForwardVector.X, Car.ForwardVector.Y, 0f);
-            if (track.LengthSquared() < 0.0001f || heading.LengthSquared() < 0.0001f) return false;
-            Vector3 right = Vector3.Cross(track.Normalized, Vector3.WorldUp);
-            float lateral = Vector3.Dot(heading.Normalized, right);
-            return lateral * cornerDir > (float)Math.Sin(ARS.DegToRad(CurveLeanInwardHoldDegrees));
-        }
-
-        bool TryComputeCurveLean(CornerPoint lineCorner, TrackPoint steerRefPoint, float speedMps, float ownLane, float laneEdge, float trackWidthMeters, out float lane, out bool outward)
+        bool TryComputeCurveLean(CornerPoint lineCorner, TrackPoint steerRefPoint, float speedMps, float laneEdge, float trackWidthMeters, out float lane, out bool outward)
         {
             lane = 0f;
             outward = false;
@@ -1065,11 +1068,6 @@ namespace ARS
             float insideGap = IsWithinCorner(lineCorner) ? 0f : LaneInsideGapMeters;
             lane = -cornerDir * Math.Max(laneEdge - insideGap, 0f);
 
-            if (lane * cornerDir < ownLane * cornerDir && HeadingLeansOut(cornerDir))
-            {
-                float held = ownLane - cornerDir * CurveLeanInwardHoldLeadMeters;
-                if (held * cornerDir > lane * cornerDir) lane = held;
-            }
             _leanVerdict = 0;
             return true;
         }
@@ -1092,6 +1090,16 @@ namespace ARS
 
             float gap = request - _carriedLane;
             if (float.IsNaN(gap) || float.IsInfinity(gap)) return;
+
+            if (_laneReset)
+            {
+                _laneReset = false;
+                _carriedLane = ARS.Clamp(steerRefOffset, -laneEdge, laneEdge);
+                _laneRequestPrev = _carriedLane;
+                _laneRate = 0f;
+                _laneOvershoot = false;
+                return;
+            }
 
             if (_laneSnap)
             {
@@ -1163,7 +1171,7 @@ namespace ARS
             }
         }
         const float RequirementLookaheadSeconds = 3.95f;
-        const float IdealLineWindowMeters = 300f;
+        const float IdealLineWindowSeconds = 6f;
         const float LaneOutsideGapMeters = 0.5f;
         const float EdgeEmptySpaceMeters = 0.5f;
         const float LaneInsideGapMeters = 1f;
@@ -1172,7 +1180,7 @@ namespace ARS
         // The gate: six track widths before the apex, floored at 20 m.
         const float IdealLineBlendWidthFactor = 6f;
         const float IdealLineBlendMinMeters = 20f;
-        const float IdealLineMaxRadiusMeters = 50f;
+        public const float IdealLineMaxRadiusMeters = 50f;
         const float OutReleaseAlignDegrees = 10f;
         const float OutReleaseReachedMeters = 1f;
         const float IdealLineSpeedMarginMph = 15f;

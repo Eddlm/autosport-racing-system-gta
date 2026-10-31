@@ -343,9 +343,12 @@ namespace ARS
             return text.ToString();
         }
 
+        static readonly List<string> ApexRejects = new List<string>();
+
         public static void BuildApexTable()
         {
             ARS.Corners.Clear();
+            ApexRejects.Clear();
             int count = ARS.TrackPoints.Count;
             if (count < 1) return;
 
@@ -432,6 +435,23 @@ namespace ARS
             float widestApexRadius = 0f;
             foreach (CornerPoint counted in ARS.Corners) widestApexRadius = Math.Max(widestApexRadius, counted.SupposedRadius);
             ARS.Log(ARS.LogImportance.Info, "Apex table: " + ARS.Corners.Count + " corners, widest apex radius " + widestApexRadius.ToString("0") + "m");
+
+            for (int listed = 0; listed < ARS.Corners.Count; listed++)
+            {
+                CornerPoint apex = ARS.Corners[listed];
+                string outside = apex.DetectedRadius < Racer.IdealLineMaxRadiusMeters
+                    ? "outside=yes"
+                    : "outside=no (R >= " + Racer.IdealLineMaxRadiusMeters.ToString("0") + " m)";
+                ARS.Log(ARS.LogImportance.Info, "Apex " + (listed + 1) + "/" + ARS.Corners.Count
+                    + " node=" + apex.Node
+                    + " R=" + apex.DetectedRadius.ToString("0.0")
+                    + " supposed=" + apex.SupposedRadius.ToString("0.0")
+                    + " angle=" + apex.Angle.ToString("0.0")
+                    + " span=" + apex.StartNode + "-" + apex.EndNode
+                    + " " + outside);
+            }
+            if (ApexRejects.Count > 0)
+                ARS.Log(ARS.LogImportance.Info, "Apex rejected: " + string.Join("; ", ApexRejects));
 
             int nodeCount = ARS.TrackPoints.Count;
             for (int i = 0; i < ARS.Corners.Count; i++)
@@ -771,6 +791,7 @@ namespace ARS
             if (lineDistance < ApexStartLineClearanceNodes)
             {
                 ARS.Log(ARS.LogImportance.Info, "Corner skipped: apex=" + apexNode + " is " + lineDistance + " nodes from the line (clearance " + ApexStartLineClearanceNodes + ")");
+                ApexRejects.Add(apexNode + " R " + tightestRadius.ToString("0.0") + " (start line clearance, " + lineDistance + " nodes)");
                 return;
             }
 
@@ -816,6 +837,7 @@ namespace ARS
             if (nodesToDouble > SpanBlurNodes)
             {
                 ARS.Log(ARS.LogImportance.Info, "Corner blur: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " nodesToDouble=" + nodesToDouble + " > " + SpanBlurNodes + "; not a corner");
+                ApexRejects.Add(apexNode + " R " + detectedRadius.ToString("0.0") + " (blurred, nodesToDouble " + nodesToDouble + " > " + SpanBlurNodes + ")");
                 return;
             }
             ARS.Log(ARS.LogImportance.Info, "Corner open: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " nodesToDouble=" + nodesToDouble + "/" + exitMaxStep + (nodesToDouble >= exitMaxStep ? " (did not double)" : ""));
@@ -849,6 +871,7 @@ namespace ARS
                         CornerPoint loser = corner.DetectedRadius < previous.DetectedRadius ? previous : corner;
                         bool dropPrevious = loser.Node == previous.Node;
                         ARS.Log(ARS.LogImportance.Info, "Corner skipped (radii differ by >" + SpanMergeRadiusGate.ToString("0") + "m): previousR=" + previous.DetectedRadius.ToString("0.0") + " cornerR=" + corner.DetectedRadius.ToString("0.0") + " loserApex=" + loser.Node + (dropPrevious ? " (previous)" : " (new)"));
+                        ApexRejects.Add(loser.Node + " R " + loser.DetectedRadius.ToString("0.0") + " (too close to " + (dropPrevious ? corner.Node : previous.Node) + ", radii differ)");
 
                         if (dropPrevious)
                         {
