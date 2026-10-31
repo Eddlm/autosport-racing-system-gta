@@ -52,6 +52,16 @@ reports `410-`…`417-` (untracked, like the rest of `docs/audit/`). Each slug b
   three builds were spent avoiding. Revive by flipping `WheelTrimUnderPower` and restoring the row (`TargetUnderPowerPct`,
   30-100 in fives, ships 45). Read together with `gs-lane-throttle-floor`: both consume the same room, and only one of them
   should own the exit.
+- `floor-fights-the-brake` — **open, deliberately left as it is (build 1396, driver: "está probado y funciona genial... lo
+  dejamos tal como está")**: the lane throttle floor is a `Math.Max` on `Control.Throttle` and never reads the brake, so in a
+  braking zone whose projection says "inside" the car ends up with **both pedals down** - the brake from the plan, the
+  throttle at the room. In this engine the brake force usually wins, so it brakes, but worse and with the engine pushing
+  against it; on a driven axle that is slip added exactly when the tyre is already loaded. A floor should fight a lift, not
+  a brake. One condition fixes it, either at the write (`if (newBrake <= 0.05f && gsFloor > 0f)`) or before the split
+  (`combinedInput > 0`). The cheaper alternative, judged second best: leave the write alone and let `_gsFloorActiveThisTick`
+  keep marking those entrance samples for the brake learner, which is the protection that already exists. Deferred because
+  the seat report is good; reopen if the braking distance into a corner with a clear projection grows, or if entrances
+  start reading "braked too little".
 - `abs-tooltip` — **open (D-T7-1)**: the row works (a brake taper on a locking wheel); the tooltip still says the undoing of
   native ABS is being worked on.
 - `features-nitrous-claims` — **open (D-T8-1, D-T8-2)**: `FEATURES.md` sells the player's bottle as *"Coming soon"* (it fires on
