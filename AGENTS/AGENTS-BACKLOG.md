@@ -16,12 +16,20 @@ reports `410-`…`417-` (untracked, like the rest of `docs/audit/`). Each slug b
 - `no-collision-polarity` — **open (D-T4-1)**: `ApplyNoCollision` calls `SET_ENTITY_NO_COLLISION_ENTITY(a, b, !enable)` and its
   three call sites disagree with the native's own name, so the menu row is inert and the cleanup points the wrong way. Two
   further faults: it pairs each car with its **nearest** rival only, and the cleanup runs after `CleanRacers` empties the list.
-- `open-up-inert` — **open (D-T6-1)**: the pedal scale has never reached the wheel. It used to scale `_clampTargetDeg`,
-  a copy only the readout printed, while the limiter chased the unscaled local; build 1387 rewrote that readout and deleted
-  the field, so `OpensUpClampScale()` now has **no caller at all** and the row is inert end to end. One line, where
-  `clampTarget` is computed in `ApplySteerLimits`: `clampTarget *= OpensUpClampScale();`. It is a behaviour change — the
-  wheel would start giving way under throttle — so it needs a drive, and the readout's `cap` would follow it for free,
-  being the applied ceiling.
+- `open-up-inert` — **REMOVED from the tree (build 1389)**, kept here as the formula. The pedal scale never reached the
+  wheel: it scaled `_clampTargetDeg`, a copy only the readout printed, while the limiter chased the unscaled local. Build
+  1387 rewrote that readout and deleted the field; 1389 removed the row (`Rival Pace > Open Up on Throttle`), its
+  `KeySpec`, `OpenUpOnThrottleFloorPct`, `OpenUpFloorChoices` and the `OpensUpClampScale()` method itself, so nothing in the
+  tree can turn it on. To rebuild it: `scale = 1 - (1 - floorPct/100) * Clamp(throttle / 0.5, 0, 1)` — the reduction is spent
+  by half pedal, the row is 10-100 % with 100 = off and 60 the old default — and the line that makes it work, in
+  `ApplySteerLimits`, on the **local** before the chase: `clampTarget *= scale;`. It needs a drive, because the wheel would
+  start giving way under throttle; the readout's `cap` follows it for free, being the applied ceiling.
+- `gs-lane-throttle-floor` — **PARKED (build 1389, driver: "para que no envenenen el test")**: the corner-exit floor is now
+  `static readonly bool GsLaneThrottleFloor = false`, so `GsLaneThrottleFloorValue` returns 0 on its first line and the
+  throttle is never raised above what the slip cut allowed. The row, its `KeySpec` and the `GetBool` are gone, so no ini can
+  switch it back on. It poisoned the test twice over: it raised the throttle with `Math.Max` **after** the slip cut had
+  closed it, and `_gsFloorActiveThisTick` marked the brake learner's entrance samples, which is now simply never set. Revive
+  by flipping the field to `true` and restoring the row.
 - `abs-tooltip` — **open (D-T7-1)**: the row works (a brake taper on a locking wheel); the tooltip still says the undoing of
   native ABS is being worked on.
 - `features-nitrous-claims` — **open (D-T8-1, D-T8-2)**: `FEATURES.md` sells the player's bottle as *"Coming soon"* (it fires on

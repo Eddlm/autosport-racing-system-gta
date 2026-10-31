@@ -137,10 +137,7 @@ namespace ARS
 
         public static bool SteerTrace = false;
 
-        public static bool GsLaneThrottleFloor = true;
-
-        public static int OpenUpOnThrottleFloorPct = 60;
-        public static readonly string[] OpenUpFloorChoices = { "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" };
+        public static readonly bool GsLaneThrottleFloor = false;
 
         public static bool SlipFromMemory = true;
 
@@ -992,24 +989,6 @@ namespace ARS
             maxCrestLiftItem.SelectedIndex = Math.Max(0, maxCrestLiftItem.Items.IndexOf(SettingsMenuStore.GetFloat("MaxCrestLift", 0.4f).ToString("0.0", CultureInfo.InvariantCulture)));
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
-
-            NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "Corner exit aid: while the line ahead points at the inside of the road, the throttle cannot fall below a floor that grows toward the inside edge and never exceeds what TCS and stability allow.", GsLaneThrottleFloor);
-            gsLaneFloorItem.CheckboxChanged += (sender, args) =>
-            {
-                GsLaneThrottleFloor = gsLaneFloorItem.Checked;
-                SaveRacerSetting("GsLaneThrottleFloor", GsLaneThrottleFloor.ToString());
-            };
-            rivalPaceMenu.Add(gsLaneFloorItem);
-
-            NativeListItem<string> openUpItem = new NativeListItem<string>("Open Up on Throttle", "Share of the normal steering clamp left at full pedal: 100 % is the rule off, 40 % opens the wheel to two fifths of its allowance under power. Asking for throttle with the wheel wound on spends the front tyre on lateral force, and that force is not pushing the car. The reduction is spent by half pedal.", SettingsRepair.OptionsFor("OpenUpOnThrottleFloorPct"));
-            openUpItem.ItemChanged += (sender, args) =>
-            {
-                OpenUpOnThrottleFloorPct = int.Parse(openUpItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct.ToString(CultureInfo.InvariantCulture));
-            };
-            openUpItem.SelectedIndex = Math.Max(0, openUpItem.Items.IndexOf(SettingsMenuStore.GetInt("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct).ToString(CultureInfo.InvariantCulture)));
-            rivalPaceMenu.Add(openUpItem);
-            HookListTextPicker(openUpItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "Share of the tuned slope speed cut: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. Pitch counts both ways.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
@@ -3408,8 +3387,6 @@ namespace ARS
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             SteerTrace = DevelopmentMenuStore.GetBool("SteerTrace", SteerTrace);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
-            GsLaneThrottleFloor = SettingsMenuStore.GetBool("GsLaneThrottleFloor", GsLaneThrottleFloor);
-            OpenUpOnThrottleFloorPct = SettingsMenuStore.GetInt("OpenUpOnThrottleFloorPct", OpenUpOnThrottleFloorPct);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);

@@ -1503,17 +1503,6 @@ namespace ARS
             s.InnerPct = 100f * demand / available;
             return s;
         }
-        const float OpensUpThrottleSpanShare = 0.5f;
-
-        float OpensUpClampScale()
-        {
-            float floorPct = ARS.Clamp(ARS.OpenUpOnThrottleFloorPct, 0, 100) / 100f;
-            if (floorPct >= 1f) return 1f;
-
-            float travel = ARS.Clamp(Control.Throttle / OpensUpThrottleSpanShare, 0f, 1f);
-            return 1f - (1f - floorPct) * travel;
-        }
-
         float GeometrySteerCeiling(float fwdSpeed)
         {
             float vanillaCeiling = VehicleData.SteeringLock / (1f + SteerReductionPerMps * fwdSpeed);
