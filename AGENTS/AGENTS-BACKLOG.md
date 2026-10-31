@@ -35,12 +35,16 @@ reports `410-`…`417-` (untracked, like the rest of `docs/audit/`). Each slug b
   measure the wheel is cut by, so with the power trim also handing back angle there were two laws moving the pedal in one
   corner and no way to attribute what the seat felt. Revive by flipping the flag; the band has no setting of its own (its
   1x-2.5x span is the engine's flat point, `sfTractionMinAngle`), so a row there would be the first. What it is for: a
-  four-wheel slide, where both axles are past 100 and only speed restores grip. the corner-exit floor is now
-  `static readonly bool GsLaneThrottleFloor = false`, so `GsLaneThrottleFloorValue` returns 0 on its first line and the
-  throttle is never raised above what the slip cut allowed. The row, its `KeySpec` and the `GetBool` are gone, so no ini can
-  switch it back on. It poisoned the test twice over: it raised the throttle with `Math.Max` **after** the slip cut had
-  closed it, and `_gsFloorActiveThisTick` marked the brake learner's entrance samples, which is now simply never set. Revive
-  by flipping the field to `true` and restoring the row.
+  four-wheel slide, where both axles are past 100 and only speed restores grip.
+- `gs-lane-throttle-floor` — **PARKED, its geometry LIVE as the exit gate (build 1395)**: the corner-exit floor is
+  `static readonly bool GsLaneThrottleFloor = false`, so the write that raised the throttle is gone, and the row, its
+  `KeySpec` and the `GetBool` with it. **The geometry did not stay parked**: `UpdateExitRoom` runs every tick - loaded, in
+  the sense that lateral g exceeds `GsLaneFloorLateralShare` (0.525) of the theoretical grip; the projection not
+  outside-and-widening; an inside to aim at - and publishes `_exitRoom01`, the room from the outer edge (0) to the inside
+  (1). The power trim multiplies its pedal ramp by that, so angle is handed back only where there is somewhere to go, and
+  `GsLaneThrottleFloorValue` is now the pure reader, which keeps reviving the pedal floor a one-flag change that reproduces
+  the old numbers exactly (`outside + (max - outside) * room`). What poisoned the test was the `Math.Max` on the throttle,
+  not the geometry.
 - `abs-tooltip` — **open (D-T7-1)**: the row works (a brake taper on a locking wheel); the tooltip still says the undoing of
   native ABS is being worked on.
 - `features-nitrous-claims` — **open (D-T8-1, D-T8-2)**: `FEATURES.md` sells the player's bottle as *"Coming soon"* (it fires on

@@ -258,6 +258,8 @@ namespace ARS
 
         float _projectionOutsideMeters = 0f;
         bool _projectionWidening = false;
+        float _exitRoom01;
+        bool _exitRoomArmed;
         float _projectionOutsideSeconds = 0f;
 
         Color _projectionPathColor = Color.Blue;
@@ -1468,6 +1470,7 @@ namespace ARS
         float AllowedSlipTrim(float fwdSpeed)
         {
             float ramp = ARS.Clamp((Control.Throttle - ExitTrimPedalStart) / (1f - ExitTrimPedalStart), 0f, 1f);
+            ramp *= _exitRoomArmed ? _exitRoom01 : 0f;
             if (ramp <= 0f) return 1f;
 
             float baseShare = Math.Max(0.05f, AllowedSlipShare(fwdSpeed));
@@ -1729,20 +1732,19 @@ namespace ARS
         }
         const float GsLaneFloorLateralShare = 0.525f;
 
-        float GsLaneThrottleFloorValue(out bool insideRegime)
+        void UpdateExitRoom()
         {
-            insideRegime = false;
-            if (!ARS.GsLaneThrottleFloor) return 0f;
+            _exitRoomArmed = false;
+            _exitRoom01 = 0f;
+            if (!ARS.GsLaneThrottleFloor && Control.Throttle <= ExitTrimPedalStart) return;
 
-            if (_projectionOutsideMeters > 0f && _projectionWidening) return 0f;
+            if (_projectionOutsideMeters > 0f && _projectionWidening) return;
             float theoreticalGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
-            if (!(theoreticalGs > 0f)) return 0f;
-            if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= GsLaneFloorLateralShare * theoreticalGs) return 0f;
+            if (!(theoreticalGs > 0f)) return;
+            if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= GsLaneFloorLateralShare * theoreticalGs) return;
 
             int insideSign = -Math.Sign(CurrentTrackPoint.Angle);
-            if (insideSign == 0) return 0f;
-
-            insideRegime = true;
+            if (insideSign == 0) return;
 
             Vector3 projected = ProjectAhead(SteerPreviewSeconds);
             int projectedWindow = (int)(Car.Velocity.Length() * SteerPreviewSeconds) + 10;
@@ -1750,10 +1752,17 @@ namespace ARS
             float projectedOffset = ARS.SignedLaneOffset(projected, projectedNode.Position, projectedNode.Direction);
 
             float room = Math.Max(projectedNode.TrackHalfWidth - VehicleData.ModelDimensions.X * 0.5f, 1f);
-
             float inward = projectedOffset * insideSign / room;
-            float outerShare = ARS.Clamp(-inward, 0f, 1f);
-            return GsLaneThrottleMaxFloor - (GsLaneThrottleMaxFloor - GsLaneOutsideFloor) * outerShare;
+
+            _exitRoomArmed = true;
+            _exitRoom01 = 1f - ARS.Clamp(-inward, 0f, 1f);
+        }
+
+        float GsLaneThrottleFloorValue(out bool insideRegime)
+        {
+            insideRegime = ARS.GsLaneThrottleFloor && _exitRoomArmed;
+            if (!insideRegime) return 0f;
+            return GsLaneOutsideFloor + (GsLaneThrottleMaxFloor - GsLaneOutsideFloor) * _exitRoom01;
         }
 
         void ConvertSpeedToPedals()
@@ -1815,6 +1824,7 @@ namespace ARS
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
 
+            UpdateExitRoom();
             float gsFloor = GsLaneThrottleFloorValue(out bool gsInsideRegime);
 
             if (countersteering) gsFloor = 0f;
