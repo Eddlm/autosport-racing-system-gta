@@ -1,4 +1,3 @@
-// One settings row: type, limits, default and the ini key it lives under.
 using GTA;
 using System;
 using System.Collections.Generic;

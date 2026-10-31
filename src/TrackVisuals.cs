@@ -1,4 +1,4 @@
-// Debug drawing of the route: edges, chevrons, apex markers. Read-only over the track.
+// The debug drawing: route, walls, lane, apex and the aim point.
 using GTA;
 using GTA.Math;
 using System;

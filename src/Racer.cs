@@ -1,7 +1,5 @@
-// Lane law: one line in two states. OUT names the outer edge at a fixed 6 m/s between the 300 m window and the gate six
-// track widths out; the base state names the inside at 10 x track width / radius, and holds to a quarter of a metre of lead
-// while the car still leans 10 deg out of the corner. The mover shapes every move: 40 m/s^2 and 24 m/s, halved outward.
-// Corridor, walls, avoidance and recovery write the same request, last writer winning.
+// The AI driver: steering aim, lane law, pedals, manoeuvre cards and recovery. The lane is one line in two
+// states, and every producer - corridor, walls, avoidance, recovery - writes the same request, last writer winning.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -89,7 +87,6 @@ namespace ARS
         int _halfSecondTick = 0;
         int _oneSecondTick = 0;
         int _phaseOffsetMs = 0;
-
         const int RivalRefreshMs = 250;
         int _rivalTick = 0;
         int _pressureTick = 0;
@@ -113,7 +110,6 @@ namespace ARS
         int _stuckRecoveryCooldownEndTime = 0;
         Vector3 _stuckMoveSamplePosition = Vector3.Zero;
         int _stuckMoveSampleTime = 0;
-
         const int StuckReverseMs = 1000;
         const int RecoveryTriggerMs = 2000;
         const float RecoveryTriggerMph = 2f;
@@ -124,11 +120,9 @@ namespace ARS
         const int RecoveryExitHoldMs = 500;
         const int StuckMoveSampleMs = 1000;
         const float StuckMoveMeters = 0.5f;
-
         const int DNFSlotSpacingMeters = 5;
         const float DNFSlotOffsetMeters = 1f;
         const float DNFUnderTrackMeters = 5f;
-
         const float KickMaxDriveBiasFront = 0.01f;
         const float KickPedalLevel = 1f;
         const int KickArmSaturateMs = 1000;
@@ -146,19 +140,15 @@ namespace ARS
 
         float _kickAskDegrees = 0f;
         public float RouteLookaheadSizeSeconds = 2.0f;
-
         const float SteerPreviewSeconds = 0.5f;
         const float SteerLookaheadMinNodes = 8f;
         public const float SteerLookaheadMaxNodes = 90f;
 
-        // How far ahead the car is aimed: half a second of travel, floored and capped, read as a NODE count by the aim and by
-        // the debug ribbon, so the two ends agree with each other. Nodes are at most 1.5 m apart, so the same speed aims
-        // further on a coarsely sampled route: the number is nodes, not metres, and always was.
+        // Half a second of travel, floored at 8 and capped at 90: a NODE count, not metres, and nodes are at most 1.5 m apart.
         public static float SteerLookaheadNodes(float speedMps)
         {
             return ARS.Clamp(speedMps * SteerPreviewSeconds, SteerLookaheadMinNodes, SteerLookaheadMaxNodes);
         }
-
         const float GsPreviewBlend = 0.5f;
 
         float _avoidLeftWall = 0f;
@@ -216,35 +206,23 @@ namespace ARS
 
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
-
         const float RouteStraightSagittaShare = 0.002f;
-
         const float RouteBrakeCap = 0.2f;
-
         const float GsLaneThrottleMaxFloor = 1f;
-        // At the outer edge the floor keeps half a pedal: lifting there is the one thing that pulls a car further out.
         const float GsLaneOutsideFloor = 0.5f;
-
         const float ProjectionInputPerSecond = 2f;
         const float ProjectionBrakeFloor = 0.5f;
-
         const float OffTrackSpeedSlackMph = 40f;
         const float OffTrackSpeedFloorMph = 20f;
-
         const float OffshootMinRouteAngleDeg = 2f;
-
         const float OffshootMinSpeedMph = 20f;
-
         const float FullPedalSpeedErrorMps = 1f;
-
         const float BrakeLearnerBarMps = FullPedalSpeedErrorMps * BrakeErrorMultiplier;
-
         const float BrakeErrorMultiplier = 3f;
 
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
         const float InputTrailSampleSpacing = 0.5f;
         const int InputTrailMaxSamples = 80;
-
         const float InputTrailChevronSpacing = 1f;
         const float InputTrailChevronGroundClearance = 1f;
         const float InputTrailChevronHeightGain = 0.5f;
@@ -269,19 +247,13 @@ namespace ARS
         float _clampTargetDeg = float.NaN;
 
         float _slipFactor = 1f;
-
         const float SlipOpenDegPerSec = 72f;
-
         const float SlipClosePerSecond = 15f;
-
         const float SlipCloseMaxDegPerSec = 90f;
 
         SlipState _slip;
-
         const float FrontSlipNeutralSteerDeg = 0.5f;
-
         const float FrontSlipTheoryMinSpeedMps = 3f;
-
         const float FrontSlipTheoryMinCommandDeg = 0.05f;
         const float FrontSlipGravity = 9.81f;
         float _steerGrantedCeiling = 0f;
@@ -296,22 +268,15 @@ namespace ARS
 
         bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
-
         const float BrakeFactorSeed = 0.8f;
-
         const int BrakeFactorSeedJitterHundredths = 5;
-
         const int BrakeConfidenceJitterHundredths = 5;
         float _brakeConfidenceBias;
-
         const float CornerTightRadius = 50f;
-
         const float RequirementExtrapolationScale = 0.9f;
         const float PositionExcessMph = 10f;
         const float BrakeExcessMph = 25f;
-
         const float BrakeHorizonMargin = 40f;
-
         const bool BrakeLearningApplies = true;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
@@ -331,7 +296,6 @@ namespace ARS
 
         bool _brakeSampleFloorAtEntrance = false;
         bool _brakeSampleEntranceCrossed = false;
-
         const float BrakeApexNearMetres = 50f;
         float _brakeSampleApexGap = 0f;
         int _brakeLastApexAnnounced = -1;
@@ -347,18 +311,14 @@ namespace ARS
         bool _brakeCommitSawAboveApex = false;
         bool _brakeCommitFloorAtEntrance = false;
         bool _brakeCommitEntranceCrossed = false;
-
         const float BrakeSkidBrakeShare = 0.25f;
         const float BrakeSkidFactorStep = 0.1f;
         const float BrakeSkidPeakMultiple = 2.5f;
         const float BrakeCommitDelaySeconds = 0.75f;
         const float BrakeMinFactor = 0.5f;
-
         const float BrakeEntryFactorPerMetre = 0.02f;
         const float BrakeEntryMaxStepPerEvent = 0.25f;
-
         const float BrakeFloorLatchSeconds = 1f;
-
         const float BrakeOverAllowanceShare = 1.5f;
         const int BrakeOverSampleMs = 100;
         const float BrakeMaxFactor = 1.5f;
@@ -373,9 +333,6 @@ namespace ARS
 
         bool CornerRequiresBraking(int apexNode) => apexNode >= 0 && TryGetCornerContext(apexNode, out CornerContext context) && context.RequiresBraking;
 
-        // A corner that asks for nothing gets no card: no draft, no defence, no concession. Read from the apex speed the
-        // picker already worked out against the speed we carry now, so it answers on approach. The braking latch cannot:
-        // it only trips once we are already inside braking range and arriving too fast, which is most of the way in.
         bool CornerAsksForBraking() => Brain.Corner != null && Brain.Corner.Speed < Car.Velocity.Length();
 
         CornerContext CornerContextForWrite(int apexNode)
@@ -413,13 +370,10 @@ namespace ARS
 
         bool _isPassengerized = false;
         const float RivalSearchRangeMeters = 200f;
-
         const float NitrousPowerMultiplier = 5f;
-
         const float PlayerNitrousPowerMultiplier = 1f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
-
         const int NitrousArmDelayMs = 6000;
         const float NitrousCornerLookaheadSeconds = 8f;
         const float NitrousLonelySpeedFraction = 0.5f;
@@ -430,19 +384,14 @@ namespace ARS
         const float ChillRivalCrowdDistance = 40f;
         const int ChillCrowdCount = 5;
         const float ChillReleaseRadiusMeters = 50f;
-
         const float DivebombReleaseGapMeters = 40f;
-
-        // How much later than me a rival may still reach the corner entrance and remain worth defending against.
         const float DefendLaterMarginSeconds = 1f;
-        // A rival this close is worth defending against even if it is not closing: 20 metres plus both cars' length.
         const float DefendCloseBehindMeters = 20f;
         const float DivebombReleaseAngleDegrees = 25f;
         const int CardMinDwellMs = 1000;
         const int CardCooldownMs = 1000;
         public const float ChillStandoffDistance = 20f;
         const float ChillThrottleCap = 0.5f;
-
         const float RivalLiftMeters = 3f;
         const float RivalLiftFloor = 0.1f;
         const float ChillStandoffEscapeMargin = 2f;
@@ -459,8 +408,6 @@ namespace ARS
         const float SideBySideFullAssistExtraGap = 1f;
         const float SideBySideMinimumAssist = 0.1f;
         const float SideBySideHeadingShare = 0.5f;
-        // Two cars are only in the same race for space if they are at the same level: on a figure-eight the car on the bridge
-        // passes a couple of metres above the one underneath, and proximity alone reads that as a car alongside.
         const float RivalHeightGateMeters = 2f;
         const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
         const ulong CheatPowerIncreaseHash = 0xB59E4BD37AE292DB;
@@ -714,9 +661,7 @@ namespace ARS
 
             AdvancePastApex();
             CornerPoint lineCorner = NearestApexAhead();
-            // The one bound every writer obeys: half the road, less the car's half width, less the buffer. Inside the corner the
-            // car's own width is the whole buffer, so the lane may ask for the inner extreme with its edge on the line; on the
-            // way in the half metre still applies.
+
             float laneLimit = Math.Max(roadWide - carHalfWidth - (IsWithinCorner(lineCorner) ? 0f : EdgeEmptySpaceMeters), 0f);
             if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, steerRefOffset, laneLimit, roadWide * 2f, out float curveLean, out bool leanOutward))
             {
@@ -920,39 +865,23 @@ namespace ARS
                 float headingDifference = -Vector3.SignedAngle(rivalFlat, courseFlat, Vector3.WorldUp);
                 if (float.IsNaN(headingDifference) || float.IsInfinity(headingDifference)) continue;
 
-                // Half his heading error, not a fixed nudge: the assist scales with how hard he is angling, and there is no cap.
                 correction += headingDifference * SideBySideHeadingShare * proximity;
             }
             return correction;
         }
-
-        // A line exists at all only under this radius.
         const float CurveLeanRadiusMeters = 900f;
         const float CurveLeanChordSeconds = 1.25f;
-        // The base rate: 20 x full width / radius, in m/s: 20 when the radius equals the width.
+        // 20 x full track width / radius, in m/s; the out state ignores the bend and pulls at 6 m/s.
         const float CurveLeanWidthScale = 20f;
-
-        // OUT ignores the bend: 6 m/s, straight or curve.
         const float CurveLeanOutMps = 6f;
-
-        // How far the heading must lean out before the line stops pulling in. At 10 deg the car is genuinely going wide:
-        // 5.2 m/s of lateral drift at 30 m/s, well past a car merely following the bend.
+        // 10 deg of lean is 5.2 m/s of lateral drift at 30 m/s, past a car merely following the bend.
         const float CurveLeanInwardHoldDegrees = 10f;
-        // How far inside the car the aim may still sit while that hold is on: a quarter of a metre, so the line keeps
-        // pointing at the inside without pulling the car there.
         const float CurveLeanInwardHoldLeadMeters = 0.25f;
-
         const float LaneLockTestOffsetMeters = 0.1f;
-
         const float PursuitGain = 2f;
-
         const float MaxPursuitBearingDegrees = 90f;
-
         const float SmallAimBearingDegrees = 1f;
-
-        // Crossing scale for the steering ask. Off: the mover upstream may make it redundant.
         const float LaneCrossingLateralSpeedMps = 1f;
-
         static readonly bool LaneCrossingScale = false;
 
         static float LaneCrossingThresholdDegrees(float speedMps)
@@ -1027,9 +956,6 @@ namespace ARS
             {
                 if (ForwardNodeDistance(steerRefPoint.Node) >= ForwardNodeDistance(outsideEntranceNode)) return false;
 
-                // The one release the width can veto: the corner has already begun by heading, so the outside line only lets go
-                // once the car has used the width. What it must reach is whatever the walls leave reachable, not the bare
-                // outside lane: a rival wall can close that lane for the whole corner and waiting for it would never end.
                 float ownLane = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
                 float reachable = ClampLaneToWalls(outsideLane, steerRefPoint.TrackHalfWidth, _leftWallHeld, _rightWallHeld);
                 Vector3 steerFlat = new Vector3(steerRefPoint.Direction.X, steerRefPoint.Direction.Y, 0f);
@@ -1083,8 +1009,7 @@ namespace ARS
 
             _leanApproachMps = CurveLeanWidthScale * trackWidthMeters / Math.Max(ahead.PreciseCurveRadius, 5f);
             _laneCornerDir = (int)cornerDir;
-            // Inside the corner the lane may ask for the inner extreme; on the way in it keeps the gap, so the line does not hug
-            // the edge a hundred metres before the turn-in.
+
             float insideGap = IsWithinCorner(lineCorner) ? 0f : LaneInsideGapMeters;
             lane = -cornerDir * Math.Max(laneEdge - insideGap, 0f);
 
@@ -1095,19 +1020,13 @@ namespace ARS
             }
             return true;
         }
-
         const float LaneOverrideHoldMeters = 0.1f;
-
-        // The mover: 40 m/s^2, 24 m/s, half of both outward. The cap bounds the lunge, the acceleration the reversal.
         const float LaneMoverAccelMps2 = 40f;
         const float LaneMoverSpeedCapMps = 99f;
-
         const float LaneMoverMaxStepSeconds = 0.1f;
-
         const float LaneCrossMinMeters = 0.1f;
 
-        // Elastic: the lane leads the car at full rate up to 2.5 m, fades to a stop at 5 m, and past 5 it comes back, at full
-        // pull by 6 m. The aim is a leash, never a rope.
+        // The leash: full rate to 2.5 m, nothing between 5 and 6, full pull back by 6. The aim leads; it is never a rope.
         public const float LaneTaperNearMeters = 2.5f;
         const float LaneTaperFarMeters = 5f;
         const float LaneTaperCapShare = 0f;
@@ -1169,7 +1088,6 @@ namespace ARS
             float arrivalRate = Math.Sign(gap) * Math.Min(moverSpeedCap, (float)Math.Sqrt(2f * moverAccel * Math.Abs(gap)));
             float desiredRate = requestRate + arrivalRate;
 
-            // Past the far end the aim stops being led and returns to the car, harder the further out it sits.
             if (awayFromCar > LaneTaperFarMeters)
             {
                 float pull = ARS.Clamp((awayFromCar - LaneTaperFarMeters) / (LaneElasticReturnEnd - LaneTaperFarMeters), 0f, 1f);
@@ -1191,28 +1109,18 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Lane mover " + Name + ": asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + "), aimed " + _carriedLane.ToString("0.00") + ", rate " + _laneRate.ToString("0.00"));
             }
         }
-
         const float RequirementLookaheadSeconds = 3.95f;
-
-        // OUT window: from here to the gate the line names the outer edge.
         const float IdealLineWindowMeters = 300f;
-
         const float LaneOutsideGapMeters = 0.5f;
-        // The lane never leaves the road: whatever asks for it, the aim keeps the car's half width plus this buffer from the edge.
         const float EdgeEmptySpaceMeters = 0.5f;
         const float LaneInsideGapMeters = 1f;
         const float LaneBiasMaxMeters = 0.5f;
-
         const float LineApexStickyMeters = 30f;
-
         // The gate: six track widths before the apex, floored at 20 m.
         const float IdealLineBlendWidthFactor = 6f;
         const float IdealLineBlendMinMeters = 20f;
-        // Beyond this radius a bend is a kink and gets no outside.
         const float IdealLineMaxRadiusMeters = 50f;
-        // How close the steering lookahead's direction has to be to the entrance's before the out state calls the corner begun.
         const float OutReleaseAlignDegrees = 10f;
-        // How close to the outside lane the car has to be before the out state is allowed to let go of it.
         const float OutReleaseReachedMeters = 1f;
         const float IdealLineSpeedMarginMph = 15f;
 
@@ -1238,23 +1146,13 @@ namespace ARS
             if (adopted != null && adoptedMeters <= bestMeters + LineApexStickyMeters) return adopted;
             return best;
         }
-
         const float AvoidAngleGateDegrees = 20f;
-
         const float SameSectionMaxGapMeters = 30f;
-
-        // The same five seconds the avoidance lane arms on: a rival we are catching has to keep the corridor closed until
-        // the avoidance lane has taken over from it. Retiring the wall at three left a two second band in which the corridor
-        // was open, the avoidance lane was not yet the request, and the lean was free to aim at the car ahead.
         const float WallApproachSeconds = 5f;
-
         const float EngineHealthHalf = 500f;
-
         const float WallSideDeadbandMeters = 0.3f;
-
         const float AvoidHoldBehindMeters = 14f;
         const float AvoidHoldLateralMeters = 1.5f;
-
         const int AvoidHoldTimeoutMs = 8000;
 
         float ComputeAvoidanceLane(float roadWide)
@@ -1300,8 +1198,6 @@ namespace ARS
             Rival target = Brain.AvoidanceTarget;
             if (target == null || target.RivalRacer == null) { _passLaneLatched = false; return 0f; }
 
-            // A pass lane is a decision, not a shadow: once chosen it holds while the target persists, so a rival drifting down
-            // the road no longer drags our line with him. It is recomputed when he is no longer clear of the latched lane.
             bool latchHolds = _passLaneLatched && _passLaneTarget == target.RivalRacer
                 && Math.Abs(_passLaneValue - target.NodeOffset) >= target.CombinedWidth;
             if (latchHolds) return _passLaneValue;
@@ -1469,49 +1365,32 @@ namespace ARS
 
             return ClampLaneToWalls(requestLane, roadWide, leftConstrained, rightConstrained);
         }
-
         const float SlidingFraction = 0.3f;
-
         const float SlideBlendStartFraction = 1f;
         const float SlideBlendFullFraction = 2.5f;
-
         const float CountersteerSlideShare = 0.5f;
-
         const float CountersteerAssistDegreesPerSecond = 10f;
-
         const float CountersteerTotalShare = 1f;
-
         const float CountersteerPedalCap = 0.5f;
-
         const float CountersteerMinSpeedMph = 10f;
-
         const float SteerSlewRate = 120f;
-
         static readonly bool SlowCornerSlipAllowance = true;
         const float SlowCornerSlipFullMph = 15f;
         const float SlowCornerSlipDoubleMph = 5f;
-
         const float DamperCrossingShare = 1f;
-
         const float DamperEffectScale = 1f;
-
         const bool SteerDampingEnabled = true;
-
         const bool SteerDampingAimReference = true;
         float SteerDampingFor()
         {
 
             return SteerDampingEnabled ? ARS.SteerDampingGain / Math.Max(VehicleData.BaseMechanicalGrip, 1f) : 0f;
         }
-
         const float VanillaSteerReductionPerMps = 0.075f;
-
         const float SteerCapGripReference = 1f;
         const float SteerCapGripFloor = 0.5f;
-
         const float EngineSteerWheelOuterShare = 0.75f;
         const float PeakSlipOuterCommandShare = 1f / EngineSteerWheelOuterShare;
-
         const float SteerLimitRampStartMph = 5f;
         const float SteerLimitRampEndMph = 30f;
 
@@ -1572,6 +1451,7 @@ namespace ARS
             return 1f + slow;
         }
 
+        // Target x slow-corner allowance + tolerance / peak(v): a share first, absolute degrees second.
         float AllowedSlipShare(float fwdSpeed)
         {
             float peakDeg = LateralPeakAtSpeed(fwdSpeed);
@@ -1628,7 +1508,6 @@ namespace ARS
             s.InnerPct = 100f * demand / available;
             return s;
         }
-
         const float OpensUpThrottleSpanShare = 0.5f;
 
         float OpensUpClampScale()
@@ -1664,7 +1543,6 @@ namespace ARS
 
             return Math.Max(ceiling, ManeuverRamp(speedMph, endCeiling));
         }
-
         static readonly bool SpeedSteerCeiling = false;
 
         float ManeuverRamp(float speedMph, float ceiling)
@@ -1837,7 +1715,6 @@ namespace ARS
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
         }
-
         const float PedalSlewRate = 6f;
         const float PedalSlewMaxPerTick = 0.5f;
 
@@ -1855,7 +1732,6 @@ namespace ARS
             if (_projectionWidening) return Color.Red;
             return Color.Blue;
         }
-
         const float GsLaneFloorLateralShare = 0.525f;
 
         float GsLaneThrottleFloorValue(out bool insideRegime)
@@ -1863,9 +1739,6 @@ namespace ARS
             insideRegime = false;
             if (!ARS.GsLaneThrottleFloor) return 0f;
 
-            // The projection owns the pedals once it is outside the edge, because it is the one braking for the line: the floor
-            // yields to it whether or not the car is still over its target speed. Waiting on the outside timer was not enough,
-            // since that timer only runs while the car is also faster than the target and re-arms the moment it is not.
             if (_projectionOutsideMeters > 0f && _projectionWidening) return 0f;
             float theoreticalGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
             if (!(theoreticalGs > 0f)) return 0f;
@@ -1882,8 +1755,7 @@ namespace ARS
             float projectedOffset = ARS.SignedLaneOffset(projected, projectedNode.Position, projectedNode.Direction);
 
             float room = Math.Max(projectedNode.TrackHalfWidth - VehicleData.ModelDimensions.X * 0.5f, 1f);
-            // Full pedal from the inside through the centre, falling to half at the outer edge. Past that edge the off-track
-            // projection owns the braking, so the floor stays put and lets it act.
+
             float inward = projectedOffset * insideSign / room;
             float outerShare = ARS.Clamp(-inward, 0f, 1f);
             return GsLaneThrottleMaxFloor - (GsLaneThrottleMaxFloor - GsLaneOutsideFloor) * outerShare;
@@ -2231,9 +2103,7 @@ namespace ARS
             if (corner == null || corner.Node < 0) return -1;
             return corner.EndNode >= 0 ? corner.EndNode : OffsetCornerNode(corner.Node, corner.LengthEnd);
         }
-
         const int BrakeTargetLeadMeters = 2;
-
         const float CornerLiftMphPerSecond = 10f;
         const float CornerLiftGraceMph = 5f;
 
@@ -2392,7 +2262,6 @@ namespace ARS
             if (!burning && rbFactor < 1f && !rbFreeZone && !(ARS.CurrentRubberbandMode == RubberbandMode.Natural && rbNearbyRival))
                 Brain.CurrentIntention.Speed *= rbFactor;
         }
-
         const float nearSeconds = 1.0f;
         const float farSeconds = 2.0f;
         float CrestGripSpeedFactor(int carNode, int count, out int nearNode, out int farNode, out float rawDeltaGs)
@@ -2430,7 +2299,6 @@ namespace ARS
             float norm = (RacePosition - centerPos) / (float)maxDistance;
             return 1f + norm * 0.33f * (ARS.RubberbandingPct * 0.01f);
         }
-
         const float ElevationToSlopeSine = 1f / 90f;
 
         float GetFollowPointSlopeAngle()
@@ -2447,12 +2315,9 @@ namespace ARS
             if (horizDist < 0.01f) return 0f;
             return Math.Abs((float)Math.Atan2(to.Z - from.Z, horizDist));
         }
-
         const float OffTrackTargetShare = 0.5f;
-
         const float ReasonCapSlewRate = 3.5f;
         const float TcsCapFloor = 0.2f;
-
         static readonly float TaperNormaliser = (float)(1.0 / Math.Tanh(1.0));
 
         static float TaperShare(float depth, float span)
@@ -2463,20 +2328,14 @@ namespace ARS
         const float OffTrackThrottleLevel = 0f;
         const float OffTrackSafeSpeedMph = 20f;
         const float OffTrackFullThrottleMph = 15f;
-
         const float OffTrackRecoverThrottle = 0.75f;
-
         const float StabilityFallPerWheelPerSecond = 0.5f;
         const float StabilityRisePerSecond = 0.5f;
-
         const float OverspeedArmMaxSteerDegrees = 2f;
         const float OverspeedArmMaxSlideDegrees = 2f;
         const float OverspeedArmMinSpeedMph = 30f;
-
         const float OverspeedArmMaxLateralGs = 0.25f;
-
         const float OverspeedCutStartGs = 0.2f;
-
         const float ReasonCapRecoveryScale = 0.5f;
 
         static float Glide(float current, float level, float fallRate, float riseRate, float tickScale)
@@ -2560,10 +2419,8 @@ namespace ARS
             float depthShare = TaperShare(spinDepth, SlipForShare(ARS.TcsTaperSpanPct));
             return 1f - depthShare * (1f - TcsCapFloor);
         }
-
         const float AbsLockRadPerSecond = 2f;
         const float AbsMinSpeedMph = 15f;
-
         const float AbsKneeSlip = 0.5f;
         const float AbsLockSlip = 1f;
         const float AbsBrakeFloor = 0f;
@@ -2712,19 +2569,14 @@ namespace ARS
                         break;
                     }
                     float combinedLength = Math.Abs(VehicleData.ModelDimensions.Y) + Math.Abs(r.RivalRacer.VehicleData.ModelDimensions.Y);
-                    // Gone when he is neither closing nor close: the same pair that let him in. Closure alone cannot decide it,
-                    // since a rival holding station behind never shows a closing time, and arrival time cannot either, since a
-                    // car behind always reaches the entrance later than us and the test would fire on the very first tick.
+
                     bool stillClosing = !float.IsPositiveInfinity(hisTimeToReachMe);
                     bool stillClose = r.Distance < DefendCloseBehindMeters + combinedLength;
                     threatGone = !stillClosing && !stillClose;
                     break;
                 }
                 bool lostTarget = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || !targetTrails;
-                // The defence ends where the out state does, so the base behaviour takes the line back and the car turns in for
-                // the apex when it should. The writer reads the same gate at the steer node and this one reads it at the car's
-                // node: where the road changes width between them the slot can free a few metres early or late, which costs
-                // nothing because this only frees the slot.
+
                 bool outsideOver = MetresToNode(_defendApexNode) <= OutsideGateMeters(CurrentTrackPoint);
 
                 if ((lostTarget || threatGone || outsideOver || HasPassedApex(_defendApexNode)) && CardMayEnd)
@@ -2773,7 +2625,6 @@ namespace ARS
             return fwd;
         }
 
-        // Metres from the car to a node along the route, wrapped for a loop and negative once it is behind us.
         float MetresToNode(int node)
         {
             if (node < 0 || node >= ARS.TrackPoints.Count) return 0f;
@@ -2783,7 +2634,6 @@ namespace ARS
             return metres;
         }
 
-        // Where the out state hands the line back: the same gate the lean uses, read at the node each caller has at hand.
         float OutsideGateMeters(TrackPoint at) => Math.Max(2f * at.TrackHalfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
 
         bool IsWithinCorner(CornerPoint corner)
@@ -2855,10 +2705,8 @@ namespace ARS
             StartNitrous();
             return true;
         }
-
         const float FightWindowMinSeconds = 2f;
         const float FightWindowMaxSeconds = 6f;
-
         const float DivebombReachSeconds = 0.75f;
         const float DivebombFullThrottle = 0.99f;
 
@@ -2917,8 +2765,7 @@ namespace ARS
             if (entranceNode < 0) return false;
             float myTimeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
             if (!ARS.IsBetween(myTimeToEntrance, FightWindowMinSeconds, FightWindowMaxSeconds)) return false;
-            // Armed inside the out state's own gate the card could never move the car: the lane writer holds the defend
-            // offset only while the apex is still beyond that gate.
+
             if (MetresToNode(apexNode) <= OutsideGateMeters(CurrentTrackPoint)) return false;
 
             Rival defenderTarget = null;
@@ -2937,14 +2784,11 @@ namespace ARS
                     break;
                 }
 
-                // He counts if he is closing on me, or if he is simply close behind: the case the card exists for. A rival
-                // that is merely close never shows a closing time, so the two tests have to be alternatives, not a chain.
                 float combinedLength = Math.Abs(VehicleData.ModelDimensions.Y) + Math.Abs(r.RivalRacer.VehicleData.ModelDimensions.Y);
                 bool closesSoon = ARS.IsBetween(timeToReachMe, 3f, 6f);
                 bool closeBehind = r.Distance < DefendCloseBehindMeters + combinedLength;
                 if (!closesSoon && !closeBehind) continue;
 
-                // And he has to still be arriving: a rival who reaches the entrance long after me threatens nothing.
                 float hisTimeToEntrance = r.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(r.Speed, 1f);
                 if (hisTimeToEntrance > myTimeToEntrance + DefendLaterMarginSeconds) continue;
 
@@ -2962,9 +2806,6 @@ namespace ARS
             float reachable = Math.Abs(CurrentTrackPoint.TrackHalfWidth) - Math.Abs(VehicleData.BoundingBox) * 0.5f - EdgeEmptySpaceMeters;
             float inward = -defendTurn;
 
-            // If the road leaves no room to be clear of him on the inside, the card is not played: a target that clamps back
-            // onto his outside would hand him the apex. The target itself may still be cut back to the road edge, which only
-            // brings the line nearer the gate he is already on.
             if (Math.Abs(hisLane + inward * clearance) > reachable) return false;
 
             ActiveManeuver.Type = ManeuverType.DefendLane;
@@ -2972,8 +2813,6 @@ namespace ARS
             ActiveManeuver.LastEnabled = Game.GameTime;
             _defendApexNode = apexNode;
 
-            // His lane, one combined width towards the corner's inside, so the line sits nearer the apex than he does.
-            // Taken once when the card is played: a defence is a promise about where the car will be, not a chase.
             _defendLaneOffset = ARS.Clamp(hisLane + inward * combinedWidth, -reachable, reachable);
             return true;
         }
@@ -3106,9 +2945,6 @@ namespace ARS
             float sin = (float)Math.Sin(rad);
             return new Vector3(v.X * cos - v.Y * sin, v.X * sin + v.Y * cos, v.Z);
         }
-
-        // Input visuals are parked: the steer fan and the throttle and brake bars that hang off it are off, while the pedal
-        // trail of chevrons stays. Flip this one flag to bring all three back; no setting has to change.
         const bool DebugInputVisuals = false;
 
         void DrawDebug()
@@ -3121,7 +2957,6 @@ namespace ARS
             if (ARS.DebugToggles[Options.ShowFrontSlip]) DrawFrontSlipReadout();
             if (ARS.DebugToggles[Options.ShowGsProjection]) DrawGsProjection();
         }
-
         const float FanLineLength = 5f;
         const float FanPursuitHeight = 0.05f;
         const float FanDamperHeight = 0.10f;
@@ -3215,14 +3050,12 @@ namespace ARS
                 World.DrawMarker(MarkerType.ChevronUpx1, position, direction, new Vector3(89f, 90f, -90f), new Vector3(InputTrailChevronSize, InputTrailChevronSize, InputTrailChevronSize), colour, false, false, 2, false, "", "", false);
             }
         }
-
         const float SteerLinePedalSize = 0.08f;
 
         void DrawSteerLineSphere(Vector3 basePt, Vector3 dir, float length, float level, float size, Color color)
         {
             World.DrawMarker(MarkerType.DebugSphere, basePt + dir * length * ARS.Clamp(level, 0f, 1f), Vector3.Zero, Vector3.Zero, new Vector3(size, size, size), color);
         }
-
         static readonly Color SlipRestColor = Color.White;
         static readonly Color SlipPeakColor = Color.Lime;
         static readonly Color SlipSkidColor = Color.Yellow;
@@ -3231,7 +3064,6 @@ namespace ARS
         const float SlipFloorLevel = 2.5f;
         const float WheelSlipSphereHeight = 1f;
         const float WheelSlipSphereSize = 0.35f;
-
         const float ProjectionVerticalShare = 0.5f;
 
         Vector3 DampedVertical(Vector3 point, float baseZ)
@@ -3325,22 +3157,14 @@ namespace ARS
             t = ARS.Clamp(t, 0f, 1f);
             return Color.FromArgb((int)(from.A + (to.A - from.A) * t), (int)(from.R + (to.R - from.R) * t), (int)(from.G + (to.G - from.G) * t), (int)(from.B + (to.B - from.B) * t));
         }
-
         const float PedalLimitReasonSize = 0.1f;
         const float PedalLimitCapSize = 0.09f;
-
         static readonly Color NonDangerousReasonColor = Color.FromArgb(255, 120, 200, 255);
         static readonly Color GripReasonColor = Color.Yellow;
         static readonly Color OverspeedReasonColor = Color.Black;
         static readonly Color CountersteerReasonColor = Color.Orange;
         static readonly Color StabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
         static readonly Color RecoveryReasonColor = Color.Cyan;
-
-
-        // The lane's colour says what it is doing, not who asked: grey with nothing asking, blue with an aim that is not
-        // moving, green while it moves inward, yellow while it moves outward.
-        // Blue means "asking, but the aim is not going anywhere": the same rate the mover treats as quiet in its own log,
-        // so the two never disagree about whether the lane is moving.
         const float LaneStillMps = 0.2f;
 
         public static Color LaneMotionColor(LaneReason reason, float rateMps, int cornerDir)
@@ -3820,7 +3644,6 @@ namespace ARS
                 ? (int)ARS.Clamp(node, 0, count - 1)
                 : ((node % count) + count) % count;
         }
-
         const float ApexBufferSeconds = 5f;
         const float EntranceBrakeBufferSeconds = 0.25f;
         const float EntranceBrakeExtraDistance = 0f;
@@ -4036,9 +3859,6 @@ namespace ARS
                 Brain.Corner = null;
             }
         }
-
-        // The corner the line works is let go once the car is this many nodes past its apex: until then it keeps the reference
-        // it earned on the way in, and after it the label and the next corner's stickiness move on together.
         const int ApexAdvanceNodes = 10;
 
         void AdvancePastApex()
@@ -4499,7 +4319,6 @@ namespace ARS
             float thrustPerWheel = VehicleMemory.GetInitialDriveForce(Car) * KickGearRatio(currentGear, maxGear) / 2f;
             return thrustPerWheel > VehicleData.CurrentMechanicalGrip * KickWheelLoadShare * KickGripMargin;
         }
-
         const bool KickCardEnabled = false;
 
         void UpdateThrottleKick()

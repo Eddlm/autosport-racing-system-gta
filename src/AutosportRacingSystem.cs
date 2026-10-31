@@ -1,6 +1,4 @@
-// The outside world: menu and ini, the race cycle (grid, laps, results), the HUD and the debug toggles. Settings are read
-// once into Options and written back atomically; a value the ini does not carry keeps its default. Every per-tick path
-// fails soft: a bad frame logs once and the race survives instead of dying with it.
+// The script: settings and menus, the race lifecycle, and the stores every other file reads.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -86,7 +84,6 @@ namespace ARS
         public static Dictionary<string, string> ModelNameCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public static Dictionary<string, float> ModelPaceIndexCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-
         const float ElectricDrivePeak = 5f;
 
         public static float ComputePaceIndex(float topSpeedMph, float grip, float accelRaw, bool isElectric)
@@ -107,7 +104,6 @@ namespace ARS
             }
             return _electricNativeAvailable.Value && Function.Call<int>((Hash)0x1FCB07FE230B6639, modelHash) != 0;
         }
-
         static readonly HashSet<VehicleClass> BlacklistedVehicleClasses = new HashSet<VehicleClass>
         {
             VehicleClass.Motorcycles, VehicleClass.Cycles, VehicleClass.Boats, VehicleClass.Helicopters,
@@ -551,8 +547,7 @@ namespace ARS
 
         public static float SignedLaneOffset(Vector3 pos, Vector3 refPoint, Vector3 refDir)
         {
-            // Unit axis: the cross of a graded direction with the world's up is horizontal, but its length is the slope's
-            // cosine, so the offset would shrink on a hill while the bands it is compared against do not.
+
             Vector3 right = Vector3.Cross(refDir, Vector3.WorldUp);
             if (right.LengthSquared() < 0.0001f) return 0f;
 
@@ -1092,6 +1087,7 @@ namespace ARS
             rivalSteeringMenu.Add(damperCounterItem);
             HookListTextPicker(damperCounterItem);
 
+            // The key keeps its legacy name; the row it fills is Peak Slip Target.
             NativeListItem<string> peakSlipTargetItem = new NativeListItem<string>("Peak Slip Target", "How much of the tyre's peak slip the guard lets it use before it cuts: 100 % aims at the peak, below that the car never reaches its grip, above that it slides. The tolerance row adds absolute degrees on top.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
             peakSlipTargetItem.ItemChanged += (sender, args) =>
             {
@@ -1983,16 +1979,14 @@ namespace ARS
                         float carriedOffset = racer.CarriedLane;
                         float requestOffset = racer.LaneRequest;
                         Color laneColor = Racer.LaneMotionColor(racer.LaneRequestReason, racer.LaneRate, racer.LaneCornerDir);
-                        // A lead past the leash's near end blinks white: 200 ms on, 200 off, so the stretch is unmistakable.
+
                         if (Math.Abs(carriedOffset - nodeOffset) > Racer.LaneTaperNearMeters && Game.GameTime % LaneBlinkPeriodMs < LaneBlinkOnMs) laneColor = Color.White;
                         Color requestColor = Color.FromArgb(120, laneColor.R, laneColor.G, laneColor.B);
-                        // The car's own lane wears the pedal trail's colours: green on throttle, yellow neutral, red on the brake.
+
                         Color ownLaneColor = Racer.InputColour(racer.Control.Throttle - racer.Control.Brake);
-                        // Visual only: the lines follow the road's own profile and keep the car's height above it, so a crest or a
-                        // bridge bends them with the surface instead of leaving them flat.
+
                         float carLift = racer.Car.Position.Z - racer.CurrentTrackPoint.Position.Z;
-                        // The ribbon ends on the same node the aim uses, one short of it. The lookahead is a node offset, so
-                        // counting nodes here is what keeps both ends together; walking metres would drift with node spacing.
+
                         int laneSpan = (int)Racer.SteerLookaheadNodes(racer.Car.Velocity.Length());
                         Vector3 laneEnd = Vector3.Zero;
 
@@ -2029,7 +2023,6 @@ namespace ARS
 
                         }
 
-                        // A black ball marks the far end when the lookahead is at its cap, so a capped line reads as capped.
                         if (laneSpan >= (int)Racer.SteerLookaheadMaxNodes)
                             World.DrawMarker(MarkerType.DebugSphere, laneEnd, Vector3.Zero, Vector3.Zero, new Vector3(0.35f, 0.35f, 0.35f), Color.Black);
 
@@ -2314,7 +2307,6 @@ namespace ARS
             DrawText(new Vector2(leftX, 0.83f), "CURRENT LAP    " + lapTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
             DrawText(new Vector2(leftX, 0.87f), "TIME    " + totalTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
         }
-
         const bool ShowPeakStats = false;
 
         static string BoardRowName(Racer r)
@@ -2907,7 +2899,6 @@ namespace ARS
             if (float.IsNaN(multiplier) || float.IsInfinity(multiplier)) return 1f;
             return Clamp(multiplier, 0f, 1f);
         }
-
         const float HillGripKPerDegree = 0.693147f / 15f;
         const float HillGripMin = 0.5f;
         public static float HillGripFactorFromPitchAngle(float pitchDegrees, Racer r)
@@ -2942,7 +2933,6 @@ namespace ARS
 
             return ARS.Remap(ARS.Clamp(Vector3.Angle(e.ForwardVector, e.Velocity.Normalized), 0f, 90f), 0f, 90f, e.Model.GetDimensions().X, e.Model.GetDimensions().Y);
         }
-
         const float DefaultWheelBase = 2.7f;
         const float MinWheelBase = 1f;
         const float MaxWheelBase = 6f;
@@ -3196,16 +3186,13 @@ namespace ARS
         {
             return _random.Next(min, max);
         }
-
         const float ApexMarkHeight = 1.6f;
         const int LaneBlinkPeriodMs = 400;
         const int LaneBlinkOnMs = 200;
         const float LaneHeightCurrent = 0.100f;
         const float LaneHeightCarried = 0.125f;
         const float LaneHeightRequest = 0.150f;
-        // The demand is not drawn for now: the aim alone says where the lane is, and two lines of one colour read as one.
         const bool DrawLaneRequest = false;
-        // Track analysis keeps the lane and drops the rest: corner regions, crests and the live crest checks are off.
         const bool DrawTrackAnalysisExtras = false;
         const float LaneHeightWalls = 0.175f;
 
@@ -3213,7 +3200,6 @@ namespace ARS
         {
             Function.Call(Hash.DRAW_LINE, from.X, from.Y, from.Z, to.X, to.Y, to.Z, color.R, color.G, color.B, color.A);
         }
-
         const float GLineMetresPerG = 1f;
         const float GLineMaxGs = 4f;
         const int GLineRestartMs = 200;
@@ -3754,7 +3740,6 @@ namespace ARS
             }
             return GridFill.Filled;
         }
-
         static readonly List<string> _sillyNames = new List<string>();
         static readonly Random _sillyNameRandom = new Random();
 

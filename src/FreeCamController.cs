@@ -1,4 +1,3 @@
-// Free camera for the debug views.
 using GTA;
 using GTA.Math;
 using GTA.Native;

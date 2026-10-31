@@ -1,4 +1,3 @@
-// Where tracks live on disk and what the loader is offered.
 using GTA.Math;
 using System;
 using System.Collections.Generic;

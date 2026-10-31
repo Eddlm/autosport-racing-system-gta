@@ -1,5 +1,4 @@
-// What the game build actually exposes: native patterns are probed once and a build that lacks one is refused before
-// the grid is built, rather than throwing every tick.
+// Reads the game's own wheel and handling fields by pattern, read-only, with fail-closed shape checks.
 using GTA;
 using System;
 using System.Collections.Generic;
@@ -17,7 +16,6 @@ namespace ARS
         static readonly Dictionary<string, IntPtr> _patterns = new Dictionary<string, IntPtr>();
         static bool _controlPatternReported;
         static bool _handlingPatternReported;
-
         const string ControlPattern = "\x74\x0A\xF3\x0F\x11\xB3\x1C\x09\x00\x00\xEB\x25";
         const string ControlMask = "xxxxx?????xx";
         const string HandlingPattern = "\x3C\x03\x0F\x85\x00\x00\x00\x00\x48\x8B\x41\x20\x48\x8B\x88";

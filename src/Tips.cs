@@ -1,4 +1,3 @@
-// The tip lines the HUD rotates through.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,7 +14,6 @@ namespace ARS
 
     public static class Tips
     {
-
         static readonly string[] BuiltInTips =
         {
             "[circuit] ARS hands you a fresh nitrous bottle every lap - spend the one you have.",
@@ -41,14 +39,12 @@ namespace ARS
             public string Tag;
             public Func<bool> Applies;
         }
-
         static readonly TipTag[] Tags =
         {
             new TipTag { Tag = "[circuit]", Applies = () => !ARS.IsPointToPoint },
             new TipTag { Tag = "[nitro]", Applies = () => ARS.NitrousEnabled },
             new TipTag { Tag = "[tuning-off]", Applies = () => !ARS.SmartTuning }
         };
-
         static readonly List<Tip> _all = new List<Tip>();
         static readonly List<Tip> _deck = new List<Tip>();
         static readonly Random _random = new Random();

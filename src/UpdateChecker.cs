@@ -1,4 +1,3 @@
-// Version check on start. In-process, advisory only.
 using System;
 using System.IO;
 using System.Net;

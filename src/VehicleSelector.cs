@@ -1,4 +1,3 @@
-// Picks the car for a grid slot: class, PI band and the driver's own choice first.
 using System;
 using System.Collections.Generic;
 using System.Linq;

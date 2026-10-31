@@ -1,4 +1,4 @@
-// Applies a Menyoo appearance preset to a spawned car. Optional: absent, the car keeps its own.
+// Copies a Menyoo skin onto a rival's car by model hash.
 using GTA;
 using GTA.Native;
 using System;
@@ -211,9 +211,7 @@ namespace ARS
 
     static class FunctionWrapper
     {
-
         const int NeonEnabledHash = unchecked((int)0x2AA720E4287BF269);
-
         const int NeonColorHash = unchecked((int)0x8E0A58289A6BAAAB);
 
         public static void SetNeonEnabled(Vehicle car, bool left, bool right, bool front, bool back)

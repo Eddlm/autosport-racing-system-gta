@@ -1,5 +1,4 @@
-// The shared shapes: route points, corner records, the lane reason enum that names the debug colour, and the per-car
-// state bags. Plain fields, no logic.
+// The data every racer shares: vehicle limits, handling, brain and control state.
 using GTA.Math;
 using System;
 using System.Collections.Generic;
@@ -158,7 +157,6 @@ namespace ARS
 
         public float NodeOffset=0f;
         public float CombinedWidth = 0f;
-
         const float SlowRivalMps = 1f;
         public void Update(Racer me)
         {

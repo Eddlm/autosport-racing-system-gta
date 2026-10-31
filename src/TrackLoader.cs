@@ -1,6 +1,4 @@
-// Route geometry. Angle is the signed turn from the incoming to the outgoing direction, so -cornerDir is the inside of
-// every bend. Radii are circumcircles over 2/4/10-node windows, 999 meaning no bend. Angles are flattened to Z=0: the
-// route carries grade, and a 3D angle reads the slope as steering.
+// Parses a track file into the route, and projects a world point onto it.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -16,7 +14,6 @@ namespace ARS
 {
     public static class TrackLoader
     {
-
         const int ApexStartLineClearanceNodes = 30;
 
         public static XmlDocument LoadTrackFile(string trackname = null)
@@ -202,9 +199,7 @@ namespace ARS
             BuildApexTable();
             ARS.Log(ARS.LogImportance.Info, "Route generated");
         }
-
         const int GeometryWindowNodes = 10;
-
         const int PointToPointEndBandNodes = 50;
 
         static void ComputePointGeometry(TrackPoint point, int nodeCount)
@@ -472,18 +467,14 @@ namespace ARS
 
             ARS.CornersRevision++;
         }
-
         const float BumpDepartureRungMeters = 2f;
         const float BumpOnsetRungMeters = 3f;
         const float BumpMinRunMeters = 2f;
         const float BumpMaxRunMeters = 8f;
         const float BumpMinDepartureGrade = 0.03f;
         const float BumpMinLipDrop = 0.02f;
-
         const float BumpSeamMaxGrade = BumpMinDepartureGrade;
-
         const float BumpRiseGradeDrop = 0.01f;
-
         const float DensifyAboveMeters = 1.5f;
 
         static void DensifyRoute()
@@ -574,7 +565,6 @@ namespace ARS
             if (!seamOk) ARS.Log(ARS.LogImportance.Info, "Bumps: the route seam steps at grade " + seamGrade.ToString("0.000") + ", so no lip is taken within " + BumpMaxRunMeters.ToString("0.0") + "m of it");
             ARS.Log(ARS.LogImportance.Info, "Bumps: " + ARS.Bumps.Count + " lips, minimum departure grade " + BumpMinDepartureGrade.ToString("0.000") + ", run " + BumpMinRunMeters.ToString("0.0") + "-" + BumpMaxRunMeters.ToString("0.0") + "m");
         }
-
         const int FeatureEntranceBackNodes = 100;
         const int FeatureEntranceSearchNodes = 100;
 
@@ -890,11 +880,8 @@ namespace ARS
             float angle = Vector3.SignedAngle(new Vector3(exitDirection.X, exitDirection.Y, 0f), new Vector3(entranceDirection.X, entranceDirection.Y, 0f), Vector3.WorldUp);
             return !float.IsNaN(angle) && !float.IsInfinity(angle) && Math.Abs(angle) <= degrees;
         }
-
         const int SpanConsecutiveNodes = 8;
-
         const float SpanDoublingMultiple = 2f;
-
         const int SpanBlurNodes = 60;
 
         static int NodesToDoubleRadius(int apexNode, float apexRadius, int maxStep, int count)
@@ -916,14 +903,11 @@ namespace ARS
             }
             return maxStep;
         }
-
         const float SpanMinimumMeters = 20f;
         const float SpanEntranceRadiusMultiple = 1.5f;
         const float SpanExitRadiusMultiple = 1.5f;
-
         const float SpanMergeRadiusGate = 50f;
         const int SpanNodeLimit = 500;
-
         const int SpanMaxDistanceNodes = 40;
         const float AlignedCornerSeconds = 3f;
         const float AlignedCornerDegrees = 15f;
@@ -1119,7 +1103,6 @@ namespace ARS
             int rgb;
             return value.Length == 9 && int.TryParse(value, out rgb) ? Color.FromArgb(int.Parse(value.Substring(0, 3)), int.Parse(value.Substring(3, 3)), int.Parse(value.Substring(6, 3))) : Color.GreenYellow;
         }
-
         const string FlarePtfxAsset = "scr_apartment_mp";
         const string FlarePtfxEffect = "scr_finders_package_flare";
         static readonly List<KeyValuePair<Prop, Color>> QueuedFlares = new List<KeyValuePair<Prop, Color>>();

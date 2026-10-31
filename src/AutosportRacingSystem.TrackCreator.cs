@@ -1,4 +1,3 @@
-// Builds a route from recorded nodes or a saved file and hands it to the loader.
 using GTA;
 using GTA.Math;
 using System;

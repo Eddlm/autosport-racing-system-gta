@@ -1,5 +1,4 @@
-// The schema of every owned ini, and the two passes that keep a file inside it: prune undeclared keys, repair
-// values the menu could not have produced. A file whose keys cannot be parsed is not rewritten as a whole.
+// The schema of every owned ini, its prune and its repair pass: a key missing here is deleted at load.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -315,7 +314,6 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
                     if (string.Equals(spec.Key, key, StringComparison.Ordinal) && spec.Domain != null) return spec.Domain;
             return new string[0];
         }
-
         static readonly HashSet<string> ReportedUndeclared = new HashSet<string>(StringComparer.Ordinal);
 
         public static void ReportUndeclared(string fileName, string key, string operation)

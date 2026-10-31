@@ -1,4 +1,4 @@
-// Per-car pace and grip tuning from completed laps. Writes results back as settings, never mid-race.
+// Per-car tuning derived from the handling and from the laps the car has actually driven.
 using GTA;
 using GTA.Native;
 using System;
@@ -10,7 +10,6 @@ namespace ARS
     internal static class SmartTuner
     {
         enum Style { Clean, Racing, Stripes, Muscle, Offroad, Tuner, Beater }
-
         static readonly KeyValuePair<string, Style>[] Keywords =
         {
             new KeyValuePair<string, Style>("rusty", Style.Beater),
@@ -68,7 +67,6 @@ namespace ARS
             new KeyValuePair<string, Style>("prolaps", Style.Tuner),
             new KeyValuePair<string, Style>("neds", Style.Tuner),
         };
-
         static readonly Dictionary<Style, VehicleMod[]> Parts = new Dictionary<Style, VehicleMod[]>
         {
             { Style.Racing, new[] { VehicleMod.Spoilers, VehicleMod.FrontBumper, VehicleMod.RearBumper, VehicleMod.SideSkirt, VehicleMod.Exhaust, VehicleMod.Frame, VehicleMod.Roof, VehicleMod.PlateHolder, VehicleMod.TrimDesign, VehicleMod.Windows } },
@@ -79,7 +77,6 @@ namespace ARS
             { Style.Clean, new[] { VehicleMod.SideSkirt, VehicleMod.PlateHolder, VehicleMod.Windows } },
             { Style.Beater, new[] { VehicleMod.Exhaust, VehicleMod.PlateHolder, VehicleMod.Ornaments, VehicleMod.Trunk, VehicleMod.Hydraulics, VehicleMod.VanityPlates } },
         };
-
         static readonly Dictionary<string, KeyValuePair<string[], string[]>> Brands = new Dictionary<string, KeyValuePair<string[], string[]>>
         {
             { "redwood", new KeyValuePair<string[], string[]>(new[] { "white" }, new[] { "red", "yellow" }) },
@@ -106,9 +103,7 @@ namespace ARS
             { "annis", new KeyValuePair<string[], string[]>(new[] { "white", "silver", "black" }, new[] { "blue" }) },
             { "vapid", new KeyValuePair<string[], string[]>(new[] { "white", "black", "silver" }, new[] { "red" }) },
         };
-
         static readonly string[] Marques = { "ubermacht", "benefactor", "pegassi", "truffade", "coil", "willard", "dinka", "obey", "bravado", "declasse", "fathom" };
-
         static readonly KeyValuePair<VehicleColor, string>[] Palette =
         {
             new KeyValuePair<VehicleColor, string>(VehicleColor.MetallicWhite, "white"),
@@ -167,11 +162,9 @@ namespace ARS
             new KeyValuePair<VehicleColor, string>(VehicleColor.MetallicCream, "cream"),
             new KeyValuePair<VehicleColor, string>(VehicleColor.MetallicChampagne, "cream"),
         };
-
         static readonly string[] ColourWords = { "white", "black", "red", "blue", "green", "yellow", "orange", "silver", "gold", "purple", "brown", "cream", "grey", "gray" };
         static readonly string[] AllFamilies = { "white", "black", "red", "blue", "green", "yellow", "orange", "silver", "gold", "purple", "brown", "cream" };
         static readonly string[] Neutrals = { "black", "white", "silver" };
-
         static readonly Dictionary<string, VehicleColor[]> MatteByFamily = new Dictionary<string, VehicleColor[]>
         {
             { "white", new[] { VehicleColor.MatteWhite } },
@@ -187,7 +180,6 @@ namespace ARS
             { "silver", new[] { VehicleColor.MatteGray, VehicleColor.MatteLightGray } },
             { "cream", new[] { VehicleColor.MatteDesertTan, VehicleColor.MatteWhite } },
         };
-
         static readonly Dictionary<string, string[]> BodyWith = new Dictionary<string, string[]>
         {
             { "white", new[] { "red", "black", "blue", "orange", "green", "purple", "gold" } },
@@ -203,7 +195,6 @@ namespace ARS
             { "brown", new[] { "cream", "white", "black", "orange", "silver", "gold" } },
             { "cream", new[] { "black", "brown", "red", "green", "gold", "blue" } },
         };
-
         static readonly Queue<Vehicle> Pending = new Queue<Vehicle>();
 
         internal static void Enqueue(IEnumerable<Racer> racers)

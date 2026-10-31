@@ -1,4 +1,3 @@
-// Reading and writing track files. Format is line based and tolerant: unknown keys are kept for the next write.
 using GTA;
 using GTA.Math;
 using GTA.Native;

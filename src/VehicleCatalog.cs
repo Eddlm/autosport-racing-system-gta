@@ -1,4 +1,3 @@
-// The pool of cars the mod can spawn, indexed once from the roster files.
 using GTA;
 using GTA.Native;
 using System;

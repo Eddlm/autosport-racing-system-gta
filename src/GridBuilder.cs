@@ -1,4 +1,4 @@
-// Slots the grid: lane, stagger and heading, from the route's own geometry.
+// Spawns the field and lays the grid on the route.
 using GTA;
 using GTA.Math;
 using GTA.Native;
