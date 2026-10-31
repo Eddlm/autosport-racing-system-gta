@@ -3589,7 +3589,7 @@ namespace ARS
 
             LiveRouteRadiusBackNode = back;
             LiveRouteRadiusFwdNode = fwd;
-            if (back == mid || fwd == mid) return 999f;
+            if (back == mid || fwd == mid || back == fwd) return 999f;
 
             float r = ARS.Circumradius3D(ARS.TrackPoints[back].Position, ARS.TrackPoints[fwd].Position, ARS.TrackPoints[mid].Position);
             if (float.IsNaN(r) || float.IsInfinity(r)) return 999f;
@@ -3599,7 +3599,14 @@ namespace ARS
         float RouteRadiusSampled()
         {
             int count = ARS.TrackPoints.Count;
-            if (count < 10) return 999f;
+            if (count < 10)
+            {
+                LiveRouteRadius = 999f;
+                LiveRouteRadiusCentred = 999f;
+                LiveRouteRadiusBackNode = -1;
+                LiveRouteRadiusFwdNode = -1;
+                return 999f;
+            }
 
             float traction = Math.Max(VehicleData.CurrentMechanicalGrip, 0.1f);
 
