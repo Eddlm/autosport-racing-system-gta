@@ -209,7 +209,7 @@ namespace ARS
         const float RouteStraightSagittaShare = 0.002f;
         const float RouteBrakeCap = 0.2f;
         const float GsLaneThrottleMaxFloor = 1f;
-        const float GsLaneOutsideFloor = 0.5f;
+        const float GsLaneOutsideFloor = 0f;
         const float ProjectionInputPerSecond = 2f;
         const float ProjectionBrakeFloor = 0.5f;
         const float OffTrackSpeedSlackMph = 40f;
@@ -1467,8 +1467,12 @@ namespace ARS
         const float ExitTrimPedalStart = 0.5f;
 
         // Under power the wheel aims at a share of the PEAK, not of the target: it hands back angle the exit does not need.
+        static readonly bool WheelTrimUnderPower = false;
+
         float AllowedSlipTrim(float fwdSpeed)
         {
+            if (!WheelTrimUnderPower) return 1f;
+
             float ramp = ARS.Clamp((Control.Throttle - ExitTrimPedalStart) / (1f - ExitTrimPedalStart), 0f, 1f);
             ramp *= _exitRoomArmed ? _exitRoom01 : 0f;
             if (ramp <= 0f) return 1f;

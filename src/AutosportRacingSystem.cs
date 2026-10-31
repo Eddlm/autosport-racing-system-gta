@@ -137,7 +137,7 @@ namespace ARS
 
         public static bool SteerTrace = false;
 
-        public static readonly bool GsLaneThrottleFloor = false;
+        public static readonly bool GsLaneThrottleFloor = true;
 
         public static int TargetUnderPowerPct = 45;
 
@@ -991,16 +991,6 @@ namespace ARS
             maxCrestLiftItem.SelectedIndex = Math.Max(0, maxCrestLiftItem.Items.IndexOf(SettingsMenuStore.GetFloat("MaxCrestLift", 0.4f).ToString("0.0", CultureInfo.InvariantCulture)));
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
-
-            NativeListItem<string> targetUnderPowerItem = new NativeListItem<string>("Target Under Power (%)", "The slip the wheel aims at while the throttle is open, as a share of the tyre's own peak rather than of the target: 45 holds the front under half its peak so the grip it is not spending on turning goes into pushing. It replaces the target between half and full pedal; 100 leaves the cornering target alone.", SettingsRepair.OptionsFor("TargetUnderPowerPct"));
-            targetUnderPowerItem.ItemChanged += (sender, args) =>
-            {
-                TargetUnderPowerPct = int.Parse(targetUnderPowerItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("TargetUnderPowerPct", targetUnderPowerItem.Items[args.Index]);
-            };
-            targetUnderPowerItem.SelectedIndex = Math.Max(0, targetUnderPowerItem.Items.IndexOf(SettingsMenuStore.GetInt("TargetUnderPowerPct", TargetUnderPowerPct).ToString(CultureInfo.InvariantCulture)));
-            rivalPaceMenu.Add(targetUnderPowerItem);
-            HookListTextPicker(targetUnderPowerItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "Share of the tuned slope speed cut: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. Pitch counts both ways.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
@@ -3399,7 +3389,6 @@ namespace ARS
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             SteerTrace = DevelopmentMenuStore.GetBool("SteerTrace", SteerTrace);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
-            TargetUnderPowerPct = SettingsMenuStore.GetInt("TargetUnderPowerPct", TargetUnderPowerPct);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);

@@ -36,15 +36,22 @@ reports `410-`…`417-` (untracked, like the rest of `docs/audit/`). Each slug b
   corner and no way to attribute what the seat felt. Revive by flipping the flag; the band has no setting of its own (its
   1x-2.5x span is the engine's flat point, `sfTractionMinAngle`), so a row there would be the first. What it is for: a
   four-wheel slide, where both axles are past 100 and only speed restores grip.
-- `gs-lane-throttle-floor` — **PARKED, its geometry LIVE as the exit gate (build 1395)**: the corner-exit floor is
-  `static readonly bool GsLaneThrottleFloor = false`, so the write that raised the throttle is gone, and the row, its
-  `KeySpec` and the `GetBool` with it. **The geometry did not stay parked**: `UpdateExitRoom` runs every tick - loaded, in
+- `gs-lane-throttle-floor` — **LIVE again (build 1396, driver: "quiero que el gas se abra si la proyección lo permite")**:
+  the floor is on with `GsLaneOutsideFloor = 0`, so it keeps the throttle at least at the room - 1 at the inside edge, 0 at
+  the outer one - clamped to `Control.MaxThrottle`, which folds every other throttle cap, and zeroed under countersteer
+  and while the projection is outside *and* widening. **Its geometry is the part that matters**: `UpdateExitRoom` runs every tick - loaded, in
   the sense that lateral g exceeds `GsLaneFloorLateralShare` (0.525) of the theoretical grip; the projection not
   outside-and-widening; an inside to aim at - and publishes `_exitRoom01`, the room from the outer edge (0) to the inside
-  (1). The power trim multiplies its pedal ramp by that, so angle is handed back only where there is somewhere to go, and
-  `GsLaneThrottleFloorValue` is now the pure reader, which keeps reviving the pedal floor a one-flag change that reproduces
-  the old numbers exactly (`outside + (max - outside) * room`). What poisoned the test was the `Math.Max` on the throttle,
-  not the geometry.
+  (1). The parked wheel trim
+  read the same field; the floor is now its only consumer. It is also what makes the write safe now and did not before: the
+  slip band that it used to override is parked (`SlipPedalCut`), so `Control.MaxThrottle` really is the whole cap set.
+- `wheel-trim-under-power` — **PARKED (build 1396, driver: "aparca el sistema que ajusta el volante")**, row removed. It
+  handed angle back under power: from half pedal to full, `AllowedSlipTrim` blended the wheel's allowance from the target's
+  to `Target Under Power` % of the PEAK (45), multiplied by the projection's room. What parked it is the goal, not a defect:
+  the driver wanted the projection to open the throttle instead, and moving two actuators in one test is what the last
+  three builds were spent avoiding. Revive by flipping `WheelTrimUnderPower` and restoring the row (`TargetUnderPowerPct`,
+  30-100 in fives, ships 45). Read together with `gs-lane-throttle-floor`: both consume the same room, and only one of them
+  should own the exit.
 - `abs-tooltip` — **open (D-T7-1)**: the row works (a brake taper on a locking wheel); the tooltip still says the undoing of
   native ABS is being worked on.
 - `features-nitrous-claims` — **open (D-T8-1, D-T8-2)**: `FEATURES.md` sells the player's bottle as *"Coming soon"* (it fires on

@@ -8,7 +8,7 @@ How the front-slip guard is built today, what each number means, the evidence be
 |---|---|---|
 | `capShare` | what counts as "the peak" this tick, as a multiple of the tyre's own peak: `Peak Slip Target (0.90) x slow-corner allowance + Peak Slip Tolerance (°) / peak(v)`. `FrontPct` is normalised against it. | none — physics and settings |
 | `factor` | how much of the request survives: `Clamp(100 / wheelPct, 1 - Deepest Cut %, 1)`, where `wheelPct` is the measurement with the power trim folded in. | none — recomputed every tick |
-| `clampTarget` | the angle the wheel is allowed. Above the target (`FrontPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. **`Target Under Power (%)` moves the aim, not the clamp**: from half pedal to full it blends the wheel's allowance from the target's to that share of the *peak* (45 % ships), so an exit hands back the angle it does not need. It folds into `wheelPct`, a local the wheel alone reads — the throttle band and the readout keep the base allowance, because scaling the shared one would close the pedal instead of the wheel. It is also gated by the projection: `UpdateExitRoom` arms only while the car is loaded, the projected path is inside the road and pointing at the inside, and publishes the room from the outer edge (0) to the inside (1); the pedal ramp is multiplied by it, so angle is handed back only where there is somewhere to go. | none — recomputed every tick |
+| `clampTarget` | the angle the wheel is allowed. Above the target (`FrontPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. **`Target Under Power` is parked** (`WheelTrimUnderPower = false`, row removed on 2026-10-31): it blended the wheel's allowance down to 45 % of the peak past half pedal, gated by the projection's room. One flag and one row bring it back; the geometry it used now drives the throttle floor instead. | none — recomputed every tick |
 | `chasingClamp` | the ceiling actually applied, `min(lock, chasingClamp)`. Born at `clampTarget` the first time the guard can speak, and the **only state** in the system. | closes exponentially, opens linearly (below) |
 
 The steering factor:
@@ -101,6 +101,12 @@ share = 1 + slow;        // SlowCornerSlipAllowance = true
 The allowance is the only part of the law that moves with speed. It corrects an axis the tyre model assumes flat: at walking pace the tyre does not behave like it does at 60 mph, and holding the wheel at the high-speed peak there is what made the car refuse to turn in hairpins.
 
 In the **theory** source the allowance is nearly inert: that source cannot be read below 6.7 mph (`FrontSlipTheoryMinSpeedMps = 3`) and only cuts when the demand at full lock exceeds the grip available, which happens at 12-15 mph. All of the allowance's real effect is in the memory source, which is the default.
+
+## The lane throttle floor
+
+`GsLaneThrottleFloor` is on again (2026-10-31, build 1396) with `GsLaneOutsideFloor = 0`: while the car is loaded, its projected path is inside the road and pointing at the inside, the throttle cannot fall below the room — **1 at the inside edge and 0 at the outer one**. It is a floor, not a cap: it raises a pedal the plan wanted lifted, and it is clamped to `Control.MaxThrottle`, which folds TCS, stability, overspeed, rival, chill-out, yield, off-track and recovery, so every other cap still wins. It is zeroed while countersteering, and while the projection is outside *and* widening — the two cases where accelerating is the wrong answer.
+
+The room comes from `UpdateExitRoom`, one computation per tick with one writer; the parked wheel trim read the same field.
 
 ## The two sources
 
