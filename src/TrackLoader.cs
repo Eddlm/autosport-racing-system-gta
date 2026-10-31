@@ -347,13 +347,17 @@ namespace ARS
 
         // Share of the usable half width the line wants at each node: +1 the outside, -1 the inside, 0 the centre.
         const int LaneFieldApexPlateauNodes = 3;
-        const float LaneFieldSaturationPerRadian = 2.8f;
-        const float LaneFieldTurnInPerSqrtRadius = 1.05f;
-        const float LaneFieldRampPerMetre = 0.55f;
-        const int LaneFieldTurnInMinNodes = 3;
-        const int LaneFieldTurnInMaxNodes = 40;
-        const int LaneFieldRampMinNodes = 12;
-        const int LaneFieldRampMaxNodes = 160;
+        const float LaneFieldSaturationPerRadian = 0.75f;
+        const float LaneFieldReachPerRadian = 3.69f;
+        const float LaneFieldRateFloor = 0.25f;
+        const float LaneFieldRateCeiling = 3f;
+        const float LaneFieldMaxSharePerNode = 0.12f;
+        const float LaneFieldStepTightRadius = 10f;
+        const float LaneFieldStepWideRadius = 100f;
+        const float LaneFieldStepAtTight = 0.5f;
+        const float LaneFieldStepAtWide = 1f;
+        const int LaneFieldRampMinNodes = 6;
+        const int LaneFieldRampMaxNodes = 700;
 
         static void BuildLaneField(int count)
         {
@@ -364,15 +368,14 @@ namespace ARS
             if (corners == 0) return;
 
             int[] entryStart = new int[corners];
-            int[] turnInNodes = new int[corners];
             int[] rampNodes = new int[corners];
             for (int c = 0; c < corners; c++)
             {
                 CornerPoint corner = ARS.Corners[c];
                 float radius = Math.Max(5f, corner.DetectedRadius);
-                int turnIn = (int)ARS.Clamp((float)Math.Round(LaneFieldTurnInPerSqrtRadius * (float)Math.Sqrt(radius)), LaneFieldTurnInMinNodes, LaneFieldTurnInMaxNodes);
-                int ramp = (int)ARS.Clamp((float)Math.Round(turnIn + LaneFieldApexPlateauNodes + LaneFieldRampPerMetre * radius), LaneFieldRampMinNodes, LaneFieldRampMaxNodes);
-                turnInNodes[c] = turnIn;
+                float stepScale = RadiusStepScaleOf(radius);
+                float reach = LaneFieldReachPerRadian / (LaneFieldSaturationPerRadian * stepScale) * radius;
+                int ramp = (int)ARS.Clamp((float)Math.Round(LaneFieldApexPlateauNodes + reach), LaneFieldRampMinNodes, LaneFieldRampMaxNodes);
                 rampNodes[c] = ramp;
                 entryStart[c] = ArcNode(corner.Node, -ramp, count);
 
@@ -394,19 +397,37 @@ namespace ARS
                 outOfApex = Math.Min(outOfApex, Math.Max(2, ArcSpan(corner.Node, nextEntry, count) - 1));
                 if (intoApex < 2 || outOfApex < 2) continue;
 
-                float saturation = LaneFieldSaturationPerRadian / Math.Max(5f, corner.DetectedRadius);
-                float cross = LaneFieldApexPlateauNodes + turnInNodes[c];
-                for (int step = -intoApex; step <= outOfApex; step++)
+                float cornerRadius = Math.Max(5f, corner.DetectedRadius);
+                float inside = -sign;
+                float outside = sign;
+                float deficitBack = 2f;
+                float previous = inside;
+                for (int step = 0; step <= intoApex; step++)
+                {
+                    int node = ArcNode(corner.Node, -step, count);
+                    float share = inside;
+                    if (step > LaneFieldApexPlateauNodes)
+                    {
+                        deficitBack *= (float)Math.Exp(-NodeRate(node, cornerRadius));
+                        share = ARS.Clamp(outside - (outside - inside) * deficitBack * 0.5f, previous - NodeStep(node, cornerRadius), previous + NodeStep(node, cornerRadius));
+                    }
+                    ARS.TrackPoints[node].LaneLineShare = share;
+                    previous = share;
+                    covered[node] = true;
+                }
+                float deficitForward = 2f;
+                previous = inside;
+                for (int step = 0; step <= outOfApex; step++)
                 {
                     int node = ArcNode(corner.Node, step, count);
-                    float distance = Math.Abs(step);
-                    float share;
-                    if (distance <= LaneFieldApexPlateauNodes) share = -sign;
-                    else if (distance <= cross)
-                        share = -sign * (1f - (distance - LaneFieldApexPlateauNodes) / turnInNodes[c]);
-                    else
-                        share = sign * (1f - (float)Math.Exp(-saturation * (distance - cross)));
+                    float share = inside;
+                    if (step > LaneFieldApexPlateauNodes)
+                    {
+                        deficitForward *= (float)Math.Exp(-NodeRate(node, cornerRadius));
+                        share = ARS.Clamp(outside - (outside - inside) * deficitForward * 0.5f, previous - NodeStep(node, cornerRadius), previous + NodeStep(node, cornerRadius));
+                    }
                     ARS.TrackPoints[node].LaneLineShare = share;
+                    previous = share;
                     covered[node] = true;
                 }
             }
@@ -446,6 +467,31 @@ namespace ARS
             int node = fromNode + offset;
             if (ARS.IsPointToPoint) return Math.Min(node, count - 1);
             return ((node % count) + count) % count;
+        }
+
+        // Share lost per node, scaled by how tight this node is against the corner's own radius: a node tighter than the
+        // corner moves the line less, one that is opening out moves it more.
+        static float NodeRate(int node, float cornerRadius)
+        {
+            return LaneFieldSaturationPerRadian / cornerRadius * RadiusStepScale(node);
+        }
+
+        // 1 where the road is wide, LaneFieldStepAtTight where it is tight: the line slows down where it is being asked most.
+        static float RadiusStepScale(int node)
+        {
+            return RadiusStepScaleOf(ARS.TrackPoints[node].PreciseCurveRadius);
+        }
+
+        static float RadiusStepScaleOf(float radius)
+        {
+            float t = ARS.Clamp((radius - LaneFieldStepTightRadius) / (LaneFieldStepWideRadius - LaneFieldStepTightRadius), 0f, 1f);
+            return LaneFieldStepAtTight + (LaneFieldStepAtWide - LaneFieldStepAtTight) * t;
+        }
+
+        // How far the line may move between one node and the next.
+        static float NodeStep(int node, float cornerRadius)
+        {
+            return LaneFieldMaxSharePerNode;
         }
 
         static float LaneSmoothStep(float t)

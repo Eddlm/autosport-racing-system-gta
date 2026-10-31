@@ -3004,7 +3004,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 + "   cap " + cap.ToString("0.0") + "°", 50);
         }
 
-        const int LaneFieldDrawNodes = 50;
+        const int LaneFieldDrawNodes = 100;
         const float LaneFieldDrawHeight = 0.35f;
         const float LaneFieldDrawSize = 0.30f;
 
