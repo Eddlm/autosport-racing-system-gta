@@ -27,6 +27,10 @@ namespace ARS
         internal string CarModelName = "";
         public Ped Driver;
         public Vehicle Car;
+        public bool WorldCarBorrowed;
+        public bool WorldDriverBorrowed;
+        public bool WorldClone;
+        bool _nosAiActive;
         public Team TeamRole = Team.None;
         public bool ControlledByPlayer = false;
         public RacerBaseBehavior BaseBehavior = RacerBaseBehavior.GridWait;
@@ -2794,6 +2798,7 @@ namespace ARS
         void UpdateNitrous()
         {
 
+            if (_nosAiActive && Car != null && Car.Exists()) NosAiNitro.Hold(Car.Handle, ARS.NitrousEnabled && Game.GameTime < _nitrousActiveUntil);
             if (_nitrousActiveUntil > 0 && (!ARS.NitrousEnabled || Game.GameTime >= _nitrousActiveUntil)) StopNitrous();
         }
 
@@ -3011,9 +3016,14 @@ namespace ARS
 
         void StartNitrous()
         {
-            Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, NitrousPtfxAsset);
-            Function.Call((Hash)FullyChargeNitrousHash, Car);
-            Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 1.0f, 100.0f, false);
+            if (!ControlledByPlayer && !_nosAiActive) _nosAiActive = NosAiNitro.Register(Car.Handle);
+            if (_nosAiActive) NosAiNitro.Hold(Car.Handle, true);
+            else
+            {
+                Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, NitrousPtfxAsset);
+                Function.Call((Hash)FullyChargeNitrousHash, Car);
+                Function.Call((Hash)OverrideNitrousLevelHash, Car, true, 1.0f, 1.0f, 100.0f, false);
+            }
             _nitrousActiveUntil = Game.GameTime + NitrousDurationMs;
             _nitrousLapUsed = Lap;
 
@@ -3047,7 +3057,8 @@ namespace ARS
 
         void StopNitrous()
         {
-            Function.Call((Hash)OverrideNitrousLevelHash, Car, false, 10.0f, 0.0f, 100.0f, true);
+            if (_nosAiActive) NosAiNitro.Hold(Car.Handle, false);
+            else Function.Call((Hash)OverrideNitrousLevelHash, Car, false, 10.0f, 0.0f, 100.0f, true);
             _nitrousActiveUntil = 0;
         }
 
@@ -4692,12 +4703,14 @@ namespace ARS
         {
 
             if (_nitrousActiveUntil > 0) StopNitrous();
+            if (_nosAiActive && Car != null) { NosAiNitro.Release(Car.Handle); _nosAiActive = false; }
 
-            if (!ControlledByPlayer) Driver.Delete();
+            if (!ControlledByPlayer && !WorldDriverBorrowed && Driver != null && Driver.Exists()) Driver.Delete();
+            else if (WorldDriverBorrowed && Driver != null && Driver.Exists()) Driver.IsPersistent = false;
 
             if (Car.CurrentBlip != null && Car.CurrentBlip.Exists()) Car.CurrentBlip.Remove();
 
-            if (ControlledByPlayer || Game.Player.Character.IsInVehicle(Car))
+            if (ControlledByPlayer || WorldCarBorrowed || Game.Player.Character.IsInVehicle(Car))
             {
                 Car.IsPersistent = false;
             }

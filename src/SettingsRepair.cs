@@ -118,6 +118,7 @@ namespace ARS
             race.Specs.Add(new KeySpec("Track", null));
             race.Specs.Add(new KeySpec("Laps", "6", Kind.Number, new[] { "2", "4", "6", "8", "10" }));
             race.Specs.Add(new KeySpec("GridSize", "8", Kind.Number, Array.ConvertAll(ARS.GridSizeChoices, v => v.ToString()), 0f, ARS.GridSizeChoices[ARS.GridSizeChoices.Length - 1]));
+            race.Specs.Add(new KeySpec("CapturedGridMode", "Hybrid", Kind.Text, new[] { "Hybrid", "CustomClones", "CustomOnly", "Standard" }));
             race.Specs.Add(new KeySpec("PaceMode", PaceMode.RelativeToMine.ToString(), Kind.Text, Enum.GetNames(typeof(PaceMode))));
             race.Specs.Add(new KeySpec("PaceOffset", "0", Kind.Number, new[] { "-10", "-9", "-8", "-7", "-6", "-5", "-4", "-3", "-2", "-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }));
             race.Specs.Add(new KeySpec("PaceTarget", null, Kind.Number));
