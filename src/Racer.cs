@@ -240,13 +240,8 @@ namespace ARS
 
         float _steerPreLimitDegrees = 0f;
 
-        float _finalCeilingDeg = 0f;
-
         float _chasingClampDeg = float.NaN;
 
-        float _clampTargetDeg = float.NaN;
-
-        float _slipFactor = 1f;
         const float SlipOpenDegPerSec = 72f;
         const float SlipClosePerSecond = 15f;
         const float SlipCloseMaxDegPerSec = 90f;
@@ -1568,21 +1563,16 @@ namespace ARS
             float speedCeiling = VehicleData.SteeringLock;
             if (fwdSpeed > 0f) speedCeiling = ResolveSteerCeiling(fwdSpeed);
             _slip = MeasureFrontSlip(fwdSpeed);
-            _slipFactor = 1f;
-            _clampTargetDeg = float.NaN;
 
             if (_slip.Readable && _slip.InnerPct > 0.01f)
             {
 
                 float factor = ARS.Clamp(100f / _slip.InnerPct, 1f - ARS.SlipCutDepthPct * 0.01f, 1f);
-                _slipFactor = factor;
 
                 float clampTarget = _slip.InnerPct > 100f
                     ? Math.Abs(requestedSteer) * factor
                     : VehicleData.SteeringLock;
-                _clampTargetDeg = clampTarget;
 
-                _clampTargetDeg *= OpensUpClampScale();
                 float chase = float.IsNaN(_chasingClampDeg) ? clampTarget : _chasingClampDeg;
 
                 if (clampTarget >= chase)
@@ -1598,8 +1588,6 @@ namespace ARS
                 }
                 speedCeiling = Math.Min(speedCeiling, _chasingClampDeg);
             }
-            _finalCeilingDeg = speedCeiling;
-
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
 
@@ -3094,38 +3082,25 @@ namespace ARS
 
         void DrawFrontSlipReadout()
         {
+            float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
+            float mph = ARS.MpsToMph(Math.Abs(fwdSpeed));
 
-            if (!ARS.SlipFromMemory)
+            string state = fwdSpeed <= 0f ? "inactive - stopped"
+                : !_slip.Readable ? "no reading"
+                : _slip.InnerPct < 0.5f ? "inactive - straight"
+                : null;
+
+            if (state != null)
             {
-                float target = _clampTargetDeg;
-                float applied = _chasingClampDeg;
-                if (float.IsNaN(target) || float.IsNaN(applied) || target < 0.01f)
-                {
-                    float forwardSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
-                    float speedMph = ARS.MpsToMph(Math.Abs(forwardSpeed));
-                    string state = forwardSpeed <= 0f ? "inactive - stopped"
-                        : speedMph < 7f ? "inactive - below 7 mph"
-                        : !_slip.Readable ? "no wheel data"
-                        : "inactive - straight";
-                    UI.ShowSubtitle("Slip vs Allowed~n~" + state, 50);
-                    return;
-                }
-                UI.ShowSubtitle("Slip vs Allowed~n~x" + (applied / target).ToString("0.0")
-                    + " of " + target.ToString("0.0") + "°", 50);
+                UI.ShowSubtitle("Slip vs Allowed~n~" + state, 50);
                 return;
             }
 
-            float clamp = float.IsNaN(_chasingClampDeg) ? _finalCeilingDeg : _chasingClampDeg;
-            float asked = Math.Abs(_steerPreLimitDegrees);
-            float mph = ARS.MpsToMph(Math.Abs(Vector3.Dot(Car.Velocity, Car.ForwardVector)));
-            float share = AllowedSlipShare(ARS.MphToMps(mph));
-            float cap = PeakSlipCeilingAt(AllowedSlipDegrees(ARS.MphToMps(mph)));
+            float cap = float.IsNaN(_chasingClampDeg) ? VehicleData.SteeringLock : _chasingClampDeg;
 
-            UI.ShowSubtitle((clamp > 0.01f ? asked / clamp : 0f).ToString("0.0") + "   "
-                + _slipFactor.ToString("0.00") + "   " + mph.ToString("0") + "mph"
-                + "   F " + _slip.InnerPct.ToString("0") + "   R " + _slip.RearPct.ToString("0")
-                + "   cap " + cap.ToString("0.0") + "°"
-                + (Math.Abs(share - 1f) > 0.001f ? "   x" + share.ToString("0.0") : ""), 50);
+            UI.ShowSubtitle("Slip vs Allowed~n~x" + (_slip.InnerPct * 0.01f).ToString("0.0")
+                + "   " + mph.ToString("0") + "mph"
+                + "   cap " + cap.ToString("0.0") + "°", 50);
         }
 
         void DrawWheelSlip()

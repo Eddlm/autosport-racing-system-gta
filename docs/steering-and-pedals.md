@@ -8,7 +8,7 @@ How the front-slip guard is built today, what each number means, the evidence be
 |---|---|---|
 | `capShare` | what counts as "the peak" this tick, as a multiple of the tyre's own peak: `Peak Slip Target (0.90) x slow-corner allowance + Peak Slip Tolerance (°) / peak(v)`. `InnerPct` is normalised against it. | none — physics and settings |
 | `factor` | how much of the request survives: `Clamp(100 / InnerPct, 1 - Deepest Cut %, 1)`. | none — recomputed every tick |
-| `clampTarget` | the angle the wheel is allowed. Above the target (`InnerPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. Then scaled by **Open Up on Throttle** (`Development`, 10-100 %, ships 100 = off): the clamp falls to that share of itself by half pedal. It scales the clamp and not `capShare`, because `InnerPct` also feeds the throttle cap and scaling it there closed the pedal instead of the wheel. | none — recomputed every tick |
+| `clampTarget` | the angle the wheel is allowed. Above the target (`InnerPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. **`Open Up on Throttle` is meant to scale it and does not**: the call is missing, so the row is inert and the scale exists only as `OpensUpClampScale()`, which has no caller (backlog `open-up-inert`). When it is wired it must scale the clamp and not `capShare`, because `InnerPct` also feeds the throttle cap and scaling it there closed the pedal instead of the wheel. | none — recomputed every tick |
 | `chasingClamp` | the ceiling actually applied, `min(lock, chasingClamp)`. Born at `clampTarget` the first time the guard can speak, and the **only state** in the system. | closes exponentially, opens linearly (below) |
 
 The steering factor:
@@ -141,19 +141,20 @@ Reading: `R` at ~200 in both is ~0.78 of `F`, i.e. both axles are past their pea
 
 ## What the readout shows
 
-Memory source:
+One line, the same for both slip sources — `Debug > Show Front Slip`:
 
 ```
-ratio   factor   mph   F n   R n   cap n.n°   x1.8
+Slip vs Allowed
+x1.9   47mph   cap 6.2°
 ```
 
-- `ratio` = request / `chasingClamp`: above 1 the guard is holding the wheel back.
-- `factor` = the share of the request the cut leaves; 1.00 means no cut.
-- `F` / `R` = worst front and worst rear tyre, as a percentage of `capShare`.
-- `cap` = the ceiling the two rows define, in **command degrees**: `allowed slip x 4/3`, clamped to the lock. It is the law's angle, not the rate-limited `chasingClamp`, and it is the number `Peak Slip Target` plus `Peak Slip Tolerance` are actually setting.
-- `x` = `capShare` itself, shown **only when it is not 1.0** (a target below 1, the tolerance, the slow-corner allowance, or all three). Without it `F 100` would silently stop meaning "at the peak".
+- `x` = `InnerPct / 100`: how far the tyre is from what the guard allows. 1.0 sits exactly on the allowance, 1.9 is 90 % past it. Under the memory source that is measured side slip; under the theory source it is lateral demand, which is the slip the model predicts — the same question, and the same heading, either way.
+- `mph` = forward speed, the context that gives a corner its name.
+- `cap` = the ceiling **in force**, in command degrees: `min(gate, chasingClamp)`. It is the rate-limited value, not the law's target, so watching it walk is how the rate gets tuned.
 
-Theory source (`Slip From Memory` off) shows **one number**: `chasingClamp / clampTarget x 100`. 100 % means the applied clamp sits where the law says; above it, the gate is still closing onto the target; `--` when there is no target yet.
+When there is nothing to read, the same slot names the state instead of showing numbers: `inactive - stopped`, `no reading` (the source cannot answer — no wheel field, or the theory source under 3 m/s), `inactive - straight` (readable, below 0.5 % of the allowance). One token, one meaning, and the heading never moves.
+
+What is **not** on the line any more: the factor, the asked/allowed ratio, the per-wheel front and rear percentages, and the allowance share. Each answered a question the first three numbers now answer together, and four of them were what made the line unreadable. `RearPct` is still computed in `SlipState` because the four-wheel-slide brake is the next thing to gate on it.
 
 Only an AI racer draws it: `DrawFrontSlipReadout` returns early for the player, and `ApplySteerLimits` lives inside `if (!ControlledByPlayer)`. **The whole system is AI-only** — the player's steering is never written by ARS.
 

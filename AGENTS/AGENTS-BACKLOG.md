@@ -16,9 +16,12 @@ reports `410-`…`417-` (untracked, like the rest of `docs/audit/`). Each slug b
 - `no-collision-polarity` — **open (D-T4-1)**: `ApplyNoCollision` calls `SET_ENTITY_NO_COLLISION_ENTITY(a, b, !enable)` and its
   three call sites disagree with the native's own name, so the menu row is inert and the cleanup points the wrong way. Two
   further faults: it pairs each car with its **nearest** rival only, and the cleanup runs after `CleanRacers` empties the list.
-- `open-up-inert` — **open (D-T6-1)**: `_clampTargetDeg *= OpensUpClampScale()` scales the copy the readout prints
-  (`Racer.cs:3256`) while the limiter chases the unscaled local, so the row never reaches the wheel and the subtitle can print
-  a ratio above one. One line: scale the local, then assign it.
+- `open-up-inert` — **open (D-T6-1)**: the pedal scale has never reached the wheel. It used to scale `_clampTargetDeg`,
+  a copy only the readout printed, while the limiter chased the unscaled local; build 1387 rewrote that readout and deleted
+  the field, so `OpensUpClampScale()` now has **no caller at all** and the row is inert end to end. One line, where
+  `clampTarget` is computed in `ApplySteerLimits`: `clampTarget *= OpensUpClampScale();`. It is a behaviour change — the
+  wheel would start giving way under throttle — so it needs a drive, and the readout's `cap` would follow it for free,
+  being the applied ceiling.
 - `abs-tooltip` — **open (D-T7-1)**: the row works (a brake taper on a locking wheel); the tooltip still says the undoing of
   native ABS is being worked on.
 - `features-nitrous-claims` — **open (D-T8-1, D-T8-2)**: `FEATURES.md` sells the player's bottle as *"Coming soon"* (it fires on
