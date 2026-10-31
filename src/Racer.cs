@@ -3085,7 +3085,7 @@ namespace ARS
                 return;
             }
 
-            float cap = float.IsNaN(_chasingClampDeg) ? VehicleData.SteeringLock : _chasingClampDeg;
+            float cap = _steerGrantedCeiling > 0.01f ? _steerGrantedCeiling : VehicleData.SteeringLock;
 
             UI.ShowSubtitle("Slip vs Allowed~n~x" + (_slip.InnerPct * 0.01f).ToString("0.0")
                 + "   " + mph.ToString("0") + "mph"

@@ -150,7 +150,7 @@ x1.9   47mph   cap 6.2°
 
 - `x` = `InnerPct / 100`: how far the tyre is from what the guard allows. 1.0 sits exactly on the allowance, 1.9 is 90 % past it. Under the memory source that is measured side slip; under the theory source it is lateral demand, which is the slip the model predicts — the same question, and the same heading, either way.
 - `mph` = forward speed, the context that gives a corner its name.
-- `cap` = the ceiling **in force**, in command degrees: `min(gate, chasingClamp)`. It is the rate-limited value, not the law's target, so watching it walk is how the rate gets tuned.
+- `cap` = the ceiling **in force**, in command degrees: the bound the command was clamped against on the side asked (`_steerGrantedCeiling`), which is `min(gate, chasingClamp)` until a countersteer allowance or the damper branch lifts it to the slide angle or to the lock. It is the rate-limited value, not the law's target, so watching it walk is how the rate gets tuned.
 
 When there is nothing to read, the same slot names the state instead of showing numbers: `inactive - stopped`, `no reading` (the source cannot answer — no wheel field, or the theory source under 3 m/s), `inactive - straight` (readable, below 0.5 % of the allowance). One token, one meaning, and the heading never moves.
 
