@@ -351,6 +351,7 @@ namespace ARS
         public float Elevation = 0f;
         public float TrackHalfWidth = 5f;
         public float CumulativeDistance = 0f;
+        public float LaneLineShare;
     }
 
     public class CornerPoint

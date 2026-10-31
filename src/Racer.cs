@@ -199,6 +199,8 @@ namespace ARS
         bool _laneSnap = false;
         bool _laneReset = false;
         CornerPoint _laneCornerInside;
+        float _laneProfile;
+        float _laneField;
         bool _laneOverride = false;
         public float CarriedLane { get { return _carriedLane; } }
 
@@ -686,11 +688,14 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Lane reset " + Name + ": left the corner at node " + CurrentTrackPoint.Node);
             }
             _laneCornerInside = laneCornerInside;
-            if (Lap > 0 && TryComputeCurveLean(lineCorner, steerRefPoint, speedMps, laneLimit, roadWide * 2f, out float curveLean, out bool leanOutward))
+
+            CornerPoint profileCorner = laneCornerInside != null ? laneCornerInside : lineCorner;
+            _laneProfile = LaneProfileOffset(profileCorner, laneLimit);
+            _laneField = ARS.TrackPoints[steerRefPoint.Node].LaneLineShare * laneLimit;
+            if (Lap > 0)
             {
-                laneRequest = curveLean;
+                laneRequest = _laneField;
                 laneReason = LaneReason.CurveLean;
-                _laneRequestOutward = leanOutward;
             }
             LogLineVerdict();
             if (ActiveManeuver.Type == ManeuverType.DefendLane && MetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
@@ -707,7 +712,9 @@ namespace ARS
             if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneReason = LaneReason.DebugLock; }
             _laneRequest = laneRequest;
             _laneRequestReason = laneReason;
-            UpdateLaneMover(steerRefOffset, laneLimit);
+            _carriedLane = laneRequest;
+            _laneRate = 0f;
+            _laneOvershoot = false;
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
             Vector3 steerRight = Vector3.Cross(steerRefPoint.Direction, Vector3.WorldUp).Normalized;
@@ -1167,7 +1174,7 @@ namespace ARS
             if (Math.Abs(_laneRate) > 0.2f && Game.GameTime > _laneMoverLoggedAt)
             {
                 _laneMoverLoggedAt = Game.GameTime + 1000;
-                ARS.Log(ARS.LogImportance.Info, "Lane mover " + Name + ": asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + "), aimed " + _carriedLane.ToString("0.00") + ", rate " + _laneRate.ToString("0.00"));
+                ARS.Log(ARS.LogImportance.Info, "Lane mover " + Name + ": asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + "), aimed " + _carriedLane.ToString("0.00") + ", rate " + _laneRate.ToString("0.00") + ", profile " + _laneProfile.ToString("0.00") + ", field " + _laneField.ToString("0.00"));
             }
         }
         const float RequirementLookaheadSeconds = 3.95f;
@@ -2705,6 +2712,34 @@ namespace ARS
         }
 
         float OutsideGateMeters(TrackPoint at) => Math.Max(2f * at.TrackHalfWidth * IdealLineBlendWidthFactor, IdealLineBlendMinMeters);
+
+        float LaneProfileOffset(CornerPoint corner, float laneEdge)
+        {
+            if (corner == null) return 0f;
+            float dir = Math.Sign(corner.Angle);
+            if (dir == 0f) return 0f;
+
+            float toStart = MetresToNode(corner.StartNode);
+            float toApex = MetresToNode(corner.Node);
+            float toEnd = MetresToNode(corner.EndNode);
+            float lengthIn = toApex - toStart;
+            float lengthOut = toEnd - toApex;
+            if (lengthIn <= 1f || lengthOut <= 1f) return 0f;
+
+            float outside = dir * Math.Max(laneEdge - LaneOutsideGapMeters, 0f);
+            float inside = -dir * laneEdge;
+            float travelled = -toStart;
+
+            if (travelled <= 0f) return outside;
+            if (travelled <= lengthIn) return outside + (inside - outside) * LaneSmooth(travelled / lengthIn);
+            return inside * (1f - LaneSmooth(Math.Min(1f, (travelled - lengthIn) / lengthOut)));
+        }
+
+        static float LaneSmooth(float t)
+        {
+            t = ARS.Clamp(t, 0f, 1f);
+            return t * t * (3f - 2f * t);
+        }
 
         bool IsWithinCorner(CornerPoint corner)
         {

@@ -345,6 +345,69 @@ namespace ARS
 
         static readonly List<string> ApexRejects = new List<string>();
 
+        // Share of the usable half width the line wants at each node: +1 the outside, -1 the inside, 0 the centre.
+        static void BuildLaneField(int count)
+        {
+            for (int node = 0; node < count; node++) ARS.TrackPoints[node].LaneLineShare = 0f;
+
+            int corners = ARS.Corners.Count;
+            for (int c = 0; c < corners; c++)
+            {
+                CornerPoint corner = ARS.Corners[c];
+                float sign = Math.Sign(corner.Angle);
+                if (sign == 0f) continue;
+                int intoApex = ArcSpan(corner.StartNode, corner.Node, count);
+                int outOfApex = ArcSpan(corner.Node, corner.EndNode, count);
+                if (intoApex < 2 || outOfApex < 2) continue;
+
+                for (int i = 0; i <= intoApex; i++)
+                    ARS.TrackPoints[ArcNode(corner.StartNode, i, count)].LaneLineShare = sign * (1f - 2f * LaneSmoothStep((float)i / intoApex));
+                for (int i = 0; i <= outOfApex; i++)
+                    ARS.TrackPoints[ArcNode(corner.Node, i, count)].LaneLineShare = -sign * (1f - LaneSmoothStep((float)i / outOfApex));
+            }
+
+            int gaps = ARS.IsPointToPoint ? corners - 1 : corners;
+            for (int c = 0; c < gaps; c++)
+            {
+                CornerPoint corner = ARS.Corners[c];
+                CornerPoint next = ARS.Corners[(c + 1) % corners];
+                float from = ARS.TrackPoints[corner.EndNode].LaneLineShare;
+                float to = ARS.TrackPoints[next.StartNode].LaneLineShare;
+                int gap = ArcSpan(corner.EndNode, next.StartNode, count);
+                if (gap < 2) continue;
+                for (int i = 1; i < gap; i++)
+                {
+                    int node = ArcNode(corner.EndNode, i, count);
+                    ARS.TrackPoints[node].LaneLineShare = from + (to - from) * LaneSmoothStep((float)i / gap);
+                }
+            }
+
+            float widestStep = 0f;
+            for (int node = 1; node < count; node++)
+                widestStep = Math.Max(widestStep, Math.Abs(ARS.TrackPoints[node].LaneLineShare - ARS.TrackPoints[node - 1].LaneLineShare));
+            ARS.Log(ARS.LogImportance.Info, "Lane field: " + corners + " corner(s), widest share step between adjacent nodes " + widestStep.ToString("0.000"));
+        }
+
+        static int ArcSpan(int fromNode, int toNode, int count)
+        {
+            int span = toNode - fromNode;
+            if (!ARS.IsPointToPoint && span < 0) span += count;
+            return Math.Max(0, span);
+        }
+
+        static int ArcNode(int fromNode, int offset, int count)
+        {
+            int node = fromNode + offset;
+            if (ARS.IsPointToPoint) return Math.Min(node, count - 1);
+            return ((node % count) + count) % count;
+        }
+
+        static float LaneSmoothStep(float t)
+        {
+            t = ARS.Clamp(t, 0f, 1f);
+            return t * t * (3f - 2f * t);
+        }
+
         public static void BuildApexTable()
         {
             ARS.Corners.Clear();
@@ -484,6 +547,7 @@ namespace ARS
             AssignCrests(nodeCount);
             AssignBumpNodes(nodeCount);
             MoveEntrancesForFeatures(nodeCount);
+            BuildLaneField(nodeCount);
 
             ARS.CornersRevision++;
         }
