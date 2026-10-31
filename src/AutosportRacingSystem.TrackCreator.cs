@@ -19,6 +19,11 @@ namespace ARS
         int _previewRouteNodes = -1;
         int _previewWidth = 0;
         const float PreviewRebuildDistance = 1f;
+        int _deleteHoldStartMs = -1;
+        int _lastDeleteMs = -1;
+        const int DeleteRepeatDelayMs = 350;
+        const int DeleteRepeatSlowMs = 145;
+        const int DeleteRepeatFastMs = 45;
 
         void StartTrackCreator()
         {
@@ -30,6 +35,8 @@ namespace ARS
 
             CleanEverything();
             _routeSection.Clear();
+            _deleteHoldStartMs = -1;
+            _lastDeleteMs = -1;
             TrackLoader.ClearRouteInfo();
             _routeEditorActive = true;
             if (!_freeCam.IsActive) _freeCam.Toggle();
@@ -53,8 +60,33 @@ namespace ARS
             SaveRoute(Game.GetUserInput(30));
         }
 
+        void ExitTrackCreatorWithoutSaving()
+        {
+            if (_freeCam.IsActive) _freeCam.Toggle();
+            _routeEditorActive = false;
+            _routeSection.Clear();
+            _deleteHoldStartMs = -1;
+            _lastDeleteMs = -1;
+            _previewRouteNodes = -1;
+            _previewWidth = 0;
+            CleanEverything();
+            UI.Notify("~y~Track creator closed. Unsaved route discarded.");
+        }
+
         void HandleTrackCreator()
         {
+            if (!_routeEditorActive) return;
+            if (Game.IsKeyPressed(System.Windows.Forms.Keys.Escape) || Game.IsKeyPressed(System.Windows.Forms.Keys.Back))
+            {
+                ExitTrackCreatorWithoutSaving();
+                return;
+            }
+            if (_freeCam.IsActive && Game.IsControlPressed(2, GTA.Control.Sprint))
+            {
+                _deleteHoldStartMs = -1;
+                _lastDeleteMs = -1;
+                return;
+            }
 
             int cool = -1;
             int rebuildFrom = -1;
@@ -110,30 +142,38 @@ namespace ARS
                     if (cool == 0) DisplayHelpTextThisFrame("Close the circuit near the ~b~Start Line.");
                     if (cool == 1) DisplayHelpTextThisFrame("~g~The circuit is closed.");
 
-                    if (Game.IsControlJustPressed(2, GTA.Control.Aim))
+                    bool deleting = Game.IsControlPressed(2, GTA.Control.Aim);
+                    bool pressed = Game.IsControlJustPressed(2, GTA.Control.Aim);
+                    int now = Game.GameTime;
+                    if (!deleting)
                     {
-                        if (RouteNodes.Count > 2)
+                        _deleteHoldStartMs = -1;
+                        _lastDeleteMs = -1;
+                    }
+                    else
+                    {
+                        if (pressed || _deleteHoldStartMs < 0)
                         {
-                            if (Game.IsControlPressed(2, GTA.Control.Sprint))
-                            {
-                                int i = 0;
-                                while (i < 10)
-                                {
-                                    if (RouteNodes.Count == 0) break;
-                                    RouteNodes.RemoveAt(RouteNodes.Count - 1);
-                                    i++;
-                                }
-                            }
-                            else
-                            {
-                                RouteNodes.RemoveAt(RouteNodes.Count - 1);
-                            }
+                            _deleteHoldStartMs = now;
+                            _lastDeleteMs = now;
                         }
-                        else
+                        int duration = Math.Max(0, now - _deleteHoldStartMs);
+                        float ramp = Math.Min(1f, Math.Max(0f, (duration - DeleteRepeatDelayMs) / 2200f));
+                        int interval = (int)(DeleteRepeatSlowMs + (DeleteRepeatFastMs - DeleteRepeatSlowMs) * ramp);
+                        if (pressed || (duration >= DeleteRepeatDelayMs && now - _lastDeleteMs >= interval))
                         {
-                            RouteNodes.Clear();
-                            TrackLoader.ClearRouteInfo();
-                            return;
+                            _lastDeleteMs = now;
+                            RouteNodes.RemoveAt(RouteNodes.Count - 1);
+                            _routeSection.Clear();
+                            _previewRouteNodes = -1;
+                            _previewWidth = 0;
+                            EditNodeHalfWidths.Clear();
+                            if (RouteNodes.Count == 0)
+                            {
+                                TrackLoader.ClearRouteInfo();
+                                NodeHalfWidths.Clear();
+                                return;
+                            }
                         }
                     }
 

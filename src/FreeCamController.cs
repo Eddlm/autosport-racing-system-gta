@@ -1,4 +1,3 @@
-// Free camera for the debug views.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -9,11 +8,8 @@ namespace ARS
     public class FreeCamController
     {
         readonly ARS _ars;
-        bool _droneMode = true;
         bool _isActive = false;
         int _previousViewMode = -1;
-        Vector3 _movement = Vector3.Zero;
-        float _intendedHeight = 4f;
 
         public FreeCamController(ARS ars)
         {
@@ -32,10 +28,12 @@ namespace ARS
 
             if (!_isActive)
             {
-                _movement = Vector3.Zero;
                 return;
             }
 
+            // The mode writes the ped's position every active frame, so anything the game does to that ped is undone next tick: a
+            // player who dies, respawns or gets into a car during freecam is dragged back under the drone, and a mounted ped is warped
+            // out of its vehicle. Leaving is the only safe answer, and Toggle restores gravity, collision, visibility and the view mode.
             Ped ped = Game.Player.Character;
             if (ped == null || !ped.Exists() || ped.IsDead || ped.IsInVehicle())
             {
@@ -54,6 +52,8 @@ namespace ARS
             Game.DisableControlThisFrame(0, Control.Sprint);
             Game.DisableControlThisFrame(0, Control.Jump);
             Game.DisableControlThisFrame(0, Control.Phone);
+            if (routeEditorActive)
+                Game.DisableControlThisFrame(0, Control.FrontendPause);
 
             if (Game.IsControlJustPressed(2, Control.Jump))
             {
@@ -70,70 +70,33 @@ namespace ARS
                 }
             }
 
-            ARS.FreeCamRide.Position += _movement * ARS.Clamp(60 / Game.FPS, 1, 10);
             ARS.FreeCamRide.Rotation = new Vector3(0f, 0f, ARS.FreeCamRide.Rotation.Z);
             ARS.FreeCamRide.Rotation += new Vector3(0, 0, GameplayCamera.RelativeHeading);
 
-            float speed = 0.01f;
-            float heightAboveGround = ARS.FreeCamRide.HeightAboveGround;
             Game.Player.Character.Position = ARS.FreeCamRide.Position + new Vector3(0, 0, -1.5f);
             Game.Player.Character.Rotation = ARS.FreeCamRide.Rotation + new Vector3(0, 0, 180f);
 
-            bool reduce = true;
-            if (_movement.Length() < 7f)
+            if (GameplayCamera.IsRendering)
             {
-                if (!_droneMode) speed = 0.02f;
-                if (Game.IsControlPressed(2, Control.Sprint)) speed += 0.05f;
-
-                if (GameplayCamera.IsRendering)
+                Vector3 forward = GameplayCamera.Direction;
+                forward.Z = 0f;
+                if (forward.Length() > 0.001f) forward.Normalize();
+                Vector3 right = Vector3.Cross(forward, Vector3.WorldUp);
+                Vector3 input = Vector3.Zero;
+                if (Game.IsControlPressed(2, Control.MoveUpOnly)) input += forward;
+                if (Game.IsControlPressed(2, Control.MoveDownOnly)) input -= forward;
+                if (Game.IsControlPressed(2, Control.MoveRightOnly)) input += right;
+                if (Game.IsControlPressed(2, Control.MoveLeftOnly)) input -= right;
+                if (Game.IsControlPressed(2, Control.Context)) input += Vector3.WorldUp;
+                if (Game.IsControlPressed(2, Control.Cover)) input -= Vector3.WorldUp;
+                if (input.Length() > 0.001f)
                 {
-                    if (Game.IsControlJustPressed(2, Control.NextCamera))
-                    {
-                        _droneMode = !_droneMode;
-                        if (_droneMode) _intendedHeight = ARS.FreeCamRide.HeightAboveGround;
-                    }
-
-                    if (Game.IsControlPressed(2, Control.Context)) _intendedHeight += 0.2f;
-                    if (Game.IsControlPressed(2, Control.Cover)) _intendedHeight -= 0.2f;
-                    if (Game.IsControlPressed(2, Control.VehicleAccelerate))
-                    {
-                        reduce = false;
-                        _movement += (_droneMode ? Game.Player.Character.ForwardVector : GameplayCamera.Direction) * speed;
-                    }
-                    if (Game.IsControlPressed(2, Control.VehicleBrake))
-                    {
-                        reduce = false;
-                        _movement -= (_droneMode ? Game.Player.Character.ForwardVector : GameplayCamera.Direction) * speed;
-                    }
-                    if (Game.IsControlPressed(2, Control.MoveLeftOnly))
-                    {
-                        reduce = false;
-                        _movement += Game.Player.Character.RightVector * -speed;
-                    }
-                    if (Game.IsControlPressed(2, Control.MoveRightOnly))
-                    {
-                        reduce = false;
-                        _movement += Game.Player.Character.RightVector * speed;
-                    }
-                }
-
-                if (_droneMode)
-                {
-                    if (_intendedHeight < 2f) _intendedHeight = 2f;
-                    if (heightAboveGround > 0f)
-                    {
-                        float difference = _intendedHeight - heightAboveGround;
-                        if (Math.Abs(difference) > 1f)
-                        {
-                            _movement += new Vector3(0, 0, ARS.Clamp(difference / 200, -0.1f, 0.1f));
-                            _movement.Z = ARS.Clamp(_movement.Z, -0.5f, 0.5f);
-                        }
-                        _movement.Z *= 0.9f;
-                    }
+                    input.Normalize();
+                    float seconds = 1f / Math.Max(1f, Game.FPS);
+                    float metresPerSecond = Game.IsControlPressed(2, Control.Sprint) ? 45f : 12f;
+                    ARS.FreeCamRide.Position += input * metresPerSecond * Math.Min(seconds, 0.1f);
                 }
             }
-
-            if (reduce) ApplyMovementDecay(speed, heightAboveGround);
         }
 
         public void Toggle()
@@ -141,7 +104,7 @@ namespace ARS
             if (_isActive)
             {
                 _isActive = false;
-
+                // The ride borrows the player's first-person camera, so the player's own mode has to come back.
                 if (_previousViewMode >= 0)
                 {
                     Function.Call(Hash.SET_FOLLOW_PED_CAM_VIEW_MODE, _previousViewMode);
@@ -159,7 +122,8 @@ namespace ARS
 
             if (!ARS.CanWeUse(ARS.FreeCamRide)) return;
             _previousViewMode = Function.Call<int>(Hash.GET_FOLLOW_PED_CAM_VIEW_MODE);
-
+            // Forced only when the reading is a real mode: a -1 cannot be restored on the way out, so forcing 4 over it would leave
+            // the player's camera on the drone's mode for good.
             if (_previousViewMode >= 0 && _previousViewMode != 4)
                 Function.Call(Hash.SET_FOLLOW_PED_CAM_VIEW_MODE, 4);
 
@@ -179,30 +143,29 @@ namespace ARS
             ARS.InstructionalScaleform.CallFunction("CREATE_CONTAINER");
             if (routeEditorActive)
             {
+                // Keep a persistent exit hint. Shift has no alternate mouse action:
+                // it only speeds up camera movement.
                 if (routeNodeCount > 0)
                 {
-                    if (Game.IsControlPressed(2, Control.Sprint))
-                        SetInstruction(0, Control.Aim, "Delete last ten nodes");
-                    else
-                    {
-                        SetInstruction(2, Control.Attack, "Apply Section");
-                        SetInstruction(1, Control.Aim, "Delete last node");
-                        SetInstruction(0, Control.Sprint, "More options");
-                    }
+                    SetInstruction(0, Control.Sprint, "Shift: Fly faster / More options");
+                    SetInstruction(1, Control.Aim, "RMB: Undo / hold to rewind");
+                    SetInstruction(2, Control.Attack, "LMB: Apply section");
                 }
                 else
                 {
-                    SetInstruction(2, Control.Attack, "Place Start Line");
-                    SetInstruction(1, Control.WeaponWheelPrev, "Widen");
-                    SetInstruction(0, Control.WeaponWheelNext, "Tighten");
+                    SetInstruction(0, Control.Sprint, "Shift: Fly faster / More options");
+                    SetInstruction(1, Control.WeaponWheelPrev, "Widen / Narrow");
+                    SetInstruction(2, Control.Attack, "LMB: Place start line");
                 }
             }
             else
             {
-                SetInstruction(0, Control.NextCamera, _droneMode ? "Freecam Mode" : "Drone Mode");
-                SetInstruction(1, Control.Detonate, "Hide Hud");
-                SetInstruction(2, Control.Jump, "Slow Mo");
+                SetInstruction(0, Control.Context, "Up / Cover: Down");
+                SetInstruction(1, Control.Sprint, "Fast movement");
+                SetInstruction(2, Control.Detonate, "Hide Hud");
             }
+            if (routeEditorActive)
+                SetInstruction(3, Control.FrontendCancel, "ESC / BACKSPACE: EXIT (discard route)");
             ARS.InstructionalScaleform.CallFunction("DRAW_INSTRUCTIONAL_BUTTONS", 0);
             if (!ARS.HideHudMode) ARS.InstructionalScaleform.Render2D();
             return true;
@@ -214,12 +177,5 @@ namespace ARS
                 Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)control), text);
         }
 
-        void ApplyMovementDecay(float speed, float heightAboveGround)
-        {
-            float multiplier = _droneMode && _movement.Length() > 0.2f ? 1 - (speed * 0.5f) : 1 - (speed * 2f);
-            _movement.X *= multiplier;
-            _movement.Y *= multiplier;
-            if (!_droneMode || Math.Abs(heightAboveGround) < 1f) _movement.Z *= 1 - (speed * 2f);
-        }
     }
 }

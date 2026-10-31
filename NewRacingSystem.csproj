@@ -83,6 +83,8 @@
     <Compile Include="src\VehicleSelector.cs" />
     <Compile Include="src\VehicleMemory.cs" />
     <Compile Include="src\Racer.cs" />
+    <Compile Include="src\NosAiNitro.cs" />
+    <Compile Include="src\AutosportRacingSystem.CapturedGrid.cs" />
     <Compile Include="src\MenuSettings.cs" />
     <Compile Include="src\SettingsRepair.cs" />
     <Compile Include="src\Properties\AssemblyInfo.cs" />
