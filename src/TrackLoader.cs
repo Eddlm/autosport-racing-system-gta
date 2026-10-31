@@ -401,8 +401,8 @@ namespace ARS
                 if (intoApex < 2 || outOfApex < 2) continue;
 
                 float cornerRadius = Math.Max(5f, corner.DetectedRadius);
-                float inside = -sign;
-                float outside = sign;
+                float inside = ARS.InsideSign(corner.Angle);
+                float outside = -inside;
                 float deficitBack = 2f;
                 float previous = inside;
                 for (int step = 0; step <= intoApex; step++)

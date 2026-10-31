@@ -185,9 +185,6 @@ namespace ARS
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
 
-        int _laneCornerDir;
-        float _laneMoverLoggedAt = 0f;
-        int _cornerLineLoggedAt = 0;
         CornerPoint _laneCornerInside;
         int _laneTraceAt;
         float _probeDeepest;
@@ -199,7 +196,7 @@ namespace ARS
         {
             float sign = Math.Sign(corner.Angle);
             if (sign == 0f) return;
-            float inward = -ownOffset * sign;
+            float inward = ownOffset * ARS.InsideSign(corner.Angle);
             if (inward > _probeDeepest)
             {
                 _probeDeepest = inward;
@@ -227,7 +224,6 @@ namespace ARS
         public int LineCornerNode { get { return _lineCornerNode; } }
         public LaneReason LaneRequestReason { get { return _laneRequestReason; } }
         public float LaneRequest { get { return _laneRequest; } }
-        public int LaneCornerDir { get { return _laneCornerDir; } }
 
         float _cornerSpd = 999f;
 
@@ -712,24 +708,35 @@ namespace ARS
             }
             if (laneCornerInside != null) UpdateApexProbe(laneCornerInside, steerRefOffset);
 
-            _laneField = ARS.TrackPoints[steerRefPoint.Node].LaneLineShare * laneLimit;
+            int laneNode = TrackLoader.NodeAhead(CurrentTrackPoint.Node, speedMps * ARS.LanePreviewSeconds, ARS.TrackPoints.Count);
+            _laneField = ARS.TrackPoints[laneNode].LaneLineShare * laneLimit;
             float aimRadius = ARS.TrackPoints[steerRefPoint.Node].PreciseCurveRadius;
             float toApex = lineCorner != null ? MetresToNode(lineCorner.Node) : 0f;
-            if (Lap > 0 && lineCorner != null && aimRadius <= ARS.LaneDynamicRadius)
+            float prepMetres = speedMps * ARS.LanePrepSeconds;
+            bool apexStillAhead = laneCornerInside != null && MetresToNode(laneCornerInside.Node) > 0f;
+            bool absoluteMode = Lap > 0 && (apexStillAhead
+                || (lineCorner != null && toApex <= Math.Max(ARS.LaneAbsoluteMetres, prepMetres)));
+            if (absoluteMode)
             {
-                if (toApex <= ARS.LaneAbsoluteMetres)
-                {
-                    laneRequest = _laneField;
-                    laneReason = LaneReason.CurveLean;
-                }
-                else
-                {
-                    float rate = ARS.Clamp(ARS.LaneRatePerRadius / Math.Max(1f, aimRadius), ARS.LaneRateFloor, ARS.LaneRateCeiling);
-                    float reach = Math.Min(laneLimit, rate * Math.Max(0f, toApex - ARS.LaneAbsoluteMetres));
-                    laneRequest = steerRefOffset - Math.Sign(lineCorner.Angle) * reach;
-                    laneReason = LaneReason.CurveLean;
-                }
+                laneRequest = _laneField;
+                laneReason = LaneReason.CurveLean;
             }
+            else if (Lap > 0 && lineCorner != null && aimRadius <= ARS.LaneDynamicRadius)
+            {
+                float rate = ARS.Clamp(ARS.LaneRatePerRadius / Math.Max(1f, aimRadius), ARS.LaneRateFloor, ARS.LaneRateCeiling);
+                float reach = Math.Min(laneLimit, rate * Math.Max(0f, toApex - ARS.LaneAbsoluteMetres));
+                laneRequest = steerRefOffset + ARS.InsideSign(lineCorner.Angle) * reach;
+                laneReason = LaneReason.CurveLean;
+            }
+            CornerPoint laneRef = laneCornerInside != null ? laneCornerInside : lineCorner;
+            if (laneRef != null)
+            {
+                float outward = -ARS.InsideSign(laneRef.Angle);
+                if ((laneRequest - steerRefOffset) * outward > ARS.LaneOutsidePullMetres)
+                    laneRequest = steerRefOffset + outward * ARS.LaneOutsidePullMetres;
+            }
+            laneRequest = ARS.Clamp(laneRequest, -laneLimit, laneLimit);
+
             if (ActiveManeuver.Type == ManeuverType.DefendLane && MetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
             {
                 laneRequest = ARS.Clamp(_defendLaneOffset, -laneLimit, laneLimit);
@@ -2852,7 +2859,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (ARS.DebugToggles[Options.ShowWheelSlip]) DrawWheelSlip();
             if (ARS.DebugToggles[Options.ShowFrontSlip]) DrawFrontSlipReadout();
             if (ARS.DebugToggles[Options.ShowSlideAngle]) DrawSlideAngleReadout();
-            if (ARS.DebugToggles[Options.ShowLaneField]) DrawLaneField();
             if (ARS.DebugToggles[Options.ShowGsProjection]) DrawGsProjection();
         }
         const float FanLineLength = 5f;
@@ -3011,36 +3017,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             UI.ShowSubtitle("Slip vs Allowed~n~x" + (_slip.FrontPct * 0.01f).ToString("0.0")
                 + "   " + mph.ToString("0") + "mph"
                 + "   cap " + cap.ToString("0.0") + "°", 50);
-        }
-
-        const int LaneFieldDrawBehindNodes = 20;
-        const int LaneFieldDrawAheadNodes = 40;
-        const float LaneFieldDrawHeight = 0.35f;
-        const float LaneFieldDrawSize = 0.30f;
-
-        void DrawLaneField()
-        {
-            int count = ARS.TrackPoints.Count;
-            if (count < 4) return;
-            for (int step = -LaneFieldDrawBehindNodes; step <= LaneFieldDrawAheadNodes; step++)
-            {
-                int node = CurrentTrackPoint.Node + step;
-                if (ARS.IsPointToPoint)
-                {
-                    if (node < 0 || node >= count) continue;
-                }
-                else node = ((node % count) + count) % count;
-
-                TrackPoint point = ARS.TrackPoints[node];
-                Vector3 right = Vector3.Cross(point.Direction, Vector3.WorldUp);
-                if (right.LengthSquared() < 0.0001f) continue;
-                right.Normalize();
-
-                float laneEdge = Math.Max(point.TrackHalfWidth - VehicleData.BoundingBox * 0.5f - EdgeEmptySpaceMeters, 0f);
-                Vector3 position = point.Position + right * (point.LaneLineShare * laneEdge) + Vector3.WorldUp * LaneFieldDrawHeight;
-                World.DrawMarker(MarkerType.DebugSphere, position, Vector3.Zero, Vector3.Zero,
-                    new Vector3(LaneFieldDrawSize, LaneFieldDrawSize, LaneFieldDrawSize), Color.Black);
-            }
         }
 
         void DrawSlideAngleReadout()
