@@ -7,19 +7,19 @@ How the front-slip guard is built today, what each number means, the evidence be
 | Name | What it is | Rate |
 |---|---|---|
 | `capShare` | what counts as "the peak" this tick, as a multiple of the tyre's own peak: `Peak Slip Target (0.90) x slow-corner allowance + Peak Slip Tolerance (°) / peak(v)`. `InnerPct` is normalised against it. | none — physics and settings |
-| `factor` | how much of the request survives: `Clamp(100 / InnerPct, SlipCutFloor, 1)`. | none — recomputed every tick |
+| `factor` | how much of the request survives: `Clamp(100 / InnerPct, 1 - Deepest Cut %, 1)`. | none — recomputed every tick |
 | `clampTarget` | the angle the wheel is allowed. Above the target (`InnerPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. Then scaled by **Open Up on Throttle** (`Development`, 10-100 %, ships 100 = off): the clamp falls to that share of itself by half pedal. It scales the clamp and not `capShare`, because `InnerPct` also feeds the throttle cap and scaling it there closed the pedal instead of the wheel. | none — recomputed every tick |
 | `chasingClamp` | the ceiling actually applied, `min(lock, chasingClamp)`. Born at `clampTarget` the first time the guard can speak, and the **only state** in the system. | closes exponentially, opens linearly (below) |
 
 The steering factor:
 
 ```csharp
-factor = Clamp(100 / InnerPct, SlipCutFloor, 1)
+factor = Clamp(100 / InnerPct, 1 - DeepestCutPct / 100, 1)
 ```
 
 - `InnerPct` is the worse front tyre's side slip, as a percentage of `capShare`. `F` in the readout.
-- The cut stops at **`Slip Cut Floor`** (`Rival Steering`, 0.00-0.90, ships **0.40**): there is no second clamp behind it. The old 2.5x saturation is gone because it was what kept every floor below 0.40 inert.
-- At the shipping 0.40 the arithmetic is identical to the retired saturation (`100/250 = 0.40`), so the default changed nothing; the setting only has teeth when it is moved.
+- The cut stops at **`Deepest Cut (%)`** (`Rival Steering`, 0-100 in steps of 5, ships **60**): the share of the request the guard may remove at the bottom of a slide, so 60 still leaves 40 % of what was asked. There is no second clamp behind it. The row is stated as a *depth* rather than a floor so that its ladder runs with the guard's strength — 0 turns the cut off and 100 leaves nothing — instead of against it, which is what made the old numbers read backwards.
+- The shipped 60 is `1/2.5`, the point where the traction curve stops falling, so the wheel bottoms out just before a deeper cut would buy no more grip (2.25x the physical peak at the shipping 0.90 target, because the floor is measured against the allowance). That is a stop the tyre chooses, not a preference: below it the cut only takes direction away, and it also bounds how far each pulse of the loop can swing when the slip reading trails the wheel by a tick or two.
 
 The pedal, applied to `combinedInput` before it splits into throttle and brake:
 
@@ -77,7 +77,7 @@ Rules the calibration has to respect, learned the hard way:
 
 - **`Peak Slip Target`** (0.05-2.00, ships **0.90**) is how much of the tyre's peak slip the guard lets it use before it cuts. 1.00 aims at the peak, below it the car never reaches its grip, above it the tyre slides, 2.00 barely cuts at all. Being a share it moves with the car and with the speed: the same value means the same thing on an 11 degree car and a 22 degree one.
 - **`Peak Slip Tolerance (°)`** (0-6, steps of 0.5, ships **0**) is extra slip allowed on top, in **absolute degrees**: 0 cuts at the target, 2 lets the tyre run two degrees past it, 6 is past the 2.5x flat point, i.e. no guard at all. Being absolute it weighs more the smaller the peak is, so at speed it dominates the target — 4 degrees against a 2.7 degree peak is 148 % of it.
-- **`Slip Cut Floor`** (0.00-0.90, ships 0.40) is the deepest the cut may go. 0.40 leaves 40 % of the request; 0.00 can remove it entirely and the car goes straight on.
+- **`Deepest Cut (%)`** (0-100 in steps of 5, ships **60**) is how much of the request the guard may remove at the very bottom: 60 leaves 40 %, the point where the tyre's force stops falling, so a deeper cut costs direction and buys no grip. 0 turns the cut off; 100 leaves nothing. Being a share of the *ask* it is the one row here that does not speak in the tyre's own units, which is why its label states the depth instead of a fraction of what is left.
 
 All three live in `Rival Steering`, and the first two are **one** quantity:
 
@@ -160,7 +160,7 @@ Only an AI racer draws it: `DrawFrontSlipReadout` returns early for the player, 
 ## Open items
 
 1. **Brake when both axles are sliding.** The data says a four-wheel slide needs speed removed, not wheel angle. Proposal: if `R > 180` and `F > 200`, let the combined input go negative (to -1 as the excess grows). The earlier brake experiment was rejected as "slow" because it braked in *every* corner, including front-led understeer where it was unnecessary; gating it on `R` fixes that. `R` is normalised against `capShare` too, so the threshold moves with `Peak Slip Target` and the tolerance.
-2. **Never cut below the peak angle.** `Slip Cut Floor` can be set under the angle that produces peak force on a car asking for little; at the shipping 0.40 that is not the case, but the setting allows it.
+2. **Never cut below the peak angle.** `Deepest Cut` can be pushed past the angle that produces peak force on a car asking for little — 100 removes the whole request and the car goes straight on. The row now says so in its label, but nothing in the law stops it.
 3. **Hysteresis.** The close now starts at any gap (exponential) and the open runs at 72 deg/s, so the old 1-2 Hz oscillation at 100 % should be gone — unverified in the car. A dead band (close above 105, open below 95) remains the fallback.
 4. **The measurement lag.** The slip trails the command by 100-200 ms and nothing compensates. A first-order filter on `InnerPct` would remove most of it.
 5. **`SpeedSteerCeiling` is zombie code** (`Racer.cs`, `static readonly bool = false`): `ResolveSteerCeiling`, `PeakSlipCeilingAt`, `GeometrySteerCeiling`, `ManeuverRamp` and the 5-30 mph ramp are compiled but inert, while the target/tolerance pair drives the live limiter. Decided for **0.11**: revive the law or delete it **and** its leftovers together.

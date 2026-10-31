@@ -1574,7 +1574,7 @@ namespace ARS
             if (_slip.Readable && _slip.InnerPct > 0.01f)
             {
 
-                float factor = ARS.Clamp(100f / _slip.InnerPct, ARS.SlipCutFloor, 1f);
+                float factor = ARS.Clamp(100f / _slip.InnerPct, 1f - ARS.SlipCutDepthPct * 0.01f, 1f);
                 _slipFactor = factor;
 
                 float clampTarget = _slip.InnerPct > 100f

@@ -155,7 +155,7 @@ namespace ARS
         public static float PeakSlipTarget = 0.9f;
         public static float PeakSlipToleranceDeg = 0f;
 
-        public static float SlipCutFloor = 0.4f;
+        public static int SlipCutDepthPct = 60;
 
         public const float SlipPeakRatio = 0.4f;
 
@@ -1108,16 +1108,16 @@ namespace ARS
             rivalSteeringMenu.Add(peakSlipToleranceItem);
             HookListTextPicker(peakSlipToleranceItem);
 
-            NativeListItem<string> slipCutFloorItem = new NativeListItem<string>("Slip Cut Floor", "The deepest the limiter may cut the wheel: 0.40 leaves 40% of what was asked, 0.00 removes the request entirely and the car goes straight on."
-                , SettingsRepair.OptionsFor("SlipCutFloor"));
-            slipCutFloorItem.ItemChanged += (sender, args) =>
+            NativeListItem<string> slipCutDepthItem = new NativeListItem<string>("Deepest Cut (%)", "How much of the wheel the guard may remove at the bottom of a slide: 60 leaves 40 %, which is where the tyre's force stops falling, so a deeper cut costs direction and buys no grip. 0 turns the cut off; 100 leaves nothing."
+                , SettingsRepair.OptionsFor("SlipCutDepthPct"));
+            slipCutDepthItem.ItemChanged += (sender, args) =>
             {
-                SlipCutFloor = float.Parse(slipCutFloorItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("SlipCutFloor", slipCutFloorItem.Items[args.Index]);
+                SlipCutDepthPct = int.Parse(slipCutDepthItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SlipCutDepthPct", slipCutDepthItem.Items[args.Index]);
             };
-            slipCutFloorItem.SelectedIndex = Math.Max(0, slipCutFloorItem.Items.IndexOf(SettingsMenuStore.GetFloat("SlipCutFloor", SlipCutFloor).ToString("0.00", CultureInfo.InvariantCulture)));
-            rivalSteeringMenu.Add(slipCutFloorItem);
-            HookListTextPicker(slipCutFloorItem);
+            slipCutDepthItem.SelectedIndex = Math.Max(0, slipCutDepthItem.Items.IndexOf(SettingsMenuStore.GetInt("SlipCutDepthPct", SlipCutDepthPct).ToString(CultureInfo.InvariantCulture)));
+            rivalSteeringMenu.Add(slipCutDepthItem);
+            HookListTextPicker(slipCutDepthItem);
 
             NativeMenu rulesMenu = new NativeMenu("Race Rules", "Race Rules", "Rules that apply to every race: timing, damaged and dead cars, field pace, collision, nitrous and downforce.")
             {
@@ -3401,7 +3401,7 @@ namespace ARS
             DamperCountersteerMaxDeg = SettingsMenuStore.GetFloat("DamperCountersteerMaxDeg", DamperCountersteerMaxDeg);
             PeakSlipTarget = SettingsMenuStore.GetFloat("SteerCeilingFactor", PeakSlipTarget);
             PeakSlipToleranceDeg = SettingsMenuStore.GetFloat("PeakSlipToleranceDeg", PeakSlipToleranceDeg);
-            SlipCutFloor = SettingsMenuStore.GetFloat("SlipCutFloor", SlipCutFloor);
+            SlipCutDepthPct = SettingsMenuStore.GetInt("SlipCutDepthPct", SlipCutDepthPct);
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
