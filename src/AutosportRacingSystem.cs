@@ -46,7 +46,7 @@ namespace ARS
 
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip, ShowSlideAngle
     }
     public partial class ARS : Script
     {
@@ -197,6 +197,7 @@ namespace ARS
         { Options.ShowBumps, false },
         { Options.ShowWheelSlip, false },
         { Options.ShowFrontSlip, false },
+        { Options.ShowSlideAngle, false },
         { Options.ShowGsProjection, false },
         { Options.ShowGLine, false },
         { Options.ShowRouteRadius, false }
@@ -1385,6 +1386,8 @@ namespace ARS
             };
             developmentMenu.Add(slipSourceItem);
 
+            AddDebugCheckbox(developmentMenu, Options.ShowSlideAngle, "Show Slide Angle", "The focus car's slide angle in the subtitle, averaged live over the last half second of frames: signed, the sign being which side the car is sliding to, and not filtered for the car's direction of turn.");
+
             AddSub(_arsMenu, _raceMenu);
             AddSub(_arsMenu, rivalsMenu);
             AddSub(_arsMenu, rulesMenu);
@@ -2217,7 +2220,7 @@ namespace ARS
                     if (NoCollision) ApplyNoCollision(true);
                 }
 
-                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
+                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowSlideAngle] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
                 {
                     Vector3 focusPos = Game.Player.Character.Position;
                     DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();

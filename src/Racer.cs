@@ -447,6 +447,13 @@ namespace ARS
         float _powerCounter = 1f;
         float _overspeedPowerLevel = 1f;
         float _countersteerAssistDeg = 0f;
+        const float SlideAverageSeconds = 0.5f;
+        const int SlideAverageSlots = 128;
+        readonly float[] _slideSamples = new float[SlideAverageSlots];
+        readonly float[] _steerSamples = new float[SlideAverageSlots];
+        readonly int[] _slideSampleAt = new int[SlideAverageSlots];
+        int _slideSampleIndex;
+        int _slideSampleCount;
         int _cornerLiftApex = -1;
         float _defendLaneOffset = 0f;
         float _avoidHoldLane = 0f;
@@ -673,6 +680,7 @@ namespace ARS
                 laneReason = LaneReason.CurveLean;
                 _laneRequestOutward = leanOutward;
             }
+            LogLineVerdict();
             if (ActiveManeuver.Type == ManeuverType.DefendLane && MetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
             {
                 laneRequest = ARS.Clamp(_defendLaneOffset, -laneLimit, laneLimit);
@@ -932,18 +940,52 @@ namespace ARS
             return PursuitSteerFromBearing(bearing, distance);
         }
 
+        int _lineVerdict = 1;
+        int _lineApexNode = -1;
+        float _lineApexRadius;
+        float _lineApexMetres = -1f;
+        int _leanVerdict = 2;
+        float _leanSampleRadius;
+        int _lineLogKey = -1;
+        int _lineLogAt;
+
+        static readonly string[] LineVerdictNames = { "taken", "no apex", "apex passed", "radius 50 m or wider", "not fast enough", "beyond 300 m", "past the entrance", "aligned out", "inside the gate" };
+        static readonly string[] LeanVerdictNames = { "lean in", "lean out", "lean off" };
+
+        void LogLineVerdict()
+        {
+            int key = (_lineApexNode * 16) + _lineVerdict;
+            if (key == _lineLogKey || Game.GameTime < _lineLogAt) return;
+            _lineLogKey = key;
+            _lineLogAt = Game.GameTime + 500;
+            ARS.Log(ARS.LogImportance.Info, "line apex " + _lineApexNode
+                + " R " + _lineApexRadius.ToString("0.0")
+                + " at " + _lineApexMetres.ToString("0") + " m"
+                + " | outside " + LineVerdictNames[_lineVerdict]
+                + " | " + LeanVerdictNames[_leanVerdict]
+                + " (forward R " + _leanSampleRadius.ToString("0") + ")");
+        }
+
         bool TryGetOutsideLane(CornerPoint lineCorner, TrackPoint steerRefPoint, float speedMps, out float lane)
         {
             lane = 0f;
+            _lineVerdict = 1;
+            _lineApexNode = -1;
+            _lineApexRadius = 0f;
+            _lineApexMetres = -1f;
             if (lineCorner == null) return false;
+
             int apexNode = lineCorner.Node;
-            if (HasPassedApex(apexNode)) return false;
+            _lineApexNode = apexNode;
+            _lineApexRadius = lineCorner.DetectedRadius;
+            _lineApexMetres = MetresToNode(apexNode);
 
-            if (!(lineCorner.DetectedRadius < IdealLineMaxRadiusMeters)) return false;
-            if (!(speedMps > ApexSpeedWithDownforce(lineCorner.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph))) return false;
+            if (HasPassedApex(apexNode)) { _lineVerdict = 2; return false; }
 
-            float metresToApex = MetresToNode(apexNode);
-            if (!(metresToApex <= IdealLineWindowMeters)) return false;
+            if (!(lineCorner.DetectedRadius < IdealLineMaxRadiusMeters)) { _lineVerdict = 3; return false; }
+            if (!(speedMps > ApexSpeedWithDownforce(lineCorner.DetectedRadius) - ARS.MphToMps(IdealLineSpeedMarginMph))) { _lineVerdict = 4; return false; }
+
+            if (!(_lineApexMetres <= IdealLineWindowMeters)) { _lineVerdict = 5; return false; }
 
             if (_lineBiasNode != apexNode)
             {
@@ -958,7 +1000,7 @@ namespace ARS
             int outsideEntranceNode = CornerEntranceNode(lineCorner, apexNode);
             if (outsideEntranceNode >= 0)
             {
-                if (ForwardNodeDistance(steerRefPoint.Node) >= ForwardNodeDistance(outsideEntranceNode)) return false;
+                if (ForwardNodeDistance(steerRefPoint.Node) >= ForwardNodeDistance(outsideEntranceNode)) { _lineVerdict = 6; return false; }
 
                 float ownLane = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
                 float reachable = ClampLaneToWalls(outsideLane, steerRefPoint.TrackHalfWidth, _leftWallHeld, _rightWallHeld);
@@ -966,10 +1008,12 @@ namespace ARS
                 Vector3 entranceFlat = new Vector3(ARS.TrackPoints[outsideEntranceNode].Direction.X, ARS.TrackPoints[outsideEntranceNode].Direction.Y, 0f);
                 if (steerFlat.LengthSquared() > 0.01f && entranceFlat.LengthSquared() > 0.01f
                     && Vector3.Angle(steerFlat, entranceFlat) < OutReleaseAlignDegrees
-                    && Math.Abs(ownLane - reachable) < OutReleaseReachedMeters) return false;
+                    && Math.Abs(ownLane - reachable) < OutReleaseReachedMeters) { _lineVerdict = 7; return false; }
             }
 
-            if (metresToApex <= OutsideGateMeters(steerRefPoint)) return false;
+            if (_lineApexMetres <= OutsideGateMeters(steerRefPoint)) { _lineVerdict = 8; return false; }
+
+            _lineVerdict = 0;
             return true;
         }
 
@@ -988,6 +1032,8 @@ namespace ARS
             lane = 0f;
             outward = false;
             _laneCornerDir = 0;
+            _leanVerdict = 2;
+            _leanSampleRadius = 0f;
 
             if (TryGetOutsideLane(lineCorner, steerRefPoint, speedMps, out float outsideLane))
             {
@@ -995,6 +1041,7 @@ namespace ARS
                 outward = true;
                 _laneCornerDir = Math.Sign(lineCorner.Angle);
                 _leanApproachMps = CurveLeanOutMps;
+                _leanVerdict = 1;
                 return true;
             }
             int count = ARS.TrackPoints.Count;
@@ -1006,10 +1053,11 @@ namespace ARS
                 fwdNode = ((CurrentTrackPoint.Node + fwdOffset) % count + count) % count;
 
             TrackPoint ahead = ARS.TrackPoints[fwdNode];
-            if (!(ahead.PreciseCurveRadius <= CurveLeanRadiusMeters)) return false;
+            _leanSampleRadius = ahead.PreciseCurveRadius;
+            if (!(ahead.PreciseCurveRadius <= CurveLeanRadiusMeters)) { _leanVerdict = 2; return false; }
 
             float cornerDir = Math.Sign(ahead.Angle);
-            if (cornerDir == 0f) return false;
+            if (cornerDir == 0f) { _leanVerdict = 2; return false; }
 
             _leanApproachMps = CurveLeanWidthScale * trackWidthMeters / Math.Max(ahead.PreciseCurveRadius, 5f);
             _laneCornerDir = (int)cornerDir;
@@ -1022,6 +1070,7 @@ namespace ARS
                 float held = ownLane - cornerDir * CurveLeanInwardHoldLeadMeters;
                 if (held * cornerDir > lane * cornerDir) lane = held;
             }
+            _leanVerdict = 0;
             return true;
         }
         const float LaneOverrideHoldMeters = 0.1f;
@@ -2968,6 +3017,7 @@ namespace ARS
             if (DebugInputVisuals && ARS.DebugToggles[Options.ShowTrackAnalysis]) DrawSteerAngles();
             if (ARS.DebugToggles[Options.ShowWheelSlip]) DrawWheelSlip();
             if (ARS.DebugToggles[Options.ShowFrontSlip]) DrawFrontSlipReadout();
+            if (ARS.DebugToggles[Options.ShowSlideAngle]) DrawSlideAngleReadout();
             if (ARS.DebugToggles[Options.ShowGsProjection]) DrawGsProjection();
         }
         const float FanLineLength = 5f;
@@ -3126,6 +3176,32 @@ namespace ARS
             UI.ShowSubtitle("Slip vs Allowed~n~x" + (_slip.FrontPct * 0.01f).ToString("0.0")
                 + "   " + mph.ToString("0") + "mph"
                 + "   cap " + cap.ToString("0.0") + "°", 50);
+        }
+
+        void DrawSlideAngleReadout()
+        {
+            int now = Game.GameTime;
+            _slideSamples[_slideSampleIndex] = VehicleData.SlideAngle;
+            _steerSamples[_slideSampleIndex] = Control.SteerDegrees;
+            _slideSampleAt[_slideSampleIndex] = now;
+            _slideSampleIndex = (_slideSampleIndex + 1) % SlideAverageSlots;
+            if (_slideSampleCount < SlideAverageSlots) _slideSampleCount++;
+
+            int windowMs = (int)(SlideAverageSeconds * 1000f);
+            float slideSum = 0f;
+            float steerSum = 0f;
+            int used = 0;
+            for (int i = 0; i < _slideSampleCount; i++)
+            {
+                if (now - _slideSampleAt[i] > windowMs) continue;
+                slideSum += _slideSamples[i];
+                steerSum += _steerSamples[i];
+                used++;
+            }
+
+            float slide = used > 0 ? slideSum / used : VehicleData.SlideAngle;
+            float steer = used > 0 ? steerSum / used : Control.SteerDegrees;
+            UI.ShowSubtitle(slide.ToString("0.0") + "°~n~" + steer.ToString("0.0") + "°", 50);
         }
 
         void DrawWheelSlip()
