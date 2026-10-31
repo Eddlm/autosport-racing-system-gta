@@ -162,6 +162,7 @@ namespace ARS
         public static int TcsTaperSpanPct = 50;
 
         public static float MaxCrestLift = 0.4f;
+        public static float BrakeAimDepth = 0f;
         public static float HillGripEffect = 1f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
@@ -991,6 +992,16 @@ namespace ARS
             maxCrestLiftItem.SelectedIndex = Math.Max(0, maxCrestLiftItem.Items.IndexOf(SettingsMenuStore.GetFloat("MaxCrestLift", 0.4f).ToString("0.0", CultureInfo.InvariantCulture)));
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
+
+            NativeListItem<string> brakeAimItem = new NativeListItem<string>("Brake Aim Depth", "How far into the corner the braking aim sits: 0 aims at the entrance, so the car is at corner speed by the entry; 1 aims at the apex, so it carries speed in and brakes all the way to it. The distance grows, so the brake point moves later.", SettingsRepair.OptionsFor("BrakeAimDepth"));
+            brakeAimItem.ItemChanged += (sender, args) =>
+            {
+                BrakeAimDepth = float.Parse(brakeAimItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("BrakeAimDepth", brakeAimItem.Items[args.Index]);
+            };
+            brakeAimItem.SelectedIndex = Math.Max(0, brakeAimItem.Items.IndexOf(SettingsMenuStore.GetFloat("BrakeAimDepth", BrakeAimDepth).ToString("0.0", CultureInfo.InvariantCulture)));
+            rivalPaceMenu.Add(brakeAimItem);
+            HookListTextPicker(brakeAimItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "Share of the tuned slope speed cut: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. Pitch counts both ways.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
@@ -3389,6 +3400,7 @@ namespace ARS
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             SteerTrace = DevelopmentMenuStore.GetBool("SteerTrace", SteerTrace);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
+            BrakeAimDepth = SettingsMenuStore.GetFloat("BrakeAimDepth", BrakeAimDepth);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);

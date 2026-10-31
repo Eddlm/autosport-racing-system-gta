@@ -148,6 +148,8 @@ brakes later; positive gives factor back. No dead zone. The mark is taken on the
 threshold is frozen when the sample opens, because `NextApexSpeed` is rebuilt every tick from grip and a smoothed radius and a live threshold
 decides the crossing on noise. The corner is looked up by apex node, exactly as `ApexBrakingSpeed` does.
 
+**The aim node is a setting (build 1397).** `BrakeAimDepth` moves the node the braking distance is measured to: 0 is the entrance minus `BrakeTargetLeadMeters` (what every build up to 1396 did), 1 is the apex, interpolated in forward nodes. Deeper moves the brake point later and lets the car carry speed in. **It contradicts the measurement above, which still marks "the corner speed reached at the entrance"**: with a depth above zero the car legitimately arrives faster and reaches the corner speed later, the mark reads positive, the factor comes down, and the row's effect is eaten over a few laps at the cost of a lower factor. Moving the mark's reference onto the same node is the one-line follow-up; until then the row is a per-lap statement, not a stable one.
+
 **The lane floor is recorded and no longer holds the verdict (driver, 2026-10-27).** `BrakeFloorLatchSeconds` latches whether the floor
 was holding throttle over the last second before the entrance, and the flag reaches the commit - but the metres still decide: a corner the
 floor kept quick still has a braking point that can be measured wrong.

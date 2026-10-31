@@ -3877,6 +3877,19 @@ namespace ARS
             return ForwardNodeDistance(apexNode) > ARS.TrackPoints.Count / 2;
         }
 
+        int BrakeTargetDistance(CornerPoint corner, int apexNode, int fallbackNode)
+        {
+            int baseNode = BrakeTargetBaseNode(corner, fallbackNode);
+            if (baseNode < 0) baseNode = fallbackNode;
+            int baseDistance = ForwardNodeDistance(baseNode);
+
+            float depth = ARS.Clamp(ARS.BrakeAimDepth, 0f, 1f);
+            if (depth <= 0f || apexNode < 0) return baseDistance;
+
+            int apexDistance = ForwardNodeDistance(apexNode);
+            return (int)Math.Round(baseDistance + (apexDistance - baseDistance) * depth);
+        }
+
         float ApexBrakingSpeed(int apexNode, float apexSpeed)
         {
             if (apexNode < 0) return 999f;
@@ -3884,10 +3897,8 @@ namespace ARS
 
             CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
             int fallbackNode = CornerEntranceNode(corner, apexNode);
-            int targetNode = BrakeTargetBaseNode(corner, fallbackNode);
-            if (targetNode < 0) targetNode = fallbackNode;
 
-            int targetDistance = ForwardNodeDistance(targetNode);
+            int targetDistance = BrakeTargetDistance(corner, apexNode, fallbackNode);
             int apexDistance = ForwardNodeDistance(apexNode);
 
             float rawDistance = !ARS.IsPointToPoint && targetDistance > apexDistance
