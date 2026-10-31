@@ -163,7 +163,8 @@ namespace ARS
 
         public static float MaxCrestLift = 0.4f;
         public static float BrakeAimDepth = 0f;
-        public static float RouteRadiusLeadSeconds = 1.5f;
+        public static bool RouteRadiusFar = true;
+        public static float SlidRadiusLeadSeconds = 0.5f;
         public static float HillGripEffect = 1f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
@@ -1012,15 +1013,23 @@ namespace ARS
             };
             rivalPaceMenu.Add(gsLaneFloorItem);
 
-            NativeListItem<string> routeRadiusLeadItem = new NativeListItem<string>("Route Radius Lead (s)", "How much of the two-second radius sample lies ahead of the car: 2.0 measures from the car to two seconds ahead, which opens onto the straight while the car is still in the bend; 1.0 pulls the sample back to one second each side, so the bend being driven keeps setting the speed and only the far end looks ahead.", SettingsRepair.OptionsFor("RouteRadiusLeadSeconds"));
-            routeRadiusLeadItem.ItemChanged += (sender, args) =>
+            NativeCheckboxItem routeRadiusFarItem = new NativeCheckboxItem("Route Radius", "Measure the two-second route radius that sets the general speed reference. Off leaves only the near radius, which is the A/B: the near one alone reacts late on a fast approach.", RouteRadiusFar);
+            routeRadiusFarItem.CheckboxChanged += (sender, args) =>
             {
-                RouteRadiusLeadSeconds = float.Parse(routeRadiusLeadItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("RouteRadiusLeadSeconds", routeRadiusLeadItem.Items[args.Index]);
+                RouteRadiusFar = routeRadiusFarItem.Checked;
+                SaveRacerSetting("RouteRadiusFar", RouteRadiusFar.ToString());
             };
-            routeRadiusLeadItem.SelectedIndex = Math.Max(0, routeRadiusLeadItem.Items.IndexOf(SettingsMenuStore.GetFloat("RouteRadiusLeadSeconds", RouteRadiusLeadSeconds).ToString("0.0", CultureInfo.InvariantCulture)));
-            rivalPaceMenu.Add(routeRadiusLeadItem);
-            HookListTextPicker(routeRadiusLeadItem);
+            rivalPaceMenu.Add(routeRadiusFarItem);
+
+            NativeListItem<string> slidRadiusLeadItem = new NativeListItem<string>("Slid Radius Lead (s)", "The second sample is the same two-second fit as the first, only slid back by this much: 0 puts it entirely behind the car, ending at the wheels - what the car has just driven; 0.5 ends it half a second ahead; 1.5 nearly sits it on top of the first. The tighter of the two sets the speed.", SettingsRepair.OptionsFor("SlidRadiusLeadSeconds"));
+            slidRadiusLeadItem.ItemChanged += (sender, args) =>
+            {
+                SlidRadiusLeadSeconds = float.Parse(slidRadiusLeadItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("SlidRadiusLeadSeconds", slidRadiusLeadItem.Items[args.Index]);
+            };
+            slidRadiusLeadItem.SelectedIndex = Math.Max(0, slidRadiusLeadItem.Items.IndexOf(SettingsMenuStore.GetFloat("SlidRadiusLeadSeconds", SlidRadiusLeadSeconds).ToString("0.0", CultureInfo.InvariantCulture)));
+            rivalPaceMenu.Add(slidRadiusLeadItem);
+            HookListTextPicker(slidRadiusLeadItem);
 
             NativeListItem<string> hillEffectItem = new NativeListItem<string>("Slope Loss (%)", "Share of the tuned slope speed cut: 0% ignores slopes, 100% is the tuned cut, 200% doubles it. Pitch counts both ways.", SettingsRepair.OptionsFor("HillGripEffect"));
             hillEffectItem.ItemChanged += (sender, args) =>
@@ -1962,7 +1971,8 @@ namespace ARS
                         TrackVisuals.DrawRouteRadiusChecks(radiusRacer, ARS.TrackPoints);
                         if (radiusRacer.LiveRouteRadius > 0f)
                             DrawText(radiusRacer.Car.Position + Vector3.WorldUp * 2.2f,
-                                     Math.Round(radiusRacer.LiveRouteRadius).ToString(CultureInfo.InvariantCulture) + " m",
+                                     Math.Round(radiusRacer.LiveRouteRadius).ToString(CultureInfo.InvariantCulture)
+                                     + " / " + (radiusRacer.LiveSlidRadius > 0f ? Math.Round(radiusRacer.LiveSlidRadius).ToString(CultureInfo.InvariantCulture) : "-") + " m",
                                      Color.Magenta, 0.55f);
                     }
                 }
@@ -3421,7 +3431,8 @@ namespace ARS
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
             BrakeAimDepth = SettingsMenuStore.GetFloat("BrakeAimDepth", BrakeAimDepth);
             GsLaneThrottleFloor = SettingsMenuStore.GetBool("GsLaneThrottleFloor", GsLaneThrottleFloor);
-            RouteRadiusLeadSeconds = SettingsMenuStore.GetFloat("RouteRadiusLeadSeconds", RouteRadiusLeadSeconds);
+            RouteRadiusFar = SettingsMenuStore.GetBool("RouteRadiusFar", RouteRadiusFar);
+            SlidRadiusLeadSeconds = SettingsMenuStore.GetFloat("SlidRadiusLeadSeconds", SlidRadiusLeadSeconds);
             TcsEnabled = SettingsMenuStore.GetBool("TcsEnabled", TcsEnabled);
             AbsEnabled = SettingsMenuStore.GetBool("AbsEnabled", AbsEnabled);
             TcsSlipLimitPct = SettingsMenuStore.GetInt("TcsSlipLimitPct", TcsSlipLimitPct);

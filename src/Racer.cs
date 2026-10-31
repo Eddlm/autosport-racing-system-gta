@@ -66,6 +66,10 @@ namespace ARS
         public int LiveRouteRadiusNearNode = -1;
         public int LiveRouteRadiusMidNode = -1;
         public int LiveRouteRadiusFarNode = -1;
+        public int LiveSlidRadiusNearNode = -1;
+        public int LiveSlidRadiusMidNode = -1;
+        public int LiveSlidRadiusFarNode = -1;
+        public float LiveSlidRadius = -1f;
 
         public float LiveRouteRadius = -1f;
 
@@ -3577,22 +3581,14 @@ namespace ARS
 
         const float RouteRadiusSpanSeconds = 2f;
 
-        float RouteRadiusSampled()
+        // One two-second window of the route ending `endSeconds` ahead of the car, fitted to a circle; 999 when it reads straight.
+        float RouteRadiusWindow(float endSeconds, ref int nearNode, ref int midNode, ref int farNode)
         {
             int count = ARS.TrackPoints.Count;
-            if (count < 10)
-            {
-                LiveRouteRadius = 999f;
-                LiveRouteRadiusNearNode = -1;
-                LiveRouteRadiusMidNode = -1;
-                LiveRouteRadiusFarNode = -1;
-                return 999f;
-            }
-
             float speed = Car.Velocity.Length();
             int span = Math.Min((int)(speed * RouteRadiusSpanSeconds), count - 1);
-            int lead = Math.Min((int)(speed * ARS.Clamp(ARS.RouteRadiusLeadSeconds, 1f, RouteRadiusSpanSeconds)), span);
-            int start = lead - span;
+            int end = Math.Min((int)(speed * Math.Max(endSeconds, 0f)), span);
+            int start = end - span;
             int middleNear = span / 3;
             int middleFar = (span * 2) / 3;
 
@@ -3600,11 +3596,11 @@ namespace ARS
             int n0 = WrappedNode(carNode + start);
             int n1 = WrappedNode(carNode + start + middleNear);
             int n2 = WrappedNode(carNode + start + middleFar);
-            int n3 = WrappedNode(carNode + lead);
+            int n3 = WrappedNode(carNode + end);
 
-            LiveRouteRadiusNearNode = n1;
-            LiveRouteRadiusMidNode = n2;
-            LiveRouteRadiusFarNode = n3;
+            nearNode = n1;
+            midNode = n2;
+            farNode = n3;
 
             Vector3 p0 = ARS.TrackPoints[n0].Position;
             Vector3 p1 = ARS.TrackPoints[n1].Position;
@@ -3615,12 +3611,10 @@ namespace ARS
             float chord = Vector2.Distance(new Vector2(p0.X, p0.Y), new Vector2(p3.X, p3.Y));
             if (middleNear == 0 || middleFar == middleNear || chord < 1f)
             {
-
                 r = 999f;
             }
             else if (Sagitta(p0, p1, p2, p3, chord) < RouteStraightSagittaShare * chord)
             {
-
                 r = 999f;
             }
             else
@@ -3629,7 +3623,41 @@ namespace ARS
                 if (r >= 999f) r = ARS.Circumradius3D(p0, p3, p2);
             }
 
-            if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
+            if (float.IsNaN(r) || float.IsInfinity(r)) return 999f;
+            return r;
+        }
+
+        float RouteRadiusSampled()
+        {
+            int count = ARS.TrackPoints.Count;
+            if (count < 10)
+            {
+                LiveRouteRadius = 999f;
+                LiveRouteRadiusNearNode = -1;
+                LiveRouteRadiusMidNode = -1;
+                LiveRouteRadiusFarNode = -1;
+                LiveSlidRadiusNearNode = -1;
+                LiveSlidRadiusMidNode = -1;
+                LiveSlidRadiusFarNode = -1;
+                LiveSlidRadius = 999f;
+                return 999f;
+            }
+
+            float r = 999f;
+            if (ARS.RouteRadiusFar)
+            {
+                r = RouteRadiusWindow(RouteRadiusSpanSeconds, ref LiveRouteRadiusNearNode, ref LiveRouteRadiusMidNode, ref LiveRouteRadiusFarNode);
+            }
+            else
+            {
+                LiveRouteRadiusNearNode = -1;
+                LiveRouteRadiusMidNode = -1;
+                LiveRouteRadiusFarNode = -1;
+            }
+
+            float slid = RouteRadiusWindow(ARS.SlidRadiusLeadSeconds, ref LiveSlidRadiusNearNode, ref LiveSlidRadiusMidNode, ref LiveSlidRadiusFarNode);
+            LiveSlidRadius = slid;
+            if (slid < r) r = slid;
 
             LiveRouteRadius = ARS.Clamp(r, 5f, 999f);
             return LiveRouteRadius;
