@@ -498,7 +498,6 @@ namespace ARS
         int _nitroRefusalLoggedAt = 0;
         float _powerCounter = 1f;
         float _overspeedPowerLevel = 1f;
-        float _countersteerAssistDeg = 0f;
         const float SlideAverageSeconds = 0.5f;
         const int SlideAverageSlots = 128;
         readonly float[] _slideSamples = new float[SlideAverageSlots];
@@ -888,10 +887,6 @@ namespace ARS
 
             float fwdSpeed = ARS.GetForwardSpeed(Car);
 
-            if (TRLateralAtSpeed > 0.01f && fwdSpeed >= 2f)
-                _slidePriority = ARS.Remap(Math.Abs(VehicleData.SlideAngle), TRLateralAtSpeed * SlideBlendStartFraction, TRLateralAtSpeed * SlideBlendFullFraction, 0f, 1f, true);
-            else
-                _slidePriority = 0f;
             float yawTarget = 0f;
             if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * SlidingFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
@@ -928,31 +923,24 @@ namespace ARS
                     + " dist=" + _pursuitAimDistanceM.ToString("0.0")
                     + " lat=" + _pursuitAimLateralM.ToString("0.00"));
 
-            if (_slidePriority > 0f)
-            {
-
-                if (!KickWantsSlide())
-                {
-                    float countersteerTarget = (steerKP * sideBySideSteerDeg) - (VehicleData.SlideAngle * CountersteerShare());
-                    Control.SteerDegrees += (countersteerTarget - Control.SteerDegrees) * _slidePriority;
-                }
-            }
-
             float slideDeg = VehicleData.SlideAngle;
-
             if (float.IsNaN(slideDeg) || float.IsInfinity(slideDeg)) slideDeg = 0f;
-            bool blendCommitted = _slidePriority > 0f;
+
+            float slideShare = TRLateralAtSpeed > 0.01f ? Math.Abs(slideDeg) / TRLateralAtSpeed : 0f;
+            float countersteerAmount = 0f;
+            if (slideShare > CountersteerBlendStart)
+                countersteerAmount = 0.5f * Math.Min(slideShare - CountersteerBlendStart,
+                    CountersteerBlendMid - CountersteerBlendStart) / (CountersteerBlendMid - CountersteerBlendStart);
+            if (slideShare > CountersteerBlendMid)
+                countersteerAmount += 0.5f * Math.Min(slideShare - CountersteerBlendMid,
+                    CountersteerBlendFull - CountersteerBlendMid) / (CountersteerBlendFull - CountersteerBlendMid);
+
             bool rotationReversed = VehicleData.YawRotationPerSecondDegrees * Math.Sign(slideDeg) < 0f;
-            if (!blendCommitted || rotationReversed)
-            {
-                _countersteerAssistDeg = 0f;
-            }
-            else
-            {
-                float assistCeilingDeg = Math.Max(0f, (CountersteerTotalShare - CountersteerSlideShare) * Math.Abs(slideDeg));
-                _countersteerAssistDeg = Math.Min(_countersteerAssistDeg + CountersteerAssistDegreesPerSecond * TickScale, assistCeilingDeg);
-            }
-            Control.SteerDegrees -= Math.Sign(slideDeg) * _countersteerAssistDeg;
+            if (rotationReversed && countersteerAmount > 0f) countersteerAmount *= CountersteerRecoilShare;
+
+            _slidePriority = countersteerAmount;
+            if (countersteerAmount > 0f && !KickWantsSlide())
+                Control.SteerDegrees -= Math.Sign(slideDeg) * countersteerAmount * Math.Abs(slideDeg);
 
             if (Math.Abs(_steerAimBearingDegrees) < SmallAimBearingDegrees && _slidePriority <= 0f) Control.SteerDegrees = 0f;
             Control.SteerDegrees += steerKP * contactSteerDeg;
@@ -1325,11 +1313,14 @@ const float RequirementLookaheadSeconds = 3.95f;
             return ClampLaneToWalls(requestLane, roadWide, leftConstrained, rightConstrained);
         }
         const float SlidingFraction = 0.3f;
-        const float SlideBlendStartFraction = 1f;
-        const float SlideBlendFullFraction = 2.5f;
-        const float CountersteerSlideShare = 0.5f;
-        const float CountersteerAssistDegreesPerSecond = 10f;
-        const float CountersteerTotalShare = 1f;
+        // Countersteer is a fraction of the body slip angle, read off the slide in units of the peak slip angle:
+        // it starts at half a peak, reaches half of the slip angle at one and a half, and the whole slip angle (the
+        // geometric countersteer) at two and a half. A slide that is already coming back gets half of that again,
+        // so the car is not held into the slide it has just recovered from.
+        const float CountersteerBlendStart = 1f;
+        const float CountersteerBlendMid = 1.5f;
+        const float CountersteerBlendFull = 2.5f;
+        const float CountersteerRecoilShare = 0.5f;
         const float CountersteerPedalCap = 0.5f;
         const float CountersteerMinSpeedMph = 10f;
         const float SteerSlewRate = 120f;
@@ -1583,8 +1574,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             _steerPreLimitDegrees = requestedSteer;
             _steerGrantedCeiling = requestedSteer >= 0f ? steerLimitLeft : steerLimitRight;
         }
-
-        float CountersteerShare() => CountersteerSlideShare;
 
         bool IsFullCountersteer()
         {
@@ -3899,17 +3888,28 @@ const float RequirementLookaheadSeconds = 3.95f;
             return nearestSpeed - candidateSpeed >= SecondaryApexSpeedDifference;
         }
 
+
+        // The radius a corner's speed is judged on: the line through it, not the road's own bend. The queue's
+        // geometry - which apexes are worth holding, how far apart they are - keeps using DetectedRadius.
+        float SpeedRadiusFor(int node, float fallbackRadius)
+        {
+            if (node < 0) return fallbackRadius;
+            for (int i = 0; i < ARS.Corners.Count; i++)
+                if (ARS.Corners[i].Node == node) return ARS.CornerRadiusForSpeed(ARS.Corners[i]);
+            return fallbackRadius;
+        }
+
         void CommitApexQueue(int[] nodes, float[] radii)
         {
             NextApexNode = nodes[0];
             NextApexRadius = radii[0];
-            NextApexSpeed = NextApexNode >= 0 ? ApexSpeedWithDownforce(NextApexRadius) : 999f;
+            NextApexSpeed = NextApexNode >= 0 ? ApexSpeedWithDownforce(SpeedRadiusFor(NextApexNode, NextApexRadius)) : 999f;
             NextApexNode2 = nodes[1];
             NextApexRadius2 = radii[1];
-            NextApexSpeed2 = NextApexNode2 >= 0 ? ApexSpeedWithDownforce(NextApexRadius2) : 999f;
+            NextApexSpeed2 = NextApexNode2 >= 0 ? ApexSpeedWithDownforce(SpeedRadiusFor(NextApexNode2, NextApexRadius2)) : 999f;
             NextApexNode3 = nodes[2];
             NextApexRadius3 = radii[2];
-            NextApexSpeed3 = NextApexNode3 >= 0 ? ApexSpeedWithDownforce(NextApexRadius3) : 999f;
+            NextApexSpeed3 = NextApexNode3 >= 0 ? ApexSpeedWithDownforce(SpeedRadiusFor(NextApexNode3, NextApexRadius3)) : 999f;
 
             if (NextApexNode >= 0)
             {
@@ -4430,7 +4430,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (ControlledByPlayer || ARS.GetForwardSpeed(Car) <= 0f
                 || VehicleMemory.GetDriveBiasFront(Car) > KickMaxDriveBiasFront
                 || Game.GameTime < _kickCooldownUntil || !GearCanKick()
-                || Math.Abs(VehicleData.SlideAngle) >= TRLateralAtSpeed * SlideBlendStartFraction)
+                || Math.Abs(VehicleData.SlideAngle) >= TRLateralAtSpeed * CountersteerBlendStart)
             {
                 _kickArmSince = 0;
                 return;

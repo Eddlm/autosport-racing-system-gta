@@ -513,18 +513,26 @@ namespace ARS
         // The largest circle that stays on the road through this corner: tangent to the inside edge at the apex and to
         // the outside edge where it enters and leaves it. The line it describes is the one with the least curvature,
         // which is the fastest there is when the corner is taken at a constant speed.
-        static float OptimalRadiusOf(CornerPoint corner)
+
+        // The same total turn OptimalRadiusOf uses, exposed for the table log.
+        static float OptimalTurnOf(CornerPoint corner)
         {
-            // The turn of the whole corner, not the local angle at the apex: `Angle` is the chord-to-chord turn
-            // over 2 * GeometryWindowNodes, so summing it across the span and dividing by that window gives the
-            // total. A hairpin turns ~170 deg, a sweeper ~20, and the two want opposite things from this formula.
             int count = ARS.TrackPoints.Count;
             int span = ArcSpan(corner.StartNode, corner.EndNode, count);
             if (span < 2) return 0f;
             float swept = 0f;
             for (int i = 0; i <= span; i++)
                 swept += ARS.TrackPoints[ArcNode(corner.StartNode, i, count)].Angle;
-            float turn = Math.Abs(swept) / (2f * GeometryWindowNodes);
+            return Math.Abs(swept) / GeometryWindowNodes;
+        }
+
+        static float OptimalRadiusOf(CornerPoint corner)
+        {
+            // The turn of the whole corner, not the local angle at the apex. `Angle` at a node is the turn between
+            // the two chords that meet there, so it covers an arc of GeometryWindowNodes nodes - from the midpoint of
+            // one chord to the midpoint of the other. Summing it along the span and dividing by that window is the
+            // integral of the curvature. Dividing by twice the window halves the turn, and the radius with it squared.
+            float turn = OptimalTurnOf(corner);
             if (turn < 1f || turn > 179f) return 0f;
             float width = 2f * Math.Max(1f, ARS.NodeHalfWidths[corner.Node]);
             float inner = Math.Max(1f, corner.DetectedRadius - width * 0.5f);
@@ -680,6 +688,7 @@ namespace ARS
                     + " optimal=" + apex.OptimalRadius.ToString("0")
                     + " supposed=" + apex.SupposedRadius.ToString("0.0")
                     + " angle=" + apex.Angle.ToString("0.0")
+                    + " turn=" + OptimalTurnOf(apex).ToString("0.0")
                     + " span=" + apex.StartNode + "-" + apex.EndNode
                     + " " + outside);
             }
@@ -1088,7 +1097,11 @@ namespace ARS
                 DetectedRadius = detectedRadius
             };
             corner.OptimalRadius = OptimalRadiusOf(corner);
-            corner.Speed = (float)Math.Sqrt(9.81f * ARS.CornerRadiusForSpeed(corner));
+            // `Speed` stays on the road's own radius on purpose. It decides whether two corners merge (the gap in
+            // seconds between them), and that is a question about the track, not about the line through it: on the
+            // optimal radius the seconds shrink, the gap looks short, and two corners become one. The driver's
+            // corner speed is `CornerApexSpeed`, which does read `OptimalRadius`.
+            corner.Speed = (float)Math.Sqrt(9.81f * tightestRadius);
 
             if (ARS.Corners.Count > 0)
             {
