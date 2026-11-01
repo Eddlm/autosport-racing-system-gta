@@ -1,0 +1,129 @@
+# VERIFICAR EN JUEGO — pendiente
+
+Build desplegada: **1380**. Lo marcado ✅ es tuyo, verificado en juego; lo marcado ⬜ sigue siendo **compile-only**.
+Marca una línea con `[x]` o dime «verificado N» y actualizo este fichero.
+
+**Lo de hoy (30-10) está en la sección H**, al final del bloque de abajo: seis commits, build 1375 → 1380, todos
+compile-only. El detalle de qué se arregló y qué quedó archivado vive en `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## L · línea de carrera (1301 → 1312)
+
+| # | Qué | Cómo | Pasa si | Estado |
+|---|---|---|---|---|
+| L1 | **fase por distancia** (1302) | curvas en V y en U, observando la línea | ya no acelera en los últimos nodos | ✅ **verificado 28-10 · 1302** |
+| L2 | **lean por ancho/radio** (1308) | pista estrecha y pista ancha | en la ancha ataca el interior con más ritmo, sin volantazo | ✅ **verificado 28-10 · 1308** |
+| L3 | **out-in eliminado** (1312) | cualquier curva | el naranja del exterior sigue en la aproximación, **sin** magenta, y la entrada se siente igual que en 1308 | ✅ **verificado 28-10 · 1312** |
+
+## A · Sin conducir (log)
+
+| # | Qué | Cómo | Pasa si | Estado |
+|---|---|---|---|---|
+| A1 | **el throw de `Math.Sign`** | deja el mod 10 min y `grep -c "OnTick error" ARS.log` | **0**. La cifra «208» era de una sesión del 25; hoy todas las sesiones han cerrado con 0 | ⬜ |
+| A2 | **settings atómicos** | cambia una fila; luego pon el ini **read-only** y cambia otra | el valor persiste; con el fichero bloqueado sale un `Error` en el log en vez de perderse | ⬜ |
+| A3 | **304 · parrilla vacía** | `Max PI Deviation` bajo para no tener a nadie en banda, Start Race | **no arranca**, dice `No car within N PI of X`, y **no quedan bengalas** | ✅ **verificado 26-10** |
+| A4 | **preflight** | mismo caso que A3, mirando el log | aparece `Start Race refused: …` **antes** de instanciar | ✅ **verificado 26-10 (1124)** |
+| A5 | **layout · nombres** | arranca una carrera | los rivales llevan nombre (`Drivers\names.txt`) y salen tips | ✅ **verificado 26-10** |
+| A6 | **roster nuevo** (1169) | cambia el roster en Rivals a `cars.txt` y pide parrilla | indexa **643 modelos** y monta la parrilla. Antes se colgaba (o eso parecía) al cambiarlo | ⬜ |
+| A7 | **log rotado** (1171) | arranca dos veces seguidas | existe `ARS.prev.log` en la **raíz del juego** con la sesión anterior | ⬜ |
+
+## B · Una vuelta normal
+
+| # | Qué | Cómo | Pasa si | Estado |
+|---|---|---|---|---|
+| B1 | **costura de curvas** | **El Burro Rally** con `LogLevel = Info` | el primer `Corner add` da un `start=` sensato y el nitro **no** está vetado toda la vuelta | ✅ **verificado 26-10**: 14 curvas en El Burro / 18 en Oct1, `apex=0` solo en el `skipped`, y frena la primera curva |
+| B2 | **brake learner** (1126) | una entrada pasada de frenada con `Brake Learn Notify` | el aviso **sale sin Show Track Analysis** y el recorte es **0,15 como mucho** | ⬜ |
+| B3 | **muros a tres** | Show Rivalry, un rival a cada lado | los dos muros siguen dibujados | ⬜ |
+| B4 | **board · nombres** (1117) | mira la columna | **sin** paréntesis de PI, y el PI con **un decimal** | ✅ **verificado 26-10** |
+| B5 | **board · toggle** (1112) | apaga *Show Driver Names* | la cabecera pasa a **CAR** y salen modelos, sin reiniciar carrera | ⬜ |
+| B6 | **board · posición** (1125) | mira la esquina superior izquierda | el `POS` ya no se solapa con las hints/tips | ⬜ |
+| B7 | **allowance lenta** (1127) | curva de 5-15 mph con `Show Front Slip` | el coche gira y aparece el token `x1.5`/`x2.0` | ⬜ |
+| B8 | **Peak Slip Target** (1128) | token `x0.9` y `F` en curva rápida | el corte empieza antes del pico (F 100 = 90 % del pico) | ⬜ |
+| B9 | **Deepest Cut (%)** (1385) | sube de 60 a 80 en un derrape largo | recorta más que antes; a 0 no corta nada; a 60 idéntico a la 1384 | ⬜ |
+| B10 | **la referencia pasó a la exterior** (1391) | una tanda con 0.75 / 0.75° después de la de 1.00 / 1.0° en la 1389 | se siente **igual** que antes del cambio: es el mismo coche con el número de la otra rueda | ⬜ |
+| B11 | ~~Target Under Power~~ (1393) | — | aparcado en la 1396: la fila ya no existe | ⛔ |
+| B12 | **el suelo de gas del carril** (1396) | curvón apuntando al **interior**, con el plan pidiendo levantar | el gas **no baja**: acelera aunque el plan quisiera levantar; pegado al borde exterior el suelo desaparece | ✅ **verificado 31-10 · 1396**: «probado y funciona genial» |
+| B13 | **Brake Aim Depth** (1397) | una curva donde ya frenaba, subiéndolo a 0.4 y luego a 0.8 | frena **más tarde** y entra con más velocidad; si a las pocas vueltas vuelve a frenar donde antes, es el aprendiz bajando el factor | ⬜ |
+| B14 | **Car-Centred Radius** (1399) | Figureight entre ápex 2 y 3, una vuelta con el toggle **off** y otra **on** | off se sale igual que ahora; on aguanta la curva hasta salir de verdad, y **no** frena antes en la entrada | ✅ **verificado 31-10 · 1400**: «lo tenemos, esto ha ayudado» — falta confirmar que la entrada no se ha vuelto más lenta |
+| B15 | **Slid Radius Lead + toggle del radio** (1404) | el mismo tramo: toggle **off**, luego lead 0.0 / 0.5 / 1.5 | off = reacciona tarde a la entrada; 0.0 = mide sólo lo recorrido, el más cauto al salir; 1.5 = casi el mismo número que el principal | ✅ **verificado 31-10 · 1404** |
+| B16 | ~~carril inactivo se planta~~ (1408) | — | **descartado en 1409**: el umbral `LaneCrossMinMeters` convertía una cantidad continua en un estado binario y parpadeaba. Se quitó el bloque; el carril vuelve por el mover, como antes | ❌ descartado |
+| B10 | **cierre exponencial** (1132) | `Slip From Memory` **off**: el readout es la proporción | a 500 % llega a 100 % en ~0,27 s (8 ticks); a 1000 % ~0,3 s | ⬜ |
+
+## C · Abuso deliberado
+
+| # | Qué | Cómo | Pasa si | Estado |
+|---|---|---|---|---|
+| C1 | **nitro al terminar** | dispara y **End Race dentro de los 3 s** | tu coche no sale con la botella armada; destildar Nitrous en pleno burn **para** el empuje | ⬜ |
+| C2 | **recarga** | **Insert** en plena carrera | no crashea, la carrera desaparece, pedal neutro | ⬜ |
+| C3 | **carrera tras carrera** | termina una y lanza otra antes de que expire el «Ns to end» | la nueva **no muere en sus semáforos** | ⬜ |
+| C4 | **creador** | línea de salida + **una** sección, guardar | se niega y dice cuántos nodos faltan, sin pantalla negra | ⬜ |
+| C5 | **solitario corto** | **Grid Size 0** en un circuito corto | arranca | ⬜ |
+| C6 | **freecam** | actívala y **entra en un coche** | la freecam **sale sola** | ⬜ |
+
+## D · Decisiones y papeleo
+
+| # | Qué | Notas | Estado |
+|---|---|---|---|
+| D1 | **ABS desbloqueado** (1114) | fila viva, arranca con el valor guardado. **Falta la descripción nueva** que ibas a darme | ⬜ |
+| D2 | **`Oprahs`** en `names.txt` | ¿se queda, se convierte en `Oprah` o se va? | ⬜ |
+| D3 | **Tag `v0.9.0`** | **ya estaba cortado**: release publicado el 27-10 con el build 1293 y el zip de ese día, etiqueta en `1d8b91e`. El build de hoy va aparte, como `v0.9.0.1381` en borrador. `docs/audit/` son 1140 KB internos | ✅ 30-10 |
+| D4 | **PI relativo a pie** (1124) | error inmediato, sin instanciar, sin teleport, sin fade | ✅ **verificado 26-10** |
+
+## E · Lo de hoy, sin probar todavía
+
+| # | Qué | Cómo | Pasa si | Estado |
+|---|---|---|---|---|
+| E1 | **off-track: 40 debajo, suelo 20** (1171) | sácate de la línea en una curva rápida | el coche baja de verdad, no 10 mph menos: una curva de 35 pide 20, una de 70 pide 30 | ⬜ |
+| E2 | **ángulo de derrape horizontal** (1165) | curvas con **desnivel** | detecta el derrape igual en rasante que en llano; antes se inflaba con la pendiente | ⬜ |
+| E3 | **chicanas** (1165) | pista con pendiente y eses | las chicanas siguen siéndolo (+10 mph); ninguna se clasifica por el desnivel | ⬜ |
+| E4 | **slots de parrilla** (1165) | mira los coches en la salida | ninguno hundido ni flotando en pistas con pendiente | ⬜ |
+| E5 | **el dither del volante** | ya no hay que probarlo | **resuelto** en la 1163: era la demora medida en 3D. Los intentos fallidos están en `AGENTS-BACKLOG.md` | ✅ |
+| E6 | **aire en offroad** | no implementado | la señal existe y es fiable (`ARS.WheelsOffGround`, 0-4 ruedas leyendo `0x1C4`), pero solo alimenta el factor de estabilidad. Aparcado | ⬜ |
+
+## F · La tanda de feedback (1294)
+
+| # | Qué | Cómo | Pasa si | Estado |
+|---|---|---|---|---|
+| F1 | **gate de build** | cualquier carrera normal en la 3889 | **arranca igual** que antes: el gate solo rechaza si falta una firma | ✅ **28-10 (1294)**: la carrera corrió; el gate dejó pasar |
+| F2 | **sin tormenta** | una carrera entera y `grep -c "OnTick error" ARS.log` | **0** | ✅ **28-10 (1294)**: 0 en 14 líneas de log (1,5 KB) |
+| F3 | **tips vs board** | pasa un ápex con tips y leaderboard visibles | la caja del tip **no tapa** la cabecera `POS` | ✅ «todo bien», 28-10 (1294) |
+| F4 | **nombre del coche** | Interface > *Show Driver Names* apagado | la cabecera dice `CAR` y sale el modelo | ✅ «todo bien», 28-10 (1294) |
+
+---
+
+### Fuera de esta lista, ya decidido
+
+- **B5** (lag del registro de rivales) y **R12** (leaderboard por frame) → aparcados a **0.11**, en `AGENTS-BACKLOG.md`.
+- **`SpeedSteerCeiling`** → zombie para **0.11**: revivir la ley o borrarla con su fila del menú.
+- **`corner-chevron-exit`** → 0.9.1.
+- **301** · 43 filas heredadas reales → deuda, no blocker. **303-F2** → sin tocar a propósito.
+- **El crash al cambiar el roster**: causa **desconocida**. Los commits de la 1167/1169 quitan peligros reales pero no lo explican. Si vuelve, `ARS.prev.log` (en la raíz del juego) ya guarda la sesión anterior.
+
+---
+
+## H · La caza de bugs del 30-10 (1375 → 1380)
+
+Seis commits, todos **compile-only**. Cada fila trae cómo provocarlo y qué debe pasar.
+
+| # | Qué | Cómo | Pasa si | Estado |
+|---|---|---|---|---|
+| H1 | **pista rechazada** (1375) | Tracks → un XML con menos de 6 nodos de ruta | **no** dice «Track instanced», no arranca parrilla, sale el aviso | ✅ **verificado 30-10 · 1380** con `Chianski Long only Five.xml`: `Start Race refused: That track has 5 route nodes`, sin `Track instanced`. Ojo: la puerta que se ejercitó es el **preflight**, que ya funcionaba; la que arreglé (Load Track en el menú) sigue sin ser alcanzable |
+| H2 | **el abort deja el ped en pie** (1375) | entra en freecam y luego Insert (reload) | el ped **no** queda flotando sin gravedad; la carrera siguiente arranca normal | ✅ **verificado 30-10 · 1380**: recargar en freecam ya no deja al ped flotando en ragdoll; el bug existía y ya no se puede reproducir |
+| H3 | **la carga de fondo que falla avisa** (1375) | arranca y lee el log | una sola `Initialization complete`, sin `OnTick error` | ✅ **verificado 30-10 · 1380**: `build 1380`, `Initialization complete.`, y `grep -c "OnTick error"` = **0** |
+| H4 | **el prune conserva comentarios** (1376) | pon `; prueba = 1` dentro de `[MENU]` de `Menu-Race.ini` y recarga | el comentario **sobrevive** a la carga | ❌ **falla 30-10 · 1380**: la línea desaparece. El prune ya la conserva, pero `MenuSettings.Save()` reescribe el fichero como `[MENU]` + claves declaradas en el primer `Set()`, y la carga hace media docena antes de que lo mires. Es D-T2-3, archivado; el pase lo verifiqué yo mal: comprobé el prune, no el fichero |
+| H5 | **el prune dice lo que borra** (1376) | añade `ClaveInventada = 1` en `[MENU]` y recarga con `LogLevel = Error` | `ARS.log` trae `dropped stale` | ✅ **verificado 30-10 · 1380**: `Settings repair: Menu-Race.ini dropped stale ClaveInventada`, con el nivel de log por defecto |
+| H6 | **restart sin carta heredada** (1377) | con una maniobra activa (etiqueta del rival visible), Restart Race | la carrera nueva **no** arrastra el tope de gas de la carta vieja | ✅ **verificado 30-10 · 1380**: «las plays desaparecen y se juegan en la nueva carrera de manera normal» |
+| H7 | **Restart tras Load Track** (1378) | carrera → Load Track → Restart Race | **no** lanza `ArgumentOutOfRangeException`; arranca o se niega limpiamente | ⛔ **no alcanzable**: `Load Track` y `Build Grid` sólo se añaden al menú con `StagedSpawns`, que la carga fuerza a `false` (`:3432`). El agujero es real y queda cerrado, pero hoy no hay puerta. Para 0.11 / 0.9.1 |
+| H8 | **el handbrake al lanzar** (1378) | salida parada, mira los primeros metros | ningún coche sale clavado 0,2–0,6 s; el pelotón sale junto | ✅ **verificado 30-10 · 1380**: «todos salen bien» |
+| H9 | **el carril en pendiente** (1379) | tramo con desnivel, a velocidad | se comporta **igual** que en llano; el cambio es < 1 cm y no deberías notarlo | ⬜ pendiente: no encontró el tramo todavía |
+| H10 | **clamp tras derrape + Restart** (1380) | derrapa, Restart Race, primera curva | gira como una carrera nueva, no con el volante ya cerrado | ✅ **verificado 30-10 · 1380**: «no veo problema» |
+
+### Lo que espera decisión tuya (no tocado a propósito)
+
+1. **`No Collision` está invertido** en los tres puntos de llamada: el ajuste no hace nada y su limpieza apunta al revés. `docs/audit/410-hunt-2026-10-30.md` → D-T4-1.
+2. **«Open Up on Throttle»: retirado del árbol** (1389) — la fila, la clave y el método han desaparecido; ya nunca llegaba a la rueda. La fórmula vive en el backlog (`open-up-inert`) por si vuelve. D-T6-1.
+3. **`LaneMoverSpeedCapMps` = 99** donde el comentario y el diseño dicen 24: el tope del latigazo no puede morder. D-T5-4.
+4. **`avoid-hold-timeout`** (te debía la prueba) vive detrás de `avoidHoldEnabled = false`: la prueba apunta a código muerto. D-T5-2.
+5. **Tooltip del ABS**: «I'm working on undoing that» en una fila que sí funciona. D-T7-1.
+6. **`FEATURES.md` vende el nitro del jugador como «coming soon»** y el de la IA como porcentaje del tuyo: el tuyo corre en X/duck, y la IA lleva 5× contra 1×. D-T8-1, D-T8-2.

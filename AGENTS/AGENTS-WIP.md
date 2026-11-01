@@ -98,8 +98,9 @@ When 0.9.0 is published, tell people this in the README, not only in the release
 4. **Clean install before publishing**: extract that zip into a clean `Scripts\` beside the matched SHVDN pair and run the race-loop gate above.
 5. Publish: `gh release create v0.9.0 <zip> --title "0.9.0" --notes-file docs/RELEASE-NOTES.md --prerelease`, then
    `gh release edit v0.9.0 --prerelease=false` when you are ready for `releases/latest` to move and the in-game notice to fire.
-   WARNING: two files look like release notes - `docs/RELEASE-NOTES.md` (the one this command publishes) and `docs/release-0.9.0.md`
-   (the curated draft). Decide which is canonical before the cut and keep the other from drifting.
+   **One file is canonical: `docs/RELEASE-NOTES.md`.** The second draft that used to sit beside it (`docs/release-0.9.0.md`)
+   disagreed with it on the nitrous multiplier and is archived as `docs/working/RELEASE-0.9.0-DRAFT-ARCHIVE.md`; read
+   the published body against the code before the cut, never against the other draft.
 6. Close what the release answers, one line each: **#8** (a build the mod cannot drive on now logs a forced error instead of crashing) and **#3** (the downforce toggle — the reporter confirmed it works). **#1** and **#7** are old and unrelated: close as stale or leave, the owner's call rather than the release's.
 
 ## WIP — projection throttle rule (spec, user-stated 2026-10-23)
@@ -248,7 +249,7 @@ restored from a previous session would be a switch the user cannot see or change
 built and one line from live, for the day `STATUS_PLAYER` can be put on an AI car.
 
 **Two documents added today**: `AGENTS-VEHICLE-STATUS.md` (all 117 engine sites that branch on STATUS_PLAYER vs STATUS_PHYSICS) and
-`docs/KNOWN-BUGS.md` (defects understood and deliberately not fixed; first entry `first-corner-eagerness`).
+`docs/REGISTER.md` (defects understood and deliberately not fixed; first entry `first-corner-eagerness`).
 
 **The open decision of the day**: GTA re-grants `WF_ABS` to every non-player-driven car each tick (`Automobile.cpp:3775`), so an AI car
 cannot be made ABS-free from `strModelFlags`. The engine's own clamp holds slip at 0.6 and our taper's knee is 0.5, i.e. 0.1 of room.
@@ -277,7 +278,7 @@ What was wrong, in the order it was found (each one produced the same class of s
 `Corner line` (`t=`, `apex=`, `dir=`, `out=`, `bias=`, `in=`) in the log.
 
 **Still open, unchanged**: audit findings 4, 5, 7, 8, 9 from `deleg_7fee6020`; `apex-stays-referenced` and `first-corner-eagerness` in
-`docs/KNOWN-BUGS.md`.
+`docs/REGISTER.md`.
 
 ## 2026-10-24 late - corner entry/exit floor, VERIFIED
 
@@ -315,7 +316,7 @@ untracked track files (`Dist/AutosportRacingSystem/Tracks/F8.xml`, `TestOct.xml`
   closest rival (`:2450`, `ManeuverType.ChillOut`).
 - The line's speed floor at 15 mph under the apex speed (885).
 
-**Filed, not fixed**: `docs/KNOWN-BUGS.md` - `apex-stays-referenced`, `first-corner-eagerness`.
+**Filed, not fixed**: `docs/REGISTER.md` - `apex-stays-referenced`, `first-corner-eagerness`.
 **Audit findings still open** (`deleg_7fee6020`): the overshoot deadband at 0.1 m against overshoots of metres; the lean sampling a single
 node; `lineActive` vs `entryActive`; the needle-thread averaging two rivals' lanes; the turn-in exempted on a 1 Hz queue.
 
@@ -568,8 +569,12 @@ values were doubled instead: player **2.0** (`PlayerNitrousPowerMultiplier`), ri
 `GTA.Control.VehicleDuck` works; `GTA.Control.VehicleHorn` never fired and was removed. Index `2` = gamepad only;
 keyboard X still works.
 
-**Pedal law, now 1:3.** `FullPedalSpeedErrorMps = 1` (full gas at 1 m/s of deficit), `BrakeErrorMultiplier = 3`
-(full brake at 3 m/s = 6.7 mph). The chain `Speed -> IntendedSpeedChange -> throttle/brake` was audited stage by
+**Pedal law, now 1:3 as two named scales.** `FullThrottleSpeedErrorMps = 1` (full gas at 1 m/s of deficit),
+`FullBrakeSpeedErrorMps = 3` (full brake at 3 m/s = 6.7 mph, half a pedal at 1.5). Until 2026-11-01 the brake shared
+the throttle's 2 m/s, which saturated the pedal at 7 km/h of error and was reported as abrupt; 5 was tried the same
+day and judged too soft, so it ships at 3, 1.5x the old saturation. The pair reads 1:3 again, but as two constants
+rather than a multiplier. `BrakeLearnerBarMps` is half the brake (`FullBrakeSpeedErrorMps * 0.5` = 1.5 m/s), so
+"arrived still braking" means the plan is still asking for more than half a pedal at the entrance. The chain `Speed -> IntendedSpeedChange -> throttle/brake` was audited stage by
 stage and has no dead zone; the launch relay that quantised the pedal to 0/1 below 27 mph was the only one and is
 gone. `ModulatedThrottleCap` (0.99) was removed too — it existed to dodge GTA's own full-throttle grip loss, and
 dodging a native behaviour is not the same as not having it.
