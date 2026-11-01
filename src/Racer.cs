@@ -358,6 +358,8 @@ namespace ARS
         bool _brakeSampleEntranceCrossed = false;
         float _brakeSampleBrakeAtEntrance = 0f;
         float _brakeSampleOverAtEntrance = 0f;
+        bool _brakeSampleCollided = false;
+        float _brakeSampleApexOffset = 0f;
         const float BrakeApexNearMetres = 50f;
         float _brakeSampleApexGap = 0f;
         int _brakeLastApexAnnounced = -1;
@@ -371,6 +373,9 @@ namespace ARS
         float _brakeCommitEntryMetres = 0f;
         float _brakeCommitBrakeAtEntrance = 0f;
         float _brakeCommitOverAtEntrance = 0f;
+        float _brakeCommitApexClosest = float.MaxValue;
+        float _brakeCommitApexOffset = 0f;
+        bool _brakeCommitCollided = false;
         bool _brakeCommitEntryMeasured = false;
         bool _brakeCommitSawAboveApex = false;
         bool _brakeCommitFloorAtEntrance = false;
@@ -383,6 +388,8 @@ namespace ARS
         const float BrakeEntryFactorPerMetre = 0.02f;
         // Factor lost per unit of brake still applied when the car reached the entrance.
         const float BrakeEntryPenaltyShare = 0.15f;
+        // Factor lost per metre the car passed wide of the apex, measured with half its width kept clear.
+        const float BrakeApexMissPenaltyPerMetre = 0.01f;
         const float BrakeFloorLatchSeconds = 1f;
         const float BrakeOverAllowanceShare = 1.5f;
         const int BrakeOverSampleMs = 100;
@@ -1936,9 +1943,12 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _brakeSampleBrakeAtEntrance = 0f;
                 _brakeSampleOverAtEntrance = 0f;
                 _brakeSampleApexClosest = float.MaxValue;
+                _brakeSampleCollided = false;
                 _brakeOverNextSampleAt = 0;
 
             }
+
+            if (_brakeSampleApexNode >= 0 && Car.HasCollidedWithAnything) _brakeSampleCollided = true;
 
             if (_brakeSampleApexNode >= 0)
             {
@@ -1948,7 +1958,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (approach < BrakeApexNearMetres && approach < _brakeSampleApexClosest)
                 {
                     _brakeSampleApexClosest = approach;
-                    _brakeSampleApexGap = apexTrack.TrackHalfWidth - Math.Abs(ARS.SignedLaneOffset(Car.Position, apexTrack.Position, apexTrack.Direction));
+                    _brakeSampleApexOffset = ARS.SignedLaneOffset(Car.Position, apexTrack.Position, apexTrack.Direction);
+                    _brakeSampleApexGap = apexTrack.TrackHalfWidth - Math.Abs(_brakeSampleApexOffset);
                 }
             }
 
@@ -2045,6 +2056,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             _brakeCommitEntryMetres = _brakeSampleEntryMetres;
             _brakeCommitBrakeAtEntrance = _brakeSampleBrakeAtEntrance;
             _brakeCommitOverAtEntrance = _brakeSampleOverAtEntrance;
+            _brakeCommitApexClosest = _brakeSampleApexClosest;
+            _brakeCommitApexOffset = _brakeSampleApexOffset;
+            _brakeCommitCollided = _brakeSampleCollided;
             _brakeCommitEntryMeasured = _brakeSampleEntryMeasured;
             _brakeCommitSawAboveApex = _brakeSampleSawAboveApex;
             _brakeCommitFloorAtEntrance = _brakeSampleFloorAtEntrance;
@@ -2101,10 +2115,37 @@ const float RequirementLookaheadSeconds = 3.95f;
             // than the car could give, and the penalty is proportional to the brake it had to use to try.
             if (_brakeCommitBrakeAtEntrance > 0.2f && _brakeCommitOverAtEntrance > 0f)
                 step -= _brakeCommitBrakeAtEntrance * BrakeEntryPenaltyShare;
+
+            // Passing wide of the apex means it came in too fast, and the learner should pay for it - but only as long
+            // as it stayed off the walls: a collision is already punished, and twice is not twice as informative.
+            // How far short of the apex the car passed, in lane offsets rather than in metres of air: the ideal lane
+            // at the apex is the inside edge, so the miss is the share of the usable half width it did not use. Doing
+            // it with a distance to the apex *point* punishes the correct line, because that point is the centre of
+            // the road and a car hugging the inside passes five metres from it.
+            float missMetres = 0f;
+            bool punishedForMiss = false;
+            if (!_brakeCommitCollided && _brakeCommitApexClosest < float.MaxValue)
+            {
+                CornerPoint missedCorner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
+                if (missedCorner != null)
+                {
+                    float side = ARS.InsideSign(missedCorner.Angle);
+                    float usable = ARS.TrackPoints[apexNode].TrackHalfWidth - VehicleData.BoundingBox * 0.5f;
+                    float inward = _brakeCommitApexOffset * side;
+                    missMetres = ARS.Clamp(usable - inward, 0f, 2f * usable);
+                    if (missMetres > 0f)
+                    {
+                        step -= missMetres * BrakeApexMissPenaltyPerMetre;
+                        punishedForMiss = true;
+                    }
+                }
+            }
             float factor = ARS.Clamp(before + step, BrakeMinFactor, BrakeMaxFactor);
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
             bool stuck = Math.Abs(factor - before) < 0.001f;
-            AnnounceBrakeAdjustment(id + " · " + where + " · " + before.ToString("0.00")
+            AnnounceBrakeAdjustment(id + " · " + where
+                + (punishedForMiss ? " · missed by " + missMetres.ToString("0.0") + " m" : string.Empty)
+                + " · " + before.ToString("0.00")
                 + (stuck ? " = at the limit" : " → " + factor.ToString("0.00")));
         }
 

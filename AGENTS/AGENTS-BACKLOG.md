@@ -453,3 +453,25 @@ the apex and to the outside edge where it enters and leaves. `r_in + width / (1 
   is to feed the ramp from the same accessor — one line, and it invalidates the lane tuning, so do it on purpose.
 
 Magnitudes, with a 12 m road: 20 deg turn -> x7.7 corner speed, 40 deg -> x3.9, 80 deg -> x2.1, 171 deg (hairpin) -> x1.2.
+
+## corner-speed-offset — missing the apex is a speed problem, not a braking one
+
+Idea from the driver, deferred: an apex missed wide is usually a *speed* error — the car entered too fast for the
+line — and the brake factor is the wrong lever for it. Braking harder only changes where the speed is spent; it does
+not lower the speed the car carries through the apex. A per-corner speed offset (a multiplier or an additive on
+`ApexBrakingSpeed` for that corner, learned like `BrakeFactor`) would target the actual quantity.
+
+What exists today, for whoever picks it up:
+
+- the miss is measured in lane offsets at the apex: `usable - offset * InsideSign(corner.Angle)`, clamped to
+  `[0, 2 * usable]`, with `usable = TrackHalfWidth - carHalfWidth`. Zero when the car is on the inside edge, one usable
+  half width when it goes through the middle, two when it goes round the outside;
+- it is charged to the **brake factor** at 0.01 per metre, gated on no collision during that braking, in
+  `CommitBrakeLearning`;
+- the brake factor is shared by the whole car, not per corner, so a corner that is always missed wide drags the
+  factor down for every other corner it is measured on — which is the coupling this idea would break.
+
+Sketch: a per-corner `SpeedOffset` seeded at 1.0, multiplied into the corner speed the plan aims for, stepped down
+when the apex is missed and stepped back up when it is hit cleanly, with the same always-announce rule as the brake
+learner. It needs its own bounds, and it interacts with `OptimalRadius` (which already decides the apex speed), so the
+two must not both answer the same question.
