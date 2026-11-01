@@ -107,7 +107,7 @@ namespace ARS
         static readonly HashSet<VehicleClass> BlacklistedVehicleClasses = new HashSet<VehicleClass>
         {
             VehicleClass.Motorcycles, VehicleClass.Cycles, VehicleClass.Boats, VehicleClass.Helicopters,
-            VehicleClass.Planes, VehicleClass.Trains
+            VehicleClass.Planes, VehicleClass.Trains, (VehicleClass)19 // military / tracked vehicles
         };
 
         public static int RaceReward = 0;
@@ -766,6 +766,35 @@ namespace ARS
             _gridSizeItem.SelectedIndex = Array.IndexOf(GridSizeChoices, _intendedOpponents);
             _raceMenu.Add(_gridSizeItem);
             HookListTextPicker(_gridSizeItem);
+
+            _gridRosterModeItem = new NativeListItem<string>("Race Vehicle Source",
+                "Custom Cars: captured cars, then recolored clones; Hybrid: captured cars plus ARS pool; ARS Only: track/pool cars.",
+                new[] { "Custom Cars", "Hybrid", "ARS Only" });
+            _capturedGridMode = ParseEnum(RaceMenuStore.Get("CapturedGridMode", "Hybrid"), CapturedGridMode.Hybrid);
+            if (_capturedGridMode == CapturedGridMode.CustomOnly)
+                _capturedGridMode = CapturedGridMode.CustomClones; // migrate old mode
+            _gridRosterModeItem.SelectedIndex = _capturedGridMode == CapturedGridMode.CustomClones ? 0
+                : _capturedGridMode == CapturedGridMode.Standard ? 2 : 1;
+            _gridRosterModeItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index < 0 || args.Index > 2) return;
+                _capturedGridMode = args.Index == 0 ? CapturedGridMode.CustomClones
+                    : args.Index == 1 ? CapturedGridMode.Hybrid : CapturedGridMode.Standard;
+                RaceMenuStore.Set("CapturedGridMode", _capturedGridMode.ToString());
+            };
+            _raceMenu.Add(_gridRosterModeItem);
+            HookListTextPicker(_gridRosterModeItem);
+            NativeItem captureCarsItem = new NativeItem("Capture Nearby Cars", "Select up to ten existing world cars and drivers.");
+            captureCarsItem.Activated += (sender, args) => CaptureNearbyWorldCars();
+            _raceMenu.Add(captureCarsItem);
+            _capturedCarsMenu = new NativeMenu("Captured Cars", "Captured Cars", "Select a vehicle to inspect; Delete removes it from the grid.")
+            {
+                UseMouse = false,
+                DisableControls = true,
+                Alignment = Alignment.Right
+            };
+            AddSub(_raceMenu, _capturedCarsMenu);
+            _capturedCarsMenu.Shown += (sender, args) => RefreshCapturedCarsMenu();
 
             NativeMenu piSettingsMenu = new NativeMenu("PI Settings", "PI Settings", "The performance index the grid is drawn from, and how close to it a rival may sit.")
             {
@@ -1434,6 +1463,7 @@ namespace ARS
 
             _menuPool.Add(_arsMenu);
             _menuPool.Add(_raceMenu);
+            _menuPool.Add(_capturedCarsMenu);
             _menuPool.Add(piSettingsMenu);
             _menuPool.Add(rivalsMenu);
             _menuPool.Add(rivalPaceMenu);
@@ -1533,7 +1563,8 @@ namespace ARS
             TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, _intendedOpponents + 1, GridPositions);
             int gridSize = Math.Min(_intendedOpponents, Math.Max(0, GridSlotsAvailable - 1));
             if (gridSize != _intendedOpponents) Log(LogImportance.Info, "Grid: the track only yielded " + GridSlotsAvailable + " slots, so " + _intendedOpponents + " was capped to " + gridSize);
-            GridFill fill = FillCachedCandidates(gridSize);
+            bool needsPool = EffectiveCapturedGridMode != CapturedGridMode.CustomClones;
+            GridFill fill = needsPool ? FillCachedCandidates(gridSize) : GridFill.Filled;
             LoadGrid(gridSize);
 
             if (Racers.Count == 0 && _intendedOpponents > 0)
@@ -1585,6 +1616,16 @@ namespace ARS
                 + " canReadPace=" + TryComputePlayerCarPaceIndex(out float _)
                 + " lastKnown=" + _lastKnownPlayerPace);
 
+            if (_worldRosterWasChosen && _capturedWorldCars.Count == 0)
+            {
+                reason = "Captured list is empty. Capture cars again or switch the grid mode.";
+                return false;
+            }
+            if (!_worldRosterWasChosen && EffectiveCapturedGridMode == CapturedGridMode.CustomClones && _intendedOpponents > 0)
+            {
+                reason = "Capture nearby cars first or choose Hybrid / ARS Only mode.";
+                return false;
+            }
             string unsupported = VehicleMemory.UnsupportedBuildReason();
             if (unsupported != null) { reason = unsupported; return false; }
 
@@ -1612,7 +1653,8 @@ namespace ARS
                 return false;
             }
 
-            if (_intendedOpponents > 0)
+            if (_intendedOpponents > 0 && EffectiveCapturedGridMode != CapturedGridMode.CustomClones
+                && (EffectiveCapturedGridMode == CapturedGridMode.Standard || _capturedWorldCars.Count < _intendedOpponents))
             {
                 ResolvePaceTargetForGrid();
                 FillCachedCandidates(_intendedOpponents + 1);
@@ -1861,7 +1903,9 @@ namespace ARS
 
         void CleanEverything()
         {
+            ReleasePlayerCountdownLock();
             CleanRacers();
+            ReleaseUnusedCapturedCars();
             foreach (Prop p in StartLineFlares) if (CanWeUse(p)) p.Delete();
             foreach (Prop p in CustomProps) if (CanWeUse(p)) p.Delete();
             foreach (Prop p in AutoGeneratedProps) if (CanWeUse(p)) p.Delete();
@@ -1891,6 +1935,11 @@ namespace ARS
 
         void OnKeyDown(object sender, KeyEventArgs e)
         {
+            if (_capturedCarsMenu != null && _capturedCarsMenu.Visible && e.KeyCode == Keys.Delete)
+            {
+                RemoveSelectedCapturedCar();
+                return;
+            }
             if (!HotkeysEnabled || _arsMenu == null || _menuPool.AreAnyVisible) return;
             if (e.KeyCode != MenuKey || !IsMenuModifierPressed(e)) return;
             _arsMenu.Visible = true;
@@ -1933,6 +1982,7 @@ namespace ARS
                 TrackLoader.TickQueuedFlares(FlareEffects);
 
                 _menuPool.Process();
+                UpdateCapturedCarPreview();
                 HandleTrackCreator();
 
                 if (!CanWeUse(FreeCamRide))
@@ -2194,6 +2244,9 @@ namespace ARS
                     else StartCountdown();
                 }
 
+                // Lock the player vehicle and driving controls until the common GO signal.
+                UpdatePlayerCountdownLock();
+
                 if (_countdownTickMs < Game.GameTime)
                 {
                     _countdownTickMs = Game.GameTime + 1000;
@@ -2226,6 +2279,8 @@ namespace ARS
 
                         if (_countdown == 0)
                         {
+                            // Release before all racers receive Launch() in this same tick.
+                            ReleasePlayerCountdownLock();
                             foreach (Racer r in Racers)
                             {
                                 r.Launch();
@@ -2280,6 +2335,10 @@ namespace ARS
                         if (_raceTimedFinishMs == 0) _raceTimedFinishMs = Game.GameTime + (SettingsMenuStore.GetInt("TimeoutSeconds", 30) * 1000);
                     }
                 }
+
+                // AI/racer logic and other scripts can modify vehicle physics after the early tick lock.
+                // Re-apply after all racer updates, without blocking throttle or N.O.S. input.
+                UpdatePlayerCountdownLock();
 
                 if (_posUpdateTickMs < Game.GameTime)
                 {
@@ -2535,6 +2594,7 @@ namespace ARS
 
         public void CleanRacers()
         {
+            ReleasePlayerCountdownLock();
             Game.MissionFlag = false;
             foreach (Racer r in Racers)
             {
@@ -2575,6 +2635,7 @@ namespace ARS
 
         public void SetupRace(bool placecars, bool tunecars)
         {
+            ReleasePlayerCountdownLock();
 
             _raceTimedFinishMs = 0;
             LeaderboardFinish.Clear();
@@ -2596,12 +2657,99 @@ namespace ARS
             if (tunecars && SmartTuning)
             {
                 Log(LogImportance.Info, "Smart tuning queued for " + Racers.Count + " cars");
-                SmartTuner.Enqueue(Racers);
+                SmartTuner.Enqueue(Racers.Where(r => !r.WorldCarBorrowed && !r.WorldClone).ToList());
             }
 
             foreach (Racer r in Racers) if (r.Car.CurrentBlip != null) r.Car.CurrentBlip.Color = BlipColor.Blue;
             RaceStatus = RaceState.NotInitiated;
         }
+        // Keep the player on the starting grid until the common launch signal.
+        // Other scripts may change entity velocity or undo FreezePosition, so re-assert
+        // the lock after racer updates on every frame, not only when entering countdown.
+        Vehicle _countdownLockedVehicle;
+        Vector3 _countdownGridPosition;
+        float _countdownGridHeading;
+
+        void ReleasePlayerCountdownLock()
+        {
+            Vehicle locked = _countdownLockedVehicle;
+            _countdownLockedVehicle = null;
+            if (!CanWeUse(locked)) return;
+            try
+            {
+                locked.Velocity = Vector3.Zero;
+                locked.FreezePosition = false;
+            }
+            catch (Exception ex)
+            {
+                Log(LogImportance.Error, "Player grid unlock failed: " + ex.Message);
+            }
+        }
+
+        void UpdatePlayerCountdownLock()
+        {
+            Vehicle target = null;
+            if (RaceStatus == RaceState.Countdown && PlayerParticipating)
+            {
+                Ped playerPed = Game.Player.Character;
+                if (playerPed != null && playerPed.Exists() && CanWeUse(playerPed.CurrentVehicle))
+                {
+                    Vehicle current = playerPed.CurrentVehicle;
+                    // The roster can temporarily replace its driver references while
+                    // building a Custom Clones grid. PlayerParticipating is set by
+                    // AddPlayerToGrid(), so lock the player's actual vehicle instead
+                    // of relying on Racer.Driver.IsPlayer during countdown.
+                    target = current;
+                }
+            }
+
+            if (_countdownLockedVehicle != null && (target == null || _countdownLockedVehicle.Handle != target.Handle))
+                ReleasePlayerCountdownLock();
+
+            if (target == null) return;
+
+            // Block driving input for this frame. Use the same native controls GTA
+            // uses for keyboard and gamepad, but keep camera and pause available.
+            // If a binding fails, the physics lock below still gets applied.
+            try
+            {
+                Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)GTA.Control.VehicleAccelerate, true);
+                Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)GTA.Control.VehicleBrake, true);
+                Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)GTA.Control.VehicleMoveLeftRight, true);
+                Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)GTA.Control.VehicleMoveUpDown, true);
+                Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)GTA.Control.VehicleHandbrake, true);
+                Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)GTA.Control.VehicleExit, true);
+            }
+            catch (Exception ex)
+            {
+                Log(LogImportance.Error, "Player countdown controls failed: " + ex.Message);
+            }
+
+            if (_countdownLockedVehicle == null)
+            {
+                _countdownLockedVehicle = target;
+                _countdownGridPosition = target.Position;
+                _countdownGridHeading = target.Heading;
+            }
+
+            try
+            {
+                // NOS and other scripts may apply forces or clear the freeze flag.
+                // Restore the known grid spot only if movement actually occurred.
+                target.Velocity = Vector3.Zero;
+                target.FreezePosition = true;
+                if (target.Position.DistanceTo(_countdownGridPosition) > 0.08f)
+                    target.Position = _countdownGridPosition;
+                if (Math.Abs(target.Heading - _countdownGridHeading) > 0.5f)
+                    target.Heading = _countdownGridHeading;
+            }
+            catch (Exception ex)
+            {
+                Log(LogImportance.Error, "Player grid lock failed: " + ex.Message);
+                ReleasePlayerCountdownLock();
+            }
+        }
+
         public void StartCountdown()
         {
             HelpMessages.Add("The prize is: ~g~" + RaceReward.ToString() + "~w~$.");
@@ -2617,6 +2765,7 @@ namespace ARS
             }
 
             RaceStatus = RaceState.Countdown;
+            UpdatePlayerCountdownLock();
             _countdownTickMs = Game.GameTime;
             _countdown = _maxCountdown;
 
@@ -3313,6 +3462,7 @@ namespace ARS
 
             try
             {
+            ReleasePlayerCountdownLock();
             World.RenderingCamera = null;
             Function.Call(Hash._STOP_ALL_SCREEN_EFFECTS);
             if (_freeCam.IsActive)
@@ -3353,6 +3503,7 @@ namespace ARS
             }
             finally
             {
+                ReleasePlayerCountdownLock();
                 RaceStatus = RaceState.None;
                 PlayerParticipating = false;
                 LeaderboardFinish.Clear();
@@ -3906,7 +4057,8 @@ namespace ARS
         {
             if (HardcodedRoster != null && HardcodedRoster.Count > 0)
             {
-                _cachedCandidates = VehicleSelector.SelectHardcoded(HardcodedRoster, maxcars, GetRandomInt, text => Log(LogImportance.Info, text));
+                List<string> roadRoster = HardcodedRoster.Where(IsEligibleARSRosterModel).ToList();
+                _cachedCandidates = VehicleSelector.SelectHardcoded(roadRoster, maxcars, GetRandomInt, text => Log(LogImportance.Info, text));
             }
             else
             {
@@ -4078,6 +4230,11 @@ namespace ARS
                         Log(LogImportance.Error, "Skipping " + modelKey + " - model not loaded", true);
                         return false;
                     }
+                    if (!IsRoadRaceCarModel(vehicleModel))
+                    {
+                        Log(LogImportance.Info, "Skipping unsuitable racing vehicle: " + modelKey);
+                        return false;
+                    }
 
                     car = World.CreateVehicle(vehicleModel, RouteNodes[(Racers.Count + 1) * 10]);
                     car.Heading = (RouteNodes[2] - RouteNodes[0]).ToHeading();
@@ -4108,22 +4265,32 @@ namespace ARS
                 return Racers.Count > before;
             }
 
-            List<string> spawnedKeys = new List<string>();
-            foreach (string modelKey in _cachedCandidates)
+            // Custom Cars: captured originals plus copies (with randomized paint/neon).
+            // Hybrid: captured originals plus cars selected by ARS for this race.
+            // ARS Only: ignore captured selections entirely.
+            List<Vehicle> acceptedOriginals = EffectiveCapturedGridMode == CapturedGridMode.Standard
+                ? new List<Vehicle>()
+                : AddWorldCarsToGrid(maxcars, AddRacer, CreateDriverPed);
+            if (EffectiveCapturedGridMode == CapturedGridMode.CustomClones)
+                FillWorldCarClones(maxcars, acceptedOriginals, AddRacer, CreateDriverPed);
+            if (EffectiveCapturedGridMode != CapturedGridMode.CustomClones)
             {
-                if (SpawnRacer(modelKey)) spawnedKeys.Add(modelKey);
+                List<string> spawnedKeys = new List<string>();
+                foreach (string modelKey in _cachedCandidates)
+                {
+                    if (Racers.Count >= maxcars) break;
+                    if (SpawnRacer(modelKey)) spawnedKeys.Add(modelKey);
+                }
+                int cycle = 0;
+                int failures = 0;
+                while (ForceFillGrid && Racers.Count < maxcars && spawnedKeys.Count > 0 && failures < spawnedKeys.Count)
+                {
+                    bool spawned = SpawnRacer(spawnedKeys[cycle % spawnedKeys.Count]);
+                    cycle++;
+                    failures = spawned ? 0 : failures + 1;
+                }
+                if (Racers.Count < maxcars) Log(LogImportance.Info, "Grid: " + Racers.Count + " of " + maxcars + " cars spawned.");
             }
-
-            int cycle = 0;
-            int failures = 0;
-            while (ForceFillGrid && Racers.Count < maxcars && failures < spawnedKeys.Count)
-            {
-                bool spawned = SpawnRacer(spawnedKeys[cycle % spawnedKeys.Count]);
-                cycle++;
-                failures = spawned ? 0 : failures + 1;
-            }
-            if (Racers.Count < maxcars) Log(LogImportance.Info, "Grid: " + Racers.Count + " of " + maxcars + " cars spawned from " + _cachedCandidates.Count + " candidate(s), Force-Fill " + (ForceFillGrid ? "on" : "off") + ".");
-            else if (cycle > 0) Log(LogImportance.Info, "Force-Fill: repeated the pool's models " + cycle + " time(s) to reach the grid target of " + maxcars + ".");
 
             RaceStatus = RaceState.None;
             PlayerParticipating = Racers.Any(r => r.Driver != null && r.Driver.IsPlayer);
