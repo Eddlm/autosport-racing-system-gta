@@ -194,12 +194,15 @@ namespace ARS
         // Why the throttle is not at full. The pedal the plan asked for, the one the car got, and the numbers that
         // decided it, so a readout does not have to guess from the value alone.
         float _thrWanted;
+        float _brkWanted;
+        float _brkFinal;
         float _thrFinal;
         float _thrDelta;
         float _thrTarget;
         float _thrActualMps;
         float _thrFloor;
         bool _thrSlew;
+        bool _brakePlanActive;
         SpeedTerm _thrTerm;
         float _speedCorner;
         float _speedRoute;
@@ -264,6 +267,7 @@ namespace ARS
         int _defendApexNode = -1;
         const float RouteStraightSagittaShare = 0.002f;
         const float RouteBrakeCap = 0.2f;
+        const float RouteBrakeSlackMph = 5f;
         const float GsLaneThrottleMaxFloor = 1f;
         const float GsLaneOutsideFloor = 0f;
         const float ProjectionInputPerSecond = 2f;
@@ -272,9 +276,9 @@ namespace ARS
         const float OffTrackSpeedFloorMph = 20f;
         const float OffshootMinRouteAngleDeg = 2f;
         const float OffshootMinSpeedMph = 20f;
-        public const float FullPedalSpeedErrorMps = 1f;
+        public const float FullPedalSpeedErrorMps = 2f;
+        const float BrakeErrorMultiplier = 1f;
         const float BrakeLearnerBarMps = FullPedalSpeedErrorMps * BrakeErrorMultiplier;
-        const float BrakeErrorMultiplier = 3f;
 
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
         const float InputTrailSampleSpacing = 0.5f;
@@ -324,7 +328,7 @@ namespace ARS
 
         bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
-        const float BrakeFactorSeed = 0.8f;
+        const float BrakeFactorSeed = 0.9f;
         const int BrakeFactorSeedJitterHundredths = 5;
         const int BrakeConfidenceJitterHundredths = 5;
         float _brakeConfidenceBias;
@@ -352,6 +356,8 @@ namespace ARS
 
         bool _brakeSampleFloorAtEntrance = false;
         bool _brakeSampleEntranceCrossed = false;
+        float _brakeSampleBrakeAtEntrance = 0f;
+        float _brakeSampleOverAtEntrance = 0f;
         const float BrakeApexNearMetres = 50f;
         float _brakeSampleApexGap = 0f;
         int _brakeLastApexAnnounced = -1;
@@ -363,6 +369,8 @@ namespace ARS
         float _brakeCommitMaxSlideDeg = 0f;
         bool _brakeCommitWasAirborne = false;
         float _brakeCommitEntryMetres = 0f;
+        float _brakeCommitBrakeAtEntrance = 0f;
+        float _brakeCommitOverAtEntrance = 0f;
         bool _brakeCommitEntryMeasured = false;
         bool _brakeCommitSawAboveApex = false;
         bool _brakeCommitFloorAtEntrance = false;
@@ -371,13 +379,14 @@ namespace ARS
         const float BrakeSkidFactorStep = 0.1f;
         const float BrakeSkidPeakMultiple = 2.5f;
         const float BrakeCommitDelaySeconds = 0.75f;
-        const float BrakeMinFactor = 0.5f;
+        const float BrakeMinFactor = 0.25f;
         const float BrakeEntryFactorPerMetre = 0.02f;
-        const float BrakeEntryMaxStepPerEvent = 0.25f;
+        // Factor lost per unit of brake still applied when the car reached the entrance.
+        const float BrakeEntryPenaltyShare = 0.15f;
         const float BrakeFloorLatchSeconds = 1f;
         const float BrakeOverAllowanceShare = 1.5f;
         const int BrakeOverSampleMs = 100;
-        const float BrakeMaxFactor = 1.5f;
+        const float BrakeMaxFactor = 1.25f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         float _divebombBrakeBonus;
 
@@ -505,7 +514,6 @@ namespace ARS
         readonly int[] _slideSampleAt = new int[SlideAverageSlots];
         int _slideSampleIndex;
         int _slideSampleCount;
-        int _cornerLiftApex = -1;
         float _defendLaneOffset = 0f;
         float _avoidHoldLane = 0f;
         bool _avoidHoldActive = false;
@@ -514,7 +522,6 @@ namespace ARS
         bool _passLaneLatched;
         Racer _passLaneTarget;
         int _avoidHoldUntil = 0;
-        float _cornerLiftMps = 0f;
         float _appliedThrottleLastFrame = 1f;
         int _powerCounterLoggedAt = 0;
 
@@ -798,6 +805,8 @@ namespace ARS
                     _throttleLogAt = Game.GameTime + 1000;
                     ARS.Log(ARS.LogImportance.Info, "thr " + Name + ": "
                         + _thrFinal.ToString("0.00") + " final, " + _thrWanted.ToString("0.00") + " wanted, "
+                        + " | brk " + _brkFinal.ToString("0.00") + " wanted " + _brkWanted.ToString("0.00")
+                        + " (" + Control.BrakeReason + " cap " + Control.MaxBrake.ToString("0.00") + ")"
                         + " | reason " + ARS.ThrottleCause(Control.ThrottleReason, _thrDelta, _thrWanted,
                             ThrottleSlewLimited, ThrottleFloorActive, _thrFloor, _thrTerm)
                         + " | src " + ARS.SpeedSourceName(this)
@@ -1761,6 +1770,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _offtrackThrottleHeld = projectionBinds;
 
             newBrake = ComposeBrakeCap(newBrake, countersteering);
+            _brkWanted = newBrake;
 
             if (!countersteering)
             {
@@ -1791,6 +1801,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _gsFloorActiveThisTick = Control.Throttle > throttleBeforeFloor;
             _thrFloor = gsFloor;
             _thrFinal = Control.Throttle;
+            _brkFinal = Control.Brake;
             _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
 
             UpdateBrakeLearning();
@@ -1799,8 +1810,19 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float ComputeCombinedInput(float intendedSpeedChange)
         {
-            float divisor = intendedSpeedChange < 0f ? FullPedalSpeedErrorMps * BrakeErrorMultiplier : FullPedalSpeedErrorMps;
-            return ARS.Clamp(intendedSpeedChange / divisor, -1f, 1f);
+            // `ApexBrakingSpeed` already lowers the target with the distance left, using the deceleration the car has:
+            // that ramp IS the braking plan. All that is left here is the error against it, and the same metre per
+            // second converts it for both pedals. Full pedal means the car is a metre per second behind its own ramp,
+            // which is the emergency it should be. Nothing else recomputes the geometry.
+            return ARS.Clamp(intendedSpeedChange / FullPedalSpeedErrorMps, -1f, 1f);
+        }
+
+        // What the car can actually do with the pedal on the floor: the same brake factor the braking plan assumes,
+        // so a plan that is asking exactly for the limit shows as full pedal and nothing more.
+        float FullBrakeDecelMps2()
+        {
+            float grip = Math.Min(Handling.BrakingAbility * 4f, VehicleData.CurrentMechanicalGrip);
+            return Math.Max(1f, grip * Handling.Gravity * EffectiveBrakeFactor(_brakeSampleApexNode));
         }
 
         void SplitCombinedInput(float combinedInput, ref float newThrottle, ref float newBrake)
@@ -1897,7 +1919,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                     && _brakeSampleApexClosest < float.MaxValue && HasPassedApex(_brakeSampleApexNode))
                 {
                     _brakeLastApexAnnounced = _brakeSampleApexNode;
-                    AnnounceBrakeAdjustment("Apex " + _brakeSampleApexGap.ToString("0.0") + "m");
+                    ARS.Log(ARS.LogImportance.Info, "brake sample " + Name + ": apex " + _brakeSampleApexNode
+                        + " taken " + _brakeSampleApexGap.ToString("0.0") + " m from the edge");
                 }
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
@@ -1910,6 +1933,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _brakeSampleEntryHasCandidate = false;
                 _brakeSampleFloorAtEntrance = false;
                 _brakeSampleEntranceCrossed = false;
+                _brakeSampleBrakeAtEntrance = 0f;
+                _brakeSampleOverAtEntrance = 0f;
                 _brakeSampleApexClosest = float.MaxValue;
                 _brakeOverNextSampleAt = 0;
 
@@ -1986,7 +2011,13 @@ const float RequirementLookaheadSeconds = 3.95f;
 
                     if (toEntrance > 0f && toEntrance <= Car.Velocity.Length() * BrakeFloorLatchSeconds && _gsFloorActiveThisTick)
                         _brakeSampleFloorAtEntrance = true;
-                    if (toEntrance <= 0f) _brakeSampleEntranceCrossed = true;
+                    if (toEntrance <= 0f && !_brakeSampleEntranceCrossed)
+                    {
+                        _brakeSampleEntranceCrossed = true;
+                        _brakeSampleBrakeAtEntrance = Control.Brake;
+                        _brakeSampleOverAtEntrance = ARS.GetForwardSpeed(Car)
+                            - Brain.CurrentIntention.Speed - GraceBandMps();
+                    }
                 }
             }
 
@@ -2012,6 +2043,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             _brakeCommitMaxSlideDeg = _brakeSampleMaxSlideDeg;
             _brakeCommitWasAirborne = _brakeSampleWasAirborne;
             _brakeCommitEntryMetres = _brakeSampleEntryMetres;
+            _brakeCommitBrakeAtEntrance = _brakeSampleBrakeAtEntrance;
+            _brakeCommitOverAtEntrance = _brakeSampleOverAtEntrance;
             _brakeCommitEntryMeasured = _brakeSampleEntryMeasured;
             _brakeCommitSawAboveApex = _brakeSampleSawAboveApex;
             _brakeCommitFloorAtEntrance = _brakeSampleFloorAtEntrance;
@@ -2020,40 +2053,72 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         void CommitBrakeLearning()
         {
-            if (!ARS.BrakeLearning || _brakeCommitApexNode < 0) return;
+            if (_brakeCommitApexNode < 0) return;
             int apexNode = _brakeCommitApexNode;
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
             _brakeCommitApexNode = -1;
             float before = BrakeFactorForApex(apexNode);
+
+            // Every corner that was sampled speaks, whatever happened to it: no verdict at all is the one outcome the
+            // driver cannot tell apart from a broken learner.
+            if (!ARS.BrakeLearning)
+            {
+                AnnounceBrakeAdjustment("corner " + apexNode + " · learning off · factor stays " + before.ToString("0.00"));
+                return;
+            }
             bool skid = TRLateralAtSpeed > 0.01f && maxSlideDeg > TRLateralAtSpeed * BrakeSkidPeakMultiple;
 
             if (skid)
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
                 if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment("Skid detected, assuming instability adjust " + (skidFactor - before).ToString("+0.00;-0.00"));
+                AnnounceBrakeAdjustment("corner " + apexNode + " · skid, assuming instability · "
+                    + before.ToString("0.00") + " → " + skidFactor.ToString("0.00"));
                 return;
             }
             if (!_brakeCommitEntryMeasured)
             {
-                AnnounceBrakeAdjustment(_brakeCommitSawAboveApex ? "Never slowed" : "No braking");
+                AnnounceBrakeAdjustment("corner " + apexNode + " · " + (_brakeCommitSawAboveApex ? "never slowed" : "no braking")
+                    + " · factor stays " + before.ToString("0.00"));
                 return;
             }
+            int cornerIndex = -1;
+            for (int i = 0; i < ARS.Corners.Count; i++)
+                if (ARS.Corners[i].Node == apexNode) { cornerIndex = i; break; }
+            string id = "corner " + (cornerIndex >= 0 ? "#" + (cornerIndex + 1) : "?");
+
             string where = _brakeCommitEntryMetres < -0.5f
                 ? "Early by " + Math.Abs(_brakeCommitEntryMetres).ToString("0") + "m"
                 : (_brakeCommitEntryMetres > 0.5f
                     ? "Late by " + _brakeCommitEntryMetres.ToString("0") + "m"
                     : "On the mark");
 
-            float step = ARS.Clamp(-_brakeCommitEntryMetres * BrakeEntryFactorPerMetre, -BrakeEntryMaxStepPerEvent, BrakeEntryMaxStepPerEvent);
+            // No per-event cap: the error is proportional to how wrong the plan was, and the factor's own range
+            // (BrakeMinFactor..BrakeMaxFactor) is the only bound it needs.
+            float step = -_brakeCommitEntryMetres * BrakeEntryFactorPerMetre;
+
+            // It arrived at the entrance still on the brakes and still above the grace band: the plan asked for more
+            // than the car could give, and the penalty is proportional to the brake it had to use to try.
+            if (_brakeCommitBrakeAtEntrance > 0.2f && _brakeCommitOverAtEntrance > 0f)
+                step -= _brakeCommitBrakeAtEntrance * BrakeEntryPenaltyShare;
             float factor = ARS.Clamp(before + step, BrakeMinFactor, BrakeMaxFactor);
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
-            AnnounceBrakeAdjustment(where + " → " + factor.ToString("0.00"));
+            bool stuck = Math.Abs(factor - before) < 0.001f;
+            AnnounceBrakeAdjustment(id + " · " + where + " · " + before.ToString("0.00")
+                + (stuck ? " = at the limit" : " → " + factor.ToString("0.00")));
         }
 
+        const int BrakeNotifySpacingMs = 1200;
+        int _brakeNotifyAt;
+
+        // The verdict is always logged, so nothing is lost when the notification toggle is off or when the feed
+        // is full; the on-screen note is throttled because a dozen cars deciding at once would eat each other's.
         void AnnounceBrakeAdjustment(string detail)
         {
+            ARS.Log(ARS.LogImportance.Info, "brake learn " + Name + " (" + Car.DisplayName + "): " + detail);
             if (!ARS.BrakeLearningNotify) return;
+            if (Game.GameTime < _brakeNotifyAt) return;
+            _brakeNotifyAt = Game.GameTime + BrakeNotifySpacingMs;
             UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + detail);
         }
 
@@ -2068,8 +2133,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             return corner.EndNode >= 0 ? corner.EndNode : OffsetCornerNode(corner.Node, corner.LengthEnd);
         }
         const int BrakeTargetLeadMeters = 2;
-        const float CornerLiftMphPerSecond = 10f;
-        const float CornerLiftGraceMph = 5f;
+        // The band above the corner speed inside which the car counts as having arrived at it: detection only, the
+        // target itself stays exactly the corner speed. It is not a taste - it is the speed half the car's braking
+        // can still take off inside the reaction horizon, so strong brakes tolerate a bigger error and weak ones a
+        // smaller. At 4.1 m/s2 that is 0.62 m/s (1.4 mph); at 10 m/s2, 1.5 m/s (3.4 mph).
+        const float GraceHorizonSeconds = 0.3f;
+        float GraceBandMps() { return 0.5f * FullBrakeDecelMps2() * GraceHorizonSeconds; }
 
         int BrakeTargetBaseNode(CornerPoint corner, int fallbackNode)
         {
@@ -2159,24 +2228,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
             if (cornerSpd <= 5 && Brain.Corner != null) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
 
-            if (NextApexNode != _cornerLiftApex)
-            {
-                _cornerLiftApex = NextApexNode;
-                _cornerLiftMps = 0f;
-            }
-            if (cornerSpd < 999f)
-            {
-
-                float liftTarget = cornerSpd + _cornerLiftMps;
-                if (HasPassedBrakingTarget()
-                    && ARS.GetForwardSpeed(Car) <= liftTarget + ARS.MphToMps(CornerLiftGraceMph))
-                    _cornerLiftMps += ARS.MphToMps(CornerLiftMphPerSecond) * TickScale;
-                cornerSpd += _cornerLiftMps;
-            }
-
             if (NextApexNode >= 0 && HasPassedApex(NextApexNode)) cornerSpd = 999f;
 
             bool cornerPlansABrake = cornerSpd < 999f;
+            // A corner braking plan is an instruction to slow down for a corner, not a drift: the pedal caps that
+            // exist to keep a sliding car under control have no business clipping it.
+            _brakePlanActive = cornerPlansABrake;
 
             {
                 float slopeAngleDeg = ARS.RadToDeg(GetFollowPointSlopeAngle());
@@ -2217,6 +2274,11 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph);
+            // While the corner plan is asking for brake, the curvature has nothing to add: the car is slowing for a
+            // corner it will take on the line, and the road's own radius would ask for less than that line allows -
+            // by more than ten metres a second on Figureight, arriving one second later than it could be used.
+            if (cornerPlansABrake && ARS.GetForwardSpeed(Car) > cornerTerm) routeTerm = 999f;
+
             _speedCorner = cornerTerm;
             _speedRoute = routeTerm;
             Brain.CurrentIntention.Speed = Math.Min(cornerTerm, routeTerm);
@@ -2429,7 +2491,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             bool countersteering = IsFullCountersteer();
             Control.MaxBrakeFromABS = AbsCapLevel();
-            Control.MaxBrakeFromCountersteer = GlideCap(Control.MaxBrakeFromCountersteer, countersteering ? CountersteerPedalCap : 1f);
+            Control.MaxBrakeFromCountersteer = GlideCap(Control.MaxBrakeFromCountersteer,
+                countersteering && !_brakePlanActive ? CountersteerPedalCap : 1f);
 
             if (ARS.AbsEnabled && Math.Abs(Control.Brake) > 0.2f && Game.GameTime > _absLoggedAt)
             {

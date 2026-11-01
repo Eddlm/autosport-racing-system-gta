@@ -2017,8 +2017,13 @@ namespace ARS
                         CornerPoint marked = ARS.Corners[apexIndex];
                         if (marked.Node < 0 || marked.Node >= ARS.TrackPoints.Count) continue;
                         Vector3 apexPos = ARS.TrackPoints[marked.Node].Position + Vector3.WorldUp * (ApexMarkHeight + 3f);
+                        Racer apexReader = DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null);
+                        string brakeLine = apexReader != null
+                            ? "~n~b " + apexReader.BrakeFactorForApex(marked.Node).ToString("0.00", CultureInfo.InvariantCulture)
+                            : string.Empty;
                         DrawText(apexPos, "Apex #" + (apexIndex + 1) + "~n~"
-                            + Math.Round(marked.DetectedRadius) + "r / " + Math.Round(marked.OptimalRadius) + "r",
+                            + Math.Round(marked.DetectedRadius) + "r / " + Math.Round(marked.OptimalRadius) + "r"
+                            + brakeLine,
                             Color.White, 0.5f);
                     }
 

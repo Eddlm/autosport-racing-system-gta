@@ -346,6 +346,9 @@ namespace ARS
         static readonly List<string> ApexRejects = new List<string>();
 
         // Share of the usable half width the line wants at each node: +1 the outside, -1 the inside, 0 the centre.
+        // Share of the road width the optimal line is asked to reach at the ends of a corner. 0.5 = the centre
+        // line, which is the classic line; less than that is a tighter, slower circle.
+        const float OptimalRadiusExcursionShare = 0.25f;
         const int LaneFieldApexPlateauNodes = 3;
         const float LaneFieldApproachNodes = 180f;   // nominal 6 s at 30 m/s
         const float LaneFieldSaturationPerRadian = 0.75f;
@@ -515,6 +518,21 @@ namespace ARS
         // which is the fastest there is when the corner is taken at a constant speed.
 
         // The same total turn OptimalRadiusOf uses, exposed for the table log.
+
+        // Metres between the exit of the previous corner and the entrance of this one: the straight the line has to
+        // work with. Zero when there is no previous corner to measure from.
+        static float OptimalRoomMetres(CornerPoint corner)
+        {
+            int previous = ARS.Corners.Count - 1;
+            if (previous < 0) return 0f;
+            CornerPoint before = ARS.Corners[previous];
+            if (before.EndNode < 0 || corner.StartNode < 0) return 0f;
+            float room = ARS.TrackPoints[corner.StartNode].CumulativeDistance
+                - ARS.TrackPoints[before.EndNode].CumulativeDistance;
+            if (!ARS.IsPointToPoint && room < 0f && ARS.RouteLengthMeters > 0f) room += ARS.RouteLengthMeters;
+            return room;
+        }
+
         static float OptimalTurnOf(CornerPoint corner)
         {
             int count = ARS.TrackPoints.Count;
@@ -536,7 +554,21 @@ namespace ARS
             if (turn < 1f || turn > 179f) return 0f;
             float width = 2f * Math.Max(1f, ARS.NodeHalfWidths[corner.Node]);
             float inner = Math.Max(1f, corner.DetectedRadius - width * 0.5f);
-            float optimal = inner + width / (1f - (float)Math.Cos(turn * Math.PI / 360f));
+            // How far out the line is asked to be at the ends of the corner, as a share of the road's width. The radius
+            // is what that excursion costs: over a turn of `turn` it is `excursion / (1 - cos(turn / 2))`, so each
+            // metre of excursion is worth metres of radius, and the radius decides the corner speed.
+            float optimal = inner + width * OptimalRadiusExcursionShare / (1f - (float)Math.Cos(turn * Math.PI / 360f));
+
+            // The arc touches the outside of the road at `radius * turn / 2` metres from the apex, on both sides. That
+            // has to fit in the room there actually is, or the line leaves the road before it comes back parallel to
+            // it: a corner whose neighbour is a hundred metres behind cannot be taken on a four-hundred-metre circle.
+            float room = OptimalRoomMetres(corner);
+            if (room > 5f)
+            {
+                float capped = 2f * room / (turn * (float)Math.PI / 180f);
+                if (capped < optimal) optimal = capped;
+            }
+
             return optimal > 5000f ? 5000f : optimal;
         }
 
@@ -689,6 +721,7 @@ namespace ARS
                     + " supposed=" + apex.SupposedRadius.ToString("0.0")
                     + " angle=" + apex.Angle.ToString("0.0")
                     + " turn=" + OptimalTurnOf(apex).ToString("0.0")
+                    + " room=" + OptimalRoomMetres(apex).ToString("0")
                     + " span=" + apex.StartNode + "-" + apex.EndNode
                     + " " + outside);
             }
