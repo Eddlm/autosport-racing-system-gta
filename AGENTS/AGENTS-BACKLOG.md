@@ -433,3 +433,23 @@ One lap of the driver's own: not visible in the car. Accepted as it stands — t
 rate the ramp was drawn. If it is revisited, the shape of the fix is to cap the *change* per tick instead of the
 position (compare against the offset at the lane node rather than at the car), so the field governs once the
 handover is over.
+
+## corner-optimal-radius — one switch, and what it does not touch
+
+`CornerPoint.OptimalRadius` is the circle of the fastest line through the corner: tangent to the inside edge at
+the apex and to the outside edge where it enters and leaves. `r_in + width / (1 - cos(turn / 2))`.
+
+- **the turn is the corner's total, not the apex's local angle.** `TrackPoint.Angle` is the chord-to-chord turn over
+  `2 * GeometryWindowNodes`, so the total is `sum(Angle over StartNode..EndNode) / (2 * GeometryWindowNodes)`. Using
+  `corner.Angle` directly was wrong by a factor of four on a hairpin (38.7 deg instead of 171) and made the radius,
+  and therefore the corner speed, nonsense.
+- **one switch, `ARS.UseOptimalRadius`, read through `ARS.CornerRadiusForSpeed(c)`.** Every consumer goes through
+  that accessor so the whole thing reverts with one boolean: `CornerApexSpeed` and the table's own `corner.Speed`
+  (which is what the merge logic turns into seconds between corners). Both now agree; before this they did not.
+- **it does not touch the lane field.** `BuildLaneField` still sizes its ramp and its rate from `DetectedRadius`.
+  That is deliberate: the lane was tuned against the road's own geometry, and the field has no speed to reason
+  about. The consequence to remember: on a shallow corner the optimal radius can be several times the detected one,
+  so the car arrives much faster than the lane ramp was drawn for. If the line starts reading late there, the change
+  is to feed the ramp from the same accessor — one line, and it invalidates the lane tuning, so do it on purpose.
+
+Magnitudes, with a 12 m road: 20 deg turn -> x7.7 corner speed, 40 deg -> x3.9, 80 deg -> x2.1, 171 deg (hairpin) -> x1.2.

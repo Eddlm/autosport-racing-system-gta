@@ -509,6 +509,29 @@ namespace ARS
             }
         }
 
+
+        // The largest circle that stays on the road through this corner: tangent to the inside edge at the apex and to
+        // the outside edge where it enters and leaves it. The line it describes is the one with the least curvature,
+        // which is the fastest there is when the corner is taken at a constant speed.
+        static float OptimalRadiusOf(CornerPoint corner)
+        {
+            // The turn of the whole corner, not the local angle at the apex: `Angle` is the chord-to-chord turn
+            // over 2 * GeometryWindowNodes, so summing it across the span and dividing by that window gives the
+            // total. A hairpin turns ~170 deg, a sweeper ~20, and the two want opposite things from this formula.
+            int count = ARS.TrackPoints.Count;
+            int span = ArcSpan(corner.StartNode, corner.EndNode, count);
+            if (span < 2) return 0f;
+            float swept = 0f;
+            for (int i = 0; i <= span; i++)
+                swept += ARS.TrackPoints[ArcNode(corner.StartNode, i, count)].Angle;
+            float turn = Math.Abs(swept) / (2f * GeometryWindowNodes);
+            if (turn < 1f || turn > 179f) return 0f;
+            float width = 2f * Math.Max(1f, ARS.NodeHalfWidths[corner.Node]);
+            float inner = Math.Max(1f, corner.DetectedRadius - width * 0.5f);
+            float optimal = inner + width / (1f - (float)Math.Cos(turn * Math.PI / 360f));
+            return optimal > 5000f ? 5000f : optimal;
+        }
+
         static int ArcSpan(int fromNode, int toNode, int count)
         {
             int span = toNode - fromNode;
@@ -654,6 +677,7 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Apex " + (listed + 1) + "/" + ARS.Corners.Count
                     + " node=" + apex.Node
                     + " R=" + apex.DetectedRadius.ToString("0.0")
+                    + " optimal=" + apex.OptimalRadius.ToString("0")
                     + " supposed=" + apex.SupposedRadius.ToString("0.0")
                     + " angle=" + apex.Angle.ToString("0.0")
                     + " span=" + apex.StartNode + "-" + apex.EndNode
@@ -1061,9 +1085,10 @@ namespace ARS
                 LengthStart = apexPosition - startPosition,
                 LengthEnd = endPosition - apexPosition,
                 SupposedRadius = tightestRadius,
-                DetectedRadius = detectedRadius,
-                Speed = (float)Math.Sqrt(9.81f * tightestRadius)
+                DetectedRadius = detectedRadius
             };
+            corner.OptimalRadius = OptimalRadiusOf(corner);
+            corner.Speed = (float)Math.Sqrt(9.81f * ARS.CornerRadiusForSpeed(corner));
 
             if (ARS.Corners.Count > 0)
             {

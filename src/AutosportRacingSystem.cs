@@ -46,7 +46,7 @@ namespace ARS
 
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip, ShowSlideAngle
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip, ShowSlideAngle, ShowThrottleReason
     }
     public partial class ARS : Script
     {
@@ -163,10 +163,20 @@ namespace ARS
 
         public static float MaxCrestLift = 0.4f;
         public static float BrakeAimDepth = 0f;
+        // The radius the car's corner speed is computed from. `OptimalRadius` is the circle of the fastest line
+        // through the corner; `DetectedRadius` is the road's own bend. One switch, because it may be reverted.
+        public const bool UseOptimalRadius = true;
+        public static float CornerRadiusForSpeed(CornerPoint c)
+        {
+            return UseOptimalRadius && c.OptimalRadius > 0f ? c.OptimalRadius : c.DetectedRadius;
+        }
+
         public const float LaneDynamicRadius = 400f;
         public const float LaneAbsoluteMetres = 25f;
         // The approach the absolute owns before a corner: the car has to be on the outside this long before it.
         public const float LanePrepSeconds = 6f;
+        // Leaving an apex, nobody prepares the next one for this long: the car is still in this one.
+        public const float LaneApexCooldownSeconds = 1f;
         // The outside is asked for gently: never further than this from the car's own lane.
         public const float LaneOutsidePullMetres = 1f;
         // Where the lane is read. Longer than the pursuit on purpose: the car has to start moving before
@@ -213,6 +223,7 @@ namespace ARS
         { Options.ShowWheelSlip, false },
         { Options.ShowFrontSlip, false },
         { Options.ShowSlideAngle, false },
+        { Options.ShowThrottleReason, false },
         { Options.ShowGsProjection, false },
         { Options.ShowGLine, false },
         { Options.ShowRouteRadius, false }
@@ -1401,6 +1412,8 @@ namespace ARS
             };
             developmentMenu.Add(slipSourceItem);
 
+            AddDebugCheckbox(developmentMenu, Options.ShowThrottleReason, "Show Throttle Reason",
+                "Centre of the screen, top: why the throttle is not at full, with the plan's own numbers, and the one line a second in the log.");
             AddDebugCheckbox(developmentMenu, Options.ShowSlideAngle, "Show Slide Angle", "The focus car's slide angle in the subtitle, averaged live over the last half second of frames: signed, the sign being which side the car is sliding to, and not filtered for the car's direction of turn.");
 
             AddSub(_arsMenu, _raceMenu);
@@ -1981,6 +1994,9 @@ namespace ARS
                     }
                 }
 
+                if (DebugToggles[Options.ShowThrottleReason])
+                    DrawThrottleReason(DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null));
+
                 if (DebugToggles[Options.ShowRouteRadius])
                 {
                     Racer radiusRacer = DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null);
@@ -1996,6 +2012,16 @@ namespace ARS
                 }
                 if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
                 {
+                    for (int apexIndex = 0; apexIndex < ARS.Corners.Count; apexIndex++)
+                    {
+                        CornerPoint marked = ARS.Corners[apexIndex];
+                        if (marked.Node < 0 || marked.Node >= ARS.TrackPoints.Count) continue;
+                        Vector3 apexPos = ARS.TrackPoints[marked.Node].Position + Vector3.WorldUp * (ApexMarkHeight + 3f);
+                        DrawText(apexPos, "Apex #" + (apexIndex + 1) + "~n~"
+                            + Math.Round(marked.DetectedRadius) + "r / " + Math.Round(marked.OptimalRadius) + "r",
+                            Color.White, 0.5f);
+                    }
+
                     if (DrawTrackAnalysisExtras)
                     {
                         if (PlayerRacer != null)
@@ -2065,15 +2091,6 @@ namespace ARS
                         if (laneSpan >= (int)Racer.SteerLookaheadMaxNodes)
                             World.DrawMarker(MarkerType.DebugSphere, laneEnd, Vector3.Zero, Vector3.Zero, new Vector3(0.35f, 0.35f, 0.35f), Color.Black);
 
-                        int adoptedNode = racer.LineCornerNode;
-                        if (adoptedNode >= 0 && adoptedNode < ARS.TrackPoints.Count)
-                        {
-                            Vector3 apexPos = ARS.TrackPoints[adoptedNode].Position + Vector3.WorldUp * ApexMarkHeight;
-                            int cornerIndex = ARS.Corners.FindIndex(c => c.Node == adoptedNode);
-                            int apexNumber = cornerIndex >= 0 ? cornerIndex + 1 : 0;
-                            float apexRadius = cornerIndex >= 0 ? ARS.Corners[cornerIndex].DetectedRadius : ARS.TrackPoints[adoptedNode].PreciseCurveRadius;
-                            DrawText(apexPos + Vector3.WorldUp * 3f, (apexNumber > 0 ? "Apex #" + apexNumber : "Apex") + "~n~" + Math.Round(apexRadius) + "r", Color.White, 0.5f);
-                        }
 
                     }
 
@@ -2235,7 +2252,7 @@ namespace ARS
                     if (NoCollision) ApplyNoCollision(true);
                 }
 
-                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowSlideAngle] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
+                if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowSlideAngle] || DebugToggles[Options.ShowThrottleReason] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
                 {
                     Vector3 focusPos = Game.Player.Character.Position;
                     DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
@@ -2953,7 +2970,7 @@ namespace ARS
         public static float CornerApexSpeed(CornerPoint c, Racer r)
         {
 
-            float radius = c.DetectedRadius;
+            float radius = CornerRadiusForSpeed(c);
             if (radius <= 0f) radius = c.GetPreciseRadius();
 
             if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AiConstants.MaxSpeed;
@@ -3638,6 +3655,135 @@ namespace ARS
             if (type == ManeuverType.ChillOut)
                 return "CHILL~n~" + Math.Round(Racer.ChillStandoffDistance).ToString(CultureInfo.InvariantCulture) + " m";
             return string.Empty;
+        }
+
+
+        string _thrHudTop = string.Empty;
+        int _thrHudAt;
+
+        static string ThrottleReasonName(ThrottleReason reason)
+        {
+            switch (reason)
+            {
+                case ThrottleReason.Tcs: return "tcs";
+                case ThrottleReason.Overspeed: return "off track";
+                case ThrottleReason.Rival: return "rival";
+                case ThrottleReason.ChillOut: return "chill";
+                case ThrottleReason.Yield: return "yield";
+                case ThrottleReason.Offtrack: return "off track";
+                case ThrottleReason.GridWait: return "grid";
+                case ThrottleReason.Countersteer: return "countersteer";
+                case ThrottleReason.StuckRecovery: return "recovery";
+                case ThrottleReason.Stability: return "stability";
+                case ThrottleReason.Kick: return "kick";
+                default: return "plan";
+            }
+        }
+
+
+        // 999 means "nothing to respect": print it as a dash rather than as a speed.
+
+        // Why the pedal is where it is, in words that carry the number that decided it. `Plan` is not a cause: it
+        // means no cap is binding, and the base pedal is the speed error divided by the error that asks for full
+        // throttle. So say which of those it is.
+
+        // Which calculation fixed the target speed, said specifically: the apex it came from and how far away, or the
+        // curvature being followed and its radius. This is the answer to "why did it lift", for the route side.
+        public static string SpeedSourceName(Racer racer)
+        {
+            SpeedTerm term = racer.ThrottleTerm;
+            if (term == SpeedTerm.Corner)
+            {
+                int index = -1;
+                for (int i = 0; i < ARS.Corners.Count; i++)
+                    if (ARS.Corners[i].Node == racer.SpeedSourceNode) { index = i; break; }
+                return "corner " + (index >= 0 ? "#" + (index + 1) : "?")
+                    + " @" + Math.Round(racer.SpeedSourceMetres).ToString(CultureInfo.InvariantCulture) + "m"
+                    + " (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
+            }
+            if (term == SpeedTerm.Route)
+                return "curva (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
+            if (term == SpeedTerm.Standoff) return "standoff";
+            if (term == SpeedTerm.Chicane) return "chicane";
+            if (term == SpeedTerm.GridWait) return "grid";
+            if (term == SpeedTerm.Finished) return "finished";
+            return "no limit";
+        }
+
+        public static string ThrottleCause(ThrottleReason reason, float delta, float wanted, bool slew, bool floorActive,
+            float floorLevel, SpeedTerm term)
+        {
+            string label;
+            if (reason == ThrottleReason.Plan)
+            {
+                if (wanted >= 0.995f) label = "full";
+                else if (delta <= 0f) label = "over " + SpeedTermName(term);
+                else if (slew) label = "rising";
+                else label = "error " + delta.ToString("0.0", CultureInfo.InvariantCulture) + "/"
+                        + Racer.FullPedalSpeedErrorMps.ToString("0.0", CultureInfo.InvariantCulture);
+            }
+            else label = ThrottleReasonName(reason);
+            if (floorActive) label += " +floor " + Math.Round(floorLevel * 100f).ToString(CultureInfo.InvariantCulture) + "%";
+            return label;
+        }
+
+        static string SpeedNumber(float mps)
+        {
+            return mps >= 900f ? "-" : mps.ToString("0.0", CultureInfo.InvariantCulture);
+        }
+
+        static string SpeedTermName(SpeedTerm term)
+        {
+            switch (term)
+            {
+                case SpeedTerm.Corner: return "corner";
+                case SpeedTerm.Route: return "route";
+                case SpeedTerm.Standoff: return "standoff";
+                case SpeedTerm.Chicane: return "chicane";
+                case SpeedTerm.GridWait: return "grid";
+                case SpeedTerm.Finished: return "finished";
+                case SpeedTerm.Forced: return "forced";
+                default: return "free";
+            }
+        }
+
+        // Centre of the screen, top: the pedal the car got, the one the plan asked for, and the arithmetic between
+        // them. Rebuilt a few times a second, never per frame.
+
+        // Colour by the speed difference between the car and the speed it means to be doing, with no numbers:
+        // red when it is too fast for it, yellow when it is on it, green when it is too slow and pulling.
+        static Color ThrottleColour(float delta)
+        {
+            float t = ARS.Clamp(delta / Racer.FullPedalSpeedErrorMps, -1f, 1f);
+            int r, g, b;
+            if (t <= 0f)
+            {
+                float k = -t;
+                r = (int)(235f - 0f * k);
+                g = (int)(210f - 150f * k);
+                b = (int)(60f + 0f * k);
+            }
+            else
+            {
+                r = (int)(235f - 155f * t);
+                g = (int)(210f + 15f * t);
+                b = (int)(60f + 30f * t);
+            }
+            return Color.FromArgb(235, r, g, b);
+        }
+
+        void DrawThrottleReason(Racer racer)
+        {
+            if (racer == null || racer.ThrottleFinal >= 0.98f) return;
+            if (Game.GameTime >= _thrHudAt)
+            {
+                _thrHudAt = Game.GameTime + 100;
+                string source = SpeedSourceName(racer);
+                _thrHudTop = source == "no limit" ? string.Empty : source;
+            }
+            if (_thrHudTop.Length == 0) return;
+            DrawText(new Vector2(0.5f, 0.045f), _thrHudTop, ThrottleColour(racer.ThrottleDelta),
+                DrawTextFont.Standard, DrawTextAlign.Center, 0.5f);
         }
 
         public static void DrawText(Vector3 pos, string t, Color c, float scale)

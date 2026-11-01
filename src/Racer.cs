@@ -187,6 +187,39 @@ namespace ARS
 
         CornerPoint _laneCornerInside;
         int _laneTraceAt;
+        int _apexPassedAt;
+        int _throttleLogAt;
+        bool _apexWasAhead;
+
+        // Why the throttle is not at full. The pedal the plan asked for, the one the car got, and the numbers that
+        // decided it, so a readout does not have to guess from the value alone.
+        float _thrWanted;
+        float _thrFinal;
+        float _thrDelta;
+        float _thrTarget;
+        float _thrActualMps;
+        float _thrFloor;
+        bool _thrSlew;
+        SpeedTerm _thrTerm;
+        float _speedCorner;
+        float _speedRoute;
+
+        public float ThrottleWanted { get { return _thrWanted; } }
+        public float ThrottleFinal { get { return _thrFinal; } }
+        public float ThrottleDelta { get { return _thrDelta; } }
+        public float ThrottleTargetMps { get { return _thrTarget; } }
+        public float ThrottleActualMps { get { return _thrActualMps; } }
+        public float ThrottleFloorLevel { get { return _thrFloor; } }
+        public bool ThrottleFloorActive { get { return _gsFloorActiveThisTick; } }
+        public bool ThrottleSlewLimited { get { return _thrSlew; } }
+        public SpeedTerm ThrottleTerm { get { return _thrTerm; } }
+        // The two limits the target speed is the smaller of: the corner's own (from OptimalRadius) and the
+        // road's curvature. Kept apart so a readout can say which one lifted the throttle.
+        public int SpeedSourceNode { get { return Brain.CurrentIntention.TermNode; } }
+        public float SpeedSourceMetres { get { return Brain.CurrentIntention.TermMetres; } }
+        public float SpeedSourceRadius { get { return Brain.CurrentIntention.TermRadius; } }
+        public float CornerTermMps { get { return _speedCorner; } }
+        public float RouteTermMps { get { return _speedRoute; } }
         float _probeDeepest;
         int _probeNode = -1;
         float _probeApexOffset;
@@ -239,7 +272,7 @@ namespace ARS
         const float OffTrackSpeedFloorMph = 20f;
         const float OffshootMinRouteAngleDeg = 2f;
         const float OffshootMinSpeedMph = 20f;
-        const float FullPedalSpeedErrorMps = 1f;
+        public const float FullPedalSpeedErrorMps = 1f;
         const float BrakeLearnerBarMps = FullPedalSpeedErrorMps * BrakeErrorMultiplier;
         const float BrakeErrorMultiplier = 3f;
 
@@ -715,7 +748,10 @@ namespace ARS
             float toApex = lineCorner != null ? MetresToNode(lineCorner.Node) : 0f;
             float prepMetres = speedMps * ARS.LanePrepSeconds;
             bool apexStillAhead = laneCornerInside != null && MetresToNode(laneCornerInside.Node) > 0f;
-            bool absoluteMode = Lap > 0 && !ChainedApex(lineCorner, prepMetres) && (apexStillAhead
+            if (_apexWasAhead && !apexStillAhead) _apexPassedAt = Game.GameTime;
+            _apexWasAhead = apexStillAhead;
+            bool apexCooldown = Game.GameTime - _apexPassedAt < ARS.LaneApexCooldownSeconds * 1000;
+            bool absoluteMode = Lap > 0 && !apexCooldown && !ChainedApex(lineCorner, prepMetres) && (apexStillAhead
                 || (lineCorner != null && toApex <= Math.Max(ARS.LaneAbsoluteMetres, prepMetres)));
             if (absoluteMode)
             {
@@ -758,6 +794,26 @@ namespace ARS
             {
                 _laneTraceAt = Game.GameTime + 1000;
                 string mode = absoluteMode ? "ABS" : (laneReason == LaneReason.CurveLean ? "DYN" : "OWN");
+                if (_thrFinal < ThrottleLogBelow && Game.GameTime > _throttleLogAt)
+                {
+                    _throttleLogAt = Game.GameTime + 1000;
+                    ARS.Log(ARS.LogImportance.Info, "thr " + Name + ": "
+                        + _thrFinal.ToString("0.00") + " final, " + _thrWanted.ToString("0.00") + " wanted, "
+                        + " | reason " + ARS.ThrottleCause(Control.ThrottleReason, _thrDelta, _thrWanted,
+                            ThrottleSlewLimited, ThrottleFloorActive, _thrFloor, _thrTerm)
+                        + " | src " + ARS.SpeedSourceName(this)
+                        + " | d " + _thrDelta.ToString("+0.00;-0.00") + " tgt " + _thrTarget.ToString("0.0")
+                        + " corner " + (_speedCorner >= 900f ? "-" : _speedCorner.ToString("0.0"))
+                        + " curva " + (_speedRoute >= 900f ? "-" : _speedRoute.ToString("0.0"))
+                        + " now " + _thrActualMps.ToString("0.0") + " (" + _thrTerm + ")"
+                        + " | floor " + _thrFloor.ToString("0.00") + (ThrottleSlewLimited ? " slew" : "")
+                        + " | tcs " + Control.MaxThrottleFromTCS.ToString("0.00")
+                        + " stab " + Control.MaxThrottleFromStability.ToString("0.00")
+                        + " over " + Control.MaxThrottleFromOverspeed.ToString("0.00")
+                        + " rival " + Control.MaxThrottleFromRival.ToString("0.00")
+                        + " offt " + Control.MaxThrottleFromOffTrack.ToString("0.00")
+                        + " rec " + Control.MaxThrottleFromRecovery.ToString("0.00"));
+                }
                 ARS.Log(ARS.LogImportance.Info, "lane " + Name + ": node " + CurrentTrackPoint.Node
                     + " offset " + steerRefOffset.ToString("0.00")
                     + ", field " + _laneField.ToString("0.00") + " @lane node " + laneNode
@@ -1618,6 +1674,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (TeamRole == Team.Cop) Car.SirenActive = true;
 
         }
+        const float ThrottleLogBelow = 0.9f;
         const float PedalSlewRate = 6f;
         const float PedalSlewMaxPerTick = 0.5f;
 
@@ -1682,6 +1739,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
 
             float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
+            _thrDelta = intendedSpeedChange;
+            _thrTarget = Brain.CurrentIntention.Speed;
+            _thrActualMps = currentForwardSpeed;
+            _thrTerm = Brain.CurrentIntention.Term;
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
 
@@ -1707,6 +1768,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float projectionInput = Math.Max(1f - ProjectionInputPerSecond * _projectionOutsideSeconds, -ProjectionBrakeFloor);
             bool projectionBinds = !countersteering && newThrottle > Math.Max(projectionInput, 0f);
             newThrottle = ComposeThrottleCap(newThrottle, projectionBinds, countersteering);
+            _thrWanted = newThrottle;
             _offtrackThrottleHeld = projectionBinds;
 
             newBrake = ComposeBrakeCap(newBrake, countersteering);
@@ -1726,6 +1788,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 else if (newThrottle > projectionInput) newThrottle = projectionInput;
             }
 
+            _thrSlew = Math.Abs(newThrottle - Control.Throttle) > inputChange * 0.99f;
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
 
@@ -1737,6 +1800,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             float throttleBeforeFloor = Control.Throttle;
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
             _gsFloorActiveThisTick = Control.Throttle > throttleBeforeFloor;
+            _thrFloor = gsFloor;
+            _thrFinal = Control.Throttle;
             _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
 
             UpdateBrakeLearning();
@@ -2059,29 +2124,44 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (BaseBehavior == RacerBaseBehavior.GridWait)
             {
                 Brain.CurrentIntention.Speed = 200f;
+                Brain.CurrentIntention.Term = SpeedTerm.GridWait;
                 return;
             }
             if (BaseBehavior == RacerBaseBehavior.FinishedRace)
             {
                 Brain.CurrentIntention.Speed = 20f;
+                Brain.CurrentIntention.Term = SpeedTerm.Finished;
                 return;
             }
             if (BaseBehavior == RacerBaseBehavior.FinishedStandStill)
             {
                 Brain.CurrentIntention.Speed = 0f;
+                Brain.CurrentIntention.Term = SpeedTerm.Finished;
                 return;
             }
             Brain.CurrentIntention.Speed = AiConstants.MaxSpeed;
+            Brain.CurrentIntention.Term = SpeedTerm.None;
 
             float cornerSpd = 999f;
+            int cornerSourceNode = -1;
             if (NextApexNode >= 0)
             {
 
-                if (CornerRequiresBraking(NextApexNode)) cornerSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
+                if (CornerRequiresBraking(NextApexNode))
+                {
+                    cornerSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
+                    cornerSourceNode = NextApexNode;
+                }
                 if (NextApexNode2 >= 0 && CornerRequiresBraking(NextApexNode2))
-                    cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode2, NextApexSpeed2)));
+                {
+                    float second = Math.Max(2, ApexBrakingSpeed(NextApexNode2, NextApexSpeed2));
+                    if (second < cornerSpd) { cornerSpd = second; cornerSourceNode = NextApexNode2; }
+                }
                 if (NextApexNode3 >= 0 && CornerRequiresBraking(NextApexNode3))
-                    cornerSpd = Math.Min(cornerSpd, Math.Max(2, ApexBrakingSpeed(NextApexNode3, NextApexSpeed3)));
+                {
+                    float third = Math.Max(2, ApexBrakingSpeed(NextApexNode3, NextApexSpeed3));
+                    if (third < cornerSpd) { cornerSpd = third; cornerSourceNode = NextApexNode3; }
+                }
             }
 
             float followTrackSpd = RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint);
@@ -2143,11 +2223,29 @@ const float RequirementLookaheadSeconds = 3.95f;
                 float chicaneBoost = ARS.MphToMps(10f);
                 cornerSpd += chicaneBoost;
                 followTrackSpd += chicaneBoost;
+                Brain.CurrentIntention.Term = SpeedTerm.Chicane;
             }
 
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph);
+            _speedCorner = cornerTerm;
+            _speedRoute = routeTerm;
             Brain.CurrentIntention.Speed = Math.Min(cornerTerm, routeTerm);
+            if (cornerTerm <= routeTerm)
+            {
+                Brain.CurrentIntention.Term = SpeedTerm.Corner;
+                Brain.CurrentIntention.TermNode = cornerSourceNode;
+                Brain.CurrentIntention.TermMetres = cornerSourceNode >= 0 ? MetresToNode(cornerSourceNode) : 0f;
+                CornerPoint source = cornerSourceNode >= 0 ? ARS.Corners.Find(c => c.Node == cornerSourceNode) : null;
+                Brain.CurrentIntention.TermRadius = source != null ? ARS.CornerRadiusForSpeed(source) : 0f;
+            }
+            else
+            {
+                Brain.CurrentIntention.Term = SpeedTerm.Route;
+                Brain.CurrentIntention.TermNode = -1;
+                Brain.CurrentIntention.TermMetres = 0f;
+                Brain.CurrentIntention.TermRadius = Brain.CurrentPerception.CurveRadiusToFollowPoint;
+            }
 
             Control.MaxBrakeFromRoute = routeTerm <= cornerTerm && !cornerPlansABrake ? RouteBrakeCap : 1f;
 
@@ -2161,6 +2259,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     float standoffMargin = ARS.Remap(standoffRival.Distance, 0f, ChillStandoffDistance, 0f, ChillStandoffEscapeMargin, true);
                     Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, standoffRival.RivalRacer.Car.Velocity.Length() + standoffMargin);
+                    Brain.CurrentIntention.Term = SpeedTerm.Standoff;
                 }
             }
 

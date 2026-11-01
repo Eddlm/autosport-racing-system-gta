@@ -129,6 +129,11 @@ namespace ARS
         public class Intention
         {
             public float Speed;
+            public SpeedTerm Term = SpeedTerm.None;
+            // Which node and which geometry produced that term: the apex for a corner, the follow point for the route.
+            public int TermNode = -1;
+            public float TermMetres;
+            public float TermRadius;
             public float IntendedSpeedChange;
 
             public float SteerLimitedSpeed;
@@ -262,6 +267,19 @@ namespace ARS
         public bool Chevron;
     }
 
+    // Which term fixed Intention.Speed. Published so a readout can say *why* the car is not at full throttle.
+    public enum SpeedTerm
+    {
+        None,
+        GridWait,
+        Finished,
+        Corner,
+        Route,
+        Standoff,
+        Chicane,
+        Forced
+    }
+
     public enum ThrottleReason
     {
         Plan,
@@ -372,6 +390,9 @@ namespace ARS
         public float SupposedRadius = 999f;
 
         public float DetectedRadius = 999f;
+        // The radius of the fastest line through this corner: the circle tangent to the inside at the apex and to
+        // the outside where it leaves. `r_in + width / (1 - cos(angle / 2))`. Set at load; 0 if never computed.
+        public float OptimalRadius = 0f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }
