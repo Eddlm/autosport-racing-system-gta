@@ -367,6 +367,9 @@ namespace ARS
         public Vector3 Direction = Vector3.Zero;
         public float GeneralCurveRadius = 999f;
         public float PreciseCurveRadius = 999f;
+        // The circle the road is on here, measured over a fixed amount of turn either side of the node instead of
+        // over a fixed length: the one a corner's speed can be judged on. 999 when the road never turns that far.
+        public float SweepCurveRadius = 999f;
         public float ExactRadius = 999f;
         public float Elevation = 0f;
         public float TrackHalfWidth = 5f;

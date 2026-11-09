@@ -201,6 +201,13 @@ namespace ARS
         }
         const int GeometryWindowNodes = 10;
         const int PointToPointEndBandNodes = 50;
+        // How much turn a node's radius is measured over, either side, and how far the walk may go to find it. A
+        // fixed distance measures a short corner's straights along with it - a 90 degree bend in 20 m reads 3.9 m
+        // over an 8 m chord, and a straight line over 25 m - while a fixed amount of turn asks every corner the
+        // same question: how far does the road travel per degree here. 200 nodes is a 570 m radius at 20 degrees,
+        // past the ceiling, so the walk stops there rather than crawling down every straight.
+        const float SweepRadiusDegrees = 20f;
+        const int SweepMaxNodes = 200;
 
         static void ComputePointGeometry(TrackPoint point, int nodeCount)
         {
@@ -221,6 +228,7 @@ namespace ARS
                 if (float.IsNaN(point.Angle) || float.IsInfinity(point.Angle)) point.Angle = 0f;
                 point.GeneralCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 10, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 10, nodeCount)], ARS.RouteNodes[point.Node]);
                 point.PreciseCurveRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 4, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 4, nodeCount)], ARS.RouteNodes[point.Node]);
+                point.SweepCurveRadius = SweptRadius(point.Node, nodeCount);
                 point.ExactRadius = Circumradius3D(ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)], ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)], ARS.RouteNodes[point.Node]);
             }
             else
@@ -232,6 +240,7 @@ namespace ARS
                 point.GeneralCurveRadius = 999f;
                 point.PreciseCurveRadius = 999f;
                 point.ExactRadius = 999f;
+                point.SweepCurveRadius = 999f;
             }
 
             if (ARS.NodeHalfWidths.ContainsKey(point.Node)) point.TrackHalfWidth = ARS.NodeHalfWidths[point.Node];
@@ -639,7 +648,6 @@ namespace ARS
             if (count < 1) return;
 
             float regionRadius = ARS.CornerCeilingMeters;
-            const int smoothingNodes = 2;
             const int exitRelaxationNodes = 4;
             const int minimumCornerNodes = 25;
             const float closeCornerSeconds = 2f;
@@ -649,7 +657,7 @@ namespace ARS
             {
                 for (int node = 0; node < count; node++)
                 {
-                    if (SmoothedRadius(node, count, smoothingNodes) >= regionRadius)
+                    if (ARS.TrackPoints[node].SweepCurveRadius >= regionRadius)
                     {
                         scanStart = node;
                         break;
@@ -674,10 +682,9 @@ namespace ARS
             for (int position = 0; position < scanNodes.Count; position++)
             {
                 int node = scanNodes[position];
-                float radius = SmoothedRadius(node, count, smoothingNodes);
-                float generalRadius = ARS.TrackPoints[node].GeneralCurveRadius;
+                float radius = ARS.TrackPoints[node].SweepCurveRadius;
                 int direction = Math.Sign(ARS.TrackPoints[node].Angle);
-                bool cornerSignal = radius < regionRadius && generalRadius < regionRadius;
+                bool cornerSignal = radius < regionRadius;
 
                 if (!inCorner)
                 {
@@ -693,7 +700,7 @@ namespace ARS
 
                 if (direction != 0 && direction != cornerDirection && cornerSignal)
                 {
-                    AddCornerRegion(scanNodes, cornerStartPosition, position - 1, count, smoothingNodes, minimumCornerNodes, closeCornerSeconds);
+                    AddCornerRegion(scanNodes, cornerStartPosition, position - 1, count, minimumCornerNodes, closeCornerSeconds);
                     cornerStartPosition = position;
                     cornerDirection = direction;
                     relaxedNodes = 0;
@@ -707,7 +714,7 @@ namespace ARS
 
                 if (relaxedNodes >= exitRelaxationNodes)
                 {
-                    AddCornerRegion(scanNodes, cornerStartPosition, position - relaxedNodes, count, smoothingNodes, minimumCornerNodes, closeCornerSeconds);
+                    AddCornerRegion(scanNodes, cornerStartPosition, position - relaxedNodes, count, minimumCornerNodes, closeCornerSeconds);
                     inCorner = false;
                     cornerStartPosition = -1;
                     cornerDirection = 0;
@@ -716,7 +723,7 @@ namespace ARS
             }
 
             if (inCorner)
-                AddCornerRegion(scanNodes, cornerStartPosition, scanNodes.Count - 1, count, smoothingNodes, minimumCornerNodes, closeCornerSeconds);
+                AddCornerRegion(scanNodes, cornerStartPosition, scanNodes.Count - 1, count, minimumCornerNodes, closeCornerSeconds);
 
             float widestApexRadius = 0f;
             foreach (CornerPoint counted in ARS.Corners) widestApexRadius = Math.Max(widestApexRadius, counted.SupposedRadius);
@@ -1049,7 +1056,7 @@ namespace ARS
             return true;
         }
 
-        static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int smoothingNodes, int minimumCornerNodes, float closeCornerSeconds)
+        static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int minimumCornerNodes, float closeCornerSeconds)
         {
             if (startPosition < 0 || endPosition < startPosition || endPosition - startPosition + 1 < minimumCornerNodes)
                 return;
@@ -1059,19 +1066,16 @@ namespace ARS
 
             int apexPosition = startPosition;
             float tightestRadius = float.MaxValue;
-            float detectedRadius = float.MaxValue;
             for (int position = startPosition; position <= endPosition; position++)
             {
-                float radius = ARS.TrackPoints[scanNodes[position]].PreciseCurveRadius;
-                if (radius < tightestRadius) tightestRadius = radius;
-
-                float smoothed = SmoothedRadius(scanNodes[position], count, smoothingNodes);
-                if (smoothed < detectedRadius)
+                float radius = ARS.TrackPoints[scanNodes[position]].SweepCurveRadius;
+                if (radius < tightestRadius)
                 {
-                    detectedRadius = smoothed;
+                    tightestRadius = radius;
                     apexPosition = position;
                 }
             }
+            float detectedRadius = tightestRadius;
 
             if (float.IsNaN(tightestRadius) || float.IsInfinity(tightestRadius)) return;
 
@@ -1265,24 +1269,52 @@ namespace ARS
             survivor.LengthEnd = exitDistance;
         }
 
-        static float SmoothedRadius(int node, int count, int halfWindow)
+        // The radius of one node, over a fixed turn either side: the circle through the two ends of that sweep and
+        // the node itself. 999 when the road never turns that far - a straight is not a 900 m corner.
+        static float SweptRadius(int node, int count)
         {
-            float curvature = 0f;
-            int samples = 0;
-            for (int offset = -halfWindow; offset <= halfWindow; offset++)
+            int left = SweepEnd(node, count, -1);
+            int right = SweepEnd(node, count, 1);
+            if (left < 0 || right < 0) return 999f;
+            return Circumradius3D(ARS.RouteNodes[left], ARS.RouteNodes[right], ARS.RouteNodes[node]);
+        }
+
+        // One end of a sweep: the node where the heading has moved `SweepRadiusDegrees` from the start node's, or where
+        // the turn reverses - a chicane is two corners, never one impossibly tight one. -1 when neither happens.
+        static int SweepEnd(int node, int count, int direction)
+        {
+            float start = HeadingRadians(node, count);
+            float window = SweepRadiusDegrees * (float)(Math.PI / 180.0);
+            float sign = 0f;
+            int last = -1;
+            int reach = Math.Min(count / 2, SweepMaxNodes);
+            for (int step = 1; step <= reach; step++)
             {
-                int sample = ARS.IsPointToPoint
-                    ? node + offset
-                    : Wrap(node + offset, count);
-                if (sample < 0 || sample >= count) continue;
-
-                float radius = ARS.TrackPoints[sample].PreciseCurveRadius;
-                if (radius <= 0f || radius >= 999f || float.IsNaN(radius) || float.IsInfinity(radius)) continue;
-                curvature += 1f / radius;
-                samples++;
+                int sample = ARS.IsPointToPoint ? node + direction * step : Wrap(node + direction * step, count);
+                if (sample < 0 || sample >= count) break;
+                float delta = HeadingRadians(sample, count) - start;
+                while (delta > Math.PI) delta -= (float)(2.0 * Math.PI);
+                while (delta < -Math.PI) delta += (float)(2.0 * Math.PI);
+                if (Math.Abs(delta) >= window) return sample;
+                if (Math.Abs(delta) > 0.02f)
+                {
+                    float turned = delta > 0f ? 1f : -1f;
+                    if (sign != 0f && turned != sign) return last;
+                    sign = turned;
+                }
+                last = sample;
             }
+            // Ran out of reach without turning far enough: the road is straighter than the window, which is not a
+            // corner of this measure. A reversal above still returns the piece it had covered.
+            return -1;
+        }
 
-            return samples > 0 ? 1f / (curvature / samples) : 999f;
+        static float HeadingRadians(int node, int count)
+        {
+            int from = ARS.IsPointToPoint ? Math.Max(0, node - 2) : Wrap(node - 2, count);
+            int to = ARS.IsPointToPoint ? Math.Min(count - 1, node + 2) : Wrap(node + 2, count);
+            Vector3 offset = ARS.RouteNodes[to] - ARS.RouteNodes[from];
+            return (float)Math.Atan2(offset.Y, offset.X);
         }
 
         public static float Circumradius3D(Vector3 a, Vector3 b, Vector3 midpoint)

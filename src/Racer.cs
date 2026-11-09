@@ -283,7 +283,6 @@ namespace ARS
 
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
-        const float RouteStraightSagittaShare = 0.001f;   // TEMPORAL: era 0,002
         const float RouteBrakeCap = 0.2f;
         const float RouteBrakeSlackMph = 5f;
         const float GsLaneThrottleMaxFloor = 1f;
@@ -3946,12 +3945,13 @@ const float RequirementLookaheadSeconds = 3.95f;
         }
 
         // Both samples are one second long. The far one sits between 1 s and 2 s ahead of the car; the slid
-        // one ends wherever `Slid Radius Lead` puts it. A one-second arc is a shorter fit, so it needs the
-        // sagitta guard tight or every straight reads as a bend.
+        // one ends wherever `Slid Radius Lead` puts it.
         const float RouteRadiusFarEndSeconds = 2f;
         const float RouteRadiusSpanSeconds = 1f;
 
-        // One two-second window of the route ending `endSeconds` ahead of the car, fitted to a circle; 999 when it reads straight.
+        // The tightest swept radius on the window ending `endSeconds` ahead: a read of the node table, not a circle
+        // fitted through four points. A fit over an arc shorter than its chord reads straight, and the window is a
+        // second of travel - longer on a fast car - so the fit said "no bend" exactly where the bend was.
         float RouteRadiusWindow(float endSeconds, ref int nearNode, ref int midNode, ref int farNode)
         {
             int count = ARS.TrackPoints.Count;
@@ -3960,44 +3960,25 @@ const float RequirementLookaheadSeconds = 3.95f;
             int end = Math.Min((int)(speed * Math.Max(endSeconds, 0f)), count - 1);
             int start = end - span;
             if (span < 8) return 999f;
-            int middleNear = span / 3;
-            int middleFar = (span * 2) / 3;
 
             int carNode = CurrentTrackPoint.Node;
-            int n0 = WrappedNode(carNode + start);
-            int n1 = WrappedNode(carNode + start + middleNear);
-            int n2 = WrappedNode(carNode + start + middleFar);
-            int n3 = WrappedNode(carNode + end);
-
-            // What gets drawn is the arc's beginning, centre and end - the three points that say where the window
-            // sits and how long it is. The four fit points stay where they are: they are spread that way on purpose
-            // and moving them would change the radius, not the picture.
-            nearNode = n0;
-            midNode = WrappedNode(carNode + start + span / 2);
-            farNode = n3;
-
-            Vector3 p0 = ARS.TrackPoints[n0].Position;
-            Vector3 p1 = ARS.TrackPoints[n1].Position;
-            Vector3 p2 = ARS.TrackPoints[n2].Position;
-            Vector3 p3 = ARS.TrackPoints[n3].Position;
-
-            float r;
-            float chord = Vector2.Distance(new Vector2(p0.X, p0.Y), new Vector2(p3.X, p3.Y));
-            if (middleNear == 0 || middleFar == middleNear || chord < 1f)
+            float r = 999f;
+            int tightestNode = -1;
+            for (int offset = start; offset <= end; offset++)
             {
-                r = 999f;
-            }
-            else if (Sagitta(p0, p1, p2, p3, chord) < RouteStraightSagittaShare * chord)
-            {
-                r = 999f;
-            }
-            else
-            {
-                r = TrackLoader.FittedCircleRadius(p0, p1, p2, p3);
-                if (r >= 999f) r = ARS.Circumradius3D(p0, p3, p2);
+                int node = WrappedNode(carNode + offset);
+                float radius = ARS.TrackPoints[node].SweepCurveRadius;
+                if (radius < r)
+                {
+                    r = radius;
+                    tightestNode = node;
+                }
             }
 
-            if (float.IsNaN(r) || float.IsInfinity(r)) return 999f;
+            // What gets drawn is where the window sits, how long it is, and the node that set the number.
+            nearNode = WrappedNode(carNode + start);
+            midNode = tightestNode;
+            farNode = WrappedNode(carNode + end);
             return r;
         }
 
@@ -4037,14 +4018,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             return LiveRouteRadius;
         }
 
-        float Sagitta(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float chord)
-        {
-            float dx = (p3.X - p0.X) / chord;
-            float dy = (p3.Y - p0.Y) / chord;
-            float near = Math.Abs((p1.X - p0.X) * dy - (p1.Y - p0.Y) * dx);
-            float far = Math.Abs((p2.X - p0.X) * dy - (p2.Y - p0.Y) * dx);
-            return Math.Max(near, far);
-        }
 
         int WrappedNode(int node)
         {
