@@ -586,6 +586,18 @@ The axle gate that used to guard that halving, and `UndersteerDegrees` with it, 
 **One deliberate silence**: the recovery rejoin's throttle kick card (`cc469ee`) buys a rotation on purpose — the slide sharing the arm-time ask's sign is wanted, so the blend and `IsFullCountersteer` stand down for it while the card plays (`KickWantsSlide` `Racer.cs`) and the ordinary handover resumes at the fold. A slide on the opposite side is not carded and gets no silence.
 
 ## Lane systems — where on the track the car aims
+
+**CURRENT — 2026-11-09, build 1777. This supersedes the paragraphs below and the sticky-apex law above.** The lane
+has one ask and one corner. `_laneHeldCorner` is the nearest *laned* corner (radius under `IdealLineMaxRadiusMeters`)
+beyond the steering lookahead, held until its apex passes or `CornerSpent` declares it done — past the entrance, under
+way, under 0.05 g of longitudinal load — and the picker will not re-adopt it: `NearestApexAhead` skips both spent corners
+and the plan's `_skippedApexes`, so plan and lane look past the same ones. One phase opens four seconds before the
+entrance: the aim is the shaped field *at* the entrance until the lookahead crosses it, then the field under the
+lookahead. Out is a lead capped by a clock — 0.1 m on the first asking tick, 2 m after `LanePrepRampSeconds` — and in is
+the aim itself, uncapped. The side always comes from `TrackTurnSign` between two headings. **Gone:** `LaneAbsoluteMetres`,
+`laneCornerInside`, `_lineCornerNode`, `LineApexStickyMeters`, `ChainedApex`, `ApexAdvanceNodes`,
+`LaneApexCooldownSeconds`. The paragraphs below still name them because they are the history of how this was arrived at,
+not a description of the code.
 Resolved in `ComputeSteering` (`Racer.cs:769-815`), later overriding earlier, over a base of **the lane the car is already in**:
 **the precomputed field** (`TrackPoint.LaneLineShare`, one float per node built at load by `TrackLoader.BuildLaneField` and read `LanePreviewSeconds` ahead as `share × (roadWide − carHalfWidth)`), through three modes — **absolute** while a corner's apex is still ahead of the lane's own lookahead (`ApexAheadOfLookahead`, the **one gate that both selects a corner and forgets it**) — the values come from `LaneAbsoluteMetres` and `LanePrepSeconds`, the window is `max(...)` of the two; **dynamic** (own lane plus `LaneInsetPerRadius` / R **metres** toward the inside, **no speed factor** since 1583 — the inset is a property of the bend, not of how fast the car arrives — capped only at `laneLimit`) while the aim node's radius is under `LaneDynamicRadius`; **own lane** otherwise —
 then **avoidance**, **stuck recovery**, the **Defend card**, and **`ApplyRivalWalls`**, which clamps.

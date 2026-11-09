@@ -271,7 +271,7 @@ What was wrong, in the order it was found (each one produced the same class of s
    signature of a sign asymmetry rather than a timing one. Side-neutral form: `(demand - ownLane) * -cornerDir > 0`.
 2. **The cross teleport needed a reversal** (build 910). Comparing aim and demand against the car's lane alone pinned the aim to the car's
    lane every tick of an out-in, so the line reached the centre and hovered. It now also needs `gap * _laneRate < 0`.
-3. **The adopted corner owns the line** (build 909) — `LineApexStickyMeters` of hysteresis on `NearestApexAhead`, and the ratchet is no longer wiped when the
+3. **The adopted corner owns the line** (build 909 — superseded 1777: the latch is `_laneHeldCorner`, released at the apex or by `CornerSpent`, and `LineApexStickyMeters` / `_lineCornerNode` are gone) — `LineApexStickyMeters` of hysteresis on `NearestApexAhead`, and the ratchet is no longer wiped when the
    blend window flickers (it contains the speed floor, which moves with grip).
 4. **`steerRefOffset` measured in the car's own node frame** (build 905) — against the steer reference far ahead it carried the
    sagitta `L^2/2R`, up to 9 m on a 50 m corner, with the sign following the corner.
