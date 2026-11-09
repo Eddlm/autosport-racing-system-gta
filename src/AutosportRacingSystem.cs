@@ -167,18 +167,13 @@ namespace ARS
         public static float BrakeAimDepth = 0f;
 
         public const float LaneDynamicRadius = 400f;
-        // The approach the absolute owns: the car has to be on the outside this long before a corner.
         public const float LanePrepSeconds = 6f;
-        // Nobody prepares the next apex for this long after leaving one.
         public const float LaneOutsidePullMetres = 1f;
         public const float LanePreviewSeconds = 1f;
-        // The shaped lane is a place to BE, so it is read ahead, not under the car.
         public const float LaneShapePreviewSeconds = 0.5f;
         public const float LaneShapeOuterMarginMetres = 0.5f;
-        // Corner selection lookahead, floored: at a crawl the honest lookahead is nothing.
         public const float LaneApexMinReachMeters = 20f;
         public const float LanePrepOutsideCapMetres = 2f;
-        // Which side of a corner's angle sign is its inside: one place, so a mirror is one number.
         public const float LaneInsideSign = -1f;
         public static float InsideSign(float cornerAngle) { return LaneInsideSign * Math.Sign(cornerAngle); }
         public const bool AbsoluteLaneEnabled = true;
@@ -277,9 +272,6 @@ namespace ARS
         static bool _nullCarReported;
         public static ulong WheelPowerOffset = 0x0;
 
-        // Only 282940568 is confirmed against a live probe (the paved stretches of Senora Rd); the other
-        // three came from an earlier collection and are kept because a road hash wrongly dropped costs the
-        // outside line on a corner, while an extra one only keeps it. 1187676648 appeared twice.
         public static List<int> Road = new List<int> { 282940568, 1187676648, -108464011, -1084640111 };
 
         public static List<string> HelpMessages = new List<string>();
@@ -3781,7 +3773,6 @@ namespace ARS
 
         static string SpeedNumber(float mps)
         {
-            // 999 means "nothing to respect": print it as a dash, never as a speed.
             return mps >= 900f ? "-" : mps.ToString("0.0", CultureInfo.InvariantCulture);
         }
 

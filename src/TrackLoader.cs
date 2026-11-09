@@ -351,7 +351,6 @@ namespace ARS
 
         static readonly List<string> ApexRejects = new List<string>();
 
-        // The lane shape is one cubic: parallel to the track at the outer edge, crossing the centre at the apex.
         public static float LaneShapeAngleScale = 0.75f;
         const int LaneShapeApexHoldNodes = 1;
         const int LaneShapeMinExitNodes = 6;
@@ -363,8 +362,6 @@ namespace ARS
             if (ARS.TrackPoints.Count > 1) BuildLaneField(ARS.TrackPoints.Count);
         }
 
-        // One probe every SurfaceSampleNodes nodes, carried across the gap; a failed probe stays road, so a
-        // miss never turns the outside approach off. The route's off-road share comes out of the same pass.
         // Below this share of road grip the outside line is not worth preparing: no out approach here.
         internal const float OutsideApproachMinGrip = 0.875f;
 
@@ -429,8 +426,6 @@ namespace ARS
                 + seen.Count + " distinct materials (" + ARS.RouteLengthMeters.ToString("0") + " m)");
         }
 
-        // One probe per apex while the probe is unproven: the same material everywhere would mean it is not
-        // reading the ground, and a whole-route scan of a broken probe is hundreds of wasted shape tests.
         static void LogSurfaceAtApexes()
         {
             for (int i = 0; i < ARS.Corners.Count; i++)
@@ -535,7 +530,6 @@ namespace ARS
                 shapedStarts[c] = previousNode;
             }
 
-            // The exit is the entry run the other way, written after every entry exists.
             for (int c = 0; c < corners; c++)
             {
                 CornerPoint corner = ARS.Corners[c];
@@ -653,8 +647,6 @@ namespace ARS
 
             float regionRadius = ARS.CornerCeilingMeters;
             const int exitRelaxationNodes = 4;
-            // A blip in the swept radius is shorter than this; anything longer is a corner, and the blur
-            // rule downstream rejects the wide, gentle runs. Nodes are metres here only by convention.
             const int minimumCornerNodes = 8;
             const float closeCornerSeconds = 2f;
 
@@ -1059,7 +1051,6 @@ namespace ARS
             return true;
         }
 
-        // A corner counts only if the road between it and the previous apex turns or slows; else it is noise.
         static bool IsWorthAnApex(CornerPoint previous, CornerPoint corner, int count)
         {
             if (corner.Speed < previous.Speed * CornerWorthySpeedShare) return true;
@@ -1096,7 +1087,6 @@ namespace ARS
                 if (radius < tightestRadius) tightestRadius = radius;
             }
 
-            // The apex is the FIRST node as tight as the corner gets, not the tightest node there is.
             int apexPosition = startPosition;
             float apexTolerance = tightestRadius * (1f + ApexSameRadiusShare);
             for (int position = startPosition; position <= endPosition; position++)
@@ -1181,7 +1171,6 @@ namespace ARS
             };
             corner.Speed = (float)Math.Sqrt(9.81f * tightestRadius);
 
-            // A corner is dropped when no straight lies between it and the previous apex and it is not 5% slower.
             if (ARS.Corners.Count > 0 && !IsWorthAnApex(ARS.Corners[ARS.Corners.Count - 1], corner, count))
             {
                 CornerPoint kept = ARS.Corners[ARS.Corners.Count - 1];
@@ -1340,7 +1329,6 @@ namespace ARS
                 }
                 last = sample;
             }
-            // Ran out of reach without turning far enough: the road is straighter than the window, so 999.
             return -1;
         }
 

@@ -360,7 +360,6 @@ namespace ARS
         public Vector3 Direction = Vector3.Zero;
         public float GeneralCurveRadius = 999f;
         public float PreciseCurveRadius = 999f;
-        // The circle the road is on here, over a fixed turn either side of the node.
         public float SweepCurveRadius = 999f;
         public float ExactRadius = 999f;
         public float Elevation = 0f;
@@ -368,7 +367,6 @@ namespace ARS
         public float CumulativeDistance = 0f;
         public float LaneLineShare;
         public bool LaneShaped;
-        // Which apex's shape wrote this node: a shape holds only while its own corner is current.
         public int LaneShapeApex = -1;
         public int LaneShapeStart = -1;
         // Grip under this node, sampled at load: 1 on road, OffRoadGrip on anything else. A wheel in contact
