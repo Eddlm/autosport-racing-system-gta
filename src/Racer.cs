@@ -288,8 +288,16 @@ namespace ARS
         const float RouteBrakeSlackMph = 5f;
         const float GsLaneThrottleMaxFloor = 1f;
         const float GsLaneOutsideFloor = 0f;
-        const float ProjectionSlowdownMphPerSecond = 4f;
-        const float ProjectionRecoveryMphPerSecond = 4f;
+        // The lift runs from nothing at the edge to the full demand here, four metres past it.
+        const float ProjectionFullLiftMetres = 4f;
+        // How fast the demand follows its target: one time constant, so a flick of the trigger moves it by a few per cent.
+        const float ProjectionChaseSeconds = 0.5f;
+        // Armed at half the lateral grip the car actually has, not at a fixed G: a slow car and a fast one reach their
+        // limit at different numbers, and the share is what they have in common.
+        const float ProjectionArmGripShare = 0.5f;
+        // Its authority, in pedal: cancel a full throttle (1) and add half a brake (0.5) on top. It can never undo a
+        // brake, because the ceiling only ever competes for the lower input.
+        const float ProjectionMaxLift = 1f + 0.5f;
         // The brake may not take the car below this floor, in mph. Zero means the projection may bring the car to a
         // stop: there is no promise here that it cannot.
         const float OffTrackSpeedFloorMph = 0f;
@@ -342,6 +350,7 @@ namespace ARS
         bool _projectionCutActive = false;
         float _exitRoom01;
         bool _exitRoomArmed;
+        float _projectionLift = 0f;
         float _projectionDropMph = 0f;
 
         Color _projectionPathColor = Color.Blue;
@@ -1891,15 +1900,18 @@ const float RequirementLookaheadSeconds = 3.95f;
             FindLowestIntendedSpeed();
             ApplyProjectionSpeedCut();
 
-            Brain.CurrentIntention.IntendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
-
-            float intendedSpeedChange = Brain.CurrentIntention.IntendedSpeedChange;
+            float intendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
+            Brain.CurrentIntention.IntendedSpeedChange = intendedSpeedChange;
             _thrDelta = intendedSpeedChange;
             _thrTarget = Brain.CurrentIntention.Speed;
             _thrActualMps = currentForwardSpeed;
             _thrTerm = Brain.CurrentIntention.Term;
 
             float combinedInput = ComputeCombinedInput(intendedSpeedChange);
+
+            // The projection competes for the lower input, like every other ceiling: it can cut into the plan's throttle
+            // and past it into a brake, and it can never raise a brake the plan asked for.
+            combinedInput = Math.Min(combinedInput, 1f - _projectionLift);
 
             if (SlipPedalCut && _slip.Readable && _slip.FrontPct > 100f)
             {
@@ -1989,8 +2001,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
         }
 
-        // The projection is a speed offset, not a pedal one: while the one-second point is off the road the target
-        // bleeds at ProjectionSlowdownMphPerSecond and recovers at ProjectionRecoveryMphPerSecond, never under the floor.
+        // The projection chases a target instead of bleeding at a rate. The target is nothing at the edge and the full
+        // demand at ProjectionFullLiftMetres past it; the demand follows it with one time constant, so a one-frame flick
+        // cannot move it and the lift still arrives well inside a second.
         void ApplyProjectionSpeedCut()
         {
             MeasureProjectionOutside(1f);
@@ -2000,15 +2013,22 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _projectionDropMph = 0f;
                 return;
             }
-            float floorMps = ARS.MphToMps(ProjectionSpeedFloorMph());
-            float planMps = Brain.CurrentIntention.Speed;
-            _projectionCutActive = _projectionWidening && ARS.MpsToMph(Car.Velocity.Length()) > ProjectionSpeedFloorMph();
-            _projectionDropMph = _projectionCutActive
-                ? _projectionDropMph + ProjectionSlowdownMphPerSecond * TickScale
-                : Math.Max(0f, _projectionDropMph - ProjectionRecoveryMphPerSecond * TickScale);
-            _projectionDropMph = Math.Min(_projectionDropMph, ARS.MpsToMph(Math.Max(0f, planMps - floorMps)));
-            float limited = Math.Max(planMps - ARS.MphToMps(_projectionDropMph), floorMps);
-            if (limited < Brain.CurrentIntention.Speed) Brain.CurrentIntention.Speed = limited;
+            // Under load only: without lateral Gs the car is off its line, not going wide.
+            float projectionGripGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
+            bool projectionLoaded = projectionGripGs > 0f
+                && Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) > ProjectionArmGripShare * projectionGripGs;
+            _projectionCutActive = projectionLoaded && _projectionOutsideMeters > 0f;
+
+            float projectionTargetLift = _projectionCutActive
+                ? Math.Min(_projectionOutsideMeters / ProjectionFullLiftMetres, 1f) * ProjectionMaxLift
+                : 0f;
+
+            float projectionChase = ARS.Clamp(TickScale / ProjectionChaseSeconds, 0f, 1f);
+            _projectionLift += (projectionTargetLift - _projectionLift) * projectionChase;
+
+            // The readout speaks in speed: what the brake side of this lift is worth, in mph, and only once it brakes.
+            float projectionBrakeShare = Math.Max(0f, _projectionLift - 1f);
+            _projectionDropMph = ARS.MpsToMph(projectionBrakeShare * FullBrakeSpeedErrorMps);
         }
 
         void MeasureProjectionOutside(float seconds)
@@ -2038,7 +2058,10 @@ const float RequirementLookaheadSeconds = 3.95f;
                 outsideOffset = Math.Abs(signedOffset);
                 carOffset = Math.Abs(ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction));
                 _projectionOutsideMeters = outsideOffset - halfWidth;
-                _projectionWidening = outsideOffset > carOffset;
+                // How far off the car's own line the projection sits, in the car's own frame: on a bend the two local
+                // frames have rotated, so the pair is only comparable when both are measured against the same node.
+                float projectionLocal = Math.Abs(ARS.SignedLaneOffset(proj, CurrentTrackPoint.Position, CurrentTrackPoint.Direction));
+                _projectionWidening = projectionLocal > carOffset;
             }
 
             if (ARS.DebugToggles[Options.ShowGsProjection] && ARS.DebugFocusRacer == this && Game.GameTime >= _offshootLogAt)
