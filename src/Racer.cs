@@ -20,7 +20,7 @@ namespace ARS
         public static readonly bool OffTrackThrottle = true;
         public static readonly bool CrestGate = true;
         public static readonly bool StabilityCap = true;
-        public static readonly bool GsLaneFloor = false;
+        public static readonly bool GsLaneFloor = true;
         public static readonly bool OverspeedCorrection = true;
         public static readonly bool SlopeGrip = true;
     }
@@ -269,8 +269,6 @@ namespace ARS
         public LaneReason LaneRequestReason { get { return _laneRequestReason; } }
         public float LaneRequest { get { return _laneRequest; } }
 
-        float _cornerSpd = 999f;
-
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
         const float GsLaneThrottleMaxFloor = 1f;
@@ -338,7 +336,6 @@ namespace ARS
 
         bool _gsFloorActiveThisTick = false;
 
-        bool _offtrackThrottleHeld = false;
         int _offshootLogAt = 0;
         const float BrakeFactorSeed = 0.75f;
         const int BrakeFactorSeedJitterHundredths = 5;
@@ -1859,6 +1856,12 @@ const float RequirementLookaheadSeconds = 3.95f;
                 combinedInput = Math.Min(combinedInput, Math.Max(0f, 1f - over));
             }
             bool countersteering = IsFullCountersteer();
+
+            // The exit floor is read before the composite, so the slew still owns every pedal change.
+            UpdateExitRoom();
+            float gsFloor = GsLaneThrottleFloorValue(out bool gsInsideRegime);
+            if (countersteering) gsFloor = 0f;
+
             SplitCombinedInput(combinedInput, ref newThrottle, ref newBrake);
             if (countersteering)
             {
@@ -1866,9 +1869,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                 newBrake = Math.Min(newBrake, CountersteerPedalCap);
             }
 
-            newThrottle = ComposeThrottleCap(newThrottle, countersteering);
+            newThrottle = ComposeThrottleCap(newThrottle, countersteering, gsFloor);
             _thrWanted = newThrottle;
-            _offtrackThrottleHeld = _projectionCutActive && _projectionDropMph > 0f;
 
             newBrake = ComposeBrakeCap(newBrake, countersteering);
             _brkWanted = newBrake;
@@ -1877,14 +1879,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
 
-            UpdateExitRoom();
-            float gsFloor = GsLaneThrottleFloorValue(out bool gsInsideRegime);
-
-            if (countersteering) gsFloor = 0f;
-            gsFloor = Math.Min(gsFloor, Control.MaxThrottle);
-            float throttleBeforeFloor = Control.Throttle;
-            if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
-            _gsFloorActiveThisTick = Control.Throttle > throttleBeforeFloor;
             _thrFloor = gsFloor;
             _thrFinal = Control.Throttle;
             _brkFinal = Control.Brake;
@@ -2336,10 +2330,21 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             if (NextApexNode >= 0 && HasPassedApex(NextApexNode)) cornerSpd = 999f;
 
+            if (TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane)
+            {
+                float chicaneBoost = ARS.MphToMps(10f);
+                cornerSpd += chicaneBoost;
+                followTrackSpd += chicaneBoost;
+                Brain.CurrentIntention.Term = SpeedTerm.Chicane;
+            }
+
             bool cornerPlansABrake = cornerSpd < 999f;
             // A braking plan is not a drift: the slide caps do not clip it.
             _brakePlanActive = cornerPlansABrake;
 
+            // Slope scales the route term only: where the plan holds a corner, the corner term is lower and
+            // filters this out, so it bites on straights and fast sections. Deliberate - the corner's own speed
+            // already answers the same question; revisit if a steep corner ever feels too quick.
             if (TrackSpeed.SlopeGrip)
             {
                 float slopeAngleDeg = ARS.RadToDeg(GetFollowPointSlopeAngle());
@@ -2355,8 +2360,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             LiveRouteCrestFarNode = routeFar;
             followTrackSpd *= routeCrestFactor;
 
-            _cornerSpd = NextApexNode >= 0 ? NextApexSpeed : (Brain.Corner != null ? ARS.CornerApexSpeed(Brain.Corner.Point, this) : 999f);
-
             bool steerLimitedSpeedGovernsRoute = false;
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
             if (steerRad > 0.001f)
@@ -2368,14 +2371,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             else
             {
                 Brain.CurrentIntention.SteerLimitedSpeed = 999f;
-            }
-
-            if (TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane)
-            {
-                float chicaneBoost = ARS.MphToMps(10f);
-                cornerSpd += chicaneBoost;
-                followTrackSpd += chicaneBoost;
-                Brain.CurrentIntention.Term = SpeedTerm.Chicane;
             }
 
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
@@ -2635,7 +2630,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             return Math.Max(AbsBrakeFloor, 1f - overKnee);
         }
 
-        float ComposeThrottleCap(float baseThrottle, bool countersteering)
+        float ComposeThrottleCap(float baseThrottle, bool countersteering, float floor)
         {
 
             bool kickRaises = _kickPlaying && baseThrottle < KickPedalLevel;
@@ -2649,6 +2644,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRecovery);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOffTrack);
             Control.MaxThrottle = ceiling;
+
+            // The exit floor raises the ask, never past the ceilings above; the slew still owns the pedal.
+            float raised = Math.Min(floor, ceiling);
+            _gsFloorActiveThisTick = raised > baseThrottle;
+            if (_gsFloorActiveThisTick) baseThrottle = raised;
 
             float binding = baseThrottle;
             ThrottleReason reason = ThrottleReason.Plan;
@@ -3999,7 +3999,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
                 bool tight = corner.DetectedRadius < CornerTightRadius;
 
-                float intended = ApexSpeedWithDownforce(corner.DetectedRadius);
+                float intended = ARS.CornerApexSpeed(corner, this);
                 float timeToEntrance = distance / speed;
                 float decel = Math.Max(BrakingDecelBase(corner.Node), 0.1f);
                 float brakingDistance = (speed * speed - intended * intended) / (2f * decel);
@@ -4070,7 +4070,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                     if (!CornerRequiresBraking(node)) continue;
 
                     float radius = ARS.Corners[upcoming[i]].DetectedRadius;
-                    float apexSpeed = ApexSpeedWithDownforce(radius);
+                    float apexSpeed = ARS.CornerApexSpeed(ARS.Corners[upcoming[i]], this);
                     if (apexSpeed >= speed) continue;
                     if (!CornerWorthHolding(node, radius, selectedNodes, selectedRadii)) continue;
 
@@ -4121,25 +4121,17 @@ const float RequirementLookaheadSeconds = 3.95f;
         }
 
 
-        float SpeedRadiusFor(int node, float fallbackRadius)
-        {
-            if (node < 0) return fallbackRadius;
-            for (int i = 0; i < ARS.Corners.Count; i++)
-                if (ARS.Corners[i].Node == node) return ARS.Corners[i].DetectedRadius;
-            return fallbackRadius;
-        }
-
         void CommitApexQueue(int[] nodes, float[] radii)
         {
             NextApexNode = nodes[0];
             NextApexRadius = radii[0];
-            NextApexSpeed = NextApexNode >= 0 ? ApexSpeedWithDownforce(SpeedRadiusFor(NextApexNode, NextApexRadius)) : 999f;
+            NextApexSpeed = NextApexNode >= 0 ? ApexSpeedFor(NextApexNode, NextApexRadius) : 999f;
             NextApexNode2 = nodes[1];
             NextApexRadius2 = radii[1];
-            NextApexSpeed2 = NextApexNode2 >= 0 ? ApexSpeedWithDownforce(SpeedRadiusFor(NextApexNode2, NextApexRadius2)) : 999f;
+            NextApexSpeed2 = NextApexNode2 >= 0 ? ApexSpeedFor(NextApexNode2, NextApexRadius2) : 999f;
             NextApexNode3 = nodes[2];
             NextApexRadius3 = radii[2];
-            NextApexSpeed3 = NextApexNode3 >= 0 ? ApexSpeedWithDownforce(SpeedRadiusFor(NextApexNode3, NextApexRadius3)) : 999f;
+            NextApexSpeed3 = NextApexNode3 >= 0 ? ApexSpeedFor(NextApexNode3, NextApexRadius3) : 999f;
 
             if (NextApexNode >= 0)
             {
@@ -4224,7 +4216,10 @@ const float RequirementLookaheadSeconds = 3.95f;
         float BrakingDecelBase(int apexNode)
         {
             float brakingAbility = Math.Min(Handling.BrakingAbility * 4, VehicleData.CurrentMechanicalGrip);
-            float decel = brakingAbility * Handling.Gravity * EffectiveBrakeFactor(apexNode);
+            // Dirt brakes like dirt: the same surface share that caps the apex speed caps the decel.
+            CornerPoint corner = apexNode >= 0 ? ARS.Corners.FirstOrDefault(c => c.Node == apexNode) : null;
+            float surfaceGrip = corner != null ? corner.SurfaceGrip : 1f;
+            float decel = brakingAbility * surfaceGrip * Handling.Gravity * EffectiveBrakeFactor(apexNode);
             if (ActiveManeuver.Type == ManeuverType.Yield) decel *= 0.5f;
             return decel;
         }
@@ -4250,6 +4245,14 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
             r = ARS.Clamp(r, 5f, 999f);
             return (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * r);
+        }
+
+        // The plan's apex speed, with the corner's own surface: a loose corner asks for less, and every
+        // reader of the apex queue - the queue itself, the requirement test, the picker - reads one number.
+        float ApexSpeedFor(int node, float fallbackRadius)
+        {
+            CornerPoint corner = node >= 0 ? ARS.Corners.FirstOrDefault(c => c.Node == node) : null;
+            return corner != null ? ARS.CornerApexSpeed(corner, this) : ApexSpeedWithDownforce(fallbackRadius);
         }
 
         float ApexSpeedWithDownforce(float r)
