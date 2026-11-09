@@ -2322,8 +2322,12 @@ namespace ARS
 
                 if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowSlideAngle] || DebugToggles[Options.ShowThrottleReason] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
                 {
-                    Vector3 focusPos = Game.Player.Character.Position;
-                    DebugFocusRacer = Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car)).OrderBy(r => r.Car.Position.DistanceTo(focusPos)).FirstOrDefault();
+                    // A lone racer is always the focus and the player's position is never read: in a spectator run there
+                    // is nothing to be nearest to, and this used to depend on the player ped being there at all.
+                    DebugFocusRacer = Racers.Count == 1
+                        ? Racers[0]
+                        : Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car))
+                            .OrderBy(r => r.Car.Position.DistanceTo(Game.Player.Character.Position)).FirstOrDefault();
                 }
                 else DebugFocusRacer = null;
                 int raceLaps = RaceMenuStore.GetInt("Laps", 6);
