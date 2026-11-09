@@ -352,6 +352,7 @@ namespace ARS
         int _prepApexNode = -1;
         float _prepStartOffset;
         float _prepSide;
+        float _prepCreep;
         bool _prepStarted;
         int _prepDoneApex = -1;
 
@@ -820,14 +821,12 @@ namespace ARS
                         ARS.Log(ARS.LogImportance.Info, "lane " + Name + ": out prep for apex " + prepApex.Node);
                     }
                     float prepEdge = prepOutward * laneEdge;
-                    // Only the part of the local turn that heads the same way as the corner closes the creep. The
-                    // unsigned gap read 20° while unwinding out of a bend of the other sign — exactly when the car is
-                    // free to move out — and shrank the creep to its floor before the approach had even begun.
-                    Vector3 from = CurrentTrackPoint.Direction;
-                    Vector3 to = steerRefPoint.Direction;
-                    float localTurn = (float)(Math.Atan2(from.X * to.Y - from.Y * to.X, from.X * to.X + from.Y * to.Y) * 180.0 / Math.PI);
-                    float creepGap = Math.Max(0f, localTurn * prepOutward);
-                    float creep = ARS.Clamp(ARS.Remap(creepGap, 1f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
+                    // The creep closes with the time left, not with how much the road is turning. On any approach that
+                    // is not dead straight the local turn reads 10-20° from the first tick, which pinned the creep at
+                    // its 0.1 m floor: the out was asked for, ten centimetres of it, and never happened.
+                    float secondsToApex = MetresToNode(prepApex.Node) / Math.Max(speedMps, 1f);
+                    float creep = ARS.Clamp(ARS.Remap(secondsToApex, ARS.LanePrepSeconds, 1f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
+                    _prepCreep = creep;
                     // The cap hangs off where the prep started, not off the car each tick: a cap re-based on the car
                     // is a target that recedes, and the mover walks the car out to the edge whatever the creep says.
                     float prepCap = _prepStartOffset + prepOutward * creep;
@@ -920,7 +919,7 @@ namespace ARS
                     + " inside " + (laneCornerInside != null ? laneCornerInside.Node.ToString() : "-")
                     + " apexIn " + (lineCorner != null ? toApex.ToString("0") : "-")
                     + " seenFrom " + (laneCornerInside != null ? MetresToNode(laneCornerInside.Node).ToString("0") : "-")
-                    + " prep " + prepMetres.ToString("0"));
+                    + " prep " + prepMetres.ToString("0") + " creep " + _prepCreep.ToString("0.00"));
             }
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
