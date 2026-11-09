@@ -347,6 +347,7 @@ namespace ARS
         int _cornersRevisionSeeded = -1;
         int _planLogApexNode = -1;
         int _prepLoggedApex = -1;
+        float _prepStartOffset;
 
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;
@@ -802,23 +803,22 @@ namespace ARS
                 CornerPoint prepApex = NearestApexForPrep(ARS.LanePrepSeconds);
                 if (prepApex != null)
                 {
-                    // The prep is a positioning move, not a fine correction: it asks for the outside edge but never
-                    // more than the cap beyond the car's own lane, so the mover walks it out smoothly instead of
-                    // jumping to the edge. The shape still never asks for out.
                     float prepOutward = -ARS.InsideSign(prepApex.Angle);
                     float prepEdge = prepOutward * laneEdge;
-                    // How far out the prep may ask: the full 2 m on a straight, a tenth of it 20 deg bent.
-                    float headingGap = Vector3.Angle(CurrentTrackPoint.Direction, steerRefPoint.Direction);
-                    float creep = ARS.Clamp(ARS.Remap(headingGap, 1f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
-                    float prepCap = steerRefOffset + prepOutward * creep;
-                    laneRequest = prepOutward > 0f ? Math.Min(prepEdge, prepCap) : Math.Max(prepEdge, prepCap);
-                    laneReason = LaneReason.CurveLean;
-                    prepOutside = true;
+                    // The cap hangs off where the prep started, not off the car each tick: a cap re-based on the car
+                    // is a target that recedes, and the mover walks the car out to the edge whatever the creep says.
                     if (_prepLoggedApex != prepApex.Node)
                     {
                         _prepLoggedApex = prepApex.Node;
+                        _prepStartOffset = steerRefOffset;
                         ARS.Log(ARS.LogImportance.Info, "lane " + Name + ": out prep for apex " + prepApex.Node);
                     }
+                    float headingGap = Vector3.Angle(CurrentTrackPoint.Direction, steerRefPoint.Direction);
+                    float creep = ARS.Clamp(ARS.Remap(headingGap, 1f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
+                    float prepCap = _prepStartOffset + prepOutward * creep;
+                    laneRequest = prepOutward > 0f ? Math.Min(prepEdge, prepCap) : Math.Max(prepEdge, prepCap);
+                    laneReason = LaneReason.CurveLean;
+                    prepOutside = true;
                 }
                 else if (dynamicOwns) laneReason = LaneReason.CurveLean;
             }
