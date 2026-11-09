@@ -4138,7 +4138,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (entranceNode < 0 || MetresToNode(entranceNode) > 0f) return false;
             return Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < CoastSpentGs;
         }
-        const float CoastSpentGs = 0.5f;
+        const float CoastSpentGs = 0.05f;
 
         // The node the plan brakes for: the aim, moved toward the apex by BrakeAimDepth. One writer, so
         // the ramp and the learner that grades it cannot aim at different nodes.
