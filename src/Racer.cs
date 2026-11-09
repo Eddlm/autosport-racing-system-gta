@@ -723,7 +723,7 @@ namespace ARS
             LaneReason laneReason = LaneReason.OwnLane;
 
             CornerPoint candidate = NearestApexAhead();
-            if (_laneHeldCorner == null || OutOfLaneCornerExit(_laneHeldCorner))
+            if (_laneHeldCorner == null || HasPassedApex(_laneHeldCorner.Node))
             {
                 if (_laneHeldCorner != null) FinishShapeError(_laneHeldCorner);
                 if (candidate != null && candidate != _laneHeldCorner)
@@ -1168,13 +1168,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             _shapeErrSum = 0f;
             _shapeErrCount = 0;
             _shapeErrLastNode = -1;
-        }
-
-        bool OutOfLaneCornerExit(CornerPoint corner)
-        {
-            int exitNode = ARS.TrackPoints[corner.Node].LaneShapeExit;
-            if (exitNode < 0) exitNode = corner.Node;
-            return MetresToNode(exitNode) <= 0f;
         }
 
         float ClampShapedLane(float metres, float laneEdge, CornerPoint apex)

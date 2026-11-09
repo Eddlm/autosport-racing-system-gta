@@ -168,7 +168,7 @@ namespace ARS
         public static float BrakeAimDepth = 0f;
 
         public const float LaneDynamicRadius = 400f;
-        public const float LanePrepSeconds = 6f;
+        public const float LanePrepSeconds = 4f;
         public const float LanePreviewSeconds = 1f;
         public const float LaneShapePreviewSeconds = 0.5f;
         public const float LaneShapeOuterMarginMetres = 0.5f;
