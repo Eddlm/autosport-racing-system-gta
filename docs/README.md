@@ -1,6 +1,6 @@
 # ARS documentation
 
-Four live documents, one folder of reference material and one of working papers. Each file answers **one question**;
+Five live documents, one folder of reference material and three of records. Each file answers **one question**;
 if a file has to answer two, the depth moves to a companion and the entry keeps the pointer.
 
 **The rule this set is built on: a document defines concepts and the relationships between them, and leaves the
@@ -11,6 +11,7 @@ authoritative. Values live in the code, where a rename or a retune cannot leave 
 | File | The question it answers | Who reads it |
 |---|---|---|
 | `DESIGN.md` | What is each system *for*, and what shape serves that goal — including the shapes that were tried and rejected, and why | anyone changing behaviour |
+| `steering-and-pedals.md` | How the front-slip guard and the pedal limits are built today: the four pieces, the actuator rates, the evidence and what is still open | anyone touching the steering limiter or a pedal law |
 | `FEATURES.md` | What does the player get, and what does it feel like | players; the store page and the README |
 | `RELEASE-NOTES.md` | What ships in this release, what it needs, and what it does not do yet | players installing it |
 | `REGISTER.md` | What is still open: decided and not built, waiting on a decision, understood and not fixed | whoever picks the next piece of work |

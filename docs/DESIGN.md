@@ -89,9 +89,9 @@ a designed behaviour the code does not implement, filed as a gap rather than des
 interchangeable. Slot one is always the nearest corner ahead, re-derived at every refill, because the line,
 the commit lane and the chevron all aim at it. The remaining slots are not the next two by distance but the
 most restrictive braking-worthy corners ahead — the ones that make the car brake earliest — since only the
-braking plan reads them. *The next corner* advances once the apex before it is behind the car — or sooner,
-when the car is through that corner's entrance pulling under 0.05 g fore or aft, since a car already sitting at
-the corner's speed has spent it — and the queue
+braking plan reads them. *The next corner* advances once the apex before it is behind the car — or sooner, when
+`CornerSpent` finds the car through that corner's entrance with no longitudinal load on the same Gs signal the
+requirement pass reads, since a car already sitting at the corner's speed has spent it — and the queue
 is what lets the plan see past the imminent bend. The successive-corner rule is a step of its own rather
 than a consequence of that advance: the approach is judged once, at the moment a corner is promoted, and if
 the car is already inside the lookahead window then there is no approach left to drive — that corner's

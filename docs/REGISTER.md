@@ -123,3 +123,23 @@ commit decision.
 **How to attack it**: clear the adopted node when its apex is passed *and* the search returns nothing, or give the
 search an explicit release so the stickiness ends with the pass rather than with the next adoption. **Falsify** with
 the debug diagonal after the last apex of a lap: it should vanish.
+
+*(2026-11-09)* The lane now lets go of its held corner when `CornerSpent` declares it spent or its apex passes, and
+re-takes one from the search every tick, so the reference is refreshed rather than kept. Whether the diagonal still
+lingers after the last apex of a lap is unverified — the falsification drive above is still owed.
+
+## 4 · Filed from the session audits
+
+### `lane-exit-invasion` — an exit walk can overwrite the next corner's entrance
+
+The shape builder stops an exit run at the next corner's entrance only once it has written the minimum exit nodes. When
+the bound arrives before that minimum it steps past it, so one corner's exit profile can be written over the entrance
+the next corner's entry pass had already laid down. A node whose `LaneShapeApex` names the previous corner inside the
+next one's entry span is the signature. **Suspicion, not a proven defect**: it needs a load log from a track whose
+corners sit closer together than the exit minimum allows.
+
+### `requirement-pass-per-frame` — the corner requirement pass runs every frame to feed a half-second refill
+
+`UpdateCornerRequirements` is the detector the refill asks, and it walks every corner to decide whether anything
+changed. Its cost has never been measured against the frame budget; nothing observed says it matters, and nothing says
+it does not.
