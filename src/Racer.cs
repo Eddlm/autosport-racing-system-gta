@@ -821,11 +821,13 @@ namespace ARS
                         ARS.Log(ARS.LogImportance.Info, "lane " + Name + ": out prep for apex " + prepApex.Node);
                     }
                     float prepEdge = prepOutward * laneEdge;
-                    // The creep closes with the time left, not with how much the road is turning. On any approach that
-                    // is not dead straight the local turn reads 10-20° from the first tick, which pinned the creep at
-                    // its 0.1 m floor: the out was asked for, ten centimetres of it, and never happened.
-                    float secondsToApex = MetresToNode(prepApex.Node) / Math.Max(speedMps, 1f);
-                    float creep = ARS.Clamp(ARS.Remap(secondsToApex, ARS.LanePrepSeconds, 1f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
+                    // The creep is the road's turn between the car and the corner's entrance: at 2° the out is allowed
+                    // in full, at 20° there is no room left and it is 0.1 m. Measured over the preview it read 10-20°
+                    // from the first tick of any bending approach and pinned the out at its floor.
+                    Vector3 here = CurrentTrackPoint.Direction;
+                    Vector3 atEntrance = ARS.TrackPoints[CornerEntranceNode(prepApex, prepApex.Node)].Direction;
+                    float approachGap = Math.Abs((float)(Math.Atan2(here.X * atEntrance.Y - here.Y * atEntrance.X, here.X * atEntrance.X + here.Y * atEntrance.Y) * 180.0 / Math.PI));
+                    float creep = ARS.Clamp(ARS.Remap(approachGap, 2f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
                     _prepCreep = creep;
                     // The cap hangs off where the prep started, not off the car each tick: a cap re-based on the car
                     // is a target that recedes, and the mover walks the car out to the edge whatever the creep says.
