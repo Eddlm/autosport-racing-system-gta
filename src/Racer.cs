@@ -807,7 +807,11 @@ namespace ARS
                     // jumping to the edge. The shape still never asks for out.
                     float prepOutward = -ARS.InsideSign(prepApex.Angle);
                     float prepEdge = prepOutward * laneEdge;
-                    float prepCap = steerRefOffset + prepOutward * ARS.LanePrepOutsideCapMetres;
+                    // How far out the prep may ask, by how bent the road is between here and the approach point:
+                    // 1 deg apart is a straight and the full 2 m, 20 deg apart is a corner and a tenth of it.
+                    float headingGap = Vector3.Angle(CurrentTrackPoint.Direction, steerRefPoint.Direction);
+                    float creep = ARS.Clamp(ARS.Remap(headingGap, 1f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
+                    float prepCap = steerRefOffset + prepOutward * creep;
                     laneRequest = prepOutward > 0f ? Math.Min(prepEdge, prepCap) : Math.Max(prepEdge, prepCap);
                     laneReason = LaneReason.CurveLean;
                     prepOutside = true;
