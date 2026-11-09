@@ -760,51 +760,47 @@ namespace ARS
             {
                 CornerPoint corner = ARS.Corners[i];
                 int apex = corner.Node;
-                int walkDist = (int)(ARS.TrackPoints[apex].TrackHalfWidth * 4f);
-                Vector3 apexDir = ARS.TrackPoints[apex].Direction;
-
-                int backNode = apex - walkDist;
-                if (!ARS.IsPointToPoint) backNode = ((backNode % nodeCount) + nodeCount) % nodeCount;
-                if (backNode < 0 || backNode >= nodeCount) continue;
-
-                int fwdNode = apex + walkDist;
-                if (!ARS.IsPointToPoint) fwdNode = fwdNode % nodeCount;
-                if (fwdNode < 0 || fwdNode >= nodeCount) continue;
-
-                Vector3 apexFlat = new Vector3(apexDir.X, apexDir.Y, 0f);
+                Vector3 apexFlat = new Vector3(ARS.TrackPoints[apex].Direction.X, ARS.TrackPoints[apex].Direction.Y, 0f);
                 Vector3 apexAt = ARS.TrackPoints[apex].Position;
                 Vector3 apexRight = Vector3.Cross(Vector3.WorldUp, apexFlat);
                 float width = Math.Max(1f, ARS.TrackPoints[apex].TrackHalfWidth * 2f);
+                int span = ArcSpan(corner.StartNode, corner.EndNode, nodeCount);
+
+                // The two nodes that decide it are the first ones a whole track width out from the apex, one
+                // each way, so nothing nearer than a width can vote.
+                int backNode = -1;
+                int fwdNode = -1;
+                for (int step = 1; step <= span && (backNode < 0 || fwdNode < 0); step++)
+                {
+                    int aheadNode = ArcNode(apex, step, nodeCount);
+                    if (fwdNode < 0 && aheadNode >= 0 && aheadNode < nodeCount
+                        && (ARS.TrackPoints[aheadNode].Position - apexAt).Length() >= width) fwdNode = aheadNode;
+                    int behindNode = ArcNode(apex, -step, nodeCount);
+                    if (backNode < 0 && behindNode >= 0 && behindNode < nodeCount
+                        && (ARS.TrackPoints[behindNode].Position - apexAt).Length() >= width) backNode = behindNode;
+                }
+                if (backNode < 0 || fwdNode < 0) continue;
+
                 float backOffset = Vector3.Dot(ARS.TrackPoints[backNode].Position - apexAt, apexRight);
                 float fwdOffset = Vector3.Dot(ARS.TrackPoints[fwdNode].Position - apexAt, apexRight);
 
-                // An S displaces the road a track width to one side behind the apex and to the other ahead of it.
-                // A bend keeps it on one side, whatever the angle noise says.
-                bool sBend = Math.Abs(backOffset) >= width && Math.Abs(fwdOffset) >= width
-                    && Math.Sign(backOffset) != Math.Sign(fwdOffset);
-                if (sBend)
+                // An S has the road on one side behind the apex and the other side ahead of it; a bend keeps it
+                // on the same side both ways.
+                if (fwdOffset != 0f && Math.Sign(backOffset) != Math.Sign(fwdOffset))
                 {
                     corner.IsChicane = true;
-                    // The apex goes to the nearest node already a whole width out on the far side, so the floor is
-                    // a displacement, not a sign change from noise.
-                    int span = ArcSpan(corner.StartNode, corner.EndNode, nodeCount);
+                    // The apex goes to the first node past the crossover, so it sits on the new side.
                     int flipOffset = 0;
-                    for (int step = 1; step < span && flipOffset == 0; step++)
+                    for (int step = 1; step <= span && flipOffset == 0; step++)
                     {
-                        int aheadNode = ArcNode(corner.Node, step, nodeCount);
-                        if (aheadNode >= 0 && aheadNode < nodeCount
-                            && Vector3.Dot(ARS.TrackPoints[aheadNode].Position - apexAt, apexRight) * -Math.Sign(backOffset) >= width) flipOffset = step;
-                        else
-                        {
-                            int behindNode = ArcNode(corner.Node, -step, nodeCount);
-                            if (behindNode >= 0 && behindNode < nodeCount
-                                && Vector3.Dot(ARS.TrackPoints[behindNode].Position - apexAt, apexRight) * -Math.Sign(backOffset) >= width) flipOffset = -step;
-                        }
+                        int aheadNode = ArcNode(apex, step, nodeCount);
+                        if (aheadNode < 0 || aheadNode >= nodeCount) break;
+                        if (Math.Sign(Vector3.Dot(ARS.TrackPoints[aheadNode].Position - apexAt, apexRight)) == Math.Sign(fwdOffset)) flipOffset = step;
                     }
                     if (flipOffset != 0)
                     {
-                        int flipNode = ArcNode(corner.Node, flipOffset, nodeCount);
-                        ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + corner.Node + " moved to " + flipNode + ", the turn flips there");
+                        int flipNode = ArcNode(apex, flipOffset, nodeCount);
+                        ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + apex + " moved to " + flipNode + ", the road crosses to the other side");
                         corner.Node = flipNode;
                         corner.LengthStart = ArcSpan(corner.StartNode, flipNode, nodeCount);
                         corner.LengthEnd = Math.Max(0, span - corner.LengthStart);
