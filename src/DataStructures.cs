@@ -391,6 +391,7 @@ namespace ARS
         public float SupposedRadius = 999f;
 
         public float DetectedRadius = 999f;
+        public float WidestRadius = 0f;
         // The worst ground the corner covers, 1 on road: a corner with loose surface anywhere in its span
         // is a loose corner, and its speed scales with the square root of this.
         public float SurfaceGrip = 1f;

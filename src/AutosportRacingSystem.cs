@@ -149,6 +149,7 @@ namespace ARS
         public static bool AbsEnabled = false;
 
         public static int CornerOffsetMph = 0;
+        public static int CornerLineSharePct = 20;
         public static int RouteOffsetMph = 0;
         public static float SteerDampingGain = 0.5f;
 
@@ -978,6 +979,16 @@ namespace ARS
             cornerOffsetItem.SelectedIndex = Math.Max(0, cornerOffsetItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph).ToString(CultureInfo.InvariantCulture)));
             rivalPaceMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
+
+            NativeListItem<string> cornerLineItem = new NativeListItem<string>("Corner Line Share (%)", "How far the corner speed is taken from the apex's tightest circle toward the widest arc that fits the road: 0 is the apex alone, 20 is a fifth of the way out.", SettingsRepair.OptionsFor("CornerLineShare"));
+            cornerLineItem.ItemChanged += (sender, args) =>
+            {
+                CornerLineSharePct = int.Parse(cornerLineItem.Items[args.Index], CultureInfo.InvariantCulture);
+                SaveRacerSetting("CornerLineShare", cornerLineItem.Items[args.Index]);
+            };
+            cornerLineItem.SelectedIndex = Math.Max(0, cornerLineItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerLineShare", CornerLineSharePct).ToString(CultureInfo.InvariantCulture)));
+            rivalPaceMenu.Add(cornerLineItem);
+            HookListTextPicker(cornerLineItem);
 
             NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Road Curvature Offset (mph)", "Raises the speed the road's curvature allows ahead. Only the slower of this and Corner Speed Offset applies.", SettingsRepair.OptionsFor("RouteOffset"));
             routeOffsetItem.ItemChanged += (sender, args) =>
@@ -3027,7 +3038,7 @@ namespace ARS
         public static float CornerApexSpeed(CornerPoint c, Racer r)
         {
 
-            float radius = c.DetectedRadius;
+            float radius = TrackLoader.CornerRadiusForSpeed(c);
             if (radius <= 0f) radius = c.GetPreciseRadius();
 
             if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AiConstants.MaxSpeed;
@@ -3511,6 +3522,7 @@ namespace ARS
             OverspeedCutPerTenthG = ParseOverspeedCut(SettingsMenuStore.Get("OverspeedCut", "0.2"));
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
+            CornerLineSharePct = SettingsMenuStore.GetInt("CornerLineShare", CornerLineSharePct);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
             DamperCountersteerMaxDeg = SettingsMenuStore.GetFloat("DamperCountersteerMaxDeg", DamperCountersteerMaxDeg);

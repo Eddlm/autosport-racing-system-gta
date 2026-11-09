@@ -1166,8 +1166,6 @@ namespace ARS
                 ApexRejects.Add(apexNode + " R " + detectedRadius.ToString("0.0") + " (blurred, nodesToDouble " + nodesToDouble + " > " + SpanBlurNodes + ")");
                 return;
             }
-            ARS.Log(ARS.LogImportance.Info, "Corner open: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " nodesToDouble=" + nodesToDouble + "/" + exitMaxStep + (nodesToDouble >= exitMaxStep ? " (did not double)" : ""));
-
             CornerPoint corner = new CornerPoint
             {
                 Node = apexNode,
@@ -1180,7 +1178,11 @@ namespace ARS
                 DetectedRadius = detectedRadius,
                 SurfaceGrip = CornerSurfaceGrip(scanNodes[startPosition], scanNodes[endPosition], count)
             };
-            corner.Speed = (float)Math.Sqrt(9.81f * tightestRadius);
+            corner.WidestRadius = WidestArcRadius(apexNode, corner.StartNode, corner.EndNode, detectedRadius);
+            corner.Speed = (float)Math.Sqrt(9.81f * CornerRadiusForSpeed(corner));
+            ARS.Log(ARS.LogImportance.Info, "Corner open: apex=" + apexNode + " tightestR=" + tightestRadius.ToString("0.0")
+                + " widestR=" + corner.WidestRadius.ToString("0.0") + " speedR=" + CornerRadiusForSpeed(corner).ToString("0.0")
+                + " nodesToDouble=" + nodesToDouble + "/" + exitMaxStep + (nodesToDouble >= exitMaxStep ? " (did not double)" : ""));
 
             if (ARS.Corners.Count > 0 && !IsWorthAnApex(ARS.Corners[ARS.Corners.Count - 1], corner, count))
             {
@@ -1305,8 +1307,52 @@ namespace ARS
             survivor.StartNode = ARS.IsPointToPoint ? survivor.Node - entranceDistance : Wrap(survivor.Node - entranceDistance, count);
             survivor.EndNode = ARS.IsPointToPoint ? survivor.Node + exitDistance : Wrap(survivor.Node + exitDistance, count);
             survivor.SurfaceGrip = CornerSurfaceGrip(survivor.StartNode, survivor.EndNode, count);
+            survivor.WidestRadius = WidestArcRadius(survivor.Node, survivor.StartNode, survivor.EndNode, survivor.DetectedRadius);
+            survivor.Speed = (float)Math.Sqrt(9.81f * CornerRadiusForSpeed(survivor));
             survivor.LengthStart = entranceDistance;
             survivor.LengthEnd = exitDistance;
+        }
+
+        // The widest arc that still stays on the road: tangent to the inside at the apex and the outside where it
+        // enters and leaves, capped by whatever straight there is before it.
+        static float WidestArcRadius(int apexNode, int startNode, int endNode, float tightest)
+        {
+            int count = ARS.TrackPoints.Count;
+            int span = ArcSpan(startNode, endNode, count);
+            if (span < 2) return tightest;
+            float swept = 0f;
+            for (int i = 0; i <= span; i++) swept += ARS.TrackPoints[ArcNode(startNode, i, count)].Angle;
+            float turn = Math.Abs(swept) / GeometryWindowNodes;
+            if (turn < 1f || turn > 179f) return tightest;
+            float halfWidth = Math.Max(1f, ARS.TrackPoints[apexNode].TrackHalfWidth);
+            float widest = Math.Max(1f, tightest - halfWidth) + 2f * halfWidth / (1f - (float)Math.Cos(turn * Math.PI / 360f));
+            float room = OptimalRoomMetres(startNode);
+            if (room > 5f)
+            {
+                float capped = 2f * room / (turn * (float)Math.PI / 180f);
+                if (capped < widest) widest = capped;
+            }
+            return Math.Max(tightest, Math.Min(widest, 5000f));
+        }
+
+        static float OptimalRoomMetres(int startNode)
+        {
+            int previous = ARS.Corners.Count - 1;
+            if (previous < 0 || startNode < 0) return 0f;
+            CornerPoint before = ARS.Corners[previous];
+            if (before.EndNode < 0) return 0f;
+            float room = ARS.TrackPoints[startNode].CumulativeDistance - ARS.TrackPoints[before.EndNode].CumulativeDistance;
+            if (!ARS.IsPointToPoint && room < 0f && ARS.RouteLengthMeters > 0f) room += ARS.RouteLengthMeters;
+            return room;
+        }
+
+        // The owner's middleground: the apex's own circle slid toward the widest arc by his share, never past it.
+        public static float CornerRadiusForSpeed(CornerPoint corner)
+        {
+            if (corner == null) return 0f;
+            if (corner.WidestRadius <= corner.DetectedRadius) return corner.DetectedRadius;
+            float share = Math.Min(Math.Max(ARS.CornerLineSharePct, 0), 20) * 0.01f;
+            return corner.DetectedRadius + (corner.WidestRadius - corner.DetectedRadius) * share;
         }
 
         static float SweptRadius(int node, int count)
