@@ -23,7 +23,7 @@ namespace ARS
         public static readonly bool RouteBrakeCap = false;
         public static readonly bool ChicaneBoost = false;
         public static readonly bool ProjectionCut = true;
-        public static readonly bool SteerAskThrottle = true;
+        public static readonly bool SteerAskThrottle = false;
         public static readonly bool OffTrackThrottle = false;
         public static readonly bool CrestGate = false;
         public static readonly bool StabilityCap = false;
@@ -295,13 +295,12 @@ namespace ARS
         const float SteerAskNoLiftShare = 1f;
         const float SteerAskFloorShare = 1.5f;
         const float SteerAskPedalFloor = 0.5f;
-        // How fast the demand follows its target: one time constant, so a flick of the trigger moves it by a few per cent.
-        const float ProjectionChaseSeconds = 0.5f;
-        // Armed at half the lateral grip the car actually has, not at a fixed G: a slow car and a fast one reach their
-        // limit at different numbers, and the share is what they have in common.
-        // The share of the tyre's peak slip at the current speed the steering must ask for before the projection
-        // may take pedal away. 1 = at the peak, so the car has to be asking for the corner at all.
-        const float ProjectionArmSteerShare = 1f;
+        // How fast the demand moves: a rate, not a time constant - one whole pedal of input per half second, up and
+        // down alike, so a lift that has to leave arrives inside half a second instead of decaying towards it.
+        const float ProjectionLiftPerSecond = 2f;
+        // The share of the tyre's peak slip at the current speed the car must be SLIDING at before the projection
+        // may take pedal away: the angle between its velocity and its heading, 60% of what the tyre peaks at.
+        const float ProjectionArmSlideShare = 0.6f;
         // Its authority, in pedal: cancel a full throttle (1) and add half a brake (0.5) on top. It can never undo a
         // brake, because the ceiling only ever competes for the lower input.
         const float ProjectionMaxLift = 1f + 0.5f;
@@ -355,6 +354,7 @@ namespace ARS
         float _projectionOutsideMeters = 0f;
         bool _projectionWidening = false;
         bool _projectionCutActive = false;
+        bool _projectionArmed = false;
         float _exitRoom01;
         bool _exitRoomArmed;
         float _projectionLift = 0f;
@@ -2024,20 +2024,28 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _projectionDropMph = 0f;
                 return;
             }
-            // The car earns the penalty by ASKING for the corner: the steering is at or past the tyre's peak slip at
-            // this speed. Lateral Gs used to gate this and was not a reliable "should it be active" - a car already
-            // sliding reads plenty of side force while asking for nothing more.
-            float projectionSteerAsk = TRLateralAtSpeed > 0.01f
-                ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
-            bool projectionAsking = projectionSteerAsk >= ProjectionArmSteerShare;
-            _projectionCutActive = projectionAsking && _projectionOutsideMeters > 0f;
+            // The car earns the penalty by SLIDING INTO the corner: the angle between its velocity and its heading is
+            // at or past ProjectionArmSlideShare of what the tyre peaks at this speed, AND the wheel points the way
+            // the car is already yawing. A countersteering driver is recovering from the slide, so the slide is not
+            // a reason to take pedal away from him. One tick of lag here: the ask is captured in ApplySteerLimits,
+            // which runs after the pedals in the same frame.
+            float projectionSlide = Math.Abs(VehicleData.SlideAngle);
+            if (float.IsNaN(projectionSlide) || float.IsInfinity(projectionSlide)) projectionSlide = 0f;
+            bool steeringIntoSlide = Math.Abs(SteerAskDegrees) > 0.01f
+                && Math.Abs(VehicleData.YawRotationPerSecondDegrees) > 0.01f
+                && Math.Sign(SteerAskDegrees) == Math.Sign(VehicleData.YawRotationPerSecondDegrees);
+            bool projectionSliding = TRLateralAtSpeed > 0.01f
+                && projectionSlide >= TRLateralAtSpeed * ProjectionArmSlideShare
+                && steeringIntoSlide;
+            _projectionArmed = projectionSliding;
+            _projectionCutActive = projectionSliding && _projectionOutsideMeters > 0f;
 
             float projectionTargetLift = _projectionCutActive
                 ? Math.Min(_projectionOutsideMeters / ProjectionFullLiftMetres, 1f) * ProjectionMaxLift
                 : 0f;
 
-            float projectionChase = ARS.Clamp(TickScale / ProjectionChaseSeconds, 0f, 1f);
-            _projectionLift += (projectionTargetLift - _projectionLift) * projectionChase;
+            float projectionStep = ProjectionLiftPerSecond * TickScale;
+            _projectionLift = ARS.Clamp(projectionTargetLift, _projectionLift - projectionStep, _projectionLift + projectionStep);
 
             // The readout speaks in speed: what the brake side of this lift is worth, in mph, and only once it brakes.
             float projectionBrakeShare = Math.Max(0f, _projectionLift - 1f);
@@ -3336,8 +3344,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (ARS.DebugToggles[Options.ShowWheelSlip]) DrawWheelSlip();
             if (ARS.DebugToggles[Options.ShowFrontSlip]) DrawFrontSlipReadout();
             if (ARS.DebugToggles[Options.ShowSlideAngle]) DrawSlideAngleReadout();
-            if (ARS.DebugToggles[Options.ShowGsProjection]) DrawGsProjection();
-            if (TrackSpeed.SteerAskThrottle) DrawSteerAskSubtitle();
+            if (ARS.DebugToggles[Options.ShowGsProjection])
+            {
+                DrawGsProjection();
+                DrawProjectionGateSubtitle();
+            }
         }
         const float FanLineLength = 5f;
         const float FanPursuitHeight = 0.05f;
@@ -3480,14 +3491,19 @@ const float RequirementLookaheadSeconds = 3.95f;
                              _projectionCutActive ? Color.Red : Color.Yellow, 0.45f);
         }
 
-        // The share goes in the subtitle, in colour: blue while the steering asks for less than twice the tyre's
-        // peak slip, red past it. Red is the moment the pedal is taken away.
-        void DrawSteerAskSubtitle()
+        // The share goes in the subtitle as one number and one colour: red once the arm passes, blue while it does not.
+        // The colour follows the SAME test the number reports - the slide share against ProjectionArmSlideShare - so the
+        // two cannot disagree. `_projectionCutActive` is the stricter flag (arm AND the projection past the edge); painting
+        // with it showed blue at 80% of the arm, which reads as the gate ignoring its own threshold.
+        // The value is taken absolute and guarded, because Math.Abs leaves a NaN as a NaN and the cast to int then
+        // prints a huge negative percentage, which reads exactly like a sign that has gone wrong.
+        void DrawProjectionGateSubtitle()
         {
-            float share = TRLateralAtSpeed > 0.01f
-                ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
+            float slide = Math.Abs(VehicleData.SlideAngle);
+            if (float.IsNaN(slide) || float.IsInfinity(slide)) slide = 0f;
+            float share = TRLateralAtSpeed > 0.01f ? slide / TRLateralAtSpeed : 0f;
             string percent = ((int)Math.Round(share * 100f)).ToString(CultureInfo.InvariantCulture) + "%";
-            UI.ShowSubtitle(share > SteerAskFloorShare ? "~r~STEER " + percent : "~b~STEER " + percent, 50);
+            UI.ShowSubtitle(_projectionArmed ? "~r~" + percent : "~b~" + percent, 50);
         }
 
         void DrawFrontSlipReadout()
