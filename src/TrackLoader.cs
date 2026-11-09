@@ -1056,6 +1056,24 @@ namespace ARS
             return true;
         }
 
+        // Whether a corner asks the car to do anything. The road between the two apexes decides it: if it never
+        // straightens, the car is still in the previous bend when it arrives, carrying that bend's speed, so a
+        // corner at or near that same speed needs no new preparation. A straight between them lets the car gain
+        // speed, and then the next corner is real.
+        static bool IsWorthAnApex(CornerPoint previous, CornerPoint corner, int count)
+        {
+            if (corner.Speed < previous.Speed * CornerWorthySpeedShare) return true;
+
+            int gap = ARS.IsPointToPoint ? corner.Node - previous.Node : Wrap(corner.Node - previous.Node, count);
+            for (int step = 1; step < gap; step++)
+            {
+                int node = ARS.IsPointToPoint ? previous.Node + step : Wrap(previous.Node + step, count);
+                if (node < 0 || node >= count) break;
+                if (ARS.TrackPoints[node].SweepCurveRadius >= ARS.CornerCeilingMeters) return true;
+            }
+            return false;
+        }
+
         static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int minimumCornerNodes, float closeCornerSeconds)
         {
             if (startPosition < 0 || endPosition < startPosition || endPosition - startPosition + 1 < minimumCornerNodes)
@@ -1064,15 +1082,24 @@ namespace ARS
             int regionStart = startPosition;
             int regionEnd = endPosition;
 
-            int apexPosition = startPosition;
             float tightestRadius = float.MaxValue;
             for (int position = startPosition; position <= endPosition; position++)
             {
                 float radius = ARS.TrackPoints[scanNodes[position]].SweepCurveRadius;
-                if (radius < tightestRadius)
+                if (radius < tightestRadius) tightestRadius = radius;
+            }
+
+            // The apex is the FIRST node as tight as the corner gets, not the tightest node there is. A long bend
+            // with two lobes is one corner, and the plan belongs to the bend the car brakes for: inside the
+            // tolerance both lobes are the same speed, so taking the later one only drags the line backwards.
+            int apexPosition = startPosition;
+            float apexTolerance = tightestRadius * (1f + ApexSameRadiusShare);
+            for (int position = startPosition; position <= endPosition; position++)
+            {
+                if (ARS.TrackPoints[scanNodes[position]].SweepCurveRadius <= apexTolerance)
                 {
-                    tightestRadius = radius;
                     apexPosition = position;
+                    break;
                 }
             }
             float detectedRadius = tightestRadius;
@@ -1154,6 +1181,20 @@ namespace ARS
             // corner speed is `CornerApexSpeed`, which does read `OptimalRadius`.
             corner.Speed = (float)Math.Sqrt(9.81f * tightestRadius);
 
+            // A corner earns its apex by demanding something. If the road from the last apex never straightens, the
+            // car is inside that bend the whole way across and arrives at its speed; when this corner is not
+            // meaningfully slower than that, braking for it again buys nothing - it is the second lobe of one
+            // corner, and dropping it is what tells the lane field and the plan to treat the run as one.
+            if (ARS.Corners.Count > 0 && !IsWorthAnApex(ARS.Corners[ARS.Corners.Count - 1], corner, count))
+            {
+                CornerPoint kept = ARS.Corners[ARS.Corners.Count - 1];
+                ARS.Log(ARS.LogImportance.Info, "Corner not worthy: apex=" + apexNode + " R=" + tightestRadius.ToString("0.0")
+                    + " speed=" + corner.Speed.ToString("0.0") + " against apex " + kept.Node + " " + kept.Speed.ToString("0.0")
+                    + ", no straight between: dropped");
+                ApexRejects.Add(apexNode + " R " + tightestRadius.ToString("0.0") + " (not worthy: arrives from " + kept.Node + " already at its speed)");
+                return;
+            }
+
             if (ARS.Corners.Count > 0)
             {
                 CornerPoint previous = ARS.Corners[ARS.Corners.Count - 1];
@@ -1233,6 +1274,10 @@ namespace ARS
         const int SpanMaxDistanceNodes = 40;
         const float AlignedCornerSeconds = 3f;
         const float AlignedCornerDegrees = 15f;
+        // How near the tightest a node must be to be called the apex, and how much slower a corner must be than the
+        // one before it to earn an apex of its own.
+        const float ApexSameRadiusShare = 0.05f;
+        const float CornerWorthySpeedShare = 0.95f;
 
         static int ExitStep(int apexNode, float apexRadius, int maxStep, int count)
         {
