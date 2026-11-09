@@ -290,9 +290,11 @@ namespace ARS
         const float GsLaneOutsideFloor = 0f;
         // The lift runs from nothing at the edge to the full demand here, four metres past it.
         const float ProjectionFullLiftMetres = 4f;
-        // The share of the peak slip at the current speed where the pedal starts coming off, and where it is gone.
+        // The share of the peak slip at the current speed where the pedal starts coming off, and where it bottoms
+        // out: past that the cap holds its floor rather than reaching nothing.
         const float SteerAskNoLiftShare = 1f;
-        const float SteerAskFullLiftShare = 2f;
+        const float SteerAskFloorShare = 1.5f;
+        const float SteerAskPedalFloor = 0.5f;
         // How fast the demand follows its target: one time constant, so a flick of the trigger moves it by a few per cent.
         const float ProjectionChaseSeconds = 0.5f;
         // Armed at half the lateral grip the car actually has, not at a fixed G: a slow car and a fast one reach their
@@ -2736,19 +2738,20 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (kickRaises) baseThrottle = KickPedalLevel;
 
             // The rFactor rule: how much steering the geometry is asking for, as a share of the slip the tyre peaks
-            // at this speed. Past 1x the corner is being taken too fast and the pedal starts coming off; by 2x it is
-            // gone. The reference is the peak slip AT THIS SPEED
+            // at this speed. Past 1x the corner is being taken too fast and the pedal starts coming off; by 1.5x it
+            // is down to its floor of half. The reference is the peak slip AT THIS SPEED
             // (`TRLateralAtSpeed`), not the handling curve's constant: the constant is the zero-speed peak, so twice
             // it sits above the steering lock and the rule could never fire. It reads the ask from BEFORE the
             // steering limiter, because the command that reaches the car is already clipped to what the tyres take.
             float steerAskShare = TRLateralAtSpeed > 0.01f
                 ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
-            // x1 of the peak slip costs no pedal, x2 costs all of it, straight line between. The remap is called
-            // WITHOUT its clamp and the OUTPUT clamped instead: `Remap`'s clamp compares against (out_min, out_max)
-            // as given, so a descending pair makes every comparison meaningless and returns 1 or 0, never the share
-            // in between.
+            // x1 of the peak slip costs no pedal, 1.5x takes it to the floor, straight line between. The remap is
+            // called WITHOUT its clamp and the OUTPUT clamped instead: `Remap`'s clamp compares against
+            // (out_min, out_max) as given, so a descending pair makes every comparison meaningless and returns 1 or
+            // 0, never the share in between.
             float steerCap = TrackSpeed.SteerAskThrottle
-                ? ARS.Clamp(ARS.Remap(steerAskShare, SteerAskNoLiftShare, SteerAskFullLiftShare, 1f, 0f), 0f, 1f)
+                ? ARS.Clamp(ARS.Remap(steerAskShare, SteerAskNoLiftShare, SteerAskFloorShare, 1f, SteerAskPedalFloor),
+                    SteerAskPedalFloor, 1f)
                 : 1f;
 
             float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromStability);
@@ -3477,7 +3480,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float share = TRLateralAtSpeed > 0.01f
                 ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
             string percent = ((int)Math.Round(share * 100f)).ToString(CultureInfo.InvariantCulture) + "%";
-            UI.ShowSubtitle(share > SteerAskFullLiftShare ? "~r~STEER " + percent : "~b~STEER " + percent, 50);
+            UI.ShowSubtitle(share > SteerAskFloorShare ? "~r~STEER " + percent : "~b~STEER " + percent, 50);
         }
 
         void DrawFrontSlipReadout()
