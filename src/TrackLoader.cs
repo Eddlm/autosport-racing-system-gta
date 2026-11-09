@@ -195,9 +195,8 @@ namespace ARS
             int nodeCount = ARS.RouteNodes.Count;
             foreach (TrackPoint point in ARS.TrackPoints) ComputePointGeometry(point, nodeCount);
 
-            AssignSurfaceGrip();
-
             BuildApexTable();
+            LogSurfaceAtApexes();
             ARS.Log(ARS.LogImportance.Info, "Route generated");
         }
         const int GeometryWindowNodes = 10;
@@ -365,7 +364,6 @@ namespace ARS
 
         // One probe every SurfaceSampleNodes nodes, carried across the gap; a failed probe stays road, so a
         // miss never turns the outside approach off. The route's off-road share comes out of the same pass.
-        const int SurfaceSampleNodes = 4;
         // Below this share of road grip the outside line is not worth preparing: no out approach here.
         internal const float OutsideApproachMinGrip = 0.875f;
 
@@ -384,38 +382,22 @@ namespace ARS
             return grip;
         }
 
-        static void AssignSurfaceGrip()
+        // One probe per apex while the probe is unproven: the same material everywhere would mean it is not
+        // reading the ground, and a whole-route scan of a broken probe is hundreds of wasted shape tests.
+        static void LogSurfaceAtApexes()
         {
-            int count = ARS.TrackPoints.Count;
-            if (count == 0) return;
-
-            int offRoad = 0;
-            int matched = 0;
-            int hits = 0;
-            int probes = 0;
-            float grip = 1f;
-            for (int node = 0; node < count; node++)
+            for (int i = 0; i < ARS.Corners.Count; i++)
             {
-                if (node % SurfaceSampleNodes == 0)
-                {
-                    grip = ARS.GroundGripAt(ARS.TrackPoints[node].Position);
-                    probes++;
-                    if (ARS.LastGroundMaterialHit) hits++;
-                    if (ARS.LastGroundMaterialMatched) matched++;
-                    if (probes <= 8)
-                        ARS.Log(ARS.LogImportance.Info, "Surface probe " + node + ": hit " + ARS.LastGroundMaterialHit
-                            + " material " + ARS.LastGroundMaterialHash + " grip " + grip.ToString("0.00")
-                            + " at " + ARS.LastGroundHit.ToString() + " node z " + ARS.TrackPoints[node].Position.Z.ToString("0.00")
-                            + " model " + ARS.LastGroundHitModel);
-                }
-                ARS.TrackPoints[node].SurfaceGrip = grip;
-                if (grip < OutsideApproachMinGrip) offRoad++;
+                CornerPoint corner = ARS.Corners[i];
+                if (corner.Node < 0 || corner.Node >= ARS.TrackPoints.Count) continue;
+                Vector3 at = ARS.TrackPoints[corner.Node].Position;
+                float grip = ARS.GroundGripAt(at);
+                ARS.Log(ARS.LogImportance.Info, "Surface apex " + (i + 1) + "/" + ARS.Corners.Count
+                    + " node " + corner.Node + " R " + corner.DetectedRadius.ToString("0")
+                    + ": hit " + ARS.LastGroundMaterialHit + " material " + ARS.LastGroundMaterialHash
+                    + " grip " + grip.ToString("0.00") + " at " + ARS.LastGroundHit.ToString()
+                    + " apex z " + at.Z.ToString("0.00") + " handle " + ARS.LastGroundHitModel);
             }
-
-            ARS.Log(ARS.LogImportance.Info, "Surface: " + (100 * offRoad / count) + "% of the route is under the "
-                + OutsideApproachMinGrip.ToString("0.000") + " approach grip, " + matched + " of " + probes
-                + " probes matched a material row, " + hits + " hit ground ("
-                + ((count + SurfaceSampleNodes - 1) / SurfaceSampleNodes) + " probes, one every " + SurfaceSampleNodes + " nodes)");
         }
 
         static void BuildLaneField(int count)
