@@ -196,6 +196,7 @@ namespace ARS
             foreach (TrackPoint point in ARS.TrackPoints) ComputePointGeometry(point, nodeCount);
 
             BuildApexTable();
+            AssignSurfaceGrip();
             LogSurfaceAtApexes();
             ARS.Log(ARS.LogImportance.Info, "Route generated");
         }
@@ -380,6 +381,44 @@ namespace ARS
                 grip = Math.Min(grip, ARS.TrackPoints[node].SurfaceGrip);
             }
             return grip;
+        }
+
+        // One probe every SurfaceSampleNodes nodes, carried across the gap, and the route's off-road share
+        // comes out of the same pass. A probe that misses leaves the node on road, so a hole in the scan
+        // never turns the approach off.
+        const int SurfaceSampleNodes = 4;
+
+        static void AssignSurfaceGrip()
+        {
+            int count = ARS.TrackPoints.Count;
+            if (count == 0) return;
+
+            int offRoad = 0;
+            int matched = 0;
+            int probes = 0;
+            float grip = 1f;
+            List<int> seen = new List<int>();
+            for (int node = 0; node < count; node++)
+            {
+                if (node % SurfaceSampleNodes == 0)
+                {
+                    grip = ARS.GroundGripAt(ARS.TrackPoints[node].Position);
+                    probes++;
+                    if (ARS.LastGroundMaterialMatched) matched++;
+                    if (ARS.LastGroundMaterialHit && !seen.Contains(ARS.LastGroundMaterialHash)) seen.Add(ARS.LastGroundMaterialHash);
+                }
+                ARS.TrackPoints[node].SurfaceGrip = grip;
+                if (grip < OutsideApproachMinGrip) offRoad++;
+            }
+
+            // The corners were built before the scan ran, so refresh their span minimum now.
+            foreach (CornerPoint corner in ARS.Corners)
+                if (corner.StartNode >= 0 && corner.EndNode >= 0)
+                    corner.SurfaceGrip = CornerSurfaceGrip(corner.StartNode, corner.EndNode, count);
+
+            ARS.Log(ARS.LogImportance.Info, "Surface: " + (100 * offRoad / count) + "% of the route is under the "
+                + OutsideApproachMinGrip.ToString("0.000") + " approach grip, " + matched + " of " + probes
+                + " probes matched a material, " + seen.Count + " distinct materials (" + ARS.RouteLengthMeters.ToString("0") + " m)");
         }
 
         // One probe per apex while the probe is unproven: the same material everywhere would mean it is not

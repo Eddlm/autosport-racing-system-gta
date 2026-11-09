@@ -1,58 +1,35 @@
+using System.Collections.Generic;
+
 namespace ARS
 {
-    // The game's authored tyre grip for each material, in materials.dat order. The shape test's material
-    // result IS this index - phMaterialMgrGta::GetMaterialId returns the entry's offset from the array start
-    // (gtaMaterialManager.cpp:415) - so no name hashing is involved. Values come from the ars-fivem table,
-    // whose layout the live manager confirms in SP Physics Tweaks: 213 entries, stride 112 bytes, grip first.
-    // An index off the end reads 1.0, so an unknown material never counts as loose ground.
+    // Tyre grip by the material hash a shape test returns, keyed off the four lists ARS already carries
+    // (Road, Dirt, Sand, Other). The hash is the collision material's, not a materials.dat index and not
+    // joaat of a material name: probed live on Offroad Hardcore v2, the apexes returned 282940568 on the
+    // paved stretches and -1907520769 / -1942898710 over dirt. A hash in none of the lists reads 1.0, so an
+    // unknown material is treated as road and never silently loses the outside approach.
     static class SurfaceMaterials
     {
-        static readonly float[] Grips =
-        {
-            1.00f, 1.00f, 0.90f, 1.00f, 1.00f, 0.90f, 0.90f, 0.92f,
-            1.00f, 1.00f, 0.80f, 1.00f, 1.00f, 1.00f, 0.90f, 1.00f,
-            1.00f, 1.00f, 0.75f, 0.80f, 0.75f, 0.90f, 0.90f, 0.75f,
-            0.75f, 0.45f, 0.65f, 0.40f, 0.65f, 0.40f, 1.00f, 0.75f,
-            0.85f, 0.75f, 0.75f, 0.90f, 0.90f, 0.90f, 0.70f, 0.70f,
-            0.70f, 0.70f, 0.70f, 0.70f, 0.70f, 0.70f, 0.70f, 0.90f,
-            0.85f, 0.70f, 0.75f, 0.80f, 0.75f, 0.85f, 0.85f, 1.00f,
-            1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f,
-            1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 0.80f, 0.80f, 0.80f,
-            0.80f, 0.80f, 0.80f, 0.80f, 0.80f, 0.80f, 0.80f, 0.80f,
-            0.80f, 0.90f, 0.90f, 0.80f, 0.90f, 0.80f, 0.80f, 0.85f,
-            0.80f, 0.80f, 0.85f, 0.80f, 0.90f, 1.00f, 1.00f, 0.90f,
-            0.80f, 0.80f, 0.80f, 0.80f, 0.80f, 0.80f, 0.80f, 0.80f,
-            0.85f, 0.80f, 0.80f, 0.80f, 1.00f, 1.00f, 0.90f, 0.90f,
-            0.90f, 0.90f, 0.90f, 0.90f, 0.90f, 0.90f, 0.90f, 0.90f,
-            0.90f, 0.90f, 0.90f, 0.90f, 0.90f, 0.90f, 0.90f, 0.90f,
-            0.90f, 1.00f, 1.00f, 0.90f, 0.80f, 1.00f, 1.00f, 1.00f,
-            1.00f, 0.80f, 0.80f, 1.00f, 0.50f, 0.50f, 1.00f, 0.70f,
-            0.70f, 0.70f, 0.70f, 0.90f, 0.90f, 0.90f, 0.70f, 0.70f,
-            0.70f, 0.70f, 0.70f, 0.70f, 0.70f, 0.70f, 0.70f, 0.70f,
-            0.70f, 0.70f, 0.70f, 0.70f, 0.70f, 0.70f, 0.70f, 0.70f,
-            0.70f, 0.70f, 0.70f, 0.70f, 0.90f, 0.90f, 1.00f, 1.00f,
-            0.80f, 0.80f, 0.80f, 1.00f, 0.75f, 1.00f, 1.00f, 0.75f,
-            0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f,
-            0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f,
-            0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f,
-            0.75f, 0.75f, 0.75f, 0.75f, 0.75f,
-        };
+        static readonly Dictionary<int, float> Grips = Build();
 
-        public static bool TryGrip(int materialIndex, out float grip)
+        static Dictionary<int, float> Build()
         {
-            if (materialIndex >= 0 && materialIndex < Grips.Length)
-            {
-                grip = Grips[materialIndex];
-                return true;
-            }
-            grip = 1f;
-            return false;
+            Dictionary<int, float> map = new Dictionary<int, float>();
+            foreach (int hash in ARS.Road) map[hash] = 1f;
+            foreach (int hash in ARS.Dirt) map[hash] = 0.75f;
+            foreach (int hash in ARS.Sand) map[hash] = 0.70f;
+            foreach (int hash in ARS.Other) map[hash] = 0.85f;
+            return map;
         }
 
-        public static float Grip(int materialIndex)
+        public static bool TryGrip(int materialHash, out float grip)
+        {
+            return Grips.TryGetValue(materialHash, out grip);
+        }
+
+        public static float Grip(int materialHash)
         {
             float grip;
-            return TryGrip(materialIndex, out grip) ? grip : 1f;
+            return Grips.TryGetValue(materialHash, out grip) ? grip : 1f;
         }
     }
 }
