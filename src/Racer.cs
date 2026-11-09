@@ -290,9 +290,9 @@ namespace ARS
         const float GsLaneOutsideFloor = 0f;
         // The lift runs from nothing at the edge to the full demand here, four metres past it.
         const float ProjectionFullLiftMetres = 4f;
-        // How many times the tyre's peak slip at the current speed the steering may ask for before the pedal goes
-        // to nothing.
-        const float SteerAskCapMultiple = 2f;
+        // The share of the peak slip at the current speed where the pedal starts coming off, and where it is gone.
+        const float SteerAskNoLiftShare = 1f;
+        const float SteerAskFullLiftShare = 2f;
         // How fast the demand follows its target: one time constant, so a flick of the trigger moves it by a few per cent.
         const float ProjectionChaseSeconds = 0.5f;
         // Armed at half the lateral grip the car actually has, not at a fixed G: a slow car and a fast one reach their
@@ -2735,14 +2735,21 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool kickRaises = _kickPlaying && baseThrottle < KickPedalLevel;
             if (kickRaises) baseThrottle = KickPedalLevel;
 
-            // The rFactor rule: when the steering asks for twice the slip the tyre peaks at, the corner is being
-            // taken too fast and the pedal goes to nothing. The reference is the peak slip AT THIS SPEED
+            // The rFactor rule: how much steering the geometry is asking for, as a share of the slip the tyre peaks
+            // at this speed. Past 1x the corner is being taken too fast and the pedal starts coming off; by 2x it is
+            // gone. The reference is the peak slip AT THIS SPEED
             // (`TRLateralAtSpeed`), not the handling curve's constant: the constant is the zero-speed peak, so twice
             // it sits above the steering lock and the rule could never fire. It reads the ask from BEFORE the
             // steering limiter, because the command that reaches the car is already clipped to what the tyres take.
             float steerAskShare = TRLateralAtSpeed > 0.01f
                 ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
-            bool steerAsksTooMuch = TrackSpeed.SteerAskThrottle && steerAskShare > SteerAskCapMultiple;
+            // x1 of the peak slip costs no pedal, x2 costs all of it, straight line between. The remap is called
+            // WITHOUT its clamp and the OUTPUT clamped instead: `Remap`'s clamp compares against (out_min, out_max)
+            // as given, so a descending pair makes every comparison meaningless and returns 1 or 0, never the share
+            // in between.
+            float steerCap = TrackSpeed.SteerAskThrottle
+                ? ARS.Clamp(ARS.Remap(steerAskShare, SteerAskNoLiftShare, SteerAskFullLiftShare, 1f, 0f), 0f, 1f)
+                : 1f;
 
             float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromStability);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOverspeed);
@@ -2750,12 +2757,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromChillOut);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromYield);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRecovery);
-            if (steerAsksTooMuch) ceiling = 0f;
+            ceiling = Math.Min(ceiling, steerCap);
             Control.MaxThrottle = ceiling;
 
             float binding = baseThrottle;
             ThrottleReason reason = ThrottleReason.Plan;
-            if (steerAsksTooMuch) { binding = 0f; reason = ThrottleReason.SteerAsk; }
+            if (steerCap < binding) { binding = steerCap; reason = ThrottleReason.SteerAsk; }
             if (Control.MaxThrottleFromTCS < binding) { binding = Control.MaxThrottleFromTCS; reason = ThrottleReason.Tcs; }
             if (Control.MaxThrottleFromStability < binding) { binding = Control.MaxThrottleFromStability; reason = ThrottleReason.Stability; }
             if (Control.MaxThrottleFromOverspeed < binding) { binding = Control.MaxThrottleFromOverspeed; reason = ThrottleReason.Overspeed; }
@@ -3470,7 +3477,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float share = TRLateralAtSpeed > 0.01f
                 ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
             string percent = ((int)Math.Round(share * 100f)).ToString(CultureInfo.InvariantCulture) + "%";
-            UI.ShowSubtitle(share > SteerAskCapMultiple ? "~r~STEER " + percent : "~b~STEER " + percent, 50);
+            UI.ShowSubtitle(share > SteerAskFullLiftShare ? "~r~STEER " + percent : "~b~STEER " + percent, 50);
         }
 
         void DrawFrontSlipReadout()
