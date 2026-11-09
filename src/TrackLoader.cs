@@ -195,8 +195,8 @@ namespace ARS
             int nodeCount = ARS.RouteNodes.Count;
             foreach (TrackPoint point in ARS.TrackPoints) ComputePointGeometry(point, nodeCount);
 
-            BuildApexTable();
             AssignSurfaceGrip();
+            BuildApexTable();
             LogSurfaceAtApexes();
             ARS.Log(ARS.LogImportance.Info, "Route generated");
         }
@@ -383,6 +383,22 @@ namespace ARS
             return grip;
         }
 
+        // The out-in belongs to the apex: the apex and two nodes either side are the window that must be road.
+        const int ApexWindowNodes = 2;
+
+        internal static bool ApexAllowsOutsideApproach(CornerPoint corner)
+        {
+            int count = ARS.TrackPoints.Count;
+            if (corner == null || count == 0) return false;
+            for (int step = -ApexWindowNodes; step <= ApexWindowNodes; step++)
+            {
+                int node = ARS.IsPointToPoint ? corner.Node + step : Wrap(corner.Node + step, count);
+                if (node < 0 || node >= count) continue;
+                if (ARS.TrackPoints[node].SurfaceGrip < OutsideApproachMinGrip) return false;
+            }
+            return true;
+        }
+
         // One probe every SurfaceSampleNodes nodes, carried across the gap, and the route's off-road share
         // comes out of the same pass. A probe that misses leaves the node on road, so a hole in the scan
         // never turns the approach off.
@@ -394,8 +410,6 @@ namespace ARS
             if (count == 0) return;
 
             int offRoad = 0;
-            int matched = 0;
-            int probes = 0;
             float grip = 1f;
             List<int> seen = new List<int>();
             for (int node = 0; node < count; node++)
@@ -403,21 +417,14 @@ namespace ARS
                 if (node % SurfaceSampleNodes == 0)
                 {
                     grip = ARS.GroundGripAt(ARS.TrackPoints[node].Position);
-                    probes++;
-                    if (ARS.LastGroundMaterialMatched) matched++;
                     if (ARS.LastGroundMaterialHit && !seen.Contains(ARS.LastGroundMaterialHash)) seen.Add(ARS.LastGroundMaterialHash);
                 }
                 ARS.TrackPoints[node].SurfaceGrip = grip;
                 if (grip < OutsideApproachMinGrip) offRoad++;
             }
 
-            // The corners were built before the scan ran, so refresh their span minimum now.
-            foreach (CornerPoint corner in ARS.Corners)
-                if (corner.StartNode >= 0 && corner.EndNode >= 0)
-                    corner.SurfaceGrip = CornerSurfaceGrip(corner.StartNode, corner.EndNode, count);
-
             foreach (int material in seen)
-                ARS.Log(ARS.LogImportance.Info, "Surface material " + material + ": " + (ARS.OffRoadGrip < 1f && !ARS.Road.Contains(material) ? "off road" : "road"));
+                ARS.Log(ARS.LogImportance.Info, "Surface material " + material + ": " + (SurfaceMaterials.IsRoad(material) ? "road" : "off road"));
             ARS.Log(ARS.LogImportance.Info, "Surface: " + (100 * offRoad / count) + "% of the route is off road, "
                 + seen.Count + " distinct materials (" + ARS.RouteLengthMeters.ToString("0") + " m)");
         }
@@ -497,6 +504,7 @@ namespace ARS
                 float halfTraverse = Math.Max(ARS.TrackPoints[corner.Node].TrackHalfWidth, 0.5f);
                 float apexHalfLength = 0.75f * 2f * halfTraverse / crossTan;
                 float outsideHalfLength = 2f * halfTraverse / crossTan;
+                bool apexRoad = ApexAllowsOutsideApproach(corner);
                 float travelled = 0f;
                 int previousNode = corner.Node;
                 for (int step = 0; step <= intoApex; step++)
@@ -509,8 +517,8 @@ namespace ARS
                     else if (travelled <= apexHalfLength)
                     {
                         float u = ARS.Clamp(1f - travelled / (2f * apexHalfLength), 0f, 1f);
-                        float nodeOutside = ARS.TrackPoints[node].SurfaceGrip < OutsideApproachMinGrip ? 0f : outside;
-                    share = nodeOutside + (inside - nodeOutside) * LaneSmoothStep(u);
+                        float nodeOutside = apexRoad ? outside : 0f;
+                        share = nodeOutside + (inside - nodeOutside) * LaneSmoothStep(u);
                     }
                     else
                     {
@@ -541,6 +549,7 @@ namespace ARS
                 float outsideHalfLength = 2f * halfTraverse / crossTan;
                 float runIn = runIns[c];
 
+                bool apexRoad = ApexAllowsOutsideApproach(corner);
                 float outTravelled = 0f;
                 int outPrevious = corner.Node;
                 int outWritten = 0;
@@ -555,7 +564,7 @@ namespace ARS
                     if (outTravelled <= apexHalfLength)
                     {
                         float u = ARS.Clamp(1f - outTravelled / (2f * apexHalfLength), 0f, 1f);
-                        float nodeOutside = ARS.TrackPoints[node].SurfaceGrip < OutsideApproachMinGrip ? 0f : outside;
+                        float nodeOutside = apexRoad ? outside : 0f;
                         outShare = nodeOutside + (inside - nodeOutside) * LaneSmoothStep(u);
                     }
                     else

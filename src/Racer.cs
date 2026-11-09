@@ -293,7 +293,7 @@ namespace ARS
         public const float FullThrottleSpeedErrorMps = 1f;
         public const float FullBrakeSpeedErrorMps = 3f;
         // Learner tolerance = half the brake: the error at which the pedal asks for 0.5.
-        const float BrakeLearnerBarMps = FullBrakeSpeedErrorMps * 0.5f;
+        const float BrakeLearnerBarMps = FullBrakeSpeedErrorMps * BrakeEntryBandShare;
 
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
         const float InputTrailSampleSpacing = 0.5f;
@@ -366,7 +366,6 @@ namespace ARS
 
         float _brakeSampleApexSpeed = 0f;
 
-        bool _brakeSampleFloorAtAim = false;
         bool _brakeSampleAimCrossed = false;
         // Car speed minus plan corner speed at the aim node, in m/s: the learner's verdict.
         float _brakeSampleAimError = 0f;
@@ -386,7 +385,6 @@ namespace ARS
         float _brakeCommitApexClosest = float.MaxValue;
         float _brakeCommitApexOffset = 0f;
         bool _brakeCommitCollided = false;
-        bool _brakeCommitFloorAtAim = false;
         bool _brakeCommitAimCrossed = false;
         const float BrakeSkidBrakeShare = 0.25f;
         const bool BrakeSkidPenaltyEnabled = false;
@@ -399,7 +397,6 @@ namespace ARS
         const float BrakeEntryBandShare = 0.5f;
         const float BrakeEntryFallPerMps = 0.02f;
         const float BrakeApexMissPenaltyPerMetre = 0.01f;
-        const float BrakeFloorLatchSeconds = 1f;
         const float BrakeOverAllowanceShare = 1.5f;
         const int BrakeOverSampleMs = 100;
         const float BrakeMaxFactor = 1.25f;
@@ -414,7 +411,7 @@ namespace ARS
 
         bool CornerRequiresBraking(int apexNode) => apexNode >= 0 && TryGetCornerContext(apexNode, out CornerContext context) && context.RequiresBraking;
 
-        bool CornerAsksForBraking() => Brain.Corner != null && Brain.Corner.Speed < Car.Velocity.Length();
+        bool CornerAsksForBraking() => Brain.Corner != null && ARS.CornerApexSpeed(Brain.Corner.Point, this) < Car.Velocity.Length();
 
         CornerContext CornerContextForWrite(int apexNode)
         {
@@ -1191,7 +1188,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 float metres = MetresToNode(corner.Node);
                 if (metres <= 0f || metres > reach || metres >= bestMeters) continue;
                 if (!CornerIsLaned(corner)) continue;
-                if (corner.Speed >= Math.Max(Car.Velocity.Length(), 1f)) continue;
+                if (ARS.CornerApexSpeed(corner, this) >= Math.Max(Car.Velocity.Length(), 1f)) continue;
                 bestMeters = metres;
                 best = corner;
             }
@@ -2056,7 +2053,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleWasAirborne = false;
                 _brakeSampleApexSpeed = Math.Max(2f, NextApexSpeed);
-                _brakeSampleFloorAtAim = false;
                 _brakeSampleAimCrossed = false;
                 _brakeSampleAimError = 0f;
                 _brakeSampleApexClosest = float.MaxValue;
@@ -2102,8 +2098,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     float toAim = MetresToNode(aimNode);
 
-                    if (toAim > 0f && toAim <= Car.Velocity.Length() * BrakeFloorLatchSeconds && _gsFloorActiveThisTick)
-                        _brakeSampleFloorAtAim = true;
                     if (toAim <= 0f && !_brakeSampleAimCrossed)
                     {
                         _brakeSampleAimCrossed = true;
@@ -2138,7 +2132,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             _brakeCommitCollided = _brakeSampleCollided;
             _brakeCommitAimCrossed = _brakeSampleAimCrossed;
             _brakeCommitAimError = _brakeSampleAimError;
-            _brakeCommitFloorAtAim = _brakeSampleFloorAtAim;
         }
 
         void CommitBrakeLearning()
@@ -3196,7 +3189,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             // No trail where there is no outside approach: those spheres are the shape the car will not use.
             CornerPoint shapedCorner = _laneShapeApexNode >= 0 ? ARS.Corners.FirstOrDefault(c => c.Node == _laneShapeApexNode) : null;
-            if (_laneShapeApexNode >= 0 && (shapedCorner == null || shapedCorner.SurfaceGrip >= TrackLoader.OutsideApproachMinGrip))
+            if (_laneShapeApexNode >= 0 && (shapedCorner == null || TrackLoader.ApexAllowsOutsideApproach(shapedCorner)))
             {
                 int count = ARS.TrackPoints.Count;
                 for (int direction = -1; direction <= 1; direction += 2)
