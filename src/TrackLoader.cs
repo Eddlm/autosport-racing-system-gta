@@ -643,6 +643,43 @@ namespace ARS
             return ((node % count) + count) % count;
         }
 
+        const int FlipReachNodes = 100;
+
+        // A width out to one side before the flip and to the other side after it; anything less is a straight
+        // being noisy, since the angle there hovers around zero.
+        static bool FlipIsAnS(int flipNode, int count)
+        {
+            float width = Math.Max(1f, ARS.TrackPoints[flipNode].TrackHalfWidth * 2f);
+            Vector3 at = ARS.TrackPoints[flipNode].Position;
+            Vector3 flat = new Vector3(ARS.TrackPoints[flipNode].Direction.X, ARS.TrackPoints[flipNode].Direction.Y, 0f);
+            Vector3 right = Vector3.Cross(Vector3.WorldUp, flat);
+            float before = 0f;
+            float after = 0f;
+            int reach = Math.Min(FlipReachNodes, count / 2);
+            for (int step = 1; step <= reach && (before == 0f || after == 0f); step++)
+            {
+                if (before == 0f)
+                {
+                    float side = Vector3.Dot(ARS.TrackPoints[ArcNode(flipNode, -step, count)].Position - at, right);
+                    if (Math.Abs(side) >= width) before = side;
+                }
+                if (after == 0f)
+                {
+                    float side = Vector3.Dot(ARS.TrackPoints[ArcNode(flipNode, step, count)].Position - at, right);
+                    if (Math.Abs(side) >= width) after = side;
+                }
+            }
+            return before != 0f && after != 0f && Math.Sign(before) != Math.Sign(after);
+        }
+
+        static bool InsideSpan(CornerPoint corner, int node, int count)
+        {
+            if (corner.StartNode < 0 || corner.EndNode < 0 || node < 0 || node >= count) return false;
+            int span = ArcSpan(corner.StartNode, corner.EndNode, count);
+            int offset = ARS.IsPointToPoint ? node - corner.StartNode : ArcSpan(corner.StartNode, node, count);
+            return offset >= 0 && offset <= span;
+        }
+
         static float LaneSmoothStep(float t)
         {
             t = ARS.Clamp(t, 0f, 1f);
@@ -756,49 +793,47 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Apex rejected: " + string.Join("; ", ApexRejects));
 
             int nodeCount = ARS.TrackPoints.Count;
+            foreach (CornerPoint corner in ARS.Corners) corner.IsChicane = false;
+
+            // An S is a curvature sign flip the road commits to: a whole track width out to one side before the
+            // flip and to the other side after it. One pass collects the flips, FlipIsAnS confirms them, and each
+            // corner takes the confirmed flip nearest its own apex.
+            int[] chicaneFlip = new int[ARS.Corners.Count];
+            int[] chicaneGap = new int[ARS.Corners.Count];
+            for (int i = 0; i < chicaneFlip.Length; i++) { chicaneFlip[i] = -1; chicaneGap[i] = int.MaxValue; }
+
+            for (int node = 0; node < nodeCount; node++)
+            {
+                int nextNode = ARS.IsPointToPoint ? node + 1 : Wrap(node + 1, nodeCount);
+                if (nextNode < 0 || nextNode >= nodeCount) continue;
+                float here = ARS.TrackPoints[node].Angle;
+                float after = ARS.TrackPoints[nextNode].Angle;
+                if (here == 0f || after == 0f || Math.Sign(here) == Math.Sign(after)) continue;
+                if (!FlipIsAnS(nextNode, nodeCount)) continue;
+
+                for (int i = 0; i < ARS.Corners.Count; i++)
+                {
+                    if (!InsideSpan(ARS.Corners[i], nextNode, nodeCount)) continue;
+                    int gap = ARS.IsPointToPoint
+                        ? Math.Abs(ARS.Corners[i].Node - nextNode)
+                        : Math.Min(ArcSpan(ARS.Corners[i].Node, nextNode, nodeCount), ArcSpan(nextNode, ARS.Corners[i].Node, nodeCount));
+                    if (gap >= chicaneGap[i]) continue;
+                    chicaneGap[i] = gap;
+                    chicaneFlip[i] = nextNode;
+                }
+            }
+
             for (int i = 0; i < ARS.Corners.Count; i++)
             {
+                if (chicaneFlip[i] < 0) continue;
                 CornerPoint corner = ARS.Corners[i];
-                int apex = corner.Node;
-                Vector3 apexFlat = new Vector3(ARS.TrackPoints[apex].Direction.X, ARS.TrackPoints[apex].Direction.Y, 0f);
-                Vector3 apexAt = ARS.TrackPoints[apex].Position;
-                Vector3 apexRight = Vector3.Cross(Vector3.WorldUp, apexFlat);
-                float width = Math.Max(1f, ARS.TrackPoints[apex].TrackHalfWidth * 2f);
                 int span = ArcSpan(corner.StartNode, corner.EndNode, nodeCount);
-
-                // The road around the corner votes: its own span ends, as long as each is at least a track width
-                // from the apex. A node exactly one width out has an offset of centimetres and its side is noise.
-                int backNode = corner.StartNode;
-                int fwdNode = corner.EndNode;
-                if (backNode < 0 || fwdNode < 0 || backNode >= nodeCount || fwdNode >= nodeCount) continue;
-                if ((ARS.TrackPoints[backNode].Position - apexAt).Length() < width) continue;
-                if ((ARS.TrackPoints[fwdNode].Position - apexAt).Length() < width) continue;
-
-                float backOffset = Vector3.Dot(ARS.TrackPoints[backNode].Position - apexAt, apexRight);
-                float fwdOffset = Vector3.Dot(ARS.TrackPoints[fwdNode].Position - apexAt, apexRight);
-
-                // An S has the road on one side behind the apex and the other side ahead of it; a bend keeps it
-                // on the same side both ways.
-                if (fwdOffset != 0f && Math.Sign(backOffset) != Math.Sign(fwdOffset))
-                {
-                    corner.IsChicane = true;
-                    // The apex goes to the first node past the crossover, so it sits on the new side.
-                    int flipOffset = 0;
-                    for (int step = 1; step <= span && flipOffset == 0; step++)
-                    {
-                        int aheadNode = ArcNode(apex, step, nodeCount);
-                        if (aheadNode < 0 || aheadNode >= nodeCount) break;
-                        if (Math.Sign(Vector3.Dot(ARS.TrackPoints[aheadNode].Position - apexAt, apexRight)) == Math.Sign(fwdOffset)) flipOffset = step;
-                    }
-                    if (flipOffset != 0)
-                    {
-                        int flipNode = ArcNode(apex, flipOffset, nodeCount);
-                        ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + apex + " moved to " + flipNode + ", behind " + backOffset.ToString("0.0") + " m, ahead " + fwdOffset.ToString("0.0") + " m off its line");
-                        corner.Node = flipNode;
-                        corner.LengthStart = ArcSpan(corner.StartNode, flipNode, nodeCount);
-                        corner.LengthEnd = Math.Max(0, span - corner.LengthStart);
-                    }
-                }
+                corner.IsChicane = true;
+                ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + corner.Node + " moved to " + chicaneFlip[i]
+                    + ", the turn flips there with a width either side");
+                corner.Node = chicaneFlip[i];
+                corner.LengthStart = Math.Max(0, ARS.IsPointToPoint ? corner.Node - corner.StartNode : ArcSpan(corner.StartNode, corner.Node, nodeCount));
+                corner.LengthEnd = Math.Max(0, span - corner.LengthStart);
             }
 
             AssignCrests(nodeCount);
