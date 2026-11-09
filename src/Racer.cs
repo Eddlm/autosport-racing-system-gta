@@ -738,14 +738,14 @@ namespace ARS
             float laneRequest = steerRefOffset;
             LaneReason laneReason = LaneReason.OwnLane;
 
-        // A held corner keeps the lane until the car is out of its exit, not until the lookahead passes.
+            // A held corner keeps the lane until the car is out of its exit, not until the lookahead passes.
             CornerPoint candidate = NearestApexAhead();
             if (_laneHeldCorner == null || OutOfLaneCornerExit(_laneHeldCorner))
             {
                 if (_laneHeldCorner != null) FinishShapeError(_laneHeldCorner);
                 if (candidate != null && candidate != _laneHeldCorner)
                 {
-        // Picked up inside the prep window: no outside approach, so no shape; the dynamic lane guides.
+                    // Picked up inside the prep window: no outside approach, so no shape; the dynamic lane guides.
                     float toEntrance = MetresToNode(CornerEntranceNode(candidate, candidate.Node));
                     _laneShapeArmed = toEntrance > Math.Max(speedMps, 1f) * ARS.LanePrepSeconds;
                 }
@@ -770,7 +770,7 @@ namespace ARS
             int laneNode = TrackLoader.NodeAhead(CurrentTrackPoint.Node, speedMps * ARS.LanePreviewSeconds, ARS.TrackPoints.Count);
             float laneEdge = Math.Max(roadWide - carHalfWidth, 0f);
             _laneField = ARS.TrackPoints[laneNode].LaneLineShare * laneEdge;
-        // The shape is read a short way ahead: under the car the wheel turns after it has gone by.
+            // The shape is read a short way ahead: under the car the wheel turns after it has gone by.
             int laneShapeNode = TrackLoader.NodeAhead(CurrentTrackPoint.Node, speedMps * ARS.LaneShapePreviewSeconds, ARS.TrackPoints.Count);
             float laneShapeNow = ClampShapedLane(ARS.TrackPoints[laneShapeNode].LaneLineShare * laneEdge, laneEdge, lineCorner);
             float aimRadius = ARS.TrackPoints[steerRefPoint.Node].PreciseCurveRadius;
@@ -812,11 +812,11 @@ namespace ARS
             }
             else
             {
-        // The outside hold outranks the dynamic ask: preparing the outside is the point.
+                // The outside hold outranks the dynamic ask: preparing the outside is the point.
                 CornerPoint prepApex = NearestApexForPrep(ARS.LanePrepSeconds);
                 if (prepApex != null)
                 {
-        // The hold travels with the car, at most LanePrepOutsideCapMetres past its own line.
+                    // The hold travels with the car, at most LanePrepOutsideCapMetres past its own line.
                     float outwardSign = -ARS.InsideSign(prepApex.Angle);
                     float fullOutside = outwardSign * laneEdge;
                     float capped = steerRefOffset + outwardSign * ARS.LanePrepOutsideCapMetres;
@@ -1885,7 +1885,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             gsFloor = Math.Min(gsFloor, Control.MaxThrottle);
             float throttleBeforeFloor = Control.Throttle;
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
-        // Off track the throttle is a FLOOR, not a cap: nothing cuts the pedal below the ramp.
+            // Off track the throttle is a FLOOR, not a cap: nothing cuts the pedal below the ramp.
             float offTrackFloor = OutOfTrackDistance() > 0f && !countersteering && _stuckPhase == StuckPhase.None
                 ? Control.MaxThrottleFromOffTrack
                 : 0f;
@@ -1902,7 +1902,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float ComputeCombinedInput(float intendedSpeedChange)
         {
-        // Only the error against ApexBrakingSpeed's ramp: 1 m/s to full throttle, 5 to full brake.
+            // Only the error against ApexBrakingSpeed's ramp: 1 m/s to full throttle, 5 to full brake.
             return PedalFromSpeedError(intendedSpeedChange);
         }
 
@@ -1944,7 +1944,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _projectionDropMph = 0f;
                 return;
             }
-        // Armed by sliding into it (>=60% of peak slip) with the wheel with the yaw; ask lags a tick.
+            // Armed by sliding into it (>=60% of peak slip) with the wheel with the yaw; ask lags a tick.
             float projectionSlide = Math.Abs(VehicleData.SlideAngle);
             if (float.IsNaN(projectionSlide) || float.IsInfinity(projectionSlide)) projectionSlide = 0f;
             bool steeringIntoSlide = Math.Abs(SteerAskDegrees) > 0.01f
@@ -2178,7 +2178,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 ? (1f - speedError) * BrakeEntryFallPerMps
                 : -speedError * BrakeEntryFallPerMps;
 
-        // Wide apex = too fast, but only off the walls; the miss is measured in lane offsets.
+            // Wide apex = too fast, but only off the walls; the miss is measured in lane offsets.
             float missMetres = 0f;
             bool punishedForMiss = false;
             if (BrakeMissPenaltyEnabled && !_brakeCommitCollided && _brakeCommitApexClosest < float.MaxValue)
@@ -2335,7 +2335,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (NextApexNode >= 0 && HasPassedApex(NextApexNode)) cornerSpd = 999f;
 
             bool cornerPlansABrake = cornerSpd < 999f;
-        // A braking plan is not a drift: the slide caps do not clip it.
+            // A braking plan is not a drift: the slide caps do not clip it.
             _brakePlanActive = cornerPlansABrake;
 
             if (TrackSpeed.SlopeGrip)
@@ -2378,7 +2378,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph);
-        // While the plan brakes the route term is dropped: it would ask for less, a second late.
+            // While the plan brakes the route term is dropped: it would ask for less, a second late.
             if (cornerPlansABrake && ARS.GetForwardSpeed(Car) > cornerTerm) routeTerm = 999f;
 
             _speedCorner = cornerTerm;
@@ -2554,7 +2554,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             Control.MaxThrottleFromChillOut = GlideCap(Control.MaxThrottleFromChillOut, ActiveManeuver.Type == ManeuverType.ChillOut ? ChillThrottleCap : 1f);
             Control.MaxThrottleFromYield = GlideCap(Control.MaxThrottleFromYield, ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null ? YieldThrottleLevel : 1f);
 
-        // Consumed as a floor: off means 0, the only value that leaves the pedal alone.
+            // Consumed as a floor: off means 0, the only value that leaves the pedal alone.
             float offTrackThrottle = TrackSpeed.OffTrackThrottle ? 1f : 0f;
             if (TrackSpeed.OffTrackThrottle && OutOfTrackDistance() > 0f)
             {
@@ -2598,7 +2598,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             Control.MaxBrakeFromABS = AbsCapLevel();
             Control.MaxBrakeFromCountersteer = GlideCap(Control.MaxBrakeFromCountersteer,
                 countersteering && !_brakePlanActive ? CountersteerPedalCap : 1f);
-        // Not bypassed by a braking plan: a tyre past half its peak has no grip to brake with.
+            // Not bypassed by a braking plan: a tyre past half its peak has no grip to brake with.
             Control.MaxBrakeFromSlide = GlideCap(Control.MaxBrakeFromSlide,
                 ARS.SlideBrakeCap && _slideShare > SlideBrakeCapShare ? SlideBrakeCap : 1f);
 
@@ -2632,10 +2632,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool kickRaises = _kickPlaying && baseThrottle < KickPedalLevel;
             if (kickRaises) baseThrottle = KickPedalLevel;
 
-        // Past 1x the peak slip the pedal comes off, 1.5x at the floor; the ask is read pre-limiter.
+            // Past 1x the peak slip the pedal comes off, 1.5x at the floor; the ask is read pre-limiter.
             float steerAskShare = TRLateralAtSpeed > 0.01f
                 ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
-        // Remap is called WITHOUT its clamp and the output clamped: a descending range breaks its compare.
+            // Remap is called WITHOUT its clamp and the output clamped: a descending range breaks its compare.
             float steerCap = TrackSpeed.SteerAskThrottle
                 ? ARS.Clamp(ARS.Remap(steerAskShare, SteerAskNoLiftShare, SteerAskFloorShare, 1f, SteerAskPedalFloor),
                     SteerAskPedalFloor, 1f)
@@ -3183,7 +3183,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                         TrackPoint nodePoint = ARS.TrackPoints[n];
                         if (!nodePoint.LaneShaped || nodePoint.LaneShapeApex != _laneShapeApexNode) break;
                         lastShaped = n;
-        // Every other node: a sphere per node exhausts the frame's marker budget and drops the trail.
+                        // Every other node: a sphere per node exhausts the frame's marker budget and drops the trail.
                         if ((n & 1) == 0) continue;
                         float half = Math.Max(nodePoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f);
                         Vector3 right = Vector3.Normalize(Vector3.Cross(nodePoint.Direction, Vector3.WorldUp));
@@ -4198,7 +4198,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 : targetDistance;
             if (rawDistance < 0f) rawDistance = 0f;
 
-        // Shift the brake ramp back by what f x brake-scale of error costs, so the car lands on it.
+            // Shift the brake ramp back by what f x brake-scale of error costs, so the car lands on it.
             float decel = BrakingDecel(apexNode, rawDistance);
             float lag = EffectiveBrakeFactor(apexNode) * FullBrakeSpeedErrorMps;
             float distance = Math.Max(0f, rawDistance - (velTarget * lag - 0.5f * lag * lag) / Math.Max(decel, 0.1f));

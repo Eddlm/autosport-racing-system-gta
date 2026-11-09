@@ -447,7 +447,7 @@ namespace ARS
                 shapedStarts[c] = previousNode;
             }
 
-        // The exit is the entry run the other way, written after every entry exists.
+            // The exit is the entry run the other way, written after every entry exists.
             for (int c = 0; c < corners; c++)
             {
                 CornerPoint corner = ARS.Corners[c];
@@ -997,7 +997,7 @@ namespace ARS
                 if (radius < tightestRadius) tightestRadius = radius;
             }
 
-        // The apex is the FIRST node as tight as the corner gets, not the tightest node there is.
+            // The apex is the FIRST node as tight as the corner gets, not the tightest node there is.
             int apexPosition = startPosition;
             float apexTolerance = tightestRadius * (1f + ApexSameRadiusShare);
             for (int position = startPosition; position <= endPosition; position++)
@@ -1081,7 +1081,7 @@ namespace ARS
             };
             corner.Speed = (float)Math.Sqrt(9.81f * tightestRadius);
 
-        // A corner is dropped when no straight lies between it and the previous apex and it is not 5% slower.
+            // A corner is dropped when no straight lies between it and the previous apex and it is not 5% slower.
             if (ARS.Corners.Count > 0 && !IsWorthAnApex(ARS.Corners[ARS.Corners.Count - 1], corner, count))
             {
                 CornerPoint kept = ARS.Corners[ARS.Corners.Count - 1];
@@ -1163,7 +1163,6 @@ namespace ARS
             }
             return maxStep;
         }
-        const float SpanMinimumMeters = 20f;
         const float SpanEntranceRadiusMultiple = 1.5f;
         const float SpanExitRadiusMultiple = 1.5f;
         const float SpanMergeRadiusGate = 50f;
@@ -1240,7 +1239,7 @@ namespace ARS
                 }
                 last = sample;
             }
-        // Ran out of reach without turning far enough: the road is straighter than the window, so 999.
+            // Ran out of reach without turning far enough: the road is straighter than the window, so 999.
             return -1;
         }
 

@@ -3724,9 +3724,6 @@ namespace ARS
             }
         }
 
-
-
-
         public static string SpeedSourceName(Racer racer)
         {
             SpeedTerm term = racer.ThrottleTerm;
@@ -3767,6 +3764,7 @@ namespace ARS
 
         static string SpeedNumber(float mps)
         {
+            // 999 means "nothing to respect": print it as a dash, never as a speed.
             return mps >= 900f ? "-" : mps.ToString("0.0", CultureInfo.InvariantCulture);
         }
 
