@@ -348,6 +348,9 @@ namespace ARS
         int _planLogApexNode = -1;
         float _laneLead;
         float _laneOutCap;
+        int _laneAskCornerNode = -1;
+        int _laneAskLap = -1;
+        int _laneAskStartMs;
 
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;
@@ -796,18 +799,20 @@ namespace ARS
                     : laneShapeNow;
                 // Out is a lead over the car, never a destination: the ask cannot sit further out than the cap, and
                 // the car keeps taking up the lead until it sits on the line. In is the aim itself, uncapped.
-                // The cap is the creep before the entrance -- 2 m at 2 degrees of road between the car and the
-                // entrance, 0.1 m at 20 -- and the plain 2 m after it, where the ramp alone is asking.
+                // The creep opens at 0.1 m and reaches the full cap one second after the ask begins for this corner,
+                // so the first tick of a corner cannot throw the car outward, whatever the road did behind it.
                 float outward = TrackTurnSign(CurrentTrackPoint.Node, laneApex.Node, 0);
                 if (outward == 0f) outward = -ARS.InsideSign(laneApex.Angle);
-                _laneOutCap = ARS.LanePrepOutsideCapMetres;
-                if (beforeEntrance)
+                if (laneApex.Node != _laneAskCornerNode || Lap != _laneAskLap)
                 {
-                    Vector3 here = CurrentTrackPoint.Direction;
-                    Vector3 atEntrance = ARS.TrackPoints[entranceNode].Direction;
-                    float approachGap = Math.Abs((float)(Math.Atan2(here.X * atEntrance.Y - here.Y * atEntrance.X, here.X * atEntrance.X + here.Y * atEntrance.Y) * 180.0 / Math.PI));
-                    _laneOutCap = ARS.Clamp(ARS.Remap(approachGap, 2f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
+                    _laneAskCornerNode = laneApex.Node;
+                    _laneAskLap = Lap;
+                    _laneAskStartMs = Game.GameTime;
                 }
+                _laneOutCap = beforeEntrance
+                    ? ARS.Clamp(ARS.Remap(Game.GameTime - _laneAskStartMs, 0f, ARS.LanePrepRampSeconds * 1000f,
+                        ARS.LanePrepCreepMetres, ARS.LanePrepOutsideCapMetres), ARS.LanePrepCreepMetres, ARS.LanePrepOutsideCapMetres)
+                    : ARS.LanePrepOutsideCapMetres;
                 _laneLead = (aim - steerRefOffset) * outward;
                 laneRequest = _laneLead > _laneOutCap ? steerRefOffset + outward * _laneOutCap : aim;
                 laneReason = LaneReason.CurveLean;

@@ -174,6 +174,8 @@ namespace ARS
         public const float LaneShapeOuterMarginMetres = 0.5f;
         public const float LaneApexMinReachMeters = 20f;
         public const float LanePrepOutsideCapMetres = 2f;
+        public const float LanePrepCreepMetres = 0.1f;
+        public const float LanePrepRampSeconds = 1f;
         public const float LaneInsideSign = -1f;
         public static float InsideSign(float cornerAngle) { return LaneInsideSign * Math.Sign(cornerAngle); }
         public const bool AbsoluteLaneEnabled = true;
