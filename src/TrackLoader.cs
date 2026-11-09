@@ -195,6 +195,8 @@ namespace ARS
             int nodeCount = ARS.RouteNodes.Count;
             foreach (TrackPoint point in ARS.TrackPoints) ComputePointGeometry(point, nodeCount);
 
+            AssignSurfaceGrip();
+
             BuildApexTable();
             ARS.Log(ARS.LogImportance.Info, "Route generated");
         }
@@ -361,6 +363,28 @@ namespace ARS
             if (ARS.TrackPoints.Count > 1) BuildLaneField(ARS.TrackPoints.Count);
         }
 
+        // One probe every SurfaceSampleNodes nodes, carried across the gap; a failed probe stays road, so a
+        // miss never turns the outside approach off. The route's off-road share comes out of the same pass.
+        const int SurfaceSampleNodes = 4;
+
+        static void AssignSurfaceGrip()
+        {
+            int count = ARS.TrackPoints.Count;
+            if (count == 0) return;
+
+            int offRoad = 0;
+            float grip = 1f;
+            for (int node = 0; node < count; node++)
+            {
+                if (node % SurfaceSampleNodes == 0) grip = ARS.GroundGripAt(ARS.TrackPoints[node].Position);
+                ARS.TrackPoints[node].SurfaceGrip = grip;
+                if (grip < 1f) offRoad++;
+            }
+
+            ARS.Log(ARS.LogImportance.Info, "Surface: " + (100 * offRoad / count) + "% of the route is not road ("
+                + ((count + SurfaceSampleNodes - 1) / SurfaceSampleNodes) + " probes, one every " + SurfaceSampleNodes + " nodes)");
+        }
+
         static void BuildLaneField(int count)
         {
             for (int node = 0; node < count; node++)
@@ -430,7 +454,8 @@ namespace ARS
                     else if (travelled <= apexHalfLength)
                     {
                         float u = ARS.Clamp(1f - travelled / (2f * apexHalfLength), 0f, 1f);
-                        share = outside + (inside - outside) * LaneSmoothStep(u);
+                        float nodeOutside = ARS.TrackPoints[node].SurfaceGrip < 1f ? 0f : outside;
+                    share = nodeOutside + (inside - nodeOutside) * LaneSmoothStep(u);
                     }
                     else
                     {
@@ -475,7 +500,8 @@ namespace ARS
                     if (outTravelled <= apexHalfLength)
                     {
                         float u = ARS.Clamp(1f - outTravelled / (2f * apexHalfLength), 0f, 1f);
-                        outShare = outside + (inside - outside) * LaneSmoothStep(u);
+                        float nodeOutside = ARS.TrackPoints[node].SurfaceGrip < 1f ? 0f : outside;
+                        outShare = nodeOutside + (inside - nodeOutside) * LaneSmoothStep(u);
                     }
                     else
                     {

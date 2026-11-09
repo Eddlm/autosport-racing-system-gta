@@ -375,6 +375,9 @@ namespace ARS
         // Which apex's shape wrote this node: a shape holds only while its own corner is current.
         public int LaneShapeApex = -1;
         public int LaneShapeStart = -1;
+        // Road grip share under this node, sampled at load: 1 on road, 0 anything else. A wheel in contact
+        // is the only true source of the surface multiplier, and the route is scanned before one is there.
+        public float SurfaceGrip = 1f;
         public int LaneShapeExit = -1;
     }
 

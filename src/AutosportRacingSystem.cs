@@ -2658,13 +2658,14 @@ namespace ARS
 
         }
 
-        public static bool TryGetSurfaceHash(Vector3 start, Vector3 end, Entity ignore, out int materialId, out Vector3 normal)
+        // Road grip share under a point, for the load-time route scan. The shape test answers a material
+        // HASH here; the real per-material multipliers are indexed by material INDEX, which only a wheel in
+        // contact reports (ars-fivem's material_tyre_grip table), so this answers road or not road.
+        public static float GroundGripAt(Vector3 point)
         {
-            materialId = 0;
-            normal = Vector3.Zero;
-            if (ignore == null) return false;
-
-            int shape = Function.Call<int>(Hash._0x28579D1B8F8AAC80, start.X, start.Y, start.Z, end.X, end.Y, end.Z, 0.3f, (int)IntersectOptions.Map, ignore.Handle, 7);
+            Vector3 start = point + new Vector3(0f, 0f, 2f);
+            Vector3 end = point - new Vector3(0f, 0f, 2f);
+            int shape = Function.Call<int>(Hash._0x377906D8A31E5586, start.X, start.Y, start.Z, end.X, end.Y, end.Z, (int)IntersectOptions.Map, 0, 7);
 
             OutputArgument didhit = new OutputArgument();
             OutputArgument hitpos = new OutputArgument();
@@ -2673,11 +2674,9 @@ namespace ARS
             OutputArgument entity = new OutputArgument();
 
             int status = Function.Call<int>(Hash._0x65287525D951F6BE, shape, didhit, hitpos, snormal, materialhash, entity);
-            if (status == 0 || !didhit.GetResult<bool>()) return false;
+            if (status == 0 || !didhit.GetResult<bool>()) return 1f;
 
-            materialId = materialhash.GetResult<int>();
-            normal = snormal.GetResult<Vector3>();
-            return true;
+            return Road.Contains(materialhash.GetResult<int>()) ? 1f : 0f;
         }
 
         static public List<Vector3> GridPositions = new List<Vector3>();
