@@ -416,9 +416,10 @@ namespace ARS
                 if (corner.StartNode >= 0 && corner.EndNode >= 0)
                     corner.SurfaceGrip = CornerSurfaceGrip(corner.StartNode, corner.EndNode, count);
 
-            ARS.Log(ARS.LogImportance.Info, "Surface: " + (100 * offRoad / count) + "% of the route is under the "
-                + OutsideApproachMinGrip.ToString("0.000") + " approach grip, " + matched + " of " + probes
-                + " probes matched a material, " + seen.Count + " distinct materials (" + ARS.RouteLengthMeters.ToString("0") + " m)");
+            foreach (int material in seen)
+                ARS.Log(ARS.LogImportance.Info, "Surface material " + material + ": " + (ARS.OffRoadGrip < 1f && !ARS.Road.Contains(material) ? "off road" : "road"));
+            ARS.Log(ARS.LogImportance.Info, "Surface: " + (100 * offRoad / count) + "% of the route is off road, "
+                + seen.Count + " distinct materials (" + ARS.RouteLengthMeters.ToString("0") + " m)");
         }
 
         // One probe per apex while the probe is unproven: the same material everywhere would mean it is not

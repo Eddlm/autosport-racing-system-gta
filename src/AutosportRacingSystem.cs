@@ -278,7 +278,10 @@ namespace ARS
         public static ulong WheelPowerOffset = 0x0;
 
         public static List<int> Other = new List<int> { 555004797, -399872228, -1447280105, 722686013 };
-        public static List<int> Road = new List<int> { 1187676648, 282940568, -108464011, 1187676648, -1084640111, };
+                // Only 282940568 is confirmed against a live probe (the paved stretches of Senora Rd); the other
+        // three came from an earlier collection and are kept because a road hash wrongly dropped costs the
+        // outside line on a corner, while an extra one only keeps it. 1187676648 appeared twice.
+        public static List<int> Road = new List<int> { 282940568, 1187676648, -108464011, -1084640111 };
         public static List<int> Dirt = new List<int> { 1144315879, 510490462, -1907520769, -1885547121, -700658213, 2128369009,
             -1595148316,-765206029,509508168,1333033863,951832588,-840216541,-1907520769,510490462,-1942898710};
         public static List<int> Sand = new List<int> { 1288448767, };
@@ -2658,6 +2661,9 @@ namespace ARS
 
         }
 
+        // Road is 1.0 and everything else this, one constant for the whole class: a modded materials.dat
+        // can move every grip in the game, so the number is ours and the classification is what is trusted.
+        public const float OffRoadGrip = 0.75f;
         public static bool LastGroundMaterialMatched = false;
         public static bool LastGroundMaterialHit = false;
         public static int LastGroundMaterialHash = 0;
@@ -2690,9 +2696,8 @@ namespace ARS
             LastGroundMaterialHash = material;
             LastGroundHit = hitpos.GetResult<Vector3>();
             LastGroundHitModel = entity.GetResult<int>();
-            float grip;
-            LastGroundMaterialMatched = SurfaceMaterials.TryGrip(material, out grip);
-            return LastGroundMaterialMatched ? grip : 1f;
+            LastGroundMaterialMatched = SurfaceMaterials.IsRoad(material);
+            return SurfaceMaterials.IsRoad(material) ? 1f : OffRoadGrip;
         }
 
         static public List<Vector3> GridPositions = new List<Vector3>();
