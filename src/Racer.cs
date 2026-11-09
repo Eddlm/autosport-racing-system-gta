@@ -802,9 +802,13 @@ namespace ARS
                 CornerPoint prepApex = NearestApexForPrep(ARS.LanePrepSeconds);
                 if (prepApex != null)
                 {
-                    // The prep is a positioning move to the outside edge, not a fine correction: the shape never
-                    // asks for out, this does, and only for a corner the car will have to slow for.
-                    laneRequest = -ARS.InsideSign(prepApex.Angle) * laneEdge;
+                    // The prep is a positioning move, not a fine correction: it asks for the outside edge but never
+                    // more than the cap beyond the car's own lane, so the mover walks it out smoothly instead of
+                    // jumping to the edge. The shape still never asks for out.
+                    float prepOutward = -ARS.InsideSign(prepApex.Angle);
+                    float prepEdge = prepOutward * laneEdge;
+                    float prepCap = steerRefOffset + prepOutward * ARS.LanePrepOutsideCapMetres;
+                    laneRequest = prepOutward > 0f ? Math.Min(prepEdge, prepCap) : Math.Max(prepEdge, prepCap);
                     laneReason = LaneReason.CurveLean;
                     prepOutside = true;
                     if (_prepLoggedApex != prepApex.Node)
