@@ -6,6 +6,7 @@ using GTA.Native;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -13,19 +14,21 @@ namespace ARS
 {
     // Every track-derived speed system, each with an on/off switch of its own. On is what the car does today; off
     // leaves the system in place and removes its effect, so one of them can be named as the guilty one without
-    // rewriting anything else. Three more already carry their own switch and are not repeated here: Gs Lane Throttle
-    // Floor (ARS.GsLaneThrottleFloor), Overspeed Correction (ARS.OverspeedCutPerTenthG at 0) and Slope Loss
-    // (HillGripEffect at 0 %).
+    // rewriting anything else. The last three also have a setting of their own; the gate sits in front of it so the
+    // bench can clear the whole set without touching the ini, and the setting keeps the final say while the gate is on.
     internal static class TrackSpeed
     {
         public static readonly bool CornerPlan = true;
         public static readonly bool RouteCurvature = true;
-        public static readonly bool RouteBrakeCap = true;
-        public static readonly bool ChicaneBoost = true;
+        public static readonly bool RouteBrakeCap = false;
+        public static readonly bool ChicaneBoost = false;
         public static readonly bool ProjectionCut = true;
-        public static readonly bool OffTrackThrottle = true;
-        public static readonly bool CrestGate = true;
-        public static readonly bool StabilityCap = true;
+        public static readonly bool OffTrackThrottle = false;
+        public static readonly bool CrestGate = false;
+        public static readonly bool StabilityCap = false;
+        public static readonly bool GsLaneFloor = false;
+        public static readonly bool OverspeedCorrection = false;
+        public static readonly bool SlopeGrip = false;
     }
 
     public enum RacerBaseBehavior
@@ -285,10 +288,11 @@ namespace ARS
         const float RouteBrakeSlackMph = 5f;
         const float GsLaneThrottleMaxFloor = 1f;
         const float GsLaneOutsideFloor = 0f;
-        const float ProjectionSlowdownMphPerSecond = 2f;
-        const float ProjectionRecoveryMphPerSecond = 1f;
-        // The brake may not take the car below this floor, in mph, so the projection can never bring it to a stop.
-        const float OffTrackSpeedFloorMph = 30f;
+        const float ProjectionSlowdownMphPerSecond = 4f;
+        const float ProjectionRecoveryMphPerSecond = 4f;
+        // The brake may not take the car below this floor, in mph. Zero means the projection may bring the car to a
+        // stop: there is no promise here that it cannot.
+        const float OffTrackSpeedFloorMph = 0f;
         const float OffshootMinSpeedMph = 20f;
         public const float FullThrottleSpeedErrorMps = 1f;
         public const float FullBrakeSpeedErrorMps = 3f;
@@ -1872,7 +1876,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float GsLaneThrottleFloorValue(out bool insideRegime)
         {
-            insideRegime = ARS.GsLaneThrottleFloor && _exitRoomArmed;
+            insideRegime = TrackSpeed.GsLaneFloor && ARS.GsLaneThrottleFloor && _exitRoomArmed;
             if (!insideRegime) return 0f;
             return GsLaneOutsideFloor + (GsLaneThrottleMaxFloor - GsLaneOutsideFloor) * _exitRoom01;
         }
@@ -2403,6 +2407,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             // exist to keep a sliding car under control have no business clipping it.
             _brakePlanActive = cornerPlansABrake;
 
+            if (TrackSpeed.SlopeGrip)
             {
                 float slopeAngleDeg = ARS.RadToDeg(GetFollowPointSlopeAngle());
                 float slopeGripFactor = ARS.HillGripFactorFromPitchAngle(slopeAngleDeg, this);
@@ -2581,6 +2586,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float OverspeedThrottleLevel()
         {
+            if (!TrackSpeed.OverspeedCorrection) return 1f;
             bool straight = ControlledByPlayer
                 ? Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) < OverspeedArmMaxLateralGs
                 : Math.Abs(Control.SteerDegrees) < OverspeedArmMaxSteerDegrees;
@@ -3407,6 +3413,12 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             ARS.DrawLine(origin, half, _projectionPathColor);
             ARS.DrawLine(half, full, _projectionPathColor);
+
+            // The bleed belongs at the end of the line: this is what the one-second point is costing the target.
+            if (_projectionDropMph > 0.5f)
+                ARS.DrawText(full + Vector3.WorldUp * 0.5f,
+                             "-" + ((int)Math.Round(_projectionDropMph)).ToString(CultureInfo.InvariantCulture) + " MPH",
+                             _projectionCutActive ? Color.Red : Color.Yellow, 0.45f);
         }
 
         void DrawFrontSlipReadout()
