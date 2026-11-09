@@ -1,4 +1,3 @@
-// Per-car tuning derived from the handling and from the laps the car has actually driven.
 using GTA;
 using GTA.Native;
 using System;

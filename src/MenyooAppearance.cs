@@ -1,4 +1,3 @@
-// Copies a Menyoo skin onto a rival's car by model hash.
 using GTA;
 using GTA.Native;
 using System;

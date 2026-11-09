@@ -1,4 +1,3 @@
-// The schema of every owned ini, its prune and its repair pass: a key missing here is deleted at load.
 using System;
 using System.Collections.Generic;
 using System.Globalization;

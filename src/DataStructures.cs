@@ -1,4 +1,3 @@
-// The data every racer shares: vehicle limits, handling, brain and control state.
 using GTA.Math;
 using System;
 using System.Collections.Generic;
@@ -122,7 +121,6 @@ namespace ARS
 
             public float HighSpeedCurveRadius = 0f;
 
-            public float CurveRadiusAfterFollowPoint = 0f;
         }
 
         public Intention CurrentIntention = new Intention();
@@ -130,7 +128,6 @@ namespace ARS
         {
             public float Speed;
             public SpeedTerm Term = SpeedTerm.None;
-            // Which node and which geometry produced that term: the apex for a corner, the follow point for the route.
             public int TermNode = -1;
             public float TermMetres;
             public float TermRadius;
@@ -267,7 +264,6 @@ namespace ARS
         public bool Chevron;
     }
 
-    // Which term fixed Intention.Speed. Published so a readout can say *why* the car is not at full throttle.
     public enum SpeedTerm
     {
         None,
@@ -368,8 +364,7 @@ namespace ARS
         public Vector3 Direction = Vector3.Zero;
         public float GeneralCurveRadius = 999f;
         public float PreciseCurveRadius = 999f;
-        // The circle the road is on here, measured over a fixed amount of turn either side of the node instead of
-        // over a fixed length: the one a corner's speed can be judged on. 999 when the road never turns that far.
+        // The circle the road is on here, over a fixed turn either side of the node.
         public float SweepCurveRadius = 999f;
         public float ExactRadius = 999f;
         public float Elevation = 0f;
@@ -377,9 +372,8 @@ namespace ARS
         public float CumulativeDistance = 0f;
         public float LaneLineShare;
         public bool LaneShaped;
-        // Which apex's shape wrote this node, so a shape can only be honoured while its own corner is the selected one.
+        // Which apex's shape wrote this node: a shape holds only while its own corner is current.
         public int LaneShapeApex = -1;
-        // On the apex node only: where that corner's shaped region starts and ends, in track nodes.
         public int LaneShapeStart = -1;
         public int LaneShapeExit = -1;
     }
@@ -394,17 +388,12 @@ namespace ARS
         public int LengthEnd = 5;
         public float Speed = 999;
         public float Elevation = 0f;
-        public float ElevationChange = 0f;
-        public bool IsKey = false;
 
         public bool IsChicane = false;
 
         public float SupposedRadius = 999f;
 
         public float DetectedRadius = 999f;
-        // The radius of the fastest line through this corner: the circle tangent to the inside at the apex and to
-        // the outside where it leaves. `r_in + width / (1 - cos(angle / 2))`. Set at load; 0 if never computed.
-        public float OptimalRadius = 0f;
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }
@@ -429,7 +418,6 @@ namespace ARS
     {
         public float Speed = 0f;
         public CornerPoint Point;
-        public float SecondsToEntrance;
         public Corner  (float speed, CornerPoint point)
         {
             Speed = speed;

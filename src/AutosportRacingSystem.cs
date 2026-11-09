@@ -1,4 +1,3 @@
-// The script: settings and menus, the race lifecycle, and the stores every other file reads.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -136,8 +135,6 @@ namespace ARS
         public static bool SlideBrakeCap = true;
 
         public static bool BrakeLearningNotify = false;
-        // Parked instrumentation: the mean gap between a car and the shaped lane it is following, announced when it
-        // leaves a corner's exit. Off means no per-node sampling at all - the cost is the dot product, so it is gated.
         public static bool LaneErrorTelemetry = false;
 
         public static bool SteerTrace = false;
@@ -168,47 +165,24 @@ namespace ARS
 
         public static float MaxCrestLift = 0.4f;
         public static float BrakeAimDepth = 0f;
-        // The radius the car's corner speed is computed from. `OptimalRadius` is the circle of the fastest line
-        // through the corner; `DetectedRadius` is the road's own bend. One switch, because it may be reverted.
-        public const bool UseOptimalRadius = true;
-        public static float CornerRadiusForSpeed(CornerPoint c)
-        {
-            return UseOptimalRadius && c.OptimalRadius > 0f ? c.OptimalRadius : c.DetectedRadius;
-        }
 
         public const float LaneDynamicRadius = 400f;
-        public const float LaneAbsoluteMetres = 25f;
-        // The approach the absolute owns before a corner: the car has to be on the outside this long before it.
+        // The approach the absolute owns: the car has to be on the outside this long before a corner.
         public const float LanePrepSeconds = 6f;
-        // Leaving an apex, nobody prepares the next one for this long: the car is still in this one.
-        public const float LaneApexCooldownSeconds = 1f;
-        // The outside is asked for gently: never further than this from the car's own lane.
+        // Nobody prepares the next apex for this long after leaving one.
         public const float LaneOutsidePullMetres = 1f;
-        // Where the lane is read. Longer than the pursuit on purpose: the car has to start moving before
-        // the line does, and a lateral shift of d metres at v takes d v^2 / a_peak metres to be legal.
         public const float LanePreviewSeconds = 1f;
-        // The shaped lane is a place the car should be, not a place it is heading for, so it is read half a second
-        // ahead: far enough that the wheel is already turning when the shape arrives, short enough not to cut the
-        // corner inside its own trace.
+        // The shaped lane is a place to BE, so it is read ahead, not under the car.
         public const float LaneShapePreviewSeconds = 0.5f;
-        // How far the inside of a shape may go from the outer edge: the car can lean on the inner edge, but its body has
-        // to stay on the road at the outer one.
         public const float LaneShapeOuterMarginMetres = 0.5f;
-        // The lookahead a corner selection is judged against. Floored, because at a crawl the honest lookahead is zero
-        // and then the nearest apex flips frame to frame on node-boundary jitter, which reads as the spheres shaking.
+        // Corner selection lookahead, floored: at a crawl the honest lookahead is nothing.
         public const float LaneApexMinReachMeters = 20f;
-        // How far the outside hold may ask beyond the car's own line. A sudden full-width step is a swerve, so the ask
-        // travels with the car instead of jumping to the edge.
         public const float LanePrepOutsideCapMetres = 2f;
-        // Which side of a corner's own angle sign is its inside. One place, so a mirror is one number.
+        // Which side of a corner's angle sign is its inside: one place, so a mirror is one number.
         public const float LaneInsideSign = -1f;
         public static float InsideSign(float cornerAngle) { return LaneInsideSign * Math.Sign(cornerAngle); }
-        // How far inside its own lane the route stage aims: this divided by the node's radius, in metres.
-        // TEMPORARY (driver, 2026-11-02): false isolates the route/dynamic lane, so the precomputed field cannot
-        // overrule it. Flip to true to put the absolute back; it is a switch because it is being judged, not a setting.
         public const bool AbsoluteLaneEnabled = true;
                 public const float LaneInsetPerRadius = 125f;
-        // The apex shape's steepness per radian, and the ladder the developer row publishes for it.
         public static readonly string[] LaneShapeStepValues = { "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90", "0.95", "1.00" };
         public static bool RouteRadiusFar = false;
         public static float SlidRadiusLeadSeconds = 1f;
@@ -253,7 +227,6 @@ namespace ARS
 
         public const float SpectateCheckpointRadiusMeters = 400f;
 
-        public static float LaneGainExponent = 1f;
 
         public static List<Prop> CustomProps = new List<Prop>();
         public static List<Prop> AutoGeneratedProps = new List<Prop>();
@@ -690,7 +663,6 @@ namespace ARS
 
         List<string> _carPoolFiles = new List<string>();
         bool _carPoolRefreshing;
-        public static int TrackListPos = 0;
         readonly ObjectPool _menuPool = new ObjectPool();
         NativeMenu _arsMenu;
         NativeMenu _raceMenu;
@@ -1164,7 +1136,6 @@ namespace ARS
             rivalSteeringMenu.Add(damperCounterItem);
             HookListTextPicker(damperCounterItem);
 
-            // The key keeps its legacy name; the row it fills is Peak Slip Target.
             NativeListItem<string> peakSlipTargetItem = new NativeListItem<string>("Peak Slip Target", "How much of the outer front tyre's peak slip the guard lets it use before it cuts: 100 % aims at the peak, below that the car never reaches its grip, above that it slides. It is read on the outer wheel, the loaded one, while the inner runs past by design. The tolerance row adds absolute degrees on top.", SettingsRepair.OptionsFor("SteerCeilingFactor"));
             peakSlipTargetItem.ItemChanged += (sender, args) =>
             {
@@ -2085,7 +2056,7 @@ namespace ARS
                             ? "~n~b " + apexReader.BrakeFactorForApex(marked.Node).ToString("0.00", CultureInfo.InvariantCulture)
                             : string.Empty;
                         DrawText(apexPos, "Apex #" + (apexIndex + 1) + "~n~"
-                            + Math.Round(marked.DetectedRadius) + "r / " + Math.Round(marked.OptimalRadius) + "r"
+                            + Math.Round(marked.DetectedRadius) + "r"
                             + brakeLine,
                             Color.White, 0.5f);
                     }
@@ -2322,8 +2293,6 @@ namespace ARS
 
                 if (DebugToggles[Options.ShowInputs] || DebugToggles[Options.ShowTrackAnalysis] || DebugToggles[Options.ShowWheelSlip] || DebugToggles[Options.ShowFrontSlip] || DebugToggles[Options.ShowSlideAngle] || DebugToggles[Options.ShowThrottleReason] || DebugToggles[Options.ShowGsProjection] || DebugToggles[Options.ShowRivalry])
                 {
-                    // A lone racer is always the focus and the player's position is never read: in a spectator run there
-                    // is nothing to be nearest to, and this used to depend on the player ped being there at all.
                     DebugFocusRacer = Racers.Count == 1
                         ? Racers[0]
                         : Racers.Where(r => r.Driver != null && !r.Driver.IsPlayer && CanWeUse(r.Car))
@@ -2435,7 +2404,7 @@ namespace ARS
             DrawText(new Vector2(leftX, 0.83f), "CURRENT LAP    " + lapTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
             DrawText(new Vector2(leftX, 0.87f), "TIME    " + totalTime, hudColor, DrawTextFont.Condensed, DrawTextAlign.Left, 0.45f);
         }
-        const bool ShowPeakStats = false;
+        static readonly bool ShowPeakStats = false;
 
         static string BoardRowName(Racer r)
         {
@@ -3042,7 +3011,7 @@ namespace ARS
         public static float CornerApexSpeed(CornerPoint c, Racer r)
         {
 
-            float radius = CornerRadiusForSpeed(c);
+            float radius = c.DetectedRadius;
             if (radius <= 0f) radius = c.GetPreciseRadius();
 
             if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AiConstants.MaxSpeed;
@@ -3321,7 +3290,7 @@ namespace ARS
         const float LaneHeightCarried = 0.125f;
         const float LaneHeightRequest = 0.150f;
         const bool DrawLaneRequest = false;
-        const bool DrawTrackAnalysisExtras = false;
+        static readonly bool DrawTrackAnalysisExtras = false;
         const float LaneHeightWalls = 0.175f;
 
         public static void DrawLine(Vector3 from, Vector3 to, Color color)
@@ -3756,14 +3725,8 @@ namespace ARS
         }
 
 
-        // 999 means "nothing to respect": print it as a dash rather than as a speed.
 
-        // Why the pedal is where it is, in words that carry the number that decided it. `Plan` is not a cause: it
-        // means no cap is binding, and the base pedal is the speed error divided by the error that asks for full
-        // throttle. So say which of those it is.
 
-        // Which calculation fixed the target speed, said specifically: the apex it came from and how far away, or the
-        // curvature being followed and its radius. This is the answer to "why did it lift", for the route side.
         public static string SpeedSourceName(Racer racer)
         {
             SpeedTerm term = racer.ThrottleTerm;
@@ -3822,11 +3785,7 @@ namespace ARS
             }
         }
 
-        // Centre of the screen, top: the pedal the car got, the one the plan asked for, and the arithmetic between
-        // them. Rebuilt a few times a second, never per frame.
 
-        // Colour by the speed difference between the car and the speed it means to be doing, with no numbers:
-        // red when it is too fast for it, yellow when it is on it, green when it is too slow and pulling.
         static Color ThrottleColour(float delta)
         {
             float t = Racer.PedalFromSpeedError(delta);

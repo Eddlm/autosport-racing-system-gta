@@ -1,4 +1,3 @@
-// Parses a track file into the route, and projects a world point onto it.
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -201,11 +200,7 @@ namespace ARS
         }
         const int GeometryWindowNodes = 10;
         const int PointToPointEndBandNodes = 50;
-        // How much turn a node's radius is measured over, either side, and how far the walk may go to find it. A
-        // fixed distance measures a short corner's straights along with it - a 90 degree bend in 20 m reads 3.9 m
-        // over an 8 m chord, and a straight line over 25 m - while a fixed amount of turn asks every corner the
-        // same question: how far does the road travel per degree here. 200 nodes is a 570 m radius at 20 degrees,
-        // past the ceiling, so the walk stops there rather than crawling down every straight.
+        // A node's radius is the circle through a +/-SweepRadiusDegrees heading sweep, capped at SweepMaxNodes.
         const float SweepRadiusDegrees = 20f;
         const int SweepMaxNodes = 200;
 
@@ -354,23 +349,13 @@ namespace ARS
 
         static readonly List<string> ApexRejects = new List<string>();
 
-        // Share of the road width the optimal line is asked to reach at the ends of a corner. 0.5 = the centre line,
-        // which is the classic line; less than that is a tighter, slower circle.
-        const float OptimalRadiusExcursionShare = 0.25f;
-        // The lane shape is one cubic: parallel to the track at the outer edge and again at the apex, crossing the track
-        // centre at an angle that shrinks as the radius grows. The natural angle to scale is the lane's own traverse
-        // against the corner radius, so this is a multiplier on that; the crossing angle then sets the length
-        // (1.5 * traverse / tan), and the angle is capped short of a right angle so the length stays finite.
+        // The lane shape is one cubic: parallel to the track at the outer edge, crossing the centre at the apex.
         public static float LaneShapeAngleScale = 0.75f;
-        public const float LaneShapeMaxNodes = 50f;
         const int LaneShapeApexHoldNodes = 1;
-        // An exit always gets at least this many nodes before the next corner's entrance may claim the road.
         const int LaneShapeMinExitNodes = 6;
         const int LaneFieldRampMinNodes = 6;
         const int LaneFieldRampMaxNodes = 700;
 
-        // Rebuild the shapes for the loaded track: the steepness is a live value, so a change has to be applied to the
-        // array the reader already holds.
         public static void RebuildLaneField()
         {
             if (ARS.TrackPoints.Count > 1) BuildLaneField(ARS.TrackPoints.Count);
@@ -397,16 +382,11 @@ namespace ARS
             for (int c = 0; c < corners; c++)
             {
                 CornerPoint corner = ARS.Corners[c];
-                // The crossing angle is the geometric one - the lane's traverse against the corner radius - scaled by
-                // the live factor, so a wide corner gets a shallow diagonal and a tight one a sharp cut.
                 float apexHalf = Math.Max(ARS.TrackPoints[corner.Node].TrackHalfWidth, 0.5f);
                 float traverse = 2f * apexHalf;
                 float geometric = (float)(Math.Atan(traverse / Math.Max(corner.DetectedRadius, 5f)) * 180.0 / Math.PI);
                 float crossing = ARS.Clamp(LaneShapeAngleScale * geometric, 4f, 80f);
                 float crossTan = Math.Max((float)Math.Tan(crossing * (float)(Math.PI / 180.0)), 0.1f);
-                // Two halves with different lengths, both fixed by their own curvature. Apex to centre is the cubic, so
-                // its half is 0.75 * traverse / tan. Centre to outside is a constant arc: the slope falls linearly from
-                // tan at the centre to zero at the edge, so its length is traverse / tan.
                 float apexHalfLength = 0.75f * traverse / crossTan;
                 float outsideHalfLength = traverse / crossTan;
                 float runIn = apexHalfLength + outsideHalfLength;
@@ -438,8 +418,6 @@ namespace ARS
                 float halfTraverse = Math.Max(ARS.TrackPoints[corner.Node].TrackHalfWidth, 0.5f);
                 float apexHalfLength = 0.75f * 2f * halfTraverse / crossTan;
                 float outsideHalfLength = 2f * halfTraverse / crossTan;
-                // Apex to centre: the cubic, so its ends are flat and its middle crosses the centre at the crossing
-                // angle. Centre to outside: a constant arc, the slope falling linearly from the crossing angle to zero.
                 float travelled = 0f;
                 int previousNode = corner.Node;
                 for (int step = 0; step <= intoApex; step++)
@@ -469,8 +447,7 @@ namespace ARS
                 shapedStarts[c] = previousNode;
             }
 
-            // The exit is the entry run the other way, and it is written after every entry exists: where a corner's
-            // entrance actually stops is a fact by now, not a prediction, so the exit can hand over to it exactly.
+        // The exit is the entry run the other way, written after every entry exists.
             for (int c = 0; c < corners; c++)
             {
                 CornerPoint corner = ARS.Corners[c];
@@ -491,8 +468,6 @@ namespace ARS
                 for (int step = 1; step <= rampNodes[c]; step++)
                 {
                     int node = ArcNode(corner.Node, step, count);
-                    // The next corner's entrance may take the road back, but not before this exit has had a floor: a
-                    // corner with a zero-node exit cannot be driven out of, so it is never the right answer.
                     if (bound >= 0 && node == bound && outWritten >= LaneShapeMinExitNodes) break;
                     outTravelled += Vector3.Distance(ARS.TrackPoints[outPrevious].Position, ARS.TrackPoints[node].Position);
                     outPrevious = node;
@@ -517,8 +492,6 @@ namespace ARS
                 }
             }
 
-            // The entrance is wherever the entry walk stopped, so the whole build describes the flags it wrote, and the
-            // apex node carries its own region so the reader can hold a corner until the car is past its exit.
             for (int c = 0; c < corners; c++)
             {
                 entryStart[c] = shapedStarts[c];
@@ -561,63 +534,6 @@ namespace ARS
             }
         }
 
-        // Metres between the exit of the previous corner and the entrance of this one: the straight the line has to
-        // work with. Zero when there is no previous corner to measure from.
-        static float OptimalRoomMetres(CornerPoint corner)
-        {
-            int previous = ARS.Corners.Count - 1;
-            if (previous < 0) return 0f;
-            CornerPoint before = ARS.Corners[previous];
-            if (before.EndNode < 0 || corner.StartNode < 0) return 0f;
-            float room = ARS.TrackPoints[corner.StartNode].CumulativeDistance
-                - ARS.TrackPoints[before.EndNode].CumulativeDistance;
-            if (!ARS.IsPointToPoint && room < 0f && ARS.RouteLengthMeters > 0f) room += ARS.RouteLengthMeters;
-            return room;
-        }
-
-        // The same total turn OptimalRadiusOf uses, exposed for the table log.
-        static float OptimalTurnOf(CornerPoint corner)
-        {
-            int count = ARS.TrackPoints.Count;
-            int span = ArcSpan(corner.StartNode, corner.EndNode, count);
-            if (span < 2) return 0f;
-            float swept = 0f;
-            for (int i = 0; i <= span; i++)
-                swept += ARS.TrackPoints[ArcNode(corner.StartNode, i, count)].Angle;
-            return Math.Abs(swept) / GeometryWindowNodes;
-        }
-
-        // The largest circle that stays on the road through this corner: tangent to the inside edge at the apex and to
-        // the outside edge where it enters and leaves it. The line it describes is the one with the least curvature,
-        // which is the fastest there is when the corner is taken at a constant speed.
-        static float OptimalRadiusOf(CornerPoint corner)
-        {
-            // The turn of the whole corner, not the local angle at the apex. `Angle` at a node is the turn between
-            // the two chords that meet there, so it covers an arc of GeometryWindowNodes nodes - from the midpoint of
-            // one chord to the midpoint of the other. Summing it along the span and dividing by that window is the
-            // integral of the curvature. Dividing by twice the window halves the turn, and the radius with it squared.
-            float turn = OptimalTurnOf(corner);
-            if (turn < 1f || turn > 179f) return 0f;
-            float width = 2f * Math.Max(1f, ARS.NodeHalfWidths[corner.Node]);
-            float inner = Math.Max(1f, corner.DetectedRadius - width * 0.5f);
-            // How far out the line is asked to be at the ends of the corner, as a share of the road's width. The radius
-            // is what that excursion costs: over a turn of `turn` it is `excursion / (1 - cos(turn / 2))`, so each
-            // metre of excursion is worth metres of radius, and the radius decides the corner speed.
-            float optimal = inner + width * OptimalRadiusExcursionShare / (1f - (float)Math.Cos(turn * Math.PI / 360f));
-
-            // The arc touches the outside of the road at `radius * turn / 2` metres from the apex, on both sides. That
-            // has to fit in the room there actually is, or the line leaves the road before it comes back parallel to
-            // it: a corner whose neighbour is a hundred metres behind cannot be taken on a four-hundred-metre circle.
-            float room = OptimalRoomMetres(corner);
-            if (room > 5f)
-            {
-                float capped = 2f * room / (turn * (float)Math.PI / 180f);
-                if (capped < optimal) optimal = capped;
-            }
-
-            return optimal > 5000f ? 5000f : optimal;
-        }
-
         static int ArcSpan(int fromNode, int toNode, int count)
         {
             int span = toNode - fromNode;
@@ -632,8 +548,6 @@ namespace ARS
             return ((node % count) + count) % count;
         }
 
-        // A smoothstep puts the lane shape's ends parallel to the road: its slope is zero at both ends and peaks in
-        // the middle, which is where the line crosses the track centre.
         static float LaneSmoothStep(float t)
         {
             t = ARS.Clamp(t, 0f, 1f);
@@ -738,11 +652,8 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Apex " + (listed + 1) + "/" + ARS.Corners.Count
                     + " node=" + apex.Node
                     + " R=" + apex.DetectedRadius.ToString("0.0")
-                    + " optimal=" + apex.OptimalRadius.ToString("0")
                     + " supposed=" + apex.SupposedRadius.ToString("0.0")
                     + " angle=" + apex.Angle.ToString("0.0")
-                    + " turn=" + OptimalTurnOf(apex).ToString("0.0")
-                    + " room=" + OptimalRoomMetres(apex).ToString("0")
                     + " span=" + apex.StartNode + "-" + apex.EndNode
                     + " " + outside);
             }
@@ -1056,10 +967,7 @@ namespace ARS
             return true;
         }
 
-        // Whether a corner asks the car to do anything. The road between the two apexes decides it: if it never
-        // straightens, the car is still in the previous bend when it arrives, carrying that bend's speed, so a
-        // corner at or near that same speed needs no new preparation. A straight between them lets the car gain
-        // speed, and then the next corner is real.
+        // A corner counts only if the road between it and the previous apex turns or slows; else it is noise.
         static bool IsWorthAnApex(CornerPoint previous, CornerPoint corner, int count)
         {
             if (corner.Speed < previous.Speed * CornerWorthySpeedShare) return true;
@@ -1089,9 +997,7 @@ namespace ARS
                 if (radius < tightestRadius) tightestRadius = radius;
             }
 
-            // The apex is the FIRST node as tight as the corner gets, not the tightest node there is. A long bend
-            // with two lobes is one corner, and the plan belongs to the bend the car brakes for: inside the
-            // tolerance both lobes are the same speed, so taking the later one only drags the line backwards.
+        // The apex is the FIRST node as tight as the corner gets, not the tightest node there is.
             int apexPosition = startPosition;
             float apexTolerance = tightestRadius * (1f + ApexSameRadiusShare);
             for (int position = startPosition; position <= endPosition; position++)
@@ -1128,7 +1034,6 @@ namespace ARS
 
             ARS.Log(ARS.LogImportance.Info, "Corner add: apex=" + apexNode + " angle=" + ARS.TrackPoints[apexNode].Angle.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " region=" + regionStart + "-" + regionEnd + " entranceStep=" + entranceStep + "/" + entranceMaxStep + (entranceStep >= entranceMaxStep ? " (at cap)" : "") + " unclampedStart=" + unclampedStart + " start=" + startPosition + (startPosition > unclampedStart ? " (clamped to regionStart)" : (startPosition == unclampedStart ? " (walk stop)" : "")) + " exitStep=" + exitStep + "/" + exitMaxStep + (exitStep >= exitMaxStep ? " (at cap)" : "") + " unclampedEnd=" + unclampedEnd + " end=" + endPosition);
 
-            float minEntranceExit = Math.Min(SpanMinimumMeters, spanLimit);
 
             if (apexPosition - startPosition > SpanMaxDistanceNodes)
             {
@@ -1174,17 +1079,9 @@ namespace ARS
                 SupposedRadius = tightestRadius,
                 DetectedRadius = detectedRadius
             };
-            corner.OptimalRadius = OptimalRadiusOf(corner);
-            // `Speed` stays on the road's own radius on purpose. It decides whether two corners merge (the gap in
-            // seconds between them), and that is a question about the track, not about the line through it: on the
-            // optimal radius the seconds shrink, the gap looks short, and two corners become one. The driver's
-            // corner speed is `CornerApexSpeed`, which does read `OptimalRadius`.
             corner.Speed = (float)Math.Sqrt(9.81f * tightestRadius);
 
-            // A corner earns its apex by demanding something. If the road from the last apex never straightens, the
-            // car is inside that bend the whole way across and arrives at its speed; when this corner is not
-            // meaningfully slower than that, braking for it again buys nothing - it is the second lobe of one
-            // corner, and dropping it is what tells the lane field and the plan to treat the run as one.
+        // A corner is dropped when no straight lies between it and the previous apex and it is not 5% slower.
             if (ARS.Corners.Count > 0 && !IsWorthAnApex(ARS.Corners[ARS.Corners.Count - 1], corner, count))
             {
                 CornerPoint kept = ARS.Corners[ARS.Corners.Count - 1];
@@ -1274,8 +1171,6 @@ namespace ARS
         const int SpanMaxDistanceNodes = 40;
         const float AlignedCornerSeconds = 3f;
         const float AlignedCornerDegrees = 15f;
-        // How near the tightest a node must be to be called the apex, and how much slower a corner must be than the
-        // one before it to earn an apex of its own.
         const float ApexSameRadiusShare = 0.05f;
         const float CornerWorthySpeedShare = 0.95f;
 
@@ -1314,8 +1209,6 @@ namespace ARS
             survivor.LengthEnd = exitDistance;
         }
 
-        // The radius of one node, over a fixed turn either side: the circle through the two ends of that sweep and
-        // the node itself. 999 when the road never turns that far - a straight is not a 900 m corner.
         static float SweptRadius(int node, int count)
         {
             int left = SweepEnd(node, count, -1);
@@ -1324,8 +1217,6 @@ namespace ARS
             return Circumradius3D(ARS.RouteNodes[left], ARS.RouteNodes[right], ARS.RouteNodes[node]);
         }
 
-        // One end of a sweep: the node where the heading has moved `SweepRadiusDegrees` from the start node's, or where
-        // the turn reverses - a chicane is two corners, never one impossibly tight one. -1 when neither happens.
         static int SweepEnd(int node, int count, int direction)
         {
             float start = HeadingRadians(node, count);
@@ -1349,8 +1240,7 @@ namespace ARS
                 }
                 last = sample;
             }
-            // Ran out of reach without turning far enough: the road is straighter than the window, which is not a
-            // corner of this measure. A reversal above still returns the piece it had covered.
+        // Ran out of reach without turning far enough: the road is straighter than the window, so 999.
             return -1;
         }
 

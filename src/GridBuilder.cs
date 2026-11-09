@@ -1,4 +1,3 @@
-// Spawns the field and lays the grid on the route.
 using GTA;
 using GTA.Math;
 using GTA.Native;

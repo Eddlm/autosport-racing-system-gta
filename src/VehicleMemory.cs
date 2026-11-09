@@ -1,4 +1,3 @@
-// Reads the game's own wheel and handling fields by pattern, read-only, with fail-closed shape checks.
 using GTA;
 using System;
 using System.Collections.Generic;
