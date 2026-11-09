@@ -19,7 +19,7 @@ namespace ARS
         public static readonly bool ChicaneBoost = false;
         public static readonly bool ProjectionCut = true;
         public static readonly bool SteerAskThrottle = false;
-        public static readonly bool OffTrackThrottle = false;
+        public static readonly bool OffTrackThrottle = true;
         public static readonly bool CrestGate = false;
         public static readonly bool StabilityCap = false;
         public static readonly bool GsLaneFloor = false;
@@ -366,10 +366,10 @@ namespace ARS
 
         float _brakeSampleApexSpeed = 0f;
 
-        bool _brakeSampleFloorAtEntrance = false;
-        bool _brakeSampleEntranceCrossed = false;
+        bool _brakeSampleFloorAtAim = false;
+        bool _brakeSampleAimCrossed = false;
         // Car speed minus plan corner speed at the entrance node, in m/s: the learner's verdict.
-        float _brakeSampleEntranceError = 0f;
+        float _brakeSampleAimError = 0f;
         bool _brakeSampleCollided = false;
         float _brakeSampleApexOffset = 0f;
         const float BrakeApexNearMetres = 50f;
@@ -382,12 +382,12 @@ namespace ARS
         int _brakeCommitAtGameTime = 0;
         float _brakeCommitMaxSlideDeg = 0f;
         bool _brakeCommitWasAirborne = false;
-        float _brakeCommitEntranceError = 0f;
+        float _brakeCommitAimError = 0f;
         float _brakeCommitApexClosest = float.MaxValue;
         float _brakeCommitApexOffset = 0f;
         bool _brakeCommitCollided = false;
-        bool _brakeCommitFloorAtEntrance = false;
-        bool _brakeCommitEntranceCrossed = false;
+        bool _brakeCommitFloorAtAim = false;
+        bool _brakeCommitAimCrossed = false;
         const float BrakeSkidBrakeShare = 0.25f;
         const bool BrakeSkidPenaltyEnabled = false;
         const float BrakeSkidFactorStep = 0.1f;
@@ -395,7 +395,8 @@ namespace ARS
         const float BrakeCommitDelaySeconds = 0.75f;
         const float BrakeMinFactor = 0.25f;
         // Learner: the factor rises inside the band, falls in proportion to the excess above it.
-        const float BrakeEntryRiseBandMps = 1f;
+        // The tolerance is half the error the pedal takes to reach full brake: inside it, the corner is right.
+        const float BrakeEntryBandShare = 0.5f;
         const float BrakeEntryFallPerMps = 0.02f;
         const float BrakeApexMissPenaltyPerMetre = 0.01f;
         const float BrakeFloorLatchSeconds = 1f;
@@ -1108,11 +1109,17 @@ namespace ARS
                 return 0f;
             }
 
+            // The law divides by the distance to the aim, so a car far off the road - where that
+            // distance is nearly all lateral - commands almost nothing. Reach, not range.
+            float reach = headingFlat.Length() > 0.01f
+                ? Math.Max(1f, Vector3.Dot(toAimFlat, Vector3.Normalize(headingFlat)))
+                : 1f;
+
             _pursuitRawBearingDeg = bearing;
             _pursuitAimDistanceM = distance;
             _steerAimBearingDegrees = bearing;
-            _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / distance;
-            return PursuitSteerFromBearing(bearing, distance);
+            _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / reach;
+            return PursuitSteerFromBearing(bearing, reach);
         }
 
 
@@ -1438,8 +1445,10 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float CountersteerRecoilShare = 0.5f;
         const float CountersteerPedalCap = 0.5f;
         const float CountersteerMinSpeedMph = 10f;
-        const float SlideBrakeCapShare = 1f;
-        const float SlideBrakeCap = 0.25f;
+        // Full pedal to half the peak slip angle, a third of it from 1.5x: a sliding tyre brakes less.
+        const float SlideBrakeCapStartShare = 0.5f;
+        const float SlideBrakeCapEndShare = 1.5f;
+        const float SlideBrakeCap = 0.33f;
         const float SteerSlewRate = 120f;
         static readonly bool SlowCornerSlipAllowance = true;
         const float SlowCornerSlipFullMph = 15f;
@@ -1885,13 +1894,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             gsFloor = Math.Min(gsFloor, Control.MaxThrottle);
             float throttleBeforeFloor = Control.Throttle;
             if (gsFloor > 0f) Control.Throttle = Math.Max(Control.Throttle, gsFloor);
-            // Off track the throttle is a FLOOR, not a cap: nothing cuts the pedal below the ramp.
-            float offTrackFloor = OutOfTrackDistance() > 0f && !countersteering && _stuckPhase == StuckPhase.None
-                ? Control.MaxThrottleFromOffTrack
-                : 0f;
-            if (offTrackFloor > Control.Throttle) Control.Throttle = offTrackFloor;
             _gsFloorActiveThisTick = Control.Throttle > throttleBeforeFloor;
-            _thrFloor = Math.Max(gsFloor, offTrackFloor);
+            _thrFloor = gsFloor;
             _thrFinal = Control.Throttle;
             _brkFinal = Control.Brake;
             _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
@@ -1902,7 +1906,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float ComputeCombinedInput(float intendedSpeedChange)
         {
-            // Only the error against ApexBrakingSpeed's ramp: 1 m/s to full throttle, 5 to full brake.
+            // Only the error against ApexBrakingSpeed's ramp: 1 m/s to full throttle, 3 to full brake.
             return PedalFromSpeedError(intendedSpeedChange);
         }
 
@@ -1953,8 +1957,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool projectionSliding = TRLateralAtSpeed > 0.01f
                 && projectionSlide >= TRLateralAtSpeed * ProjectionArmSlideShare
                 && steeringIntoSlide;
-            _projectionArmed = projectionSliding;
-            _projectionCutActive = projectionSliding && _projectionOutsideMeters > 0f;
+            // No exit to shape below 20 mph or while reversing: the pedal belongs to the car there.
+            bool projectionMovingAhead = ARS.MpsToMph(Car.Velocity.Length()) >= OffshootMinSpeedMph
+                && ARS.GetForwardSpeed(Car) > 0f;
+            _projectionArmed = projectionSliding && projectionMovingAhead;
+            _projectionCutActive = _projectionArmed && _projectionOutsideMeters > 0f;
 
             float projectionTargetLift = _projectionCutActive
                 ? Math.Min(_projectionOutsideMeters / ProjectionFullLiftMetres, 1f) * ProjectionMaxLift
@@ -2049,9 +2056,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _brakeSampleMaxSlideDeg = 0f;
                 _brakeSampleWasAirborne = false;
                 _brakeSampleApexSpeed = Math.Max(2f, NextApexSpeed);
-                _brakeSampleFloorAtEntrance = false;
-                _brakeSampleEntranceCrossed = false;
-                _brakeSampleEntranceError = 0f;
+                _brakeSampleFloorAtAim = false;
+                _brakeSampleAimCrossed = false;
+                _brakeSampleAimError = 0f;
                 _brakeSampleApexClosest = float.MaxValue;
                 _brakeSampleCollided = false;
                 _brakeOverNextSampleAt = 0;
@@ -2086,22 +2093,21 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
 
-            if (!_brakeSampleEntranceCrossed && _brakeSampleApexNode >= 0)
+            // Graded at the node the plan brakes for, so the verdict is about the plan's own promise.
+            if (!_brakeSampleAimCrossed && _brakeSampleApexNode >= 0)
             {
-                CornerPoint entranceCorner = ARS.Corners.FirstOrDefault(c => c.Node == _brakeSampleApexNode);
-                int entranceNode = CornerEntranceNode(entranceCorner, _brakeSampleApexNode);
-                if (entranceNode >= 0)
+                CornerPoint aimCorner = ARS.Corners.FirstOrDefault(c => c.Node == _brakeSampleApexNode);
+                int aimNode = BrakeAimTargetNode(_brakeSampleApexNode, _brakeSampleApexSpeed, CornerEntranceNode(aimCorner, _brakeSampleApexNode));
+                if (aimNode >= 0)
                 {
-                    float toEntrance = ARS.TrackPoints[entranceNode].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
-                    if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(toEntrance) > ARS.RouteLengthMeters * 0.5f)
-                        toEntrance -= Math.Sign(toEntrance) * ARS.RouteLengthMeters;
+                    float toAim = MetresToNode(aimNode);
 
-                    if (toEntrance > 0f && toEntrance <= Car.Velocity.Length() * BrakeFloorLatchSeconds && _gsFloorActiveThisTick)
-                        _brakeSampleFloorAtEntrance = true;
-                    if (toEntrance <= 0f && !_brakeSampleEntranceCrossed)
+                    if (toAim > 0f && toAim <= Car.Velocity.Length() * BrakeFloorLatchSeconds && _gsFloorActiveThisTick)
+                        _brakeSampleFloorAtAim = true;
+                    if (toAim <= 0f && !_brakeSampleAimCrossed)
                     {
-                        _brakeSampleEntranceCrossed = true;
-                        _brakeSampleEntranceError = ARS.GetForwardSpeed(Car) - _brakeSampleApexSpeed;
+                        _brakeSampleAimCrossed = true;
+                        _brakeSampleAimError = ARS.GetForwardSpeed(Car) - _brakeSampleApexSpeed;
                     }
                 }
             }
@@ -2130,10 +2136,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             _brakeCommitApexClosest = _brakeSampleApexClosest;
             _brakeCommitApexOffset = _brakeSampleApexOffset;
             _brakeCommitCollided = _brakeSampleCollided;
-            _brakeCommitEntranceCrossed = _brakeSampleEntranceCrossed;
-            _brakeCommitEntranceError = _brakeSampleEntranceError;
-            _brakeCommitFloorAtEntrance = _brakeSampleFloorAtEntrance;
-            _brakeCommitEntranceCrossed = _brakeSampleEntranceCrossed;
+            _brakeCommitAimCrossed = _brakeSampleAimCrossed;
+            _brakeCommitAimError = _brakeSampleAimError;
+            _brakeCommitFloorAtAim = _brakeSampleFloorAtAim;
+            _brakeCommitAimCrossed = _brakeSampleAimCrossed;
         }
 
         void CommitBrakeLearning()
@@ -2160,9 +2166,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                     + before.ToString("0.00") + " → " + skidFactor.ToString("0.00"));
                 return;
             }
-            if (!_brakeCommitEntranceCrossed)
+            if (!_brakeCommitAimCrossed)
             {
-                AnnounceBrakeAdjustment("corner " + apexNode + " · never reached the entrance · factor stays "
+                AnnounceBrakeAdjustment("corner " + apexNode + " · never reached the aim · factor stays "
                     + before.ToString("0.00"));
                 return;
             }
@@ -2171,12 +2177,13 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (ARS.Corners[i].Node == apexNode) { cornerIndex = i; break; }
             string id = "corner " + (cornerIndex >= 0 ? "#" + (cornerIndex + 1) : "?");
 
-            float speedError = Math.Max(_brakeCommitEntranceError, 0f);
+            float speedError = Math.Max(_brakeCommitAimError, 0f);
             string where = "speed " + speedError.ToString("0.00") + " m/s over";
 
-            float step = speedError <= BrakeEntryRiseBandMps
-                ? (1f - speedError) * BrakeEntryFallPerMps
-                : -speedError * BrakeEntryFallPerMps;
+            float band = FullBrakeSpeedErrorMps * BrakeEntryBandShare;
+            float step = speedError <= band
+                ? (1f - speedError / band) * BrakeEntryFallPerMps
+                : -(speedError - band) * BrakeEntryFallPerMps;
 
             // Wide apex = too fast, but only off the walls; the miss is measured in lane offsets.
             float missMetres = 0f;
@@ -2242,17 +2249,27 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float GraceHorizonSeconds = 0.3f;
         float GraceBandMps() { return 0.5f * FullBrakeDecelMps2() * GraceHorizonSeconds; }
 
-        int BrakeTargetBaseNode(CornerPoint corner, int fallbackNode)
+        // The aim is 0.7 s of corner speed before the apex. The lane shape's start is not a distance
+        // the brake plan can land on: the out-in prep pushes it out, and far more on shallow corners.
+        const float BrakeAimLeadSeconds = 0.7f;
+
+        int BrakeAimNode(int apexNode, float apexSpeed)
         {
-            int entranceNode = CornerEntranceNode(corner, fallbackNode);
-            return entranceNode < 0 ? fallbackNode : entranceNode;
+            if (apexNode < 0 || apexNode >= ARS.TrackPoints.Count) return -1;
+            return TrackLoader.NodeBehind(apexNode, Math.Max(1f, apexSpeed * BrakeAimLeadSeconds), ARS.TrackPoints.Count);
+        }
+
+        int BrakeTargetBaseNode(int apexNode, float apexSpeed, int fallbackNode)
+        {
+            int aimNode = BrakeAimNode(apexNode, apexSpeed);
+            return aimNode < 0 ? fallbackNode : aimNode;
         }
 
         bool HasPassedBrakingTarget()
         {
             if (NextApexNode < 0) return true;
             CornerPoint corner = _nextApexCorner;
-            int targetNode = BrakeTargetBaseNode(corner, NextApexNode);
+            int targetNode = BrakeTargetBaseNode(NextApexNode, NextApexSpeed, CornerEntranceNode(corner, NextApexNode));
             if (targetNode < 0) return true;
             int targetDistance = ForwardNodeDistance(targetNode);
             int apexDistance = ForwardNodeDistance(NextApexNode);
@@ -2488,10 +2505,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             return ARS.Clamp((float)Math.Tanh(depth / span) * TaperNormaliser, 0f, 1f);
         }
         public const float YieldThrottleLevel = 0.5f;
-        const float OffTrackThrottleLevel = 0.35f;
+        // Off track above 20 mph: no throttle while the projected path is still widening, a quarter of
+        // it once the path is coming back; full pedal from 15 mph down so the car can climb out.
+        const float OffTrackWideningThrottle = 0f;
         const float OffTrackSafeSpeedMph = 20f;
         const float OffTrackFullThrottleMph = 15f;
-        const float OffTrackRecoverThrottle = 0.75f;
+        const float OffTrackRecoverThrottle = 0.25f;
         const float StabilityFallPerWheelPerSecond = 0.5f;
         const float StabilityRisePerSecond = 0.5f;
         const float OverspeedArmMaxSteerDegrees = 2f;
@@ -2511,6 +2530,15 @@ const float RequirementLookaheadSeconds = 3.95f;
         float GlideCap(float current, float level)
         {
             return Glide(current, level, ReasonCapSlewRate, ReasonCapSlewRate * ReasonCapRecoveryScale, TickScale);
+        }
+
+        // The slide cap, read off how far past its peak the tyre is: 1 at half the peak slip, the cap
+        // at 1.5x, flat beyond. The share is the slide angle over the peak, so the ramp is car-agnostic.
+        float SlideBrakePedalCap()
+        {
+            if (!ARS.SlideBrakeCap || TRLateralAtSpeed <= 0.01f) return 1f;
+            float t = ARS.Clamp((_slideShare - SlideBrakeCapStartShare) / (SlideBrakeCapEndShare - SlideBrakeCapStartShare), 0f, 1f);
+            return 1f + (SlideBrakeCap - 1f) * t;
         }
 
         float OverspeedThrottleLevel()
@@ -2554,13 +2582,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             Control.MaxThrottleFromChillOut = GlideCap(Control.MaxThrottleFromChillOut, ActiveManeuver.Type == ManeuverType.ChillOut ? ChillThrottleCap : 1f);
             Control.MaxThrottleFromYield = GlideCap(Control.MaxThrottleFromYield, ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null ? YieldThrottleLevel : 1f);
 
-            // Consumed as a floor: off means 0, the only value that leaves the pedal alone.
-            float offTrackThrottle = TrackSpeed.OffTrackThrottle ? 1f : 0f;
+            // Off track the pedal is capped, not floored: going further out gets nothing above 20 mph.
+            float offTrackThrottle = 1f;
             if (TrackSpeed.OffTrackThrottle && OutOfTrackDistance() > 0f)
             {
-                offTrackThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), OffTrackSafeSpeedMph, OffTrackFullThrottleMph, OffTrackThrottleLevel, 1f, true);
-
-                if (ProjectionClosingOnCentre()) offTrackThrottle = OffTrackRecoverThrottle;
+                float level = ProjectionClosingOnCentre() ? OffTrackRecoverThrottle : OffTrackWideningThrottle;
+                offTrackThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), OffTrackSafeSpeedMph, OffTrackFullThrottleMph, level, 1f, true);
             }
             Control.MaxThrottleFromOffTrack = GlideCap(Control.MaxThrottleFromOffTrack, offTrackThrottle);
 
@@ -2599,8 +2626,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             Control.MaxBrakeFromCountersteer = GlideCap(Control.MaxBrakeFromCountersteer,
                 countersteering && !_brakePlanActive ? CountersteerPedalCap : 1f);
             // Not bypassed by a braking plan: a tyre past half its peak has no grip to brake with.
-            Control.MaxBrakeFromSlide = GlideCap(Control.MaxBrakeFromSlide,
-                ARS.SlideBrakeCap && _slideShare > SlideBrakeCapShare ? SlideBrakeCap : 1f);
+            Control.MaxBrakeFromSlide = GlideCap(Control.MaxBrakeFromSlide, SlideBrakePedalCap());
 
             if (ARS.AbsEnabled && Math.Abs(Control.Brake) > 0.2f && Game.GameTime > _absLoggedAt)
             {
@@ -2647,6 +2673,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromChillOut);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromYield);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRecovery);
+            ceiling = Math.Min(ceiling, Control.MaxThrottleFromOffTrack);
             ceiling = Math.Min(ceiling, steerCap);
             Control.MaxThrottle = ceiling;
 
@@ -2660,6 +2687,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (Control.MaxThrottleFromChillOut < binding) { binding = Control.MaxThrottleFromChillOut; reason = ThrottleReason.ChillOut; }
             if (Control.MaxThrottleFromYield < binding) { binding = Control.MaxThrottleFromYield; reason = ThrottleReason.Yield; }
             if (Control.MaxThrottleFromRecovery < binding) { binding = Control.MaxThrottleFromRecovery; reason = ThrottleReason.StuckRecovery; }
+            if (Control.MaxThrottleFromOffTrack < binding) { binding = Control.MaxThrottleFromOffTrack; reason = ThrottleReason.Offtrack; }
             if (countersteering) reason = ThrottleReason.Countersteer;
             if (BaseBehavior == RacerBaseBehavior.GridWait) reason = ThrottleReason.GridWait;
             if (_kickPlaying && reason == ThrottleReason.Plan) reason = ThrottleReason.Kick;
@@ -4169,17 +4197,23 @@ const float RequirementLookaheadSeconds = 3.95f;
             return ForwardNodeDistance(apexNode) > ARS.TrackPoints.Count / 2;
         }
 
-        int BrakeTargetDistance(CornerPoint corner, int apexNode, int fallbackNode)
+        // The node the plan brakes for: the aim, moved toward the apex by BrakeAimDepth. One writer, so
+        // the ramp and the learner that grades it cannot aim at different nodes.
+        int BrakeAimTargetNode(int apexNode, float apexSpeed, int fallbackNode)
         {
-            int baseNode = BrakeTargetBaseNode(corner, fallbackNode);
-            if (baseNode < 0) baseNode = fallbackNode;
-            int baseDistance = ForwardNodeDistance(baseNode);
-
+            int aimNode = BrakeTargetBaseNode(apexNode, apexSpeed, fallbackNode);
+            if (aimNode < 0 || apexNode < 0) return aimNode;
             float depth = ARS.Clamp(ARS.BrakeAimDepth, 0f, 1f);
-            if (depth <= 0f || apexNode < 0) return baseDistance;
+            int steps = apexNode - aimNode;
+            if (depth <= 0f || steps <= 0) return aimNode;
+            return OffsetCornerNode(aimNode, (int)Math.Round(steps * depth));
+        }
 
-            int apexDistance = ForwardNodeDistance(apexNode);
-            return (int)Math.Round(baseDistance + (apexDistance - baseDistance) * depth);
+        int BrakeTargetDistance(int apexNode, float apexSpeed, int fallbackNode)
+        {
+            int targetNode = BrakeAimTargetNode(apexNode, apexSpeed, fallbackNode);
+            if (targetNode < 0) targetNode = fallbackNode;
+            return ForwardNodeDistance(targetNode);
         }
 
         float ApexBrakingSpeed(int apexNode, float apexSpeed)
@@ -4190,7 +4224,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
             int fallbackNode = CornerEntranceNode(corner, apexNode);
 
-            int targetDistance = BrakeTargetDistance(corner, apexNode, fallbackNode);
+            int targetDistance = BrakeTargetDistance(apexNode, apexSpeed, fallbackNode);
             int apexDistance = ForwardNodeDistance(apexNode);
 
             float rawDistance = !ARS.IsPointToPoint && targetDistance > apexDistance

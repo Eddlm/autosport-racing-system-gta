@@ -563,7 +563,9 @@ namespace ARS
 
             float regionRadius = ARS.CornerCeilingMeters;
             const int exitRelaxationNodes = 4;
-            const int minimumCornerNodes = 25;
+            // A blip in the swept radius is shorter than this; anything longer is a corner, and the blur
+            // rule downstream rejects the wide, gentle runs. Nodes are metres here only by convention.
+            const int minimumCornerNodes = 8;
             const float closeCornerSeconds = 2f;
 
             int scanStart = 0;
@@ -895,7 +897,7 @@ namespace ARS
             return node;
         }
 
-        static int NodeBehind(int from, float meters, int count)
+        internal static int NodeBehind(int from, float meters, int count)
         {
             int node = from;
             float walked = 0f;
@@ -984,8 +986,15 @@ namespace ARS
 
         static void AddCornerRegion(List<int> scanNodes, int startPosition, int endPosition, int count, int minimumCornerNodes, float closeCornerSeconds)
         {
-            if (startPosition < 0 || endPosition < startPosition || endPosition - startPosition + 1 < minimumCornerNodes)
+            if (startPosition < 0 || endPosition < startPosition) return;
+            int regionNodes = endPosition - startPosition + 1;
+            if (regionNodes < minimumCornerNodes)
+            {
+                ARS.Log(ARS.LogImportance.Info, "Corner region dropped: " + regionNodes + " nodes from " + scanNodes[startPosition]
+                    + " to " + scanNodes[endPosition] + " (" + minimumCornerNodes + " minimum)");
+                ApexRejects.Add(scanNodes[startPosition] + " region of " + regionNodes + " nodes (below the " + minimumCornerNodes + "-node floor)");
                 return;
+            }
 
             int regionStart = startPosition;
             int regionEnd = endPosition;

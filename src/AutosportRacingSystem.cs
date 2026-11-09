@@ -1006,7 +1006,7 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeCheckboxItem slideBrakeItem = new NativeCheckboxItem("Slide Brake Cap", "While the car slides past half its peak slip angle at that speed, the brake is capped at 25 %: a sliding tyre has no grip left to brake with, and pressing harder only upsets it. Off leaves the pedal to the plan alone.", SlideBrakeCap);
+            NativeCheckboxItem slideBrakeItem = new NativeCheckboxItem("Slide Brake Cap", "From half the car's peak slip angle at that speed to 1.5x it, the brake eases from full down to a third: a sliding tyre has no grip left to brake with, and pressing harder only upsets it. Off leaves the pedal to the plan alone.", SlideBrakeCap);
             slideBrakeItem.CheckboxChanged += (sender, args) =>
             {
                 SlideBrakeCap = slideBrakeItem.Checked;
