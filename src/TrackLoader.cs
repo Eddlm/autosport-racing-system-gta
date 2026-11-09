@@ -1177,7 +1177,7 @@ namespace ARS
                 ApexRejects.Add(apexNode + " R " + detectedRadius.ToString("0.0") + " (blurred, nodesToDouble " + nodesToDouble + " > " + SpanBlurNodes + ")");
                 return;
             }
-            ARS.Log(ARS.LogImportance.Info, "Corner open: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " nodesToDouble=" + nodesToDouble + "/" + exitMaxStep + (nodesToDouble >= exitMaxStep ? " (did not double)" : ""));
+            ARS.Log(ARS.LogImportance.Info, "Corner open: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.00") + " tightestR=" + tightestRadius.ToString("0.00") + " rawFit=" + (fittedRadius > 0f ? fittedRadius.ToString("0.00") : "none") + " arcNodes=" + arcNodes.Count + " nodesToDouble=" + nodesToDouble + "/" + exitMaxStep + (nodesToDouble >= exitMaxStep ? " (did not double)" : ""));
 
             CornerPoint corner = new CornerPoint
             {
