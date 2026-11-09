@@ -754,13 +754,14 @@ namespace ARS
             float toApex = laneApex != null ? MetresToNode(laneApex.Node) : 0f;
             _laneApexNode = laneApex != null ? laneApex.Node : -1;
             _laneShapeApexNode = _laneApexNode;
-            // One ask: the shaped line itself, followed from four seconds before the entrance. Out is a 2 m lead
-            // over the car, in is uncapped, and the out-in is no longer a separate move with its own target.
+            // One ask, in two phases. Until the lookahead crosses the entrance the aim is the field AT the entrance
+            // itself; from there on it is the field under the lookahead. Out is a 2 m lead over the car in both.
+            int entranceNode = laneApex != null ? CornerEntranceNode(laneApex, laneApex.Node) : -1;
+            float toEntrance = entranceNode >= 0 ? MetresToNode(entranceNode) : 0f;
             bool following = ARS.AbsoluteLaneEnabled && Lap > 0
                 && lineCorner != null && MetresToNode(lineCorner.Node) > 0f
-                && MetresToNode(CornerEntranceNode(laneApex, laneApex.Node)) <= speedMps * ARS.LanePrepSeconds
-                && ARS.TrackPoints[laneShapeNode].LaneShaped
-                && ARS.TrackPoints[laneShapeNode].LaneShapeApex == _laneApexNode;
+                && entranceNode >= 0 && toEntrance <= speedMps * ARS.LanePrepSeconds
+                && _laneApexNode >= 0 && ARS.TrackPoints[_laneApexNode].LaneShapeStart >= 0;
 
             if (ARS.LaneErrorTelemetry)
             {
@@ -784,15 +785,20 @@ namespace ARS
             laneRequest = dynamicOwns ? dynamicAsk : steerRefOffset;
             if (following)
             {
+                // Before the lookahead crosses the entrance the car aligns with the field at the entrance: a fixed
+                // target that does not recede. Past it, the ramp is followed under the lookahead as usual.
+                bool beforeEntrance = toEntrance > speedMps * ARS.LaneShapePreviewSeconds;
+                float aim = beforeEntrance
+                    ? ClampShapedLane(ARS.TrackPoints[entranceNode].LaneLineShare * laneEdge, laneEdge, laneApex)
+                    : laneShapeNow;
                 // Out is a 2 m lead over the car, never a destination: the ask cannot sit further out than that, and
-                // the car keeps taking up the lead until it sits on the outside line. In is the field, uncapped, so
-                // the turn-in is followed whole.
+                // the car keeps taking up the lead until it sits on the line. In is the aim itself, uncapped.
                 float outward = TrackTurnSign(CurrentTrackPoint.Node, laneApex.Node, 0);
                 if (outward == 0f) outward = -ARS.InsideSign(laneApex.Angle);
-                _laneLead = (laneShapeNow - steerRefOffset) * outward;
+                _laneLead = (aim - steerRefOffset) * outward;
                 laneRequest = _laneLead > ARS.LanePrepOutsideCapMetres
                     ? steerRefOffset + outward * ARS.LanePrepOutsideCapMetres
-                    : laneShapeNow;
+                    : aim;
                 laneReason = LaneReason.CurveLean;
             }
             else if (dynamicOwns) laneReason = LaneReason.CurveLean;
