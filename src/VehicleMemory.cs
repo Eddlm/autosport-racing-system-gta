@@ -25,15 +25,10 @@ namespace ARS
         public static void SetThrottle(Vehicle vehicle, float value) => WriteInput(vehicle, value, ref _throttleOffset, 0x10, "throttle");
         public static void SetBrakes(Vehicle vehicle, float value) => WriteInput(vehicle, value, ref _brakeOffset, 0x14, "brake");
 
-        // The pedals the car actually has: ARS writes an AI's, the pad writes the player's, and this reads the same
-        // field either way. The offset is learned here too, because a solo run has no AI write to learn it from.
-        public static float GetThrottle(Vehicle vehicle) => ReadInput(vehicle, ref _throttleOffset, 0x10, "throttle");
-        public static float GetBrakes(Vehicle vehicle) => ReadInput(vehicle, ref _brakeOffset, 0x14, "brake");
-
-        static float ReadInput(Vehicle vehicle, ref ulong offset, int delta, string name)
+        public static float GetThrottle(Vehicle vehicle)
         {
-            if (!ARS.CanWeUse(vehicle) || !LearnInputOffset(ref offset, delta, name)) return 1f;
-            return *((float*)((ulong)vehicle.MemoryAddress + offset));
+            if (!ARS.CanWeUse(vehicle) || _throttleOffset == 0) return 1f;
+            return *((float*)((ulong)vehicle.MemoryAddress + _throttleOffset));
         }
 
         public static float GetLateralTraction(Vehicle vehicle) => ReadHandlingFloat(vehicle, 0x0098);
@@ -53,25 +48,17 @@ namespace ARS
             if (!ARS.CanWeUse(vehicle)) return;
             if (offset == 0)
             {
-                LearnInputOffset(ref offset, delta, name);
+                IntPtr pattern = (IntPtr)FindPattern(ControlPattern, ControlMask);
+                if (pattern == IntPtr.Zero)
+                {
+                    ReportMissingControlPattern();
+                    return;
+                }
+                offset = *(uint*)(pattern + 6) + (ulong)delta;
+                ARS.Log(ARS.LogImportance.Info, "[MEMORY] Learned the " + name + " offset: " + offset);
                 return;
             }
             *((float*)((ulong)vehicle.MemoryAddress + offset)) = value;
-        }
-
-        // The control block's fields share one signature; each is learned once, on first use.
-        static bool LearnInputOffset(ref ulong offset, int delta, string name)
-        {
-            if (offset != 0) return true;
-            IntPtr pattern = (IntPtr)FindPattern(ControlPattern, ControlMask);
-            if (pattern == IntPtr.Zero)
-            {
-                ReportMissingControlPattern();
-                return false;
-            }
-            offset = *(uint*)(pattern + 6) + (ulong)delta;
-            ARS.Log(ARS.LogImportance.Info, "[MEMORY] Learned the " + name + " offset: " + offset);
-            return true;
         }
 
         static void ReportMissingControlPattern()

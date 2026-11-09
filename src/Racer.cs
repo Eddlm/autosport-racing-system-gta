@@ -195,7 +195,7 @@ namespace ARS
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
 
-        CornerPoint _laneCornerInside;
+        int _probeApexNode = -1;
         int _laneTraceAt;
         int _laneApexNode = -1;
         int _laneShapeApexNode = -1;
@@ -251,13 +251,13 @@ namespace ARS
             }
         }
 
-        void LogApexProbe(CornerPoint corner)
+        void LogApexProbe(int apexNode)
         {
-            ARS.Log(ARS.LogImportance.Info, "apex probe " + corner.Node
+            ARS.Log(ARS.LogImportance.Info, "apex probe " + apexNode
                 + ": offset at the apex " + (_probeAtApex ? _probeApexOffset.ToString("0.00") : "missed")
                 + ", deepest inward " + _probeDeepest.ToString("0.00")
                 + " at node " + _probeNode
-                + (_probeNode >= 0 ? " (" + (_probeNode - corner.Node) + " nodes past the apex)" : ""));
+                + (_probeNode >= 0 ? " (" + (_probeNode - apexNode) + " nodes past the apex)" : ""));
         }
         float _laneField;
         int _laneTurnSign = 0;
@@ -735,17 +735,17 @@ namespace ARS
 
             float laneLimit = Math.Max(roadWide - carHalfWidth - (IsWithinCorner(lineCorner) ? 0f : EdgeEmptySpaceMeters), 0f);
 
-            CornerPoint laneCornerInside = lineCorner;
-            if (laneCornerInside != _laneCornerInside)
+            int probeApexNode = lineCorner != null ? lineCorner.Node : -1;
+            if (probeApexNode != _probeApexNode)
             {
-                if (_laneCornerInside != null) LogApexProbe(_laneCornerInside);
-                _laneCornerInside = laneCornerInside;
+                if (_probeApexNode >= 0) LogApexProbe(_probeApexNode);
+                _probeApexNode = probeApexNode;
                 _probeDeepest = 0f;
                 _probeNode = -1;
                 _probeApexOffset = 0f;
                 _probeAtApex = false;
             }
-            if (laneCornerInside != null) UpdateApexProbe(laneCornerInside, steerRefOffset);
+            if (lineCorner != null) UpdateApexProbe(lineCorner, steerRefOffset);
 
             int laneNode = TrackLoader.NodeAhead(CurrentTrackPoint.Node, speedMps * ARS.LanePreviewSeconds, ARS.TrackPoints.Count);
             float laneEdge = Math.Max(roadWide - carHalfWidth, 0f);
@@ -753,7 +753,7 @@ namespace ARS
             int laneShapeNode = TrackLoader.NodeAhead(CurrentTrackPoint.Node, speedMps * ARS.LaneShapePreviewSeconds, ARS.TrackPoints.Count);
             float laneShapeNow = ClampShapedLane(ARS.TrackPoints[laneShapeNode].LaneLineShare * laneEdge, laneEdge, lineCorner);
             float aimRadius = ARS.TrackPoints[steerRefPoint.Node].PreciseCurveRadius;
-            CornerPoint laneApex = laneCornerInside != null ? laneCornerInside : lineCorner;
+            CornerPoint laneApex = lineCorner;
             float toApex = laneApex != null ? MetresToNode(laneApex.Node) : 0f;
             _laneApexNode = laneApex != null ? laneApex.Node : -1;
             _laneShapeApexNode = _laneApexNode;
@@ -869,9 +869,7 @@ namespace ARS
                     + ", field " + _laneField.ToString("0.00") + " @lane node " + laneNode
                     + ", asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + ")"
                     + " | " + mode
-                    + " inside " + (laneCornerInside != null ? laneCornerInside.Node.ToString() : "-")
-                    + " apexIn " + (lineCorner != null ? toApex.ToString("0") : "-")
-                    + " seenFrom " + (laneCornerInside != null ? MetresToNode(laneCornerInside.Node).ToString("0") : "-")
+                    + " apex " + (lineCorner != null ? lineCorner.Node.ToString() + " in " + toApex.ToString("0") : "-")
                     + " lead " + _laneLead.ToString("0.00") + " cap " + _laneOutCap.ToString("0.00"));
             }
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
@@ -4127,8 +4125,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             return ForwardNodeDistance(apexNode) > ARS.TrackPoints.Count / 2;
         }
 
-        // A corner is spent once the car is inside it and coasting: no pedal, no longitudinal load. That is the car
-        // sitting at the corner's speed with nothing left to do, so it leaves the selection early.
+        // A corner is spent once the car is inside it and coasting: no longitudinal load means the car is sitting at
+        // the corner's speed with nothing left to do, so it leaves the selection early.
         bool CornerSpent(int apexNode)
         {
             if (apexNode < 0) return false;
@@ -4137,11 +4135,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (known.Node == apexNode) { corner = known; break; }
             int entranceNode = CornerEntranceNode(corner, apexNode);
             if (entranceNode < 0 || MetresToNode(entranceNode) > 0f) return false;
-            if (Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) >= CoastSpentGs) return false;
-            return VehicleMemory.GetThrottle(Car) < CoastSpentPedal && VehicleMemory.GetBrakes(Car) < CoastSpentPedal;
+            return Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < CoastSpentGs;
         }
-        const float CoastSpentGs = 0.1f;
-        const float CoastSpentPedal = 0.1f;
+        const float CoastSpentGs = 0.5f;
 
         // The node the plan brakes for: the aim, moved toward the apex by BrakeAimDepth. One writer, so
         // the ramp and the learner that grades it cannot aim at different nodes.
