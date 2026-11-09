@@ -1,6 +1,6 @@
 # ARS documentation
 
-Five live documents, one folder of reference material and three of records. Each file answers **one question**;
+Five live documents, one folder of reference material and two of records. Each file answers **one question**;
 if a file has to answer two, the depth moves to a companion and the entry keeps the pointer.
 
 **The rule this set is built on: a document defines concepts and the relationships between them, and leaves the
