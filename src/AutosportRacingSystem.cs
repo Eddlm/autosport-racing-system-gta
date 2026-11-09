@@ -2659,11 +2659,15 @@ namespace ARS
         }
 
         public static bool LastGroundMaterialMatched = false;
+        public static bool LastGroundMaterialHit = false;
+        public static int LastGroundMaterialHash = 0;
 
         // The material's authored grip under a point, for the load-time route scan. The shape test answers a
         // material HASH, and SurfaceMaterials maps it to the game's own multiplier; a miss reads 1.0.
         public static float GroundGripAt(Vector3 point)
         {
+            LastGroundMaterialHit = false;
+            LastGroundMaterialHash = 0;
             Vector3 start = point + new Vector3(0f, 0f, 2f);
             Vector3 end = point - new Vector3(0f, 0f, 2f);
             int shape = Function.Call<int>(Hash._0x377906D8A31E5586, start.X, start.Y, start.Z, end.X, end.Y, end.Z, (int)IntersectOptions.Map, 0, 7);
@@ -2678,6 +2682,8 @@ namespace ARS
             if (status == 0 || !didhit.GetResult<bool>()) return 1f;
 
             int material = materialhash.GetResult<int>();
+            LastGroundMaterialHit = true;
+            LastGroundMaterialHash = material;
             float grip;
             LastGroundMaterialMatched = SurfaceMaterials.TryGrip(material, out grip);
             return LastGroundMaterialMatched ? grip : 1f;

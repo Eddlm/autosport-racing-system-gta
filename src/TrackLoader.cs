@@ -391,6 +391,7 @@ namespace ARS
 
             int offRoad = 0;
             int matched = 0;
+            int hits = 0;
             int probes = 0;
             float grip = 1f;
             for (int node = 0; node < count; node++)
@@ -399,7 +400,11 @@ namespace ARS
                 {
                     grip = ARS.GroundGripAt(ARS.TrackPoints[node].Position);
                     probes++;
+                    if (ARS.LastGroundMaterialHit) hits++;
                     if (ARS.LastGroundMaterialMatched) matched++;
+                    if (probes <= 8)
+                        ARS.Log(ARS.LogImportance.Info, "Surface probe " + node + ": hit " + ARS.LastGroundMaterialHit
+                            + " material " + ARS.LastGroundMaterialHash + " grip " + grip.ToString("0.00"));
                 }
                 ARS.TrackPoints[node].SurfaceGrip = grip;
                 if (grip < OutsideApproachMinGrip) offRoad++;
@@ -407,7 +412,7 @@ namespace ARS
 
             ARS.Log(ARS.LogImportance.Info, "Surface: " + (100 * offRoad / count) + "% of the route is under the "
                 + OutsideApproachMinGrip.ToString("0.000") + " approach grip, " + matched + " of " + probes
-                + " probes matched a material row ("
+                + " probes matched a material row, " + hits + " hit ground ("
                 + ((count + SurfaceSampleNodes - 1) / SurfaceSampleNodes) + " probes, one every " + SurfaceSampleNodes + " nodes)");
         }
 
