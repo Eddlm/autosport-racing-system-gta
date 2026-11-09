@@ -2784,15 +2784,6 @@ const float RequirementLookaheadSeconds = 3.95f;
 
 
 
-        bool ChainedApex(CornerPoint corner, float prepMetres)
-        {
-            if (corner == null) return false;
-            for (int i = 1; i < ARS.Corners.Count; i++)
-                if (ARS.Corners[i].Node == corner.Node)
-                    return MetresToNode(corner.Node) - MetresToNode(ARS.Corners[i - 1].Node) < prepMetres;
-            return false;
-        }
-
         const float LaneTurnSignDeadband = 0.002f;
         int LaneTurnSignToAim(TrackPoint aim)
         {

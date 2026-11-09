@@ -192,9 +192,8 @@ be absolute: stated relative to wherever the car happens to be, it holds a const
 converges, so the *bearing* would have to grow as the car falls short. The corner's line is that kind
 of target, because it is a function of the distance to the apex and the car has to arrive somewhere.
 
-The lane is the other kind whenever it is a **lean into a bend**, which is what the chain's lean
-then stays alive for as long as the bend lasts, the
-bound is the edge rather than the answer, and nothing has to be unwound when the bend ends. The share
+The lane is the other kind whenever it is a **lean into a bend**: the lean stays alive for as long as the bend
+lasts, the bound is the edge rather than the answer, and nothing has to be unwound when the bend ends. The share
 is proportional to how tight the bend is — nothing where a bend has stopped mattering, the whole share
 inside the tight end, and the far edge only ever the bound. This is not the standing-error failure
 above: there the error never closed, whereas here the bound is what ends the move.
