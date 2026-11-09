@@ -23,6 +23,7 @@ namespace ARS
         public static readonly bool RouteBrakeCap = false;
         public static readonly bool ChicaneBoost = false;
         public static readonly bool ProjectionCut = false;
+        public static readonly bool SteerAskThrottle = true;
         public static readonly bool OffTrackThrottle = false;
         public static readonly bool CrestGate = false;
         public static readonly bool StabilityCap = false;
@@ -289,6 +290,8 @@ namespace ARS
         const float GsLaneOutsideFloor = 0f;
         // The lift runs from nothing at the edge to the full demand here, four metres past it.
         const float ProjectionFullLiftMetres = 4f;
+        // How many times the tyre's peak slip the steering may ask for before the pedal goes to nothing.
+        const float SteerAskCapMultiple = 2f;
         // How fast the demand follows its target: one time constant, so a flick of the trigger moves it by a few per cent.
         const float ProjectionChaseSeconds = 0.5f;
         // Armed at half the lateral grip the car actually has, not at a fixed G: a slow car and a fast one reach their
@@ -1538,6 +1541,9 @@ const float RequirementLookaheadSeconds = 3.95f;
         }
 
         public float TRLateralAtSpeed = 22f;
+        // What the steering asked for this tick, taken before `ApplySteerLimits` clips the command to what the
+        // tyres can actually take: the ask is the quantity that says "too fast", the command is the answer to it.
+        public float SteerAskDegrees;
 
         void UpdateTRLateralAtSpeed()
         {
@@ -1693,6 +1699,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             float requestedSteer = Control.SteerDegrees;
+            SteerAskDegrees = requestedSteer;
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
 
             bool countersteering = Math.Sign(requestedSteer) != Math.Sign(VehicleData.YawRotationPerSecondDegrees);
@@ -2727,16 +2734,26 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool kickRaises = _kickPlaying && baseThrottle < KickPedalLevel;
             if (kickRaises) baseThrottle = KickPedalLevel;
 
+            // The rFactor rule: when the steering asks for twice the slip the tyre peaks at, the corner is being
+            // taken too fast and the pedal goes to nothing. It reads the ask from BEFORE the steering limiter,
+            // because the command that reaches the car is already clipped to what the tyres can take - comparing
+            // that against itself could never fire.
+            float steerAskShare = Handling.LateralTractionCurve > 0.01f
+                ? Math.Abs(SteerAskDegrees) / Handling.LateralTractionCurve : 0f;
+            bool steerAsksTooMuch = TrackSpeed.SteerAskThrottle && steerAskShare > SteerAskCapMultiple;
+
             float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromStability);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOverspeed);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRival);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromChillOut);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromYield);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRecovery);
+            if (steerAsksTooMuch) ceiling = 0f;
             Control.MaxThrottle = ceiling;
 
             float binding = baseThrottle;
             ThrottleReason reason = ThrottleReason.Plan;
+            if (steerAsksTooMuch) { binding = 0f; reason = ThrottleReason.SteerAsk; }
             if (Control.MaxThrottleFromTCS < binding) { binding = Control.MaxThrottleFromTCS; reason = ThrottleReason.Tcs; }
             if (Control.MaxThrottleFromStability < binding) { binding = Control.MaxThrottleFromStability; reason = ThrottleReason.Stability; }
             if (Control.MaxThrottleFromOverspeed < binding) { binding = Control.MaxThrottleFromOverspeed; reason = ThrottleReason.Overspeed; }
@@ -3441,6 +3458,17 @@ const float RequirementLookaheadSeconds = 3.95f;
                 ARS.DrawText(full + Vector3.WorldUp * 0.5f,
                              "-" + ((int)Math.Round(_projectionDropMph)).ToString(CultureInfo.InvariantCulture) + " MPH",
                              _projectionCutActive ? Color.Red : Color.Yellow, 0.45f);
+
+            // How hard the steering is asking, as a share of the tyre's peak slip: blue while it is inside twice
+            // that, red past it - red is the moment the pedal is taken away.
+            if (TrackSpeed.SteerAskThrottle)
+            {
+                float askShare = Handling.LateralTractionCurve > 0.01f
+                    ? Math.Abs(SteerAskDegrees) / Handling.LateralTractionCurve : 0f;
+                ARS.DrawText(full + Vector3.WorldUp * 0.15f,
+                             "STEER " + ((int)Math.Round(askShare * 100f)).ToString(CultureInfo.InvariantCulture) + "%",
+                             askShare > SteerAskCapMultiple ? Color.Red : Color.Blue, 0.45f);
+            }
         }
 
         void DrawFrontSlipReadout()

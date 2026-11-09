@@ -293,7 +293,8 @@ namespace ARS
         Countersteer,
         StuckRecovery,
         Stability,
-        Kick
+        Kick,
+        SteerAsk
     }
 
     public enum BrakeReason
