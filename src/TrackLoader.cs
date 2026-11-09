@@ -1160,10 +1160,18 @@ namespace ARS
                 ? NodesToDoubleRadius(apexNode, detectedRadius, blurMaxStep, count)
                 : blurMaxStep;
 
-            if (nodesToDouble > SpanBlurNodes)
+            // A corner turns the car: the region's own turn is the test, not how many nodes the radius takes
+            // to double, which is three corners on a hairpin and a third of the arc on a sweeper.
+            float regionTurn = 0f;
+            for (int position = startPosition; position <= endPosition; position++)
+                regionTurn += ARS.TrackPoints[scanNodes[position]].Angle;
+            regionTurn = Math.Abs(regionTurn) / GeometryWindowNodes;
+
+            if (regionTurn < MinCornerTurnDegrees)
             {
-                ARS.Log(ARS.LogImportance.Info, "Corner blur: apex=" + apexNode + " smoothedR=" + detectedRadius.ToString("0.0") + " tightestR=" + tightestRadius.ToString("0.0") + " nodesToDouble=" + nodesToDouble + " > " + SpanBlurNodes + "; not a corner");
-                ApexRejects.Add(apexNode + " R " + detectedRadius.ToString("0.0") + " (blurred, nodesToDouble " + nodesToDouble + " > " + SpanBlurNodes + ")");
+                ARS.Log(ARS.LogImportance.Info, "Corner blur: apex=" + apexNode + " tightestR=" + tightestRadius.ToString("0.0")
+                    + " turn=" + regionTurn.ToString("0.0") + " deg < " + MinCornerTurnDegrees + "; not a corner");
+                ApexRejects.Add(apexNode + " R " + tightestRadius.ToString("0.0") + " (blurred, " + regionTurn.ToString("0.0") + " deg of turn)");
                 return;
             }
             CornerPoint corner = new CornerPoint
@@ -1244,7 +1252,7 @@ namespace ARS
         }
         const int SpanConsecutiveNodes = 8;
         const float SpanDoublingMultiple = 2f;
-        const int SpanBlurNodes = 60;
+        const float MinCornerTurnDegrees = 10f;
 
         static int NodesToDoubleRadius(int apexNode, float apexRadius, int maxStep, int count)
         {

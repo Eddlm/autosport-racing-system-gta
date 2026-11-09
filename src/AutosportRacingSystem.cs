@@ -59,9 +59,9 @@ namespace ARS
 
         public static int CornersRevision = 0;
 
-        public static int CornerCeilingMeters = 200;
+        public static int CornerCeilingMeters = 500;
 
-        public static readonly string[] CornerCeilingValues = { "20", "40", "60", "80", "100", "120", "140", "160", "180", "200" };
+        public static readonly string[] CornerCeilingValues = { "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "250", "300", "350", "400", "450", "500" };
 
         public static int AiNitroPct = 100;
         public static readonly string[] AiNitroValues = { "50", "100", "150", "200" };
