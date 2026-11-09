@@ -346,8 +346,13 @@ namespace ARS
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
         int _planLogApexNode = -1;
-        int _prepLoggedApex = -1;
+        // The out move belongs to one apex and is not re-decided per tick: its gates (in reach, slower than the car)
+        // flip with the speed, and a flip mid-move drops the ask to a hold.
+        CornerPoint _prepApex;
+        int _prepApexNode = -1;
         float _prepStartOffset;
+        bool _prepStarted;
+        int _prepDoneApex = -1;
 
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;
@@ -791,44 +796,58 @@ namespace ARS
             dynamicOwns = !shaped && Lap > 0 && aimRadius <= ARS.LaneDynamicRadius;
             laneRequest = dynamicOwns ? dynamicAsk : steerRefOffset;
             bool prepOutside = false;
-            if (shaped)
+            CornerPoint prepApex = PrepCorner();
+            if (prepApex != null)
             {
-                // Outward is never a request: the shape pulls the car in, or holds it where it already is.
-                float shapeOutward = -ARS.InsideSign(laneApex.Angle);
-                laneRequest = (laneShapeNow - steerRefOffset) * shapeOutward > 0f ? steerRefOffset : laneShapeNow;
-                laneReason = LaneReason.CurveLean;
-            }
-            else
-            {
-                CornerPoint prepApex = NearestApexForPrep(ARS.LanePrepSeconds);
-                if (prepApex != null)
+                float prepOutward = -ARS.InsideSign(prepApex.Angle);
+                bool shapeOnThis = shaped && _laneApexNode == prepApex.Node;
+                // Inward field of its own corner is the handover: the shape pulls the car in from there, one way.
+                if (shapeOnThis && (laneShapeNow - steerRefOffset) * -prepOutward > 0f)
                 {
-                    float prepOutward = -ARS.InsideSign(prepApex.Angle);
-                    float prepEdge = prepOutward * laneEdge;
-                    // The cap hangs off where the prep started, not off the car each tick: a cap re-based on the car
-                    // is a target that recedes, and the mover walks the car out to the edge whatever the creep says.
-                    if (_prepLoggedApex != prepApex.Node)
+                    _prepDoneApex = prepApex.Node;
+                    _prepApex = null;
+                    _prepApexNode = -1;
+                }
+                else if (!shaped || shapeOnThis)
+                {
+                    // The start is where the move begins, not where the apex was first seen: the creep is measured
+                    // from the first tick the prep actually owns the ask, and never re-based after that.
+                    if (!_prepStarted)
                     {
-                        _prepLoggedApex = prepApex.Node;
+                        _prepStarted = true;
                         _prepStartOffset = steerRefOffset;
                         ARS.Log(ARS.LogImportance.Info, "lane " + Name + ": out prep for apex " + prepApex.Node);
                     }
+                    float prepEdge = prepOutward * laneEdge;
                     float headingGap = Vector3.Angle(CurrentTrackPoint.Direction, steerRefPoint.Direction);
                     float creep = ARS.Clamp(ARS.Remap(headingGap, 1f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
+                    // The cap hangs off where the prep started, not off the car each tick: a cap re-based on the car
+                    // is a target that recedes, and the mover walks the car out to the edge whatever the creep says.
                     float prepCap = _prepStartOffset + prepOutward * creep;
                     laneRequest = prepOutward > 0f ? Math.Min(prepEdge, prepCap) : Math.Max(prepEdge, prepCap);
                     laneReason = LaneReason.CurveLean;
                     prepOutside = true;
                 }
-                else if (dynamicOwns) laneReason = LaneReason.CurveLean;
             }
+            if (shaped)
+            {
+                if (!prepOutside)
+                {
+                    // Outward is never a request: the shape pulls the car in, or holds it where it already is.
+                    float shapeOutward = -ARS.InsideSign(laneApex.Angle);
+                    laneRequest = (laneShapeNow - steerRefOffset) * shapeOutward > 0f ? steerRefOffset : laneShapeNow;
+                }
+                laneReason = LaneReason.CurveLean;
+            }
+            else if (!prepOutside && dynamicOwns) laneReason = LaneReason.CurveLean;
             CornerPoint laneRef = laneApex;
             if (laneRef != null && !prepOutside && !shaped)
             {
-                int turn = LaneTurnSignToAim(ARS.TrackPoints[steerRefPoint.Node]);
-                if (turn == 0) turn = Math.Sign(laneRef.Angle);
-                float outward = -ARS.LaneInsideSign * turn;
-                if ((laneRequest - steerRefOffset) * outward > 0f) laneRequest = steerRefOffset;
+                // Outward is measured against the corner the lane is working, never the latched local bend: before a
+                // corner of the other sign the local sign guards the wrong flank and an outward ask slips through,
+                // which is the car stepping out for a moment on an approach that should only ever move inward.
+                float outward = -ARS.InsideSign(laneRef.Angle);
+                if (outward != 0f && (laneRequest - steerRefOffset) * outward > 0f) laneRequest = steerRefOffset;
             }
             float requestLimit = (shaped || prepOutside) ? laneEdge : laneLimit;
             laneRequest = ARS.Clamp(laneRequest, -requestLimit, requestLimit);
@@ -1145,6 +1164,23 @@ const float RequirementLookaheadSeconds = 3.95f;
                 best = corner;
             }
             return best;
+        }
+
+        // One apex at a time, latched. The gates above flip with the speed (in reach is speed × seconds, slower than
+        // the car is a live comparison), so asking again every tick made the out move start, lapse and start again.
+        // The latch ends at the apex or the moment the shape takes that corner over, and never resumes for it.
+        CornerPoint PrepCorner()
+        {
+            if (_prepApex != null && !HasPassedApex(_prepApexNode)) return _prepApex;
+            _prepApex = null;
+            _prepApexNode = -1;
+            if (_prepDoneApex >= 0 && HasPassedApex(_prepDoneApex)) _prepDoneApex = -1;
+            CornerPoint next = NearestApexForPrep(ARS.LanePrepSeconds);
+            if (next == null || next.Node == _prepDoneApex) return null;
+            _prepApex = next;
+            _prepApexNode = next.Node;
+            _prepStarted = false;
+            return next;
         }
 
         bool CornerIsLaned(CornerPoint corner) => corner.DetectedRadius < IdealLineMaxRadiusMeters;
