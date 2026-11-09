@@ -772,30 +772,33 @@ namespace ARS
                 if (fwdNode < 0 || fwdNode >= nodeCount) continue;
 
                 Vector3 apexFlat = new Vector3(apexDir.X, apexDir.Y, 0f);
-                Vector3 backFlat = new Vector3(ARS.TrackPoints[backNode].Direction.X, ARS.TrackPoints[backNode].Direction.Y, 0f);
-                Vector3 fwdFlat = new Vector3(ARS.TrackPoints[fwdNode].Direction.X, ARS.TrackPoints[fwdNode].Direction.Y, 0f);
-                float angleBack = Vector3.SignedAngle(apexFlat, backFlat, Vector3.WorldUp);
-                float angleFwd = Vector3.SignedAngle(apexFlat, fwdFlat, Vector3.WorldUp);
+                Vector3 apexAt = ARS.TrackPoints[apex].Position;
+                Vector3 apexRight = Vector3.Cross(Vector3.WorldUp, apexFlat);
+                float width = Math.Max(1f, ARS.TrackPoints[apex].TrackHalfWidth * 2f);
+                float backOffset = Vector3.Dot(ARS.TrackPoints[backNode].Position - apexAt, apexRight);
+                float fwdOffset = Vector3.Dot(ARS.TrackPoints[fwdNode].Position - apexAt, apexRight);
 
-                // An S is the road turning one way behind the apex and the other way ahead of it. Same side both
-                // ways is a bend, which is what this test used to call a chicane.
-                if (Math.Abs(angleBack) > 1f && Math.Abs(angleFwd) > 1f && Math.Sign(angleBack) != Math.Sign(angleFwd))
+                // An S displaces the road a track width to one side behind the apex and to the other ahead of it.
+                // A bend keeps it on one side, whatever the angle noise says.
+                bool sBend = Math.Abs(backOffset) >= width && Math.Abs(fwdOffset) >= width
+                    && Math.Sign(backOffset) != Math.Sign(fwdOffset);
+                if (sBend)
                 {
                     corner.IsChicane = true;
-                    // The flip nearest the apex, searched both ways: a merged span can begin on the other side of
-                    // the bend, and the first differing node forward would then be the span's own start.
+                    // The apex goes to the nearest node already a whole width out on the far side, so the floor is
+                    // a displacement, not a sign change from noise.
                     int span = ArcSpan(corner.StartNode, corner.EndNode, nodeCount);
                     int flipOffset = 0;
                     for (int step = 1; step < span && flipOffset == 0; step++)
                     {
                         int aheadNode = ArcNode(corner.Node, step, nodeCount);
                         if (aheadNode >= 0 && aheadNode < nodeCount
-                            && Math.Sign(ARS.TrackPoints[aheadNode].Angle) != Math.Sign(corner.Angle)) flipOffset = step;
+                            && Vector3.Dot(ARS.TrackPoints[aheadNode].Position - apexAt, apexRight) * -Math.Sign(backOffset) >= width) flipOffset = step;
                         else
                         {
                             int behindNode = ArcNode(corner.Node, -step, nodeCount);
                             if (behindNode >= 0 && behindNode < nodeCount
-                                && Math.Sign(ARS.TrackPoints[behindNode].Angle) != Math.Sign(corner.Angle)) flipOffset = -step;
+                                && Vector3.Dot(ARS.TrackPoints[behindNode].Position - apexAt, apexRight) * -Math.Sign(backOffset) >= width) flipOffset = -step;
                         }
                     }
                     if (flipOffset != 0)
