@@ -347,6 +347,7 @@ namespace ARS
         int _cornersRevisionSeeded = -1;
         int _planLogApexNode = -1;
         float _laneLead;
+        float _laneOutCap;
 
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;
@@ -791,14 +792,22 @@ namespace ARS
                 float aim = beforeEntrance
                     ? ClampShapedLane(ARS.TrackPoints[entranceNode].LaneLineShare * laneEdge, laneEdge, laneApex)
                     : laneShapeNow;
-                // Out is a 2 m lead over the car, never a destination: the ask cannot sit further out than that, and
+                // Out is a lead over the car, never a destination: the ask cannot sit further out than the cap, and
                 // the car keeps taking up the lead until it sits on the line. In is the aim itself, uncapped.
+                // The cap is the creep before the entrance -- 2 m at 2 degrees of road between the car and the
+                // entrance, 0.1 m at 20 -- and the plain 2 m after it, where the ramp alone is asking.
                 float outward = TrackTurnSign(CurrentTrackPoint.Node, laneApex.Node, 0);
                 if (outward == 0f) outward = -ARS.InsideSign(laneApex.Angle);
+                _laneOutCap = ARS.LanePrepOutsideCapMetres;
+                if (beforeEntrance)
+                {
+                    Vector3 here = CurrentTrackPoint.Direction;
+                    Vector3 atEntrance = ARS.TrackPoints[entranceNode].Direction;
+                    float approachGap = Math.Abs((float)(Math.Atan2(here.X * atEntrance.Y - here.Y * atEntrance.X, here.X * atEntrance.X + here.Y * atEntrance.Y) * 180.0 / Math.PI));
+                    _laneOutCap = ARS.Clamp(ARS.Remap(approachGap, 2f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
+                }
                 _laneLead = (aim - steerRefOffset) * outward;
-                laneRequest = _laneLead > ARS.LanePrepOutsideCapMetres
-                    ? steerRefOffset + outward * ARS.LanePrepOutsideCapMetres
-                    : aim;
+                laneRequest = _laneLead > _laneOutCap ? steerRefOffset + outward * _laneOutCap : aim;
                 laneReason = LaneReason.CurveLean;
             }
             else if (dynamicOwns) laneReason = LaneReason.CurveLean;
@@ -861,7 +870,7 @@ namespace ARS
                     + " inside " + (laneCornerInside != null ? laneCornerInside.Node.ToString() : "-")
                     + " apexIn " + (lineCorner != null ? toApex.ToString("0") : "-")
                     + " seenFrom " + (laneCornerInside != null ? MetresToNode(laneCornerInside.Node).ToString("0") : "-")
-                    + " lead " + _laneLead.ToString("0.00"));
+                    + " lead " + _laneLead.ToString("0.00") + " cap " + _laneOutCap.ToString("0.00"));
             }
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
