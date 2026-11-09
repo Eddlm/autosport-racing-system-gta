@@ -11,6 +11,23 @@ using System.Windows.Forms;
 
 namespace ARS
 {
+    // Every track-derived speed system, each with an on/off switch of its own. On is what the car does today; off
+    // leaves the system in place and removes its effect, so one of them can be named as the guilty one without
+    // rewriting anything else. Three more already carry their own switch and are not repeated here: Gs Lane Throttle
+    // Floor (ARS.GsLaneThrottleFloor), Overspeed Correction (ARS.OverspeedCutPerTenthG at 0) and Slope Loss
+    // (HillGripEffect at 0 %).
+    internal static class TrackSpeed
+    {
+        public static readonly bool CornerPlan = true;
+        public static readonly bool RouteCurvature = true;
+        public static readonly bool RouteBrakeCap = true;
+        public static readonly bool ChicaneBoost = true;
+        public static readonly bool ProjectionCut = true;
+        public static readonly bool OffTrackThrottle = true;
+        public static readonly bool CrestGate = true;
+        public static readonly bool StabilityCap = true;
+    }
+
     public enum RacerBaseBehavior
     {
         GridWait, Race, FinishedRace, FinishedStandStill
@@ -1973,6 +1990,12 @@ const float RequirementLookaheadSeconds = 3.95f;
         void ApplyProjectionSpeedCut()
         {
             MeasureProjectionOutside(1f);
+            if (!TrackSpeed.ProjectionCut)
+            {
+                _projectionCutActive = false;
+                _projectionDropMph = 0f;
+                return;
+            }
             float floorMps = ARS.MphToMps(ProjectionSpeedFloorMph());
             float planMps = Brain.CurrentIntention.Speed;
             _projectionCutActive = _projectionWidening && ARS.MpsToMph(Car.Velocity.Length()) > ProjectionSpeedFloorMph();
@@ -2345,7 +2368,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             float cornerSpd = 999f;
             int cornerSourceNode = -1;
-            if (NextApexNode >= 0)
+            if (TrackSpeed.CornerPlan && NextApexNode >= 0)
             {
 
                 if (CornerRequiresBraking(NextApexNode))
@@ -2365,7 +2388,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                 }
             }
 
-            float followTrackSpd = RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint);
+            float followTrackSpd = TrackSpeed.RouteCurvature
+                ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint)
+                : 999f;
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
@@ -2407,7 +2432,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Brain.CurrentIntention.SteerLimitedSpeed = 999f;
             }
 
-            if (Brain.Corner != null && Brain.Corner.Point.IsChicane)
+            if (TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane)
             {
                 float chicaneBoost = ARS.MphToMps(10f);
                 cornerSpd += chicaneBoost;
@@ -2441,7 +2466,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Brain.CurrentIntention.TermRadius = Brain.CurrentPerception.CurveRadiusToFollowPoint;
             }
 
-            Control.MaxBrakeFromRoute = routeTerm <= cornerTerm && !cornerPlansABrake ? RouteBrakeCap : 1f;
+            Control.MaxBrakeFromRoute = TrackSpeed.RouteBrakeCap && routeTerm <= cornerTerm && !cornerPlansABrake ? RouteBrakeCap : 1f;
 
             if (ActiveManeuver.Type == ManeuverType.ChillOut)
             {
@@ -2472,6 +2497,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             nearNode = -1;
             farNode = -1;
             rawDeltaGs = 0f;
+            if (!TrackSpeed.CrestGate) return 1f;
             if (carNode < 0 || carNode >= count) return 1f;
             float v = Car.Velocity.Length();
             if (v < 0.5f) return 1f;
@@ -2572,7 +2598,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             Control.MaxThrottleFromTCS = _kickPlaying ? 1f : GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
             int wheelsOffGround = ARS.WheelsOffGround(Car);
-            if (wheelsOffGround > 0)
+            if (TrackSpeed.StabilityCap && wheelsOffGround > 0)
                 Control.MaxThrottleFromStability -= StabilityFallPerWheelPerSecond * wheelsOffGround * TickScale;
             else
                 Control.MaxThrottleFromStability += StabilityRisePerSecond * TickScale;
@@ -2593,8 +2619,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             Control.MaxThrottleFromChillOut = GlideCap(Control.MaxThrottleFromChillOut, ActiveManeuver.Type == ManeuverType.ChillOut ? ChillThrottleCap : 1f);
             Control.MaxThrottleFromYield = GlideCap(Control.MaxThrottleFromYield, ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null ? YieldThrottleLevel : 1f);
 
-            float offTrackThrottle = 1f;
-            if (OutOfTrackDistance() > 0f)
+            // This channel is consumed as a throttle floor, not a cap: 1f would demand full pedal on the grass.
+            // Off therefore means 0f - no floor at all - which is the only value that leaves the pedal alone.
+            float offTrackThrottle = TrackSpeed.OffTrackThrottle ? 1f : 0f;
+            if (TrackSpeed.OffTrackThrottle && OutOfTrackDistance() > 0f)
             {
                 offTrackThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), OffTrackSafeSpeedMph, OffTrackFullThrottleMph, OffTrackThrottleLevel, 1f, true);
 
