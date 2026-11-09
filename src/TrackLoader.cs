@@ -473,6 +473,13 @@ namespace ARS
             float[] crossTans = new float[corners];
             int[] shapedStarts = new int[corners];
             int[] shapedEnds = new int[corners];
+            // -1 is the sentinel the readers already understand: a shape the builder skips must not claim node 0
+            // (the start line) as its entrance.
+            for (int c = 0; c < corners; c++)
+            {
+                shapedStarts[c] = -1;
+                shapedEnds[c] = -1;
+            }
             for (int c = 0; c < corners; c++)
             {
                 CornerPoint corner = ARS.Corners[c];
@@ -591,7 +598,7 @@ namespace ARS
 
             for (int c = 0; c < corners; c++)
             {
-                entryStart[c] = shapedStarts[c];
+                if (shapedStarts[c] >= 0) entryStart[c] = shapedStarts[c];
                 TrackPoint apex = ARS.TrackPoints[ARS.Corners[c].Node];
                 apex.LaneShapeStart = shapedStarts[c];
                 apex.LaneShapeExit = shapedEnds[c];
