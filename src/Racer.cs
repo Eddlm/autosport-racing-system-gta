@@ -2330,11 +2330,10 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             if (NextApexNode >= 0 && HasPassedApex(NextApexNode)) cornerSpd = 999f;
 
-            if (TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane)
+            bool chicane = TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane;
+            if (chicane)
             {
-                float chicaneBoost = ARS.MphToMps(10f);
-                cornerSpd += chicaneBoost;
-                followTrackSpd += chicaneBoost;
+                cornerSpd += ARS.MphToMps(10f);
                 Brain.CurrentIntention.Term = SpeedTerm.Chicane;
             }
 
@@ -2359,6 +2358,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             LiveRouteCrestNode = routeNear;
             LiveRouteCrestFarNode = routeFar;
             followTrackSpd *= routeCrestFactor;
+
+            // The boost is a flat 10 mph, so it lands after the slope and crest factors have had their say.
+            if (chicane) followTrackSpd += ARS.MphToMps(10f);
 
             bool steerLimitedSpeedGovernsRoute = false;
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
@@ -4104,7 +4106,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         bool CornerWorthHolding(int node, float radius, List<int> selectedNodes, List<float> selectedRadii)
         {
             int distance = ForwardNodeDistance(node);
-            float candidateSpeed = RouteIdealSpeedForRadius(radius);
+            float candidateSpeed = ApexSpeedFor(node, radius);
             float nearestGap = float.MaxValue;
             float nearestSpeed = 999f;
             for (int i = 0; i < selectedNodes.Count; i++)
@@ -4113,7 +4115,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (gap < nearestGap)
                 {
                     nearestGap = gap;
-                    nearestSpeed = RouteIdealSpeedForRadius(selectedRadii[i]);
+                    nearestSpeed = ApexSpeedFor(selectedNodes[i], selectedRadii[i]);
                 }
             }
             if (nearestGap > Math.Max(5f, nearestSpeed * ApexBufferSeconds)) return true;
@@ -4240,12 +4242,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             return sum / samples * ElevationToSlopeSine;
         }
 
-        float RouteIdealSpeedForRadius(float r)
-        {
-            if (float.IsNaN(r) || float.IsInfinity(r)) r = 999f;
-            r = ARS.Clamp(r, 5f, 999f);
-            return (float)Math.Sqrt((VehicleData.CurrentMechanicalGrip * Handling.Gravity) * r);
-        }
+        // The same law as the apex speed, named for its reader: the route term is a radius too.
+        float RouteIdealSpeedForRadius(float r) => ApexSpeedWithDownforce(r);
 
         // The plan's apex speed, with the corner's own surface: a loose corner asks for less, and every
         // reader of the apex queue - the queue itself, the requirement test, the picker - reads one number.
