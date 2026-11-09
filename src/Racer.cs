@@ -351,6 +351,7 @@ namespace ARS
         CornerPoint _prepApex;
         int _prepApexNode = -1;
         float _prepStartOffset;
+        float _prepSide;
         bool _prepStarted;
         int _prepDoneApex = -1;
 
@@ -799,7 +800,7 @@ namespace ARS
             CornerPoint prepApex = PrepCorner();
             if (prepApex != null)
             {
-                float prepOutward = -ARS.InsideSign(prepApex.Angle);
+                float prepOutward = _prepSide;
                 bool shapeOnThis = shaped && _laneApexNode == prepApex.Node;
                 // Inward field of its own corner is the handover: the shape pulls the car in from there, one way.
                 if (shapeOnThis && (laneShapeNow - steerRefOffset) * -prepOutward > 0f)
@@ -819,12 +820,21 @@ namespace ARS
                         ARS.Log(ARS.LogImportance.Info, "lane " + Name + ": out prep for apex " + prepApex.Node);
                     }
                     float prepEdge = prepOutward * laneEdge;
-                    float headingGap = Vector3.Angle(CurrentTrackPoint.Direction, steerRefPoint.Direction);
-                    float creep = ARS.Clamp(ARS.Remap(headingGap, 1f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
+                    // Only the part of the local turn that heads the same way as the corner closes the creep. The
+                    // unsigned gap read 20° while unwinding out of a bend of the other sign — exactly when the car is
+                    // free to move out — and shrank the creep to its floor before the approach had even begun.
+                    Vector3 from = CurrentTrackPoint.Direction;
+                    Vector3 to = steerRefPoint.Direction;
+                    float localTurn = (float)(Math.Atan2(from.X * to.Y - from.Y * to.X, from.X * to.X + from.Y * to.Y) * 180.0 / Math.PI);
+                    float creepGap = Math.Max(0f, localTurn * prepOutward);
+                    float creep = ARS.Clamp(ARS.Remap(creepGap, 1f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
                     // The cap hangs off where the prep started, not off the car each tick: a cap re-based on the car
                     // is a target that recedes, and the mover walks the car out to the edge whatever the creep says.
                     float prepCap = _prepStartOffset + prepOutward * creep;
-                    laneRequest = prepOutward > 0f ? Math.Min(prepEdge, prepCap) : Math.Max(prepEdge, prepCap);
+                    float prepAsk = prepOutward > 0f ? Math.Min(prepEdge, prepCap) : Math.Max(prepEdge, prepCap);
+                    // One way only: the prep moves the car out and then holds. A creep that shrinks with the turn must
+                    // not withdraw the out, or the out is asked for and taken back again.
+                    laneRequest = (prepAsk - steerRefOffset) * prepOutward > 0f ? prepAsk : steerRefOffset;
                     laneReason = LaneReason.CurveLean;
                     prepOutside = true;
                 }
@@ -846,7 +856,7 @@ namespace ARS
                 // Outward is measured against the corner the lane is working, never the latched local bend: before a
                 // corner of the other sign the local sign guards the wrong flank and an outward ask slips through,
                 // which is the car stepping out for a moment on an approach that should only ever move inward.
-                float outward = -ARS.InsideSign(laneRef.Angle);
+                float outward = TrackTurnSign(CurrentTrackPoint.Node, laneRef.Node, 0);
                 if (outward != 0f && (laneRequest - steerRefOffset) * outward > 0f) laneRequest = steerRefOffset;
             }
             float requestLimit = (shaped || prepOutside) ? laneEdge : laneLimit;
@@ -1177,6 +1187,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (_prepDoneApex >= 0 && HasPassedApex(_prepDoneApex)) _prepDoneApex = -1;
             CornerPoint next = NearestApexForPrep(ARS.LanePrepSeconds);
             if (next == null || next.Node == _prepDoneApex) return null;
+            // The side comes from the road, not from the corner's stored angle: the car's heading against the heading
+            // at that apex. Read here, once, so nothing downstream can flip it mid-approach.
+            float side = TrackTurnSign(CurrentTrackPoint.Node, next.Node, 0);
+            if (side == 0) return null;
+            _prepSide = side;
             _prepApex = next;
             _prepApexNode = next.Node;
             _prepStarted = false;
