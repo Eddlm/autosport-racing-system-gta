@@ -279,7 +279,7 @@ namespace ARS
         const float OffTrackSpeedFloorMph = 0f;
         const float OffshootMinSpeedMph = 20f;
         public const float FullThrottleSpeedErrorMps = 1f;
-        public const float FullBrakeSpeedErrorMps = 3f;
+        public const float FullBrakeSpeedErrorMps = 4.5f;
         // Learner tolerance = half the brake: the error at which the pedal asks for 0.5.
         const float BrakeLearnerBarMps = FullBrakeSpeedErrorMps * BrakeEntryBandShare;
 
