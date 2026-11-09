@@ -3318,6 +3318,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (ARS.DebugToggles[Options.ShowFrontSlip]) DrawFrontSlipReadout();
             if (ARS.DebugToggles[Options.ShowSlideAngle]) DrawSlideAngleReadout();
             if (ARS.DebugToggles[Options.ShowGsProjection]) DrawGsProjection();
+            if (TrackSpeed.SteerAskThrottle) DrawSteerAskSubtitle();
         }
         const float FanLineLength = 5f;
         const float FanPursuitHeight = 0.05f;
@@ -3458,17 +3459,16 @@ const float RequirementLookaheadSeconds = 3.95f;
                 ARS.DrawText(full + Vector3.WorldUp * 0.5f,
                              "-" + ((int)Math.Round(_projectionDropMph)).ToString(CultureInfo.InvariantCulture) + " MPH",
                              _projectionCutActive ? Color.Red : Color.Yellow, 0.45f);
+        }
 
-            // How hard the steering is asking, as a share of the tyre's peak slip: blue while it is inside twice
-            // that, red past it - red is the moment the pedal is taken away.
-            if (TrackSpeed.SteerAskThrottle)
-            {
-                float askShare = Handling.LateralTractionCurve > 0.01f
-                    ? Math.Abs(SteerAskDegrees) / Handling.LateralTractionCurve : 0f;
-                ARS.DrawText(full + Vector3.WorldUp * 0.15f,
-                             "STEER " + ((int)Math.Round(askShare * 100f)).ToString(CultureInfo.InvariantCulture) + "%",
-                             askShare > SteerAskCapMultiple ? Color.Red : Color.Blue, 0.45f);
-            }
+        // The share goes in the subtitle, in colour: blue while the steering asks for less than twice the tyre's
+        // peak slip, red past it. Red is the moment the pedal is taken away.
+        void DrawSteerAskSubtitle()
+        {
+            float share = Handling.LateralTractionCurve > 0.01f
+                ? Math.Abs(SteerAskDegrees) / Handling.LateralTractionCurve : 0f;
+            string percent = ((int)Math.Round(share * 100f)).ToString(CultureInfo.InvariantCulture) + "%";
+            UI.ShowSubtitle(share > SteerAskCapMultiple ? "~r~STEER " + percent : "~b~STEER " + percent, 50);
         }
 
         void DrawFrontSlipReadout()
