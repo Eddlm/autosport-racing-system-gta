@@ -289,8 +289,7 @@ namespace ARS
         Countersteer,
         StuckRecovery,
         Stability,
-        Kick,
-        SteerAsk
+        Kick
     }
 
     public enum BrakeReason
@@ -299,8 +298,6 @@ namespace ARS
         Abs,
         Countersteer,
         Slide,
-
-        Route,
 
         Projection,
         GridWait,
@@ -337,7 +334,6 @@ namespace ARS
         public float MaxThrottleFromTCS = 1f;
         public float MaxBrakeFromABS = 1f;
 
-        public float MaxBrakeFromRoute = 1f;
         public float MaxBrakeFromCountersteer = 1f;
         public float MaxBrakeFromSlide = 1f;
         public float MaxThrottleFromOverspeed = 1f;

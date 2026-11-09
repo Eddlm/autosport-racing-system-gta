@@ -15,16 +15,14 @@ namespace ARS
     {
         public static readonly bool CornerPlan = true;
         public static readonly bool RouteCurvature = true;
-        public static readonly bool RouteBrakeCap = false;
-        public static readonly bool ChicaneBoost = false;
+        public static readonly bool ChicaneBoost = true;
         public static readonly bool ProjectionCut = true;
-        public static readonly bool SteerAskThrottle = false;
         public static readonly bool OffTrackThrottle = true;
-        public static readonly bool CrestGate = false;
-        public static readonly bool StabilityCap = false;
+        public static readonly bool CrestGate = true;
+        public static readonly bool StabilityCap = true;
         public static readonly bool GsLaneFloor = false;
-        public static readonly bool OverspeedCorrection = false;
-        public static readonly bool SlopeGrip = false;
+        public static readonly bool OverspeedCorrection = true;
+        public static readonly bool SlopeGrip = true;
     }
 
     public enum RacerBaseBehavior
@@ -275,13 +273,9 @@ namespace ARS
 
         int _divebombApexNode = -1;
         int _defendApexNode = -1;
-        const float RouteBrakeCap = 0.2f;
         const float GsLaneThrottleMaxFloor = 1f;
         const float GsLaneOutsideFloor = 0f;
         const float ProjectionFullLiftMetres = 4f;
-        const float SteerAskNoLiftShare = 1f;
-        const float SteerAskFloorShare = 1.5f;
-        const float SteerAskPedalFloor = 0.5f;
         // The lift moves at a rate, not a time constant: 2 pedal per second, both ways.
         const float ProjectionLiftPerSecond = 2f;
         const float ProjectionArmSlideShare = 0.6f;
@@ -1755,7 +1749,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             Control.MaxThrottle = 1f;
             Control.MaxBrake = 1f;
             Control.MaxBrakeFromABS = 1f;
-            Control.MaxBrakeFromRoute = 1f;
             Control.MaxBrakeFromCountersteer = 1f;
             Control.MaxBrakeFromSlide = 1f;
             Control.MaxThrottleFromTCS = 1f;
@@ -2409,8 +2402,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Brain.CurrentIntention.TermRadius = Brain.CurrentPerception.CurveRadiusToFollowPoint;
             }
 
-            Control.MaxBrakeFromRoute = TrackSpeed.RouteBrakeCap && routeTerm <= cornerTerm && !cornerPlansABrake ? RouteBrakeCap : 1f;
-
             if (ActiveManeuver.Type == ManeuverType.ChillOut)
             {
                 Rival standoffRival = Brain.Rivals
@@ -2650,15 +2641,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool kickRaises = _kickPlaying && baseThrottle < KickPedalLevel;
             if (kickRaises) baseThrottle = KickPedalLevel;
 
-            // Past 1x the peak slip the pedal comes off, 1.5x at the floor; the ask is read pre-limiter.
-            float steerAskShare = TRLateralAtSpeed > 0.01f
-                ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
-            // Remap is called WITHOUT its clamp and the output clamped: a descending range breaks its compare.
-            float steerCap = TrackSpeed.SteerAskThrottle
-                ? ARS.Clamp(ARS.Remap(steerAskShare, SteerAskNoLiftShare, SteerAskFloorShare, 1f, SteerAskPedalFloor),
-                    SteerAskPedalFloor, 1f)
-                : 1f;
-
             float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromStability);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOverspeed);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRival);
@@ -2666,12 +2648,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromYield);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRecovery);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOffTrack);
-            ceiling = Math.Min(ceiling, steerCap);
             Control.MaxThrottle = ceiling;
 
             float binding = baseThrottle;
             ThrottleReason reason = ThrottleReason.Plan;
-            if (steerCap < binding) { binding = steerCap; reason = ThrottleReason.SteerAsk; }
             if (Control.MaxThrottleFromTCS < binding) { binding = Control.MaxThrottleFromTCS; reason = ThrottleReason.Tcs; }
             if (Control.MaxThrottleFromStability < binding) { binding = Control.MaxThrottleFromStability; reason = ThrottleReason.Stability; }
             if (Control.MaxThrottleFromOverspeed < binding) { binding = Control.MaxThrottleFromOverspeed; reason = ThrottleReason.Overspeed; }
@@ -2692,13 +2672,11 @@ const float RequirementLookaheadSeconds = 3.95f;
         float ComposeBrakeCap(float baseBrake, bool countersteering)
         {
             Control.MaxBrake = Math.Min(Control.MaxBrakeFromABS, Control.MaxBrakeFromCountersteer);
-            Control.MaxBrake = Math.Min(Control.MaxBrake, Control.MaxBrakeFromRoute);
             Control.MaxBrake = Math.Min(Control.MaxBrake, Control.MaxBrakeFromSlide);
 
             float binding = baseBrake;
             BrakeReason reason = BrakeReason.Plan;
             if (Control.MaxBrakeFromABS < binding) { binding = Control.MaxBrakeFromABS; reason = BrakeReason.Abs; }
-            if (Control.MaxBrakeFromRoute < binding) { binding = Control.MaxBrakeFromRoute; reason = BrakeReason.Route; }
             if (Control.MaxBrakeFromCountersteer < binding) { binding = Control.MaxBrakeFromCountersteer; reason = BrakeReason.Countersteer; }
             if (Control.MaxBrakeFromSlide < binding) { binding = Control.MaxBrakeFromSlide; reason = BrakeReason.Slide; }
             if (countersteering) reason = BrakeReason.Countersteer;
