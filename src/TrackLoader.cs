@@ -404,7 +404,9 @@ namespace ARS
                     if (ARS.LastGroundMaterialMatched) matched++;
                     if (probes <= 8)
                         ARS.Log(ARS.LogImportance.Info, "Surface probe " + node + ": hit " + ARS.LastGroundMaterialHit
-                            + " material " + ARS.LastGroundMaterialHash + " grip " + grip.ToString("0.00"));
+                            + " material " + ARS.LastGroundMaterialHash + " grip " + grip.ToString("0.00")
+                            + " at " + ARS.LastGroundHit.ToString() + " node z " + ARS.TrackPoints[node].Position.Z.ToString("0.00")
+                            + " model " + ARS.LastGroundHitModel);
                 }
                 ARS.TrackPoints[node].SurfaceGrip = grip;
                 if (grip < OutsideApproachMinGrip) offRoad++;

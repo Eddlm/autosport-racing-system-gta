@@ -2661,6 +2661,8 @@ namespace ARS
         public static bool LastGroundMaterialMatched = false;
         public static bool LastGroundMaterialHit = false;
         public static int LastGroundMaterialHash = 0;
+        public static Vector3 LastGroundHit = Vector3.Zero;
+        public static int LastGroundHitModel = 0; // the raw hit handle: FromHandle is internal in SHVDN2
 
         // The material's authored grip under a point, for the load-time route scan. The shape test answers a
         // material HASH, and SurfaceMaterials maps it to the game's own multiplier; a miss reads 1.0.
@@ -2668,6 +2670,8 @@ namespace ARS
         {
             LastGroundMaterialHit = false;
             LastGroundMaterialHash = 0;
+            LastGroundHit = Vector3.Zero;
+            LastGroundHitModel = 0;
             Vector3 start = point + new Vector3(0f, 0f, 2f);
             Vector3 end = point - new Vector3(0f, 0f, 2f);
             int shape = Function.Call<int>(Hash._0x377906D8A31E5586, start.X, start.Y, start.Z, end.X, end.Y, end.Z, (int)IntersectOptions.Map, 0, 7);
@@ -2684,6 +2688,8 @@ namespace ARS
             int material = materialhash.GetResult<int>();
             LastGroundMaterialHit = true;
             LastGroundMaterialHash = material;
+            LastGroundHit = hitpos.GetResult<Vector3>();
+            LastGroundHitModel = entity.GetResult<int>();
             float grip;
             LastGroundMaterialMatched = SurfaceMaterials.TryGrip(material, out grip);
             return LastGroundMaterialMatched ? grip : 1f;
