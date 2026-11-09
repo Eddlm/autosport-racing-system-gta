@@ -73,6 +73,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="src\SurfaceMaterials.cs" />
     <Compile Include="src\DataStructures.cs" />
     <Compile Include="src\FreeCamController.cs" />
     <Compile Include="src\TrackRepository.cs" />

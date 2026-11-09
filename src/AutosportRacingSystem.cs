@@ -2658,9 +2658,10 @@ namespace ARS
 
         }
 
-        // Road grip share under a point, for the load-time route scan. The shape test answers a material
-        // HASH here; the real per-material multipliers are indexed by material INDEX, which only a wheel in
-        // contact reports (ars-fivem's material_tyre_grip table), so this answers road or not road.
+        public static bool LastGroundMaterialMatched = false;
+
+        // The material's authored grip under a point, for the load-time route scan. The shape test answers a
+        // material HASH, and SurfaceMaterials maps it to the game's own multiplier; a miss reads 1.0.
         public static float GroundGripAt(Vector3 point)
         {
             Vector3 start = point + new Vector3(0f, 0f, 2f);
@@ -2676,7 +2677,10 @@ namespace ARS
             int status = Function.Call<int>(Hash._0x65287525D951F6BE, shape, didhit, hitpos, snormal, materialhash, entity);
             if (status == 0 || !didhit.GetResult<bool>()) return 1f;
 
-            return Road.Contains(materialhash.GetResult<int>()) ? 1f : 0f;
+            int material = materialhash.GetResult<int>();
+            float grip;
+            LastGroundMaterialMatched = SurfaceMaterials.TryGrip(material, out grip);
+            return LastGroundMaterialMatched ? grip : 1f;
         }
 
         static public List<Vector3> GridPositions = new List<Vector3>();
