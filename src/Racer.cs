@@ -290,7 +290,8 @@ namespace ARS
         const float GsLaneOutsideFloor = 0f;
         // The lift runs from nothing at the edge to the full demand here, four metres past it.
         const float ProjectionFullLiftMetres = 4f;
-        // How many times the tyre's peak slip the steering may ask for before the pedal goes to nothing.
+        // How many times the tyre's peak slip at the current speed the steering may ask for before the pedal goes
+        // to nothing.
         const float SteerAskCapMultiple = 2f;
         // How fast the demand follows its target: one time constant, so a flick of the trigger moves it by a few per cent.
         const float ProjectionChaseSeconds = 0.5f;
@@ -2735,11 +2736,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (kickRaises) baseThrottle = KickPedalLevel;
 
             // The rFactor rule: when the steering asks for twice the slip the tyre peaks at, the corner is being
-            // taken too fast and the pedal goes to nothing. It reads the ask from BEFORE the steering limiter,
-            // because the command that reaches the car is already clipped to what the tyres can take - comparing
-            // that against itself could never fire.
-            float steerAskShare = Handling.LateralTractionCurve > 0.01f
-                ? Math.Abs(SteerAskDegrees) / Handling.LateralTractionCurve : 0f;
+            // taken too fast and the pedal goes to nothing. The reference is the peak slip AT THIS SPEED
+            // (`TRLateralAtSpeed`), not the handling curve's constant: the constant is the zero-speed peak, so twice
+            // it sits above the steering lock and the rule could never fire. It reads the ask from BEFORE the
+            // steering limiter, because the command that reaches the car is already clipped to what the tyres take.
+            float steerAskShare = TRLateralAtSpeed > 0.01f
+                ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
             bool steerAsksTooMuch = TrackSpeed.SteerAskThrottle && steerAskShare > SteerAskCapMultiple;
 
             float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromStability);
@@ -3465,8 +3467,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         // peak slip, red past it. Red is the moment the pedal is taken away.
         void DrawSteerAskSubtitle()
         {
-            float share = Handling.LateralTractionCurve > 0.01f
-                ? Math.Abs(SteerAskDegrees) / Handling.LateralTractionCurve : 0f;
+            float share = TRLateralAtSpeed > 0.01f
+                ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
             string percent = ((int)Math.Round(share * 100f)).ToString(CultureInfo.InvariantCulture) + "%";
             UI.ShowSubtitle(share > SteerAskCapMultiple ? "~r~STEER " + percent : "~b~STEER " + percent, 50);
         }
