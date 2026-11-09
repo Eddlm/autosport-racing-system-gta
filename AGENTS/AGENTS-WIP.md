@@ -159,6 +159,9 @@ stale on both counts:**
 - The route speed does **not** read the raw `PreciseCurveRadius`: `RouteRadiusSampled()` (`Racer.cs:3921`) is the
   four-point least-squares fit behind the sagitta guard, and `PreciseCurveRadius` is read only by the lean code
   (`:1011`, `:1020`). There was no unsmoothed step to fix.
+- **Build 1662:** no fit is left in the route path. `RouteRadiusWindow` returns the tightest `SweepCurveRadius` on its
+  window — per node, measured over ±20° of turn either side — and the sagitta guard left with the fit
+  (`FittedCircleRadius` now has no caller). `PreciseCurveRadius` is still read by the lean code (`:1011`, `:1020`).
 - The curvature's brake is capped at `RouteBrakeCap` (`Racer.cs:243`, applied at `:2448` — only while the route
   term is the limiting one *and* no corner plans a brake — consumed at `:2787` with `Math.Min` and tagged
   `BrakeReason.Route`). A step in the reading can ask for a fifth of the brake, never for a slam.
