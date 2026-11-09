@@ -724,7 +724,9 @@ namespace ARS
             LaneReason laneReason = LaneReason.OwnLane;
 
             CornerPoint candidate = NearestApexAhead();
-            if (_laneHeldCorner == null || HasPassedApex(_laneHeldCorner.Node))
+            // NextApexNode is the corner in play; a spent one is let go here too, so the shape cannot outlive it.
+            int spentApex = CornerSpent(NextApexNode) ? NextApexNode : -1;
+            if (_laneHeldCorner == null || HasPassedApex(_laneHeldCorner.Node) || _laneHeldCorner.Node == spentApex)
             {
                 if (_laneHeldCorner != null) FinishShapeError(_laneHeldCorner);
                 _laneHeldCorner = candidate;
@@ -3931,6 +3933,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             float forwardGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
             bool flipped = false;
 
+            // Coasting inside the corner means it is spent: the picker looks past it rather than holding it to the apex.
+            if (CornerSpent(NextApexNode) && _skippedApexes.Add(NextApexNode))
+            {
+                flipped = true;
+                ARS.Log(ARS.LogImportance.Info, "Queue pass " + Name + ": corner " + NextApexNode + " spent coasting past its entrance");
+            }
+
             foreach (CornerPoint corner in ARS.Corners)
             {
                 int entranceNode = corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(corner.Node, -corner.LengthStart);
@@ -4117,6 +4126,22 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             return ForwardNodeDistance(apexNode) > ARS.TrackPoints.Count / 2;
         }
+
+        // A corner is spent once the car is inside it and coasting: no pedal, no longitudinal load. That is the car
+        // sitting at the corner's speed with nothing left to do, so it leaves the selection early.
+        bool CornerSpent(int apexNode)
+        {
+            if (apexNode < 0) return false;
+            CornerPoint corner = null;
+            foreach (CornerPoint known in ARS.Corners)
+                if (known.Node == apexNode) { corner = known; break; }
+            int entranceNode = CornerEntranceNode(corner, apexNode);
+            if (entranceNode < 0 || MetresToNode(entranceNode) > 0f) return false;
+            if (Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) >= CoastSpentGs) return false;
+            return VehicleMemory.GetThrottle(Car) < CoastSpentPedal && VehicleMemory.GetBrakes(Car) < CoastSpentPedal;
+        }
+        const float CoastSpentGs = 0.1f;
+        const float CoastSpentPedal = 0.1f;
 
         // The node the plan brakes for: the aim, moved toward the apex by BrakeAimDepth. One writer, so
         // the ramp and the learner that grades it cannot aim at different nodes.
