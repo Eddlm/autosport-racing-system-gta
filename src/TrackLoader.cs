@@ -1108,7 +1108,19 @@ namespace ARS
                     break;
                 }
             }
-            float detectedRadius = tightestRadius;
+            // The arc's own circle, fitted over the nodes within a share of the tightest: the minimum below
+            // stays the apex's measure and the blur rule's, but it undershoots as a radius, so it is not the speed.
+            List<Vector2> arcNodes = new List<Vector2>();
+            float arcCeiling = tightestRadius * ArcFitShare;
+            for (int position = startPosition; position <= endPosition; position++)
+            {
+                TrackPoint arcPoint = ARS.TrackPoints[scanNodes[position]];
+                if (arcPoint.SweepCurveRadius <= arcCeiling) arcNodes.Add(new Vector2(arcPoint.Position.X, arcPoint.Position.Y));
+            }
+            float fittedRadius = FittedArcRadius(arcNodes);
+            float detectedRadius = fittedRadius > 0f
+                ? ARS.Clamp(fittedRadius, tightestRadius, tightestRadius * ArcFitCeilingShare)
+                : tightestRadius;
 
             if (float.IsNaN(tightestRadius) || float.IsInfinity(tightestRadius)) return;
 
@@ -1243,6 +1255,8 @@ namespace ARS
         const int SpanConsecutiveNodes = 8;
         const float SpanDoublingMultiple = 2f;
         const int SpanBlurNodes = 60;
+        const float ArcFitShare = 1.5f;
+        const float ArcFitCeilingShare = 1.3f;
 
         static int NodesToDoubleRadius(int apexNode, float apexRadius, int maxStep, int count)
         {
@@ -1307,6 +1321,31 @@ namespace ARS
             survivor.SurfaceGrip = CornerSurfaceGrip(survivor.StartNode, survivor.EndNode, count);
             survivor.LengthStart = entranceDistance;
             survivor.LengthEnd = exitDistance;
+        }
+
+        // The corner's radius as the road actually bends: a least-squares circle over the nodes that sit on the
+        // arc, not the tightest noisy sample of it. Centred before the fit, which is what keeps the numbers sane.
+        static float FittedArcRadius(List<Vector2> points)
+        {
+            int n = points.Count;
+            if (n < 5) return 0f;
+            double mx = 0, my = 0;
+            foreach (Vector2 p in points) { mx += p.X; my += p.Y; }
+            mx /= n; my /= n;
+            double sxx = 0, syy = 0, sxy = 0, sxz = 0, syz = 0, sz = 0;
+            foreach (Vector2 p in points)
+            {
+                double x = p.X - mx, y = p.Y - my, z = x * x + y * y;
+                sxx += x * x; syy += y * y; sxy += x * y;
+                sxz += x * z; syz += y * z; sz += z;
+            }
+            double det = sxx * syy - sxy * sxy;
+            if (Math.Abs(det) < 1e-6) return 0f;
+            double d = (-sxz * syy + syz * sxy) / det;
+            double e = (-syz * sxx + sxz * sxy) / det;
+            double r2 = (d * d + e * e) / 4.0 + sz / n;
+            if (r2 <= 0 || double.IsNaN(r2) || double.IsInfinity(r2)) return 0f;
+            return (float)Math.Sqrt(r2);
         }
 
         static float SweptRadius(int node, int count)
