@@ -1284,10 +1284,11 @@ namespace ARS
                 float gapSeconds = gap / Math.Max(referenceSpeed, 1f);
 
                 bool sameBend = gapSeconds < AlignedCornerSeconds && AimsSameWay(previous, corner, AlignedCornerDegrees);
-                // Two apexes this close are one corner only if they are the same size; a fast sweeper running
-                // into a tight turn is two corners, and one of them is not a mis-detection to be deleted.
+                // Inside the close window the tighter apex governs the pair whatever their sizes: a wide kink a
+                // few metres after a corner is that corner's exit, not a corner. The radius gate guards only the
+                // aligned case, where two same-way apexes further apart really can be two corners.
                 bool similarRadii = Math.Abs(corner.DetectedRadius - previous.DetectedRadius) <= SpanMergeRadiusGate;
-                if (similarRadii && (gapSeconds < closeCornerSeconds || sameBend))
+                if (gapSeconds < closeCornerSeconds || (similarRadii && sameBend))
                 {
                     CornerPoint survivor = corner.DetectedRadius < previous.DetectedRadius ? corner : previous;
                     CornerPoint absorbed = survivor == corner ? previous : corner;
