@@ -349,8 +349,9 @@ namespace ARS
         float _laneLead;
         float _laneOutCap;
         int _laneAskCornerNode = -1;
-        int _laneAskLap = -1;
         int _laneAskStartMs;
+        int _laneAskLastMs;
+        const int LaneAskGapMs = 1000;
 
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;
@@ -699,6 +700,11 @@ namespace ARS
             _cornersRevisionSeeded = -1;
             _skippedApexes.Clear();
             _brakeCommitApexNode = -1;
+            _laneHeldCorner = null;
+            _laneTurnSign = 0;
+            _laneAskCornerNode = -1;
+            _laneAskStartMs = 0;
+            _laneAskLastMs = 0;
 
             Car.Repair();
         }
@@ -799,18 +805,21 @@ namespace ARS
                     : laneShapeNow;
                 // Out is a lead over the car, never a destination: the ask cannot sit further out than the cap, and
                 // the car keeps taking up the lead until it sits on the line. In is the aim itself, uncapped.
-                // The creep opens at 0.1 m and reaches the full cap one second after the ask begins for this corner,
-                // so the first tick of a corner cannot throw the car outward, whatever the road did behind it.
+                // The creep opens at 0.1 m and reaches the full cap over LanePrepRampSeconds of asking for this
+                // corner, so the first tick of a corner cannot throw the car outward, whatever the road did behind it.
                 float outward = TrackTurnSign(CurrentTrackPoint.Node, laneApex.Node, 0);
                 if (outward == 0f) outward = -ARS.InsideSign(laneApex.Angle);
-                if (laneApex.Node != _laneAskCornerNode || Lap != _laneAskLap)
+                // A new corner, or the same one a lap later: either way the gap since the last asking tick is what
+                // separates them. A flicker shorter than the gap keeps the clock it had.
+                int now = Game.GameTime;
+                if (laneApex.Node != _laneAskCornerNode || now - _laneAskLastMs > LaneAskGapMs)
                 {
                     _laneAskCornerNode = laneApex.Node;
-                    _laneAskLap = Lap;
-                    _laneAskStartMs = Game.GameTime;
+                    _laneAskStartMs = now;
                 }
+                _laneAskLastMs = now;
                 _laneOutCap = beforeEntrance
-                    ? ARS.Clamp(ARS.Remap(Game.GameTime - _laneAskStartMs, 0f, ARS.LanePrepRampSeconds * 1000f,
+                    ? ARS.Clamp(ARS.Remap(now - _laneAskStartMs, 0f, ARS.LanePrepRampSeconds * 1000f,
                         ARS.LanePrepCreepMetres, ARS.LanePrepOutsideCapMetres), ARS.LanePrepCreepMetres, ARS.LanePrepOutsideCapMetres)
                     : ARS.LanePrepOutsideCapMetres;
                 _laneLead = (aim - steerRefOffset) * outward;
