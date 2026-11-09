@@ -1,6 +1,6 @@
 # VERIFICAR EN JUEGO — pendiente
 
-Build desplegada: **1380**. Lo marcado ✅ es tuyo, verificado en juego; lo marcado ⬜ sigue siendo **compile-only**.
+Build desplegada: **1569**. Lo marcado ✅ es tuyo, verificado en juego; lo marcado ⬜ sigue siendo **compile-only**.
 Marca una línea con `[x]` o dime «verificado N» y actualizo este fichero.
 
 **Lo de hoy (30-10) está en la sección H**, al final del bloque de abajo: seis commits, build 1375 → 1380, todos
@@ -74,7 +74,7 @@ compile-only. El detalle de qué se arregló y qué quedó archivado vive en `do
 
 | # | Qué | Cómo | Pasa si | Estado |
 |---|---|---|---|---|
-| E1 | **off-track: 40 debajo, suelo 20** (1171) | sácate de la línea en una curva rápida | el coche baja de verdad, no 10 mph menos: una curva de 35 pide 20, una de 70 pide 30 | ⬜ |
+| E1 | **off-track: 40 debajo, suelo 20** (1171) | sácate de la línea en una curva rápida | el coche baja de verdad, no 10 mph menos: una curva de 35 pide 20, una de 70 pide 30 | ⛔ superseded by I1 — no longer behind a switch, allowance now 20 mph (1569) |
 | E2 | **ángulo de derrape horizontal** (1165) | curvas con **desnivel** | detecta el derrape igual en rasante que en llano; antes se inflaba con la pendiente | ⬜ |
 | E3 | **chicanas** (1165) | pista con pendiente y eses | las chicanas siguen siéndolo (+10 mph); ninguna se clasifica por el desnivel | ⬜ |
 | E4 | **slots de parrilla** (1165) | mira los coches en la salida | ninguno hundido ni flotando en pistas con pendiente | ⬜ |
@@ -127,3 +127,16 @@ Seis commits, todos **compile-only**. Cada fila trae cómo provocarlo y qué deb
 4. **`avoid-hold-timeout`** (te debía la prueba) vive detrás de `avoidHoldEnabled = false`: la prueba apunta a código muerto. D-T5-2.
 5. **Tooltip del ABS**: «I'm working on undoing that» en una fila que sí funciona. D-T7-1.
 6. **`FEATURES.md` vende el nitro del jugador como «coming soon»** y el de la IA como porcentaje del tuyo: el tuyo corre en X/duck, y la IA lleva 5× contra 1×. D-T8-1, D-T8-2.
+
+## I · 2026-11-02 (1569)
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| I1 | **Projection brake floor** (`ProjectionBrakeFloorMph`) | go wide in a fast bend with `Show Gs Projection` on and read the `Offshoot:` log line | `floor=` moves with the bend — 20 in a tight corner, higher in a fast one — and the car **keeps rolling**: the projection never holds a full brake with the speed under its own floor | ⬜ |
+| I2 | **`ars` cheat** | type `ars` in the console | the ARS menu opens; `arsmenu` no longer does | ⬜ |
+| I3 | **lane timings: identity, two clocks, and no glide** | a lap | the absolute ends when the lane preview crosses the apex and the request **snaps** to the curvature ask (the 1 s and 3 s glides are gone); the next corner's preparation does not claim the car on the apex | ⬜ |
+| I4 | **apex merge raised 5 s → 6 s** | load a track with a close pair of corners, read `Apex table: N corners` | the pair now merges into one corner (count drops by one) and the second no longer runs dynamic-only | ⬜ |
+| I5 | **drive kept off track** (`OffTrackThrottleLevel` 0.35, now a **floor**) | put a car well past the edge at 40+ mph and let it go | off the track the pedal cannot be cut below the ramp by TCS/stability/plan: the car keeps rolling and only arms the reverse recovery if it is genuinely stopped | ⬜ |
+| I6 | **projection is a speed offset** (`ProjectionSlowdownMphPerSecond` 2, floor 30) | run wide on the approach to a fast bend, `Show Gs Projection` on | the car slows **gradually** (2 mph/s on the target, then the pedal law brakes) instead of the old 0.25 s throttle drop + 0.8 brake, and it never goes under 30 mph or the bend's speed less 30; the `Offshoot:` log line now prints `drop=` and `floor=` | ⬜ |
+| I7 | **route turn-in is a pure inset** (`LaneInsetPerRadius` 125, no speed factor) | a slow corner taken fast, and the same corner taken slowly | the aim sits the **same distance inside** in both (2.5 m at R=50, 1.25 at R=100, 5 m clamp under ~25 m); it no longer widens with speed | ⬜ |
+| I8 | **a corner is forgotten at the lookahead** (`ApexAheadOfLookahead` gates both selection and forgetting) | drive out of a corner on a stretch with no corner the lane will work | the lane never asks for the **outside** after the exit and never re-arms on the corner behind it; it holds the field until the apex crosses the preview, then lets go | ⬜ |

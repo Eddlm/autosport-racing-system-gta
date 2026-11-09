@@ -133,7 +133,12 @@ namespace ARS
 
         public static bool BrakeLearning = true;
 
+        public static bool SlideBrakeCap = true;
+
         public static bool BrakeLearningNotify = false;
+        // Parked instrumentation: the mean gap between a car and the shaped lane it is following, announced when it
+        // leaves a corner's exit. Off means no per-node sampling at all - the cost is the dot product, so it is gated.
+        public static bool LaneErrorTelemetry = false;
 
         public static bool SteerTrace = false;
 
@@ -146,8 +151,8 @@ namespace ARS
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = false;
 
-        public static int CornerOffsetMph = 4;
-        public static int RouteOffsetMph = 2;
+        public static int CornerOffsetMph = 0;
+        public static int RouteOffsetMph = 0;
         public static float SteerDampingGain = 0.5f;
 
         public static float DamperCountersteerMaxDeg = 2f;
@@ -182,14 +187,31 @@ namespace ARS
         // Where the lane is read. Longer than the pursuit on purpose: the car has to start moving before
         // the line does, and a lateral shift of d metres at v takes d v^2 / a_peak metres to be legal.
         public const float LanePreviewSeconds = 1f;
+        // The shaped lane is a place the car should be, not a place it is heading for, so it is read half a second
+        // ahead: far enough that the wheel is already turning when the shape arrives, short enough not to cut the
+        // corner inside its own trace.
+        public const float LaneShapePreviewSeconds = 0.5f;
+        // How far the inside of a shape may go from the outer edge: the car can lean on the inner edge, but its body has
+        // to stay on the road at the outer one.
+        public const float LaneShapeOuterMarginMetres = 0.5f;
+        // The lookahead a corner selection is judged against. Floored, because at a crawl the honest lookahead is zero
+        // and then the nearest apex flips frame to frame on node-boundary jitter, which reads as the spheres shaking.
+        public const float LaneApexMinReachMeters = 20f;
+        // How far the outside hold may ask beyond the car's own line. A sudden full-width step is a swerve, so the ask
+        // travels with the car instead of jumping to the edge.
+        public const float LanePrepOutsideCapMetres = 2f;
         // Which side of a corner's own angle sign is its inside. One place, so a mirror is one number.
         public const float LaneInsideSign = -1f;
         public static float InsideSign(float cornerAngle) { return LaneInsideSign * Math.Sign(cornerAngle); }
-        public const float LaneRatePerRadius = 1f;
-        public const float LaneRateFloor = 0.001f;
-        public const float LaneRateCeiling = 1f;
-        public static bool RouteRadiusFar = true;
-        public static float SlidRadiusLeadSeconds = 0.5f;
+        // How far inside its own lane the route stage aims: this divided by the node's radius, in metres.
+        // TEMPORARY (driver, 2026-11-02): false isolates the route/dynamic lane, so the precomputed field cannot
+        // overrule it. Flip to true to put the absolute back; it is a switch because it is being judged, not a setting.
+        public const bool AbsoluteLaneEnabled = true;
+                public const float LaneInsetPerRadius = 125f;
+        // The apex shape's steepness per radian, and the ladder the developer row publishes for it.
+        public static readonly string[] LaneShapeStepValues = { "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90", "0.95", "1.00" };
+        public static bool RouteRadiusFar = false;
+        public static float SlidRadiusLeadSeconds = 1f;
         public static float HillGripEffect = 1f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
@@ -1012,6 +1034,14 @@ namespace ARS
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
+            NativeCheckboxItem slideBrakeItem = new NativeCheckboxItem("Slide Brake Cap", "While the car slides past half its peak slip angle at that speed, the brake is capped at 25 %: a sliding tyre has no grip left to brake with, and pressing harder only upsets it. Off leaves the pedal to the plan alone.", SlideBrakeCap);
+            slideBrakeItem.CheckboxChanged += (sender, args) =>
+            {
+                SlideBrakeCap = slideBrakeItem.Checked;
+                SaveRacerSetting("SlideBrakeCap", SlideBrakeCap.ToString());
+            };
+            rivalPaceMenu.Add(slideBrakeItem);
+
             NativeListItem<string> maxCrestLiftItem = new NativeListItem<string>("Max Crest Lift (g)", "The crest lift, in g, the car may feel before the no-fly gate slows it: 0.1 is very conservative, 2.0 only the sharpest features.", SettingsRepair.OptionsFor("MaxCrestLift"));
             maxCrestLiftItem.ItemChanged += (sender, args) =>
             {
@@ -1302,7 +1332,7 @@ namespace ARS
                 Alignment = Alignment.Right
             };
 
-            NativeCheckboxItem hotkeysItem = new NativeCheckboxItem("Hotkeys", "Allow the configured virtual-key chord to open the ARS menu. The arsmenu cheat remains available.", HotkeysEnabled);
+            NativeCheckboxItem hotkeysItem = new NativeCheckboxItem("Hotkeys", "Allow the configured virtual-key chord to open the ARS menu. The ars cheat remains available.", HotkeysEnabled);
             hotkeysItem.CheckboxChanged += (sender, args) =>
             {
                 HotkeysEnabled = hotkeysItem.Checked;
@@ -1339,7 +1369,7 @@ namespace ARS
                 Alignment = Alignment.Right
             };
             AddDebugCheckbox(debugMenu, Options.ShowInputs, "Show Pedal Trail", "Draw the focus car's input trail: one chevron per metre, coloured green to red by pedal input, holding the last 40 m.");
-            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the focus car's steer-angle fan, the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
+            AddDebugCheckbox(debugMenu, Options.ShowTrackAnalysis, "Show Track Analysis", "Draw the focus car's speed above its roof, then its steer-angle fan, the corner entrance/apex/exit lines and the lane aim lines 40 nodes ahead.");
             AddDebugCheckbox(debugMenu, Options.ShowRivalry, "Show Rivalry", "Draw the two rival walls from the car's node to one second ahead: red while a rival holds one in, blue once released, plus a line from the car to each far end.");
             AddDebugCheckbox(debugMenu, Options.ShowBumps, "Show Bumps", "Mark every lip the route scan found with a cyan tick and a line across the road.");
             AddDebugCheckbox(debugMenu, Options.ShowWheelSlip, "Show Wheel Slip", "Draw a sphere over each wheel of the focus car, coloured by side-slip: white at rest, green at the peak, red where grip goes flat.");
@@ -1404,6 +1434,15 @@ namespace ARS
             };
             developmentMenu.Add(brakeLearnNotifyItem);
 
+            NativeCheckboxItem laneErrorItem = new NativeCheckboxItem("Lane Error Telemetry", "Parked: measures each car's distance from the shaped lane it follows, per node, and announces the average once the corner's exit is behind it. Costs a dot product per node, so it is off unless needed.");
+            laneErrorItem.Checked = ARS.LaneErrorTelemetry;
+            laneErrorItem.CheckboxChanged += (sender, args) =>
+            {
+                ARS.LaneErrorTelemetry = laneErrorItem.Checked;
+                DevelopmentMenuStore.Set("LaneErrorTelemetry", ARS.LaneErrorTelemetry.ToString());
+            };
+            developmentMenu.Add(laneErrorItem);
+
             NativeCheckboxItem slipSourceItem = new NativeCheckboxItem("Slip From Memory", "On reads the front tyres' side slip from the wheel memory and reports how much of its peak the inner tyre is using; off derives the demand from the inner wheel's radius against the grip the car has. Two different laws on the same scale, not two sensors for one: switching changes the behaviour, not just the source.", SlipFromMemory);
             slipSourceItem.CheckboxChanged += (sender, args) =>
             {
@@ -1415,6 +1454,21 @@ namespace ARS
             AddDebugCheckbox(developmentMenu, Options.ShowThrottleReason, "Show Throttle Reason",
                 "Centre of the screen, top: why the throttle is not at full, with the plan's own numbers, and the one line a second in the log.");
             AddDebugCheckbox(developmentMenu, Options.ShowSlideAngle, "Show Slide Angle", "The focus car's slide angle in the subtitle, averaged live over the last half second of frames: signed, the sign being which side the car is sliding to, and not filtered for the car's direction of turn.");
+
+            NativeListItem<string> shapeStepItem = new NativeListItem<string>("Apex Shape", "What the lane's crossing angle is multiplied by: that angle starts as the lane's own traverse over the corner radius, so a wide corner crosses shallow and a tight one sharply, and this factor scales the whole family. Changing it rebuilds the lane field for the loaded track.", ARS.LaneShapeStepValues);
+            shapeStepItem.ItemChanged += (sender, args) =>
+            {
+                if (args.Index < 0 || args.Index >= ARS.LaneShapeStepValues.Length) return;
+                float step;
+                if (!float.TryParse(ARS.LaneShapeStepValues[args.Index], NumberStyles.Float, CultureInfo.InvariantCulture, out step)) return;
+                TrackLoader.LaneShapeAngleScale = step;
+                DevelopmentMenuStore.Set("ShapeAngleScale", step);
+                TrackLoader.RebuildLaneField();
+                Log(LogImportance.Info, "Apex shape " + step.ToString("0.00", CultureInfo.InvariantCulture) + " - lane field rebuilt.");
+            };
+            shapeStepItem.SelectedIndex = Math.Max(0, Array.IndexOf(ARS.LaneShapeStepValues, TrackLoader.LaneShapeAngleScale.ToString("0.##", CultureInfo.InvariantCulture)));
+            developmentMenu.Add(shapeStepItem);
+            HookListTextPicker(shapeStepItem);
 
             AddSub(_arsMenu, _raceMenu);
             AddSub(_arsMenu, rivalsMenu);
@@ -2010,6 +2064,15 @@ namespace ARS
                                      Color.Magenta, 0.55f);
                     }
                 }
+                if (DebugToggles[Options.ShowTrackAnalysis])
+                {
+                    Racer speedReader = DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null);
+                    if (speedReader != null && speedReader.Car.Exists())
+                        DrawText(speedReader.Car.Position + Vector3.WorldUp * (speedReader.VehicleData.ModelDimensions.Z + 0.5f),
+                                 Math.Round(ARS.MpsToMph(ARS.GetForwardSpeed(speedReader.Car))).ToString(CultureInfo.InvariantCulture) + " MPH",
+                                 Color.White, 0.5f);
+                }
+
                 if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
                 {
                     for (int apexIndex = 0; apexIndex < ARS.Corners.Count; apexIndex++)
@@ -2179,7 +2242,7 @@ namespace ARS
                     Function.Call(Hash.SET_SCENARIO_PED_DENSITY_MULTIPLIER_THIS_FRAME, 0f);
                 }
 
-                if (!_menuPool.AreAnyVisible && WasCheatStringJustEntered("arsmenu"))
+                if (!_menuPool.AreAnyVisible && WasCheatStringJustEntered("ars"))
                 {
                     _arsMenu.Visible = true;
                 }
@@ -3466,9 +3529,12 @@ namespace ARS
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
+            SlideBrakeCap = SettingsMenuStore.GetBool("SlideBrakeCap", SlideBrakeCap);
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
+            ARS.LaneErrorTelemetry = DevelopmentMenuStore.GetBool("LaneErrorTelemetry", ARS.LaneErrorTelemetry);
             SteerTrace = DevelopmentMenuStore.GetBool("SteerTrace", SteerTrace);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
+            TrackLoader.LaneShapeAngleScale = DevelopmentMenuStore.GetFloat("ShapeAngleScale", TrackLoader.LaneShapeAngleScale);
             BrakeAimDepth = SettingsMenuStore.GetFloat("BrakeAimDepth", BrakeAimDepth);
             GsLaneThrottleFloor = SettingsMenuStore.GetBool("GsLaneThrottleFloor", GsLaneThrottleFloor);
             RouteRadiusFar = SettingsMenuStore.GetBool("RouteRadiusFar", RouteRadiusFar);
@@ -3725,7 +3791,7 @@ namespace ARS
                 else if (delta <= 0f) label = "over " + SpeedTermName(term);
                 else if (slew) label = "rising";
                 else label = "error " + delta.ToString("0.0", CultureInfo.InvariantCulture) + "/"
-                        + Racer.FullPedalSpeedErrorMps.ToString("0.0", CultureInfo.InvariantCulture);
+                        + Racer.PedalSpeedScale(delta).ToString("0.0", CultureInfo.InvariantCulture);
             }
             else label = ThrottleReasonName(reason);
             if (floorActive) label += " +floor " + Math.Round(floorLevel * 100f).ToString(CultureInfo.InvariantCulture) + "%";
@@ -3759,7 +3825,7 @@ namespace ARS
         // red when it is too fast for it, yellow when it is on it, green when it is too slow and pulling.
         static Color ThrottleColour(float delta)
         {
-            float t = ARS.Clamp(delta / Racer.FullPedalSpeedErrorMps, -1f, 1f);
+            float t = Racer.PedalFromSpeedError(delta);
             int r, g, b;
             if (t <= 0f)
             {

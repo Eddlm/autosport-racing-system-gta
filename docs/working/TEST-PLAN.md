@@ -38,7 +38,7 @@ game folder carries the init banner and lap lines.
 ## 1. Off-track throttle ramp (general, every car)
 
 1. Take a car well off the track at speed (past the raw edge).
-   **Expect:** pedal lifted (throttle 0) above 20 mph, ramping back to full at 15 mph — it sits slow but firm — **unless the car is pointed back at the track**, in which case a flat half (`OffTrackRecoverThrottle`) replaces the ramp.
+   **Expect:** the off-track throttle is a **floor**, not a cap (build 1577): off the track the pedal can never sit below the ramp — 0.35 at 20 mph, rising to 1.0 at 15 mph — so TCS, stability or the plan may not cut it to zero and the car keeps driving instead of coasting to a stop on the grass. It is skipped while countersteering and inside a stuck recovery, **and** while the car is pointed back at the track a flat `OffTrackRecoverThrottle` 0.75 replaces the ramp.
 2. Watch the **white override sphere** on the white steer line while off track (Show Track Analysis).
 3. Put the car half-off (centre still on the track). **Expect: no cap** — the rule is centre-past-edge.
 

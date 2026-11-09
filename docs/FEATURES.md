@@ -12,7 +12,7 @@ This file is the tour, written for players: what you get and what it feels like,
 - **ScriptHookV**, **.NET Framework 4.8** and the current **Visual C++ redistributable** — installed separately.
 - **Extract the `AutosportRacingSystem` folder into the game's `Scripts` folder**, overwriting if you are updating. Tracks, car rosters and settings live inside it, a first run writes the settings files for you, and the menu library is included — so there is nothing to hand-edit before your first race.
 - If ARS does not appear, `ARS.log`, at the game root, names the reason.
-- **The menu** opens on `Left Shift + E`, or by typing `arsmenu` in the chat console.
+- **The menu** opens on `Left Shift + E`, or by typing `ars` in the chat console.
 
 ## The rivals play by your rules
 
@@ -74,7 +74,7 @@ Side by side is its own problem: the cars match headings to hold a line together
 
 Nitrous is a race rule, on or off. With it on, every rival gets a fresh bottle each lap, and they spend it themselves: on a straight, in a fight, or near the finish. It is not a free pass — a rival will not fire mid-corner or on the way in, off the road, at a big steering angle, or from too low a gear, and that last one is a rear-drive problem: an all-wheel-drive car can put the power down and is not held back.
 
-AI Nitrous Power sets their bottle as a percentage of yours, anywhere from 50 to 200. It is the most surgical dial in the file, because it changes what a rival can do on a straight without touching how it drives a corner.
+AI Nitrous Power sets their bottle as a percentage of yours, across the `AiNitroValues` ladder. It is the most surgical dial in the file, because it changes what a rival can do on a straight without touching how it drives a corner.
 
 Your own bottle is coming. Theirs is live now.
 
@@ -124,7 +124,7 @@ Auto Styling dresses the field before a race: it reads each car's own livery nam
 
 ## Tuning and setup
 
-The menu has a Race section (track, laps, grid size and the performance index the field is drawn from), a Rivals section (who races you, the grid sorting, plus their pace, traction and steering dials), Race Rules (timing, damage, DNFs, collision, nitrous, rubberbanding), Interface, Controls (the menu chord and the `arsmenu` fallback), and the Track Creator entry. The Rivals dials are the ones that change character: corner and road-curvature speed offsets, brake learning on or off, crest lift, slope loss, overspeed correction, TCS and ABS and how soft their cuts are, steering damping, and the steering limit at speed. Between them you can make a field braver, tidier or sloppier corner by corner. Rubberbanding is worth its own line: on at full strength by default, and when you turn it down it stops packing the field — the leaders are slowed, and at the artificial setting the backmarkers also get a boost.
+The menu has a Race section (track, laps, grid size and the performance index the field is drawn from), a Rivals section (who races you, the grid sorting, plus their pace, traction and steering dials), Race Rules (timing, damage, DNFs, collision, nitrous, rubberbanding), Interface, Controls (the menu chord and the `ars` fallback), and the Track Creator entry. The Rivals dials are the ones that change character: corner and road-curvature speed offsets, brake learning on or off, crest lift, slope loss, overspeed correction, TCS and ABS and how soft their cuts are, steering damping, and the steering limit at speed. Between them you can make a field braver, tidier or sloppier corner by corner. Rubberbanding is worth its own line: on at full strength by default, and when you turn it down it stops packing the field — the leaders are slowed, and at the artificial setting the backmarkers also get a boost.
 
 Settings live in four ini files under `Settings\` (Race, Settings, Debug, Development), and ARS maintains them: retired keys are removed, a number that is no longer offered snaps to the nearest one that is, a name that is no longer offered goes back to its default, and missing keys are recreated on load — so a hand-edited file repairs itself and a fresh install has nothing to set up. There is also a Debug submenu for tinkerers — visual overlays, the log level, and the radius at which the detector stops treating the road as a corner region — but nothing in it is needed to race.
 
@@ -138,6 +138,6 @@ Settings live in four ini files under `Settings\` (Race, Settings, Debug, Develo
 - **Grid pace is model-level.** Cars are matched by their model's pace, not the upgrades on a particular vehicle, so a tuned example of a slow car is still selected as a slow car.
 - **The player's own nitrous bottle.** Coming soon — the rivals' bottles are live.
 - **The rivals' driver aids do not reach your car.** No ARS traction control, launch shaping or crest discipline on your pedals: your car drives exactly the way the game drives it.
-- **No gamepad route into the menu.** It opens on the keyboard chord or the `arsmenu` command, and neither has a controller binding.
+- **No gamepad route into the menu.** It opens on the keyboard chord or the `ars` command, and neither has a controller binding.
 - **No flames or nitro engine note.** The burn is a straight-line power boost, and the theatre is not there.
 - **FiveM.** Single-player, for now.

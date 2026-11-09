@@ -152,7 +152,7 @@ It is reset to 1.0 post-physics (`Vehicle.cpp:31338`) and gated on the type *and
 | authority limit | speed-only, 11.5–40° | grip-scaled vanilla curve vs Ackermann, whichever is lower |
 | countersteer | inside the same symmetric clamp | bounded, but that side's limit is raised to the slide angle |
 | slip term | chase-only, gain −0.4 on normalised sideslip | always, `1 × SlideAngle` |
-| rate limit | none in normal driving | fixed 180°/s, doubled countersteering |
+| rate limit | none in normal driving | `SteerSlewRate`, doubled countersteering |
 | throttle tie-in | two `Min` ceilings (steer usage, slip) | none (removed as a no-op) |
 | script steering lever | `m_fSteerInputBias`, player-only | ARS writes its own input |
 
@@ -162,7 +162,7 @@ Vanilla's steer→throttle coupling is the reference implementation for the tie-
 Vanilla keeps its AI nearly slip-blind (chase-only term) and buys stability from the speed cap plus the throttle ceilings; ARS's split — slip handling inside the AI's steering law, throttle tie-in removed — is the inverse, and it was a choice, not an accident.
 
 **The brake side, the same way round — three behaviours, and only one of them is a pedal policy.** Vanilla's *normal* ABS (`WF_ABS`, from `MF_ABS_STD` / `MF_ABS_OPTION`; every fleet car carries `MF_ABS_STD`) is a **quiet slip clamp**: above 5 m/s it refuses to let the modelled brake slip pass `sfBrakeRatioLimitAbs × sfTractionMinAngleInv` = 1.5 × 0.4 = 0.6 (`wheel.cpp:4580-4599`, the constants at `:4142-4146`) and never touches the pedal, so the wheel keeps rolling and steering with 97% of peak force still available and pressing harder simply stops adding braking. Vanilla's *alternative* ABS (`WF_ABS_ALT`, from `MF_ABS_ALT_STD` / `_OPTION`; no fleet car carries that pair) is **binary**: nothing at all until the wheel is already locked (slip past 0.9, the engine's own skid line), and then the brake is zeroed whole for `sfBrakeAbsTimer` 62.5 ms once the slip passes `sfBrakeAbsLimit` 1.5 (`:5268-5277`, the zeroing at `:3915`) — brake, lock, release, lock. ARS's cap is the only one that moves the pedal. ⚠️ From `7ccaac7` to build 881 it was **not** a slip taper - a wheel-rotation lock guard
-with a 0.2 floor and a 0.2/s glide - and **build 882 put the taper back**: full brake to slip 0.5, straight to 0.0 at 1.0, evaluated
+with a 0.2 floor and a 0.2/s glide - and **build 882 put the taper back**: full brake down to `AbsKneeSlip`, straight to `AbsBrakeFloor` at `AbsLockSlip`, evaluated
 per tick, with the rotation guard as a backstop. The old text here described the guard and is retired. They are not three points on one dial — vanilla clamps the simulation's own slip, which a control-writing script never reaches, so ARS's lever can only hold by being tight enough to forbid what vanilla's clamp outlaws outright. The old 97%/95% argument, and the plot beside it, measured the **taper** that `7ccaac7` deleted: `docsbs-comparison.py` and its .png still plot that `b11e52b` law and are history, not a description of the shipped cap. The lock guard's case is the wheel staying rolling; it makes no claim about longitudinal force.
 
 ## Not in this drop (do not guess)

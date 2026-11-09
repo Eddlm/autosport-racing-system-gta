@@ -6,7 +6,7 @@ Grand Theft Auto V\Scripts\ (overwrite if updating).
 In game, press Left Shift + E (the chord: Left Shift is the modifier, E the
 second key). Rebind either half under Controls (Menu Modifier, Menu Key), or edit
 MenuModifierKey / MenuKey in Settings\Menu-Settings.ini. You can also open it
-by typing arsmenu in the chat console.
+by typing ars in the chat console.
 
 Included: LemonUI.SHVDN2 1.5.2, used under the MIT License, by JustALemon
 (https://github.com/LemonUIbyLemon/LemonUI).

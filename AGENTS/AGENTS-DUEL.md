@@ -21,21 +21,21 @@
 > let them decide from **the likely result** (who wins the corner).
 >
 > **Both fight cards share one window, and the window is a count of chances, 2026-10-23 (driver).** `FightWindowMinSeconds`
-> / `FightWindowMaxSeconds` = **2 to 6 s** to the entrance, for divebomb and defend alike. The hand is evaluated on the
+> / `FightWindowMaxSeconds` bound the time to the entrance, for divebomb and defend alike. The hand is evaluated on the
 > **half-second beat** (`_rivalInfoTick`), so a window is how many times a card can be considered at all: 3-5 s gave
-> **four** evaluations, and with the stricter gates added the same day that read as "almost never a play"; 2-6 gives
+> **four** evaluations, and with the stricter gates added the same day that read as "almost never a play"; the current window gives
 > eight. Narrowing this window is not free, and widening it is the first lever when cards stop appearing - before
 > touching any individual gate. Divebomb's old window was `brakingTime + 0.5`, which is *wider* than it looked because
 > brakingTime runs to seconds. The brake-point lead and its constant went
 > with it. What still separates the two: Defend needs a chaser closing from behind, Divebomb needs a car ahead that
-> arrives first by no more than 0.75 s with this car closing on it.
+> arrives first inside `DivebombReachSeconds` with this car closing on it.
 >
 > **The dwell floor is a settling time, not a taste number (driver, 2026-10-23).** A card that orders a lane change and
 > is released mid-way turns the car one way, loses the request and turns back — instability that reads as a glitch.
 > Simulating `UpdateLaneMover` (26 m/s^2, 24 m/s cap, arrival `sqrt(2·a·gap)`) gives the settling time of the manoeuvre
 > the card actually asks for: 2.5 m — the Defend commit, `combinedWidth + 0.6` — completes in **0.77 s**, and 3 m — the
 > lead cap — in **0.83 s**. At a 750 ms floor the car is at 99.6 % and 95 % of the way when the card ends, which is the
-> cancellation the driver described; at 1000 ms both are complete with about a fifth of margin. **Any future change to
+> cancellation the driver described; at `CardMinDwellMs` both are complete with about a fifth of margin. **Any future change to
 > `LaneMoverAccelMps2`, `LaneMoverSpeedCapMps` or the lead caps moves this floor with it.**
 >
 > **Defend watches its own threat, 2026-10-23 (driver).** The card armed on "he is closing and will arrive no later",
@@ -43,18 +43,18 @@
 > a fight that had ended. The release now also ends the card when the threat is gone — his own `TimeToReach` reads
 > infinite (he stopped closing) or his time to the entrance exceeds this car's by `DefendThreatMarginSeconds` 0.5.
 > The entrance node is stored at arm (`_defendEntranceNode`) because the release runs outside the block that computed
-> it. Margin rather than a bare comparison: an early release costs the card its 1.5 s cooldown, so the wrong one is
+> it. Margin rather than a bare comparison: an early release costs the card a full `CardCooldownMs` re-arm, so the wrong one is
 > the expensive one.
 >
 > **A card is a decision, so its exits are looser than its entries (2026-10-23).** Three rules, all in `Racer`: every
-> continuous release threshold is **wider** than the arm that admitted the card (`DivebombReleaseGapMeters` 40 against
-> the 30 m arm, `DivebombReleaseAngleDegrees` 25 against 20, chill-out releasing at 50 m and one car fewer); no card may
-> end before `CardMinDwellMs` 1000; and after ending, that card cannot re-arm for `CardCooldownMs` 1000 through
+> continuous release threshold is **wider** than the arm that admitted the card (`DivebombReleaseGapMeters` against
+> the `SameSectionMaxGapMeters` arm, `DivebombReleaseAngleDegrees` against `AvoidAngleGateDegrees`, chill-out releasing at `ChillReleaseRadiusMeters` and one car fewer); no card may
+> end before `CardMinDwellMs`; and after ending, that card cannot re-arm for `CardCooldownMs` through
 > `EndCard`. Yield is exempt from the cooldown because it is reactive and has nothing to protect. The point is that a
 > card must read as intent: identical thresholds on both sides make a value hovering at the boundary flicker at the
 > core rate, and every re-arm re-rolls whatever random the card carries.
 >
-> **Arm and release must bound the same thing (driven, 2026-10-23).** The time-window rewrite dropped the `+30 m` band from
+> **Arm and release must bound the same thing (driven, 2026-10-23).** The time-window rewrite dropped the `SameSectionMaxGapMeters` band from
 > the arm while the release kept it, so every dive armed beyond thirty metres died on the next tick — the bonus was
 > re-rolled each frame and the card read as flickering. Observed in the log as `armed ... gap 42.0` / `released partner
 > lost after 16 ms` pairs, while every dive inside the band ran 2-3 s. `SameSectionMaxGapMeters` is back on the arm:
@@ -62,7 +62,7 @@
 >
 > **Divebomb gates, 2026-10-23:** the arm now asks *who arrives at the entrance first*, signed. `RouteGapAhead > 0`
 > (he is ahead on the road), `rivalTimeToEntrance < myTimeToEntrance` (he gets there first), the difference no more
-> than `DivebombReachSeconds` **0.75**, and `ForwardSpeedGap > 0` (this car is the one closing). The old absolute
+> than `DivebombReachSeconds`, and `ForwardSpeedGap > 0` (this car is the one closing). The old absolute
 > difference armed a car that was going to arrive first anyway, and the old `-CombinedSize.Y .. +30 m` band allowed a
 > dive against a car alongside or behind. The distance band is gone: the time window bounds the gap by itself.
 >
@@ -71,7 +71,7 @@
 > as racecraft. Applied at the three arming sites that pick a target: divebomb, yield, chill-out; defend already
 > excluded both dive and defend targets before this rule existed.
 >
-> **Divebomb, 2026-10-23:** the card no longer moves the braking target. `BrakingTargetNode` and its 0.5 factor are gone; `ApexBrakingSpeed` uses `BrakeTargetBaseNode` for every card. The card now carries only its brake bonus (+2 % to +8 %, rolled per dive) and the commit lane to the inside of its target, which is the part that still reads on track. The kick card is switched off behind `KickCardEnabled`.
+> **Divebomb, 2026-10-23:** the card no longer moves the braking target. `BrakingTargetNode` and its 0.5 factor are gone; `ApexBrakingSpeed` uses `BrakeTargetBaseNode` for every card. The card now carries only its brake bonus (rolled per dive into `_divebombBrakeBonus`) and the commit lane to the inside of its target, which is the part that still reads on track. The kick card is switched off behind `KickCardEnabled`.
 
 
 **Read this when** the work touches **rivals, overtaking, side-by-side racing, maneuvers/cards (DiveBomb, DefendLane, Yield, ChillOut) or nitro shots**. **Status: designed via Council, not implemented** — the live facts of the shipped cards are below, the design under them.
@@ -83,7 +83,7 @@
 - **ChillOut** halves throttle and holds station behind the closest rival ahead until the field thins, arming only above a minimum speed so a slow car cannot become a roadblock.
 - **DiveBomb** targets the closest reachable rival with a deeper braking target while its card lives. **DefendLane** covers the inside against a faster chaser; **Yield** lets a faster overlapping rival by near the entrance. The corner-commit lane (`Racer.cs:727`) engages inside the outside-approach window and ignores the one-way hold latch and the per-corner positioning decision while the card lives.
 - **Nitro** has four situations — contested / defended / lonely / finish-spender — behind vetoes on braking, off-track, big steer angle and low gear on high-geared RWD cars. **AWD is exempt** via the handling struct's drive bias (full rationale: `AGENTS-TECHNOTES.md`). The player fires by key press (`TryFireNitrous`), the AI via `TryPlayNitrousCard`; both share one shot per lap, one charge cycle and one `SetOverrideNitrousLevel` path.
-- **Throttle kick** (limiter-saturation rotation, slotless like nitro, `cc469ee`, current contract `09295b3`): arms on the **ask the limiter was handed sitting past the ceiling it enforced** (stashed one core tick old in `ApplySteerLimits`), held 1 s of consecutive game-time calls, with no slide in the progress (the blend's own onset), RWD (the `0x48` bias ≤ 0.01) and a signed forward roll — **no speed band, no context gates, by decision** — plus the **gear gate**, computed from the leak's transmission: the burst's per-wheel thrust (`fInitialDriveForce` at handling `0x60`, the count verified between the `0x48` and `0x80` anchors) times the current gear's ratio (the leak's constants: first `1/0.3`, top `0.9`, the middles on the `1.1` progression) over two drive wheels, beating the live grip times the static wheel share by margin; the close-ratio and low-speed-torque flag multipliers are unread, so flagged cars read green on multiplied thrust and the fold's slip is their verdict. The window floors the pedal for 1.25 s — TCS pinned to 1 at the field, the slide blend and `IsFullCountersteer` standing down for the rotation sharing the arm-side sign (`KickWantsSlide`) — and folds at the **window cap or a body slide past 30°** (`rotated`); instability, the recovery override and the TCS's return cutting-fast answer the rest. `ThrottleReason.Kick` tags the floor; every play, fold and recovery entry logs forced; the burst's rotation is driver-proven (every recorded play broke the axle). Review: two glm-5.3-flash passes, findings folded; the drive judges the entry-band plays' outcomes (TEST-PLAN).
+- **Throttle kick** (limiter-saturation rotation, slotless like nitro, `cc469ee`, current contract `09295b3`): arms on the **ask the limiter was handed sitting past the ceiling it enforced** (stashed one core tick old in `ApplySteerLimits`), held `KickArmSaturateMs` of consecutive game-time calls, with no slide in the progress (the blend's own onset), RWD (the `0x48` bias ≤ `KickMaxDriveBiasFront`) and a signed forward roll — **no speed band, no context gates, by decision** — plus the **gear gate**, computed from the leak's transmission: the burst's per-wheel thrust (`fInitialDriveForce` at handling `0x60`, the count verified between the `0x48` and `0x80` anchors) times the current gear's ratio (the leak's constants: first `1/0.3`, top `0.9`, the middles on the `1.1` progression) over two drive wheels, beating the live grip times the static wheel share by margin; the close-ratio and low-speed-torque flag multipliers are unread, so flagged cars read green on multiplied thrust and the fold's slip is their verdict. The window floors the pedal for `KickWindowMs` — TCS pinned to `KickPedalLevel` at the field, the slide blend and `IsFullCountersteer` standing down for the rotation sharing the arm-side sign (`KickWantsSlide`) — and folds at the **window cap or a body slide past `KickFoldSlideDegrees`** (`rotated`); instability, the recovery override and the TCS's return cutting-fast answer the rest. `ThrottleReason.Kick` tags the floor; every play, fold and recovery entry logs forced; the burst's rotation is driver-proven (every recorded play broke the axle). Review: two glm-5.3-flash passes, findings folded; the drive judges the entry-band plays' outcomes (TEST-PLAN).
 - **Passengerize** shifts AI drivers to the passenger seat while a rival overlaps, so they cannot swerve into contact, and is never applied to the player. **The ghosting removed in the avoidance cleanup is back as the No Collision option, untested (`0623276`)**: it clears rival detection outright and makes every racer pair pass through by calling the native in its permanent mode — the mode the removed ghosting got wrong.
 
 ## Duel model — the deferred design (not implemented)

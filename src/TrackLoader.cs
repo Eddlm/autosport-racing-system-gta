@@ -345,45 +345,66 @@ namespace ARS
 
         static readonly List<string> ApexRejects = new List<string>();
 
-        // Share of the usable half width the line wants at each node: +1 the outside, -1 the inside, 0 the centre.
-        // Share of the road width the optimal line is asked to reach at the ends of a corner. 0.5 = the centre
-        // line, which is the classic line; less than that is a tighter, slower circle.
+        // Share of the road width the optimal line is asked to reach at the ends of a corner. 0.5 = the centre line,
+        // which is the classic line; less than that is a tighter, slower circle.
         const float OptimalRadiusExcursionShare = 0.25f;
-        const int LaneFieldApexPlateauNodes = 3;
-        const float LaneFieldApproachNodes = 180f;   // nominal 6 s at 30 m/s
-        const float LaneFieldSaturationPerRadian = 0.75f;
-        const float LaneFieldReachPerRadian = 3.69f;
-        const float LaneFieldRateFloor = 0.25f;
-        const float LaneFieldRateCeiling = 3f;
-        const float LaneFieldMaxSharePerNode = 0.12f;
-        const float LaneFieldStepTightRadius = 10f;
-        const float LaneFieldStepWideRadius = 100f;
-        const float LaneFieldStepAtTight = 0.5f;
-        const float LaneFieldStepAtWide = 1f;
-        const float LaneFieldLateralRatePerRadius = 10f;
-        const float LaneFieldLateralRateCeiling = 1f;
-        const float LaneFieldLateralRateFloor = 0.05f;
+        // The lane shape is one cubic: parallel to the track at the outer edge and again at the apex, crossing the track
+        // centre at an angle that shrinks as the radius grows. The natural angle to scale is the lane's own traverse
+        // against the corner radius, so this is a multiplier on that; the crossing angle then sets the length
+        // (1.5 * traverse / tan), and the angle is capped short of a right angle so the length stays finite.
+        public static float LaneShapeAngleScale = 0.75f;
+        public const float LaneShapeMaxNodes = 50f;
+        const int LaneShapeApexHoldNodes = 1;
+        // An exit always gets at least this many nodes before the next corner's entrance may claim the road.
+        const int LaneShapeMinExitNodes = 6;
         const int LaneFieldRampMinNodes = 6;
         const int LaneFieldRampMaxNodes = 700;
 
+        // Rebuild the shapes for the loaded track: the steepness is a live value, so a change has to be applied to the
+        // array the reader already holds.
+        public static void RebuildLaneField()
+        {
+            if (ARS.TrackPoints.Count > 1) BuildLaneField(ARS.TrackPoints.Count);
+        }
+
         static void BuildLaneField(int count)
         {
-            for (int node = 0; node < count; node++) ARS.TrackPoints[node].LaneLineShare = 0f;
-            bool[] covered = new bool[count];
+            for (int node = 0; node < count; node++)
+            {
+                ARS.TrackPoints[node].LaneLineShare = 0f;
+                ARS.TrackPoints[node].LaneShaped = false;
+                ARS.TrackPoints[node].LaneShapeApex = -1;
+            }
 
             int corners = ARS.Corners.Count;
             if (corners == 0) return;
 
             int[] entryStart = new int[corners];
             int[] rampNodes = new int[corners];
+            float[] runIns = new float[corners];
+            float[] crossTans = new float[corners];
+            int[] shapedStarts = new int[corners];
+            int[] shapedEnds = new int[corners];
             for (int c = 0; c < corners; c++)
             {
                 CornerPoint corner = ARS.Corners[c];
-                float radius = Math.Max(5f, corner.DetectedRadius);
-                float stepScale = RadiusStepScaleOf(radius);
-                float reach = LaneFieldReachPerRadian / (LaneFieldSaturationPerRadian * stepScale) * radius;
-                int ramp = (int)ARS.Clamp((float)Math.Round(LaneFieldApexPlateauNodes + reach), LaneFieldRampMinNodes, LaneFieldRampMaxNodes);
+                // The crossing angle is the geometric one - the lane's traverse against the corner radius - scaled by
+                // the live factor, so a wide corner gets a shallow diagonal and a tight one a sharp cut.
+                float apexHalf = Math.Max(ARS.TrackPoints[corner.Node].TrackHalfWidth, 0.5f);
+                float traverse = 2f * apexHalf;
+                float geometric = (float)(Math.Atan(traverse / Math.Max(corner.DetectedRadius, 5f)) * 180.0 / Math.PI);
+                float crossing = ARS.Clamp(LaneShapeAngleScale * geometric, 4f, 80f);
+                float crossTan = Math.Max((float)Math.Tan(crossing * (float)(Math.PI / 180.0)), 0.1f);
+                // Two halves with different lengths, both fixed by their own curvature. Apex to centre is the cubic, so
+                // its half is 0.75 * traverse / tan. Centre to outside is a constant arc: the slope falls linearly from
+                // tan at the centre to zero at the edge, so its length is traverse / tan.
+                float apexHalfLength = 0.75f * traverse / crossTan;
+                float outsideHalfLength = traverse / crossTan;
+                float runIn = apexHalfLength + outsideHalfLength;
+                crossTans[c] = crossTan;
+                int ramp = (int)ARS.Clamp((float)Math.Ceiling(runIn), LaneFieldRampMinNodes, LaneFieldRampMaxNodes);
                 rampNodes[c] = ramp;
+                runIns[c] = runIn;
                 entryStart[c] = ArcNode(corner.Node, -ramp, count);
 
                 if (!ARS.IsPointToPoint && corners > 1)
@@ -401,61 +422,113 @@ namespace ARS
                 int intoApex = ArcSpan(entryStart[c], corner.Node, count);
                 if (intoApex < 2) continue;
 
-                float cornerRadius = Math.Max(5f, corner.DetectedRadius);
                 float inside = ARS.InsideSign(corner.Angle);
                 float outside = -inside;
-                float deficitBack = 2f;
-                float previous = inside;
+                float runIn = runIns[c];
+                float crossTan = crossTans[c];
+                float halfTraverse = Math.Max(ARS.TrackPoints[corner.Node].TrackHalfWidth, 0.5f);
+                float apexHalfLength = 0.75f * 2f * halfTraverse / crossTan;
+                float outsideHalfLength = 2f * halfTraverse / crossTan;
+                // Apex to centre: the cubic, so its ends are flat and its middle crosses the centre at the crossing
+                // angle. Centre to outside: a constant arc, the slope falling linearly from the crossing angle to zero.
+                float travelled = 0f;
+                int previousNode = corner.Node;
                 for (int step = 0; step <= intoApex; step++)
                 {
                     int node = ArcNode(corner.Node, -step, count);
-                    float share = inside;
-                    if (step > LaneFieldApexPlateauNodes)
+                    if (step > 0) travelled += Vector3.Distance(ARS.TrackPoints[previousNode].Position, ARS.TrackPoints[node].Position);
+                    previousNode = node;
+                    float share;
+                    if (step <= LaneShapeApexHoldNodes) share = inside;
+                    else if (travelled <= apexHalfLength)
                     {
-                        deficitBack *= (float)Math.Exp(-NodeRate(node, cornerRadius));
-                        share = ARS.Clamp(outside - (outside - inside) * deficitBack * 0.5f, previous - NodeStep(node, cornerRadius), previous + NodeStep(node, cornerRadius));
+                        float u = ARS.Clamp(1f - travelled / (2f * apexHalfLength), 0f, 1f);
+                        share = outside + (inside - outside) * LaneSmoothStep(u);
+                    }
+                    else
+                    {
+                        float z = Math.Min(travelled - apexHalfLength, outsideHalfLength);
+                        float outward = halfTraverse + crossTan * z - crossTan * z * z / (2f * outsideHalfLength);
+                        share = inside * (1f - outward / halfTraverse);
                     }
                     ARS.TrackPoints[node].LaneLineShare = share;
-                    previous = share;
-                    covered[node] = true;
+                    ARS.TrackPoints[node].LaneShaped = true;
+                    ARS.TrackPoints[node].LaneShapeApex = corner.Node;
+                    if (travelled >= runIn) break;
                 }
+
+                shapedStarts[c] = previousNode;
             }
 
-            // The approach and the exit are the corner's own business: the generator writes the outside plateau
-            // before the ramp, and keeps the apex offset to the end of the span, so no node needs a filler.
+            // The exit is the entry run the other way, and it is written after every entry exists: where a corner's
+            // entrance actually stops is a fact by now, not a prediction, so the exit can hand over to it exactly.
             for (int c = 0; c < corners; c++)
             {
                 CornerPoint corner = ARS.Corners[c];
-                float outside = -ARS.InsideSign(corner.Angle);
-                int approach = (int)LaneFieldApproachNodes;
-                if (!ARS.IsPointToPoint && corners > 1)
-                    approach = Math.Min(approach, ArcSpan(ARS.Corners[(c + corners - 1) % corners].Node, entryStart[c], count) - 1);
-                for (int step = 1; step <= approach; step++)
-                {
-                    int node = ArcNode(entryStart[c], -step, count);
-                    if (covered[node]) break;
-                    ARS.TrackPoints[node].LaneLineShare = outside;
-                    covered[node] = true;
-                }
+                if (Math.Sign(corner.Angle) == 0f) continue;
+                int bound = c + 1 < corners ? shapedStarts[c + 1] : (ARS.IsPointToPoint ? -1 : shapedStarts[0]);
+                float inside = ARS.InsideSign(corner.Angle);
+                float outside = -inside;
+                float crossTan = crossTans[c];
+                float halfTraverse = Math.Max(ARS.TrackPoints[corner.Node].TrackHalfWidth, 0.5f);
+                float apexHalfLength = 0.75f * 2f * halfTraverse / crossTan;
+                float outsideHalfLength = 2f * halfTraverse / crossTan;
+                float runIn = runIns[c];
 
-                int holdStop = ArcSpan(corner.Node, corner.EndNode, count) < ArcSpan(corner.Node, entryStart[(c + 1) % corners], count)
-                    ? corner.EndNode : entryStart[(c + 1) % corners];
-                int holdSpan = Math.Min(ArcSpan(corner.Node, holdStop, count) - 1, count / 2);
-                for (int step = 1; step <= holdSpan; step++)
+                float outTravelled = 0f;
+                int outPrevious = corner.Node;
+                int outWritten = 0;
+                shapedEnds[c] = corner.Node;
+                for (int step = 1; step <= rampNodes[c]; step++)
                 {
                     int node = ArcNode(corner.Node, step, count);
-                    ARS.TrackPoints[node].LaneLineShare = ARS.TrackPoints[corner.Node].LaneLineShare;
-                    covered[node] = true;
+                    // The next corner's entrance may take the road back, but not before this exit has had a floor: a
+                    // corner with a zero-node exit cannot be driven out of, so it is never the right answer.
+                    if (bound >= 0 && node == bound && outWritten >= LaneShapeMinExitNodes) break;
+                    outTravelled += Vector3.Distance(ARS.TrackPoints[outPrevious].Position, ARS.TrackPoints[node].Position);
+                    outPrevious = node;
+                    float outShare;
+                    if (outTravelled <= apexHalfLength)
+                    {
+                        float u = ARS.Clamp(1f - outTravelled / (2f * apexHalfLength), 0f, 1f);
+                        outShare = outside + (inside - outside) * LaneSmoothStep(u);
+                    }
+                    else
+                    {
+                        float z = Math.Min(outTravelled - apexHalfLength, outsideHalfLength);
+                        float outward = halfTraverse + crossTan * z - crossTan * z * z / (2f * outsideHalfLength);
+                        outShare = inside * (1f - outward / halfTraverse);
+                    }
+                    ARS.TrackPoints[node].LaneLineShare = outShare;
+                    ARS.TrackPoints[node].LaneShaped = true;
+                    ARS.TrackPoints[node].LaneShapeApex = corner.Node;
+                    shapedEnds[c] = node;
+                    outWritten++;
+                    if (outTravelled >= runIn) break;
                 }
             }
 
-            FollowTargetShape(count);
-
+            // The entrance is wherever the entry walk stopped, so the whole build describes the flags it wrote, and the
+            // apex node carries its own region so the reader can hold a corner until the car is past its exit.
+            for (int c = 0; c < corners; c++)
+            {
+                entryStart[c] = shapedStarts[c];
+                TrackPoint apex = ARS.TrackPoints[ARS.Corners[c].Node];
+                apex.LaneShapeStart = shapedStarts[c];
+                apex.LaneShapeExit = shapedEnds[c];
+                int entryNodes = ArcSpan(shapedStarts[c], ARS.Corners[c].Node, count);
+                int exitNodes = ArcSpan(ARS.Corners[c].Node, shapedEnds[c], count);
+                ARS.Log(ARS.LogImportance.Info, "lane shape apex " + ARS.Corners[c].Node
+                    + ": entry " + shapedStarts[c] + " (" + entryNodes + " nodes)"
+                    + " | exit " + shapedEnds[c] + " (" + exitNodes + " nodes)"
+                    + " | wanted " + rampNodes[c] + " nodes each way"
+                    + (exitNodes == 0 ? " | EXIT HAS NO ROOM: next entrance is node " + (c + 1 < corners ? shapedStarts[c + 1].ToString() : "loop start") : ""));
+            }
 
             float widestStep = 0f;
             for (int node = 1; node < count; node++)
                 widestStep = Math.Max(widestStep, Math.Abs(ARS.TrackPoints[node].LaneLineShare - ARS.TrackPoints[node - 1].LaneLineShare));
-            ARS.Log(ARS.LogImportance.Info, "Lane field: " + corners + " corner(s), ramps from the radius, widest share step between adjacent nodes " + widestStep.ToString("0.000"));
+            ARS.Log(ARS.LogImportance.Info, "Lane field: " + corners + " corner(s), each shaped over the length its crossing angle asks for, widest share step between adjacent nodes " + widestStep.ToString("0.000"));
             for (int c = 0; c < ARS.Corners.Count; c++)
             {
                 CornerPoint probe = ARS.Corners[c];
@@ -479,46 +552,6 @@ namespace ARS
             }
         }
 
-
-        // The shape says where the line wants to be; this says how fast the car may get there, from the local radius.
-        // A capped lateral rate turns every sharp corner of the target into a curvature ramp, which is what a clothoid
-        // does and what the raw shape has no way to express.
-        static void FollowTargetShape(int count)
-        {
-            float[] target = new float[count];
-            for (int node = 0; node < count; node++) target[node] = ARS.TrackPoints[node].LaneLineShare;
-
-            int start = 0;
-            if (!ARS.IsPointToPoint)
-            {
-                float straightest = -1f;
-                for (int node = 0; node < count; node++)
-                    if (ARS.TrackPoints[node].PreciseCurveRadius > straightest) { straightest = ARS.TrackPoints[node].PreciseCurveRadius; start = node; }
-            }
-
-            int passes = ARS.IsPointToPoint ? 1 : 2;
-            for (int pass = 0; pass < passes; pass++)
-            {
-                float share = target[start];
-                for (int i = 0; i < count; i++)
-                {
-                    int node = ARS.IsPointToPoint ? Math.Min(start + i, count - 1) : (start + i) % count;
-                    float rate = ARS.Clamp(LaneFieldLateralRatePerRadius / Math.Max(1f, ARS.TrackPoints[node].PreciseCurveRadius), LaneFieldLateralRateFloor, LaneFieldLateralRateCeiling);
-                    float edge = Math.Max(1f, ARS.TrackPoints[node].TrackHalfWidth - 1f);
-                    float step = rate / edge;
-                    share += ARS.Clamp(target[node] - share, -step, step);
-                    ARS.TrackPoints[node].LaneLineShare = share;
-                }
-            }
-        }
-
-
-        // The largest circle that stays on the road through this corner: tangent to the inside edge at the apex and to
-        // the outside edge where it enters and leaves it. The line it describes is the one with the least curvature,
-        // which is the fastest there is when the corner is taken at a constant speed.
-
-        // The same total turn OptimalRadiusOf uses, exposed for the table log.
-
         // Metres between the exit of the previous corner and the entrance of this one: the straight the line has to
         // work with. Zero when there is no previous corner to measure from.
         static float OptimalRoomMetres(CornerPoint corner)
@@ -533,6 +566,7 @@ namespace ARS
             return room;
         }
 
+        // The same total turn OptimalRadiusOf uses, exposed for the table log.
         static float OptimalTurnOf(CornerPoint corner)
         {
             int count = ARS.TrackPoints.Count;
@@ -544,6 +578,9 @@ namespace ARS
             return Math.Abs(swept) / GeometryWindowNodes;
         }
 
+        // The largest circle that stays on the road through this corner: tangent to the inside edge at the apex and to
+        // the outside edge where it enters and leaves it. The line it describes is the one with the least curvature,
+        // which is the fastest there is when the corner is taken at a constant speed.
         static float OptimalRadiusOf(CornerPoint corner)
         {
             // The turn of the whole corner, not the local angle at the apex. `Angle` at a node is the turn between
@@ -586,31 +623,8 @@ namespace ARS
             return ((node % count) + count) % count;
         }
 
-        // Share lost per node, scaled by how tight this node is against the corner's own radius: a node tighter than the
-        // corner moves the line less, one that is opening out moves it more.
-        static float NodeRate(int node, float cornerRadius)
-        {
-            return LaneFieldSaturationPerRadian / cornerRadius * RadiusStepScale(node);
-        }
-
-        // 1 where the road is wide, LaneFieldStepAtTight where it is tight: the line slows down where it is being asked most.
-        static float RadiusStepScale(int node)
-        {
-            return RadiusStepScaleOf(ARS.TrackPoints[node].PreciseCurveRadius);
-        }
-
-        static float RadiusStepScaleOf(float radius)
-        {
-            float t = ARS.Clamp((radius - LaneFieldStepTightRadius) / (LaneFieldStepWideRadius - LaneFieldStepTightRadius), 0f, 1f);
-            return LaneFieldStepAtTight + (LaneFieldStepAtWide - LaneFieldStepAtTight) * t;
-        }
-
-        // How far the line may move between one node and the next.
-        static float NodeStep(int node, float cornerRadius)
-        {
-            return LaneFieldMaxSharePerNode;
-        }
-
+        // A smoothstep puts the lane shape's ends parallel to the road: its slope is zero at both ends and peaks in
+        // the middle, which is where the line crosses the track centre.
         static float LaneSmoothStep(float t)
         {
             t = ARS.Clamp(t, 0f, 1f);

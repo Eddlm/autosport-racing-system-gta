@@ -108,44 +108,44 @@ When 0.9.0 is published, tell people this in the README, not only in the release
 `OffshootInputCap` is being simplified. Keep gates 1, 2, 3 exactly as they are:
 
 1. `_laneOverride` must be set (a car holding its own line is exempt).
-2. Speed >= `OffshootMinSpeedMph` (20).
-3. `Math.Abs(CurrentTrackPoint.Angle) > OffshootMinRouteAngleDeg` (2).
+2. Speed >= `OffshootMinSpeedMph`.
+3. `Math.Abs(CurrentTrackPoint.Angle) > OffshootMinRouteAngleDeg`.
 
 New shape:
 
 - **Throttle only.** The path no longer brakes and no longer caps the combined input; `offtrackBrakeCommand` becomes always false and the `BrakeReason.Offtrack` tag goes with it.
-- **Ramp 1 -> 0 from the track edge out to 5 m beyond it** (`OffshootRangeMeters` 2 -> 5; inside the edge the cap is 1.0, so the old centre-line ramp and `OffshootBlendBrake` are gone).
+- **Ramp from full to nothing from the track edge out to `OffshootRangeMeters` beyond it** (`OffshootRangeMeters` was widened; inside the edge the cap is full, so the old centre-line ramp and `OffshootBlendBrake` are gone).
 - **Only when the projection lands farther from the centre than the car's own position.** If the car is already wider than where it is heading, nothing fires.
 
-Shipped in build 736 as `OffshootThrottleCap` (`Racer.cs:1607`): the cap is applied with `Math.Min` to `newThrottle` after the throttle composition, so it is a ceiling over every reason. `OffshootBlendBrake`, the brake command and `BrakeReason.Offtrack` are gone from the brake path; the field is `_offtrackThrottleCap` and the pedal bar draws it over the whole 1..0 range. Compile-verified, drive owed.
+Shipped in build 736 as `OffshootThrottleCap` (`Racer.cs:1607`): the cap is applied with `Math.Min` to `newThrottle` after the throttle composition, so it is a ceiling over every reason. `OffshootBlendBrake`, the brake command and `BrakeReason.Offtrack` are gone from the brake path; the field is `_offtrackThrottleCap` and the pedal bar draws it over the whole range. Compile-verified, drive owed.
 
 ## WIP — NodesToDoubleRadius, report mode (build 738)
 
 The blur gate holds how many nodes the road runs before `IsOpenedFor`
-sees a radius of `2 x` the apex's **smoothed** radius (`SpanDoublingMultiple = 2`, `SpanConsecutiveNodes = 8`),
-walked to `exitMaxStep` = min(500, nodes left) and **not** clamped to 40. Each corner logs:
+sees a radius of `2 x` the apex's **smoothed** radius (`SpanDoublingMultiple`, `SpanConsecutiveNodes`),
+walked to `exitMaxStep` = min(`SpanNodeLimit`, nodes left) and **not** clamped to `SpanMaxDistanceNodes`. Each corner logs:
 
 `Corner open: apex=1487 smoothedR=41.3 tightestR=33.9 nodesToDouble=12/500`
 
-**Now a gate (build 739).** `nodesToDouble > SpanBlurNodes (60)` returns before the corner is built, and the
-`CornerCeilingMeters` screen is gone. The 60 comes from 32 corners over FIG, LSIA and a third track, whose
-distribution splits between 52 and 70 nodes; a 40-node cut was tried and rejected because node count mixes distance
+**Now a gate (build 739).** `nodesToDouble > SpanBlurNodes` returns before the corner is built, and the
+`CornerCeilingMeters` screen is gone. The threshold comes from 32 corners over FIG, LSIA and a third track, whose
+distribution splits into two clusters; a lower cut was tried and rejected because node count mixes distance
 with speed, while seconds mix a road property with the car's grip (1G..3G across mods), so seconds are not a road
 unit at all. Expected effect on the three measured tracks: 4 corners culled of 32.
 
 Residual to know: `CornerCeilingMeters` still feeds `regionRadius` in `BuildApexTable`, so a region is never cut
-where the road is wider than the ceiling. The screen is retired; the region delimiter is not. A 250 m radius bend
+where the road is wider than the ceiling. The screen is retired; the region delimiter is not. A very wide bend
 still never forms a region and so never reaches the blur test - worth attacking in the region detector itself.
 
 ## Field-verified, 2026-10-23 (builds 732-748)
 
 - **ABS as a lock guard (732)** — driver-verified: the brake is no longer held off by the old slip taper.
-- **Blur gate at 60 nodes (739)** — verified by import on Figureight (1 culled), LSIA (2), By The Highway (1),
+- **Blur gate at `SpanBlurNodes` (739)** — verified by import on Figureight (1 culled), LSIA (2), By The Highway (1),
   and a fourth track (apex 511, R 162.7, 154 nodes). The population is consistent: sweeps of 160-185 m radius
   take 149-165 nodes to open, corners of the same radius take 24-34. Nothing in between was measured.
 - **Projection throttle cap (742-745)** — the descending-Remap bug is why it never fired; it now fires on ~0.75%
   of ticks, all of them genuine (the logged samples show the car already past the edge when the cap drops).
-- **Off-track recovery throttle (743/748)** — 0.75, not 0.5: half would not pull the car out of the grass from a
+- **Off-track recovery throttle (743/748)** — `OffTrackRecoverThrottle`, not half: half would not pull the car out of the grass from a
   stop. Verified in the field.
 - **Development gate (747)** — the row must NOT require `PlayerParticipating`: Racers holds the player only when
   they are on the grid, and the levers exist for a one-AI test with the player spectating.
@@ -159,7 +159,7 @@ stale on both counts:**
 - The route speed does **not** read the raw `PreciseCurveRadius`: `RouteRadiusSampled()` (`Racer.cs:3921`) is the
   four-point least-squares fit behind the sagitta guard, and `PreciseCurveRadius` is read only by the lean code
   (`:1011`, `:1020`). There was no unsmoothed step to fix.
-- The curvature's brake is capped at `RouteBrakeCap` **0.2** (`Racer.cs:243`, applied at `:2448` — only while the route
+- The curvature's brake is capped at `RouteBrakeCap` (`Racer.cs:243`, applied at `:2448` — only while the route
   term is the limiting one *and* no corner plans a brake — consumed at `:2787` with `Math.Min` and tagged
   `BrakeReason.Route`). A step in the reading can ask for a fifth of the brake, never for a slam.
 
@@ -170,13 +170,13 @@ Driver-reported fixed 2026-10-25. The cap had already closed it; what was owed w
 Four systems decide how fast a car goes. They were built one at a time and never composed, which is the next job.
 
 1. **Corner** — `ApexBrakingSpeed` builds a ramp from the braking target to the apex and releases at the braking target (build 734, reverting 731). It knows the distance left, so its deceleration is planned. Full brake authority.
-2. **Curvature** — `RouteRadiusSampled` (three-node plan-view circumradius at the car, speed/grip and twice that) through `RouteIdealSpeedForRadius` = sqrt(grip * g * R). It is a level, not a transition: no memory, no lookahead, no time. While it is the term setting the speed, the brake is capped at `RouteBrakeCap` 0.1 (build 755, a probe).
-3. **Crest and slope** — `CrestGripSpeedFactor` (the no-fly gate, samples 1 s and 2 s ahead, drawn blue and red) and `slopeSpeedFactor`. These multiply **both** the corner and the route speed, so they are the only pair that already composes.
-4. **Projection** — `OffshootThrottleCap`: throttle only, 1.0 at the track edge ramping to 0 over the five metres beyond it, and it fires only when the projection is outside the edge **and** wider than the car. Applied with `Math.Min` after `ComposeThrottleCap`, so it outranks every reason field.
+2. **Curvature** — `RouteRadiusSampled` (three-node plan-view circumradius at the car, speed/grip and twice that) through `RouteIdealSpeedForRadius` = sqrt(grip * g * R). It is a level, not a transition: no memory, no lookahead, no time. While it is the term setting the speed, the brake is capped at `RouteBrakeCap`, lowered for the probe (build 755).
+3. **Crest and slope** — `CrestGripSpeedFactor` (the no-fly gate, sampling the near and far crest horizons, drawn blue and red) and `slopeSpeedFactor`. These multiply **both** the corner and the route speed, so they are the only pair that already composes.
+4. **Projection** — the one-second speed offset: while the projected path is outside the edge on the turn's side, the intended speed bleeds at `ProjectionSlowdownMphPerSecond` and recovers at `ProjectionRecoveryMphPerSecond` inside, floored at `ProjectionSpeedFloorMph()` — the bend's speed less `OffTrackSpeedSlackMph`, or `OffTrackSpeedFloorMph`, whichever is higher. It writes no pedal; the proportional law brakes for it. The `_projectionCut` input offset and the short `OffshootThrottleCap` ramp this line used to name are gone, and `Offshoot` survives only as the `OffshootMin*` gates on the probe.
 
-**Where they meet.** `Intention.Speed = min(cornerTerm, routeTerm)`, then slope and crest multiply, then the error `Speed - currentSpeed` is divided by 3 m/s for throttle and 6 m/s for brake. Those two numbers are the amplifier: at R = 150 m, 23 m of radius is the whole throttle range and 47 m the whole brake range, so any residual step in a radius reading becomes a saturated pedal. It is a proportional law with a band, and outside that band it is bang-bang.
+**Where they meet.** `Intention.Speed = min(cornerTerm, routeTerm)`, then slope and crest multiply, then the error `Speed - currentSpeed` is divided by `FullThrottleSpeedErrorMps` for throttle and `FullBrakeSpeedErrorMps` for brake. Those two constants are the amplifier: at any radius the brake spans twice the radius error the throttle does, so any residual step in a radius reading becomes a saturated pedal. It is a proportional law with a band, and outside that band it is bang-bang.
 
-**Measured, not assumed.** On the real LSIA route a three-point sample steps up to 12.84 km/h of target speed in one node, which is 59% of the brake range in ~26 ms. A least-squares four-point fit halves that inside the governed regime (R < 200 m) but is unusable unguarded: on a uniform node spacing the samples are centrally symmetric, the algebraic fit's curvature terms cancel to ~1e-9, and it returns the RMS size of the sampling window as a "radius" (45 m on a road whose real radius is 5-9 km). The sagitta guard (`RouteStraightSagittaShare` 0.002) fixes it; the fit still under-reads tight corners by ~16%.
+**Measured, not assumed.** On the real LSIA route a three-point sample steps up to 12.84 km/h of target speed in one node, which is 59% of the brake range in ~26 ms. A least-squares four-point fit halves that inside the governed regime (R < 200 m) but is unusable unguarded: on a uniform node spacing the samples are centrally symmetric, the algebraic fit's curvature terms cancel to ~1e-9, and it returns the RMS size of the sampling window as a "radius" (45 m on a road whose real radius is 5-9 km). The sagitta guard (`RouteStraightSagittaShare`) fixes it; the fit still under-reads tight corners by ~16%.
 
 **Field-verified.** Trails show red only where a corner brakes, and green-yellow with no red at all through a curve without an apex: the two systems are visibly separate. Radius readout 15 m at an apex, 182 m through a wide junction, 999 m on a viaduct.
 
@@ -184,46 +184,46 @@ Four systems decide how fast a car goes. They were built one at a time and never
 - The pedal law is proportional on a speed error with no deceleration term: a car 1 m/s over at 200 m out and one 1 m/s over at 10 m out get the same pedal.
 - The curvature term has no time dimension while the corner does. Rate-limiting its fall to a grip-consistent deceleration is the cheap fix; a feed-forward from the required deceleration is the correct one.
 - `999` is the sentinel for both "huge radius" and "degenerate solve", so the route can be blind in a curve and say so with a number that looks like a straight. Suspected at a viaduct; needs the estimator checked in a genuinely tight curve.
-- The brake learner measures `share` of full pedal. The 0.1 cap makes share 0, so it raises the factor by 18% every pass and teaches the car to brake even less. It should measure relative to the cap.
-- `CornerCeilingMeters` survives only as the region delimiter (200 m); the blur gate at 60 nodes decides what exists.
-**Probe state.** `RouteBrakeCap` 0.2, applied only while **no corner is inside its braking distance**: a live corner plan owns the brake outright. The first rule read which term asked for the lower speed, ramp included, and it was driven and rejected — inside the ramp the cap blocked the braking the corner had planned, so the car could not slow for the corner it was already committed to. The plan wins by being a plan, not by being the strictest number., and `steerLimitedSpeedGovernsRoute` false: the steer-limited speed is still computed for readout but no longer replaces 70 % of the curvature term, so the route speed is the track's radius alone. Both are one-line switches.
-**The projection is a time escalation, and the clock is its only form.** The five-metre distance ramp is gone — it answered the same question from the other direction, and two laws on one pedal is one too many. While the one-second projection is outside the edge **and widening**, the clock runs, and it spends the input at two units per second, bled every tick rather than in steps: full throttle at 0 s, level at 0.5 s, the **0.5 brake floor** at 0.75 s — half of the pedal, because off the line the car does not need to stop, only to be slow enough to turn back. The escalation also stops on speed, not only on the clock: while the car is at or under the speed **its own curvature asks for, minus `OffTrackSpeedSlackMph` 10**, the projection does not bind at all — the plan drives, and the car has the speed it needs to steer back. A car that stays out long enough still reaches the recovery mode. Back inside, the clock resets instantly; the pedal's own slew is what stops that from snapping. The projection outranks the plan and the route cap, because it is the only term that knows the plan has already failed, but it does not outrank the ABS (the physical ceiling the floor respects) nor full countersteer (the tyre is already working diagonally, so brake there saturates the circle instead of sharing it).
+- The brake learner measures `share` of full pedal. The route cap makes share zero, so it raises the factor by 18% every pass and teaches the car to brake even less. It should measure relative to the cap.
+- `CornerCeilingMeters` survives only as the region delimiter; the blur gate at `SpanBlurNodes` decides what exists.
+**Probe state.** `RouteBrakeCap`, applied only while **no corner is inside its braking distance**: a live corner plan owns the brake outright. The first rule read which term asked for the lower speed, ramp included, and it was driven and rejected — inside the ramp the cap blocked the braking the corner had planned, so the car could not slow for the corner it was already committed to. The plan wins by being a plan, not by being the strictest number., and `steerLimitedSpeedGovernsRoute` false: the steer-limited speed is still computed for readout but no longer replaces the curvature term, so the route speed is the track's radius alone. Both are one-line switches.
+**The projection is a speed escalation** (1578: it began as an input offset and was morphed into one). While the one-second projection is outside the edge on the turn's side, the **intended speed** bleeds at `ProjectionSlowdownMphPerSecond`, bled every tick rather than in steps, and recovers at `ProjectionRecoveryMphPerSecond` once the point is back inside. **It writes no pedal**: the proportional law turns the lowered target into brake on its own, so the projection tags no `BrakeReason` and outranks nothing — it moves the same number the plan does. **The floor is the whole point**: never under **the bend it is leaving less `OffTrackSpeedSlackMph`, or `OffTrackSpeedFloorMph`, whichever is higher** (`ProjectionSpeedFloorMph`), with the radius capped at `CornerCeilingMeters` because a straight's radius sentinel would otherwise ask an impossible speed and disarm it; the drop is itself capped at `target − floor`, so a car already at or under the floor is not touched at all. **Widening is not part of the gate**: `_projectionWidening` survives only to colour the overlay and to zero the Gs lane floor. The five-metre distance ramp is long gone, and the input form has now gone with it, for the same reason: one pedal law, one number.
 ## Drive owed — 2026-10-23 evening (builds 763-779)
 
-**Driven and accepted in the car:** the curvature brake cap at 0.2 with the corner owning full authority while it asks for the lower speed; the steer-limited blend switched off (no observable effect, which is itself the finding that the route term rarely binds); the countersteer share at half; the damper's plain crossing with `SteerDampingGain` at 0.5.
+**Driven and accepted in the car:** the curvature brake cap at `RouteBrakeCap` with the corner owning full authority while it asks for the lower speed; the steer-limited blend switched off (no observable effect, which is itself the finding that the route term rarely binds); the countersteer share at half; the damper's plain crossing with `SteerDampingGain`.
 
 **Compile-verified, drive owed:**
-- The projection clock at 2/s, with the lane gate, the distance ramp and the hysteresis all removed. Driven once at 1/s with the ramp still in place, never in this shape.
-- The brake learner's entrance cut (0.02 per 10 m/s over, uncapped) and the factor range widened to 0.5–1.5.
-- `SteerDampingGain` shipping at 0.5 instead of 1.0 — the value the plain crossing was driven at, now the default.
+- The projection clock at `ProjectionSlowdownMphPerSecond`, with the lane gate, the distance ramp and the hysteresis all removed. Driven once at the recovery rate with the ramp still in place, never in this shape.
+- The brake learner's entrance cut (`BrakeEntryFactorPerMetre`, uncapped) and the factor range widened to `BrakeMinFactor`..`BrakeMaxFactor`.
+- `SteerDampingGain` shipping below unity — the value the plain crossing was driven at, now the default.
 
 **Known untested interaction:** the entrance cut is uncapped and the share step still runs beside it, so a corner can rebound between two factors. The notice feed is the place it shows; there is no log line behind it.
-**The corner keeps the arc, and grows through it.** The plan no longer lets go at its braking target: it holds its own number until the car has actually reached it — forward speed within `CornerLiftGraceMph` 5 mph of the target — and only then starts lifting at `CornerLiftMphPerSecond` 5 mph/s, so the car builds speed through the arc instead of sitting on the apex number until the apex. The gate reads the lifted number, so a car that falls behind pauses the growth without losing what it earned. Past the apex the plan releases outright. The route term still votes through `min`, so a radius that says slower is still the ceiling — the two are meant to work together, not to hand over.
+**The corner keeps the arc, and grows through it.** The plan no longer lets go at its braking target: it holds its own number until the car has actually reached it — forward speed within the lift's grace band of the target — and only then starts lifting at the lift's own rate, so the car builds speed through the arc instead of sitting on the apex number until the apex. The gate reads the lifted number, so a car that falls behind pauses the growth without losing what it earned. Past the apex the plan releases outright. The route term still votes through `min`, so a radius that says slower is still the ceiling — the two are meant to work together, not to hand over.
 
 ## Terrain speed cuts apply to the route and only the route (2026-10-23)
 
 The slope's `sqrt(hill grip)` and the crest's `routeCrestFactor` multiply **`followTrackSpd` alone**. The corner plan
 (`cornerSpd`) takes neither, and `apexTargetWithCurrentRouteGrip` - an unused copy of it - is gone. Why: both factors are
-sampled **ahead of the car** (slope over the 1.0-2.0 s window, crest at the 1.0 s and 2.0 s nodes), so multiplying a corner
+sampled **ahead of the car** (slope over the near-to-far horizon window, crest at the near and far horizon nodes), so multiplying a corner
 target by them made an apex two hundred metres away rise and fall with the road under the wheels. Found from a corner that
 read as strangely slow on every lap; with the corner cut removed it took its authored speed again while the route term went
-on protecting the crests where the car actually is. `MaxCrestLift` (0.1-2.0 g, default 0.4) is the crest tolerance and it is
+on protecting the crests where the car actually is. `MaxCrestLift`, whose range and default its KeySpec owns, is the crest tolerance and it is
 live again, because the multiplier is back on the route.
 
 
 ## Session close 2026-10-23/24 — builds 816-880 (deployed: 880)
 
-**Driven and reported good by the driver this session**: the outside apex line measured in metres (250 plateau + 50 ramp to 5 m, raw
+**Driven and reported good by the driver this session**: the outside apex line measured in metres (a long plateau, a short ramp, raw
 half width), the lean standing down while the line is active, the stability rate, and the four audit fixes. Everything earlier in the
 range was driven at some point unless stated.
 
-**Not driven yet** (compile-verified only, deployed in 880): the outside leg of the lane mover at **half rate** (13 m/s2 and 12 m/s
-while the reason is `OutsideLine`), and the eight-second `AvoidHoldTimeoutMs` backstop.
+**Not driven yet** (compile-verified only, deployed in 880): the outside leg of the lane mover at **half rate** (its lateral rate and
+`LaneMoverSpeedCapMps` while the reason is `OutsideLine`), and the eight-second `AvoidHoldTimeoutMs` backstop.
 
-**Open, filed in `AGENTS-BACKLOG.md`, deliberately not fixed**: `rival-walls-500ms-snapshot` (the wall corridor reads a 500 ms rival
-snapshot and reopens at 10 m/s - the next one to attack, and the most likely remaining cause of "never the same corner, never the same
+**Open, filed in `AGENTS-BACKLOG.md`, deliberately not fixed**: `rival-walls-500ms-snapshot` (the wall corridor reads a `RivalRefreshMs` rival
+snapshot and reopens at the wall's own opening rate - the next one to attack, and the most likely remaining cause of "never the same corner, never the same
 lap"), `track-point-resnap` (a whole-route re-snap with no heading test), `lane-two-frames` (`ownLane` and `steerRefOffset` compared
-across two reference frames, ~2.3 m of sagitta at R 50), `stability-speed-scaling`.
+across two reference frames, a sagitta of metres on a tight radius), `stability-speed-scaling`.
 
 **Instrument this analysis is missing**: the log has second resolution and every lane line is 1 Hz, so lane findings can only be
 falsified by same-second correlation. A per-tick lane record for one car - node, metres to apex, wants, entry, reason, request,
@@ -236,11 +236,11 @@ EOL and refuses an ambiguous search instead of guessing.
 
 ## Session close 2026-10-24 (afternoon) — deployed build 885
 
-**Driven and reported good**: the apex line in metres of route (outside 250 m, ramp 50→5 m, raw half width, latch to the apex, nearest
-unpassed apex, corners under 50 m radius), the lean standing down only while the line is active, and the four audit fixes.
+**Driven and reported good**: the apex line in metres of route (a long outside plateau, a short ramp, raw half width, latch to the apex, nearest
+unpassed apex, corners under `CornerTightRadius`), the lean standing down only while the line is active, and the four audit fixes.
 
-**Compile-verified, drive owed**: the line's speed floor at **15 mph** under the apex speed (build 885); the outside leg of the lane mover
-at half rate (13 m/s2, 12 m/s, build 880); the 8 s `AvoidHoldTimeoutMs` backstop.
+**Compile-verified, drive owed**: the line's speed floor at `IdealLineSpeedMarginMph` under the apex speed (build 885); the outside leg of the lane mover
+at half rate (build 880); its own `AvoidHoldTimeoutMs` backstop.
 
 **The ABS is not drive-owed — it ships off by design** (corrected 2026-10-25). The row is **unchecked and greyed**
 (`absItem.Enabled = false`, `AutosportRacingSystem.cs:1086-1089`) with the description *"GTA forces native ABS on non-player driven
@@ -252,7 +252,7 @@ built and one line from live, for the day `STATUS_PLAYER` can be put on an AI ca
 `docs/REGISTER.md` (defects understood and deliberately not fixed; first entry `first-corner-eagerness`).
 
 **The open decision of the day**: GTA re-grants `WF_ABS` to every non-player-driven car each tick (`Automobile.cpp:3775`), so an AI car
-cannot be made ABS-free from `strModelFlags`. The engine's own clamp holds slip at 0.6 and our taper's knee is 0.5, i.e. 0.1 of room.
+cannot be made ABS-free from `strModelFlags`. The engine's own clamp and our taper's knee leave only a narrow margin of room.
 Either ARS writes `STATUS_PLAYER` into an AI car - which drags in air control, damage thresholds, population culling and collision
 response, all catalogued in `AGENTS-VEHICLE-STATUS.md` - or the ABS stays a player-only feature.
 
@@ -268,11 +268,11 @@ What was wrong, in the order it was found (each one produced the same class of s
    signature of a sign asymmetry rather than a timing one. Side-neutral form: `(demand - ownLane) * -cornerDir > 0`.
 2. **The cross teleport needed a reversal** (build 910). Comparing aim and demand against the car's lane alone pinned the aim to the car's
    lane every tick of an out-in, so the line reached the centre and hovered. It now also needs `gap * _laneRate < 0`.
-3. **The adopted corner owns the line** (build 909) — `NearestApexAhead` hysteresis of 30 m, and the ratchet is no longer wiped when the
+3. **The adopted corner owns the line** (build 909) — `LineApexStickyMeters` of hysteresis on `NearestApexAhead`, and the ratchet is no longer wiped when the
    blend window flickers (it contains the speed floor, which moves with grip).
-4. **`steerRefOffset` measured in the car's own node frame** (build 905) — against the steer reference up to 30 m ahead it carried the
+4. **`steerRefOffset` measured in the car's own node frame** (build 905) — against the steer reference far ahead it carried the
    sagitta `L^2/2R`, up to 9 m on a 50 m corner, with the sign following the corner.
-5. **The last second is a commitment** (build 914): `secondsToApex <= 1` forces the inside extreme whatever the blend managed.
+5. **The last second is a commitment** (build 914): the last second of `secondsToApex` forces the inside extreme whatever the blend managed.
 
 **Tools left in place**: the white diagonal from the car to the adopted apex node (build 913, `ShowTrackAnalysis`), and `Lane cross` /
 `Corner line` (`t=`, `apex=`, `dir=`, `out=`, `bias=`, `in=`) in the log.
@@ -298,27 +298,27 @@ untracked track files (`Dist/AutosportRacingSystem/Tracks/F8.xml`, `TestOct.xml`
 
 **Driven since, driver report 2026-10-25**:
 - The apex blend's clock on the entry speed latched at the window, with no cushion (917/926) — **correct**.
-- The blend ends and pins the inside at a quarter second (`IdealLineBlendEndSeconds` 0.25, `Racer.cs:1203`, read at `:1389` as
+- The blend ends and pins the inside at a quarter second (the blend's end, `Racer.cs:1203`, read at `:1389` as
   `apexCommitted`) — **adequate behaviour, not exactly verified**: the driver is not certain the pin actually fires, and no log
   line proves it. What was judged is the result on track, not the mechanism.
-- The braking modulation of the clock (`LineClockBrakeMphPerG` 2, `Racer.cs:1352`, clamped to ±10 mph) — **driver-observed
+- The braking modulation of the clock (the clock's brake gain, `Racer.cs:1352`, clamped to its own band) — **driver-observed
   working**: *"veo la línea morada ajustar su velocidad acorde; coche más lento, la línea morada avanza al interior más lenta"*.
   What that observation pins down is the clock running on the **latched entry speed** (`:1348-1351`, `secondsToApex = metres /
-  clock`): a slower car stays further from the apex longer, so the purple line's inward advance slows with it. The ±10 mph brake
+  clock`): a slower car stays further from the apex longer, so the purple line's inward advance slows with it. The brake
   boost rides on the same denominator and has no separate observable, so it was not isolated — accepted on feel.
 
 **Changed but not driven**:
-- The outside leg of the lane mover at half rate (13 m/s2 and 12 m/s while the reason is `OutsideLine`, 880).
+- The outside leg of the lane mover at half rate (`LaneMoverSpeedCapMps` while the reason is `OutsideLine`, 880).
 - The eight-second `AvoidHoldTimeoutMs` backstop (880) — **not ChillOut**: this is the *lane* hold after a pass (`ComputeAvoidanceLane`,
-  `Racer.cs:1470-1500`), which keeps the pass lane until nothing is left alongside (14 m behind, 1.5 m lateral) and dies after 8 s
+  `Racer.cs:1470-1500`), which keeps the pass lane until nothing is left alongside (`AvoidHoldBehindMeters`, `AvoidHoldLateralMeters`) and dies after `AvoidHoldTimeoutMs`
   because a pass that long is not a pass any more. Without the backstop the held lane outranked the corner line for the rest of the
   race when the geometric release never fired. ChillOut is the separate **throttle** manoeuvre that holds a standoff behind the
   closest rival (`:2450`, `ManeuverType.ChillOut`).
-- The line's speed floor at 15 mph under the apex speed (885).
+- The line's speed floor at `IdealLineSpeedMarginMph` under the apex speed (885).
 
 **Filed, not fixed**: `docs/REGISTER.md` - `apex-stays-referenced`, `first-corner-eagerness`.
-**Audit findings still open** (`deleg_7fee6020`): the overshoot deadband at 0.1 m against overshoots of metres; the lean sampling a single
-node; `lineActive` vs `entryActive`; the needle-thread averaging two rivals' lanes; the turn-in exempted on a 1 Hz queue.
+**Audit findings still open** (`deleg_7fee6020`): the overshoot deadband against overshoots of metres; the lean sampling a single
+node; `lineActive` vs `entryActive`; the needle-thread averaging two rivals' lanes; the turn-in exempted on a once-a-second queue.
 
 **First thing next session**: the audit's finding 4 (overshoot deadband) - it is the one the driver would feel.
 
@@ -328,13 +328,13 @@ node; `lineActive` vs `entryActive`; the needle-thread averaging two rivals' lan
 pre-`54fc02a` behaviour. The fields stay, unused, so it can be turned back on without re-writing it.
 
 **Why**: `ApplyRivalWalls` already constrains every lane request - corner line, lean, avoidance, recovery - against a rival
-beside the car, closing instantly and opening at 10 m/s. The hold may therefore be a second law for the same nose clip, and
-the 8 s ceiling made it the dangerous one: a stuck geometric release would hold a pass line for up to 480 m.
+beside the car, closing instantly and opening at the wall's own rate. The hold may therefore be a second law for the same nose clip, and
+the `AvoidHoldTimeoutMs` ceiling made it the dangerous one: a stuck geometric release would hold a pass line for hundreds of metres.
 
 **Driven, 2026-10-25 (build 934): no cross after a pass — the claim is invalid.** The behaviour the hold was written for, the
 lane snapping back and the car turning in on the car it just passed, does not reproduce with it off. `ApplyRivalWalls` covers
-it on its own: the wall holds while `|LongitudinalGap| < CombinedSize.Y` (body half-sum + 0.25 m behind, +1 m ahead) and then
-opens at 10 m/s, which is enough for the car to unwind clear of the passed car.
+it on its own: the wall holds while `|LongitudinalGap| < CombinedSize.Y` (a body half-sum plus a small bias each way) and then
+opens at the wall's own rate, which is enough for the car to unwind clear of the passed car.
 
 **Kept as zombie code, driver's decision (2026-10-25)**: the fields, `ComputeAvoidanceLane` and `AvoidHoldTimeoutMs` stay in
 the source, unused, marked `ZOMBIE` at the switch and at the constants — *due to be revisited and removed if it truly is of no
@@ -344,23 +344,23 @@ use*. Nothing is rebuilt for the annotation: 934 stays in the car.
 
 `CombinedWidth` is the **average of the two full widths**, i.e. the car's half width plus the rival's — the code calls the same
 formula `combinedHalfWidth` at `:787`. Both the pass lane (`:1559`) and the wall target (`:1631`) then added
-`VehicleData.BoundingBox * 0.5f` **again**, so a clean pass left a full half width of air (≈0.95 m) on top of the aggression
-buffer (0.2–1.2 m), and the wall sat that far outside the rival's own body.
+half the bounding box **again**, so a clean pass left a full half width of air on top of the aggression
+buffer, and the wall sat that far outside the rival's own body.
 
-Both now carry `rival.RivalRacer.VehicleData.BoundingBox * 0.5f + aggroBuffer`, and the half width the caller adds puts the
+Both now carry half the rival's bounding box plus `aggroBuffer`, and the half width the caller adds puts the
 car's **body edge** on the rival's edge, which is what `ClampLaneToWalls` was written to mean. Expected effect: passes closer by
-~0.95 m, walls that visibly sit on the rival's flank, and — with a fixed 5 m/s rate — a shorter distance to travel either way.
+half a body width, walls that visibly sit on the rival's flank, and — with a fixed rate — a shorter distance to travel either way.
 
 **Drive owed**: whether the tighter corridor still passes without contact, at both ends of the aggression range.
 
 ### Build 943 — the predictive branch of the wall gate is gone
 
 The wall now constrains only for a car whose **body is alongside**: `|LongitudinalGap| < CombinedSize.Y` and the same
-30 m of route. The `aheadAndClose` branch — `RelativePos.Ahead`, `TimeToReach < 3 s`, `|DirectionDiff| ≤ 20°` — is deleted.
+`SameSectionMaxGapMeters` of route. The `aheadAndClose` branch — `RelativePos.Ahead`, `TimeToReach < WallApproachSeconds`, `|DirectionDiff|` under `AvoidAngleGateDegrees` — is deleted.
 It put walls up for cars that were merely approaching, so the corridor moved with nothing on screen to explain it, and the
 angle gate made the wall appear and vanish with the rival's heading.
 
-What survives, and why: the same-section 30 m test stays, because it is what keeps a car on the far leg of a U from counting
+What survives, and why: the same-section `SameSectionMaxGapMeters` test stays, because it is what keeps a car on the far leg of a U from counting
 as a trackside blockage when it is physically close.
 
 **Known inconsistency, next**: the test still reads `LongitudinalGap`, which is measured **in my car's own frame** — so a rival
@@ -370,7 +370,7 @@ follows.
 ### Build 945 — the overlap moves to the route axis, and the shape gains its cone
 
 `overlaps` now reads `|RouteGapAhead| < CombinedSize.Y`: the same axis `0623276` gave rival detection, so the gap no longer
-shrinks for a rival at an angle, a sliding car stops toggling it, and corners stop under-reading it. The 30 m same-section
+shrinks for a rival at an angle, a sliding car stops toggling it, and corners stop under-reading it. The `SameSectionMaxGapMeters` same-section
 guard went with it — an arc shorter than a body cannot reach the far leg of a U — so the wall gate is one condition on one axis.
 
 The Show Rivalry drawing gains the `\./`: two lines from the car's own position to each wall's far end, in the wall's own colour,
@@ -383,13 +383,13 @@ gap wraps correctly at the start line — a wrong wrap would flicker the wall on
 
 Both live in the pass picker, and they answer different geometry:
 
-1. **Within a metre nose to tail, no flip** (`SideFlipMinClearanceMeters` 1): the crossing itself is the risk — the rear of the
+1. **Within a metre nose to tail, no flip** (`SideFlipMinClearanceMeters`): the crossing itself is the risk — the rear of the
    car ahead is still in the way while this one goes round. Further back the flip stays free.
 2. **Side by side, the side is latched** (`|NodeOffset − its NodeOffset| < CombinedWidth`): once the two bodies are abreast
    there is no room to cross over, so the lane the pass began on is the lane it finishes on. The geometry is not asked again
    until the lateral overlap ends, and the latch is per target, so a different rival starts a fresh decision.
 
-They had to be split: written both as longitudinal arc, the 1 m rule lands **inside** the overlap window (`CombinedSize.Y` ≈ a
+They had to be split: written both as longitudinal arc, the clearance rule lands **inside** the overlap window (`CombinedSize.Y` ≈ a
 body and a bit) and would never fire. The narrow one is longitudinal, the committed one is lateral — one car behind you does not
 pin you, only one alongside.
 
@@ -402,7 +402,7 @@ the rival's offset from the **track centreline**. On a two-lane road the midpoin
 drifting by a few centimetres across it swapped walls in a single tick, and the corridor went with it.
 
 - The side is now `sideGap = r.NodeOffset - myNodeOffset`, so **my own lane** sets which side of me the rival is on.
-- `WallSideLockMeters` 1: within a metre nose to tail the side is not re-decided — crossing there clips its rear.
+- `WallSideLockMeters`: within a metre nose to tail the side is not re-decided — crossing there clips its rear.
 - `abreast` (`|sideGap| < CombinedWidth`): the side is latched outright; alongside there is no room to cross over, so the wall
   stays where the pass began. The latch is per slot **and per rival**, so a different car in the same slot decides fresh.
 
@@ -443,7 +443,7 @@ matching arithmetic:
 
 1. `targetLeftWall = Math.Max(targetLeftWall, r.NodeOffset + rivalBuffer)` — **never clamped to the edge**. A rival near or past
    one edge (its `NodeOffset` 7.9 on a 6 m half-width) produced a left target of 9.55.
-2. The corridor inverted, and the ordering guard wrote `mid ± 1` — with `mid` outside the road, **both walls** landed off the
+2. The corridor inverted, and the ordering guard wrote its corridor half about `mid` — with `mid` outside the road, **both walls** landed off the
    track (5.81 / 7.81), leaving the car aiming outside it.
 3. Next tick the targets recomputed and the rate walked them back. One-tick spike outward, smooth return: exactly the symptom.
 4. Compounding it: the side test `LateralGap > CombinedWidth` is **one-sided**, not a deadband, so a rival 1.5 m to this car's
@@ -454,13 +454,13 @@ Three clamps, one rule — a wall is a lane offset inside the road:
 - targets clamped to `±trackBound`;
 - the stored walls re-clamped every tick, because they are measured against the previous tick's width and a narrowing road
   leaves them outside the new edge;
-- the ordering guard keeps its ±1 m corridor *inside* the edges (`corridorHalf = min(1, trackBound)`).
+- the ordering guard keeps its corridor *inside* the edges (`corridorHalf = min(<corridor>, trackBound)`).
 
 **Drive owed**: the same narrowing straight and the edge-hugging rival, with Show Rivalry visible.
 
 ### Build 957/958 — the subagent's report was right, and 956 only bounded the symptom
 
-956 clamped the values, so nothing left the road — but the **oscillator survived**: the ordering guard wrote `mid ± 1` into
+956 clamped the values, so nothing left the road — but the **oscillator survived**: the ordering guard wrote its corridor half about `mid` into
 the *state*, the mover dragged both walls back at its rate, the targets re-crossed 4-6 ticks later, and it repeated. A
 relaxation oscillator with the period set by `wallCloseRate`.
 
@@ -475,7 +475,7 @@ Three changes now in:
 - **the guard runs on the targets**, not the state (`if (targetLeftWall > targetRightWall)`, corridor half a metre clamped
   inside the edges); the state write-back is deleted, so there is nothing left to undo — a fixed point instead of a cycle;
 - **the teleport writes are clamped** to `±trackBound`, so a jump can never land outside;
-- **`WallSideDeadbandMeters` 0.3** replaces the body-width deadband: only a rival on the centreline counts as straight ahead.
+- **`WallSideDeadbandMeters`** replaces the body-width deadband: only a rival on the centreline counts as straight ahead.
 
 **Drive owed**: the same two situations. The subagent left a discriminator — a **blue** wall leaving the track could only be the
 collapse, a **red** one resting exactly one `BoundingBox` short of its target is the teleport. After 958 neither should occur.
@@ -486,7 +486,7 @@ collapse, a **red** one resting exactly one `BoundingBox` short of its target is
 *approaching*. The walls are what starts an overtake, not only what survives one, so with the branch gone a wall could not
 appear until the bodies were already level — and the car never moved over.
 
-The approach is back as one condition, `r.TimeToReach < WallApproachSeconds` (3 s). `TimeToReach` already carries every gate
+The approach is back as one condition, `r.TimeToReach < WallApproachSeconds`. `TimeToReach` already carries every gate
 that matters — ahead in arc, inside this car's lateral corridor, and genuinely closing — and returns infinity otherwise, so it
 needs no angle test and no `RelativePos` classification. Those two were what made the old branch flicker; the approach itself
 was never the problem.
@@ -499,24 +499,23 @@ a malformed track file stopping startup, unbounded wheel-pointer reads, rival re
 design (the route brake cap only applies outside corner plans), one false (`ScriptSettings.Save()` returns void).
 The rest of the reports — ~38 blockers — are still unverified claims.
 
-**Nitro.** The player's burn never showed because nothing lifted the entity's speed cap: the 2.5x power multiplier drove
-the car into the model's own top speed. `StartNitrous` now sets `SET_ENTITY_MAX_SPEED(Car, 50000)` and `StopNitrous` puts
-the model's top speed back with `MODIFY_VEHICLE_TOP_SPEED(Car, 0)` (hash not in SHVDN's enum). Taken from
+**Nitro.** The player's burn never showed because nothing lifted the entity's speed cap: `NitrousPowerMultiplier` drove
+the car into the model's own top speed. `StartNitrous` now lifts `SET_ENTITY_MAX_SPEED` clear of any model's top speed and `StopNitrous` puts
+the model's top speed back with `MODIFY_VEHICLE_TOP_SPEED` (hash not in SHVDN's enum). Taken from
 `FIying-Scotsman/GTAV-EnhancedNativeTrainer`, cloned to `D:/Projects/FromInternet/`.
 
 **Power channel — the rule that now holds.** Only two reasons may raise power above stock:
-- the burn, at `NitrousPowerMultiplier` (2.5, x `AiNitroPct` for AI);
+- the burn, at `NitrousPowerMultiplier` (times `AiNitroPct` for AI);
 - artificial rubberbanding, at `ComputeRubberBandFactor()` for an AI car that is behind.
 `UpdatePowerCompensation` can only reduce (`_overspeedPowerLevel`, player-only), and `ApplyPowerMultiplier` takes one
-reason per tick — nothing multiplies with anything else. Removed: the pedal-gap boost (x1.5), the over-top-speed boost
-(x1.35), and the artificial rubberbanding that used to ride the throttle above 1.0.
+reason per tick — nothing multiplies with anything else. Removed: the pedal-gap boost, the over-top-speed boost, and the artificial rubberbanding that used to ride the throttle above full.
 
 **Menus.** Submenu titles carry the trail in the `Subtitle` (`MAIN MENU > RIVALS > RIVAL TRACTION`), written in one pass
 after the tree exists — computing it while linking crashed the menu, because menus are built children-first. Menu build
 is wrapped so a failure logs at Error instead of taking the mod down. Show Track & Grid Rows ships off and greyed.
 
-**Defaults** now the driver's tuned set: AutoRepair, Laps 10, GridSize 8, CornerOffset 4 / RouteOffset 2, TCS 100/50,
-Damper countersteer 2.0, Steer ceiling 0.9, MaxCrestLift 0.4, Rubberbanding 100, every debug toggle off except the
+**Defaults** now the driver's tuned set: AutoRepair, `Laps`, `GridSize`, `CornerOffset` / `RouteOffset`, the TCS pair,
+the damper countersteer, `SteerCeilingFactor`, `MaxCrestLift`, `Rubberbanding`, every debug toggle off except the
 leaderboard.
 
 **Owed a drive**: the AI without the pedal-gap padding (a car may now fall short where it used to be propped up), and the
@@ -533,21 +532,21 @@ no asymmetry to fix; the perceived gap is felt-vs-watched, plus different PI. If
 `Burn` line, not an opinion.
 
 Settings the driver runs (worth knowing before reading any report): `TcsEnabled = False`, `OverspeedCut = Off`,
-`AiNitroPct = 100`, `Rubberbanding = 100` in Natural. With TCS off the burn lights the tyres early
+`AiNitroPct` at parity, `Rubberbanding` at its default, in Natural. With TCS off the burn lights the tyres early
 (`slip -3.04`) and grip only recovers after ~1 s of the 3 the bottle buys.
 
-**Diagnostics left in place** (`Info`): `Burn <car> (player|AI), power, throttle, caps, plan, speed, slip` every 500 ms
+**Diagnostics left in place** (`Info`): `Burn <car> (player|AI), power, throttle, caps, plan, speed, slip` every half second
 during a burn; `AI nitrous: <car> lap N, plan X mph, packing xF`; `Nitro Gs: measured, wheel, excess` inside the
-overspeed sampling block (only when `OverspeedCutPerTenthG > 0`).
+overspeed sampling block (only when `OverspeedCutPerTenthG` is not `Off`).
 
 **Still open:** the 13 audit reports in `docs/audit/` remain uncommitted, and ~38 of their blockers are unverified
 claims. Owed a drive: the AI without the deleted pedal-gap compensation, artificial rubberbanding as explicit power.
 
 ### Throttle cap removed, 2026-10-25 (build 1005)
 
-`ModulatedThrottleCap = 0.99` is gone, and with it `ShapeLaunchThrottle`: the throttle now goes to the game whole,
-1.00 included. **Why it existed (driver's note, keep this):** at a literal full throttle GTA applies its own
-full-throttle behaviour and *takes grip away*, so the 0.99 cap kept the launch out of that range instead of fighting
+`ModulatedThrottleCap` is gone, and with it `ShapeLaunchThrottle`: the throttle now goes to the game whole,
+full included. **Why it existed (driver's note, keep this):** at a literal full throttle GTA applies its own
+full-throttle behaviour and *takes grip away*, so that cap kept the launch out of that range instead of fighting
 it. It is disabled on purpose — dodging a native behaviour is not the same as not having it, and the driver wants to
 see what the car does with the whole pedal.
 
@@ -560,35 +559,35 @@ stage by stage (the launch relay was the only one, removed in 1004).
 
 **Nitro, settled by measurement on track.** The player's burn and the rivals' are two different mechanisms: the
 player's rides GTA's own nitrous force (`Transmission.cpp:1624`, `fDriveForce *= 1 + 3.0 x powerMod`, with our power
-override at 1.0), while an AI car never sets `GetNitrousActive()` — nothing presses boost for it — so it only gets
-`SET_VEHICLE_CHEAT_POWER_INCREASE`. Measured: the player at 1.0 and a rival at 2.5 produced the same shove. Bridging
+override at parity), while an AI car never sets `GetNitrousActive()` — nothing presses boost for it — so it only gets
+`SET_VEHICLE_CHEAT_POWER_INCREASE`. Measured: the player at parity and a rival at `NitrousPowerMultiplier` produced the same shove. Bridging
 that properly (calling `SET_NITROUS_IS_ACTIVE`, `0x9E566EA551F4F1A6`) was **declined as too complex for now**; the
-values were doubled instead: player **2.0** (`PlayerNitrousPowerMultiplier`), rivals **5.0** at `AiNitroPct 100`.
+values were doubled instead: player at `PlayerNitrousPowerMultiplier`, rivals at `NitrousPowerMultiplier` with `AiNitroPct` at parity.
 
 **Pad binding.** The fire check was `Game.IsKeyPressed(Keys.X)` — keyboard only, so a gamepad had no trigger at all.
 `GTA.Control.VehicleDuck` works; `GTA.Control.VehicleHorn` never fired and was removed. Index `2` = gamepad only;
 keyboard X still works.
 
-**Pedal law, now 1:3 as two named scales.** `FullThrottleSpeedErrorMps = 1` (full gas at 1 m/s of deficit),
-`FullBrakeSpeedErrorMps = 3` (full brake at 3 m/s = 6.7 mph, half a pedal at 1.5). Until 2026-11-01 the brake shared
-the throttle's 2 m/s, which saturated the pedal at 7 km/h of error and was reported as abrupt; 5 was tried the same
-day and judged too soft, so it ships at 3, 1.5x the old saturation. The pair reads 1:3 again, but as two constants
-rather than a multiplier. `BrakeLearnerBarMps` is half the brake (`FullBrakeSpeedErrorMps * 0.5` = 1.5 m/s), so
+**Pedal law, now two named scales.** `FullThrottleSpeedErrorMps` (full gas at its own deficit),
+`FullBrakeSpeedErrorMps` (full brake at its own error, half a pedal at half of it). Until 2026-11-01 the brake shared
+the throttle's scale, which saturated the pedal at a much smaller error and was reported as abrupt; a softer value was
+tried the same day and judged too soft, so it ships where it does. The pair is two constants
+rather than a multiplier. `BrakeLearnerBarMps` is half the brake (`FullBrakeSpeedErrorMps * 0.5`), so
 "arrived still braking" means the plan is still asking for more than half a pedal at the entrance. The chain `Speed -> IntendedSpeedChange -> throttle/brake` was audited stage by
-stage and has no dead zone; the launch relay that quantised the pedal to 0/1 below 27 mph was the only one and is
-gone. `ModulatedThrottleCap` (0.99) was removed too — it existed to dodge GTA's own full-throttle grip loss, and
+stage and has no dead zone; the launch relay that quantised the pedal to on/off below a speed was the only one and is
+gone. `ModulatedThrottleCap` was removed too — it existed to dodge GTA's own full-throttle grip loss, and
 dodging a native behaviour is not the same as not having it.
 
 **Cards.** ChillOut parked behind `const bool ChillOutEnabled = false`; the nitro card cannot fire inside the first
-6 s (`NitrousArmDelayMs`); the `DIVEBOMB`/`DEFEND`/`YIELD`/`CHILL` labels over the roofs are now behind `ShowRivalry`
-instead of always on. `RivalLiftFloor` 0.5 -> 0.1.
+window (`NitrousArmDelayMs`); the `DIVEBOMB`/`DEFEND`/`YIELD`/`CHILL` labels over the roofs are now behind `ShowRivalry`
+instead of always on. `RivalLiftFloor` lowered.
 
 **Track surgery.** `Tracks/Figureight.xml` now carries F8's 2350 route nodes (same layout, new editor, same rotation,
 start line ~55 m earlier); everything else — name, tags, 19 props, trackside — is still Figureight's. Backup at
 `Tracks/Figureight.xml.bak` (deliberately not `.xml`, or the mod would list it as a track).
 
-**Settings.** Laps default 6. The legacy migrations now seed only from a key that really exists, so a fresh install
-takes its defaults from `KeySpec` and not from a number copied into a `GetValue<int>(..., 60)` fallback.
+**Settings.** The `Laps` default moved. The legacy migrations now seed only from a key that really exists, so a fresh install
+takes its defaults from `KeySpec` and not from a number copied into a numeric `GetValue<int>` fallback.
 
 ### Slip source toggle, closed 2026-10-25 (builds 1056-1059)
 
@@ -601,9 +600,9 @@ tyre is using; the theory source reports how much of the grip the inner command 
 them would mean turning the lateral demand back into an equivalent slip angle, i.e. reintroducing the tyre model the theory source
 exists to avoid. That is left as a "later, if it can be done cheaply" item.
 
-**The theory source, as built:** `innerRadius = L / tan(command)` (the command IS the inner wheel's angle; the outer takes 0.75
-of it), `demand = v^2 / innerRadius`, `available = grip x 9.81 x share`, and the ceiling is the same question inverted on the
-same radius. Guards: no answer below 3 m/s, on a NaN grip/speed/wheelbase, when the radius at the limit falls inside the
+**The theory source, as built:** `innerRadius = L / tan(command)` (the command IS the inner wheel's angle; the outer takes `EngineSteerWheelOuterShare`
+of it), `demand = v^2 / innerRadius`, `available = grip x FrontSlipGravity x share`, and the ceiling is the same question inverted on the
+same radius. Guards: no answer below `FrontSlipTheoryMinSpeedMps`, on a NaN grip/speed/wheelbase, when the radius at the limit falls inside the
 wheelbase, or in reverse (neither source answers backwards - the file's own contract is that reverse keeps the full lock).
 
 Audited by two subagents (plumbing and mathematics). Their findings, re-checked here: the safe batch went in as build 1058
@@ -614,10 +613,10 @@ Audited by two subagents (plumbing and mathematics). Their findings, re-checked 
 ### Front-slip guard, session closed 2026-10-25 (builds 1050-1089)
 
 The steering limiter is now: `maxSlip` (peak at speed x share x slow-corner allowance) -> `clampTarget` (lock when
-there is no overshoot, `request x factor` when there is, saturating at 2.5x where the tyre's curve flattens) ->
-`chasingClamp` (the only state; shuts at 1-10 deg/s by severity, opens at 4). The pedal follows the same band,
+there is no overshoot, `request x factor` when there is, saturating where the tyre's curve flattens) ->
+`chasingClamp` (the only state; shuts within a severity band, opens at its own rate). The pedal follows the same band,
 throttle only, closed between x1 and x2.5 and never below zero. Full design note, game-source evidence
-(`sfTractionPeakAngle` 1.0, `sfTractionMinAngle` 2.5), the on-track capture and the open items:
+(`sfTractionPeakAngle`, `sfTractionMinAngle`), the on-track capture and the open items:
 `docs/steering-and-pedals.md`.
 
 Two things the session established that are easy to lose:
@@ -625,9 +624,9 @@ Two things the session established that are easy to lose:
 - **The whole guard is AI-only.** `ApplySteerLimits` sits inside `if (!ControlledByPlayer)`, and the readout only
   draws for `DebugFocusRacer`, so the numbers on screen always belong to a rival. The player's steering is never
   written by ARS.
-- **The 0.40 factor floor is load-bearing and nobody wrote it down.** It falls out of `100 / 250` (the 2.5x saturation),
-  not out of `FrontSlipFactorFloor`, which is 0.30 lower and never reached. Proposed fix in
-  `docs/steering-and-pedals.md` item 5: `Clamp(100 / InnerPct, 0.40, 1)` and delete the saturation constant.
+- **The factor floor is load-bearing and nobody wrote it down.** It falls out of the saturation ratio,
+  not out of `FrontSlipFactorFloor`, which is lower and never reached. Proposed fix in
+  `docs/steering-and-pedals.md` item 5: `Clamp(100 / InnerPct, <floor>, 1)` and delete the saturation constant.
 - **A four-wheel slide is not an understeer.** `F` and `R` near each other in `docs/steering-and-pedals.md`'s
   capture means both axles are past the peak, where cutting the wheel buys nothing; speed is the only lever.
 

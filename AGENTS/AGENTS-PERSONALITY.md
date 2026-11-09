@@ -14,7 +14,7 @@ Most of what this needs **already exists in the code, unnamed**:
 
 | Already there | Where | What it is |
 |---|---|---|
-| `Aggression` 0-100 | `Racer.cs` | Moves the avoidance buffer and the pressure target |
+| `Aggression` | `Racer.cs` | Moves the avoidance buffer and the pressure target |
 | `_brakeConfidenceBias` | `Racer.cs`, drawn at init and logged | A permanent courage offset, one per racer |
 | `Pressure` | rival model | Grows with proximity × aggression, falls fast; its only consumer is Yield |
 | Per-apex `BrakeFactor` | corner context | Grows and shrinks as the learner scores corners |
@@ -32,7 +32,7 @@ Cost is the reason for the order: the first three are one multiplier on an exist
 | 3 | **Braking anticipation** | constant | Multiplies `BrakeHorizonMargin`. High brakes early (prudent), low leaves it late | one line |
 | 4 | **Confidence** | constant | The existing `_brakeConfidenceBias` — the bias the car is born with | none |
 | 5 | **Learning rate** | constant | `BrakeLearningGain` per car: learns a corner in two passes, or repeats the mistake all race | none |
-| 6 | **Aggression** | constant | The existing 0-100: avoidance buffer and pressure | none |
+| 6 | **Aggression** | constant | The existing field: avoidance buffer and pressure | none |
 | 7 | **Pressure** | variable | The existing one: rises near a rival, decays when clear | none |
 | 8 | **Corner confidence** | variable | The existing per-apex `BrakeFactor`, raised and lowered by the learner | none |
 | 9 | **Frustration** | variable | Grows while stuck behind a slower car, cools in clean air; temporarily raises aggression | new state |

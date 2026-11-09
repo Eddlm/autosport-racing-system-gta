@@ -40,7 +40,7 @@ Four supersessions, each stated at its own section below:
 It is built at `Racer.cs:574-582` and handed straight to `PursuitSteerDegrees` (`Racer.cs:586`), whose law is an `atan` on the bearing from the car's travel direction to it (`PursuitSteerFromBearing` `Racer.cs:786-790`) —
 so the live chain does carry a geometric gain and an aim angle, and the lane becomes a steer here and nowhere else.
 The bearing clamps at `MaxPursuitBearingDegrees` so `sin` cannot fade past abeam (`Racer.cs:684`, `:694`), and inside `SmallAimBearingDegrees` with no slide the command is zeroed outright (`Racer.cs:687`, `:617`).
-The aim's lateral coordinate also carries the **Gs-aware lead**: the aim is the carried lane minus half of the lane error measured at the car's own 0.5 s kinematic projection — position + velocity·t + half the smoothed acceleration·t² (`ProjectAhead` `Racer.cs:2442`, read as a lane offset `Racer.cs:578`, blend `GsPreviewBlend` 0.5 `:137`) — so the correction leads the lateral drift instead of reacting after it lands, and the lead is nil at steady state. **Always on** — the behaviour toggle behind it was de-gated, and its menu slot is repurposed as the `ShowGsProjection` debug drawing of that same path (`AutosportRacingSystem.cs:1259`, drawn from the roof `Racer.cs:2615`).
+The aim's lateral coordinate also carries the **Gs-aware lead**: the aim is the carried lane minus half of the lane error measured at the car's own `SteerPreviewSeconds` kinematic projection — position + velocity·t + half the smoothed acceleration·t² (`ProjectAhead` `Racer.cs:2442`, read as a lane offset `Racer.cs:578`, blend `GsPreviewBlend` (`:137`)) — so the correction leads the lateral drift instead of reacting after it lands, and the lead is nil at steady state. **Always on** — the behaviour toggle behind it was de-gated, and its menu slot is repurposed as the `ShowGsProjection` debug drawing of that same path (`AutosportRacingSystem.cs:1259`, drawn from the roof `Racer.cs:2615`).
 
 **The stability is loop *order*, not the setpoint: pursuit is position feedback driving a plant whose input is a rate, and the damper is the loop's only rate feedback.**
 To first order the pursuit acts on *where the car is*, not on where it points, and nothing but the damper closes that second-order loop (`Racer.cs:596`, `:602-603`).
@@ -68,9 +68,9 @@ The pursuit is not gated either (see the ungated-pursuit section), so a straight
 **One body-yaw feedback path, and it is the loop's only rate term.**
 The signal is the raw native yaw rate — `GET_ENTITY_ROTATION_VELOCITY.Z` in °/s, unfiltered and undifferentiated (`Racer.cs:3591`).
 The term is `−gain·(yawRate − yawTarget)`, where `yawTarget` is the yaw the **aim point** requires, `fwdSpeed × _steerAimCurvature`, dropped above `LateralTractionCurve × SlidingFraction` because a sliding car's wanted rotation is the countersteer's (`Racer.cs:589-590`, `:714`, `:942`) — the reference is live (`SteerDampingAimReference`, `Racer.cs:960`).
-The gain is `SteerDampingFor`, and the term never adds lock: one that agrees in sign with the rest of the command is zeroed, and one that crosses neutral answers with its overshoot whole (`DamperCrossingShare` 1) **capped at `DamperCountersteerMaxDeg` 2 degrees past neutral**, plus an unconditional magnitude bound so a straight-line command cannot be steered by the term with no ceiling. Driven history: the plain law at gain 0.5 held, and so did a /3 and a /2 slope — this is the amplitude form of the same idea, back by driver request once the slide blend was relaxed and the damper was again the loosest source of opposite lock. **The crossing is not capped and its slope is not cut, and that is a driven result**: three shapes were built and driven — a flat 5° ceiling, a third of the overshoot across the whole range, and a 2° free band with half of the excess beyond it — and each did its job only because the gain was wrong. With `SteerDampingGain` at 0.5 the plain law does all of it, so the shapes were removed rather than tuned. The gain is the one knob; if a snap returns, lower it before re-inventing a ceiling.
-**The whole term is scaled by `DamperEffectScale`, and it sits back at 1 — full authority.** The slide batch drove the scale at 0.5 and the slides answered, but that field read a smidge unstable, so the scale returns to whole and what stays from the batch is the blend's band and the countersteer's share; halving only the crossing while the base term ran at full strength never helped the slide at all.
-`steerKP` is unity and dimensionless, so the pursuit and the side-by-side correction enter at 1.0 against that gain (`Racer.cs:577`, `:595`), and there is no course feedback anywhere in the sum.
+The gain is `SteerDampingFor`, and the term never adds lock: one that agrees in sign with the rest of the command is zeroed, and one that crosses neutral answers with its overshoot whole (`DamperCrossingShare`) **capped at `DamperCountersteerMaxDeg` past neutral**, plus an unconditional magnitude bound so a straight-line command cannot be steered by the term with no ceiling. Driven history: the plain law at `SteerDampingGain` held, and so did a /3 and a /2 slope — this is the amplitude form of the same idea, back by driver request once the slide blend was relaxed and the damper was again the loosest source of opposite lock. **The crossing is not capped and its slope is not cut, and that is a driven result**: three shapes were built and driven — a flat 5° ceiling, a third of the overshoot across the whole range, and a 2° free band with half of the excess beyond it — and each did its job only because the gain was wrong. With `SteerDampingGain` as shipped the plain law does all of it, so the shapes were removed rather than tuned. The gain is the one knob; if a snap returns, lower it before re-inventing a ceiling.
+**The whole term is scaled by `DamperEffectScale`, and it sits back at full authority.** The slide batch drove the scale at half and the slides answered, but that field read a smidge unstable, so the scale returns to whole and what stays from the batch is the blend's band and the countersteer's share; halving only the crossing while the base term ran at full strength never helped the slide at all.
+`steerKP` is unity and dimensionless, so the pursuit and the side-by-side correction enter at unity against that gain (`Racer.cs:577`, `:595`), and there is no course feedback anywhere in the sum.
 
 - **Rejected design, kept as history — the zero-reference damper, and the toll it paid.**
   Until the term damped the *excess over* the yaw the aim requires, it damped against zero, so in a steady corner it removed `gain × ω` of command the corner needed — paid as a **standing lateral offset from the carried lane**, growing with speed and corner tightness, which is the mechanism behind "stable but a little lazy".
@@ -92,7 +92,7 @@ The gain is `SteerDampingFor`, and the term never adds lock: one that agrees in 
 
 **The gain is grip-normalised and constant with speed (`SteerDampingFor`, `Racer.cs`).**
 `SteerDampingGain` is an **absolute gain in seconds**: the dial *is* the gain, divided by the floored `BaseMechanicalGrip` — read rather than the live perceived grip, so at a fixed dial the term is a **uniform multiplier** (every car's term moves by the same ratio) and a low grip reading cannot blow it up.
-**The speed schedule is REMOVED (driver):** the term used to fall as a reference speed over the car's above that speed, and at a dial of 1.0 the cars damped cleanly at every speed, so the axis, its menu item and `ARS.SteerDampingSpeedMph` are gone; a stored `SteerDampingSpeed` is dropped by the repair pass as an undeclared key.
+**The speed schedule is REMOVED (driver):** the term used to fall as a reference speed over the car's above that speed, and at a dial of unity the cars damped cleanly at every speed, so the axis, its menu item and `ARS.SteerDampingSpeedMph` are gone; a stored `SteerDampingSpeed` is dropped by the repair pass as an undeclared key.
 The divisor is grip itself rather than its square root, so the term falls faster with grip than a constant-damping-ratio law would need.
 Speed therefore enters the live loop only through the pursuit's growing `range`.
 
@@ -180,7 +180,7 @@ It is the only such guard in the corpus, and it matters because it makes the pre
 
 **This is the field's answer to a hazard ARS had**: the lane systems are a **hard switch** (outside → inside, no lerp) and the chain's answer could step, which stepped the **lane error**, and so the command.
 The old D-term amplification is gone; the step now reaches the wheel as a pursuit-plus-damper jump, ramped off by the slew rate at a fixed °/s rather than spiking in a single frame.
-**Rate-limiting the lane at the source was the better fix, and it is built and driver-verified**: the lane mover carries the carried lane onto the chain's request at 26 m/s^2 with a 24 m/s cap, which removes the step from the P term instead of relying on the downstream slew to hide it, and it survives a slew-rate retune (ranked list item 3).
+**Rate-limiting the lane at the source was the better fix, and it is built and driver-verified**: the lane mover carries the carried lane onto the chain's request at `LaneMoverAccelMps2` with a `LaneMoverSpeedCapMps` cap, which removes the step from the P term instead of relying on the downstream slew to hide it, and it survives a slew-rate retune (ranked list item 3).
 
 ## Anti-windup is mandatory when the actuator saturates — and ARS's steering saturates
 
@@ -285,7 +285,7 @@ That is TUM's architecture — a path-tracking controller with a slip-gated coun
 The two terms are not competing for the same job, so their interaction is a *priority* choice (save the car first) — the honest justification for the blend getting the last word.
 Two consequences to keep in mind: while the blend holds full priority, **course tracking is suspended**; and a slide that never develops enough slip to trip the ramp is invisible to the blend, so only the PD chain's indirect response to it exists.
 
-**At full priority the pedals are capped, not cut.** `CountersteerPedalCap` 0.5 limits **both** throttle and brake while `IsFullCountersteer` holds, and the plan keeps its own direction up to that cap: the tyre is already spending its grip diagonally, so neither a full brake nor a full throttle belongs in that state, but coasting at 0.05 was the other extreme and left the car unable to keep the wheels rolling or to settle its speed.
+**At full priority the pedals are capped, not cut.** `CountersteerPedalCap` limits **both** throttle and brake while `IsFullCountersteer` holds, and the plan keeps its own direction up to that cap: the tyre is already spending its grip diagonally, so neither a full brake nor a full throttle belongs in that state, but coasting at 0.05 was the other extreme and left the car unable to keep the wheels rolling or to settle its speed.
 
 ## Slides: the field mostly does nothing; ARS is ahead of it
 
@@ -358,7 +358,7 @@ Ranked by expected payoff:
    Grip normalisation (`SteerDampingScale`) stays retired (`a9603c4`); the grip divisor does that job.
    If the toll ever shows up again in the lane line, the reference is the lever that removes it.
 2. **Clamp and gate an integral** before I is ever turned up — **a precondition, not a task**: there is no integral to clamp today. Prefer clamp + saturation gate, or Game AI Pro ch.40's leaky rolling integral.
-3. ~~Rate-limit the carried lane~~ — **BUILT and driver-verified (`5e9426a`, built `0f825b8`, `8e8884e`): the lane mover.** The lane reads right on a drive — smooth, and the flapping this exists for is gone. The chain's answer is a request and the carried lane is carried onto it at 26 m/s^2 with a 24 m/s cap, so a request that flips inside half a second moves the lane 3.4 m instead of stepping the whole way. The numbers come from the line's own motion, not from feel: two safe bounds over `2R·leadAngle` asks about 8 m/s and 21 m/s^2 at a supercar's apex speed and 6.4 and 13.6 at a vanilla car's, near enough the same at every radius because a car takes each corner at its own limit — so the cap must sit above the line's own rate and the acceleration is the only lunge knob. At 14 the aim tracks the line to 0.27 m and 0.06 m respectively; at 6 it lagged 2.9 m, over a third of the traverse, which would have read as cars refusing the inside line. The request's own rate feeds forward, the aim is clamped into the interval between the car's own lane and the request, and the green re-seeds it. **The rival walls were then taken off the aim entirely (`3d13279`, driver-observed: the avoidance reads smoother)** — a bound laid on the aim is placed in one tick rather than carried onto, which is the step the mover exists to remove — so the walls bound the request alone and a switch to the legal side of a rival costs the arrival law's time (0.38 s for a metre) instead of arriving at once. Its own log line is the instrument if it is ever retuned.
+3. ~~Rate-limit the carried lane~~ — **BUILT and driver-verified (`5e9426a`, built `0f825b8`, `8e8884e`): the lane mover.** The lane reads right on a drive — smooth, and the flapping this exists for is gone. The chain's answer is a request and the carried lane is carried onto it at `LaneMoverAccelMps2` with a `LaneMoverSpeedCapMps` cap, so a request that flips inside half a second moves the lane 3.4 m instead of stepping the whole way. The numbers come from the line's own motion, not from feel: two safe bounds over `2R·leadAngle` asks about 8 m/s and 21 m/s^2 at a supercar's apex speed and 6.4 and 13.6 at a vanilla car's, near enough the same at every radius because a car takes each corner at its own limit — so the cap must sit above the line's own rate and the acceleration is the only lunge knob. At 14 the aim tracks the line to 0.27 m and 0.06 m respectively; at 6 it lagged 2.9 m, over a third of the traverse, which would have read as cars refusing the inside line. The request's own rate feeds forward, the aim is clamped into the interval between the car's own lane and the request, and the green re-seeds it. **The rival walls were then taken off the aim entirely (`3d13279`, driver-observed: the avoidance reads smoother)** — a bound laid on the aim is placed in one tick rather than carried onto, which is the step the mover exists to remove — so the walls bound the request alone and a switch to the legal side of a rival costs the arrival law's time (0.38 s for a metre) instead of arriving at once. Its own log line is the instrument if it is ever retuned.
 4. ~~A/B the grip-scaled preview against a speed-only one~~ — **WITHDRAWN: the premise does not exist.**
    Grip enters neither the steer reference nor the aim (see the preview properties above), so there is no grip-scaled preview to A/B and the constant-time arithmetic this item rested on described a form the code never had.
    What is still testable is the **band**, not the grip: outside it the preview time stretches below the floor and shortens above the cap, so the live question is whether those two bounds should move.
@@ -385,11 +385,11 @@ Moved whole out of the project `AGENTS.md` to keep the instruction chain inside 
    Yaw rate also cannot tell a clean turn-in from a stepped-out rear, and the slide's sign can.
    The **slip-balance knee is deleted** (`d434b86`); `d434b86` added the second governor, and `cd6efea` removed it.
    **A steering writer added below it is a silent bypass** — the bug class this shape removes.
-4b. `UpdateLaneMover` (`Racer.cs` `UpdateLaneMover`) — carries the aim onto the lane request under one law: `LaneMoverAccelMps2 26`
-   and `LaneMoverSpeedCapMps 24`, both **halved while the reason is `OutsideLine`** (positioning outwards is a choice made with room;
+4b. `UpdateLaneMover` (`Racer.cs` `UpdateLaneMover`) — carries the aim onto the lane request under one law: `LaneMoverAccelMps2`
+   and `LaneMoverSpeedCapMps`, both **halved while the reason is `OutsideLine`** (positioning outwards is a choice made with room;
    the apex side is where the car is already turning in), an arrival term `sqrt(2·a·gap)` that decelerates onto the request, the
    request's own rate as feed-forward, a rate reset whenever the desired rate reverses sign, and `dt` capped at
-   `LaneMoverMaxStepSeconds 0.1` so a stalled tick cannot integrate a whole gap.
+   `LaneMoverMaxStepSeconds` so a stalled tick cannot integrate a whole gap.
    **Every lane reason passes through it** — `CurveLean`, `OutsideLine`, `ApexLine`, `CommitCard`, `Avoidance`, `RecoveryEdge` — so
    inertia is a property of the mover, not of any producer. The two escapes are `_laneSnap` (one tick, `SnapToTrack` and the per-car
    reset) and `ClampLaneToWalls`, which bounds the **request** only while the aim still rides the rate.
@@ -407,9 +407,9 @@ same unsatisfiable-demand defect the audit found in the rival walls.
 the `roadWide` clamp it used to end with was the aim point's own clamp repeated 700 lines early, so the only bound left on the lean is
 `aimPointOffset` against `drivableEdge`, and `ClampLaneToWalls` on the request. Its `roadWide` parameter went with it.
 
-**The brake learner, tuned by driving (driver, 2026-10-24, build 922).** `BrakeEntryDeadbandMps` **2 mph**,
-`BrakeEntryExcessMps` **5 mph**, `BrakeEntryFactorStep` **0.2** per five miles an hour over, `BrakeGoodArrivalStep` **0.025** flat,
-`BrakeMinFactor 0.5`, and the ceiling moved from 1.5 to **1.0** - no step above the nominal brake point. Both steps are absolute in the
+**The brake learner, tuned by driving (driver, 2026-10-24, build 922).** `BrakeEntryDeadbandMps`,
+`BrakeEntryExcessMps`, `BrakeEntryFactorStep` per five miles an hour over, `BrakeGoodArrivalStep` flat,
+`BrakeMinFactor`, and the ceiling moved from 1.5 to **1.0** - no step above the nominal brake point. Both steps are absolute in the
 factor's own units, never a percentage. By overshoot: 2 mph nothing, 5 mph -0.12, 10 mph -0.32 (floor), 20 mph -0.72 (floor). The car under
 test took four laps to settle at the gentler settings; this is one lap for anything past ~10 mph. Cost: a single overshoot saturates the
 floor and every clean lap buys back only 0.025, so a corner can sit at 0.5 for ten laps after one mistake - the symptom is brakes far too
@@ -418,7 +418,7 @@ early on a corner the AI got wrong once.
 **Superseded** - see `AGENTS-TECHNOTES.md`, "The brake learner writes, and only the position writes it". The paragraph above is the
 tuning record of the arrival-speed law (build 922) and its numbers no longer exist in the code: `BrakeEntryExcessMps`,
 `BrakeEntryDeadbandMps` and `BrakeEntryFactorStep` are gone, and so is the feasibility ratio that briefly replaced them. The live step
-is positional: `BrakeEntryFactorPerMetre` 0.02 per metre, capped at 0.25 per event, factor range 0.5-1.5.
+is positional: `BrakeEntryFactorPerMetre` per metre, with the factor bounded by `BrakeMinFactor` and `BrakeMaxFactor`.
 
 **The brake learner is calibrated and VERIFIED (driver, 2026-10-24, build 922).** One lap to learn a corner - a single pass through
 the apex - and once settled the factor moves at most **+/-0.02 per lap**. The driver's verdict: *"este balance esta bien"*. That closes
@@ -441,8 +441,8 @@ end of the chain was being constrained. **VERIFIED on F8 (driver): the cars take
 manoeuvre in.** Note that it binds broadly, not rarely: the logged walks returned 6, 9, 11, 13, 19, 64 list positions, so most F8 corners
 had their entry pushed outward. That is the point - those entries were the strange apexes.
 
-**The clock leans on the car's own braking (driver, 2026-10-24, build 927).** `LineClockBrakeMphPerG 2` adds two miles an hour of clock per g
-(build 928, doubled from 1), clamped to `LineClockBrakeCapMph 10` (raised from 1 at build 929 to see the effect uncapped), measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
+**The clock leans on the car's own braking (driver, 2026-10-24, build 927).** `LineClockBrakeMphPerG` adds its rate in miles an hour of clock per g
+(build 928, doubled from 1), clamped to `LineClockBrakeCapMph` (raised from 1 at build 929 to see the effect uncapped), measured from `AlongTrackSpeed`'s fall each tick. A car shedding speed
 reaches the apex later than the cached entry speed says, so the line is allowed to slow with it - by a mile an hour at most, which is
 the whole point of the cap. Reading fixed up front: the driver said 0.1 per g, and at 0.1 mph/g the cap could never bind, so the law is
 0.1 mph per 0.1 g. `Corner line` logs the effective clock and `br=` in g.
@@ -469,14 +469,14 @@ multiplication by a positive magnitude and is correct: `lane = -cornerDir * (lan
 **Rule**: a comparison between two lane values must be made in a frame that does not depend on the corner's handedness. Multiplying
 both sides by `cornerDir` does not neutralise the sides - it mirrors one and not the other.
 
-**The last second is a commitment (driver, 2026-10-24, build 914).** Once `secondsToApex <= IdealLineBlendEndSeconds 1`, `linePhase`
+**The last second is a commitment (driver, 2026-10-24, build 914).** Once `secondsToApex <= IdealLineBlendEndSeconds`, `linePhase`
 is forced to 1 and `lineActive` to true whatever the blend managed: the target IS the inside extreme. It closes every way the line could
 arrive short - a 2 s window at speed, a lean contesting the lane, a speed floor that dropped out under braking - and it is what the
 magenta line could not do on F8, where it reached the centre and hovered without ever committing to the inside. `entryActive` still
 gates the plateau and the exit; the commitment overrides only the final second.
 
 **The adopted apex is drawn (build 913).** `ShowTrackAnalysis` now draws a white diagonal from the car to the **centre of the node**
-of the corner the lane has adopted (`Racer.LineCornerNode`), at `ApexMarkHeight 1.6` so it flies above every lane line and chevron, with
+of the corner the lane has adopted (`Racer.LineCornerNode`), at `ApexMarkHeight` so it flies above every lane line and chevron, with
 the node number beside it. The lane's own geometry is gradual and hard to read; the identity is not - a diagonal that jumps to a distant
 corner is the whole class of bug in one glance.
 
@@ -488,7 +488,7 @@ rule exists for (a lean flipping handedness). Normal chasing, including crossing
 `Lane cross` logs the event once a second.
 
 **The adopted corner owns the line until its apex is passed (driver, 2026-10-24, build 909).** `NearestApexAhead` now keeps returning
-`_lineCornerNode` while it is still ahead and no other corner is more than `LineApexStickyMeters 30` nearer. Without it, two apexes a
+`_lineCornerNode` while it is still ahead and no other corner is more than `LineApexStickyMeters` nearer. Without it, two apexes a
 few metres apart - a chicane, a bend detected twice - swapped identity tick after tick, and every swap reset the blend: the magenta
 line reverted to the outside mid-manoeuvre on the last two apexes of F8. The ratchet's `else`-clear is **gone**: it ran whenever the
 blend window flickered, and that window contains the speed floor, which moves with mechanical grip and downforce - i.e. it flickered
@@ -501,9 +501,9 @@ adoption reset handles it without a special case: the latch goes to 0 and the sa
 value its own clock gives (0.8 at 1.2 s), so the demand crosses from the first apex's inside extreme to the second's remaining blend
 instead of jumping outwards first. A pair like that should read as one continuous inside line across both apexes.
 
-**Edge clearances and the per-car outside bias (driver, 2026-10-24, build 907).** The outside line now sits `LaneOutsideGapMeters
-0.5` inside the guard and the lean sits `LaneInsideGapMeters 1.0` inside it, so neither names the very edge of the tarmac. On top of the
-outside gap each car rolls its own pull-in of `0..LaneBiasMaxMeters 4` metres, **once per corner** (`_lineBiasNode`) and held until it
+**Edge clearances and the per-car outside bias (driver, 2026-10-24, build 907).** The outside line now sits `LaneOutsideGapMeters`
+inside the guard and the lean sits `LaneInsideGapMeters` inside it, so neither names the very edge of the tarmac. On top of the
+outside gap each car rolls its own pull-in of `0..LaneBiasMaxMeters` metres, **once per corner** (`_lineBiasNode`) and held until it
 passes the apex, so a field does not stack itself on one line; the bound is floored at zero, so the bias can reach the centre of the road
 and never cross it. The inside extreme of the apex line keeps the raw guard - it is the one place the car is meant to use the whole
 width. The bias is cleared in `Launch`: a restart must not inherit the previous race's pull-in.
@@ -532,9 +532,9 @@ fast as a 250 m one at 9.6 m/s); an exponential in m/s is what the driver asked 
 Cost: the lean is no longer self-limiting - a bend inside 500 m now walks the car all the way to the inside lane, where before it
 asked for one metre.
 
-**The apex blend is a TIME law; the outside is a distance law (driver, 2026-10-24, build 896).** `IdealLineWindowMeters 300` still says
+**The apex blend is a TIME law; the outside is a distance law (driver, 2026-10-24, build 896).** `IdealLineWindowMeters` still says
 where the line begins to be asked for, because placing the car on the outer edge is done with room to spare and does not change with
-speed. The outside-inside blend is `IdealLineBlendStartSeconds 2` to `IdealLineBlendEndSeconds 0.25` (three-to-one was tried first and was too early, build 897; the end moved
+speed. The outside-inside blend is `IdealLineBlendStartSeconds` to `IdealLineBlendEndSeconds` (three-to-one was tried first and was too early, build 897; the end moved
 from 1 s to 0.25 s at build 928 so the manoeuvre has 1.75 s of clock and the inside is pinned only at the last quarter second), phase computed from
 `metresToApex / _lineClockMps`, where `_lineClockMps` is **the speed the car carried when it entered the window**, latched once per
 corner (`_lineClockNode`, build 917, driver's call). Three variants were tried and each failed for its own reason: the **live speed**
@@ -548,8 +548,8 @@ itself** (build 903): outside `secondsToApex <= IdealLineBlendStartSeconds` the 
 is asking for the outside and there is nothing to ratchet - an armour latched 300 m out would follow the car into situations the
 corner knows nothing about. Inside the blend the demand can only move toward the apex.
 
-**The aim is leashed to the car** (`build 889`, `LaneTaperNearMeters 2`, `LaneTaperFarMeters 4`): the speed cap is full up to
-   2 m from the car lane and falls linearly to **half** (`LaneTaperCapShare 0.5`) at 4 m, on top of the reason-based halving, and
+**The aim is leashed to the car** (`build 889`, `LaneTaperNearMeters`, `LaneTaperFarMeters`): the speed cap is full up to
+   2 m from the car lane and falls linearly to **half** (`LaneTaperCapShare`) at `LaneTaperFarMeters`, on top of the reason-based halving, and
    stays at half beyond. It slows the lane as it leaves the car; it never stops it, or the car could not be led anywhere at all
    (builds 889 stop, 895 half). Cap by distance, inward / outward: 2 m 24/12, 3 m 18/9, 3.5 m 15/7.5, 4 m and beyond 12/6.
    **The aim lives on the segment [car lane, demand]** - two violations, two rules. Crossing (aim and demand on opposite sides
@@ -557,7 +557,7 @@ corner knows nothing about. Inside the blend the demand can only move toward the
    the mover's acceleration doubles - the speed cap is untouched, so it returns twice as promptly without ever moving faster than
    any other request - and the car stops following the lane, keeping its own (`aimLane = steerRefOffset`), because following an aim
    on its way back drives the car past the goal and back again. Build 887.
-   **A request on the far side of the car is placed ON the car, rate zeroed** (`build 886`, `LaneCrossMinMeters 0.1`): the stretch
+   **A request on the far side of the car is placed ON the car, rate zeroed** (`build 886`, `LaneCrossMinMeters`): the stretch
    between the aim and the car's own lane is ground the car already occupies, so sweeping it is invisible work that costs a full
    reversal — which is what made a curve changing handedness read as half a second of frozen lane. What remains visible, and keeps
    its own rate, is the outbound leg from the car onto the new side.
@@ -586,14 +586,17 @@ The axle gate that used to guard that halving, and `UndersteerDegrees` with it, 
 **One deliberate silence**: the recovery rejoin's throttle kick card (`cc469ee`) buys a rotation on purpose — the slide sharing the arm-time ask's sign is wanted, so the blend and `IsFullCountersteer` stand down for it while the card plays (`KickWantsSlide` `Racer.cs`) and the ordinary handover resumes at the fold. A slide on the opposite side is not carded and gets no silence.
 
 ## Lane systems — where on the track the car aims
-Resolved in `ComputeSteering`, later overriding earlier, over a base of **the lane the car is already in**:
-**curve lean** (`Racer.cs` `TryComputeCurveLean`, runs every tick and answers only where the node `speed × CurveLeanChordSeconds` ahead carries a curve radius under the gate (`Racer.cs:725`, `:726`, `:805`), and it answers a **relative pull** — the car's own lane plus up to a metre toward the inside, faded linearly from nothing at the gate to the full metre at 250 m (`:812`, `:814`) — rather than the edge, so the crossing stays alive while the bend lasts and the drivable bound is what ends it; below the hold threshold it reports no opinion, because the answer is then the car's own lane),
-**corner line** (`Racer.cs` `ComputeCornerLane`, the distance-parameterised ideal line),
-**avoidance** (`Racer.cs` `ComputeAvoidAheadLane`),
-then **`ApplyRivalWalls`** (`Racer.cs`) clamps the result between track bounds and rival walls — walls that sit exactly at `±roadWide` when nothing constrains them (`Racer.cs:884`, `:922-923`, `:938`).
+Resolved in `ComputeSteering` (`Racer.cs:769-815`), later overriding earlier, over a base of **the lane the car is already in**:
+**the precomputed field** (`TrackPoint.LaneLineShare`, one float per node built at load by `TrackLoader.BuildLaneField` and read `LanePreviewSeconds` ahead as `share × (roadWide − carHalfWidth)`), through three modes — **absolute** while a corner's apex is still ahead of the lane's own lookahead (`ApexAheadOfLookahead`, the **one gate that both selects a corner and forgets it**) — the values come from `LaneAbsoluteMetres` and `LanePrepSeconds`, the window is `max(...)` of the two; **dynamic** (own lane plus `LaneInsetPerRadius` / R **metres** toward the inside, **no speed factor** since 1583 — the inset is a property of the bend, not of how fast the car arrives — capped only at `laneLimit`) while the aim node's radius is under `LaneDynamicRadius`; **own lane** otherwise —
+then **avoidance**, **stuck recovery**, the **Defend card**, and **`ApplyRivalWalls`**, which clamps.
+**The absolute ends when the lane's own lookahead crosses the apex** (`ApexAheadOfLookahead`, `speed × LanePreviewSeconds` ahead), a second before the car does, and the request then **snaps** to whatever the next mode asks. A glide bridging that step was built twice — 1 s, then 3 s, from full inside to the live ask — and **removed at the driver's word after being driven**: the smoothing was itself the problem, and a snap to the curvature ask is what the car wanted.
+**One event, two consequences**: the same `ApexAheadOfLookahead` gate that forgets the corner starts `LaneApexCooldownSeconds` when the car's own apex is already behind it (`_laneApexNode`), so the cooldown still covers the exit even though the corner no longer exists for the lane.
+**One answer to "which corner"**: `laneApex = laneCornerInside ?? lineCorner`, and `toApex`, both edges, `ChainedApex` and the outward-pull sign all read it. Mixing the two resolvers reads two corners at once just after an apex; both now carry the same `ApexAheadOfLookahead` gate, so they cannot disagree, and the adopted `lineCorner` clears `ApexAdvanceNodes` after the pass. A **chained apex** (gap to the previous apex under `speed × LanePrepSeconds`) and the **`LaneApexCooldownSeconds` cooldown** after a pass both cancel the absolute, and the dynamic stage covers those.
+**A node's `Angle` is not a direction.** It is the region's local turn, and it reads zero the moment that node sits on straight road — so every decision that took its side from one node flipped or bailed exactly at the apex. Take the side from **two headings a span apart** (`TrackTurnSign`, with a deadband and the last real answer held): the car's node against the aim node for anything live, the corner's entrance against its apex for anything read off the table.
+**The detected span survives only where the question is the road**: the lane's `EdgeEmptySpaceMeters` margin (`Racer.cs:755`) and the nitrous veto (`:2869`) still read `IsWithinCorner`, because both ask "is the car in this piece of tarmac". Anything asking "which corner is this car working" must use the apex window instead — the span is a detection artefact whose length runs from 12 to 80 nodes, so a test on it silently fails at racing speed.
 
 **The base is load-bearing**: zero is the *centre* lane, not the absence of an answer, so a chain seeded with zero steered every car back to the middle of the road wherever no source had an opinion — which is every straight (`dd484d3`).
-The corner and avoidance sources still report silence as zero, and that is what lets the lean take over inside a corner the car has not asked to position for.
+Avoidance still reports silence as zero, and zero in the field means "nobody is asking", so the car keeps the lane it is in wherever no mode has an opinion.
 
 **The damper's countersteer ceiling is a slide-propensity dial, not just an amplitude (driver, 2026-10-23).** The damper
 is the only term that reads **yaw rate**; the blend and the assist read **slip angle**, so they act after the car is
@@ -604,8 +607,8 @@ rotating at 60 — late by construction, and only decisive if the slide persists
 only reduce the correction: **it increases the occasions**. It is also a personality lever before the personality system
 exists — a tail-happy car is one with this knob low.
 
-**The blend's band starts at the peak and ends past it: 1.0 to 2.5 of the live peak slip.** `SlideBlendStartFraction` 1.0 and
-`SlideBlendFullFraction` 2.5.
+**The blend's band starts at the peak and ends past it: `SlideBlendStartFraction` to
+`SlideBlendFullFraction` of the live peak slip.**
 
 **Both bands read `TRLateralAtSpeed`, the peak at the current speed (driver, 2026-10-23).** They used to read the authored
 `Handling.LateralTractionCurve` so the response was the same at every speed, and that was wrong for the reason the engine
@@ -618,31 +621,31 @@ sliding — correcting at half the peak, as it does at 0.5, is correcting while 
 live that was 2.1 degrees at 200 km/h, a car that never slides at all. At 200 km/h the band is **4.2 to 10.5 degrees**; at
 20 mph, **11.6 to 29**. What that changes: `IsFullCountersteer`
 needs priority 1, so the pedal handover and the projection's yield now begin at 33 degrees rather than 17.6; and the
-assist's own onset of 10 degrees now **precedes** the blend in the early part of every slide, which is the intended
+assist's own `CountersteerAssistOnsetDegrees` onset now **precedes** the blend in the early part of every slide, which is the intended
 shape — the gentle response first, the earned authority later.
 
 **The slide gets a careful extra, and its own release is what keeps it safe (driver, 2026-10-23).** Half the slide
 recovers most cars; the ones it does not are the ones still **rotating into** the slide. Past
-`CountersteerAssistOnsetDegrees` 10 and while `sign(slide) == sign(yawRate)`, the command gains
-`CountersteerAssistDegreesPerSecond` **10 degrees per second** — a rate, so it builds rather than jumping. **Its two gates
+`CountersteerAssistOnsetDegrees` and while `sign(slide) == sign(yawRate)`, the command gains
+`CountersteerAssistDegreesPerSecond` — a rate, so it builds rather than jumping. **Its two gates
 are separate**: it grows while the **blend is committed** (`_slidePriority > 0`), and it is reset only when the **rotation
 turns back against the slide**. Reading one test for both — grow only while rotating into the slide — left a car sliding
-steadily, with no rotation to measure, on less than half the correction its slide asked for and indefinitely. Its ceiling is **a share of the slide, not an angle**: `CountersteerTotalShare` 1.0 is the whole answer the wheel may ever give, the blend already spends `CountersteerSlideShare` 0.5 of it, and the assist may add the difference — so at 33 degrees of slide the wheel can reach 33, which points it along the velocity vector and no further. 0.8 leaves it short of neutral. **The moment the rotation changes sign the degrees disappear**, and that instant
+steadily, with no rotation to measure, on less than half the correction its slide asked for and indefinitely. Its ceiling is **a share of the slide, not an angle**: `CountersteerTotalShare` is the whole answer the wheel may ever give, the blend already spends `CountersteerSlideShare` of it, and the assist may add the difference — so at 33 degrees of slide the wheel can reach 33, which points it along the velocity vector and no further. 0.8 leaves it short of neutral. **The moment the rotation changes sign the degrees disappear**, and that instant
 drop is the whole safety argument: the assist is removed exactly when the car stops turning into the slide, which is
 before the correction can become the next snap. Adding amplitude without that release is what the 5-degree ceiling
 tried to fix and could not.
 
 **The inward lead is bounded like the outward one.** The tanh bound was written outward-only because the outside line
 is a preference it can decline; the apex line needs the same shape for the opposite sign, because an aim that runs
-ahead of the car toward the vertex asks for a nose the car cannot place. `LaneInwardLeadMeters` 3 and
-`LaneInwardLeadTaperMeters` 1 mirror the outward pair, and the same tanh is applied through `LeadBounded`, which now
+ahead of the car toward the vertex asks for a nose the car cannot place. `LaneInwardLeadMeters` and
+`LaneInwardLeadTaperMeters` mirror the outward pair, and the same tanh is applied through `LeadBounded`, which now
 names the three preference reasons (outside line, avoidance, apex line) instead of two. The request clamp uses the
 cap of the reason it is bounding, so the two directions keep their own numbers.
 
 **The apex line is geometric, and it is pulled toward the apex by half a second of travel.** `IdealLineOffset` walks a
 smoothstep from the outer edge at `t = 1` to the inner edge at `t = 0`, with `t = |distance to apex| / (radius x leadAngle
 x IdealLineLeadMultiple)`. No time enters the profile, so a car arriving fast met the same shape it would have met slowly
-— and arrived at it late, because steering and the lane mover take time to carry the aim across. `IdealLineLeadSeconds` 0.5
+— and arrived at it late, because steering and the lane mover take time to carry the aim across. `IdealLineLeadSeconds`
 subtracts the distance the car covers in half a second from the profile's argument, so the line reaches the inside half a
 second **before** the apex rather than exactly at it. The lead is in metres of the car's own travel, so it scales with
 speed rather than with the corner.
@@ -658,11 +661,11 @@ longitudinal overlap at any model size. The same-line case stays intentional: wi
 beside a slower rival ahead; the chain drops the request the tick `Brain.AvoidanceTarget` clears, which is the tick the
 overlap ends — and that is precisely when the rear is still beside the car that was passed. The mover's rate keeps the
 *speed* of the turn sane but not its *timing*, so the car turned in on top of the rival behind it. `ComputeAvoidanceLane`
-wraps it: the offset holds while any rival is still within `AvoidHoldBehindMeters` 14 m behind and `AvoidHoldLateralMeters`
-1.5 m of the held lane beyond the pair's combined width, and releases only when nothing is left alongside. The hold is
+wraps it: the offset holds while any rival is still within `AvoidHoldBehindMeters` behind and `AvoidHoldLateralMeters`
+of the held lane beyond the pair's combined width, and releases only when nothing is left alongside. The hold is
 geometric, not timed — it ends when the cars are actually clear, at any speed.
 
-**The chain's answer is a request, not the aim.** The lane mover (`Racer.cs` `UpdateLaneMover`) carries the carried lane onto that request at 26 m/s^2 with a 24 m/s cap, so a requirement that is valid for half a second cannot step the lane; the request's own rate feeds forward, so a line that moves smoothly is still tracked without the v^2/2a lag a pure arrival law would leave. The numbers are settled against the line's own motion in the ranked list, item 3. **Every writer of the request also records why**: `LaneReason` tags it own lane, curve lean, the corner's outside or apex phase, a commit card, avoidance, the recovery edge, a wall that moved it, or the debug pin (`Racer.LaneRequestReason`), and the debug ribbons take their colour from that tag — the ask dashed and dimmed, the aim solid — with the reason and both offsets named at the near end. The tag describes the request and never the aim, which the mover's bounded carry keeps different for a moment. **The aim is clamped into the interval between the car's own lane and the request** (`Racer.cs:907-914`), after the integration, because a lag is only harmless while the request holds still: with no source answering, the request *is* the car's own lane and a lagged aim turns the correction into a delayed function of the car's own motion, which is a limit cycle rather than a lag. The clamp takes the car's lane from the call site and not from the published centre deviation — two different frames, the steer reference sitting a lookahead ahead — and it zeroes the mover's rate when it moves the aim, or that rate winds up to the car's own lateral speed and carries the aim the wrong way on the first tick with a real request. **The walls are not among the mover's clamps**: they bound the request alone, so a corridor that closes on the car is carried onto like any other request.
+**The chain's answer is a request, not the aim.** The lane mover (`Racer.cs` `UpdateLaneMover`) carries the carried lane onto that request at `LaneMoverAccelMps2` with a `LaneMoverSpeedCapMps` cap, so a requirement that is valid for half a second cannot step the lane; the request's own rate feeds forward, so a line that moves smoothly is still tracked without the v^2/2a lag a pure arrival law would leave. The numbers are settled against the line's own motion in the ranked list, item 3. **Every writer of the request also records why**: `LaneReason` tags it own lane, curve lean, the corner's outside or apex phase, a commit card, avoidance, the recovery edge, a wall that moved it, or the debug pin (`Racer.LaneRequestReason`), and the debug ribbons take their colour from that tag — the ask dashed and dimmed, the aim solid — with the reason and both offsets named at the near end. The tag describes the request and never the aim, which the mover's bounded carry keeps different for a moment. **The aim is clamped into the interval between the car's own lane and the request** (`Racer.cs:907-914`), after the integration, because a lag is only harmless while the request holds still: with no source answering, the request *is* the car's own lane and a lagged aim turns the correction into a delayed function of the car's own motion, which is a limit cycle rather than a lag. The clamp takes the car's lane from the call site and not from the published centre deviation — two different frames, the steer reference sitting a lookahead ahead — and it zeroes the mover's rate when it moves the aim, or that rate winds up to the car's own lateral speed and carries the aim the wrong way on the first tick with a real request. **The walls are not among the mover's clamps**: they bound the request alone, so a corridor that closes on the car is carried onto like any other request.
 
 **Lane systems only *set* the request; how hard it is pursued is the authority chain's job.** Every lane answer insets by half the car's width — the inside line, the avoidance bound and the corner line alike; `OutOfTrackDistance` (`Racer.cs:2807`) is centre-based on the raw half width, which is why a car pushed off is judged by its centre.
 
@@ -678,24 +681,24 @@ Adjacent profiles still merge by taking the further-in of the two, and an opposi
 traversal is `2 * safeBound` - **18 m** on a wide track - and it has to fit inside the blend's 1.5 s, which needs
 `4 * 18 / 1.5^2 = 32 m/s^2` just to start and stop in the window. It ran at **14**, so the aim could not follow the ramp at
 all, and a direction change first had to spend `24 / 14 = 1.7 s` killing its own speed - longer than the whole blend. That is
-the "inertia" the driver felt. Now `LaneMoverAccelMps2` **26** and `LaneMoverSpeedCapMps` **24** — **halved to 13 and 12 while the reason is `OutsideLine`**,
+the "inertia" the driver felt. Now `LaneMoverAccelMps2` and `LaneMoverSpeedCapMps` — **halved while the reason is `OutsideLine`**,
 because opening the line to the outer edge is a positioning choice made with room to spare and at the full rate it arrived as a
 sideways lunge; the apex side keeps the full pair (45/25 was the first, deliberately over-sized cut; 26 covers 18 m from rest in 1.66 s against a 1.5 s window, and the window does not start from rest), and when the desired rate
 reverses sign `_laneRate` is zeroed instead of being carried across: momentum the other way is a lag with nothing worth
 keeping.
 
 **The lane mover has no lateral leash to the car (driver, 2026-10-23).** `LaneInwardLeadMeters` and `LaneOutwardLeadMeters`
-(3 m each) capped how far the aim could sit from `steerRefOffset`, with a tanh taper from 1 m and two interval clamps that
+capped how far the aim could sit from `steerRefOffset`, with a tanh taper from 1 m and two interval clamps that
 pinned `_carriedLane` between the car's own lane and the request. All of it is gone, together with `LeadBounded`: the aim was
 tethered to the car, so a geometric line could not run ahead of it and every request read as a follower rather than a target.
-What is left is the acceleration limit (`LaneMoverAccelMps2` 26) and the speed cap (`LaneMoverSpeedCapMps` 24) - inertia,
+What is left is the acceleration limit (`LaneMoverAccelMps2`) and the speed cap (`LaneMoverSpeedCapMps`) - inertia,
 not distance - and the inside-mode guard, which is a direction test and not a leash.
 
 **The line is measured in METRES of route, and reaches the extreme five metres early (driver, 2026-10-23).** On a bend a node is
 more path than the straight line it stands for, so a node count measures a different corner at every radius. `metresToApex`
 is `TrackPoints[apex].CumulativeDistance - reference.CumulativeDistance`, wrapped shortest-way-round with `RouteLengthMeters`
 (the same pattern as the rival gap); `CumulativeDistance` is already metres and is rebuilt with the route. The stations are
-`IdealLineOutsideMeters` **250**, `IdealLineRampStartMeters` **50** and `IdealLineApexMeters` **5**: the line opens 300 m out,
+`IdealLineOutsideMeters`, `IdealLineRampStartMeters` and `IdealLineApexMeters`: the line opens 300 m out,
 the ramp runs from 50 m to 5 m, and `linePhase` is `clamp((50 - d) / 45)`.
 
 **The extreme is the raw half width, and the line reaches it five metres early.** `safeBound` is the track
@@ -716,9 +719,9 @@ the latched approach speed that replaced both - with `IdealLineOutsideSeconds`, 
 
 **The avoidance hold is a pass in progress, not a lane the car owns (driver, 2026-10-23).** `_avoidHoldLane`/`_avoidHoldActive`
 were written only inside `ComputeAvoidanceLane` and released only by a geometric test that needs a rival still alongside - all
-of it from the 500 ms rival snapshot. Nothing cleared them in `Initialize`, so a hold from a previous race outranked the corner
+of it from the `RivalRefreshMs` rival snapshot. Nothing cleared them in `Initialize`, so a hold from a previous race outranked the corner
 line on the next one's first corners, and a rival that despawned or a snapshot that still said "alongside" for a car already
-behind kept the held lane alive indefinitely. Now: a hard `AvoidHoldTimeoutMs` **8000** backstop, a drop when the held lane is
+behind kept the held lane alive indefinitely. Now: a hard `AvoidHoldTimeoutMs` backstop, a drop when the held lane is
 outside the current road, a clear in `Initialize` (with the inside guard, which had the same problem) and a clear in
 `FinishStuckRecovery`.
 
@@ -750,7 +753,7 @@ had switched the lean off for most of a lap; the rule is with an outside there i
 lean is free.
 
 **The two protocols travel together: without an outside there is no outside-inside (driver, 2026-10-23).** `CurveLean` pulls
-**inward** from the car's own lane on any bend under `CurveLeanRadiusMeters` **500** by up to `CurveLeanPullMeters` 1, and it is
+**inward** from the car's own lane on any bend under `CurveLeanRadiusMeters` by up to `CurveLeanPullMeters`, and it is
 relative, so it can never ask for the outer edge: the inside half of the protocol with the outside half missing. Worse, it ran
 BEFORE the apex window opened - so a car under 50 m of apex radius was pulled inside by the lean, and six seconds out the corner
 asked for the outside, a reversal that read as the lane's inertia. Now the nearest apex decides first: if its radius is under
@@ -759,24 +762,24 @@ threshold the lean is the only opinion there is, exactly as before. `NearestApex
 into `ComputeCornerLane`, so both halves read the same corner.
 
 **The line has a speed floor (driver, 2026-10-24).** `wantsPosition` also requires `speedMps > ApexSpeedWithDownforce(radius) -
-IdealLineSpeedMarginMph` (**15 mph**). Without it the window, being metres, keeps an apex near the start line inside it for ten
-seconds at grid speed and every car dives for the outer edge off the line. The margin is measured UNDER the apex speed, so a car
+IdealLineSpeedMarginMph`. Without it the window, being metres, keeps an apex near the start line inside it for `IdealLineWindowSeconds`
+at grid speed and every car dives for the outer edge off the line. The margin is measured UNDER the apex speed, so a car
 that has already slowed for the corner keeps the line it committed to; a car crawling is simply not asked for one.
 
 **The outside is asked for by TIME to the apex, not by being overspeed (driver, 2026-10-23).** The whole `RequiresPositioning` machinery used to
-gate the corner line and it armed only on a corner that was **tight** (`R < 50`) and where the car arrived **10 mph over**
+gate the corner line and it armed only on a corner that was **tight** (`R < CornerTightRadius`) and where the car arrived the `PositionExcessMph` margin over
 the apex speed. It is gone: the field, `ApproachStarted`, the promotion pass that set it, `inPositionRange` and
 `_promotedApexNode` all deleted with it. Once the braking plan got good enough to arrive on speed, `excess` never crossed the threshold and the
 line stopped existing: measured in one session, **65 % of samples read `armed=False`, `started=False`** and only 14 % had the
 line at all. The outside is the first half of the line, not a correction for overspeed. The gate is now
-`fwdToApex <= IdealLineWindowNodes` (**200 nodes**, which is both halves' room: the outside plateau plus the ramp),
-measured in nodes, plus `DetectedRadius < IdealLineMaxRadiusMeters` (**50**, the same bound as `CornerTightRadius` but its own constant) and
+`fwdToApex <= IdealLineWindowNodes` (which is both halves' room: the outside plateau plus the ramp),
+measured in nodes, plus `DetectedRadius < IdealLineMaxRadiusMeters` (the same bound as `CornerTightRadius` but its own constant) and
 `!HasPassedApex`. The radius gate replaces what the excess gate was really doing: deciding which bends are corners the car
 positions for at all. Past that the bend is a kink the car takes without leaving its lane, and an outside line there was noise.
 
 **The blend is one straight ramp in TIME to the apex, and nothing else (driver, 2026-10-23).** `IdealLineOffset` is
-`t = clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds))`, `offset = safeBound * (1 - 2t)`: the outer clamp at **1.5 s** out, the inside clamp
-at the apex (**0 s**), linear between, and it holds the inside below 0.5 s and past the apex.  Both obvious choices fail: the **live** speed
+`t = clamp((IdealLineOutsideSeconds - secondsToApex) / (IdealLineOutsideSeconds - IdealLineApexSeconds))`, `offset = safeBound * (1 - 2t)`: the outer clamp at `IdealLineOutsideSeconds` out, the inside clamp
+at the apex (`IdealLineApexSeconds`), linear between, and it holds the inside below 0.5 s and past the apex.  Both obvious choices fail: the **live** speed
 makes `d / v` grow every time the car brakes, so the countdown expands under a braking car and the line reopens outward
 mid-corner; the **apex** speed fixes that but measures the window with the speed the car will leave with, so in a slow corner
 reached fast the whole two seconds fit inside one real second and the car never reaches the outside - the outside phase was
@@ -838,7 +841,7 @@ lose. The profile itself is unchanged: `IdealLineOffset` holds the outer clamp f
 arrives, so it now reaches the inside at the apex instead of being cut twenty short.
 
 The entry profile's far end is a **clamp, not a gate** — the outer edge is its value at every distance past the blend — so the window, not the profile, is what bounds it in time. Two time gates arm it, both in `UpdateCornerRequirements`: `RequiresPositioning` clears once the corner's apex is behind, so every approach re-arms in its own window (`Racer.cs:2965`); and the approach has to have **started**, judged once at promotion — a corner promoted to slot 0 while already inside the window is skipped for that approach (`Racer.cs:2945`), which is also the successive-corner rule, because promotion *is* the previous corner's apex. `RequiresBraking` is deliberately **not** cleared, because its range is measured to the entrance and it must outlive that to hold a plan through the apex. Filed as `outside-approach-window`, gate chain in `AGENTS-BACKLOG.md`.
-- **The picker looks past a corner the plan will ignore, so the start rule above cannot misfire on a sweeper.** A corner too wide to ever ask for positioning (`DetectedRadius >= CornerTightRadius`) that has not asked for braking by the time the car is inside its 3.95 s window is flagged in `UpdateCornerRequirements`; `RefillApexQueue` gives slot one to the next corner instead, and the flag holds until that apex is behind. Without it a fast sweeper the car passes flat promotes the tight corner behind it *at its own apex* — already inside the tight corner's window — and the whole approach is lost, every lap. A corner that asks for a braking plan **revokes its own flag in that same pass** and retakes slot one, so an armed corner is never skipped, and a flag landing forces that tick's refill so the picker cannot switch a gate late; slot one therefore stops being "the nearest corner", and the consumers that ride it shift with it (cards, the nitro corner veto, the crossing taper, brake learning — `docs/working/TEST-PLAN.md`). The table's own ceiling is a Debug setting (`Corner Ceiling`, 20–200 m, `ARS.CornerCeilingMeters`, shipped at 200 m since build 724) whose change rebuilds the table in place, mid-race included; the ceiling sits above `CornerTightRadius`, so the corners between the two are the "wide" class the skip exists for, and a ceiling at or under the tightness gate parks it. The two halves are one flag, written by the scan and read by the picker (`picker-skip-ignored-corner` in `AGENTS-BACKLOG.md`).
+- **The picker looks past a corner the plan will ignore, so the start rule above cannot misfire on a sweeper.** A corner too wide to ever ask for positioning (`DetectedRadius >= CornerTightRadius`) that has not asked for braking by the time the car is inside its `RequirementLookaheadSeconds` window is flagged in `UpdateCornerRequirements`; `RefillApexQueue` gives slot one to the next corner instead, and the flag holds until that apex is behind. Without it a fast sweeper the car passes flat promotes the tight corner behind it *at its own apex* — already inside the tight corner's window — and the whole approach is lost, every lap. A corner that asks for a braking plan **revokes its own flag in that same pass** and retakes slot one, so an armed corner is never skipped, and a flag landing forces that tick's refill so the picker cannot switch a gate late; slot one therefore stops being "the nearest corner", and the consumers that ride it shift with it (cards, the nitro corner veto, the crossing taper, brake learning — `docs/working/TEST-PLAN.md`). The table's own ceiling is a Debug setting (`Corner Ceiling`, 20–200 m, `ARS.CornerCeilingMeters`, its own ceiling since build 724) whose change rebuilds the table in place, mid-race included; the ceiling sits above `CornerTightRadius`, so the corners between the two are the "wide" class the skip exists for, and a ceiling at or under the tightness gate parks it. The two halves are one flag, written by the scan and read by the picker (`picker-skip-ignored-corner` in `AGENTS-BACKLOG.md`).
 - **The blend refuses an ask that would move the car outward.** Below the far clamp, i.e. in the `ApexLine` phase, a demand lying outside the car's own lane is dropped and the chain falls through to the lean or to the car's own lane, so a car already inside the line is never sent back out to meet it and an entry cannot read as out and then in. Exempt by design: the hold at the clamp, because reaching the outer edge is what the outside approach is for and the outward lead lives on it; every other phase; and a car off the road, whose way back is this line. The comparison uses the car's own lane (`CurrentNodeOffset`, the green line) and not the mover's `steerRefOffset`, which reads inward by the bend's sagitta — metres on a fast tight corner — and would refuse the line outright there. The refusal **logs** rather than taking a reason tag, because it leaves the request where the chain had it and `_laneOverride` arms on the tag. Driver-observed as right, with 25 refusals logged across a race and the entry no longer reading out and then in.
 - **A sweeping corner suppresses its own corner line through the positioning decision**: the flag requires a tight corner (`Racer.cs:2853`) and route speed governs a sweeper's speed either way.
 That regime is no longer switchable (the Route Speed Limit toggle removal is the speed pipeline's `70e177c` note); the lever that shifts it is **Road Curvature Offset (mph)**.
@@ -848,7 +851,7 @@ That regime is no longer switchable (the Route Speed Limit toggle removal is the
   The inside line aims at the **inside edge** — `−cornerDir × (roadWide − half the car)` (`Racer.cs:808-809`).
   The steer carries pure pursuit's factor of two (`PursuitGain`, `Racer.cs`); a target that steps from wherever the car is instead holds a constant error and never converges.
   The ordering is load-bearing — car's-heading-to-the-aim is the steering command's own convention, and a minus inverts the lane.
-  **The lane ask is scaled by the crossing, the ruling against a ceiling is why it is a scale, and the scale itself is off behind `LaneCrossingScale` while a comparison is owed.** That verdict — a ceiling flattens a lane law into a constant-command phase that builds lateral velocity the short tail cannot shed — was driven against the flat degrees-per-metre P, and both shapes tried since run into it: a step on the crossing, and a hard cap on the wheel. The share `allowance / (allowance + crossing)` fades instead and never reaches nothing. What keeps it out of the ceiling's way is also where it applies: only the ask that crosses the car further, never the unwinding one, and never during turn-in. The lookahead's length and the step into the line stay the levers for *how fast* a lane is taken (`AGENTS-TECHNOTES.md`). With the lane mover upstream, the owed drive is whether this scale is redundant or still the better answer for the case it was built for. **Reviving it as a 5° limit is a re-tune, not a restoration**: as compiled the allowance is `asin(1 m/s ÷ speed)`, about 1.6° at 130 km/h, and the same value by construction at every speed, while the gate is the crossing *direction* with the turn-in window exempt — not the lane moving outward.
+  **The lane ask is scaled by the crossing, the ruling against a ceiling is why it is a scale, and the scale itself is off behind `LaneCrossingScale` while a comparison is owed.** That verdict — a ceiling flattens a lane law into a constant-command phase that builds lateral velocity the short tail cannot shed — was driven against the flat degrees-per-metre P, and both shapes tried since run into it: a step on the crossing, and a hard cap on the wheel. The share `allowance / (allowance + crossing)` fades instead and never reaches nothing. What keeps it out of the ceiling's way is also where it applies: only the ask that crosses the car further, never the unwinding one, and never during turn-in. The lookahead's length and the step into the line stay the levers for *how fast* a lane is taken (`AGENTS-TECHNOTES.md`). With the lane mover upstream, the owed drive is whether this scale is redundant or still the better answer for the case it was built for. **Reviving it as a 5° limit is a re-tune, not a restoration**: as compiled the allowance is `asin(LaneCrossingLateralSpeedMps ÷ speed)`, about 1.6° at 130 km/h, and the same value by construction at every speed, while the gate is the crossing *direction* with the turn-in window exempt — not the lane moving outward.
   **The lane error is unscaled and the outward move is bounded instead** (`73756c7`; reshaped, build 703): the ask is the pursuit's own, and where the lane was asked for by the outside line or by avoidance the aim leads the car's own lane at full send until 1 m, then each outward tick carries the band's tanh share and the approach to the **3 m cap** is asymptotic — the hard stop the first bound drove at 1.5 m is gone (driver). The bound still travels out with the car, no lane change is cut short, and the clamps behind the glide are the failsafe. A recovery edge, a commit card's lane, a wall clamp, the apex crossing and the debug pin are exempt, and the gate is the reason the lane was asked for rather than a comparison of the two lanes — that comparison clamps an off-track car's return, which needs the mover's whole reach.
   **The share on those degrees was driven and reverted** (`9decee7` at a half, `a555ea9` at three quarters): the unscaled ask rings onto the outside line and a half leaves the following lazy, the car trailing the aim so a lane change and the entry land late. The ring is that share's own term, which is why scaling the gain could never separate an outside lunge from a turn-in.
   **The centring's own ratio**: `114.59·L/D²` degrees per metre of lane error, with the wheelbase `L` and `D = clamp(0.5 × speed, 8, 30)` m, so a metre asks a flat 8 m/s² across the half-second band — the degrees fall with speed and the lateral acceleration they buy does not. No lateral-g figure for the tyres exists in the tree: the limiter's ceiling is a slip-angle proxy and the grip is authored.
@@ -886,20 +889,20 @@ The fields cut at the shared rate and recover more slowly (`GlideCap` `Racer.cs:
 Overrides (grid wait, countersteer, stuck recovery) re-tag after; offtrack re-tags the throttle side only, since the brake path stopped taking an off-track command in `6a3dfa3`.
 - **The overspeed reason is the incline-boost anti-cheat**: it compares measured forward Gs against the **total** wheel-pushed Gs with a deadband (`OverspeedExcessGs` `Racer.cs:3581`), so it fires whenever the car accelerates harder than its wheels are asking.
 It arms only on a straight line above its speed gate (`Racer.cs:1677`), which deliberately leaves the launch alone — the engine's assist there is exactly the excess it would otherwise read.
-- **Off-track projection cap (`Racer.cs:1611`)** is a **throttle-only** ceiling: 1.0 at the track edge, ramping to 0 across the five metres beyond it, and it fires only when the projection is outside the edge *and* further out than the car already is.
-Applied with `Math.Min` after `ComposeThrottleCap`, it never reaches the brake and has no negative branch; it yields to the full-countersteer floor, because a slide is exactly when the projection is widest.
+- **Off-track projection cut (`Racer.cs` `ApplyProjectionSpeedCut`)** runs on the one-second projection and is a **speed offset, not a pedal one** (build 1578): while the projection's signed offset sits outside the edge on the turn's side — above `OffshootMinSpeedMph` and past `OffshootMinRouteAngleDeg` — the *intended speed* bleeds at `ProjectionSlowdownMphPerSecond` and recovers at `ProjectionRecoveryMphPerSecond`, floored at `max(OffTrackSpeedFloorMph, the bend's speed less OffTrackSpeedSlackMph)`.
+It **writes no pedal of its own**: the proportional pedal law answers the lowered target, so the brake arrives through the same law the plan's does and needs no `BrakeReason` of its own; the drop is capped at `target − floor`, so it can never ask for less than the floor, and full countersteer no longer vetoes it because the brake still passes the countersteer cap like every other. The floor is the bend it is leaving less `OffTrackSpeedSlackMph`, or `OffTrackSpeedFloorMph`, whichever is higher (`ProjectionSpeedFloorMph`), with the radius capped at the corner ceiling, because a straight's 999 sentinel would otherwise ask 200 mph and disarm it. Widening is no longer a gate: `_projectionWidening` only colours the overlay and zeroes the Gs lane floor.
 - **The throttle/brake avoidance override was REMOVED.** **Asymmetry is by design** — corner is the loose target, route the tight one, so don't "balance" them with flat offsets; on high-grip cars the route term wins.
 
 ## Corner lifecycle (apex table + three held targets)
 1. **Apex table at generation** — `BuildApexTable` (`TrackLoader.cs:231`) detects corner regions on the smoothed radius, and `AddCornerRegion` takes each region's **smoothed minimum** as its apex, keeping the region's smallest precise radius alongside it as the 1g speed's radius.
    - Two apexes the car reaches close in time are one complex, and so is a pair whose exit and entrance aim the same way inside a short window — that branch catches a fast kink the car clears before it can react to the slow corner behind it, so the window must stay under the time a U-turn's two apexes take to be planned separately, or the second absorbs the first and the merged span never covers the lead-in.
-   - It keeps the **slower by smoothed radius** and re-walks the survivor's span.
+   - It keeps the **slower by smoothed radius** and re-walks the survivor's span. The merge gap is `max(5 m, nearestSpeed × ApexBufferSeconds)`, and `ApexBufferSeconds` is now `LanePrepSeconds` so the table and the lane's `ChainedApex` share one threshold for what a chained corner is; at a shorter margin than the lane's `LanePrepSeconds` a pair between the two was two corners to the table and one to the lane, and the second never got an absolute line.
    - Both span ends derive from the apex, walked outward to where the smoothed radius opens past a multiple of the apex's own — entrance tighter than exit so the two ends cannot chatter — bounded by the region the detector already found and by a node cap that stays a node count, because a radius multiple there gave a sweeper twice its own radius.
    - **The apex is the smoothed minimum, not the region's tightest node** — a coarse chord measures a wide corner below the file's own decimal quantum.
    - A region must also run a minimum length and carry a tight enough apex to register at all, which is what drops the blips and shallow bends; no radius flag survives, and the racer decides per corner (`UpdateCornerRequirements` `Racer.cs:2840`).
 2. **Held apex queue per racer** — `UpdateApexLeapfrog` (`Racer.cs:2797`) prunes stale entries and leapfrogs passed ones each tick, while `RefillApexQueue` (`Racer.cs:2883`) **derives the queue fresh on every refill**: slot 1 is always the nearest corner ahead, the rest the most restrictive corners this car wants a braking plan for; the queue invalidates on a route-data change or a low-speed incident.
 Per-car apex speed is physics, `√(grip · gravity · radius)`.
-3. **Braking map** — every held apex the car has flagged for braking feeds a kinematic solve over the usable distance and `cornerSpd` takes the lowest demand (`ApexBrakingSpeed` `Racer.cs:3165`, the `Math.Min` chain at `Racer.cs:1564`); its decel is grip-limited times a **per-apex learned factor**, seeded by two draws of ±0.05 — one per racer, taken once in the constructor, and one per corner — and corrected by a positional step after the corner, with a flat cut for a corner taken with a real slide (`CommitBrakeLearning` `Racer.cs:1446`). **The correction is positional**: the node where the car drops below the corner speed plus the pedal's own full-brake error, against the corner's entrance. Negative is early, so the factor climbs and the next lap brakes later; positive gives factor back. The step is `-metres × BrakeEntryFactorPerMetre` 0.02, capped at 0.25 per event, with no dead zone. The notice is gated on `BrakeLearningNotify` alone: it is a diagnostic, not race furniture. It is the rule that catches a car that came in hot without ever braking — an approach the pedal share scores as perfect, because it never pressed hard. The factor runs 0.5 to 1.5.
+3. **Braking map** — every held apex the car has flagged for braking feeds a kinematic solve over the usable distance and `cornerSpd` takes the lowest demand (`ApexBrakingSpeed` `Racer.cs:3165`, the `Math.Min` chain at `Racer.cs:1564`); its decel is grip-limited times a **per-apex learned factor**, seeded by two draws of ±`BrakeFactorSeedJitterHundredths` hundredths — one per racer, taken once in the constructor, and one per corner — and corrected by a positional step after the corner, with a flat cut for a corner taken with a real slide (`CommitBrakeLearning` `Racer.cs:1446`). **The correction is positional**: the node where the car drops below the corner speed plus the pedal's own full-brake error, against the corner's entrance. Negative is early, so the factor climbs and the next lap brakes later; positive gives factor back. The step is `-metres × BrakeEntryFactorPerMetre`, with no dead zone. The notice is gated on `BrakeLearningNotify` alone: it is a diagnostic, not race furniture. It is the rule that catches a car that came in hot without ever braking — an approach the pedal share scores as perfect, because it never pressed hard. The factor runs `BrakeMinFactor` to `BrakeMaxFactor`.
 The buffer is a flat time × speed, pressure does **not** scale it, and **a car whose ABS holds the pedal down reads as under-braking and drifts its factor up** — the learner watches pedal share, not achieved decel.
 **A constant offset on the learned value cancels within a lap, wherever it is applied**: the commit reads that value and writes it back multiplied, so the only fixed point is the share target being met, and a per-racer base survives as a seed only — a trait that lasts needs the target or the gain, not the seed.
 4. **Route-speed split** — route speed governs sweeping corners while the three-apex map handles tight ones from far away, and **min governs** (`Racer.cs:1544`).
@@ -911,7 +914,7 @@ Track facts: node counts are treated as metres; measured spacing on `Airport Qui
 
 ## Stability — the throttle cut's landing state (moved out of the project memory, verbatim)
 
-- **Stability owns the throttle cut, and it is one signal (`Racer.cs`)**: the count of wheels reading zero on the side-slip axis (`ARS.WheelsOffGround`, `wheel+0x1C4`) is a **rate, not a target**: each wheel out of contact costs `StabilityFallPerWheelPerSecond` **0.5** of the cap **per second, additive** — four wheels empty it in exactly **half a second**, one wheel in two — and only with every wheel down does the cap recover, at one flat `StabilityRisePerSecond` 0.5/s, which is zero to whole in **two seconds**, clamped to 0..1. The four-to-one asymmetry of the worst case is the point: being out of contact is the emergency, coming back is the thing to be careful about. Read on every **timed core** pass, never per frame.
+- **Stability owns the throttle cut, and it is one signal (`Racer.cs`)**: the count of wheels reading zero on the side-slip axis (`ARS.WheelsOffGround`, `wheel+0x1C4`) is a **rate, not a target**: each wheel out of contact costs `StabilityFallPerWheelPerSecond` of the cap **per second, additive** — four wheels empty it in the time that rate implies, one wheel in four times as long — and only with every wheel down does the cap recover, at one flat `StabilityRisePerSecond`, which is zero to whole in the same time, clamped to 0..1. The four-to-one asymmetry of the worst case is the point: being out of contact is the emergency, coming back is the thing to be careful about. Read on every **timed core** pass, never per frame.
 - **The arms it replaced are gone**: the ride-height-above-rest test and the yaw-demand test are **removed**, with `InstabilityRideHeightMargin`, `InstabilityMinSpeedMps` and `InstabilityYawTolerance`. That costs the four-wheels-down slide its throttle cut, so the TCS cap and the steering blend are what answer a slide now.
 - **The lateral axis is load-bearing**: this was built once before (`cead3dd`), counting near-zeroes on the **longitudinal** ratio, and retired (`c18444a`) because a decompressed tyre still reads ~0 there. `CurrentMechanicalGrip` carries no stability factor, and nothing models roll, pitch, load or suspension.
 

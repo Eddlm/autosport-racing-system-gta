@@ -129,8 +129,8 @@ namespace ARS
             settings.Specs.Add(new KeySpec("VehiclePool", "cars.txt"));
             settings.Specs.Add(new KeySpec("TimeoutSeconds", "30", Kind.Number, new[] { "15", "30", "45", "60" }));
             settings.Specs.Add(new KeySpec("AIRacerAutofix", AutofixMode.AutoRepair.ToString(), Kind.Text, Enum.GetNames(typeof(AutofixMode))));
-            settings.Specs.Add(new KeySpec("CornerOffset", "4", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
-            settings.Specs.Add(new KeySpec("RouteOffset", "2", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
+            settings.Specs.Add(new KeySpec("CornerOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
+            settings.Specs.Add(new KeySpec("RouteOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
             settings.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("NitrousEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TipRate", TipFrequency.High.ToString(), Kind.Text, Enum.GetNames(typeof(TipFrequency))));
@@ -138,6 +138,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("ForceFillGrid", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("OverspeedCut", "0.2", Kind.Text, new[] { "Off", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" }));
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("SlideBrakeCap", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TcsEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("AbsEnabled", "False", Kind.Bool));
 
@@ -153,8 +154,8 @@ namespace ARS
             settings.Specs.Add(new KeySpec("MaxCrestLift", "0.4", Kind.Number, new[] { "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9", "2.0" }));
             settings.Specs.Add(new KeySpec("HillGripEffect", "100", Kind.Number, new[] { "0", "25", "50", "75", "100", "150", "200" }));
             settings.Specs.Add(new KeySpec("GsLaneThrottleFloor", "True", Kind.Bool));
-            settings.Specs.Add(new KeySpec("RouteRadiusFar", "True", Kind.Bool));
-            settings.Specs.Add(new KeySpec("SlidRadiusLeadSeconds", "0.5", Kind.Number, new[] { "0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5" }));
+            settings.Specs.Add(new KeySpec("RouteRadiusFar", "False", Kind.Bool));
+            settings.Specs.Add(new KeySpec("SlidRadiusLeadSeconds", "1.0", Kind.Number, new[] { "0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5" }));
             settings.Specs.Add(new KeySpec("BrakeAimDepth", "0.0", Kind.Number, new[] { "0.0", "0.2", "0.4", "0.6", "0.8", "1.0" }));
             settings.Specs.Add(new KeySpec("Rubberbanding", "100", Kind.Number, new[] { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" }));
             settings.Specs.Add(new KeySpec("RubberbandMode", RubberbandMode.Natural.ToString(), Kind.Text, Enum.GetNames(typeof(RubberbandMode))));
@@ -169,8 +170,10 @@ namespace ARS
 
             FileSpec development = Owned("Menu-Development.ini");
             development.Specs.Add(new KeySpec("BrakeLearningNotify", "False", Kind.Bool));
+            development.Specs.Add(new KeySpec("LaneErrorTelemetry", "False", Kind.Bool));
 development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             development.Specs.Add(new KeySpec("SlipFromMemory", "True", Kind.Bool));
+            development.Specs.Add(new KeySpec("ShapeAngleScale", "0.75", Kind.Number, ARS.LaneShapeStepValues));
             files.Add(development);
 
             FileSpec debug = Owned("Menu-Debug.ini");

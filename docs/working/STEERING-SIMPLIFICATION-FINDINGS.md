@@ -1,5 +1,9 @@
 # ARS — steering simplification: findings and ranked candidates
 
+**Status (2026-11-02).** Superseded where it touches the lane systems: the per-node `TrackPoint.LaneLineShare`
+field (`TrackLoader.BuildLaneField`) replaced them, and `CurveLeanRadiusMeters`, `IdealLineWindowMeters` and
+`TryGetOutsideLane` no longer exist. Every `file:line` below is provenance against `48c8d6f`, not a live location.
+
 **Provenance.** Read against `48c8d6f`, working tree clean. `src/Racer.cs` is the revision left by `a0134d9` (3755
 lines); every `file:line` anchor below was opened in that file rather than recalled, and where a doc's anchor has
 drifted the checked line is given beside it. **No build was run and nothing was driven** — every statement here is a

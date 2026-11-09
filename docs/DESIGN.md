@@ -172,7 +172,7 @@ the error, with no integral, and no standing error because it acts on position r
 velocity. Steering is measured against the car's *velocity* direction, not its heading, which is what
 makes the loop blind to a slide in exactly the way it should be.
 
-**The gain, and its two speed terms.** The pursuit gain on a lateral error is `2 · wheelbase /
+**The gain, and its two speed terms.** The pursuit gain on a lateral error is `PursuitGain · wheelbase /
 aim distance²`. The aim distance is a **slice of travel time** rather than a distance, clamped at
 both ends:
 

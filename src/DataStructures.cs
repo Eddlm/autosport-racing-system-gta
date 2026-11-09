@@ -301,6 +301,7 @@ namespace ARS
         Plan,
         Abs,
         Countersteer,
+        Slide,
 
         Route,
 
@@ -341,6 +342,7 @@ namespace ARS
 
         public float MaxBrakeFromRoute = 1f;
         public float MaxBrakeFromCountersteer = 1f;
+        public float MaxBrakeFromSlide = 1f;
         public float MaxThrottleFromOverspeed = 1f;
         public float MaxThrottleFromRival = 1f;
         public float MaxThrottleFromChillOut = 1f;
@@ -370,6 +372,12 @@ namespace ARS
         public float TrackHalfWidth = 5f;
         public float CumulativeDistance = 0f;
         public float LaneLineShare;
+        public bool LaneShaped;
+        // Which apex's shape wrote this node, so a shape can only be honoured while its own corner is the selected one.
+        public int LaneShapeApex = -1;
+        // On the apex node only: where that corner's shaped region starts and ends, in track nodes.
+        public int LaneShapeStart = -1;
+        public int LaneShapeExit = -1;
     }
 
     public class CornerPoint
