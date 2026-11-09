@@ -1024,7 +1024,7 @@ namespace ARS
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
 
-            NativeListItem<string> brakeAimItem = new NativeListItem<string>("Brake Aim Depth", "How far into the corner the braking aim sits: 0 aims at the entrance, so the car is at corner speed by the entry; 1 aims at the apex, so it carries speed in and brakes all the way to it. The distance grows, so the brake point moves later.", SettingsRepair.OptionsFor("BrakeAimDepth"));
+            NativeListItem<string> brakeAimItem = new NativeListItem<string>("Brake Aim Depth", "How far into the corner the braking aim sits: 0 aims at the node 0.7 s of corner speed before the apex, so the car is at corner speed with that much to spare; 1 aims at the apex, so it carries speed in and brakes all the way to it. The distance grows, so the brake point moves later.", SettingsRepair.OptionsFor("BrakeAimDepth"));
             brakeAimItem.ItemChanged += (sender, args) =>
             {
                 BrakeAimDepth = float.Parse(brakeAimItem.Items[args.Index], CultureInfo.InvariantCulture);

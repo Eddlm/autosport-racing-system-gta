@@ -368,7 +368,7 @@ namespace ARS
 
         bool _brakeSampleFloorAtAim = false;
         bool _brakeSampleAimCrossed = false;
-        // Car speed minus plan corner speed at the entrance node, in m/s: the learner's verdict.
+        // Car speed minus plan corner speed at the aim node, in m/s: the learner's verdict.
         float _brakeSampleAimError = 0f;
         bool _brakeSampleCollided = false;
         float _brakeSampleApexOffset = 0f;
@@ -2139,7 +2139,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             _brakeCommitAimCrossed = _brakeSampleAimCrossed;
             _brakeCommitAimError = _brakeSampleAimError;
             _brakeCommitFloorAtAim = _brakeSampleFloorAtAim;
-            _brakeCommitAimCrossed = _brakeSampleAimCrossed;
         }
 
         void CommitBrakeLearning()
@@ -4204,7 +4203,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             int aimNode = BrakeTargetBaseNode(apexNode, apexSpeed, fallbackNode);
             if (aimNode < 0 || apexNode < 0) return aimNode;
             float depth = ARS.Clamp(ARS.BrakeAimDepth, 0f, 1f);
-            int steps = apexNode - aimNode;
+            int count = ARS.TrackPoints.Count;
+            int steps = count > 0 ? (apexNode - aimNode + count) % count : 0;
             if (depth <= 0f || steps <= 0) return aimNode;
             return OffsetCornerNode(aimNode, (int)Math.Round(steps * depth));
         }
