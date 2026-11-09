@@ -3021,7 +3021,9 @@ namespace ARS
 
             float vehicleGripGs = r.VehicleData.CurrentMechanicalGrip;
 
-            float baseSpd = (float)Math.Sqrt((vehicleGripGs * r.Handling.Gravity) * radius);
+            // A loose corner cannot be taken at tarmac speed: lateral grip scales with the surface, so the
+            // speed scales with the square root of it.
+            float baseSpd = (float)Math.Sqrt(vehicleGripGs * c.SurfaceGrip * r.Handling.Gravity * radius);
             if (float.IsNaN(baseSpd) || float.IsInfinity(baseSpd)) return AiConstants.MaxSpeed;
 
             return ARS.Clamp(baseSpd, AiConstants.MinSpeed, AiConstants.MaxSpeed);

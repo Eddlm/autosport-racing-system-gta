@@ -367,7 +367,22 @@ namespace ARS
         // miss never turns the outside approach off. The route's off-road share comes out of the same pass.
         const int SurfaceSampleNodes = 4;
         // Below this share of road grip the outside line is not worth preparing: no out approach here.
-        const float OutsideApproachMinGrip = 0.875f;
+        internal const float OutsideApproachMinGrip = 0.875f;
+
+        // The worst ground the corner covers: loose surface anywhere in the span makes it a loose corner, so
+        // the minimum rather than the mean.
+        static float CornerSurfaceGrip(int from, int to, int count)
+        {
+            int span = ARS.IsPointToPoint ? to - from : Wrap(to - from, count);
+            float grip = 1f;
+            for (int step = 0; step <= span && step < count; step++)
+            {
+                int node = ARS.IsPointToPoint ? from + step : Wrap(from + step, count);
+                if (node < 0 || node >= count) break;
+                grip = Math.Min(grip, ARS.TrackPoints[node].SurfaceGrip);
+            }
+            return grip;
+        }
 
         static void AssignSurfaceGrip()
         {
@@ -1123,7 +1138,8 @@ namespace ARS
                 LengthStart = apexPosition - startPosition,
                 LengthEnd = endPosition - apexPosition,
                 SupposedRadius = tightestRadius,
-                DetectedRadius = detectedRadius
+                DetectedRadius = detectedRadius,
+                SurfaceGrip = CornerSurfaceGrip(scanNodes[startPosition], scanNodes[endPosition], count)
             };
             corner.Speed = (float)Math.Sqrt(9.81f * tightestRadius);
 
@@ -1250,6 +1266,7 @@ namespace ARS
             int exitDistance = Math.Min(ARS.IsPointToPoint ? unionEnd - survivor.Node : Wrap(unionEnd - survivor.Node, count), spanLimit);
             survivor.StartNode = ARS.IsPointToPoint ? survivor.Node - entranceDistance : Wrap(survivor.Node - entranceDistance, count);
             survivor.EndNode = ARS.IsPointToPoint ? survivor.Node + exitDistance : Wrap(survivor.Node + exitDistance, count);
+            survivor.SurfaceGrip = CornerSurfaceGrip(survivor.StartNode, survivor.EndNode, count);
             survivor.LengthStart = entranceDistance;
             survivor.LengthEnd = exitDistance;
         }

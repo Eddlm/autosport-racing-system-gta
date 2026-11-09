@@ -3194,7 +3194,9 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             if (ControlledByPlayer || ARS.DebugFocusRacer != this) return;
 
-            if (_laneShapeApexNode >= 0)
+            // No trail where there is no outside approach: those spheres are the shape the car will not use.
+            CornerPoint shapedCorner = _laneShapeApexNode >= 0 ? ARS.Corners.FirstOrDefault(c => c.Node == _laneShapeApexNode) : null;
+            if (_laneShapeApexNode >= 0 && (shapedCorner == null || shapedCorner.SurfaceGrip >= TrackLoader.OutsideApproachMinGrip))
             {
                 int count = ARS.TrackPoints.Count;
                 for (int direction = -1; direction <= 1; direction += 2)
