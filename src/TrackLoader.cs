@@ -782,17 +782,29 @@ namespace ARS
                 if (Math.Abs(angleBack) > 1f && Math.Abs(angleFwd) > 1f && Math.Sign(angleBack) != Math.Sign(angleFwd))
                 {
                     corner.IsChicane = true;
+                    // The flip nearest the apex, searched both ways: a merged span can begin on the other side of
+                    // the bend, and the first differing node forward would then be the span's own start.
                     int span = ArcSpan(corner.StartNode, corner.EndNode, nodeCount);
-                    for (int step = 1; step < span; step++)
+                    int flipOffset = 0;
+                    for (int step = 1; step < span && flipOffset == 0; step++)
                     {
-                        int flipNode = ArcNode(corner.StartNode, step, nodeCount);
-                        if (flipNode < 0 || flipNode >= nodeCount) break;
-                        if (Math.Sign(ARS.TrackPoints[flipNode].Angle) == Math.Sign(corner.Angle)) continue;
+                        int aheadNode = ArcNode(corner.Node, step, nodeCount);
+                        if (aheadNode >= 0 && aheadNode < nodeCount
+                            && Math.Sign(ARS.TrackPoints[aheadNode].Angle) != Math.Sign(corner.Angle)) flipOffset = step;
+                        else
+                        {
+                            int behindNode = ArcNode(corner.Node, -step, nodeCount);
+                            if (behindNode >= 0 && behindNode < nodeCount
+                                && Math.Sign(ARS.TrackPoints[behindNode].Angle) != Math.Sign(corner.Angle)) flipOffset = -step;
+                        }
+                    }
+                    if (flipOffset != 0)
+                    {
+                        int flipNode = ArcNode(corner.Node, flipOffset, nodeCount);
                         ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + corner.Node + " moved to " + flipNode + ", the turn flips there");
                         corner.Node = flipNode;
-                        corner.LengthStart = step;
-                        corner.LengthEnd = Math.Max(0, span - step);
-                        break;
+                        corner.LengthStart = ArcSpan(corner.StartNode, flipNode, nodeCount);
+                        corner.LengthEnd = Math.Max(0, span - corner.LengthStart);
                     }
                 }
             }
