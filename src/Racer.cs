@@ -807,8 +807,7 @@ namespace ARS
                     // jumping to the edge. The shape still never asks for out.
                     float prepOutward = -ARS.InsideSign(prepApex.Angle);
                     float prepEdge = prepOutward * laneEdge;
-                    // How far out the prep may ask, by how bent the road is between here and the approach point:
-                    // 1 deg apart is a straight and the full 2 m, 20 deg apart is a corner and a tenth of it.
+                    // How far out the prep may ask: the full 2 m on a straight, a tenth of it 20 deg bent.
                     float headingGap = Vector3.Angle(CurrentTrackPoint.Direction, steerRefPoint.Direction);
                     float creep = ARS.Clamp(ARS.Remap(headingGap, 1f, 20f, ARS.LanePrepOutsideCapMetres, 0.1f), 0.1f, ARS.LanePrepOutsideCapMetres);
                     float prepCap = steerRefOffset + prepOutward * creep;
@@ -1140,6 +1139,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 float metres = MetresToNode(corner.Node);
                 if (metres <= 0f || metres > reach || metres >= bestMeters) continue;
                 if (!CornerIsLaned(corner)) continue;
+                if (corner.IsChicane) continue;
                 if (ARS.CornerApexSpeed(corner, this) >= Math.Max(Car.Velocity.Length(), 1f)) continue;
                 bestMeters = metres;
                 best = corner;

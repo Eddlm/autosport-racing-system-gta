@@ -387,6 +387,8 @@ namespace ARS
         {
             int count = ARS.TrackPoints.Count;
             if (corner == null || count == 0) return false;
+            // An S has no outside line to take: there is nowhere to go wide that serves both halves.
+            if (corner.IsChicane) return false;
             for (int step = -ApexWindowNodes; step <= ApexWindowNodes; step++)
             {
                 int node = ARS.IsPointToPoint ? corner.Node + step : Wrap(corner.Node + step, count);
@@ -646,8 +648,7 @@ namespace ARS
         const int FlipReachNodes = 100;
         // Halves more different than this in radius are two corners sharing a span, not one S.
         const float ChicaneRadiusRatio = 1.6f;
-        // A width out to one side before the flip and to the other side after it; anything less is a straight
-        // being noisy, since the angle there hovers around zero.
+        // A width out each side, opposite ways; less than that is a straight being noisy.
         static bool FlipIsAnS(int flipNode, int count)
         {
             float width = Math.Max(1f, ARS.TrackPoints[flipNode].TrackHalfWidth * 2f);
@@ -796,9 +797,7 @@ namespace ARS
             int nodeCount = ARS.TrackPoints.Count;
             foreach (CornerPoint corner in ARS.Corners) corner.IsChicane = false;
 
-            // An S is a curvature sign flip the road commits to: a whole track width out to one side before the
-            // flip and to the other side after it. One pass collects the flips, FlipIsAnS confirms them, and each
-            // corner takes the confirmed flip nearest its own apex.
+            // An S is a curvature flip confirmed by a track width either side; each corner takes the nearest one.
             int[] chicaneFlip = new int[ARS.Corners.Count];
             int[] chicaneGap = new int[ARS.Corners.Count];
             for (int i = 0; i < chicaneFlip.Length; i++) { chicaneFlip[i] = -1; chicaneGap[i] = int.MaxValue; }
@@ -1284,9 +1283,7 @@ namespace ARS
                 float gapSeconds = gap / Math.Max(referenceSpeed, 1f);
 
                 bool sameBend = gapSeconds < AlignedCornerSeconds && AimsSameWay(previous, corner, AlignedCornerDegrees);
-                // Inside the close window the tighter apex governs the pair whatever their sizes: a wide kink a
-                // few metres after a corner is that corner's exit, not a corner. The radius gate guards only the
-                // aligned case, where two same-way apexes further apart really can be two corners.
+                // Inside the close window the tighter apex governs whatever the sizes; the gate guards the aligned case.
                 bool similarRadii = Math.Abs(corner.DetectedRadius - previous.DetectedRadius) <= SpanMergeRadiusGate;
                 if (gapSeconds < closeCornerSeconds || (similarRadii && sameBend))
                 {
