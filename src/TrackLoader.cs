@@ -1210,23 +1210,11 @@ namespace ARS
                 float gapSeconds = gap / Math.Max(referenceSpeed, 1f);
 
                 bool sameBend = gapSeconds < AlignedCornerSeconds && AimsSameWay(previous, corner, AlignedCornerDegrees);
-                if (gapSeconds < closeCornerSeconds || sameBend)
+                // Two apexes this close are one corner only if they are the same size; a fast sweeper running
+                // into a tight turn is two corners, and one of them is not a mis-detection to be deleted.
+                bool similarRadii = Math.Abs(corner.DetectedRadius - previous.DetectedRadius) <= SpanMergeRadiusGate;
+                if (similarRadii && (gapSeconds < closeCornerSeconds || sameBend))
                 {
-
-                    if (Math.Abs(corner.DetectedRadius - previous.DetectedRadius) > SpanMergeRadiusGate)
-                    {
-                        CornerPoint loser = corner.DetectedRadius < previous.DetectedRadius ? previous : corner;
-                        bool dropPrevious = loser.Node == previous.Node;
-                        ARS.Log(ARS.LogImportance.Info, "Corner skipped (radii differ by >" + SpanMergeRadiusGate.ToString("0") + "m): previousR=" + previous.DetectedRadius.ToString("0.0") + " cornerR=" + corner.DetectedRadius.ToString("0.0") + " loserApex=" + loser.Node + (dropPrevious ? " (previous)" : " (new)"));
-                        ApexRejects.Add(loser.Node + " R " + loser.DetectedRadius.ToString("0.0") + " (too close to " + (dropPrevious ? corner.Node : previous.Node) + ", radii differ)");
-
-                        if (dropPrevious)
-                        {
-                            ARS.Corners.RemoveAt(ARS.Corners.Count - 1);
-                            ARS.Corners.Add(corner);
-                        }
-                        return;
-                    }
                     CornerPoint survivor = corner.DetectedRadius < previous.DetectedRadius ? corner : previous;
                     CornerPoint absorbed = survivor == corner ? previous : corner;
                     ExtendMergedCorner(survivor, previous.StartNode, corner.EndNode, count);
