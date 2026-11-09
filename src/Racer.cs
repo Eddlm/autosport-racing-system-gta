@@ -724,9 +724,9 @@ namespace ARS
             LaneReason laneReason = LaneReason.OwnLane;
 
             CornerPoint candidate = NearestApexAhead();
-            // NextApexNode is the corner in play; a spent one is let go here too, so the shape cannot outlive it.
-            int spentApex = CornerSpent(NextApexNode) ? NextApexNode : -1;
-            if (_laneHeldCorner == null || HasPassedApex(_laneHeldCorner.Node) || _laneHeldCorner.Node == spentApex)
+            // The corner in play is the one the lane holds; NextApexNode has already moved past a spent corner by
+            // the time this runs, because the queue refills in the same tick that skips it.
+            if (_laneHeldCorner == null || HasPassedApex(_laneHeldCorner.Node) || CornerSpent(_laneHeldCorner.Node))
             {
                 if (_laneHeldCorner != null) FinishShapeError(_laneHeldCorner);
                 _laneHeldCorner = candidate;
@@ -870,7 +870,8 @@ namespace ARS
                     + ", asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + ")"
                     + " | " + mode
                     + " apex " + (lineCorner != null ? lineCorner.Node.ToString() + " in " + toApex.ToString("0") : "-")
-                    + " lead " + _laneLead.ToString("0.00") + " cap " + _laneOutCap.ToString("0.00"));
+                    + " lead " + _laneLead.ToString("0.00") + " cap " + _laneOutCap.ToString("0.00")
+                    + " gs " + VehicleData.GetLongitudinalGs(Car.ForwardVector).ToString("+0.00;-0.00"));
             }
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
 
