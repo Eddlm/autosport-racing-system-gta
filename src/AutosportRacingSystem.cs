@@ -174,6 +174,9 @@ namespace ARS
         public const float LaneShapeOuterMarginMetres = 0.5f;
         public const float LaneApexMinReachMeters = 20f;
         public const float LanePrepOutsideCapMetres = 2f;
+        // The shape's entry may lean the car out, but only a third of what the entry ramp asks and never past the
+        // prep's own sideways cap: the out-in is not allowed to walk the car to the edge.
+        public const float LaneShapeOutwardShare = 0.33f;
         public const float LaneInsideSign = -1f;
         public static float InsideSign(float cornerAngle) { return LaneInsideSign * Math.Sign(cornerAngle); }
         public const bool AbsoluteLaneEnabled = true;

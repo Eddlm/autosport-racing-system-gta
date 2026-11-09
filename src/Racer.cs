@@ -843,9 +843,18 @@ namespace ARS
             {
                 if (!prepOutside)
                 {
-                    // Outward is never a request: the shape pulls the car in, or holds it where it already is.
-                    float shapeOutward = -ARS.InsideSign(laneApex.Angle);
-                    laneRequest = (laneShapeNow - steerRefOffset) * shapeOutward > 0f ? steerRefOffset : laneShapeNow;
+                    // The entry ramp wants the car outside; the shape may lean it out, but only a third of the way and
+                    // never past the prep's cap, and it never asks the car back in on the way out. Measured against
+                    // the centre, not against the car: a fraction of the distance still to go recedes with the car
+                    // and walks it to the edge, which is the same defect the prep's cap had.
+                    float shapeOutward = TrackTurnSign(CurrentTrackPoint.Node, laneApex.Node, 0);
+                    if (shapeOutward == 0f) shapeOutward = -ARS.InsideSign(laneApex.Angle);
+                    if ((laneShapeNow - steerRefOffset) * shapeOutward > 0f)
+                    {
+                        float softOut = shapeOutward * Math.Min(Math.Abs(laneShapeNow) * ARS.LaneShapeOutwardShare, ARS.LanePrepOutsideCapMetres);
+                        laneRequest = (softOut - steerRefOffset) * shapeOutward > 0f ? softOut : steerRefOffset;
+                    }
+                    else laneRequest = laneShapeNow;
                 }
                 laneReason = LaneReason.CurveLean;
             }
