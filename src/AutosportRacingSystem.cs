@@ -2656,6 +2656,7 @@ namespace ARS
         public static int LastGroundMaterialHash = 0;
         public static Vector3 LastGroundHit = Vector3.Zero;
         public static int LastGroundHitModel = 0; // the raw hit handle: FromHandle is internal in SHVDN2
+        public static bool LastGroundProbeRejected = false;
 
         // Road or not road under a point, for the load-time route scan: the shape test answers a material HASH
         // and only its identity is read, because a modded materials.dat moves the multipliers but cannot turn
@@ -2663,6 +2664,7 @@ namespace ARS
         public static float GroundGripAt(Vector3 point)
         {
             LastGroundMaterialHit = false;
+            LastGroundProbeRejected = false;
             LastGroundMaterialHash = 0;
             LastGroundHit = Vector3.Zero;
             LastGroundHitModel = 0;
@@ -2680,9 +2682,17 @@ namespace ARS
             if (status == 0 || !didhit.GetResult<bool>()) return 1f;
 
             int material = materialhash.GetResult<int>();
+            Vector3 hit = hitpos.GetResult<Vector3>();
+            // A vertical ray can only strike under the point and within its two metres, and 0 is no material:
+            // anything else is a half-resolved query, and a junk answer must read as a miss, which stays road.
+            if (material == 0 || Math.Abs(hit.X - point.X) > 1f || Math.Abs(hit.Y - point.Y) > 1f || Math.Abs(hit.Z - point.Z) > 3f)
+            {
+                LastGroundProbeRejected = true;
+                return 1f;
+            }
             LastGroundMaterialHit = true;
             LastGroundMaterialHash = material;
-            LastGroundHit = hitpos.GetResult<Vector3>();
+            LastGroundHit = hit;
             LastGroundHitModel = entity.GetResult<int>();
             return SurfaceMaterials.IsRoad(material) ? 1f : OffRoadGrip;
         }

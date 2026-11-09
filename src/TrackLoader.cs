@@ -407,6 +407,9 @@ namespace ARS
             if (count == 0) return;
 
             int offRoad = 0;
+            int hits = 0;
+            int misses = 0;
+            int rejected = 0;
             float grip = 1f;
             List<int> seen = new List<int>();
             for (int node = 0; node < count; node++)
@@ -414,7 +417,13 @@ namespace ARS
                 if (node % SurfaceSampleNodes == 0)
                 {
                     grip = ARS.GroundGripAt(ARS.TrackPoints[node].Position);
-                    if (ARS.LastGroundMaterialHit && !seen.Contains(ARS.LastGroundMaterialHash)) seen.Add(ARS.LastGroundMaterialHash);
+                    if (ARS.LastGroundProbeRejected) rejected++;
+                    else if (ARS.LastGroundMaterialHit)
+                    {
+                        hits++;
+                        if (!seen.Contains(ARS.LastGroundMaterialHash)) seen.Add(ARS.LastGroundMaterialHash);
+                    }
+                    else misses++;
                 }
                 ARS.TrackPoints[node].SurfaceGrip = grip;
                 if (grip < OutsideApproachMinGrip) offRoad++;
@@ -424,6 +433,8 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Surface material " + material + ": " + (SurfaceMaterials.IsRoad(material) ? "road" : "off road"));
             ARS.Log(ARS.LogImportance.Info, "Surface: " + (100 * offRoad / count) + "% of the route is off road, "
                 + seen.Count + " distinct materials (" + ARS.RouteLengthMeters.ToString("0") + " m)");
+            ARS.Log(ARS.LogImportance.Info, "Surface probe: " + hits + " hits, " + misses + " misses, " + rejected
+                + " junk (a junk ray reads as road, so a high count means the sweep is not trustworthy)");
         }
 
         static void LogSurfaceAtApexes()

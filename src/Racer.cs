@@ -345,6 +345,7 @@ namespace ARS
         const bool BrakeLearningApplies = true;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
+        int _planLogApexNode = -1;
 
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;
@@ -4103,8 +4104,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                 CornerPoint original = ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode);
                 _nextApexCorner = original;
                 // Proof the surface reaches the plan: the gripped number beside the tarmac one, loose apexes only.
-                if (original != null && original.SurfaceGrip < 1f)
+                if (original != null && original.SurfaceGrip < 1f && _planLogApexNode != NextApexNode)
                 {
+                    _planLogApexNode = NextApexNode;
                     float grip = original.SurfaceGrip;
                     float decel = BrakingDecelBase(NextApexNode);
                     ARS.Log(ARS.LogImportance.Info, "Plan " + Name + ": apex " + NextApexNode + " grip " + grip.ToString("0.00")
