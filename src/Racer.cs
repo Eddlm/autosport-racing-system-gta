@@ -1171,6 +1171,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 float reach = Math.Max(Math.Max(Car.Velocity.Length(), 1f) * ARS.LanePreviewSeconds, ARS.LaneApexMinReachMeters);
                 if (!ApexAheadOfLookahead(corner, reach)) continue;
                 if (metres < 0f || metres >= bestMeters) continue;
+                if (CornerSpent(corner.Node)) continue;
                 bestMeters = metres;
                 best = corner;
             }
