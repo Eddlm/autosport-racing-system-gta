@@ -4102,6 +4102,15 @@ const float RequirementLookaheadSeconds = 3.95f;
 
                 CornerPoint original = ARS.Corners.FirstOrDefault(c => c.Node == NextApexNode);
                 _nextApexCorner = original;
+                // Proof the surface reaches the plan: the gripped number beside the tarmac one, loose apexes only.
+                if (original != null && original.SurfaceGrip < 1f)
+                {
+                    float grip = original.SurfaceGrip;
+                    float decel = BrakingDecelBase(NextApexNode);
+                    ARS.Log(ARS.LogImportance.Info, "Plan " + Name + ": apex " + NextApexNode + " grip " + grip.ToString("0.00")
+                        + ", " + NextApexSpeed.ToString("0.0") + " m/s vs " + ApexSpeedWithDownforce(original.DetectedRadius).ToString("0.0") + " on tarmac"
+                        + ", brake " + decel.ToString("0.0") + " vs " + (decel / grip).ToString("0.0"));
+                }
                 CornerPoint cp = original ?? new CornerPoint();
                 if (original == null)
                 {
