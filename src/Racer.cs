@@ -346,6 +346,7 @@ namespace ARS
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
         int _planLogApexNode = -1;
+        int _prepLoggedApex = -1;
 
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         float _brakeSampleMaxSlideDeg = 0f;
@@ -788,6 +789,7 @@ namespace ARS
             float dynamicAsk = steerRefOffset + ARS.LaneInsideSign * LaneTurnSignToAim(ARS.TrackPoints[steerRefPoint.Node]) * dynamicInset;
             dynamicOwns = !shaped && Lap > 0 && aimRadius <= ARS.LaneDynamicRadius;
             laneRequest = dynamicOwns ? dynamicAsk : steerRefOffset;
+            bool prepOutside = false;
             if (shaped)
             {
                 // Outward is never a request: the shape pulls the car in, or holds it where it already is.
@@ -797,17 +799,31 @@ namespace ARS
             }
             else
             {
-                if (dynamicOwns) laneReason = LaneReason.CurveLean;
+                CornerPoint prepApex = NearestApexForPrep(ARS.LanePrepSeconds);
+                if (prepApex != null)
+                {
+                    // The prep is a positioning move to the outside edge, not a fine correction: the shape never
+                    // asks for out, this does, and only for a corner the car will have to slow for.
+                    laneRequest = -ARS.InsideSign(prepApex.Angle) * laneEdge;
+                    laneReason = LaneReason.CurveLean;
+                    prepOutside = true;
+                    if (_prepLoggedApex != prepApex.Node)
+                    {
+                        _prepLoggedApex = prepApex.Node;
+                        ARS.Log(ARS.LogImportance.Info, "lane " + Name + ": out prep for apex " + prepApex.Node);
+                    }
+                }
+                else if (dynamicOwns) laneReason = LaneReason.CurveLean;
             }
             CornerPoint laneRef = laneApex;
-            if (laneRef != null && !shaped)
+            if (laneRef != null && !prepOutside && !shaped)
             {
                 int turn = LaneTurnSignToAim(ARS.TrackPoints[steerRefPoint.Node]);
                 if (turn == 0) turn = Math.Sign(laneRef.Angle);
                 float outward = -ARS.LaneInsideSign * turn;
                 if ((laneRequest - steerRefOffset) * outward > 0f) laneRequest = steerRefOffset;
             }
-            float requestLimit = shaped ? laneEdge : laneLimit;
+            float requestLimit = (shaped || prepOutside) ? laneEdge : laneLimit;
             laneRequest = ARS.Clamp(laneRequest, -requestLimit, requestLimit);
 
             if (ActiveManeuver.Type == ManeuverType.DefendLane && MetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
@@ -1105,6 +1121,23 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float IdealLineBlendWidthFactor = 6f;
         const float IdealLineBlendMinMeters = 20f;
         public const float IdealLineMaxRadiusMeters = 50f;
+
+        CornerPoint NearestApexForPrep(float seconds)
+        {
+            CornerPoint best = null;
+            float bestMeters = float.MaxValue;
+            float reach = Math.Max(Car.Velocity.Length(), 1f) * seconds;
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                float metres = MetresToNode(corner.Node);
+                if (metres <= 0f || metres > reach || metres >= bestMeters) continue;
+                if (!CornerIsLaned(corner)) continue;
+                if (ARS.CornerApexSpeed(corner, this) >= Math.Max(Car.Velocity.Length(), 1f)) continue;
+                bestMeters = metres;
+                best = corner;
+            }
+            return best;
+        }
 
         bool CornerIsLaned(CornerPoint corner) => corner.DetectedRadius < IdealLineMaxRadiusMeters;
 
