@@ -644,7 +644,8 @@ namespace ARS
         }
 
         const int FlipReachNodes = 100;
-
+        // Halves more different than this in radius are two corners sharing a span, not one S.
+        const float ChicaneRadiusRatio = 1.6f;
         // A width out to one side before the flip and to the other side after it; anything less is a straight
         // being noisy, since the angle there hovers around zero.
         static bool FlipIsAnS(int flipNode, int count)
@@ -828,10 +829,30 @@ namespace ARS
                 if (chicaneFlip[i] < 0) continue;
                 CornerPoint corner = ARS.Corners[i];
                 int span = ArcSpan(corner.StartNode, corner.EndNode, nodeCount);
+                int flipAt = chicaneFlip[i];
+                int leftLen = Math.Max(0, ARS.IsPointToPoint ? flipAt - corner.StartNode : ArcSpan(corner.StartNode, flipAt, nodeCount));
+                float leftRadius = float.MaxValue;
+                float rightRadius = float.MaxValue;
+                for (int step = 0; step <= span; step++)
+                {
+                    float radius = ARS.TrackPoints[ArcNode(corner.StartNode, step, nodeCount)].SweepCurveRadius;
+                    if (step <= leftLen) leftRadius = Math.Min(leftRadius, radius);
+                    else rightRadius = Math.Min(rightRadius, radius);
+                }
+
+                // Two bends of very different size are two corners sharing a span, not one S to take in a line.
+                float ratio = Math.Max(leftRadius, rightRadius) / Math.Max(1f, Math.Min(leftRadius, rightRadius));
+                if (ratio > ChicaneRadiusRatio)
+                {
+                    ARS.Log(ARS.LogImportance.Info, "Chicane refused: apex " + corner.Node + " spans two corners, halves R "
+                        + leftRadius.ToString("0.0") + " and " + rightRadius.ToString("0.0"));
+                    continue;
+                }
+
                 corner.IsChicane = true;
-                ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + corner.Node + " moved to " + chicaneFlip[i]
-                    + ", the turn flips there with a width either side");
-                corner.Node = chicaneFlip[i];
+                ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + corner.Node + " moved to " + flipAt
+                    + ", halves R " + leftRadius.ToString("0.0") + " and " + rightRadius.ToString("0.0"));
+                corner.Node = flipAt;
                 corner.LengthStart = Math.Max(0, ARS.IsPointToPoint ? corner.Node - corner.StartNode : ArcSpan(corner.StartNode, corner.Node, nodeCount));
                 corner.LengthEnd = Math.Max(0, span - corner.LengthStart);
             }
