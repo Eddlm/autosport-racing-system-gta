@@ -4132,11 +4132,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             return ForwardNodeDistance(apexNode) > ARS.TrackPoints.Count / 2;
         }
 
-        // A corner is spent once the car is inside it and coasting: no longitudinal load means the car is sitting at
-        // the corner's speed with nothing left to do, so it leaves the selection early.
+        // A corner is spent once the car is moving through it and coasting: no longitudinal load means the car is
+        // sitting at the corner's speed with nothing left to do. A stopped car reads zero on the same signal, so
+        // motion is part of the test, not an assumption.
         bool CornerSpent(int apexNode)
         {
             if (apexNode < 0) return false;
+            if (Car.Velocity.Length() < CoastSpentMinSpeedMps) return false;
             CornerPoint corner = null;
             foreach (CornerPoint known in ARS.Corners)
                 if (known.Node == apexNode) { corner = known; break; }
@@ -4145,6 +4147,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             return Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < CoastSpentGs;
         }
         const float CoastSpentGs = 0.05f;
+        const float CoastSpentMinSpeedMps = 1f;
 
         // The node the plan brakes for: the aim, moved toward the apex by BrakeAimDepth. One writer, so
         // the ramp and the learner that grades it cannot aim at different nodes.
