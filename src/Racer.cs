@@ -774,6 +774,7 @@ namespace ARS
             _laneShapeApexNode = _laneApexNode;
             bool shaped = ARS.AbsoluteLaneEnabled && Lap > 0 && _laneShapeArmed
                 && lineCorner != null && MetresToNode(lineCorner.Node) > 0f
+                && MetresToNode(CornerEntranceNode(laneApex, laneApex.Node)) <= 0f
                 && ARS.TrackPoints[laneShapeNode].LaneShaped
                 && ARS.TrackPoints[laneShapeNode].LaneShapeApex == _laneApexNode;
 
@@ -1175,7 +1176,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float reach = Math.Max(Car.Velocity.Length(), 1f) * seconds;
             foreach (CornerPoint corner in ARS.Corners)
             {
-                float metres = MetresToNode(corner.Node);
+                float metres = MetresToNode(CornerEntranceNode(corner, corner.Node));
                 if (metres <= 0f || metres > reach || metres >= bestMeters) continue;
                 if (!CornerIsLaned(corner)) continue;
                 if (corner.IsChicane) continue;
@@ -1191,7 +1192,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         // The latch ends at the apex or the moment the shape takes that corner over, and never resumes for it.
         CornerPoint PrepCorner()
         {
-            if (_prepApex != null && !HasPassedApex(_prepApexNode)) return _prepApex;
+            if (_prepApex != null && MetresToNode(CornerEntranceNode(_prepApex, _prepApex.Node)) > 0f) return _prepApex;
             _prepApex = null;
             _prepApexNode = -1;
             if (_prepDoneApex >= 0 && HasPassedApex(_prepDoneApex)) _prepDoneApex = -1;
