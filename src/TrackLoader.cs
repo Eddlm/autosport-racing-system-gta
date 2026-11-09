@@ -1351,7 +1351,7 @@ namespace ARS
         {
             if (corner == null) return 0f;
             if (corner.WidestRadius <= corner.DetectedRadius) return corner.DetectedRadius;
-            float share = Math.Min(Math.Max(ARS.CornerLineSharePct, 0), 20) * 0.01f;
+            float share = Math.Min(Math.Max(ARS.CornerLineSharePct, 10), 90) * 0.01f;
             return corner.DetectedRadius + (corner.WidestRadius - corner.DetectedRadius) * share;
         }
 

@@ -980,7 +980,7 @@ namespace ARS
             rivalPaceMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
 
-            NativeListItem<string> cornerLineItem = new NativeListItem<string>("Corner Line Share (%)", "How far the corner speed is taken from the apex's tightest circle toward the widest arc that fits the road: 0 is the apex alone, 20 is a fifth of the way out.", SettingsRepair.OptionsFor("CornerLineShare"));
+            NativeListItem<string> cornerLineItem = new NativeListItem<string>("Corner Line Share (%)", "How far the corner speed is taken from the apex's tightest circle toward the widest arc that fits the road: 10 is close to the apex, 90 is nearly the widest arc, so the car can adjust mid corner.", SettingsRepair.OptionsFor("CornerLineShare"));
             cornerLineItem.ItemChanged += (sender, args) =>
             {
                 CornerLineSharePct = int.Parse(cornerLineItem.Items[args.Index], CultureInfo.InvariantCulture);
