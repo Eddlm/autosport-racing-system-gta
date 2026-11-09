@@ -766,20 +766,13 @@ namespace ARS
                 float width = Math.Max(1f, ARS.TrackPoints[apex].TrackHalfWidth * 2f);
                 int span = ArcSpan(corner.StartNode, corner.EndNode, nodeCount);
 
-                // The two nodes that decide it are the first ones a whole track width out from the apex, one
-                // each way, so nothing nearer than a width can vote.
-                int backNode = -1;
-                int fwdNode = -1;
-                for (int step = 1; step <= span && (backNode < 0 || fwdNode < 0); step++)
-                {
-                    int aheadNode = ArcNode(apex, step, nodeCount);
-                    if (fwdNode < 0 && aheadNode >= 0 && aheadNode < nodeCount
-                        && (ARS.TrackPoints[aheadNode].Position - apexAt).Length() >= width) fwdNode = aheadNode;
-                    int behindNode = ArcNode(apex, -step, nodeCount);
-                    if (backNode < 0 && behindNode >= 0 && behindNode < nodeCount
-                        && (ARS.TrackPoints[behindNode].Position - apexAt).Length() >= width) backNode = behindNode;
-                }
-                if (backNode < 0 || fwdNode < 0) continue;
+                // The road around the corner votes: its own span ends, as long as each is at least a track width
+                // from the apex. A node exactly one width out has an offset of centimetres and its side is noise.
+                int backNode = corner.StartNode;
+                int fwdNode = corner.EndNode;
+                if (backNode < 0 || fwdNode < 0 || backNode >= nodeCount || fwdNode >= nodeCount) continue;
+                if ((ARS.TrackPoints[backNode].Position - apexAt).Length() < width) continue;
+                if ((ARS.TrackPoints[fwdNode].Position - apexAt).Length() < width) continue;
 
                 float backOffset = Vector3.Dot(ARS.TrackPoints[backNode].Position - apexAt, apexRight);
                 float fwdOffset = Vector3.Dot(ARS.TrackPoints[fwdNode].Position - apexAt, apexRight);
@@ -800,7 +793,7 @@ namespace ARS
                     if (flipOffset != 0)
                     {
                         int flipNode = ArcNode(apex, flipOffset, nodeCount);
-                        ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + apex + " moved to " + flipNode + ", the road crosses to the other side");
+                        ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + apex + " moved to " + flipNode + ", behind " + backOffset.ToString("0.0") + " m, ahead " + fwdOffset.ToString("0.0") + " m off its line");
                         corner.Node = flipNode;
                         corner.LengthStart = ArcSpan(corner.StartNode, flipNode, nodeCount);
                         corner.LengthEnd = Math.Max(0, span - corner.LengthStart);
