@@ -777,9 +777,23 @@ namespace ARS
                 float angleBack = Vector3.SignedAngle(apexFlat, backFlat, Vector3.WorldUp);
                 float angleFwd = Vector3.SignedAngle(apexFlat, fwdFlat, Vector3.WorldUp);
 
-                if (Math.Abs(angleBack) > 1f && Math.Abs(angleFwd) > 1f && Math.Sign(angleBack) == Math.Sign(angleFwd))
+                // An S is the road turning one way behind the apex and the other way ahead of it. Same side both
+                // ways is a bend, which is what this test used to call a chicane.
+                if (Math.Abs(angleBack) > 1f && Math.Abs(angleFwd) > 1f && Math.Sign(angleBack) != Math.Sign(angleFwd))
                 {
                     corner.IsChicane = true;
+                    int span = ArcSpan(corner.StartNode, corner.EndNode, nodeCount);
+                    for (int step = 1; step < span; step++)
+                    {
+                        int flipNode = ArcNode(corner.StartNode, step, nodeCount);
+                        if (flipNode < 0 || flipNode >= nodeCount) break;
+                        if (Math.Sign(ARS.TrackPoints[flipNode].Angle) == Math.Sign(corner.Angle)) continue;
+                        ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + corner.Node + " moved to " + flipNode + ", the turn flips there");
+                        corner.Node = flipNode;
+                        corner.LengthStart = step;
+                        corner.LengthEnd = Math.Max(0, span - step);
+                        break;
+                    }
                 }
             }
 
