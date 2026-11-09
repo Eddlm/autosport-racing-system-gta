@@ -3307,10 +3307,13 @@ const float RequirementLookaheadSeconds = 3.95f;
                         else n = ((n % count) + count) % count;
                         TrackPoint nodePoint = ARS.TrackPoints[n];
                         if (!nodePoint.LaneShaped || nodePoint.LaneShapeApex != _laneShapeApexNode) break;
+                        lastShaped = n;
+                        // Every other node only: a sphere per node is hundreds of markers a frame, and the game
+                        // starts dropping the rest of that frame's markers - the input trail was the casualty.
+                        if ((n & 1) == 0) continue;
                         float half = Math.Max(nodePoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f);
                         Vector3 right = Vector3.Normalize(Vector3.Cross(nodePoint.Direction, Vector3.WorldUp));
                         World.DrawMarker(MarkerType.DebugSphere, nodePoint.Position + Vector3.WorldUp * 0.6f + right * (nodePoint.LaneLineShare * half), Vector3.Zero, Vector3.Zero, new Vector3(0.25f, 0.25f, 0.25f), Color.Black);
-                        lastShaped = n;
                     }
                     // The two ends of the shaped region: red where the entrance stops, green where the exit does.
                     if (lastShaped != _laneShapeApexNode)
