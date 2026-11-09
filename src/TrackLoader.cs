@@ -1108,8 +1108,7 @@ namespace ARS
                     break;
                 }
             }
-            // The arc's own circle, fitted over the nodes within a share of the tightest: the minimum below
-            // stays the apex's measure and the blur rule's, but it undershoots as a radius, so it is not the speed.
+            // The tightest node is a worst sample: it picks the apex and the blur rule, never the speed.
             List<Vector2> arcNodes = new List<Vector2>();
             float arcCeiling = tightestRadius * ArcFitShare;
             for (int position = startPosition; position <= endPosition; position++)
@@ -1323,8 +1322,7 @@ namespace ARS
             survivor.LengthEnd = exitDistance;
         }
 
-        // The corner's radius as the road actually bends: a least-squares circle over the nodes that sit on the
-        // arc, not the tightest noisy sample of it. Centred before the fit, which is what keeps the numbers sane.
+        // The corner's radius as the road bends: a least-squares circle over the arc, centred first for headroom.
         static float FittedArcRadius(List<Vector2> points)
         {
             int n = points.Count;

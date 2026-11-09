@@ -2683,8 +2683,7 @@ namespace ARS
 
             int material = materialhash.GetResult<int>();
             Vector3 hit = hitpos.GetResult<Vector3>();
-            // A vertical ray can only strike under the point and within its two metres, and 0 is no material:
-            // anything else is a half-resolved query, and a junk answer must read as a miss, which stays road.
+            // A vertical ray strikes under the point and within its two metres; anything else is half-resolved.
             if (material == 0 || Math.Abs(hit.X - point.X) > 1f || Math.Abs(hit.Y - point.Y) > 1f || Math.Abs(hit.Z - point.Z) > 3f)
             {
                 LastGroundProbeRejected = true;
