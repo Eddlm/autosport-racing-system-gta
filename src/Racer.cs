@@ -22,7 +22,7 @@ namespace ARS
         public static readonly bool RouteCurvature = true;
         public static readonly bool RouteBrakeCap = false;
         public static readonly bool ChicaneBoost = false;
-        public static readonly bool ProjectionCut = true;
+        public static readonly bool ProjectionCut = false;
         public static readonly bool OffTrackThrottle = false;
         public static readonly bool CrestGate = false;
         public static readonly bool StabilityCap = false;
