@@ -729,6 +729,10 @@ namespace ARS
                 {
                     float toEntrance = MetresToNode(CornerEntranceNode(candidate, candidate.Node));
                     _laneShapeArmed = toEntrance > Math.Max(speedMps, 1f) * ARS.LanePrepSeconds;
+                    if (!_laneShapeArmed)
+                        ARS.Log(ARS.LogImportance.Info, "lane " + Name + ": no out-in for apex " + candidate.Node
+                            + ", " + (toEntrance / Math.Max(speedMps, 1f)).ToString("0.0") + " s to its entrance, needs "
+                            + ARS.LanePrepSeconds.ToString("0") + " s");
                 }
                 _laneHeldCorner = candidate;
             }
