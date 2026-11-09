@@ -22,7 +22,7 @@ namespace ARS
         public static readonly bool RouteCurvature = true;
         public static readonly bool RouteBrakeCap = false;
         public static readonly bool ChicaneBoost = false;
-        public static readonly bool ProjectionCut = false;
+        public static readonly bool ProjectionCut = true;
         public static readonly bool SteerAskThrottle = true;
         public static readonly bool OffTrackThrottle = false;
         public static readonly bool CrestGate = false;
@@ -299,7 +299,9 @@ namespace ARS
         const float ProjectionChaseSeconds = 0.5f;
         // Armed at half the lateral grip the car actually has, not at a fixed G: a slow car and a fast one reach their
         // limit at different numbers, and the share is what they have in common.
-        const float ProjectionArmGripShare = 0.5f;
+        // The share of the tyre's peak slip at the current speed the steering must ask for before the projection
+        // may take pedal away. 1 = at the peak, so the car has to be asking for the corner at all.
+        const float ProjectionArmSteerShare = 1f;
         // Its authority, in pedal: cancel a full throttle (1) and add half a brake (0.5) on top. It can never undo a
         // brake, because the ceiling only ever competes for the lower input.
         const float ProjectionMaxLift = 1f + 0.5f;
@@ -2022,11 +2024,13 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _projectionDropMph = 0f;
                 return;
             }
-            // Under load only: without lateral Gs the car is off its line, not going wide.
-            float projectionGripGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
-            bool projectionLoaded = projectionGripGs > 0f
-                && Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) > ProjectionArmGripShare * projectionGripGs;
-            _projectionCutActive = projectionLoaded && _projectionOutsideMeters > 0f;
+            // The car earns the penalty by ASKING for the corner: the steering is at or past the tyre's peak slip at
+            // this speed. Lateral Gs used to gate this and was not a reliable "should it be active" - a car already
+            // sliding reads plenty of side force while asking for nothing more.
+            float projectionSteerAsk = TRLateralAtSpeed > 0.01f
+                ? Math.Abs(SteerAskDegrees) / TRLateralAtSpeed : 0f;
+            bool projectionAsking = projectionSteerAsk >= ProjectionArmSteerShare;
+            _projectionCutActive = projectionAsking && _projectionOutsideMeters > 0f;
 
             float projectionTargetLift = _projectionCutActive
                 ? Math.Min(_projectionOutsideMeters / ProjectionFullLiftMetres, 1f) * ProjectionMaxLift
