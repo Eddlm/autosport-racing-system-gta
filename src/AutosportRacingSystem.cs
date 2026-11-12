@@ -28,6 +28,11 @@ namespace ARS
         None, NotInitiated, Countdown, InProgress, Finished,
     }
 
+    public enum NearbyCarsMode
+    {
+        Ignore, JoinAsIs, JoinAndTune,
+    }
+
     public enum PaceMode
     {
         Absolute, RelativeToMine,
@@ -127,7 +132,7 @@ namespace ARS
         public static bool UseMenyooSkins = true;
 
         public static bool ForceFillGrid = true;
-        public static bool NearbyCars = false;
+        public static NearbyCarsMode NearbyCars = NearbyCarsMode.Ignore;
         const float NearbyCarsRadius = 30f;
         const int NearbyPreviewRefreshMs = 1000;
         public static float OverspeedCutPerTenthG = 0.2f;
@@ -755,7 +760,7 @@ namespace ARS
                 RaceMenuStore.Set("GridSize", _intendedOpponents);
             };
             _intendedOpponents = NearestGridSize(RaceMenuStore.GetInt("GridSize", 8));
-            NearbyCars = RaceMenuStore.GetBool("NearbyCars", NearbyCars);
+            NearbyCars = ReadNearbyCarsMode();
             _gridSizeItem.SelectedIndex = Array.IndexOf(GridSizeChoices, _intendedOpponents);
             _raceMenu.Add(_gridSizeItem);
             HookListTextPicker(_gridSizeItem);
@@ -939,13 +944,15 @@ namespace ARS
             };
             rivalsMenu.Add(forceFillItem);
 
-            NativeCheckboxItem nearbyItem = new NativeCheckboxItem("Nearby Cars", "Race the cars around you. They join the grid ahead of the pool, and a blue chevron marks them while this menu is open.", NearbyCars);
-            nearbyItem.CheckboxChanged += (sender, args) =>
+            NativeListItem<string> nearbyItem = new NativeListItem<string>("Nearby Cars", "The cars around you, taken as rivals. Join And Tune also lets Auto Styling restyle them.", EnumLabels<NearbyCarsMode>());
+            nearbyItem.ItemChanged += (sender, args) =>
             {
-                NearbyCars = nearbyItem.Checked;
+                NearbyCars = (NearbyCarsMode)args.Index;
                 RaceMenuStore.Set("NearbyCars", NearbyCars.ToString());
             };
+            nearbyItem.SelectedIndex = (int)NearbyCars;
             rivalsMenu.Add(nearbyItem);
+            HookListTextPicker(nearbyItem);
 
             NativeCheckboxItem tuningItem = new NativeCheckboxItem("Auto Styling", "Restyle the spawned cars only, skipping your own and any car that already has a mod kit. Runs during the countdown.", SmartTuning);
             tuningItem.CheckboxChanged += (sender, args) =>
@@ -1980,7 +1987,7 @@ namespace ARS
 
         void TickNearbyPreview()
         {
-            if (!NearbyCars || !AnyArsMenuVisible() || RaceIsRunning)
+            if (NearbyCars == NearbyCarsMode.Ignore || !AnyArsMenuVisible() || RaceIsRunning)
             {
                 _nearbyPreview.Clear();
                 return;
@@ -2699,8 +2706,9 @@ namespace ARS
 
             if (tunecars && SmartTuning)
             {
-                Log(LogImportance.Info, "Smart tuning queued for " + Racers.Count + " cars");
-                SmartTuner.Enqueue(Racers);
+                IEnumerable<Racer> tuning = NearbyCars == NearbyCarsMode.JoinAndTune ? Racers : Racers.Where(r => !r.FromNearby);
+                Log(LogImportance.Info, "Smart tuning queued for " + tuning.Count() + " cars");
+                SmartTuner.Enqueue(tuning);
             }
 
             foreach (Racer r in Racers) if (r.Car.CurrentBlip != null) r.Car.CurrentBlip.Color = BlipColor.Blue;
@@ -3655,6 +3663,8 @@ namespace ARS
                 DebugToggles[option] = DebugMenuStore.GetBool(option.ToString(), DebugToggles[option]);
             DebugToggles[Options.ReverseRoute] = RaceMenuStore.GetBool("ReverseRoute", DebugToggles[Options.ReverseRoute]);
 
+            NearbyCars = ReadNearbyCarsMode();
+
             SettingsRepair.CompleteOwnedKeys(RaceMenuStore, SettingsMenuStore, DebugMenuStore, DevelopmentMenuStore);
             SettingsRepair.DeleteLegacyFiles();
             Log(LogImportance.Info, "Checked the Settings folder.");
@@ -3720,6 +3730,17 @@ namespace ARS
             string[] labels = new string[values.Length];
             for (int i = 0; i < values.Length; i++) labels[i] = EnumLabel((Enum)values.GetValue(i));
             return labels;
+        }
+
+        static NearbyCarsMode ReadNearbyCarsMode()
+        {
+            string stored = RaceMenuStore.Get("NearbyCars", NearbyCars.ToString());
+            if (string.Equals(stored, "True", StringComparison.OrdinalIgnoreCase)) stored = NearbyCarsMode.JoinAsIs.ToString();
+            else if (string.Equals(stored, "False", StringComparison.OrdinalIgnoreCase)) stored = NearbyCarsMode.Ignore.ToString();
+
+            NearbyCarsMode mode = ParseEnum(stored, NearbyCarsMode.Ignore);
+            if (!string.Equals(stored, mode.ToString(), StringComparison.Ordinal)) RaceMenuStore.Set("NearbyCars", mode.ToString());
+            return mode;
         }
 
         public static void Log(LogImportance i, string text, bool forced = false)
@@ -4232,7 +4253,7 @@ namespace ARS
             }
 
             List<Vehicle> nearbyCars = new List<Vehicle>();
-            if (NearbyCars)
+            if (NearbyCars != NearbyCarsMode.Ignore)
             {
                 if (_nearbyPreview.Count > 0)
                 {
