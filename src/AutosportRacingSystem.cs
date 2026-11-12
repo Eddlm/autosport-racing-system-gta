@@ -1956,6 +1956,14 @@ namespace ARS
             List<Vehicle> found = new List<Vehicle>();
             Vehicle mine = Game.Player.Character.CurrentVehicle;
             Vehicle[] around = World.GetNearbyVehicles(Game.Player.Character.Position, NearbyCarsRadius);
+            Vehicle[] wide = World.GetNearbyVehicles(Game.Player.Character.Position, NearbyCarsRadius * 3f);
+            float nearest = float.MaxValue;
+            foreach (Vehicle wideVeh in wide)
+            {
+                if (!CanWeUse(wideVeh)) continue;
+                float wideDistance = wideVeh.Position.DistanceTo(Game.Player.Character.Position);
+                if (wideDistance < nearest) nearest = wideDistance;
+            }
             int unfit = 0, mineCount = 0, racersCount = 0, seatFree = 0, seatTaken = 0;
             foreach (Vehicle veh in around)
             {
@@ -1968,7 +1976,7 @@ namespace ARS
                 found.Add(veh);
             }
 
-            if (logScan) Log(LogImportance.Info, "Nearby scan: " + around.Length + " vehicle(s) within " + NearbyCarsRadius + " m, " + found.Count + " adoptable (" + unfit + " unusable, " + mineCount + " yours, " + racersCount + " already racing; driver seat free " + seatFree + ", taken " + seatTaken + ").");
+            if (logScan) Log(LogImportance.Info, "Nearby scan: " + around.Length + " vehicle(s) within " + NearbyCarsRadius + " m, " + found.Count + " adoptable (" + unfit + " unusable, " + mineCount + " yours, " + racersCount + " already racing; driver seat free " + seatFree + ", taken " + seatTaken + "; nearest " + (nearest == float.MaxValue ? "none within " + (NearbyCarsRadius * 3f) + " m" : nearest.ToString("0.0", CultureInfo.InvariantCulture) + " m") + ").");
             return found;
         }
 
@@ -4136,7 +4144,7 @@ namespace ARS
                 }
             }
 
-            Ped CreateDriverPed(Vehicle car, Vector3? spawnAt = null)
+            Ped CreateDriverPed(Vehicle car, Vector3? spawnAt = null, int maxTries = 500)
             {
                 Model driverModel = StreetRacerModels[GetRandomInt(0, StreetRacerModels.Length)];
                 Ped driverPed = null;
@@ -4154,12 +4162,12 @@ namespace ARS
                 }
 
                 int p = 0;
-                while (!CanWeUse(driverPed) && p < 500)
+                while (!CanWeUse(driverPed) && p < maxTries)
                 {
                     Script.Wait(10);
                     try
                     {
-                        Vector3 retryPos = spawnAt ?? (car.Position + car.RightVector * (5f + p * 0.1f) + car.ForwardVector * 3f);
+                        Vector3 retryPos = spawnAt ?? (car.Position + car.RightVector * ((p % 2 == 0 ? 1f : -1f) * 5f) + car.ForwardVector * (3f + (p / 2) * 0.4f));
                         int retryHandle = Function.Call<int>(Hash.CREATE_PED, 26, (int)driverModel.Hash, retryPos.X, retryPos.Y, retryPos.Z, car.Heading, false, false);
                         driverPed = retryHandle > 0 ? new Ped(retryHandle) : null;
                     }
@@ -4170,6 +4178,7 @@ namespace ARS
                     p++;
                 }
 
+                if (!CanWeUse(driverPed)) Log(LogImportance.Info, "Ped creation gave up after " + p + " tries for " + car.FriendlyName + " (" + driverModel.Hash + ").");
                 return driverPed;
             }
 
@@ -4232,39 +4241,32 @@ namespace ARS
                 return Racers.Count > before;
             }
 
+            List<Vehicle> nearbyCars = new List<Vehicle>();
             if (NearbyCars)
             {
-                List<Vehicle> nearby = DetectNearbyCars(true);
-                int added = 0;
-                int noDriver = 0;
-                foreach (Vehicle veh in nearby)
+                if (_nearbyPreview.Count > 0)
                 {
-                    if (Racers.Count >= maxcars) break;
-                    Ped driver = veh.GetPedOnSeat(VehicleSeat.Driver);
-                    if (driver == null) driver = CreateDriverPed(veh, veh.Position + Vector3.WorldUp * 2f);
-                    if (driver == null || !CanWeUse(driver) || driver.IsPlayer) { noDriver++; continue; }
-                    int before = Racers.Count;
-                    AddRacer(veh, driver);
-                    if (Racers.Count > before)
-                    {
-                        Racers[Racers.Count - 1].FromNearby = true;
-                        added++;
-                    }
+                    nearbyCars = _nearbyPreview.FindAll(v => CanWeUse(v) && v.Position.DistanceTo(Game.Player.Character.Position) <= NearbyCarsRadius);
+                    Log(LogImportance.Info, "Nearby: adopting the list the menu was marking - " + nearbyCars.Count + " car(s) left within " + NearbyCarsRadius + " m, list is " + (Game.GameTime - _nearbyPreviewMs) + " ms old.");
                 }
-
-                Log(LogImportance.Info, "Added " + added + " nearby cars to the grid (" + noDriver + " skipped: no usable driver).");
-                if (added == 0) UI.Notify("~o~[ARS]:~w~ Nearby Cars is on, but no car around you could be added - the scan is in ARS.log.");
+                else
+                {
+                    nearbyCars = DetectNearbyCars(true);
+                }
             }
+
+            int poolTarget = Math.Max(0, maxcars - nearbyCars.Count);
 
             List<string> spawnedKeys = new List<string>();
             foreach (string modelKey in _cachedCandidates)
             {
+                if (Racers.Count >= poolTarget) break;
                 if (SpawnRacer(modelKey)) spawnedKeys.Add(modelKey);
             }
 
             int cycle = 0;
             int failures = 0;
-            while (ForceFillGrid && Racers.Count < maxcars && failures < spawnedKeys.Count)
+            while (ForceFillGrid && Racers.Count < poolTarget && failures < spawnedKeys.Count)
             {
                 bool spawned = SpawnRacer(spawnedKeys[cycle % spawnedKeys.Count]);
                 cycle++;
@@ -4272,6 +4274,32 @@ namespace ARS
             }
             if (Racers.Count < maxcars) Log(LogImportance.Info, "Grid: " + Racers.Count + " of " + maxcars + " cars spawned from " + _cachedCandidates.Count + " candidate(s), Force-Fill " + (ForceFillGrid ? "on" : "off") + ".");
             else if (cycle > 0) Log(LogImportance.Info, "Force-Fill: repeated the pool's models " + cycle + " time(s) to reach the grid target of " + maxcars + ".");
+
+            if (nearbyCars.Count > 0)
+            {
+                int added = 0;
+                int noDriver = 0;
+                int ghostSeat = 0;
+                foreach (Vehicle veh in nearbyCars)
+                {
+                    if (Racers.Count >= maxcars) break;
+                    Ped driver = veh.IsSeatFree(VehicleSeat.Driver) ? null : veh.GetPedOnSeat(VehicleSeat.Driver);
+                    if (driver != null && !CanWeUse(driver)) { ghostSeat++; driver = null; }
+                    if (driver == null) driver = CreateDriverPed(veh, null, 30);
+                    if (driver == null || !CanWeUse(driver) || driver.IsPlayer) { noDriver++; continue; }
+                    Function.Call(Hash.CLEAR_PED_TASKS_IMMEDIATELY, driver);
+                    int nearBefore = Racers.Count;
+                    AddRacer(veh, driver);
+                    if (Racers.Count > nearBefore)
+                    {
+                        Racers[Racers.Count - 1].FromNearby = true;
+                        added++;
+                    }
+                }
+
+                Log(LogImportance.Info, "Added " + added + " nearby cars to the grid (" + ghostSeat + " ghost seat(s), " + noDriver + " skipped: no usable driver).");
+                if (added == 0) UI.Notify("~o~[ARS]:~w~ Nearby Cars is on, but no car around you could be added - the scan is in ARS.log.");
+            }
 
             RaceStatus = RaceState.None;
             PlayerParticipating = Racers.Any(r => r.Driver != null && r.Driver.IsPlayer);
