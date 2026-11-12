@@ -94,7 +94,7 @@ The grid forms, the cars get dressed, and the lights count you down. Then the pa
 
 Out on track you get a board — position, car, performance index and best lap — and a corner display carrying your own position, current lap time and total time. Positions lock the moment a car crosses the line, so the order stops shuffling under you as the race closes. When the first car finishes, a grace period starts for everyone still out there; when it runs out the race is called and the stragglers are classified. Win it, and the purse is real money.
 
-You can start from the menu, or just drive up to a track's marker in the world and take the race at your feet. You can restart the same field, drop yourself back onto the road if you end up in a hedge, or sit the race out and watch the field go round — with corner markers and track-edge chevrons on screen if you want to see the line they are taking. And ambient traffic is suppressed while a track is loaded, so the race is yours.
+You can start from the menu, or just drive up to a track's marker in the world and take the race at your feet. You can restart the same field, drop yourself back onto the road if you end up in a hedge, or sit the race out and watch the field go round — with corner markers and track-edge chevrons on screen if you want to see the line they are taking. And ambient traffic stops spawning while a track is loaded - the cars already standing there are left alone, which is exactly what Nearby Cars picks from - so the race is yours.
 
 **What you notice:** the board stops moving the moment you cross the line, and the race keeps going behind you until the clock runs out.
 
