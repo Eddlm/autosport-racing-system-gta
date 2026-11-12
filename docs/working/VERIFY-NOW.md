@@ -1,6 +1,6 @@
 # VERIFICAR EN JUEGO — pendiente
 
-Build desplegada: **1569**. Lo marcado ✅ es tuyo, verificado en juego; lo marcado ⬜ sigue siendo **compile-only**.
+Build desplegada: **1777**. Lo marcado ✅ es tuyo, verificado en juego; lo marcado ⬜ sigue siendo **compile-only**.
 Marca una línea con `[x]` o dime «verificado N» y actualizo este fichero.
 
 **Lo de hoy (30-10) está en la sección H**, al final del bloque de abajo: seis commits, build 1375 → 1380, todos
@@ -140,3 +140,56 @@ Seis commits, todos **compile-only**. Cada fila trae cómo provocarlo y qué deb
 | I6 | **projection is a speed offset** (`ProjectionSlowdownMphPerSecond` 2, floor 30) | run wide on the approach to a fast bend, `Show Gs Projection` on | the car slows **gradually** (2 mph/s on the target, then the pedal law brakes) instead of the old 0.25 s throttle drop + 0.8 brake, and it never goes under 30 mph or the bend's speed less 30; the `Offshoot:` log line now prints `drop=` and `floor=` | ⬜ |
 | I7 | **route turn-in is a pure inset** (`LaneInsetPerRadius` 125, no speed factor) | a slow corner taken fast, and the same corner taken slowly | the aim sits the **same distance inside** in both (2.5 m at R=50, 1.25 at R=100, 5 m clamp under ~25 m); it no longer widens with speed | ⬜ |
 | I8 | **a corner is forgotten at the lookahead** (`ApexAheadOfLookahead` gates both selection and forgetting) | drive out of a corner on a stretch with no corner the lane will work | the lane never asks for the **outside** after the exit and never re-arms on the corner behind it; it holds the field until the apex crosses the preview, then lets go | ⬜ |
+
+## J · 2026-11-09 (1755) — the corner pipeline
+
+Ten bench flags all on in this build (`CornerPlan`, `RouteCurvature`, `ChicaneBoost`, `ProjectionCut`,
+`OffTrackThrottle`, `CrestGate`, `StabilityCap`, `GsLaneFloor`, `OverspeedCorrection`, `SlopeGrip`). Ini:
+`CornerCeiling` 500, `CornerLineShare` 20, `CornerOffset` 0, `RouteOffset` 0, `BrakeAimDepth` 0.
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| J1 | **the prep cap hangs off where the prep started** (47e9efd) | the bend where the pack used to be thrown off the road | no sudden steer-out: the creep is a fixed distance from the offset the prep began at, not a lead re-based on the car every tick | ✅ **verified 09-11 · 1755**: «Oh yeah much smoother. The same point cars got whacked off the road by their sudden steer out, they dont anymore.» |
+| J2 | **release at the apex, four seconds to position** (1e8e57c) | the same pass, on the exit | the held corner lets go at the apex and the dynamic lane takes over, no fight against the shaped exit | ✅ 09-11 · 1755, same pass as J1 |
+| J3 | **full brake asks for a 4.5 m/s error** (fe71f53) | overspeed a bend by ~5 mph, then ~10 | the pedal stays off full while the error is under 4.5 m/s (≈10 mph); the learner band, the projection share and the ramp shift with it | ⬜ |
+
+Open on this bench: the exit asks for nothing outward — the dynamic lane only ever aims inside, so the car
+leaves a corner on the inside line unless `DefendLane` is working it (his ruling: the exit is fluid, default
+outward). A span holding two corners of different size is refused at the 1.6 radius ratio, not split. Grapeseed
+2968 sits at 1.97.
+
+## K · 2026-11-09 (1768) — the corner is spent when the car coasts
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| K1 | **coasting inside the corner releases it early** (`CornerSpent`) | brake into a bend as usual, then roll through the entrance off both pedals | once past the entrance with |long G| under 0.05 the corner leaves the selection: the line stops shaping and the plan moves on, instead of holding it to the apex | ✅ **verified 09-11 · 1769/1770**: «the 0.05gs thing works well» |
+| K2 | **a lift on the straight releases nothing** | coast a hundred metres before a bend, both pedals up | the corner stays selected and the shape still starts at the entrance four seconds out — the release is gated on being past the entrance | ⬜ |
+| K3 | **the input gate is gone** | trail brake lightly into a bend | the pedals no longer matter: only the longitudinal Gs decide, so a light brake above 0.05 g keeps the corner selected | ⬜ |
+| K4 | **the lane lets go on its own corner** | the shaped line through a bend taken off the pedals | the shape stops once the car is through the entrance instead of running to the apex: the lane tests the corner it holds, because the queue's head has already moved on by the time steering runs | ⬜ |
+| K5 | **the creep is a clock, not an angle** (1770) | the S where a left corner is approached through a right-hander | the cap opens at 0.1 m and reaches 2 m three seconds after the corner starts being asked, so a counter-turning prep no longer gets the tightest creep for being perfectly placed | ⬜ |
+
+The signal is `VehicleData.GetLongitudinalGs`, the same one `UpdateCornerRequirements` already reads.
+`CoastSpentGs` is the only knob (0.05 g ≈ 0.49 m/s², so the tail of a soft brake release counts as spent).
+
+## L · 2026-11-09 (1776) — what the two auditors found, and what shipped
+
+DS Flash and GLM 5.3 Flash audited `fc8dd13..HEAD` read-only (`docs/audit/500-session-ds.md`,
+`docs/audit/501-session-glm.md`). The rows below are the ones I re-checked in the code and fixed; the rest,
+including the ones I judged false or not worth a change, are in the reports.
+
+| # | What | Passes if | State |
+|---|---|---|---|
+| L1 | **the lane really lets go** (1772) | brake into a bend, coast from the entrance: the shape stops there instead of running to the apex — the selection no longer re-adopts a corner it has just declared spent | ⬜ |
+| L2 | **a stopped car is not coasting** (1773) | sitting on the grid, or stopped past an entrance, no corner is dropped from the plan | ⬜ |
+| L3 | **the creep survives a race** (1774) | second race on the same track: the cap still opens at 0.1 m and climbs, instead of starting at 2 m | ⬜ |
+| L4 | **a skipped shape has no entrance** (1775) | a corner the shape builder dropped no longer reports the start line as its entrance | ⬜ |
+| L5 | **the lane looks past a skipped corner** (1777) | a wide corner the plan ignored gets no lean from the lane either — one selection, both readers | ⬜ |
+
+Left alone on purpose, each one a verdict rather than a fix: the refill's `first = 0` fallback still commits a corner
+the plan skipped — a queue needs a head, and `CornerRequiresBraking` keeps that head out of the braking table, so it is
+a placeholder and not a decision to brake. The lane can adopt the next corner while the plan still brakes for the
+current apex: that is what an S asks for, and the ramp is what keeps the first ask small. `UpdateCornerRequirements`
+runs every frame because it is the detector, not the refill. `_cornerContexts` does prune on a revision change
+(`SyncCornerContexts`), so that audit row was false. AGENTS/ now carries dated CURRENT blocks; its history stays as
+history.
+
