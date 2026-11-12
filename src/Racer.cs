@@ -530,6 +530,8 @@ namespace ARS
         const float PressureRisePerSecond = 2f;
         const float PressureFallPerSecond = 30f;
 
+        public bool FromNearby;
+
         public Racer(Vehicle RacerCar, Ped RacerPed)
         {
             Car = RacerCar;

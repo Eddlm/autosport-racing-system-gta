@@ -121,6 +121,7 @@ namespace ARS
             race.Specs.Add(new KeySpec("PaceTarget", null, Kind.Number));
             race.Specs.Add(new KeySpec("PaceDeviation", "Off", Kind.Text, new[] { "Off", "2", "4", "6", "8" }));
             race.Specs.Add(new KeySpec("ReverseRoute", "False", Kind.Bool));
+            race.Specs.Add(new KeySpec("NearbyCars", "False", Kind.Bool));
             files.Add(race);
 
             FileSpec settings = Owned("Menu-Settings.ini");

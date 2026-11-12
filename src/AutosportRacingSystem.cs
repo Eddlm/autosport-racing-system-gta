@@ -127,6 +127,11 @@ namespace ARS
         public static bool UseMenyooSkins = true;
 
         public static bool ForceFillGrid = true;
+        public static bool NearbyCars = false;
+        const float NearbyCarsRadius = 30f;
+
+        List<Vehicle> _nearbyPreview = new List<Vehicle>();
+        int _nearbyPreviewMs;
         public static float OverspeedCutPerTenthG = 0.2f;
         public static bool SmartTuning = true;
 
@@ -750,6 +755,7 @@ namespace ARS
                 RaceMenuStore.Set("GridSize", _intendedOpponents);
             };
             _intendedOpponents = NearestGridSize(RaceMenuStore.GetInt("GridSize", 8));
+            NearbyCars = RaceMenuStore.GetBool("NearbyCars", NearbyCars);
             _gridSizeItem.SelectedIndex = Array.IndexOf(GridSizeChoices, _intendedOpponents);
             _raceMenu.Add(_gridSizeItem);
             HookListTextPicker(_gridSizeItem);
@@ -932,6 +938,14 @@ namespace ARS
                 SaveRacerSetting("ForceFillGrid", ForceFillGrid.ToString());
             };
             rivalsMenu.Add(forceFillItem);
+
+            NativeCheckboxItem nearbyItem = new NativeCheckboxItem("Nearby Cars", "Race the cars around you. They join the grid ahead of the pool, and a blue chevron marks them while this menu is open.", NearbyCars);
+            nearbyItem.CheckboxChanged += (sender, args) =>
+            {
+                NearbyCars = nearbyItem.Checked;
+                RaceMenuStore.Set("NearbyCars", NearbyCars.ToString());
+            };
+            rivalsMenu.Add(nearbyItem);
 
             NativeCheckboxItem tuningItem = new NativeCheckboxItem("Auto Styling", "Restyle the spawned cars only, skipping your own and any car that already has a mod kit. Runs during the countdown.", SmartTuning);
             tuningItem.CheckboxChanged += (sender, args) =>
@@ -1937,6 +1951,57 @@ namespace ARS
             return HotkeysEnabled && Game.IsKeyPressed(MenuModifierKey) && Game.IsKeyPressed(MenuKey);
         }
 
+        List<Vehicle> DetectNearbyCars(bool logScan = false)
+        {
+            List<Vehicle> found = new List<Vehicle>();
+            Vehicle mine = Game.Player.Character.CurrentVehicle;
+            Vehicle[] around = World.GetNearbyVehicles(Game.Player.Character.Position, NearbyCarsRadius);
+            int unfit = 0, mineCount = 0, racersCount = 0, seatFree = 0, seatTaken = 0;
+            foreach (Vehicle veh in around)
+            {
+                if (!CanWeUse(veh) || veh.IsDead || !veh.IsDriveable) { unfit++; continue; }
+                if (mine != null && mine.Exists() && veh.Handle == mine.Handle) { mineCount++; continue; }
+                Ped seated = veh.GetPedOnSeat(VehicleSeat.Driver);
+                if (seated != null && seated.IsPlayer) { mineCount++; continue; }
+                if (Racers.Any(r => r.Car != null && r.Car.Exists() && r.Car.Handle == veh.Handle)) { racersCount++; continue; }
+                if (veh.IsSeatFree(VehicleSeat.Driver)) seatFree++; else seatTaken++;
+                found.Add(veh);
+            }
+
+            if (logScan) Log(LogImportance.Info, "Nearby scan: " + around.Length + " vehicle(s) within " + NearbyCarsRadius + " m, " + found.Count + " adoptable (" + unfit + " unusable, " + mineCount + " yours, " + racersCount + " already racing; driver seat free " + seatFree + ", taken " + seatTaken + ").");
+            return found;
+        }
+
+        bool AnyArsMenuVisible()
+        {
+            if (_arsMenu != null && _arsMenu.Visible) return true;
+            if (_raceMenu != null && _raceMenu.Visible) return true;
+            foreach (NativeMenu sub in _menuParents.Keys) if (sub.Visible) return true;
+            return false;
+        }
+
+        void TickNearbyPreview()
+        {
+            if (!NearbyCars || !AnyArsMenuVisible() || RaceIsRunning)
+            {
+                if (_nearbyPreview.Count > 0) _nearbyPreview.Clear();
+                return;
+            }
+
+            int now = Game.GameTime;
+            if (now - _nearbyPreviewMs >= 1000)
+            {
+                _nearbyPreviewMs = now;
+                _nearbyPreview = DetectNearbyCars();
+            }
+
+            foreach (Vehicle veh in _nearbyPreview)
+            {
+                if (!CanWeUse(veh)) continue;
+                World.DrawMarker(MarkerType.ChevronUpx1, veh.Position + Vector3.WorldUp * 2f, Vector3.Zero, Vector3.Zero, new Vector3(1f, 1f, 1f), Color.Blue, true, true, 0, false, "", "", false);
+            }
+        }
+
         void OnTick(object sender, EventArgs e)
         {
             try
@@ -1957,6 +2022,8 @@ namespace ARS
                 }
 
                 SmartTuner.Tick(GetRandomInt);
+
+                TickNearbyPreview();
 
                 TrackLoader.TickQueuedFlares(FlareEffects);
 
@@ -4069,13 +4136,13 @@ namespace ARS
                 }
             }
 
-            Ped CreateDriverPed(Vehicle car)
+            Ped CreateDriverPed(Vehicle car, Vector3? spawnAt = null)
             {
                 Model driverModel = StreetRacerModels[GetRandomInt(0, StreetRacerModels.Length)];
                 Ped driverPed = null;
                 try
                 {
-                    Vector3 spawnPos = car.Position + car.RightVector * 5f + car.ForwardVector * 3f;
+                    Vector3 spawnPos = spawnAt ?? (car.Position + car.RightVector * 5f + car.ForwardVector * 3f);
                     driverModel.Request(500);
                     int pedHandle = Function.Call<int>(Hash.CREATE_PED, 26, (int)driverModel.Hash, spawnPos.X, spawnPos.Y, spawnPos.Z, car.Heading, false, false);
                     driverPed = pedHandle > 0 ? new Ped(pedHandle) : null;
@@ -4092,7 +4159,7 @@ namespace ARS
                     Script.Wait(10);
                     try
                     {
-                        Vector3 retryPos = car.Position + car.RightVector * (5f + p * 0.1f) + car.ForwardVector * 3f;
+                        Vector3 retryPos = spawnAt ?? (car.Position + car.RightVector * (5f + p * 0.1f) + car.ForwardVector * 3f);
                         int retryHandle = Function.Call<int>(Hash.CREATE_PED, 26, (int)driverModel.Hash, retryPos.X, retryPos.Y, retryPos.Z, car.Heading, false, false);
                         driverPed = retryHandle > 0 ? new Ped(retryHandle) : null;
                     }
@@ -4163,6 +4230,30 @@ namespace ARS
                     try { if (car != null) car.Delete(); } catch (Exception) { }
                 }
                 return Racers.Count > before;
+            }
+
+            if (NearbyCars)
+            {
+                List<Vehicle> nearby = DetectNearbyCars(true);
+                int added = 0;
+                int noDriver = 0;
+                foreach (Vehicle veh in nearby)
+                {
+                    if (Racers.Count >= maxcars) break;
+                    Ped driver = veh.GetPedOnSeat(VehicleSeat.Driver);
+                    if (driver == null) driver = CreateDriverPed(veh, veh.Position + Vector3.WorldUp * 2f);
+                    if (driver == null || !CanWeUse(driver) || driver.IsPlayer) { noDriver++; continue; }
+                    int before = Racers.Count;
+                    AddRacer(veh, driver);
+                    if (Racers.Count > before)
+                    {
+                        Racers[Racers.Count - 1].FromNearby = true;
+                        added++;
+                    }
+                }
+
+                Log(LogImportance.Info, "Added " + added + " nearby cars to the grid (" + noDriver + " skipped: no usable driver).");
+                if (added == 0) UI.Notify("~o~[ARS]:~w~ Nearby Cars is on, but no car around you could be added - the scan is in ARS.log.");
             }
 
             List<string> spawnedKeys = new List<string>();
