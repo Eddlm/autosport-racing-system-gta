@@ -733,7 +733,7 @@ because the pool yields inside its model loops and the preview tick clears the m
 closes. Keep that order. A refactor that moves the capture after the pool loses the list silently — it happened
 once, and the only trace was an `0 car(s)` line in `ARS.log`.
 
-1. **Chevrons, a closed menu, and the cars still join.** Open Rivals, get the blue bobbing chevrons, **close the menu**, then press Start: the marked cars take the head of the grid and the log reads `Nearby: adopting from the marked list - N of M still valid`. Empty head slots, or `no marked list` in the log, means the capture moved after the pool.
+1. **Chevrons, a closed menu, and the cars still join.** Open Rivals, get the blue bobbing chevrons, **close the menu**, then press Start: the marked cars appear in the grid, placed by the same Grid Sorting rule as the pool (they are not pinned to the front any more), and the log reads `Nearby: adopting from the marked list - N of M still valid`. Missing cars, or `no marked list` in the log, means the capture moved after the pool.
 2. **`Join And Tune` restyles, `Join As Is` does not.** Same pass, both modes: tuned cars come back with a mod kit and livery, as-is cars keep their traffic look.
 3. **The setting survives a restart.** `NearbyCars=JoinAndTune` in `Menu-Race.ini`, and no `Settings repair: Menu-Race.ini NearbyCars` line in the init block of `ARS.log`. That line appearing again means the migration is being run after the repair pass.
 4. **The pool still fills Grid Size.** 8 configured with two marked cars gives 10 AI on track, not 8 — nearby cars are extra, like the player.

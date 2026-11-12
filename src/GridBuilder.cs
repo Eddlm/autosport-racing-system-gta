@@ -18,12 +18,6 @@ namespace ARS
         {
             SortRacers(racers, sort);
 
-            List<Racer> pinned = racers.FindAll(r => r.FromNearby);
-            if (pinned.Count > 0)
-            {
-                racers.RemoveAll(r => r.FromNearby);
-                racers.InsertRange(0, pinned);
-            }
             Racer player = racers.FirstOrDefault(r => r.Driver.IsPlayer);
             if (player != null) { racers.Remove(player); racers.Add(player); }
             if (pointToPoint) positions.Reverse();
