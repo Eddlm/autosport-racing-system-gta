@@ -3734,12 +3734,13 @@ namespace ARS
 
         static NearbyCarsMode ReadNearbyCarsMode()
         {
-            string stored = RaceMenuStore.Get("NearbyCars", NearbyCars.ToString());
-            if (string.Equals(stored, "True", StringComparison.OrdinalIgnoreCase)) stored = NearbyCarsMode.JoinAsIs.ToString();
-            else if (string.Equals(stored, "False", StringComparison.OrdinalIgnoreCase)) stored = NearbyCarsMode.Ignore.ToString();
+            string raw = RaceMenuStore.Get("NearbyCars", NearbyCars.ToString());
+            string migrated = raw;
+            if (string.Equals(raw, "True", StringComparison.OrdinalIgnoreCase)) migrated = NearbyCarsMode.JoinAsIs.ToString();
+            else if (string.Equals(raw, "False", StringComparison.OrdinalIgnoreCase)) migrated = NearbyCarsMode.Ignore.ToString();
 
-            NearbyCarsMode mode = ParseEnum(stored, NearbyCarsMode.Ignore);
-            if (!string.Equals(stored, mode.ToString(), StringComparison.Ordinal)) RaceMenuStore.Set("NearbyCars", mode.ToString());
+            NearbyCarsMode mode = ParseEnum(migrated, NearbyCarsMode.Ignore);
+            if (!string.Equals(raw, mode.ToString(), StringComparison.Ordinal)) RaceMenuStore.Set("NearbyCars", mode.ToString());
             return mode;
         }
 
@@ -4257,12 +4258,18 @@ namespace ARS
             {
                 if (_nearbyPreview.Count > 0)
                 {
-                    nearbyCars = _nearbyPreview.FindAll(v => CanWeUse(v) && v.Position.DistanceTo(Game.Player.Character.Position) <= NearbyCarsRadius);
-                    Log(LogImportance.Info, "Nearby: adopting the list the menu was marking - " + nearbyCars.Count + " car(s) left within " + NearbyCarsRadius + " m, list is " + (Game.GameTime - _nearbyPreviewMs) + " ms old.");
+                    nearbyCars = _nearbyPreview.FindAll(v => CanWeUse(v) && !Racers.Any(r => r.Car != null && r.Car.Exists() && r.Car.Handle == v.Handle));
+                    Log(LogImportance.Info, "Nearby: adopting from the marked list - " + nearbyCars.Count + " of " + _nearbyPreview.Count + " still valid, list is " + (Game.GameTime - _nearbyPreviewMs) + " ms old.");
+                    if (nearbyCars.Count == 0)
+                    {
+                        nearbyCars = DetectNearbyCars(true);
+                        Log(LogImportance.Info, "Nearby: the marked list validated to nothing, fell back to a scan - " + nearbyCars.Count + " found.");
+                    }
                 }
                 else
                 {
                     nearbyCars = DetectNearbyCars(true);
+                    Log(LogImportance.Info, "Nearby: no marked list (the menu was never open), a scan found " + nearbyCars.Count + ".");
                 }
             }
 
