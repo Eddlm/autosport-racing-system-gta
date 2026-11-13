@@ -1,10 +1,12 @@
-# VERIFICAR EN JUEGO — pendiente
+# VERIFY IN GAME — outstanding
 
-Build desplegada: **1802**. Lo marcado ✅ es tuyo, verificado en juego; lo marcado ⬜ sigue siendo **compile-only**.
-Marca una línea con `[x]` o dime «verificado N» y actualizo este fichero.
+Build deployed: **1802**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
+translated where you spoke Spanish.
 
-**Lo de hoy está en la sección N**, arriba del todo: Nearby Cars, builds 1784 → 1802. N1 y N3 verificados el 13-11; el resto sigue compile-only.
-Recuento: **48 abiertas** (44 viejas + 4 de Nearby Cars). El detalle de la caza del 30-10 sigue en `docs/audit/410-hunt-2026-10-30.md`.
+**Today's work is section N**, at the top: Nearby Cars, builds 1784 → 1802. N1 and N3 were verified on
+13-11; the rest is still compile-only. Count: **48 open** (44 old + 4 from Nearby Cars). The detail of the
+30-10 hunt stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
@@ -23,125 +25,125 @@ Ten builds since the section below was written; every row here is **compile-only
 
 ---
 
-## L · línea de carrera (1301 → 1312)
+## L · the racing line (1301 → 1312)
 
-| # | Qué | Cómo | Pasa si | Estado |
+| # | What | How | Passes if | State |
 |---|---|---|---|---|
-| L1 | **fase por distancia** (1302) | curvas en V y en U, observando la línea | ya no acelera en los últimos nodos | ✅ **verificado 28-10 · 1302** |
-| L2 | **lean por ancho/radio** (1308) | pista estrecha y pista ancha | en la ancha ataca el interior con más ritmo, sin volantazo | ✅ **verificado 28-10 · 1308** |
-| L3 | **out-in eliminado** (1312) | cualquier curva | el naranja del exterior sigue en la aproximación, **sin** magenta, y la entrada se siente igual que en 1308 | ✅ **verificado 28-10 · 1312** |
+| L1 | **phase by distance** (1302) | V and U corners, watching the line | it no longer accelerates over the last nodes | ✅ **verified 28-10 · 1302** |
+| L2 | **lean by width and radius** (1308) | a narrow track and a wide one | on the wide one it attacks the inside with more pace, with no jerk of the wheel | ✅ **verified 28-10 · 1308** |
+| L3 | **out-in removed** (1312) | any corner | the outside orange is still there on the approach, **with no** magenta, and the entry feels the same as in 1308 | ✅ **verified 28-10 · 1312** |
 
-## A · Sin conducir (log)
+## A · Without driving (log)
 
-| # | Qué | Cómo | Pasa si | Estado |
+| # | What | How | Passes if | State |
 |---|---|---|---|---|
-| A2 | **settings atómicos** | cambia una fila; luego pon el ini **read-only** y cambia otra | el valor persiste; con el fichero bloqueado sale un `Error` en el log en vez de perderse | ⬜ |
-| A3 | **304 · parrilla vacía** | `Max PI Deviation` bajo para no tener a nadie en banda, Start Race | **no arranca**, dice `No car within N PI of X`, y **no quedan bengalas** | ✅ **verificado 26-10** |
-| A4 | **preflight** | mismo caso que A3, mirando el log | aparece `Start Race refused: …` **antes** de instanciar | ✅ **verificado 26-10 (1124)** |
-| A5 | **layout · nombres** | arranca una carrera | los rivales llevan nombre (`Drivers\names.txt`) y salen tips | ✅ **verificado 26-10** |
-| A6 | **roster nuevo** (1169) | cambia el roster en Rivals a `cars.txt` y pide parrilla | indexa **643 modelos** y monta la parrilla. Antes se colgaba (o eso parecía) al cambiarlo | ⬜ |
-| A7 | **log rotado** (1171) | arranca dos veces seguidas | existe `ARS.prev.log` en la **raíz del juego** con la sesión anterior | ⬜ |
+| A2 | **atomic settings** | change one row, then make the ini **read-only** and change another | the value persists; with the file locked an `Error` lands in the log instead of the value being lost | ⬜ |
+| A3 | **304 · empty grid** | `Max PI Deviation` low enough that nobody is in band, Start Race | it **does not start**, it says `No car within N PI of X`, and **no flares are left behind** | ✅ **verified 26-10** |
+| A4 | **preflight** | the same case as A3, watching the log | `Start Race refused: …` appears **before** anything is instanced | ✅ **verified 26-10 (1124)** |
+| A5 | **layout · names** | start a race | rivals carry a name (`Drivers\names.txt`) and tips come out | ✅ **verified 26-10** |
+| A6 | **new roster** (1169) | change the Rivals roster to `cars.txt` and ask for a grid | it indexes **643 models** and builds the grid. Before, it used to hang (or appear to) when the roster changed | ⬜ |
+| A7 | **rotated log** (1171) | start twice in a row | `ARS.prev.log` exists in the **game root** with the previous session | ⬜ |
 
-## B · Una vuelta normal
+## B · One normal lap
 
-| # | Qué | Cómo | Pasa si | Estado |
+| # | What | How | Passes if | State |
 |---|---|---|---|---|
-| B1 | **costura de curvas** | **El Burro Rally** con `LogLevel = Info` | el primer `Corner add` da un `start=` sensato y el nitro **no** está vetado toda la vuelta | ✅ **verificado 26-10**: 14 curvas en El Burro / 18 en Oct1, `apex=0` solo en el `skipped`, y frena la primera curva |
-| B2 | **brake learner** (1126) | una entrada pasada de frenada con `Brake Learn Notify` | el aviso **sale sin Show Track Analysis** y el recorte es **0,15 como mucho** | ⬜ |
-| B3 | **muros a tres** | Show Rivalry, un rival a cada lado | los dos muros siguen dibujados | ⬜ |
-| B4 | **board · nombres** (1117) | mira la columna | **sin** paréntesis de PI, y el PI con **un decimal** | ✅ **verificado 26-10** |
-| B6 | **board · posición** (1125) | mira la esquina superior izquierda | el `POS` ya no se solapa con las hints/tips | ⬜ |
-| B7 | **allowance lenta** (1127) | curva de 5-15 mph con `Show Front Slip` | el coche gira y aparece el token `x1.5`/`x2.0` | ⬜ |
-| B8 | **Peak Slip Target** (1128) | token `x0.9` y `F` en curva rápida | el corte empieza antes del pico (F 100 = 90 % del pico) | ⬜ |
-| B9 | **Deepest Cut (%)** (1385) | sube de 60 a 80 en un derrape largo | recorta más que antes; a 0 no corta nada; a 60 idéntico a la 1384 | ⬜ |
-| B10 | **la referencia es la rueda exterior** (1391, vivo en `MeasureSlipFromMemory`) | `Show Front Slip` con `Slip From Memory` **on**: gira a un lado en una curva rápida y mira el `F` del token | el número sigue a la rueda **exterior** (la de menos derrape); con el volante recto es la media de las dos | ⬜ |
-| B11 | ~~Target Under Power~~ (1393) | — | aparcado en la 1396: la fila ya no existe | ⛔ |
-| B12 | **el suelo de gas del carril** (1396) | curvón apuntando al **interior**, con el plan pidiendo levantar | el gas **no baja**: acelera aunque el plan quisiera levantar; pegado al borde exterior el suelo desaparece | ✅ **verificado 31-10 · 1396**: «probado y funciona genial» |
-| B13 | **Brake Aim Depth** (1397) | una curva donde ya frenaba, subiéndolo a 0.4 y luego a 0.8 | frena **más tarde** y entra con más velocidad; si a las pocas vueltas vuelve a frenar donde antes, es el aprendiz bajando el factor | ⬜ |
-| B14 | **Car-Centred Radius** (1399) | Figureight entre ápex 2 y 3, una vuelta con el toggle **off** y otra **on** | off se sale igual que ahora; on aguanta la curva hasta salir de verdad, y **no** frena antes en la entrada | ✅ **verificado 31-10 · 1400**: «lo tenemos, esto ha ayudado» — falta confirmar que la entrada no se ha vuelto más lenta |
-| B15 | **Slid Radius Lead + toggle del radio** (1404) | el mismo tramo: toggle **off**, luego lead 0.0 / 0.5 / 1.5 | off = reacciona tarde a la entrada; 0.0 = mide sólo lo recorrido, el más cauto al salir; 1.5 = casi el mismo número que el principal | ✅ **verificado 31-10 · 1404** |
-| B16 | ~~carril inactivo se planta~~ (1408) | — | **descartado en 1409**: el umbral `LaneCrossMinMeters` convertía una cantidad continua en un estado binario y parpadeaba. Se quitó el bloque; el carril vuelve por el mover, como antes | ❌ descartado |
-| B17 | **cierre exponencial** (1132) | `Slip From Memory` **off**: el readout es la proporción | a 500 % llega a 100 % en ~0,27 s (8 ticks); a 1000 % ~0,3 s | ⬜ |
+| B1 | **corner seam** | **El Burro Rally** with `LogLevel = Info` | the first `Corner add` gives a sane `start=` and nitro is **not** vetoed for the whole lap | ✅ **verified 26-10**: 14 corners at El Burro / 18 at Oct1, `apex=0` only in the `skipped`, and it brakes for the first corner |
+| B2 | **brake learner** (1126) | an entry overshot under braking with `Brake Learn Notify` | the notice **comes out without Show Track Analysis** and the cut is **0.15 at most** | ⬜ |
+| B3 | **walls at three** | Show Rivalry, a rival on each side | both walls stay drawn | ⬜ |
+| B4 | **board · names** (1117) | look at the column | **no** PI brackets, and the PI with **one decimal** | ✅ **verified 26-10** |
+| B6 | **board · position** (1125) | look at the top-left corner | `POS` no longer overlaps the hints/tips | ⬜ |
+| B7 | **slow allowance** (1127) | a 5-15 mph corner with `Show Front Slip` | the car turns and the token `x1.5`/`x2.0` appears | ⬜ |
+| B8 | **Peak Slip Target** (1128) | token `x0.9` and `F` in a fast corner | the cut starts before the peak (F 100 = 90 % of the peak) | ⬜ |
+| B9 | **Deepest Cut (%)** (1385) | raise it from 60 to 80 in a long slide | it cuts more than before; at 0 it cuts nothing; at 60 identical to 1384 | ⬜ |
+| B10 | **the reference is the outer wheel** (1391, alive in `MeasureSlipFromMemory`) | `Show Front Slip` with `Slip From Memory` **on**: steer one way in a fast corner and watch the token's `F` | the number follows the **outer** wheel (the one slipping less); with the wheel straight it is the average of the two | ⬜ |
+| B11 | ~~Target Under Power~~ (1393) | — | parked in 1396: the row no longer exists | ⛔ |
+| B12 | **the lane's throttle floor** (1396) | a long bend aimed at the **inside**, with the plan asking for a lift | the throttle **does not drop**: it accelerates even though the plan wanted a lift; hugging the outer edge the floor disappears | ✅ **verified 31-10 · 1396**: «tested, works great» |
+| B13 | **Brake Aim Depth** (1397) | a corner where it already braked, raising it to 0.4 and then 0.8 | it brakes **later** and enters faster; if after a few laps it brakes where it used to, that is the learner lowering the factor | ⬜ |
+| B14 | **Car-Centred Radius** (1399) | Figureight between apex 2 and 3, one lap with the toggle **off** and one **on** | off goes wide as it does today; on holds the corner until it really leaves, and does **not** brake earlier on the entry | ✅ **verified 31-10 · 1400**: «we have it, this has helped» — the entry not having got slower is still to confirm |
+| B15 | **Slid Radius Lead + the radius toggle** (1404) | the same stretch: toggle **off**, then lead 0.0 / 0.5 / 1.5 | off = reacts late to the entry; 0.0 = measures only what has been travelled, the most cautious on the exit; 1.5 = almost the same number as the main one | ✅ **verified 31-10 · 1404** |
+| B16 | ~~an inactive lane plants itself~~ (1408) | — | **dropped in 1409**: the `LaneCrossMinMeters` threshold turned a continuous quantity into a binary state and flickered. The block was removed; the lane comes back through the mover, as before | ❌ dropped |
+| B17 | **exponential close** (1132) | `Slip From Memory` **off**: the readout is the proportion | at 500 % it reaches 100 % in ~0.27 s (8 ticks); at 1000 % ~0.3 s | ⬜ |
 
-## C · Abuso deliberado
+## C · Deliberate abuse
 
-| # | Qué | Cómo | Pasa si | Estado |
+| # | What | How | Passes if | State |
 |---|---|---|---|---|
-| C1 | **nitro al terminar** | dispara y **End Race dentro de los 3 s** | tu coche no sale con la botella armada; destildar Nitrous en pleno burn **para** el empuje | ⬜ |
-| C2 | **recarga** | **Insert** en plena carrera | no crashea, la carrera desaparece, pedal neutro | ⬜ |
-| C3 | **carrera tras carrera** | termina una y lanza otra antes de que expire el «Ns to end» | la nueva **no muere en sus semáforos** | ⬜ |
-| C4 | **creador** | línea de salida + **una** sección, guardar | se niega y dice cuántos nodos faltan, sin pantalla negra | ⬜ |
-| C5 | **solitario corto** | **Grid Size 0** en un circuito corto | arranca | ⬜ |
-| C6 | **freecam** | actívala y **entra en un coche** | la freecam **sale sola** | ⬜ |
+| C1 | **nitro at the finish** | fire it and **End Race within 3 s** | your car does not come out with the bottle armed; unticking Nitrous mid-burn **stops** the push | ⬜ |
+| C2 | **reload** | **Insert** mid-race | no crash, the race disappears, neutral pedal | ⬜ |
+| C3 | **race after race** | finish one and launch another before the «Ns to end» expires | the new one **does not die on its own lights** | ⬜ |
+| C4 | **creator** | start line + **one** section, save | it refuses and says how many nodes are missing, with no black screen | ⬜ |
+| C5 | **short solo** | **Grid Size 0** on a short circuit | it starts | ⬜ |
+| C6 | **freecam** | enable it and **get into a car** | the freecam **drops out by itself** | ⬜ |
 
-## D · Decisiones y papeleo
+## D · Decisions and paperwork
 
-| # | Qué | Notas | Estado |
+| # | What | Notes | State |
 |---|---|---|---|
-| D1 | **ABS desbloqueado** (1114) | fila viva, arranca con el valor guardado. **Falta la descripción nueva** que ibas a darme | ⬜ |
-| D2 | **`Oprahs`** en `names.txt` | ¿se queda, se convierte en `Oprah` o se va? | ⬜ |
-| D3 | **Tag `v0.9.0`** | **ya estaba cortado**: release publicado el 27-10 con el build 1293 y el zip de ese día, etiqueta en `1d8b91e`. El build de hoy va aparte, como `v0.9.0.1381` en borrador. `docs/audit/` son 1140 KB internos | ✅ 30-10 |
-| D4 | **PI relativo a pie** (1124) | error inmediato, sin instanciar, sin teleport, sin fade | ✅ **verificado 26-10** |
+| D1 | **ABS unlocked** (1114) | row alive, it starts with the stored value. **The new description is still missing** — the one you were going to give me | ⬜ |
+| D2 | **`Oprahs`** in `names.txt` | does it stay, become `Oprah`, or go? | ⬜ |
+| D3 | **tag `v0.9.0`** | **it was already cut**: release published 27-10 with build 1293 and that day's zip, tag at `1d8b91e`. Today's build goes separately, as `v0.9.0.1381` in draft. `docs/audit/` is 1140 KB of internals | ✅ 30-10 |
+| D4 | **PI relative, on foot** (1124) | immediate error, nothing instanced, no teleport, no fade | ✅ **verified 26-10** |
 
-## E · Lo de hoy, sin probar todavía
+## E · that day's work, not yet tested
 
-| # | Qué | Cómo | Pasa si | Estado |
+| # | What | How | Passes if | State |
 |---|---|---|---|---|
-| E1 | **off-track: 40 debajo, suelo 20** (1171) | sácate de la línea en una curva rápida | el coche baja de verdad, no 10 mph menos: una curva de 35 pide 20, una de 70 pide 30 | ⛔ superseded by I1 — no longer behind a switch, allowance now 20 mph (1569) |
-| E2 | **ángulo de derrape horizontal** (1165) | curvas con **desnivel** | detecta el derrape igual en rasante que en llano; antes se inflaba con la pendiente | ⬜ |
-| E3 | **chicanas** (1165) | pista con pendiente y eses | las chicanas siguen siéndolo (+10 mph); ninguna se clasifica por el desnivel | ⬜ |
-| E4 | **slots de parrilla** (1165) | mira los coches en la salida | ninguno hundido ni flotando en pistas con pendiente | ⬜ |
-| E5 | **el dither del volante** | ya no hay que probarlo | **resuelto** en la 1163: era la demora medida en 3D. Los intentos fallidos están en `AGENTS-BACKLOG.md` | ✅ |
-| E6 | **aire en offroad** | no implementado | la señal existe y es fiable (`ARS.WheelsOffGround`, 0-4 ruedas leyendo `0x1C4`), pero solo alimenta el factor de estabilidad. Aparcado | ⬜ |
+| E1 | **off-track: 40 under, floor 20** (1171) | take yourself off the line in a fast corner | the car really drops, not 10 mph less: a 35 mph corner asks 20, a 70 mph one asks 30 | ⛔ superseded by I1 — no longer behind a switch, allowance now 20 mph (1569) |
+| E2 | **horizontal slip angle** (1165) | corners with **elevation change** | it detects the slide the same on a slope as on the flat; before, the gradient inflated it | ⬜ |
+| E3 | **chicanes** (1165) | a track with gradient and esses | chicanes are still chicanes (+10 mph); none gets classified by the elevation | ⬜ |
+| E4 | **grid slots** (1165) | look at the cars on the start | none sunk or floating on tracks with gradient | ⬜ |
+| E5 | **the wheel dither** | no longer has to be tested | **resolved** in 1163: it was the delay measured in 3D. The failed attempts are in `AGENTS-BACKLOG.md` | ✅ |
+| E6 | **air offroad** | not implemented | the signal exists and is reliable (`ARS.WheelsOffGround`, 0-4 wheels reading `0x1C4`), but it only feeds the stability factor. Parked | ⬜ |
 
-## F · La tanda de feedback (1294)
+## F · The feedback batch (1294)
 
-| # | Qué | Cómo | Pasa si | Estado |
+| # | What | How | Passes if | State |
 |---|---|---|---|---|
-| F1 | **gate de build** | cualquier carrera normal en la 3889 | **arranca igual** que antes: el gate solo rechaza si falta una firma | ✅ **28-10 (1294)**: la carrera corrió; el gate dejó pasar |
-| F2 | **sin tormenta** | una carrera entera y `grep -c "OnTick error" ARS.log` | **0** | ✅ **28-10 (1294)**: 0 en 14 líneas de log (1,5 KB) |
-| F3 | **tips vs board** | pasa un ápex con tips y leaderboard visibles | la caja del tip **no tapa** la cabecera `POS` | ✅ «todo bien», 28-10 (1294) |
-| F4 | **nombre del coche** | Interface > *Show Driver Names* apagado | la cabecera dice `CAR` y sale el modelo | ✅ «todo bien», 28-10 (1294) |
-| F5 | **10 min quietos, sin tormenta** (venía de A1) | deja el mod 10 min parado, sin carrera, y `grep -c "OnTick error" ARS.log` | **0**. La cifra «208» era de una sesión del 25; todas las sesiones desde entonces cierran con 0 | ⬜ |
+| F1 | **build gate** | any normal race on 3889 | it **starts the same** as before: the gate only refuses when a signature is missing | ✅ **28-10 (1294)**: the race ran; the gate let it through |
+| F2 | **no storm** | a whole race and `grep -c "OnTick error" ARS.log` | **0** | ✅ **28-10 (1294)**: 0 across 14 log lines (1.5 KB) |
+| F3 | **tips vs board** | pass an apex with tips and the leaderboard visible | the tip box **does not cover** the `POS` header | ✅ «all good», 28-10 (1294) |
+| F4 | **car name** | Interface > *Show Driver Names* off | the header says `CAR` and the model shows | ✅ «all good», 28-10 (1294) |
+| F5 | **10 min parked, no storm** (came from A1) | leave the mod standing 10 min, no race, and `grep -c "OnTick error" ARS.log` | **0**. The «208» figure came from a session on the 25th; every session since closes at 0 | ⬜ |
 
 ---
 
-### Fuera de esta lista, ya decidido
+### Off this list, already decided
 
-- **rival-log lag** (el viejo B5, ya sin fila) y **R12** (leaderboard por frame) → aparcados a **0.11**, en `AGENTS-BACKLOG.md`.
-- **B5 · board · toggle (1112)** → cubierto por **F4** (verificado 28-10 · 1294); fila retirada el 13-11.
-- **`SpeedSteerCeiling`** → zombie para **0.11**: revivir la ley o borrarla con su fila del menú.
+- **rival-log lag** (the old B5, no longer a row) and **R12** (leaderboard per frame) → parked for **0.11**, in `AGENTS-BACKLOG.md`.
+- **B5 · board · toggle (1112)** → covered by **F4** (verified 28-10 · 1294); row withdrawn 13-11.
+- **`SpeedSteerCeiling`** → zombie for **0.11**: revive the law or delete it with its menu row.
 - **`corner-chevron-exit`** → 0.9.1.
-- **301** · 43 filas heredadas reales → deuda, no blocker. **303-F2** → sin tocar a propósito.
-- **El crash al cambiar el roster**: causa **desconocida**. Los commits de la 1167/1169 quitan peligros reales pero no lo explican. Si vuelve, `ARS.prev.log` (en la raíz del juego) ya guarda la sesión anterior.
+- **301** · 43 real legacy rows → debt, not a blocker. **303-F2** → left alone on purpose.
+- **The crash when changing the roster**: cause **unknown**. The 1167/1169 commits remove real hazards but do not explain it. If it comes back, `ARS.prev.log` (in the game root) already keeps the previous session.
 
 ---
 
-## H · La caza de bugs del 30-10 (1375 → 1380)
+## H · the 30-10 bug hunt (1375 → 1380)
 
-Seis commits, todos **compile-only**. Cada fila trae cómo provocarlo y qué debe pasar.
+Six commits, all **compile-only**. Every row carries how to provoke it and what must happen.
 
-| # | Qué | Cómo | Pasa si | Estado |
+| # | What | How | Passes if | State |
 |---|---|---|---|---|
-| H1 | **pista rechazada** (1375) | Tracks → un XML con menos de 6 nodos de ruta | **no** dice «Track instanced», no arranca parrilla, sale el aviso | ✅ **verificado 30-10 · 1380** con `Chianski Long only Five.xml`: `Start Race refused: That track has 5 route nodes`, sin `Track instanced`. Ojo: la puerta que se ejercitó es el **preflight**, que ya funcionaba; la que arreglé (Load Track en el menú) sigue sin ser alcanzable |
-| H2 | **el abort deja el ped en pie** (1375) | entra en freecam y luego Insert (reload) | el ped **no** queda flotando sin gravedad; la carrera siguiente arranca normal | ✅ **verificado 30-10 · 1380**: recargar en freecam ya no deja al ped flotando en ragdoll; el bug existía y ya no se puede reproducir |
-| H3 | **la carga de fondo que falla avisa** (1375) | arranca y lee el log | una sola `Initialization complete`, sin `OnTick error` | ✅ **verificado 30-10 · 1380**: `build 1380`, `Initialization complete.`, y `grep -c "OnTick error"` = **0** |
-| H4 | **el prune conserva comentarios** (1376) | pon `; prueba = 1` dentro de `[MENU]` de `Menu-Race.ini` y recarga | el comentario **sobrevive** a la carga | ❌ **falla 30-10 · 1380**: la línea desaparece. El prune ya la conserva, pero `MenuSettings.Save()` reescribe el fichero como `[MENU]` + claves declaradas en el primer `Set()`, y la carga hace media docena antes de que lo mires. Es D-T2-3, archivado; el pase lo verifiqué yo mal: comprobé el prune, no el fichero |
-| H5 | **el prune dice lo que borra** (1376) | añade `ClaveInventada = 1` en `[MENU]` y recarga con `LogLevel = Error` | `ARS.log` trae `dropped stale` | ✅ **verificado 30-10 · 1380**: `Settings repair: Menu-Race.ini dropped stale ClaveInventada`, con el nivel de log por defecto |
-| H6 | **restart sin carta heredada** (1377) | con una maniobra activa (etiqueta del rival visible), Restart Race | la carrera nueva **no** arrastra el tope de gas de la carta vieja | ✅ **verificado 30-10 · 1380**: «las plays desaparecen y se juegan en la nueva carrera de manera normal» |
-| H7 | **Restart tras Load Track** (1378) | carrera → Load Track → Restart Race | **no** lanza `ArgumentOutOfRangeException`; arranca o se niega limpiamente | ⛔ **no alcanzable**: `Load Track` y `Build Grid` sólo se añaden al menú con `StagedSpawns`, que la carga fuerza a `false` (`:3432`). El agujero es real y queda cerrado, pero hoy no hay puerta. Para 0.11 / 0.9.1 |
-| H8 | **el handbrake al lanzar** (1378) | salida parada, mira los primeros metros | ningún coche sale clavado 0,2–0,6 s; el pelotón sale junto | ✅ **verificado 30-10 · 1380**: «todos salen bien» |
-| H9 | **el carril en pendiente** (1379) | tramo con desnivel, a velocidad | se comporta **igual** que en llano; el cambio es < 1 cm y no deberías notarlo | ⬜ pendiente: no encontró el tramo todavía |
-| H10 | **clamp tras derrape + Restart** (1380) | derrapa, Restart Race, primera curva | gira como una carrera nueva, no con el volante ya cerrado | ✅ **verificado 30-10 · 1380**: «no veo problema» |
+| H1 | **track refused** (1375) | Tracks → an XML with fewer than 6 route nodes | it does **not** say «Track instanced», no grid starts, the warning comes out | ✅ **verified 30-10 · 1380** with `Chianski Long only Five.xml`: `Start Race refused: That track has 5 route nodes`, with no `Track instanced`. Note: the door exercised was the **preflight**, which already worked; the one I fixed (Load Track in the menu) is still unreachable |
+| H2 | **the abort leaves the ped standing** (1375) | go into freecam and then Insert (reload) | the ped **does not** hang without gravity; the next race starts normally | ✅ **verified 30-10 · 1380**: reloading in freecam no longer leaves the ped floating in ragdoll; the bug existed and can no longer be reproduced |
+| H3 | **a failing background load speaks up** (1375) | start and read the log | a single `Initialization complete`, with no `OnTick error` | ✅ **verified 30-10 · 1380**: `build 1380`, `Initialization complete.`, and `grep -c "OnTick error"` = **0** |
+| H4 | **the prune keeps comments** (1376) | put `; prueba = 1` inside `[MENU]` of `Menu-Race.ini` and reload | the comment **survives** the load | ❌ **fails 30-10 · 1380**: the line disappears. The prune does keep it, but `MenuSettings.Save()` rewrites the file as `[MENU]` plus the keys declared by the first `Set()`, and the load does half a dozen of those before you look. It is D-T2-3, archived; I verified the pass wrong myself: I checked the prune, not the file |
+| H5 | **the prune says what it drops** (1376) | add `ClaveInventada = 1` in `[MENU]` and reload with `LogLevel = Error` | `ARS.log` carries `dropped stale` | ✅ **verified 30-10 · 1380**: `Settings repair: Menu-Race.ini dropped stale ClaveInventada`, with the default log level |
+| H6 | **restart with no inherited card** (1377) | with a manoeuvre active (rival label visible), Restart Race | the new race **does not** drag the old card's throttle cap | ✅ **verified 30-10 · 1380**: «the plays disappear and are played in the new race normally» |
+| H7 | **Restart after Load Track** (1378) | race → Load Track → Restart Race | it does **not** throw `ArgumentOutOfRangeException`; it starts or refuses cleanly | ⛔ **unreachable**: `Load Track` and `Build Grid` are only added to the menu with `StagedSpawns`, which the load forces to `false` (`:3432`). The hole is real and is closed, but today there is no door. For 0.11 / 0.9.1 |
+| H8 | **the handbrake at launch** (1378) | standing start, watch the first metres | no car leaves nailed for 0.2–0.6 s; the pack leaves together | ✅ **verified 30-10 · 1380**: «everyone gets away fine» |
+| H9 | **the lane on a gradient** (1379) | a stretch with elevation change, at speed | it behaves **the same** as on the flat; the change is < 1 cm and you should not feel it | ⬜ outstanding: has not found the stretch yet |
+| H10 | **clamp after a slide + Restart** (1380) | slide, Restart Race, first corner | it turns like a new race, not with the wheel already shut | ✅ **verified 30-10 · 1380**: «I see no problem» |
 
-### Lo que espera decisión tuya (no tocado a propósito)
+### Waiting on your decision (deliberately untouched)
 
-1. **`No Collision` está invertido** en los tres puntos de llamada: el ajuste no hace nada y su limpieza apunta al revés. `docs/audit/410-hunt-2026-10-30.md` → D-T4-1.
-2. **«Open Up on Throttle»: retirado del árbol** (1389) — la fila, la clave y el método han desaparecido; ya nunca llegaba a la rueda. La fórmula vive en el backlog (`open-up-inert`) por si vuelve. D-T6-1.
-3. **`LaneMoverSpeedCapMps` = 99** donde el comentario y el diseño dicen 24: el tope del latigazo no puede morder. D-T5-4.
-4. **`avoid-hold-timeout`** (te debía la prueba) vive detrás de `avoidHoldEnabled = false`: la prueba apunta a código muerto. D-T5-2.
-5. **Tooltip del ABS**: «I'm working on undoing that» en una fila que sí funciona. D-T7-1.
-6. **`FEATURES.md` vende el nitro del jugador como «coming soon»** y el de la IA como porcentaje del tuyo: el tuyo corre en X/duck, y la IA lleva 5× contra 1×. D-T8-1, D-T8-2.
+1. **`No Collision` is inverted** at all three call sites: the setting does nothing and its cleanup points the wrong way. `docs/audit/410-hunt-2026-10-30.md` → D-T4-1.
+2. **«Open Up on Throttle»: withdrawn from the tree** (1389) — the row, the key and the method are gone; it never reached the wheel any more. The formula lives in the backlog (`open-up-inert`) in case it comes back. D-T6-1.
+3. **`LaneMoverSpeedCapMps` = 99** where the comment and the design say 24: the whip cap cannot bite. D-T5-4.
+4. **`avoid-hold-timeout`** (the test I owed you) lives behind `avoidHoldEnabled = false`: the test points at dead code. D-T5-2.
+5. **ABS tooltip**: «I'm working on undoing that» on a row that does work. D-T7-1.
+6. **`FEATURES.md` sells the player's nitro as «coming soon»** and the AI's as a percentage of yours: yours runs on X/duck, and the AI carries 5× against 1×. D-T8-1, D-T8-2.
 
 ## I · 2026-11-02 (1569)
 
