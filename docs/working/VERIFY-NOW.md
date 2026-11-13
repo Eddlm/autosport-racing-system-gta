@@ -96,12 +96,12 @@ Six commits, all **compile-only**. Every row carries how to provoke it and what 
 
 ### Waiting on your decision (deliberately untouched)
 
-1. **`No Collision` is inverted** at all three call sites: the setting does nothing and its cleanup points the wrong way. `docs/audit/410-hunt-2026-10-30.md` → D-T4-1.
+1. **`No Collision` is inverted** at its call sites: `ApplyNoCollision(enable)` hands `!enable` to `SET_ENTITY_NO_COLLISION_ENTITY` (`AutosportRacingSystem.cs:1906`), so the menu row asks for the opposite of what it says, and the cleanup asks for the opposite again. It also pairs each car with its **nearest rival only**, so half the field keeps colliding anyway. D-T4-1.
 2. **«Open Up on Throttle»: withdrawn from the tree** (1389) — the row, the key and the method are gone; it never reached the wheel any more. The formula lives in the backlog (`open-up-inert`) in case it comes back. D-T6-1.
-3. **`LaneMoverSpeedCapMps` = 99** where the comment and the design say 24: the whip cap cannot bite. D-T5-4.
-4. **`avoid-hold-timeout`** (the test I owed you) lives behind `avoidHoldEnabled = false`: the test points at dead code. D-T5-2.
-5. **ABS tooltip**: «I'm working on undoing that» on a row that does work. D-T7-1.
-6. **`FEATURES.md` sells the player's nitro as «coming soon»** and the AI's as a percentage of yours: yours runs on X/duck, and the AI carries 5× against 1×. D-T8-1, D-T8-2.
+3. **`avoid-hold-timeout`** (the test I owed you) lives behind `avoidHoldEnabled = false` (`Racer.cs:1209`): the test points at dead code. D-T5-2.
+4. **`FEATURES.md` sells the player's nitro as «coming soon»** (`docs/FEATURES.md:139`) and the AI's as a percentage of yours: yours runs on X/duck, and the AI carries 5× against 1×. D-T8-1, D-T8-2.
+
+Two items left this list on 13-11 because the code moved under them: `LaneMoverSpeedCapMps` no longer exists anywhere in the tree, and the ABS tooltip was rewritten in 1803.
 
 ## I · 2026-11-02 (1569)
 
