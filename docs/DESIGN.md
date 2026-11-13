@@ -141,6 +141,16 @@ committed to — deliberately, so a car running wide of the arc may carry more t
 allow. The plan is the smaller of the two, each with an error margin of its own as a menu offset — which is
 how a driver buys caution or commitment without touching either law.
 
+**The corner's radius is a blend, and the driver picks where on it.** The corner term reads one radius per
+apex: the tightest circle the geometry finds there, slid toward the widest arc that still fits the road, by
+`CornerRadiusBlendPct` — none of the slide is the apex's own circle, all of it is the widest arc the road
+allows. It changes the corner's speed and nothing else: the car still chooses its own line, and the route term
+wins the moment it is the lower of the two, so this knob can only buy entry speed, never geometry. Driver-tested
+2026-11-13: the low end of the range reads right across cars and corners — it varies per car and per corner,
+which is why it ships there — and raising it is the move for a car that arrives too slowly. While a brake is
+planned for the corner the route term is stood down, so inside that window it is this number alone that
+decides.
+
 **Only the corners this car decided it needs braking for enter the corner term.** Every other bend is the
 route law's business, which is the same division the apex queue already makes: the reserved queue slots feed
 this term alone, and the rest of the track is handled as geometry.
