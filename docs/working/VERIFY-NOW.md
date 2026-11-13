@@ -3,8 +3,8 @@
 Build desplegada: **1802**. Lo marcado ✅ es tuyo, verificado en juego; lo marcado ⬜ sigue siendo **compile-only**.
 Marca una línea con `[x]` o dime «verificado N» y actualizo este fichero.
 
-**Lo de hoy está en la sección N**, arriba del todo: Nearby Cars, builds 1784 → 1802, todo compile-only.
-Recuento: **44 abiertas + 6 nuevas**. El detalle de la caza del 30-10 sigue en `docs/audit/410-hunt-2026-10-30.md`.
+**Lo de hoy está en la sección N**, arriba del todo: Nearby Cars, builds 1784 → 1802. N1 y N3 verificados el 13-11; el resto sigue compile-only.
+Recuento: **48 abiertas** (44 viejas + 4 de Nearby Cars). El detalle de la caza del 30-10 sigue en `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
@@ -14,9 +14,9 @@ Ten builds since the section below was written; every row here is **compile-only
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| N1 | **the cars around you join the grid** (1784) | Nearby Cars on, one empty car in range, Start Race | it joins the grid and runs with the pack, not as a prop | ⬜ |
-| N2 | **adoption runs after the pool, and a ghost seat gets a driver** (1790) | a nearby car whose driver handle does not exist | it is adopted anyway, a driver is spawned beside it, and the log's `ghostSeat` count rises | ⬜ |
-| N3 | **the toggle is a three-way choice** (1794) | switch Ignore → Join As Is → Join And Tune | Ignore draws nothing and adopts nothing; Join As Is adopts and leaves Auto Styling alone; Join And Tune lets the tuner see them | ⬜ |
+| N1 | **the cars around you join the grid** (1784) | Nearby Cars on, one empty car in range, Start Race | it joins the grid and runs with the pack, not as a prop | ✅ **verified 13-11 · 1802** |
+| N2 | **adoption runs after the pool, and a ghost seat gets a driver** (1790) | a nearby car whose driver handle does not exist — unprovoked on 13-11; a guess at a repro: leave a parked car with its driver, walk a few hundred metres so the ped despawns, come back and adopt | it is adopted anyway, a driver is spawned beside it, and the log's `ghostSeat` count rises | ⬜ no invalid ped in reach yet; the branch is `ghostSeat` in `AdoptNearbyCars` |
+| N3 | **the toggle is a three-way choice** (1794) | switch Ignore → Join As Is → Join And Tune | Ignore draws nothing and adopts nothing; Join As Is adopts and leaves Auto Styling alone; Join And Tune lets the tuner see them | ✅ **verified 13-11 · 1802**: «Works, they tune if the setting is chosen» |
 | N4 | **adopted cars are sorted, not pinned** (1799) | adopt mid-field, then look at the grid | they take their place by pace with the rest; nobody is nailed to a slot | ⬜ |
 | N5 | **the chevrons share one angle** (1800, 1802) | a track start and a nearby car in the same view | both chevrons face the same way: one constant, `TrackChevronRotation` | ⬜ |
 | N6 | **the chevron says which car is adoptable** (1801) | one healthy empty car and one unhealthy one in range | blue for race-fit, orange for not; an **occupied** car draws nothing — a corpse in the driver's seat counts as occupied | ⬜ |
