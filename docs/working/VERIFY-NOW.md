@@ -5,7 +5,7 @@ Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes 
 translated where you spoke Spanish.
 
 **Today's work is section N**, at the top: Nearby Cars, builds 1784 → 1802. N1 and N3-N6 were verified on
-13-11; only N2 is open, because no invalid ped has been reachable yet. **45 open rows below**, and the 38
+13-11; only N2 is open, because no invalid ped has been reachable yet. **43 open rows below**, and the 40
 already driven or disposed of sit in **Answered** at the bottom, out of the way. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
@@ -56,12 +56,7 @@ Ten builds since the section below was written; every row here is **compile-only
 | C5 | **short solo** | **Grid Size 0** on a short circuit | it starts | ⬜ |
 | C6 | **freecam** | enable it and **get into a car** | the freecam **drops out by itself** | ⬜ |
 
-## D · Decisions and paperwork
-
-| # | What | Notes | State |
-|---|---|---|---|
-| D1 | **ABS unlocked** (1114) | row alive, it starts with the stored value. **The new description is still missing** — the one you were going to give me | ⬜ |
-| D2 | **`Oprahs`** in `names.txt` | does it stay, become `Oprah`, or go? | ⬜ |
+## D · Decisions and paperwork — both decided, see **Answered**
 
 ## E · that day's work, not yet tested
 
@@ -204,6 +199,8 @@ Kept for provenance: these are the in-game verdicts and the dispositions. Nothin
 - **B16** an inactive lane plants itself (1408) — ❌ dropped in 1409: `LaneCrossMinMeters` turned a continuous quantity into a binary state and flickered
 
 **D · Decisions and paperwork**
+- **D1** ABS unlocked (1114) — the description was replaced in 1803 (`AutosportRacingSystem.cs:1135`); the checkbox itself was never driven, so it stays compile-only
+- **D2** `Oprahs` in `names.txt` — renamed to `Oprah`, live install and Dist mirror both
 - **D3** tag `v0.9.0` — ✅ 30-10: release published 27-10, build 1293, tag at `1d8b91e`
 - **D4** PI relative, on foot (1124) — verified 26-10
 

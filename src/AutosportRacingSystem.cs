@@ -1132,7 +1132,7 @@ namespace ARS
             rivalTractionMenu.Add(tcsSpanItem);
             HookListTextPicker(tcsSpanItem);
 
-            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "GTA forces native ABS on non-player driven cars. I'm working on undoing that.", AbsEnabled);
+            NativeCheckboxItem absItem = new NativeCheckboxItem("ABS", "Caps the brake to keep the fronts off lock: full pedal until front slip passes half a lock, then tapers, and cuts the brake entirely once a wheel locks. 15 mph and above; ABS <name> in the log when it bites.", AbsEnabled);
             absItem.CheckboxChanged += (sender, args) =>
             {
                 AbsEnabled = absItem.Checked;
