@@ -1,10 +1,25 @@
 # VERIFICAR EN JUEGO — pendiente
 
-Build desplegada: **1777**. Lo marcado ✅ es tuyo, verificado en juego; lo marcado ⬜ sigue siendo **compile-only**.
+Build desplegada: **1802**. Lo marcado ✅ es tuyo, verificado en juego; lo marcado ⬜ sigue siendo **compile-only**.
 Marca una línea con `[x]` o dime «verificado N» y actualizo este fichero.
 
-**Lo de hoy (30-10) está en la sección H**, al final del bloque de abajo: seis commits, build 1375 → 1380, todos
-compile-only. El detalle de qué se arregló y qué quedó archivado vive en `docs/audit/410-hunt-2026-10-30.md`.
+**Lo de hoy está en la sección N**, arriba del todo: Nearby Cars, builds 1784 → 1802, todo compile-only.
+Recuento: **44 abiertas + 6 nuevas**. El detalle de la caza del 30-10 sigue en `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## N · 2026-11-13 (1784 → 1802) — Nearby Cars
+
+Ten builds since the section below was written; every row here is **compile-only**.
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| N1 | **the cars around you join the grid** (1784) | Nearby Cars on, one empty car in range, Start Race | it joins the grid and runs with the pack, not as a prop | ⬜ |
+| N2 | **adoption runs after the pool, and a ghost seat gets a driver** (1790) | a nearby car whose driver handle does not exist | it is adopted anyway, a driver is spawned beside it, and the log's `ghostSeat` count rises | ⬜ |
+| N3 | **the toggle is a three-way choice** (1794) | switch Ignore → Join As Is → Join And Tune | Ignore draws nothing and adopts nothing; Join As Is adopts and leaves Auto Styling alone; Join And Tune lets the tuner see them | ⬜ |
+| N4 | **adopted cars are sorted, not pinned** (1799) | adopt mid-field, then look at the grid | they take their place by pace with the rest; nobody is nailed to a slot | ⬜ |
+| N5 | **the chevrons share one angle** (1800, 1802) | a track start and a nearby car in the same view | both chevrons face the same way: one constant, `TrackChevronRotation` | ⬜ |
+| N6 | **the chevron says which car is adoptable** (1801) | one healthy empty car and one unhealthy one in range | blue for race-fit, orange for not; an **occupied** car draws nothing — a corpse in the driver's seat counts as occupied | ⬜ |
 
 ---
 
@@ -20,7 +35,6 @@ compile-only. El detalle de qué se arregló y qué quedó archivado vive en `do
 
 | # | Qué | Cómo | Pasa si | Estado |
 |---|---|---|---|---|
-| A1 | **el throw de `Math.Sign`** | deja el mod 10 min y `grep -c "OnTick error" ARS.log` | **0**. La cifra «208» era de una sesión del 25; hoy todas las sesiones han cerrado con 0 | ⬜ |
 | A2 | **settings atómicos** | cambia una fila; luego pon el ini **read-only** y cambia otra | el valor persiste; con el fichero bloqueado sale un `Error` en el log en vez de perderse | ⬜ |
 | A3 | **304 · parrilla vacía** | `Max PI Deviation` bajo para no tener a nadie en banda, Start Race | **no arranca**, dice `No car within N PI of X`, y **no quedan bengalas** | ✅ **verificado 26-10** |
 | A4 | **preflight** | mismo caso que A3, mirando el log | aparece `Start Race refused: …` **antes** de instanciar | ✅ **verificado 26-10 (1124)** |
@@ -36,19 +50,18 @@ compile-only. El detalle de qué se arregló y qué quedó archivado vive en `do
 | B2 | **brake learner** (1126) | una entrada pasada de frenada con `Brake Learn Notify` | el aviso **sale sin Show Track Analysis** y el recorte es **0,15 como mucho** | ⬜ |
 | B3 | **muros a tres** | Show Rivalry, un rival a cada lado | los dos muros siguen dibujados | ⬜ |
 | B4 | **board · nombres** (1117) | mira la columna | **sin** paréntesis de PI, y el PI con **un decimal** | ✅ **verificado 26-10** |
-| B5 | **board · toggle** (1112) | apaga *Show Driver Names* | la cabecera pasa a **CAR** y salen modelos, sin reiniciar carrera | ⬜ |
 | B6 | **board · posición** (1125) | mira la esquina superior izquierda | el `POS` ya no se solapa con las hints/tips | ⬜ |
 | B7 | **allowance lenta** (1127) | curva de 5-15 mph con `Show Front Slip` | el coche gira y aparece el token `x1.5`/`x2.0` | ⬜ |
 | B8 | **Peak Slip Target** (1128) | token `x0.9` y `F` en curva rápida | el corte empieza antes del pico (F 100 = 90 % del pico) | ⬜ |
 | B9 | **Deepest Cut (%)** (1385) | sube de 60 a 80 en un derrape largo | recorta más que antes; a 0 no corta nada; a 60 idéntico a la 1384 | ⬜ |
-| B10 | **la referencia pasó a la exterior** (1391) | una tanda con 0.75 / 0.75° después de la de 1.00 / 1.0° en la 1389 | se siente **igual** que antes del cambio: es el mismo coche con el número de la otra rueda | ⬜ |
+| B10 | **la referencia es la rueda exterior** (1391, vivo en `MeasureSlipFromMemory`) | `Show Front Slip` con `Slip From Memory` **on**: gira a un lado en una curva rápida y mira el `F` del token | el número sigue a la rueda **exterior** (la de menos derrape); con el volante recto es la media de las dos | ⬜ |
 | B11 | ~~Target Under Power~~ (1393) | — | aparcado en la 1396: la fila ya no existe | ⛔ |
 | B12 | **el suelo de gas del carril** (1396) | curvón apuntando al **interior**, con el plan pidiendo levantar | el gas **no baja**: acelera aunque el plan quisiera levantar; pegado al borde exterior el suelo desaparece | ✅ **verificado 31-10 · 1396**: «probado y funciona genial» |
 | B13 | **Brake Aim Depth** (1397) | una curva donde ya frenaba, subiéndolo a 0.4 y luego a 0.8 | frena **más tarde** y entra con más velocidad; si a las pocas vueltas vuelve a frenar donde antes, es el aprendiz bajando el factor | ⬜ |
 | B14 | **Car-Centred Radius** (1399) | Figureight entre ápex 2 y 3, una vuelta con el toggle **off** y otra **on** | off se sale igual que ahora; on aguanta la curva hasta salir de verdad, y **no** frena antes en la entrada | ✅ **verificado 31-10 · 1400**: «lo tenemos, esto ha ayudado» — falta confirmar que la entrada no se ha vuelto más lenta |
 | B15 | **Slid Radius Lead + toggle del radio** (1404) | el mismo tramo: toggle **off**, luego lead 0.0 / 0.5 / 1.5 | off = reacciona tarde a la entrada; 0.0 = mide sólo lo recorrido, el más cauto al salir; 1.5 = casi el mismo número que el principal | ✅ **verificado 31-10 · 1404** |
 | B16 | ~~carril inactivo se planta~~ (1408) | — | **descartado en 1409**: el umbral `LaneCrossMinMeters` convertía una cantidad continua en un estado binario y parpadeaba. Se quitó el bloque; el carril vuelve por el mover, como antes | ❌ descartado |
-| B10 | **cierre exponencial** (1132) | `Slip From Memory` **off**: el readout es la proporción | a 500 % llega a 100 % en ~0,27 s (8 ticks); a 1000 % ~0,3 s | ⬜ |
+| B17 | **cierre exponencial** (1132) | `Slip From Memory` **off**: el readout es la proporción | a 500 % llega a 100 % en ~0,27 s (8 ticks); a 1000 % ~0,3 s | ⬜ |
 
 ## C · Abuso deliberado
 
@@ -89,12 +102,14 @@ compile-only. El detalle de qué se arregló y qué quedó archivado vive en `do
 | F2 | **sin tormenta** | una carrera entera y `grep -c "OnTick error" ARS.log` | **0** | ✅ **28-10 (1294)**: 0 en 14 líneas de log (1,5 KB) |
 | F3 | **tips vs board** | pasa un ápex con tips y leaderboard visibles | la caja del tip **no tapa** la cabecera `POS` | ✅ «todo bien», 28-10 (1294) |
 | F4 | **nombre del coche** | Interface > *Show Driver Names* apagado | la cabecera dice `CAR` y sale el modelo | ✅ «todo bien», 28-10 (1294) |
+| F5 | **10 min quietos, sin tormenta** (venía de A1) | deja el mod 10 min parado, sin carrera, y `grep -c "OnTick error" ARS.log` | **0**. La cifra «208» era de una sesión del 25; todas las sesiones desde entonces cierran con 0 | ⬜ |
 
 ---
 
 ### Fuera de esta lista, ya decidido
 
-- **B5** (lag del registro de rivales) y **R12** (leaderboard por frame) → aparcados a **0.11**, en `AGENTS-BACKLOG.md`.
+- **rival-log lag** (el viejo B5, ya sin fila) y **R12** (leaderboard por frame) → aparcados a **0.11**, en `AGENTS-BACKLOG.md`.
+- **B5 · board · toggle (1112)** → cubierto por **F4** (verificado 28-10 · 1294); fila retirada el 13-11.
 - **`SpeedSteerCeiling`** → zombie para **0.11**: revivir la ley o borrarla con su fila del menú.
 - **`corner-chevron-exit`** → 0.9.1.
 - **301** · 43 filas heredadas reales → deuda, no blocker. **303-F2** → sin tocar a propósito.
@@ -162,7 +177,7 @@ outward). A span holding two corners of different size is refused at the 1.6 rad
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| K1 | **coasting inside the corner releases it early** (`CornerSpent`) | brake into a bend as usual, then roll through the entrance off both pedals | once past the entrance with |long G| under 0.05 the corner leaves the selection: the line stops shaping and the plan moves on, instead of holding it to the apex | ✅ **verified 09-11 · 1769/1770**: «the 0.05gs thing works well» |
+| K1 | **coasting inside the corner releases it early** (`CornerSpent`) | brake into a bend as usual, then roll through the entrance off both pedals | once past the entrance with `long G` under 0.05 the corner leaves the selection: the line stops shaping and the plan moves on, instead of holding it to the apex | ✅ **verified 09-11 · 1769/1770**: «the 0.05gs thing works well» |
 | K2 | **a lift on the straight releases nothing** | coast a hundred metres before a bend, both pedals up | the corner stays selected and the shape still starts at the entrance four seconds out — the release is gated on being past the entrance | ⬜ |
 | K3 | **the input gate is gone** | trail brake lightly into a bend | the pedals no longer matter: only the longitudinal Gs decide, so a light brake above 0.05 g keeps the corner selected | ⬜ |
 | K4 | **the lane lets go on its own corner** | the shaped line through a bend taken off the pedals | the shape stops once the car is through the entrance instead of running to the apex: the lane tests the corner it holds, because the queue's head has already moved on by the time steering runs | ⬜ |
@@ -171,7 +186,7 @@ outward). A span holding two corners of different size is refused at the 1.6 rad
 The signal is `VehicleData.GetLongitudinalGs`, the same one `UpdateCornerRequirements` already reads.
 `CoastSpentGs` is the only knob (0.05 g ≈ 0.49 m/s², so the tail of a soft brake release counts as spent).
 
-## L · 2026-11-09 (1776) — what the two auditors found, and what shipped
+## M · 2026-11-09 (1776) — what the two auditors found, and what shipped
 
 DS Flash and GLM 5.3 Flash audited `fc8dd13..HEAD` read-only (`docs/audit/500-session-ds.md`,
 `docs/audit/501-session-glm.md`). The rows below are the ones I re-checked in the code and fixed; the rest,
@@ -179,11 +194,11 @@ including the ones I judged false or not worth a change, are in the reports.
 
 | # | What | Passes if | State |
 |---|---|---|---|
-| L1 | **the lane really lets go** (1772) | brake into a bend, coast from the entrance: the shape stops there instead of running to the apex — the selection no longer re-adopts a corner it has just declared spent | ⬜ |
-| L2 | **a stopped car is not coasting** (1773) | sitting on the grid, or stopped past an entrance, no corner is dropped from the plan | ⬜ |
-| L3 | **the creep survives a race** (1774) | second race on the same track: the cap still opens at 0.1 m and climbs, instead of starting at 2 m | ⬜ |
-| L4 | **a skipped shape has no entrance** (1775) | a corner the shape builder dropped no longer reports the start line as its entrance | ⬜ |
-| L5 | **the lane looks past a skipped corner** (1777) | a wide corner the plan ignored gets no lean from the lane either — one selection, both readers | ⬜ |
+| M1 | **the lane really lets go** (1772) | brake into a bend, coast from the entrance: the shape stops there instead of running to the apex — the selection no longer re-adopts a corner it has just declared spent | ⬜ |
+| M2 | **a stopped car is not coasting** (1773) | sitting on the grid, or stopped past an entrance, no corner is dropped from the plan | ⬜ |
+| M3 | **the creep survives a race** (1774) | second race on the same track: the cap still opens at 0.1 m and climbs, instead of starting at 2 m | ⬜ |
+| M4 | **a skipped shape has no entrance** (1775) | a corner the shape builder dropped no longer reports the start line as its entrance | ⬜ |
+| M5 | **the lane looks past a skipped corner** (1777) | a wide corner the plan ignored gets no lean from the lane either — one selection, both readers | ⬜ |
 
 Left alone on purpose, each one a verdict rather than a fix: the refill's `first = 0` fallback still commits a corner
 the plan skipped — a queue needs a head, and `CornerRequiresBraking` keeps that head out of the braking table, so it is
