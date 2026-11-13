@@ -2300,7 +2300,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             float followTrackSpd = TrackSpeed.RouteCurvature
-                ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint)
+                ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint) * (float)Math.Sqrt(RouteSurfaceGrip())
                 : 999f;
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
@@ -4235,6 +4235,21 @@ const float RequirementLookaheadSeconds = 3.95f;
         }
 
         float RouteIdealSpeedForRadius(float r) => ApexSpeedWithDownforce(r);
+
+        // The grip of the road under the bend the route term is about to ask for: the radius is sampled over a
+        // window, so the worst surface in that window decides, the same rule CornerSurfaceGrip uses for a corner.
+        // The route was the only speed answer blind to the surface - the corner term has carried its own grip
+        // since it was written, and the wheels' multiplier only arrives once there is contact.
+        float RouteSurfaceGrip()
+        {
+            int count = ARS.TrackPoints.Count;
+            if (count == 0) return 1f;
+            float Grip(int node) => node >= 0 && node < count ? ARS.TrackPoints[node].SurfaceGrip : 1f;
+            float grip = Math.Min(Grip(LiveRouteRadiusNearNode), Grip(LiveRouteRadiusFarNode));
+            grip = Math.Min(grip, Math.Min(Grip(LiveRouteRadiusMidNode), Grip(LiveSlidRadiusNearNode)));
+            grip = Math.Min(grip, Math.Min(Grip(LiveSlidRadiusMidNode), Grip(LiveSlidRadiusFarNode)));
+            return grip;
+        }
 
         // The plan's apex speed, with the corner's own surface: a loose corner asks for less, and every
         // reader of the apex queue - the queue itself, the requirement test, the picker - reads one number.
