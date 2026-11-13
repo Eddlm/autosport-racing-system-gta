@@ -135,6 +135,7 @@ namespace ARS
         public static NearbyCarsMode NearbyCars = NearbyCarsMode.Ignore;
         const float NearbyCarsRadius = 30f;
         const int NearbyPreviewRefreshMs = 1000;
+        static readonly Vector3 TrackChevronRotation = new Vector3(180f, 0f, 0f);
         public static float OverspeedCutPerTenthG = 0.2f;
         public static bool SmartTuning = true;
 
@@ -2006,7 +2007,7 @@ namespace ARS
             {
                 if (!CanWeUse(veh)) continue;
                 Color colour = Racer.IsRaceFit(veh) ? NearbyAdoptableColor : NearbyUnhealthyColor;
-                World.DrawMarker(MarkerType.ChevronUpx1, veh.Position + Vector3.WorldUp * 2f, Vector3.Zero, new Vector3(180f, 0f, 0f), new Vector3(1f, 1f, 1f), colour, true, true, 0, false, "", "", false);
+                World.DrawMarker(MarkerType.ChevronUpx1, veh.Position + Vector3.WorldUp * 2f, Vector3.Zero, TrackChevronRotation, new Vector3(1f, 1f, 1f), colour, true, true, 0, false, "", "", false);
             }
         }
 
@@ -2264,7 +2265,7 @@ namespace ARS
                     TrackStartInfo nearest = FindNearestTrackStartInfo(Game.Player.Character.Position);
                     if (nearest != null)
                     {
-                        World.DrawMarker(MarkerType.ChevronUpx1, nearest.JoinPosition + new Vector3(0, 0, 2f), Vector3.Zero, new Vector3(180f, 0f, 0f), new Vector3(1f, 1f, 1f), Color.Yellow, false, false, 0, false, "", "", false);
+                        World.DrawMarker(MarkerType.ChevronUpx1, nearest.JoinPosition + new Vector3(0, 0, 2f), Vector3.Zero, TrackChevronRotation, new Vector3(1f, 1f, 1f), Color.Yellow, false, false, 0, false, "", "", false);
                         float dist = nearest.JoinPosition.DistanceTo2D(Game.Player.Character.Position);
                         if (dist <= 5f)
                         {
