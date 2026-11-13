@@ -199,6 +199,10 @@ Kept for provenance: these are the in-game verdicts and the dispositions. Nothin
 - **B15** Slid Radius Lead + the radius toggle (1404) — verified 31-10
 - **B16** an inactive lane plants itself (1408) — ❌ dropped in 1409: `LaneCrossMinMeters` turned a continuous quantity into a binary state and flickered
 
+**Pace · the surface under the road**
+- **the route term reads the surface** (1806) — it was the only speed answer blind to grip: the corner term had always carried its own. Verified 13-11: «the entire track is driven better now … a flat improvement everywhere»
+- **an unsampled surface inherits the one the car is on** (1807) — at runtime it takes the grip under the car, and at load the previous sample; a dead ray no longer writes tarmac
+
 **D · Decisions and paperwork**
 - **D1** ABS unlocked (1114) — the description was replaced in 1803 (`AutosportRacingSystem.cs:1135`); the checkbox itself was never driven, so it stays compile-only
 - **D2** `Oprahs` in `names.txt` — renamed to `Oprah`, live install and Dist mirror both

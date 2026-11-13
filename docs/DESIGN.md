@@ -151,6 +151,10 @@ which is why it ships there — and raising it is the move for a car that arrive
 planned for the corner the route term is stood down, so inside that window it is this number alone that
 decides.
 
+**Both terms read the surface.** The corner term always has — a loose corner asks for less. The route term
+now scales by the grip under the window its radius is sampled over, and a node with no sample inherits the
+surface the car is on rather than assuming tarmac.
+
 **Only the corners this car decided it needs braking for enter the corner term.** Every other bend is the
 route law's business, which is the same division the apex queue already makes: the reserved queue slots feed
 this term alone, and the rest of the track is handled as geometry.
