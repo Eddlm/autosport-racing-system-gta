@@ -2001,7 +2001,7 @@ namespace ARS
             foreach (Vehicle veh in _nearbyPreview)
             {
                 if (!CanWeUse(veh)) continue;
-                World.DrawMarker(MarkerType.ChevronUpx1, veh.Position + Vector3.WorldUp * 2f, Vector3.Zero, Vector3.Zero, new Vector3(1f, 1f, 1f), Color.Blue, true, true, 0, false, "", "", false);
+                World.DrawMarker(MarkerType.ChevronUpx1, veh.Position + Vector3.WorldUp * 2f, Vector3.Zero, new Vector3(180f, 0f, 0f), new Vector3(1f, 1f, 1f), Color.Blue, true, true, 0, false, "", "", false);
             }
         }
 
