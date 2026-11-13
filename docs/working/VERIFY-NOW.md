@@ -4,9 +4,9 @@ Build deployed: **1802**. What is ✅ is yours, verified in game; what is ⬜ is
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Today's work is section N**, at the top: Nearby Cars, builds 1784 → 1802. N1 and N3 were verified on
-13-11; the rest is still compile-only. Count: **48 open** (44 old + 4 from Nearby Cars). The detail of the
-30-10 hunt stays in `docs/audit/410-hunt-2026-10-30.md`.
+**Today's work is section N**, at the top: Nearby Cars, builds 1784 → 1802. N1 and N3-N6 were verified on
+13-11; only N2 is open, because no invalid ped has been reachable yet. Count: **45 open** (44 old + N2). The
+detail of the 30-10 hunt stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
@@ -19,9 +19,9 @@ Ten builds since the section below was written; every row here is **compile-only
 | N1 | **the cars around you join the grid** (1784) | Nearby Cars on, one empty car in range, Start Race | it joins the grid and runs with the pack, not as a prop | ✅ **verified 13-11 · 1802** |
 | N2 | **adoption runs after the pool, and a ghost seat gets a driver** (1790) | kill a parked car's ambient driver with a clean headshot — the corpse counts as occupied until the engine culls the body, then the seat is a ghost; Start Race once the body is gone | it is adopted, a driver is spawned and ends up **in the seat** (`Racer.cs:584`), the car drives, and the log's `ghostSeat` count rises | ⬜ unprovoked: no invalid ped yet. ARS never deletes a preview car's ped itself, so the only producer is the engine culling a corpse; walk-away (car despawns too) is the fallback |
 | N3 | **the toggle is a three-way choice** (1794) | switch Ignore → Join As Is → Join And Tune | Ignore draws nothing and adopts nothing; Join As Is adopts and leaves Auto Styling alone; Join And Tune lets the tuner see them | ✅ **verified 13-11 · 1802**: «Works, they tune if the setting is chosen» |
-| N4 | **adopted cars are sorted, not pinned** (1799) | adopt mid-field, then look at the grid | they take their place by pace with the rest; nobody is nailed to a slot | ⬜ |
-| N5 | **the chevrons share one angle** (1800, 1802) | a track start and a nearby car in the same view | both chevrons face the same way: one constant, `TrackChevronRotation` | ⬜ |
-| N6 | **the chevron says which car is adoptable** (1801) | one healthy empty car and one unhealthy one in range | blue for race-fit, orange for not; an **occupied** car draws nothing — a corpse in the driver's seat counts as occupied | ⬜ |
+| N4 | **adopted cars are sorted, not pinned** (1799) | adopt mid-field, then look at the grid | they take their place by pace with the rest; nobody is nailed to a slot | ✅ **verified 13-11 · 1802** |
+| N5 | **the chevrons share one angle** (1800, 1802) | a track start and a nearby car in the same view | both chevrons face the same way: one constant, `TrackChevronRotation` | ✅ **verified 13-11 · 1802** |
+| N6 | **the chevron says which car is adoptable** (1801) | one healthy empty car and one unhealthy one in range | blue for race-fit, orange for not; an **occupied** car draws nothing — a corpse in the driver's seat counts as occupied | ✅ **verified 13-11 · 1802** |
 
 ---
 
