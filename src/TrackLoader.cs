@@ -418,14 +418,17 @@ namespace ARS
             {
                 if (node % SurfaceSampleNodes == 0)
                 {
-                    grip = ARS.GroundGripAt(ARS.TrackPoints[node].Position);
+                    float probe = ARS.GroundGripAt(ARS.TrackPoints[node].Position);
                     if (ARS.LastGroundProbeRejected) rejected++;
                     else if (ARS.LastGroundMaterialHit)
                     {
                         hits++;
+                        grip = probe;
                         if (!seen.Contains(ARS.LastGroundMaterialHash)) seen.Add(ARS.LastGroundMaterialHash);
                     }
                     else misses++;
+                    // A ray that resolves nothing is not evidence of tarmac: an unknown surface keeps the
+                    // one the sweep was already on, which is what the car would have been driving on.
                 }
                 ARS.TrackPoints[node].SurfaceGrip = grip;
                 if (grip < OutsideApproachMinGrip) offRoad++;

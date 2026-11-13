@@ -4244,7 +4244,10 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             int count = ARS.TrackPoints.Count;
             if (count == 0) return 1f;
-            float Grip(int node) => node >= 0 && node < count ? ARS.TrackPoints[node].SurfaceGrip : 1f;
+            // An unsampled node is not evidence of tarmac: it inherits the surface the car is on now.
+            int here = CurrentTrackPoint.Node;
+            float known = here >= 0 && here < count ? ARS.TrackPoints[here].SurfaceGrip : 1f;
+            float Grip(int node) => node >= 0 && node < count ? ARS.TrackPoints[node].SurfaceGrip : known;
             float grip = Math.Min(Grip(LiveRouteRadiusNearNode), Grip(LiveRouteRadiusFarNode));
             grip = Math.Min(grip, Math.Min(Grip(LiveRouteRadiusMidNode), Grip(LiveSlidRadiusNearNode)));
             grip = Math.Min(grip, Math.Min(Grip(LiveSlidRadiusMidNode), Grip(LiveSlidRadiusFarNode)));
