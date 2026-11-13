@@ -120,8 +120,9 @@ Six commits, all **compile-only**. Every row carries how to provoke it and what 
 
 The ten bench flags are **compile-time constants**, all `true` in this build (`Racer.cs:16-25`, `TrackSpeed`) —
 there is no switch and no ini key, so nothing here can be restored or forgotten. Ini as this bench was written:
-`CornerCeiling` 500, `CornerLineShare` 20, `CornerOffset` 0, `RouteOffset` 0, `BrakeAimDepth` 0. The live
-install currently holds `CornerLineShare` 25, a hand move; the rows below were judged against 20.
+`CornerCeiling` 500, `CornerRadiusBlendPct` 20, `CornerOffset` 0, `RouteOffset` 0, `BrakeAimDepth` 0. The live
+install holds 25, carried across from the old `CornerLineShare` key by the migration; the rows below were
+judged against 20.
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|

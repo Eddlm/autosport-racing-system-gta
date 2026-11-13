@@ -1421,13 +1421,13 @@ namespace ARS
             return room;
         }
 
-        // The owner's middleground: the apex's own circle slid toward the widest arc by his share, never past it.
+        // The corner's speed radius is a blend: 0 is the apex's own circle, 100 the widest arc that fits the road.
         public static float CornerRadiusForSpeed(CornerPoint corner)
         {
             if (corner == null) return 0f;
             if (corner.WidestRadius <= corner.DetectedRadius) return corner.DetectedRadius;
-            float share = Math.Min(Math.Max(ARS.CornerLineSharePct, 10), 90) * 0.01f;
-            return corner.DetectedRadius + (corner.WidestRadius - corner.DetectedRadius) * share;
+            float blend = Math.Min(Math.Max(ARS.CornerRadiusBlendPct, 0), 100) * 0.01f;
+            return corner.DetectedRadius + (corner.WidestRadius - corner.DetectedRadius) * blend;
         }
 
         static float SweptRadius(int node, int count)

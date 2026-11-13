@@ -131,7 +131,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("AIRacerAutofix", AutofixMode.AutoRepair.ToString(), Kind.Text, Enum.GetNames(typeof(AutofixMode))));
             settings.Specs.Add(new KeySpec("CornerOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
             settings.Specs.Add(new KeySpec("RouteOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
-            settings.Specs.Add(new KeySpec("CornerLineShare", "20", Kind.Number, new[] { "10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90" }));
+            settings.Specs.Add(new KeySpec("CornerRadiusBlendPct", "20", Kind.Number, new[] { "0", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100" }));
             settings.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("NitrousEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TipRate", TipFrequency.High.ToString(), Kind.Text, Enum.GetNames(typeof(TipFrequency))));
