@@ -1957,6 +1957,10 @@ namespace ARS
             return HotkeysEnabled && Game.IsKeyPressed(MenuModifierKey) && Game.IsKeyPressed(MenuKey);
         }
 
+        static readonly Color NearbyAdoptableColor = Color.FromArgb(NearbyChevronAlpha, 0, 0, 255);
+        static readonly Color NearbyUnhealthyColor = Color.FromArgb(NearbyChevronAlpha, 255, 140, 0);
+        const int NearbyChevronAlpha = 127;
+
         List<Vehicle> DetectNearbyCars()
         {
             List<Vehicle> found = new List<Vehicle>();
@@ -1967,7 +1971,7 @@ namespace ARS
                 if (!CanWeUse(veh) || veh.IsDead || !veh.IsDriveable) continue;
                 if (mine != null && mine.Exists() && veh.Handle == mine.Handle) continue;
                 Ped seated = veh.GetPedOnSeat(VehicleSeat.Driver);
-                if (seated != null && seated.IsPlayer) continue;
+                if (seated != null && CanWeUse(seated)) continue;
                 if (Racers.Any(r => r.Car != null && r.Car.Exists() && r.Car.Handle == veh.Handle)) continue;
                 found.Add(veh);
             }
@@ -2001,7 +2005,8 @@ namespace ARS
             foreach (Vehicle veh in _nearbyPreview)
             {
                 if (!CanWeUse(veh)) continue;
-                World.DrawMarker(MarkerType.ChevronUpx1, veh.Position + Vector3.WorldUp * 2f, Vector3.Zero, new Vector3(180f, 0f, 0f), new Vector3(1f, 1f, 1f), Color.Blue, true, true, 0, false, "", "", false);
+                Color colour = Racer.IsRaceFit(veh) ? NearbyAdoptableColor : NearbyUnhealthyColor;
+                World.DrawMarker(MarkerType.ChevronUpx1, veh.Position + Vector3.WorldUp * 2f, Vector3.Zero, new Vector3(180f, 0f, 0f), new Vector3(1f, 1f, 1f), colour, true, true, 0, false, "", "", false);
             }
         }
 
@@ -4305,9 +4310,11 @@ namespace ARS
             int added = 0;
             int noDriver = 0;
             int ghostSeat = 0;
+            int unhealthy = 0;
             foreach (Vehicle veh in marked)
             {
                 if (Racers.Count >= maxcars + marked.Count) break;
+                if (!Racer.IsRaceFit(veh)) { unhealthy++; continue; }
                 Ped driver = veh.IsSeatFree(VehicleSeat.Driver) ? null : veh.GetPedOnSeat(VehicleSeat.Driver);
                 if (driver != null && !CanWeUse(driver)) { ghostSeat++; driver = null; }
                 if (driver == null) driver = CreateDriverPed(veh, null, 30);
@@ -4320,7 +4327,7 @@ namespace ARS
                 }
             }
 
-            Log(LogImportance.Info, "Added " + added + " nearby cars to the grid (" + ghostSeat + " seat(s) reported a driver that does not exist, " + noDriver + " skipped: no usable driver).");
+            Log(LogImportance.Info, "Added " + added + " nearby cars to the grid (" + ghostSeat + " seat(s) reported a driver that does not exist, " + noDriver + " skipped: no usable driver, " + unhealthy + " skipped: not race-fit).");
             if (added == 0) UI.Notify("~o~[ARS]:~w~ Nearby Cars is on, but no car around you could be added - the scan is in ARS.log.");
         }
 

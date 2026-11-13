@@ -1193,11 +1193,15 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float AvoidAngleGateDegrees = 20f;
         const float SameSectionMaxGapMeters = 30f;
         const float WallApproachSeconds = 5f;
-        const float EngineHealthHalf = 500f;
+        internal const float EngineHealthHalf = 500f;
+        internal const float BodyHealthShare = 0.5f;
         const float WallSideDeadbandMeters = 0.3f;
         const float AvoidHoldBehindMeters = 14f;
         const float AvoidHoldLateralMeters = 1.5f;
         const int AvoidHoldTimeoutMs = 8000;
+
+        internal static bool IsRaceFit(Vehicle car) =>
+            car.EngineHealth >= EngineHealthHalf && car.BodyHealth >= Math.Max(car.MaxHealth, 1) * BodyHealthShare;
 
         float ComputeAvoidanceLane(float roadWide)
         {
@@ -4301,16 +4305,11 @@ const float RequirementLookaheadSeconds = 3.95f;
                         ConsiderCrowdCard();
                     }
 
-                    if (ARS.Autofix == AutofixMode.AutoRepair)
+                    if (ARS.Autofix == AutofixMode.AutoRepair && !IsRaceFit(Car))
                     {
 
-                        float bodyFloor = Math.Max(Car.MaxHealth, 1) * 0.5f;
-                        if (Car.EngineHealth < EngineHealthHalf || Car.BodyHealth < bodyFloor)
-                        {
-
-                            ARS.Log(ARS.LogImportance.Info, "AutoRepair " + Name + ": body " + Car.BodyHealth.ToString("0") + ", engine " + Car.EngineHealth.ToString("0"));
-                            Car.Repair();
-                        }
+                        ARS.Log(ARS.LogImportance.Info, "AutoRepair " + Name + ": body " + Car.BodyHealth.ToString("0") + ", engine " + Car.EngineHealth.ToString("0"));
+                        Car.Repair();
                     }
 
                     if (!Driver.IsSittingInVehicle(Car) && Car.IsStopped && Driver.IsStopped)
