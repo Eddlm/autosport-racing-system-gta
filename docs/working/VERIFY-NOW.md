@@ -4,11 +4,20 @@ Build deployed: **1820**. What is ✅ is yours, verified in game; what is ⬜ is
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Today's work is section O**, at the top: builds 1808 → 1820, every row compile-only. Section N (Nearby Cars)
+**Today's work is section P**, at the top: builds 1808 → 1820, every row compile-only. Section N (Nearby Cars)
 is closed except N2. **50 open rows below**, and the 40 already driven or disposed of sit in **Answered** at the
 bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
+
+## P · 2026-11-14 (1841 → 1846) — the debug panel's six pedal bars
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| P1 | **six throttle bars in the panel** (1843) | launch GTA without racing: the panel must be absent everywhere (menu, freecam, free roam). Then start a race and work the throttle up and down | out of a race: no black band, no bars, nothing top-centre. In a race: six identical amber bars inside the band — bottom edges pinned to the band bottom and never moving, tops rising with the racer's throttle, no bar at rest, filling to the band top at full throttle; the tracked racer is the debug UI's own subject (closest AI racer to you when a debug toggle is on, your car otherwise), and the throttle-reason text never sits under the rect | ✅ verified 14-11 · 1843 |
+| P2 | **the bars split: three throttle, three brake** (1844) | in a race, work both pedals separately | the first three bars stay amber and rise with throttle, the last three turn red and rise with brake — widths, gaps and the bottom edge unchanged from 1843, and brake 1 fills the band | ✅ verified 14-11 · 1844 |
+| P3 | **the bars tell the throttle chain** (1845) | in a race, provoke the two bounds: hammer the throttle on greasy ground or on landing for the TCS cap, brake hard then release to raise the Gs floor; with `Gs Lane Throttle Floor` off, bar 3 stays hidden | bar 1 green rises with the applied throttle; bar 2 amber with the TCS max-throttle cap (1 when TCS is silent, dropping on wheelspin); bar 3 amber with the imposed Gs floor while the setting is on (hidden when off); bars 4-6 still red brake | ✅ verified 14-11 · 1845 |
+| P4 | **the TCS cap pulls from the top** (1846) | watch the first bar's column while TCS works — wheelspin on a greasy exit or a hard landing | an amber ceiling hangs in the first bar's column from the band's top, deepening as the cap drops, its lower edge meeting the green bar's top exactly when the cap binds; absent when TCS is silent; bar 2 keeps the plain TCS feed unchanged, reserved for reuse | ⬜ |
 
 ## O · 2026-11-14 (1808 → 1820) — the finish line and the quick join
 
@@ -247,6 +256,7 @@ Kept for provenance: these are the in-game verdicts and the dispositions. Nothin
 - **J1** the prep cap hangs off where the prep started (47e9efd) — verified 09-11 · 1755
 - **J2** release at the apex, four seconds to position (1e8e57c) — 09-11 · 1755, same pass as J1
 
-**K · the corner is spent when the car coasts**
+**K · the corner is spent when the car coasts — for speed only**
 - **K1** coasting inside the corner releases it early (`CornerSpent`) — verified 09-11 · 1769/1770: «the 0.05gs thing works well»
+- **K2** the line outlives the coast: coasting spends the speed ask (queue looks past), the corner is held to its apex node (`Racer.cs:729`) — pending your drive · 1836
 

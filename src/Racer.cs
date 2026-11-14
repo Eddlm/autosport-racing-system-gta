@@ -203,6 +203,7 @@ namespace ARS
 
         public float ThrottleWanted { get { return _thrWanted; } }
         public float ThrottleFinal { get { return _thrFinal; } }
+        public float BrakeFinal { get { return _brkFinal; } }
         public float ThrottleDelta { get { return _thrDelta; } }
         public float ThrottleTargetMps { get { return _thrTarget; } }
         public float ThrottleActualMps { get { return _thrActualMps; } }
