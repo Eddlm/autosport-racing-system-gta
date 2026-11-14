@@ -130,6 +130,7 @@ namespace ARS
         const int DNFSlotSpacingMeters = 5;
         const float DNFSlotOffsetMeters = 1f;
         const float DNFUnderTrackMeters = 5f;
+
         const float KickMaxDriveBiasFront = 0.01f;
         const float KickPedalLevel = 1f;
         const int KickArmSaturateMs = 1000;
@@ -144,8 +145,9 @@ namespace ARS
         int _kickArmSince = 0;
         int _kickCooldownUntil = 0;
         int _kickSteerSign = 0;
-
         float _kickAskDegrees = 0f;
+
+        const float GsPreviewBlend = 0.5f;
         const float SteerPreviewSeconds = 0.5f;
         const float SteerLookaheadMinNodes = 8f;
         public const float SteerLookaheadMaxNodes = 90f;
@@ -155,37 +157,34 @@ namespace ARS
         {
             return ARS.Clamp(speedMps * SteerPreviewSeconds, SteerLookaheadMinNodes, SteerLookaheadMaxNodes);
         }
-        const float GsPreviewBlend = 0.5f;
 
         float _avoidLeftWall = 0f;
         float _avoidRightWall = 0f;
         float _wallRoadWide = 0f;
+        bool _leftWallHeld;
+        bool _rightWallHeld;
+        int _activeRivalWallCount = 0;
+        bool _avoidWallsInitialized = false;
 
         public float AvoidLeftWall => _avoidLeftWall;
         public float AvoidRightWall => _avoidRightWall;
         public float WallRoadWide => _wallRoadWide;
-        bool _leftWallHeld;
-        bool _rightWallHeld;
-
         public bool LeftWallHeld => _leftWallHeld;
         public bool RightWallHeld => _rightWallHeld;
-        int _activeRivalWallCount = 0;
-        bool _avoidWallsInitialized = false;
 
+        float _laneRequest = 0f;
+        LaneReason _laneRequestReason = LaneReason.OwnLane;
         float _carriedLane = 0f;
 
         float _pursuitRawBearingDeg;
         float _pursuitAimDistanceM;
-
         float _pursuitAimLateralM;
 
-        float _laneRequest = 0f;
-        LaneReason _laneRequestReason = LaneReason.OwnLane;
-
         int _probeApexNode = -1;
-        int _laneTraceAt;
         int _laneApexNode = -1;
         int _laneShapeApexNode = -1;
+
+        int _laneTraceAt;
         int _throttleLogAt;
 
         float _thrWanted;
