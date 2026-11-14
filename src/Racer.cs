@@ -315,6 +315,8 @@ namespace ARS
         bool _projectionCutActive = false;
         bool _projectionArmed = false;
         float _gsFloor01;
+        // The floor as it is actually imposed: the ask, capped by every ceiling that binds. The line reads this one.
+        float _gsFloorApplied;
         bool _exitRoomArmed;
         float _projectionLift = 0f;
         float _projectionDropMph = 0f;
@@ -1869,10 +1871,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             Control.Brake += ARS.Clamp(newBrake - Control.Brake, -inputChange, inputChange);
             Control.Throttle += ARS.Clamp(newThrottle - Control.Throttle, -inputChange, inputChange);
 
-            _thrFloor = gsFloor;
+            _thrFloor = _gsFloorApplied;
             _thrFinal = Control.Throttle;
             _brkFinal = Control.Brake;
-            _projectionPathColor = ProjectionPathColour(gsFloor, gsInsideRegime);
+            _projectionPathColor = ProjectionPathColour(_gsFloorApplied, gsInsideRegime);
 
             UpdateBrakeLearning();
 
@@ -2627,6 +2629,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             // The exit floor raises the ask, never past the ceilings above; the slew still owns the pedal.
             float raised = Math.Min(floor, ceiling);
+            _gsFloorApplied = raised;
             _gsFloorActiveThisTick = raised > baseThrottle;
             if (_gsFloorActiveThisTick) baseThrottle = raised;
 
