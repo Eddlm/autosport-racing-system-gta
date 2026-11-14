@@ -430,40 +430,13 @@ namespace ARS
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
         const int NitrousArmDelayMs = 6000;
+        const int NitrousDurationMs = 3000;
         const float NitrousCornerLookaheadSeconds = 8f;
         const float NitrousLonelySpeedFraction = 0.5f;
         const float NitrousLonelyMinApexDistance = 500f;
         const float NitrousDefenseReachSeconds = 4f;
         const float NitrousNearbyRivalDistance = 80f;
         const float NitrousFinishExtraDistance = 100f;
-        const float ChillRivalCrowdDistance = 40f;
-        const int ChillCrowdCount = 5;
-        const float ChillReleaseRadiusMeters = 50f;
-        const float DivebombReleaseGapMeters = 40f;
-        const float DefendLaterMarginSeconds = 1f;
-        const float DefendCloseBehindMeters = 20f;
-        const float DivebombReleaseAngleDegrees = 25f;
-        const int CardMinDwellMs = 1000;
-        const int CardCooldownMs = 1000;
-        public const float ChillStandoffDistance = 20f;
-        const float ChillThrottleCap = 0.5f;
-        const float RivalLiftMeters = 3f;
-        const float RivalLiftFloor = 0.1f;
-        const float ChillStandoffEscapeMargin = 2f;
-        const float ChillMinSpeedMph = 30f;
-
-        int RivalsWithinDistance(float distance)
-        {
-            if (ARS.NoCollision) return 0;
-            return ARS.Racers.Count(r => r.Car.Handle != Car.Handle && r.RacePosition < RacePosition && r.Car.Position.DistanceTo(Car.Position) <= distance);
-        }
-        const int NitrousDurationMs = 3000;
-        const float RocketBoostMinimumCurveRadius = 600f;
-        const float SideBySideAssistRangeExtra = 3f;
-        const float SideBySideFullAssistExtraGap = 1f;
-        const float SideBySideMinimumAssist = 0.1f;
-        const float SideBySideHeadingShare = 0.5f;
-        const float RivalHeightGateMeters = 2f;
         const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
         const ulong CheatPowerIncreaseHash = 0xB59E4BD37AE292DB;
         const ulong MaxDriveGearHash = 0x24910C3D66BA770D;
@@ -471,8 +444,39 @@ namespace ARS
         const ulong FullyChargeNitrousHash = 0x1A2BCC8C636F9226;
         const ulong OverrideNitrousLevelHash = 0xC8E9B6B71B8E660D;
 
+        const float ChillRivalCrowdDistance = 40f;
+        const int ChillCrowdCount = 5;
+        const float ChillReleaseRadiusMeters = 50f;
+        public const float ChillStandoffDistance = 20f;
+        const float ChillThrottleCap = 0.5f;
+        const float ChillStandoffEscapeMargin = 2f;
+        const float ChillMinSpeedMph = 30f;
+
+        const float DivebombReleaseGapMeters = 40f;
+        const float DivebombReleaseAngleDegrees = 25f;
+        const float DefendLaterMarginSeconds = 1f;
+        const float DefendCloseBehindMeters = 20f;
+        const int CardMinDwellMs = 1000;
+        const int CardCooldownMs = 1000;
+
+        const float RivalLiftMeters = 3f;
+        const float RivalLiftFloor = 0.1f;
+        const float RivalHeightGateMeters = 2f;
+        const float RocketBoostMinimumCurveRadius = 600f;
+        const float SideBySideAssistRangeExtra = 3f;
+        const float SideBySideFullAssistExtraGap = 1f;
+        const float SideBySideMinimumAssist = 0.1f;
+        const float SideBySideHeadingShare = 0.5f;
+
+        int RivalsWithinDistance(float distance)
+        {
+            if (ARS.NoCollision) return 0;
+            return ARS.Racers.Count(r => r.Car.Handle != Car.Handle && r.RacePosition < RacePosition && r.Car.Position.DistanceTo(Car.Position) <= distance);
+        }
+
         public Maneuver ActiveManeuver = new Maneuver();
         readonly int[] _cardCooldownUntil = new int[8];
+        public float DivebombBrakeBonus => _divebombBrakeBonus;
 
         bool CardCooled(ManeuverType type) => Game.GameTime >= _cardCooldownUntil[(int)type];
         bool CardMayEnd => Game.GameTime - ActiveManeuver.LastEnabled >= CardMinDwellMs;
@@ -484,7 +488,6 @@ namespace ARS
             ActiveManeuver.Target = null;
         }
 
-        public float DivebombBrakeBonus => _divebombBrakeBonus;
         int _nitrousActiveUntil = 0;
         int _nitrousGsLoggedAt = 0;
         int _nitrousLapUsed = -1;
