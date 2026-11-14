@@ -1,6 +1,6 @@
 # ARS documentation
 
-Five live documents, one folder of reference material and two of records. Each file answers **one question**;
+Six live documents, one folder of reference material and two of records. Each file answers **one question**;
 if a file has to answer two, the depth moves to a companion and the entry keeps the pointer.
 
 **The rule this set is built on: a document defines concepts and the relationships between them, and leaves the
@@ -12,6 +12,7 @@ authoritative. Values live in the code, where a rename or a retune cannot leave 
 |---|---|---|
 | `DESIGN.md` | What is each system *for*, and what shape serves that goal — including the shapes that were tried and rejected, and why | anyone changing behaviour |
 | `steering-and-pedals.md` | How the front-slip guard and the pedal limits are built today: the four pieces, the actuator rates, the evidence and what is still open | anyone touching the steering limiter or a pedal law |
+| `steering-parked.md` | What is parked or removed from the steering and pedal laws, and what would bring it back | anyone reviving a parked switch or wondering why the law file has no dates |
 | `FEATURES.md` | What does the player get, and what does it feel like | players; the store page and the README |
 | `RELEASE-NOTES.md` | What ships in this release, what it needs, and what it does not do yet | players installing it |
 | `REGISTER.md` | What is still open: decided and not built, waiting on a decision, understood and not fixed | whoever picks the next piece of work |
@@ -33,6 +34,7 @@ Then, by folder:
 - *"What is this setting, and what does it trade?"* → `DESIGN.md`, then the row in the menu, then the constant.
 - *"Is this already known?"* → `REGISTER.md` for open work, `working/TEST-PLAN.md` for an owed drive.
 - *"What does this do?"* → `FEATURES.md` if the answer is for a player, `DESIGN.md` if it is for a reader of the code.
+- *"Why does the steering hold or release the wheel?"* → `steering-and-pedals.md`, with `steering-parked.md` for anything that does not run.
 - *"How does anything else do it?"* → `reference/`.
 
 **The agent-facing notes are not here.** `AGENTS/` holds the working logs, the ranked backlog, the flag references and

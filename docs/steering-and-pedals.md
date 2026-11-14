@@ -1,35 +1,29 @@
 # Steering and pedal limits
 
-How the front-slip guard is built today, what each number means, the evidence behind it, what was measured on track, and what is still open. Written after the 2026-10-25 session (builds 1050-1089) and rewritten after the 2026-10-26 session, which turned the actuator rates into the law described below (builds 1127-1140), and again after 2026-10-31 (build 1382), which split the single share into a target and an absolute tolerance without changing the shipped behaviour.
+How the front-slip guard and the pedal limits work today — what each number means, the evidence behind it, what was measured on track, and what is still open. What is parked, removed or revised lives in `docs/steering-parked.md`.
 
 ## The four pieces
 
 The guard reads the tyre's own slip — a physics measurement, not a plan — and turns it into a ceiling the wheel is allowed. Four quantities run the whole law: what "the peak" means this tick, what survives the cut, what the wheel is allowed, and the one piece of state that chases it. The rest of this file is the evidence for their constants.
 
-| Name | What it is | Rate |
+| Name | What it is | When it changes |
 |---|---|---|
-| `capShare` | what counts as "the peak" this tick, as a multiple of the tyre's own peak: `Peak Slip Target x slow-corner allowance + Peak Slip Tolerance (°) / peak(v)`. `FrontPct` is normalised against it. | none — physics and settings |
-| `factor` | how much of the request survives: `Clamp(100 / wheelPct, 1 - Deepest Cut %, 1)`, where `wheelPct` is the measurement with the power trim folded in. | none — recomputed every tick |
-| `clampTarget` | the angle the wheel is allowed. Above the target (`FrontPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. **`Target Under Power` is parked** (`WheelTrimUnderPower = false`, row removed on 2026-10-31): it blended the wheel's allowance down to `TargetUnderPowerPct` % of the peak past half pedal, gated by the projection's room. One flag and one row bring it back; the geometry it used now drives the throttle floor instead. | none — recomputed every tick |
+| `capShare` | what counts as "the peak" this tick, as a multiple of the tyre's own peak: `Peak Slip Target x slow-corner allowance + Peak Slip Tolerance (°) / peak(v)`. | every tick, from the settings and the speed |
+| `factor` | how much of the request survives: `Clamp(100 / wheelPct, 1 - SlipCutDepthPct / 100, 1)`, where `wheelPct` is the measurement with the power trim folded in. | recomputed every tick |
+| `clampTarget` | the angle the wheel is allowed. Above the target (`FrontPct <= 100`) it is the steering lock, i.e. no limit; past it, `request x factor`. The parked Target Under Power once shaped this cell — what it did and how to bring it back: `steering-parked.md`. | recomputed every tick |
 | `chasingClamp` | the ceiling actually applied, `min(lock, chasingClamp)`. Born at `clampTarget` the first time the guard can speak, and the **only state** in the system. | closes exponentially, opens linearly (below) |
 
 The steering factor:
 
 ```csharp
-factor = Clamp(100 / wheelPct, 1 - DeepestCutPct / 100, 1)
+factor = Clamp(100 / wheelPct, 1 - SlipCutDepthPct / 100, 1)
 ```
 
 - `FrontPct` is the **outer** front tyre's side slip, as a percentage of `capShare`: the loaded wheel, steered to `EngineSteerWheelOuterShare` of the command by Ackermann, so the one that lands on its peak while the inner runs past by design. It is picked by magnitude (`min(|left|, |right|)`), so no index-to-side assumption is baked in.
 - The cut stops at **`Deepest Cut (%)`** (`Rival Steering`, the ladder `SettingsRepair.OptionsFor` publishes, ships **at its default**): the share of the request the guard may remove at the bottom of a slide, so the shipped depth still leaves the rest of what was asked. There is no second clamp behind it. The row is stated as a *depth* rather than a floor so that its ladder runs with the guard's strength — the bottom of the ladder turns the cut off and the top leaves nothing — instead of against it, which is what made the old numbers read backwards.
 - The shipped depth is the share that leaves `1/sfTractionMinAngle` of the request, the point where the traction curve stops falling, so the wheel bottoms out just before a deeper cut would buy no more grip (past the physical peak once the shipping `SteerCeilingFactor` target scales the allowance). That is a stop the tyre chooses, not a preference: below it the cut only takes direction away, and it also bounds how far each pulse of the loop can swing when the slip reading trails the wheel by a tick or two.
 
-The pedal band, parked on `SlipPedalCut = false` while the wheel law is judged alone. With it on it is applied to `combinedInput` before it splits into throttle and brake:
-
-```csharp
-if (FrontPct > 100) combinedInput = Min(combinedInput, Max(0, 1 - (FrontPct - 100) / 150));
-```
-
-Only the throttle, never below zero, closed between the allowance and `sfTractionMinAngle` times it. Braking is left to the plan. It went out on 2026-10-31 because it was the third thing moving the pedal in one test: with the trim handing back angle under power, a band that closed the throttle on the same measurement left no way to tell which of the two was being judged. What would bring it back is a four-wheel slide - both tyres well past the allowance - where removing angle buys nothing and only speed does (the 2026-10-25 measurements: `F 312 / R 118` in a corner that did not turn, against `237-257 / 197-204` in one that did).
+The slip pedal band is parked (`SlipPedalCut = false`): what it did, why it went out and what would bring it back — `steering-parked.md`.
 
 ## The actuator: close and open
 
@@ -60,7 +54,7 @@ Measured, 30 Hz, to 1 % of the target:
 
 A full collapse, 38 deg to 2 deg: **633 ms in 19 ticks**, stepped and visible.
 
-**Opening** is linear: **`SlipOpenDegPerSec`** (2.4 deg a tick). The full travel from 2 deg to the lock (36 deg) takes 0.5 s; any shorter gap proportionally less.
+**Opening** is linear: **`SlipOpenDegPerSec`** (2.4 deg a tick). The full travel from 2 deg to the lock (38 deg — the 2026-10-25 test car's lock; the lock is per-car, `VehicleData.SteeringLock`) takes 0.5 s; any shorter gap proportionally less.
 
 | jump | time |
 |---|---|
@@ -87,7 +81,7 @@ All three live in `Rival Steering`, and the first two are **one** quantity:
 capShare = Peak Slip Target x SlowCornerSlipShare + Peak Slip Tolerance / peak(v)
 ```
 
-One writer, one denominator: `capShare` feeds the wheel cut, the throttle band and the readout from the same expression (`AllowedSlipShare`, `Racer.cs`). The tolerance is converted to a share by dividing it by the peak at that speed, which is why it is added *after* the slow-corner allowance rather than scaled by it. **At the shipped `PeakSlipToleranceDeg` the expression is algebraically the old `Peak Slip Share x allowance`**, so the row's arrival changed no behaviour; only moving it does. The row was named `Peak Slip Share` and before that `SteerCeilingFactor`, and the ini key is still `SteerCeilingFactor` — renaming the store would need a migration for a value that already exists in every install.
+One writer, one denominator: `capShare` feeds the wheel cut, the throttle band and the readout from the same expression (`AllowedSlipShare`, `Racer.cs`). The tolerance is converted to a share by dividing it by the peak at that speed, which is why it is added *after* the slow-corner allowance rather than scaled by it. **At the shipped `PeakSlipToleranceDeg` the expression is algebraically the old `Peak Slip Share x allowance`**, so the row's arrival changed no behaviour; only moving it does. The row was named `Peak Slip Share` and before that `SteerCeilingFactor`, and the ini key is still `SteerCeilingFactor` — renaming the store would need a migration for a value that already exists in every install. The menu speaks percent: its "100 %" is these lines' 1.00 (`AutosportRacingSystem.cs:1108`).
 
 The speed-derived ceiling the target once scaled is the parked `SpeedSteerCeiling` branch (see below); it now reads the same `AllowedSlipDegrees` so that flipping it carries this pair rather than a second arithmetic.
 
@@ -110,7 +104,7 @@ The planned speed is theory: corner shapes and grip numbers deciding when to lif
 
 The sections below give the same mechanic its legal form: the exact gate band, the exact lane window, and the caps that still win over it.
 
-`GsLaneThrottleFloor` is on again (2026-10-31, build 1396) with `GsLaneOutsideFloor` in force, and behind a checkbox in `Rival Pace` since build 1398 (ships on): while the car's slide angle runs between half and 1.5 of `LateralPeakAtSpeed` — the traction curve's peak at speed; a committed corner within a reasonable slip — past the peak the curve is falling but grip only bottoms out at 2.5 peaks (`sfTractionMinAngle`), so at 1.5 the tyre still holds and the power under it helps the car turn in; 1.5 is the band's own early exit before the fall steepens, and the peak being read at speed narrows the band as the car goes quicker, closing it earlier exactly where a wider slip cannot be worn — grip-free both ways, so it fires offroad as on tarmac (2026-11-14, build 1856: the lateral-Gs gate is gone, lateral Gs under-report offroad) — its projected path is inside the road and pointing at the inside, the throttle cannot fall below the room — **a fixed two-metre window over the car's lane: the projected lane two metres further from the inside than the car lane gives nothing, two metres closer gives `GsLaneThrottleMaxFloor`, linear between and clamped outside the window** (2026-11-14, build 1857: the lane-to-inside-edge lerp is gone — the floor is a plain remap around where the car lane sits, so the aid follows how far the aim commits past the car lane, not how far it runs). It is a floor, not a cap: it raises a pedal the plan wanted lifted, and it is clamped to `Control.MaxThrottle`, which folds TCS, stability, overspeed, rival, chill-out, yield, off-track and recovery, so every other cap still wins. It is zeroed while countersteering, and while the projection *or the car itself* is off the road — the cases where accelerating is the wrong answer (2026-11-14, build 1857: the widening qualifier is gone — off the road is enough, widening or not).
+`GsLaneThrottleFloor` sits behind a checkbox in `Rival Pace` (ships on): while the gate is open the throttle cannot fall below the room — **a fixed two-metre window over the car lane: the projected lane two metres further from the inside than the car lane gives nothing, two metres closer gives `GsLaneThrottleMaxFloor`, linear between and clamped outside the window**. The gate has three keys and needs all three: the car's slide angle runs between half and 1.5 of `LateralPeakAtSpeed`, the traction curve's peak at speed; both the car and its projection sit on the road; and the car is not countersteering. Past the peak the curve is falling but grip only bottoms out at 2.5 peaks (`sfTractionMinAngle`), so at 1.5 the tyre still holds and the power under it helps the car turn in; 1.5 is the band's early exit before the fall steepens, and the peak being read at speed narrows the band as the car goes quicker, closing it earlier exactly where a wider slip cannot be worn. The band is grip-free — an angle reading both ways — so it fires offroad as on tarmac. It is a floor, not a cap: it raises a pedal the plan wanted lifted, and it is clamped to `Control.MaxThrottle`, which folds TCS, stability, overspeed, rival, chill-out, yield, off-track and recovery, so every other cap still wins. It is zeroed while countersteering, and while the projection or the car itself is off the road — the cases where accelerating is the wrong answer.
 
 The share comes from `UpdateExitRoom` as that lerp, one computation per tick with one writer; the parked wheel trim reads the same field. The projected path's colour is a straight 1:1 map of the floor **as imposed** — `min(ask, every ceiling)` — green at full and white at none, so the line goes pale whenever a cap denies the aid rather than advertising an ask the pedal cannot follow.
 
@@ -151,7 +145,9 @@ Same car, same `factor` 0.40-0.42 (saturated), two corners with completely diffe
 | good | 1.82 - 2.50 | 0.40 - 0.42 | 31-32 | 237-257 | 197-204 |
 | bad | 3.12 | 0.40 | 32 | 312 | 118 |
 
-Reading: `R` at ~200 in both is ~0.78 of `F`, i.e. both axles are past their peak — a four-wheel slide, not a front-led understeer. The wheel clamp is then the wrong actuator: it removes `SlipCutDepthPct` of the angle while the force stays flat. The car is simply too fast for the corner, and the pedal is the only thing that can fix it.
+`F` and `R` are the outer front's and the worst rear's side slip as percentages of `capShare` — the same units the readout prints.
+
+Reading: in the good row both axles sit near 200 and `R` runs ~0.78 of `F`, the same shape front and rear — two tyres past their allowance together. The bad row breaks it: `F` 312 with `R` only 118, ~0.38 of `F` — the front leads, the rear barely past. What the rows share is everything past 100, and that is all they share: the 2026-10-25 note that produced this table read "R ~200 in both" and "0.78 of F" into it, which the table itself falsifies — 0.78 belongs to the good row, 118/312 is 0.38. The four-wheel-slide story therefore rests on the good row alone, and open item 1's gate — `R > 180` — would fire in the good row and miss the bad one, so before that gate ships it needs rows measured where the pedal really was the fix. In the shape the good row shows — both axles past their allowance — the wheel clamp is the wrong actuator: it removes `SlipCutDepthPct` of the angle while the force stays flat, the car is simply too fast for the corner, and only speed fixes it.
 
 ## What the readout shows
 
@@ -179,7 +175,7 @@ Only an AI racer draws it: `DrawFrontSlipReadout` returns early for the player, 
 3. **Hysteresis.** The close now starts at any gap (exponential) and the open runs at `SlipOpenDegPerSec`, so the old 1-2 Hz oscillation at 100 % should be gone — unverified in the car. A dead band (close above 105, open below 95) remains the fallback.
 4. **The measurement lag.** The slip trails the command by 100-200 ms and nothing compensates. A first-order filter on `FrontPct` would remove most of it.
 5. **`SpeedSteerCeiling` is zombie code** (`Racer.cs`, `static readonly bool = false`): `ResolveSteerCeiling`, `PeakSlipCeilingAt`, `GeometrySteerCeiling`, `ManeuverRamp` and the ramp from `SteerLimitRampStartMph` to `SteerLimitRampEndMph` are compiled but inert, while the target/tolerance pair drives the live limiter. Decided for **0.11**: revive the law or delete it **and** its leftovers together.
-6. **Left/right asymmetry** was reported and never confirmed. The wheel pick is assumption-free (`max` of both fronts), so if it persists the suspects are the countersteer/damper sign path and the AI's own steering.
+6. **Left/right asymmetry** was reported and never confirmed. The wheel pick is assumption-free — `min(|left|, |right|)`, averaged when the wheel is neutral (`Racer.cs:1553-1555`), the outer-wheel law that replaced the earlier worse-tyre pick alongside the guard's other 2026-10-31 rework — so if it persists the suspects are the countersteer/damper sign path and the AI's own steering.
 7. **The guard disappears when the source cannot answer.** If `FrontPct <= 0.01` or the source is unreadable (theory below `FrontSlipTheoryMinSpeedMps`), the block is skipped and the applied ceiling is the lock — i.e. no limit at all, which reads as an instant release. Keeping the last ceiling instead is a one-line change with real consequences in the car, so it waits for a decision.
 
 ## Failures worth remembering
