@@ -1,13 +1,25 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1802**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1820**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Today's work is section N**, at the top: Nearby Cars, builds 1784 → 1802. N1 and N3-N6 were verified on
-13-11; only N2 is open, because no invalid ped has been reachable yet. **43 open rows below**, and the 40
-already driven or disposed of sit in **Answered** at the bottom, out of the way. The detail of the 30-10 hunt
-stays in `docs/audit/410-hunt-2026-10-30.md`.
+**Today's work is section O**, at the top: builds 1808 → 1820, every row compile-only. Section N (Nearby Cars)
+is closed except N2. **48 open rows below**, and the 40 already driven or disposed of sit in **Answered** at the
+bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## O · 2026-11-14 (1808 → 1820) — the finish line and the quick join
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| O1 | **a failed start heals itself** (1808, 1809) | get a start to fail (empty grid), then press Start again without ending anything | the log says the grid was flagged instanced with no racers and rebuilds, instead of repeating the roster message |
+| O2 | **the save is free after a race** (1811) | run a race, end it (or reload mid-race), then open the pause menu | Save Game is available; the mod no longer marks itself a mission script |
+| O3 | **the chevron is a quick race** (1814) | drive into a track-start chevron with a roster and Absolute PI set in the menu | six rivals around your PI (±4, relative), 7 cars, the whole `cars.txt` fleet — and the menu's own settings are unchanged for the next normal race |
+| O4 | **corner blips live and die with the race** (1817-1819) | corner visual on, start a race, then finish it | a yellow blip on every apex while racing; all gone at the finish, and `Corner blips cleared (N)` in the log |
+| O5 | **nothing race-shaped outlives the race** (1820) | every debug toggle on, finish a race | checkpoints, chevrons, bumps, G-line, rival cards, route radius and track analysis all stop when the race does |
+| O6 | **the corner radius blend reads right** (1805) | the same corner at 0, at 25, at 100 | 0 is the tightest apex circle (slowest), 100 the widest arc (fastest), 25 what you drive today |
 
 ---
 
