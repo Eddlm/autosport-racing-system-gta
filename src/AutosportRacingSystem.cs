@@ -228,6 +228,7 @@ public const float LaneInsetPerRadius = 125f;
             foreach (int value in GridSizeChoices) if (Math.Abs(value - stored) < Math.Abs(best - stored)) best = value;
             return best;
         }
+
         List<int> _flareFx = new List<int>();
         FreeCamController _freeCam;
 
@@ -595,25 +596,20 @@ public const float LaneInsetPerRadius = 125f;
         public static Scaleform CountdownScaleform = new Scaleform("MP_BIG_MESSAGE_FREEMODE");
 
         public static float PowerTargetScale = 0.52f;
-
         public static PaceMode CurrentPaceMode = PaceMode.RelativeToMine;
         public static float PaceOffsetScale = 0f;
-
         public static int PaceDeviationLimit = 0;
 
         public static string ScriptsFolder = @"scripts\AutosportRacingSystem";
-
         public static string SettingsFolder => ScriptsFolder + @"\Settings";
-
         public static string LogPath => Path.GetFullPath(Path.Combine(ScriptsFolder, "..", "..", "ARS.log"));
         public static string PreviousLogPath => Path.GetFullPath(Path.Combine(ScriptsFolder, "..", "..", "ARS.prev.log"));
 
         public static List<string> HardcodedRoster = null;
-
         List<string> _vehiclePool = new List<string>();
-
         List<string> _carPoolFiles = new List<string>();
         bool _carPoolRefreshing;
+
         readonly ObjectPool _menuPool = new ObjectPool();
         NativeMenu _arsMenu;
         NativeMenu _raceMenu;
@@ -629,12 +625,12 @@ public const float LaneInsetPerRadius = 125f;
         readonly List<float> _paceOffsetValues = new List<float>();
 
         float _resolvedPaceTarget = 0.52f;
-
         float _lastKnownPlayerPace = float.NaN;
 
         readonly Dictionary<NativeMenu, NativeMenu> _menuParents = new Dictionary<NativeMenu, NativeMenu>();
         List<Vehicle> _nearbyPreview = new List<Vehicle>();
         int _nearbyPreviewMs;
+
         NativeSubmenuItem AddSub(NativeMenu parent, NativeMenu child)
         {
             NativeSubmenuItem item = parent.AddSubMenu(child);
