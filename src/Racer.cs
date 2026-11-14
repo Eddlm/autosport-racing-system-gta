@@ -191,6 +191,7 @@ namespace ARS
         float _brkWanted;
         float _brkFinal;
         float _thrFinal;
+        readonly SmoothFloat _thrSmooth = new SmoothFloat(0f, ThrottleSmoothRate);
         float _thrDelta;
         float _thrTarget;
         float _thrActualMps;
@@ -204,6 +205,7 @@ namespace ARS
         public float ThrottleWanted { get { return _thrWanted; } }
         public float ThrottleFinal { get { return _thrFinal; } }
         public float BrakeFinal { get { return _brkFinal; } }
+        public float ThrottleSmooth { get { return _thrSmooth.Value; } }
         public float ThrottleDelta { get { return _thrDelta; } }
         public float ThrottleTargetMps { get { return _thrTarget; } }
         public float ThrottleActualMps { get { return _thrActualMps; } }
@@ -1764,6 +1766,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float ThrottleLogBelow = 0.9f;
         const float PedalSlewRate = 6f;
         const float PedalSlewMaxPerTick = 0.5f;
+        const float ThrottleSmoothRate = 6f; // the UI follower's exponential rate (per second): 95% after ~0.5 s
 
         Color ProjectionPathColour(float gsFloor, bool insideRegime)
         {
@@ -1874,6 +1877,8 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             _thrFloor = _gsFloorApplied;
             _thrFinal = Control.Throttle;
+            _thrSmooth.Target = _thrFinal;
+            _thrSmooth.Advance(TickScale);
             _brkFinal = Control.Brake;
             _projectionPathColor = ProjectionPathColour(_gsFloorApplied, gsInsideRegime);
 

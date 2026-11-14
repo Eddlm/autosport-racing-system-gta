@@ -31,14 +31,14 @@ namespace ARS
         }
 
         // Six bars in the panel band, bottom edge pinned to DebugPanelBottom, an input of 1 filling the
-        // band: the racer's applied throttle, the TCS max-throttle cap, the Gs floor as throttle (bar
+        // band: the racer's applied throttle (smoothed), the TCS max-throttle cap, the Gs floor as throttle (bar
         // hidden when the Gs floor setting is off), then three brake bars. Column 0 also carries a bar
         // hanging from the band top down to the TCS cap line, so the cap reads as a pull on the pedal.
         static void DrawPanelBars(Racer racer)
         {
             if (racer == null) return;
             float barWidth = (DebugPanelRight - DebugPanelLeft - (2 * BarsPerPedal - 1) * ThrottleBarGap) / (2 * BarsPerPedal);
-            DrawBar(racer.ThrottleFinal, ThrottleAppliedColour, barWidth, 0);
+            DrawBar(racer.ThrottleSmooth, ThrottleAppliedColour, barWidth, 0);
             DrawHangingBar(racer.Control.MaxThrottleFromTCS, ThrottleBoundColour, barWidth, 0);
             DrawBar(racer.Control.MaxThrottleFromTCS, ThrottleBoundColour, barWidth, 1);
             DrawBar(GsLaneThrottleFloor ? racer.ThrottleFloorLevel : 0f, ThrottleBoundColour, barWidth, 2);

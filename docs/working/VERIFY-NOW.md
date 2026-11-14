@@ -10,7 +10,7 @@ bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hu
 
 ---
 
-## P · 2026-11-14 (1841 → 1846) — the debug panel's six pedal bars
+## P · 2026-11-14 (1841 → 1847) — the debug panel's six pedal bars
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
@@ -18,6 +18,7 @@ bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hu
 | P2 | **the bars split: three throttle, three brake** (1844) | in a race, work both pedals separately | the first three bars stay amber and rise with throttle, the last three turn red and rise with brake — widths, gaps and the bottom edge unchanged from 1843, and brake 1 fills the band | ✅ verified 14-11 · 1844 |
 | P3 | **the bars tell the throttle chain** (1845) | in a race, provoke the two bounds: hammer the throttle on greasy ground or on landing for the TCS cap, brake hard then release to raise the Gs floor; with `Gs Lane Throttle Floor` off, bar 3 stays hidden | bar 1 green rises with the applied throttle; bar 2 amber with the TCS max-throttle cap (1 when TCS is silent, dropping on wheelspin); bar 3 amber with the imposed Gs floor while the setting is on (hidden when off); bars 4-6 still red brake | ✅ verified 14-11 · 1845 |
 | P4 | **the TCS cap pulls from the top** (1846) | watch the first bar's column while TCS works — wheelspin on a greasy exit or a hard landing | an amber ceiling hangs in the first bar's column from the band's top, deepening as the cap drops, its lower edge meeting the green bar's top exactly when the cap binds; absent when TCS is silent; bar 2 keeps the plain TCS feed unchanged, reserved for reuse | ⬜ |
+| P5 | **the throttle bar rides a smooth follower** (1847) | watch bar 1 through a race, especially on throttle jabs and full pedal swaps | bar 1 lags the real pedal slightly and moves continuously (exponential, 6/s, frame-rate independent) instead of snapping; the TCS ceiling, floor bar and brake trio behave exactly as on 1846 | ⬜ |
 
 ## O · 2026-11-14 (1808 → 1820) — the finish line and the quick join
 

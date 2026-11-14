@@ -441,4 +441,24 @@ namespace ARS
         public int LastEnabled = 0;
         public Racer Target = null;
     }
+
+    // Holds a real value (Target) and a smooth chase of it (Value). Advance with real elapsed seconds:
+    // the remaining gap is gap * e^(-rate*dt), identical at any frame rate, and it never overshoots.
+    public class SmoothFloat
+    {
+        public float Target;
+        public float Value;
+        readonly float _ratePerSecond;
+
+        public SmoothFloat(float initial, float ratePerSecond)
+        {
+            Target = Value = initial;
+            _ratePerSecond = ratePerSecond;
+        }
+
+        public void Advance(float dtSeconds)
+        {
+            Value += (Target - Value) * (1f - (float)Math.Exp(-_ratePerSecond * dtSeconds));
+        }
+    }
 }
