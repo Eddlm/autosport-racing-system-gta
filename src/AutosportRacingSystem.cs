@@ -2177,7 +2177,7 @@ public const float LaneInsetPerRadius = 125f;
                     }
                 }
 
-                if (raceLive) DrawDebugPanel(DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null));
+                if (raceLive && DebugToggles[Options.ShowInputs]) DrawDebugPanel(DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null));
 
                 if (DebugToggles[Options.ShowThrottleReason])
                     DrawThrottleReason(DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null));

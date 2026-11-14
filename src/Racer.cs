@@ -190,6 +190,8 @@ namespace ARS
         float _thrWanted;
         float _brkWanted;
         float _brkFinal;
+        readonly SmoothFloat _brkSmooth = new SmoothFloat(0f, BrakeSmoothRate);
+        readonly SmoothFloat _tcsSmooth = new SmoothFloat(1f, TcsSmoothRate);
         float _thrFinal;
         readonly SmoothFloat _thrSmooth = new SmoothFloat(0f, ThrottleSmoothRate);
         float _thrDelta;
@@ -200,11 +202,14 @@ namespace ARS
         bool _brakePlanActive;
         SpeedTerm _thrTerm;
         float _speedCorner;
+        float _speedCornerArrival;
         float _speedRoute;
 
         public float ThrottleWanted { get { return _thrWanted; } }
         public float ThrottleFinal { get { return _thrFinal; } }
         public float BrakeFinal { get { return _brkFinal; } }
+        public float BrakeSmooth { get { return _brkSmooth.Value; } }
+        public float TcsSmooth { get { return _tcsSmooth.Value; } }
         public float ThrottleSmooth { get { return _thrSmooth.Value; } }
         public float ThrottleDelta { get { return _thrDelta; } }
         public float ThrottleTargetMps { get { return _thrTarget; } }
@@ -217,6 +222,7 @@ namespace ARS
         public float SpeedSourceMetres { get { return Brain.CurrentIntention.TermMetres; } }
         public float SpeedSourceRadius { get { return Brain.CurrentIntention.TermRadius; } }
         public float CornerTermMps { get { return _speedCorner; } }
+        public float CornerArrivalMps { get { return _speedCornerArrival; } }
         public float RouteTermMps { get { return _speedRoute; } }
         float _probeDeepest;
         int _probeNode = -1;
@@ -261,11 +267,8 @@ namespace ARS
         int _defendApexNode = -1;
         const float GsLaneThrottleMaxFloor = 1f;
         const float GsLaneOutsideFloor = 0f;
-        // The floor's fall: full at the inside edge, down to the low share five metres short of the outer edge, then
-        // on to nothing at the edge. Those five metres are absolute, not a share of the road, so a wide road keeps its
-        // floor high through the middle. A road too narrow to place the point puts the low share at half its width.
-        const float GsLaneFloorLowShare = 0.1f;
-        const float GsLaneFloorFallMeters = 5f;
+        // The room is a plain lerp from the car's lane to the inside edge, measured on the projected lane:
+        // equal distances give 0, the inside edge gives 1, a projected lane further out clamps to 0.
         const float ProjectionFullLiftMetres = 4f;
         const float ProjectionLiftPerSecond = 2f;
         const float ProjectionArmSlideShare = 0.6f;
@@ -1767,6 +1770,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float PedalSlewRate = 6f;
         const float PedalSlewMaxPerTick = 0.5f;
         const float ThrottleSmoothRate = 6f; // the UI follower's exponential rate (per second): 95% after ~0.5 s
+        const float BrakeSmoothRate = 6f;
+        const float TcsSmoothRate = 6f;
 
         Color ProjectionPathColour(float gsFloor, bool insideRegime)
         {
@@ -1796,26 +1801,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             Vector3 projected = ProjectAhead(SteerPreviewSeconds);
             int projectedWindow = (int)(Car.Velocity.Length() * SteerPreviewSeconds) + 10;
             TrackPoint projectedNode = ARS.FindNearestTrackPoint(projected, CurrentTrackPoint.Node, 0, projectedWindow);
-            int turn = TrackTurnSign(CurrentTrackPoint.Node, projectedNode.Node, Math.Sign(CurrentTrackPoint.Angle));
-            if (turn == 0) return;
-            int insideSign = (int)(ARS.LaneInsideSign * turn);
-            float projectedOffset = ARS.SignedLaneOffset(projected, projectedNode.Position, projectedNode.Direction);
+            float carHalfWidth = VehicleData.ModelDimensions.X * 0.5f;
+            float laneHere = CurrentTrackPoint.LaneLineShare * (CurrentTrackPoint.TrackHalfWidth - carHalfWidth);
+            float laneAhead = projectedNode.LaneLineShare * (projectedNode.TrackHalfWidth - carHalfWidth);
+            float fromInsideHere = CurrentTrackPoint.TrackHalfWidth - carHalfWidth - laneHere;
+            float fromInsideAhead = projectedNode.TrackHalfWidth - carHalfWidth - laneAhead;
 
-            float room = Math.Max(projectedNode.TrackHalfWidth - VehicleData.ModelDimensions.X * 0.5f, 1f);
-            float inward = projectedOffset * insideSign / room;
-
-            _exitRoomArmed = true;
-            _gsFloor01 = GsFloorShare(inward, room);
-        }
-
-        float GsFloorShare(float inward, float room)
-        {
-            float span = Math.Max(2f * room, 0.1f);
-            float fromInside = ARS.Clamp((1f - inward) * room, 0f, span);
-            float point = span - GsLaneFloorFallMeters + VehicleData.ModelDimensions.X * 0.5f;
-            if (point <= 0f) point = 0.5f * span;
-            if (fromInside <= point) return 1f - (1f - GsLaneFloorLowShare) * (fromInside / point);
-            return GsLaneFloorLowShare * (span - fromInside) / Math.Max(span - point, 0.001f);
+            float floor01 = fromInsideHere > 0.01f ? 1f - fromInsideAhead / fromInsideHere : 0f;
+            _exitRoomArmed = floor01 > 0f;
+            _gsFloor01 = ARS.Clamp(floor01, 0f, 1f);
         }
 
         float GsLaneThrottleFloorValue(out bool insideRegime)
@@ -1880,6 +1874,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             _thrSmooth.Target = _thrFinal;
             _thrSmooth.Advance(TickScale);
             _brkFinal = Control.Brake;
+            _brkSmooth.Target = _brkFinal;
+            _brkSmooth.Advance(TickScale);
             _projectionPathColor = ProjectionPathColour(_gsFloorApplied, gsInsideRegime);
 
             UpdateBrakeLearning();
@@ -2290,6 +2286,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             Brain.CurrentIntention.Term = SpeedTerm.None;
 
             float cornerSpd = 999f;
+            float cornerArrival = 999f;
             int cornerSourceNode = -1;
             if (TrackSpeed.CornerPlan && NextApexNode >= 0)
             {
@@ -2298,16 +2295,17 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     cornerSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
                     cornerSourceNode = NextApexNode;
+                    cornerArrival = NextApexSpeed;
                 }
                 if (NextApexNode2 >= 0 && CornerRequiresBraking(NextApexNode2))
                 {
                     float second = Math.Max(2, ApexBrakingSpeed(NextApexNode2, NextApexSpeed2));
-                    if (second < cornerSpd) { cornerSpd = second; cornerSourceNode = NextApexNode2; }
+                    if (second < cornerSpd) { cornerSpd = second; cornerSourceNode = NextApexNode2; cornerArrival = NextApexSpeed2; }
                 }
                 if (NextApexNode3 >= 0 && CornerRequiresBraking(NextApexNode3))
                 {
                     float third = Math.Max(2, ApexBrakingSpeed(NextApexNode3, NextApexSpeed3));
-                    if (third < cornerSpd) { cornerSpd = third; cornerSourceNode = NextApexNode3; }
+                    if (third < cornerSpd) { cornerSpd = third; cornerSourceNode = NextApexNode3; cornerArrival = NextApexSpeed3; }
                 }
             }
 
@@ -2317,14 +2315,23 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
-            if (cornerSpd <= 5 && Brain.Corner != null) cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
+            if (cornerSpd <= 5 && Brain.Corner != null)
+            {
+                cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
+                cornerArrival = cornerSpd;
+            }
 
-            if (NextApexNode >= 0 && HasPassedApex(NextApexNode)) cornerSpd = 999f;
+            if (NextApexNode >= 0 && HasPassedApex(NextApexNode))
+            {
+                cornerSpd = 999f;
+                cornerArrival = 999f;
+            }
 
             bool chicane = TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane;
             if (chicane)
             {
                 cornerSpd += ARS.MphToMps(10f);
+                cornerArrival += ARS.MphToMps(10f);
                 Brain.CurrentIntention.Term = SpeedTerm.Chicane;
             }
 
@@ -2365,10 +2372,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
+            float cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
             float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph);
             if (cornerPlansABrake && ARS.GetForwardSpeed(Car) > cornerTerm) routeTerm = 999f;
 
             _speedCorner = cornerTerm;
+            _speedCornerArrival = cornerArrivalTerm;
             _speedRoute = routeTerm;
             Brain.CurrentIntention.Speed = Math.Min(cornerTerm, routeTerm);
             if (cornerTerm <= routeTerm)
@@ -2528,6 +2537,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
 
             Control.MaxThrottleFromTCS = _kickPlaying ? 1f : GlideCap(Control.MaxThrottleFromTCS, TcsCapLevel());
+            _tcsSmooth.Target = Control.MaxThrottleFromTCS;
+            _tcsSmooth.Advance(TickScale);
             int wheelsOffGround = ARS.WheelsOffGround(Car);
             if (TrackSpeed.StabilityCap && wheelsOffGround > 0)
                 Control.MaxThrottleFromStability -= StabilityFallPerWheelPerSecond * wheelsOffGround * TickScale;
