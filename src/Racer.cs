@@ -192,6 +192,7 @@ namespace ARS
         float _brkFinal;
         readonly SmoothFloat _brkSmooth = new SmoothFloat(0f, BrakeSmoothRate);
         readonly SmoothFloat _tcsSmooth = new SmoothFloat(1f, TcsSmoothRate);
+        readonly SmoothFloat _stabSmooth = new SmoothFloat(1f, StabSmoothRate);
         float _thrFinal;
         readonly SmoothFloat _thrSmooth = new SmoothFloat(0f, ThrottleSmoothRate);
         float _thrDelta;
@@ -210,6 +211,7 @@ namespace ARS
         public float BrakeFinal { get { return _brkFinal; } }
         public float BrakeSmooth { get { return _brkSmooth.Value; } }
         public float TcsSmooth { get { return _tcsSmooth.Value; } }
+        public float StabSmooth { get { return _stabSmooth.Value; } }
         public float ThrottleSmooth { get { return _thrSmooth.Value; } }
         public float ThrottleDelta { get { return _thrDelta; } }
         public float ThrottleTargetMps { get { return _thrTarget; } }
@@ -267,8 +269,9 @@ namespace ARS
         int _defendApexNode = -1;
         const float GsLaneThrottleMaxFloor = 1f;
         const float GsLaneOutsideFloor = 0f;
-        // The room is a plain lerp from the car's lane to the inside edge, measured on the projected lane:
-        // equal distances give 0, the inside edge gives 1, a projected lane further out clamps to 0.
+        // A fixed window over the car's lane: the projected lane 2 m further from the inside than the
+        // car lane gives 0, 2 m closer gives 1, linear between, clamped beyond.
+        const float GsLaneFloorSpreadMeters = 2f;
         const float ProjectionFullLiftMetres = 4f;
         const float ProjectionLiftPerSecond = 2f;
         const float ProjectionArmSlideShare = 0.6f;
@@ -317,6 +320,7 @@ namespace ARS
         float _steerGrantedCeiling = 0f;
 
         float _projectionOutsideMeters = 0f;
+        float _carOutsideMeters = 0f;
         bool _projectionWidening = false;
         bool _projectionCutActive = false;
         bool _projectionArmed = false;
@@ -1772,6 +1776,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float ThrottleSmoothRate = 6f; // the UI follower's exponential rate (per second): 95% after ~0.5 s
         const float BrakeSmoothRate = 6f;
         const float TcsSmoothRate = 6f;
+        const float StabSmoothRate = 6f;
 
         Color ProjectionPathColour(float gsFloor, bool insideRegime)
         {
@@ -1785,7 +1790,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (_projectionOutsideMeters > 0f) return Color.Yellow;
             return Color.Blue;
         }
-        const float GsLaneFloorLateralShare = 0.525f;
+        // The exit-room gate rides the slide angle: between half and 1.5 of the traction curve's peak at
+        // speed is a committed corner; past that the car slides out and the band closes it. Grip-free.
+        const float GsLaneFloorSlipLowShare = 0.5f;
+        const float GsLaneFloorSlipOverShare = 1.5f;
 
         void UpdateExitRoom()
         {
@@ -1793,10 +1801,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             _gsFloor01 = 0f;
             if (!ARS.GsLaneThrottleFloor && !WheelTrimUnderPower) return;
 
-            if (_projectionOutsideMeters > 0f && _projectionWidening) return;
-            float theoreticalGs = VehicleData.CurrentMechanicalGrip * Handling.Gravity / 9.8f;
-            if (!(theoreticalGs > 0f)) return;
-            if (Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) <= GsLaneFloorLateralShare * theoreticalGs) return;
+            if (_projectionOutsideMeters > 0f || _carOutsideMeters > 0f) return;
+            float slipPeakDeg = LateralPeakAtSpeed(ARS.GetForwardSpeed(Car));
+            if (!(slipPeakDeg > 0f)) return;
+            float slipDeg = Math.Abs(VehicleData.SlideAngle);
+            if (slipDeg < GsLaneFloorSlipLowShare * slipPeakDeg || slipDeg > GsLaneFloorSlipOverShare * slipPeakDeg) return;
 
             Vector3 projected = ProjectAhead(SteerPreviewSeconds);
             int projectedWindow = (int)(Car.Velocity.Length() * SteerPreviewSeconds) + 10;
@@ -1804,12 +1813,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             float carHalfWidth = VehicleData.ModelDimensions.X * 0.5f;
             float laneHere = CurrentTrackPoint.LaneLineShare * (CurrentTrackPoint.TrackHalfWidth - carHalfWidth);
             float laneAhead = projectedNode.LaneLineShare * (projectedNode.TrackHalfWidth - carHalfWidth);
-            float fromInsideHere = CurrentTrackPoint.TrackHalfWidth - carHalfWidth - laneHere;
-            float fromInsideAhead = projectedNode.TrackHalfWidth - carHalfWidth - laneAhead;
+            float laneVsLane = laneAhead - laneHere;
 
-            float floor01 = fromInsideHere > 0.01f ? 1f - fromInsideAhead / fromInsideHere : 0f;
+            float floor01 = ARS.Clamp((laneVsLane + GsLaneFloorSpreadMeters) / (2f * GsLaneFloorSpreadMeters), 0f, 1f);
             _exitRoomArmed = floor01 > 0f;
-            _gsFloor01 = ARS.Clamp(floor01, 0f, 1f);
+            _gsFloor01 = floor01;
         }
 
         float GsLaneThrottleFloorValue(out bool insideRegime)
@@ -1955,6 +1963,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float mph = ARS.MpsToMph(Car.Velocity.Length());
             float signedOffset = 0f;
             _projectionOutsideMeters = 0f;
+            _carOutsideMeters = 0f;
             _projectionWidening = false;
             float halfWidth = 0f;
             float outsideOffset = 0f;
@@ -1973,6 +1982,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 turnDirection = Math.Sign(signedOffset);
                 outsideOffset = Math.Abs(signedOffset);
                 carOffset = Math.Abs(ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction));
+                _carOutsideMeters = carOffset - Math.Max(CurrentTrackPoint.TrackHalfWidth, 0.1f);
                 _projectionOutsideMeters = outsideOffset - halfWidth;
                 float projectionLocal = Math.Abs(ARS.SignedLaneOffset(proj, CurrentTrackPoint.Position, CurrentTrackPoint.Direction));
                 _projectionWidening = projectionLocal > carOffset;
@@ -2545,6 +2555,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             else
                 Control.MaxThrottleFromStability += StabilityRisePerSecond * TickScale;
             Control.MaxThrottleFromStability = ARS.Clamp(Control.MaxThrottleFromStability, 0f, 1f);
+            _stabSmooth.Target = Control.MaxThrottleFromStability;
+            _stabSmooth.Advance(TickScale);
 
             Control.MaxThrottleFromOverspeed = Game.GameTime < _nitrousActiveUntil
                 ? 1f

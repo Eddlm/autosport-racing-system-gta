@@ -16,14 +16,14 @@ namespace ARS
         const float ThrottleBarGap = 0.004f; // gap between bars, screen width fraction
         const float SpeedDeltaFullSpanMps = 30f; // margin-bar scale: 30 m/s of margin reaches a band edge
         static readonly Color ThrottleAppliedColour = Color.LimeGreen;
-        static readonly Color ThrottleBoundColour = Color.FromArgb(235, 210, 60); // TCS cap and the Gs floor
+        static readonly Color ThrottleBoundColour = Color.FromArgb(235, 210, 60); // the hanging TCS pull, the stability cap and the Gs floor
         static readonly Color BrakeBarColour = Color.Red;
         static readonly Color SpeedMarginColour = Color.Orange; // the APEX and ROUT bars
         static readonly Color OfflineColour = Color.Gray; // a margin meter out of range: bar and label gray out
         static readonly Color PanelLabelColour = Color.White;
         const float PanelLabelY = 0.272f; // the label row, inside the band above its bottom edge
         const float PanelLabelScale = 0.35f;
-        static readonly string[] PanelLabels = { "THR", "TCS", "FLR", "APEX", "ROUT", "BRAKE" };
+        static readonly string[] PanelLabels = { "THR", "STB", "FLR", "APEX", "ROUT", "BRAKE" };
 
         public static void DrawScreenRect(float left, float top, float right, float bottom, Color colour)
         {
@@ -42,7 +42,7 @@ namespace ARS
         }
 
         // Six bars in the panel band, bottom edge pinned to DebugPanelBottom, an input of 1 filling the
-        // band: applied throttle, TCS max throttle and the brake bar ride SmoothFloat followers; the Gs
+        // band: applied throttle, the stability cap and the brake bar ride SmoothFloat followers; the Gs
         // floor bar shows the imposed floor (hidden when the Gs floor setting is off). Columns 4-5 are
         // margins against the corner's arrival speed and the route ask, centred on the middle: margin
         // above, deficit below, 30 m/s reaches a band edge; orange in range, grayed out beyond it both in
@@ -53,7 +53,7 @@ namespace ARS
             if (racer == null) return;
             DrawBar(racer.ThrottleSmooth, ThrottleAppliedColour, barWidth, 0);
             DrawHangingBar(racer.TcsSmooth, ThrottleBoundColour, barWidth, 0);
-            DrawBar(racer.TcsSmooth, ThrottleBoundColour, barWidth, 1);
+            DrawBar(racer.StabSmooth, ThrottleBoundColour, barWidth, 1);
             DrawBar(GsLaneThrottleFloor ? racer.ThrottleFloorLevel : 0f, ThrottleBoundColour, barWidth, 2);
             DrawDeltaBar(racer.CornerArrivalMps - speed, SpeedMarginColour, barWidth, BarsPerPedal);
             DrawDeltaBar(racer.RouteTermMps - speed, SpeedMarginColour, barWidth, BarsPerPedal + 1);

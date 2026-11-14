@@ -587,11 +587,12 @@ The axle gate that used to guard that halving, and `UndersteerDegrees` with it, 
 
 ## Lane systems — where on the track the car aims
 
-**CURRENT — 2026-11-09, build 1777. This supersedes the paragraphs below and the sticky-apex law above.** The lane
+**CURRENT — 2026-11-14, build 1836. This supersedes the paragraphs below and the sticky-apex law above.** The lane
 has one ask and one corner. `_laneHeldCorner` is the nearest *laned* corner (radius under `IdealLineMaxRadiusMeters`)
-beyond the steering lookahead, held until its apex passes or `CornerSpent` declares it done — past the entrance, under
-way, under 0.05 g of longitudinal load — and the picker will not re-adopt it: `NearestApexAhead` skips both spent corners
-and the plan's `_skippedApexes`, so plan and lane look past the same ones. One phase opens four seconds before the
+beyond the steering lookahead, held until its apex passes — `CornerSpent` no longer releases it: coasting past the
+entrance spends the corner's *speed* requirement (the queue skips it, route and the rest of the speed rules take over),
+never the line — and the picker will not re-adopt it: `NearestApexAhead` skips the plan's `_skippedApexes` only, so a
+corner the queue spent is still a corner the line can adopt. One phase opens four seconds before the
 entrance: the aim is the shaped field *at* the entrance until the lookahead crosses it, then the field under the
 lookahead. Out is a lead capped by a clock — 0.1 m on the first asking tick, 2 m after `LanePrepRampSeconds` — and in is
 the aim itself, uncapped. The side always comes from `TrackTurnSign` between two headings. **Gone:** `LaneAbsoluteMetres`,
