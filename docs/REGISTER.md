@@ -128,6 +128,11 @@ the debug diagonal after the last apex of a lap: it should vanish.
 re-takes one from the search every tick, so the reference is refreshed rather than kept. Whether the diagonal still
 lingers after the last apex of a lap is unverified — the falsification drive above is still owed.
 
+*(2026-11-14)* Superseded in part: the lane holds its corner to the apex node and no longer lets go on `CornerSpent` —
+coasting spends what the queue asked for (the speed rules take over), never the shaped line. The search can therefore
+re-offer a corner the queue has spent, since the line outlives the speed requirement. Two consumers, two ends, on purpose —
+the one-predicate version released the line at brake-off, roughly 15-20 m before the apex.
+
 ## 4 · Filed from the session audits
 
 ### `lane-exit-invasion` — an exit walk can overwrite the next corner's entrance

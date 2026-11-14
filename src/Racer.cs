@@ -725,8 +725,9 @@ namespace ARS
 
             CornerPoint candidate = NearestApexAhead();
             // The corner in play is the one the lane holds; NextApexNode has already moved past a spent corner by
-            // the time this runs, because the queue refills in the same tick that skips it.
-            if (_laneHeldCorner == null || HasPassedApex(_laneHeldCorner.Node) || CornerSpent(_laneHeldCorner.Node))
+            // the time this runs, because the queue refills in the same tick that skips it. Coasting spends the
+            // corner's SPEED requirement only: the line keeps the corner until the car is past its apex node.
+            if (_laneHeldCorner == null || HasPassedApex(_laneHeldCorner.Node))
             {
                 if (_laneHeldCorner != null) FinishShapeError(_laneHeldCorner);
                 _laneHeldCorner = candidate;
@@ -1172,7 +1173,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (!ApexAheadOfLookahead(corner, reach)) continue;
                 if (metres < 0f || metres >= bestMeters) continue;
                 if (_skippedApexes.Contains(corner.Node)) continue;
-                if (CornerSpent(corner.Node)) continue;
                 bestMeters = metres;
                 best = corner;
             }
@@ -3934,7 +3934,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             float forwardGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
             bool flipped = false;
 
-            // Coasting inside the corner means it is spent: the picker looks past it rather than holding it to the apex.
+            // Coasting past the entrance spends the corner's speed requirement, not its line: the queue looks past it
+            // here, and the picker keeps holding it until the apex.
             if (CornerSpent(NextApexNode) && _skippedApexes.Add(NextApexNode))
             {
                 flipped = true;
