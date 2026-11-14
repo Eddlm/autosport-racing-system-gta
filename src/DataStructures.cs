@@ -331,9 +331,7 @@ namespace ARS
         public float Brake = 1f;
         public float MaxThrottle = 1f;
         public float MaxBrake = 1f;
-        public float MaxThrottleFromTCS = 1f;
         public float MaxBrakeFromABS = 1f;
-
         public float MaxBrakeFromCountersteer = 1f;
         public float MaxBrakeFromSlide = 1f;
         public float MaxThrottleFromOverspeed = 1f;
@@ -343,13 +341,13 @@ namespace ARS
         public float MaxThrottleFromStability = 1f;
         public float MaxThrottleFromOffTrack = 1f;
         public float MaxThrottleFromRecovery = 1f;
+        public float MaxThrottleFromTCS = 1f;
         public ThrottleReason ThrottleReason = ThrottleReason.Plan;
         public float ThrottleReasonLevel = 1f;
         public BrakeReason BrakeReason = BrakeReason.Plan;
         public float BrakeReasonLevel = 1f;
 
         public int HandBrakeTime = 0;
-
     }
 
     public class TrackPoint
@@ -369,10 +367,10 @@ namespace ARS
         public bool LaneShaped;
         public int LaneShapeApex = -1;
         public int LaneShapeStart = -1;
+        public int LaneShapeExit = -1;
         // Grip under this node, sampled at load: 1 on road, OffRoadGrip on anything else. A wheel in contact
         // is the only true source of the surface multiplier, and the route is scanned before one is there.
         public float SurfaceGrip = 1f;
-        public int LaneShapeExit = -1;
     }
 
     public class CornerPoint
@@ -385,16 +383,14 @@ namespace ARS
         public int LengthEnd = 5;
         public float Speed = 999;
         public float Elevation = 0f;
-
         public bool IsChicane = false;
-
         public float SupposedRadius = 999f;
-
         public float DetectedRadius = 999f;
         public float WidestRadius = 0f;
         // The worst ground the corner covers, 1 on road: a corner with loose surface anywhere in its span
         // is a loose corner, and its speed scales with the square root of this.
         public float SurfaceGrip = 1f;
+
         public float GetRadius() => ARS.TrackPoints[Node].GeneralCurveRadius;
         public float GetPreciseRadius() => ARS.TrackPoints[Node].PreciseCurveRadius;
     }
