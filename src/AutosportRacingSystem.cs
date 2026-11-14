@@ -1563,8 +1563,87 @@ namespace ARS
             Log(LogImportance.Info, "Track instanced");
         }
 
+        // A quick join from a track-start chevron is a different event from a menu race: it never reads the
+        // menu's roster, PI mode, deviation or grid size. The fleet and the three knobs are swapped for the
+        // length of the grid build and put back before the method returns, so the menu is as the driver left it.
+        const int ImmersiveOpponents = 6;
+        const int ImmersivePaceDeviation = 4;
+        bool _immersiveJoin;
+        bool _usingImmersiveFleet;
+        List<string> _immersivePool;
+        Dictionary<string, float> _immersivePace;
+        List<string> _stashedPool;
+        Dictionary<string, float> _stashedPace;
+
+        void EnsureImmersiveFleet()
+        {
+            if (_immersivePool != null) return;
+            string roster = VehicleCatalog.SelectedRosterFile;
+            try
+            {
+                VehicleCatalog.SelectRosterFile("cars.txt");
+                _immersivePool = new List<string>();
+                VehicleCatalog.FillPool(_immersivePool);
+                Dictionary<string, float> grip = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, float> top = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, float> accel = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, bool> electric = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, string> names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                VehicleCatalog.BuildPowerCache(_immersivePool, grip, top, accel, electric, names, BlacklistedVehicleClasses, text => Log(LogImportance.Info, text));
+                _immersivePace = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                foreach (var entry in grip)
+                {
+                    float mph, raw;
+                    if (!top.TryGetValue(entry.Key, out mph)) continue;
+                    accel.TryGetValue(entry.Key, out raw);
+                    bool ev = false;
+                    electric.TryGetValue(entry.Key, out ev);
+                    float pace = ComputePaceIndex(mph, entry.Value, raw, ev);
+                    if (float.IsNaN(pace) || float.IsInfinity(pace)) continue;
+                    _immersivePace[entry.Key] = pace;
+                }
+                Log(LogImportance.Info, "Immersive fleet: " + _immersivePool.Count + " cars from cars.txt, " + _immersivePace.Count + " paced.");
+            }
+            finally
+            {
+                VehicleCatalog.SelectRosterFile(roster);
+            }
+        }
+
+        void EnterImmersiveFleet()
+        {
+            EnsureImmersiveFleet();
+            _stashedPool = _vehiclePool;
+            _stashedPace = ModelPaceIndexCache;
+            _vehiclePool = _immersivePool;
+            ModelPaceIndexCache = _immersivePace;
+            _usingImmersiveFleet = true;
+        }
+
+        void LeaveImmersiveFleet()
+        {
+            if (!_usingImmersiveFleet) return;
+            _vehiclePool = _stashedPool;
+            ModelPaceIndexCache = _stashedPace;
+            _usingImmersiveFleet = false;
+            _immersiveJoin = false;
+        }
+
         public void InstanceGrid()
         {
+            PaceMode menuPaceMode = CurrentPaceMode;
+            int menuDeviation = PaceDeviationLimit;
+            int menuOpponents = _intendedOpponents;
+            if (_immersiveJoin)
+            {
+                EnterImmersiveFleet();
+                CurrentPaceMode = PaceMode.RelativeToMine;
+                PaceDeviationLimit = ImmersivePaceDeviation;
+                _intendedOpponents = ImmersiveOpponents;
+                Log(LogImportance.Info, "Immersive join: relative PI, +/- " + ImmersivePaceDeviation + ", " + (ImmersiveOpponents + 1) + " cars, the whole fleet.");
+            }
+            try
+            {
             if (!_trackInstanced)
             {
                 UI.Notify("~r~Instance a track first.");
@@ -1614,6 +1693,17 @@ namespace ARS
             _gridInstanced = true;
             Log(LogImportance.Info, "Grid instanced (" + Racers.Count + " AI cars)");
             if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
+            }
+            finally
+            {
+                if (_immersiveJoin)
+                {
+                    CurrentPaceMode = menuPaceMode;
+                    PaceDeviationLimit = menuDeviation;
+                    _intendedOpponents = menuOpponents;
+                    LeaveImmersiveFleet();
+                }
+            }
         }
 
         void ResolvePaceTargetForGrid()
@@ -2275,6 +2365,7 @@ namespace ARS
                             if ((_arsMenu == null || !_arsMenu.Visible) && CanWeUse(Game.Player.Character.CurrentVehicle) && !IsMenuHotkeyPressed() && Game.IsControlJustPressed(2, GTA.Control.Context))
                             {
 
+                                _immersiveJoin = true;
                                 SelectTrackInMenu(nearest.TrackPath);
                                 StartRaceFromMenu();
                             }
