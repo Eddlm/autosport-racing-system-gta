@@ -37,39 +37,28 @@ namespace ARS
 
     public partial class ARS : Script
     {
-
         public static List<TrackStartInfo> TrackStartInfos = new List<TrackStartInfo>();
-
         public static List<TrackPoint> TrackPoints = new List<TrackPoint>();
         public static float RouteLengthMeters = 0f;
 
         public static List<CornerPoint> Corners = new List<CornerPoint>();
-
         public static int CornersRevision = 0;
-
         public static int CornerCeilingMeters = 500;
-
         public static readonly string[] CornerCeilingValues = { "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "250", "300", "350", "400", "450", "500" };
 
-        public static int AiNitroPct = 100;
-        public static readonly string[] AiNitroValues = { "50", "100", "150", "200" };
-
         public static List<Bump> Bumps = new List<Bump>();
-
         public static List<Crest> Crests = new List<Crest>();
 
         public static List<string> KnownTracks = new List<string>();
 
+        public static int AiNitroPct = 100;
+        public static readonly string[] AiNitroValues = { "50", "100", "150", "200" };
+
         public static Dictionary<string, float> ModelGripCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-
         public static Dictionary<string, float> ModelTopSpeedMphCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-
         public static Dictionary<string, float> ModelAccelCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-
         public static Dictionary<string, bool> ModelElectricCache = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-
         public static Dictionary<string, string> ModelNameCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
         public static Dictionary<string, float> ModelPaceIndexCache = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         const float ElectricDrivePeak = 5f;
 
