@@ -2180,6 +2180,8 @@ public const float LaneInsetPerRadius = 125f;
                 if (DebugToggles[Options.ShowThrottleReason])
                     DrawThrottleReason(DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null));
 
+                DrawDebugPanel();
+
                 if (raceLive && DebugToggles[Options.ShowRouteRadius])
                 {
                     Racer radiusRacer = DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null);
