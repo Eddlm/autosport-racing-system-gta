@@ -19,34 +19,16 @@ using System.Threading.Tasks;
 namespace ARS
 {
     public enum RelativePos { Unreachable, Ahead, Left, Right, Behind }
-    public enum Team
-    {
-        None, Red, Blue, Cop, Crook
-    }
-    public enum RaceState
-    {
-        None, NotInitiated, Countdown, InProgress, Finished,
-    }
+    public enum Team { None, Red, Blue, Cop, Crook }
+    public enum RaceState { None, NotInitiated, Countdown, InProgress, Finished }
 
-    public enum NearbyCarsMode
-    {
-        Ignore, JoinAsIs, JoinAndTune,
-    }
+    public enum NearbyCarsMode { Ignore, JoinAsIs, JoinAndTune }
 
-    public enum PaceMode
-    {
-        Absolute, RelativeToMine,
-    }
+    public enum PaceMode { Absolute, RelativeToMine }
 
-    public enum RubberbandMode
-    {
-        Natural, Artificial,
-    }
+    public enum RubberbandMode { Natural, Artificial }
 
-    public enum AutofixMode
-    {
-        Off, AutoRepair, Invincible,
-    }
+    public enum AutofixMode { Off, AutoRepair, Invincible }
 
     public enum Options
     {
