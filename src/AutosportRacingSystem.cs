@@ -1572,7 +1572,7 @@ namespace ARS
 
         void RefreshCornerBlips()
         {
-            if (!DebugToggles[Options.ShowCheckpoints] || ARS.Corners.Count == 0 || ARS.TrackPoints.Count == 0)
+            if (!RaceIsRunning || !DebugToggles[Options.ShowCheckpoints] || ARS.Corners.Count == 0 || ARS.TrackPoints.Count == 0)
             {
                 ClearCornerBlips();
                 return;
