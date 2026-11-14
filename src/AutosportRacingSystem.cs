@@ -233,26 +233,22 @@ public const float LaneInsetPerRadius = 125f;
 
         public static ulong WheelsPtr = 0x0;
         public static ulong NumWheelsOffset = 0x0;
-        static bool _nullCarReported;
         public static ulong WheelPowerOffset = 0x0;
+        static bool _nullCarReported;
 
         public static List<int> Road = new List<int> { 282940568, 1187676648, -108464011, -1084640111 };
-
-        public static List<string> HelpMessages = new List<string>();
-
         public static List<Racer> Racers = new List<Racer>();
-
+        public static List<string> HelpMessages = new List<string>();
         public static List<Vector3> RouteNodes = new List<Vector3>();
         public static Dictionary<int, float> NodeHalfWidths = new Dictionary<int, float>();
-
         public static List<Prop> StartLineFlares = new List<Prop>();
         public static XmlDocument CurrentFile = null;
 
         int _raceTimedFinishMs = 0;
-        float _timeScale = 1f;
-        internal float TimeScale { get => _timeScale; set => _timeScale = value; }
         int _posUpdateTickMs = 0;
         int _longTickMs = 0;
+        float _timeScale = 1f;
+        internal float TimeScale { get => _timeScale; set => _timeScale = value; }
 
         public enum TerrainTypes
         {
