@@ -32,7 +32,11 @@ namespace ARS
 
     public enum Options
     {
-        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints, ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis, ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip, ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry, ShowFrontSlip, ShowSlideAngle, ShowThrottleReason
+        ShowInputs, ReverseRoute, HighDownforceOnline, ShowCheckpoints,
+        ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis,
+        ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip,
+        ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry,
+        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason
     }
     public partial class ARS : Script
     {
