@@ -256,6 +256,7 @@ namespace ARS
 
         bool _trackInstanced;
         bool _gridInstanced;
+        static bool _missionFlagOwned;
         int _intendedOpponents = 4;
 
         public static readonly int[] GridSizeChoices = { 0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 22, 26, 30, 40, 50, 60, 70, 80, 90, 100 };
@@ -2646,6 +2647,7 @@ namespace ARS
             }
 
             Game.MissionFlag = true;
+            _missionFlagOwned = true;
             Log(LogImportance.Info, "Setting up");
             SetupRace(true, true);
             Log(LogImportance.Info, "Set up");
@@ -2662,6 +2664,7 @@ namespace ARS
         public void CleanRacers()
         {
             Game.MissionFlag = false;
+            _missionFlagOwned = false;
             foreach (Racer r in Racers)
             {
                 r.Delete();
@@ -3507,6 +3510,13 @@ namespace ARS
             }
             finally
             {
+                // The mission flag blocks the player's save. Only clear the one we set, but never leave it
+                // behind: an abort while a race runs is how a save gets locked out for the rest of the session.
+                if (_missionFlagOwned)
+                {
+                    Game.MissionFlag = false;
+                    _missionFlagOwned = false;
+                }
                 RaceStatus = RaceState.None;
                 PlayerParticipating = false;
                 LeaderboardFinish.Clear();
