@@ -2621,6 +2621,13 @@ namespace ARS
                 InstanceTrack();
                 if (!_trackInstanced) return;
             }
+            // A grid flag with no racers is a half-finished start, not a built grid: rebuild instead of
+            // trusting it, or every later press finds an empty list and blames the roster.
+            if (_gridInstanced && Racers.Count == 0)
+            {
+                Log(LogImportance.Info, "Grid was flagged instanced with no racers - rebuilding it.");
+                _gridInstanced = false;
+            }
             if (!_gridInstanced)
             {
                 InstanceGrid();
@@ -2633,6 +2640,7 @@ namespace ARS
             {
                 UI.Notify("~r~[ARS]:~w~ no racers to start - check the car roster and Max PI Deviation.");
                 Log(LogImportance.Error, "No racers to start: intended " + _intendedOpponents + " opponent(s), " + _cachedCandidates.Count + " candidate(s) cached, " + Racers.Count + " racer(s), grid instanced " + _gridInstanced + ", " + GridSlotsAvailable + " slot(s).");
+                _gridInstanced = false;
                 if (!_freeCam.IsActive) Function.Call(Hash.DO_SCREEN_FADE_IN, 500);
                 return;
             }
