@@ -1597,6 +1597,7 @@ namespace ARS
 
         void ClearCornerBlips()
         {
+            if (_cornerBlips.Count > 0) Log(LogImportance.Info, "Corner blips cleared (" + _cornerBlips.Count + ").");
             foreach (Blip blip in _cornerBlips) if (blip != null && blip.Exists()) blip.Remove();
             _cornerBlips.Clear();
             _cornerBlipTrackPath = null;
