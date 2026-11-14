@@ -34,7 +34,6 @@ namespace ARS
 
         public string Name = "Racer";
         internal string _baseName = "Racer";
-
         public string DriverName = "Racer";
         internal string CarModelName = "";
         public Ped Driver;
@@ -56,7 +55,6 @@ namespace ARS
         public int NextApexNode3 = -1;
         public float NextApexRadius3 = 999f;
         public float NextApexSpeed3 = 999f;
-
         CornerPoint _nextApexCorner;
         const int HeldApexCount = 3;
 
@@ -64,19 +62,15 @@ namespace ARS
         public HandlingData Handling = new HandlingData();
         public float GroundGripMultiplier = 1f;
         Vector3 _lastSpeed;
-
         int _lastGsCheck = 0;
         bool _gripLogged = false;
-
         float _restHeightAboveGround = -1f;
 
         public TrackPoint CurrentTrackPoint = new TrackPoint();
         public float AlongTrackSpeed = 0f;
         public int RaceProgress = 0;
-
         public int LiveRouteCrestNode = -1;
         public int LiveRouteCrestFarNode = -1;
-
         public int LiveRouteRadiusNearNode = -1;
         public int LiveRouteRadiusMidNode = -1;
         public int LiveRouteRadiusFarNode = -1;
@@ -84,9 +78,7 @@ namespace ARS
         public int LiveSlidRadiusMidNode = -1;
         public int LiveSlidRadiusFarNode = -1;
         public float LiveSlidRadius = -1f;
-
         public float LiveRouteRadius = -1f;
-
         public enum LookAhead { SteerRef, QuarterSec, HalfSec, ThreeQuarterSec, OneSec, OneHalfSec, TwoSec };
         public Dictionary<LookAhead, TrackPoint> LookAheads = new Dictionary<LookAhead, TrackPoint>();
 
@@ -94,14 +86,11 @@ namespace ARS
         public int LapStartTime = 0;
         public int Lap = 0;
         public int RacePosition = 0;
-
         public bool IsDNF = false;
-
         public int FinalPosition = 0;
         public bool CanRegisterNewLap = false;
         int _previousNode = -1;
         public bool FinishedPointToPoint = false;
-
         int _halfSecondTick = 0;
         int _oneSecondTick = 0;
         int _phaseOffsetMs = 0;
@@ -185,12 +174,10 @@ namespace ARS
 
         float _carriedLane = 0f;
 
-
         float _pursuitRawBearingDeg;
         float _pursuitAimDistanceM;
 
         float _pursuitAimLateralM;
-
 
         float _laneRequest = 0f;
         LaneReason _laneRequestReason = LaneReason.OwnLane;
