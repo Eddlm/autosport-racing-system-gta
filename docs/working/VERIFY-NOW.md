@@ -5,7 +5,7 @@ Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes 
 translated where you spoke Spanish.
 
 **Today's work is section O**, at the top: builds 1808 → 1820, every row compile-only. Section N (Nearby Cars)
-is closed except N2. **49 open rows below**, and the 40 already driven or disposed of sit in **Answered** at the
+is closed except N2. **50 open rows below**, and the 40 already driven or disposed of sit in **Answered** at the
 bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
@@ -20,6 +20,7 @@ bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hu
 | O4 | **corner blips live and die with the race** (1817-1819) | corner visual on, start a race, then finish it | a yellow blip on every apex while racing; all gone at the finish, and `Corner blips cleared (N)` in the log | ⬜ |
 | O5 | **nothing race-shaped outlives the race** (1820) | every debug toggle on, finish a race | checkpoints, chevrons, bumps, G-line, rival cards, route radius and track analysis all stop when the race does | ⬜ |
 | O6 | **the corner radius blend reads right** (1805) | the same corner at 0, at 25, at 100 | 0 is the tightest apex circle (slowest), 100 the widest arc (fastest), 25 what you drive today | ⬜ |
+| O7 | **the declaration sweep changed nothing but where things sit** (1814-1834) | run a race on a track you know, open every menu that owns a settings row, then read the log | identical behaviour to before: same values, same menu order, same log lines, and no `OnTick error` — the six commits only moved declarations and blank lines, so any difference at all is a bug | ⬜ |
 
 ---
 
