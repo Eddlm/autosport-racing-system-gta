@@ -258,6 +258,11 @@ namespace ARS
         int _defendApexNode = -1;
         const float GsLaneThrottleMaxFloor = 1f;
         const float GsLaneOutsideFloor = 0f;
+        // The floor's fall: full at the inside edge, down to the low share five metres short of the outer edge, then
+        // on to nothing at the edge. Those five metres are absolute, not a share of the road, so a wide road keeps its
+        // floor high through the middle. A road too narrow to place the point puts the low share at half its width.
+        const float GsLaneFloorLowShare = 0.1f;
+        const float GsLaneFloorFallMeters = 5f;
         const float ProjectionFullLiftMetres = 4f;
         const float ProjectionLiftPerSecond = 2f;
         const float ProjectionArmSlideShare = 0.6f;
@@ -309,7 +314,7 @@ namespace ARS
         bool _projectionWidening = false;
         bool _projectionCutActive = false;
         bool _projectionArmed = false;
-        float _exitRoom01;
+        float _gsFloor01;
         bool _exitRoomArmed;
         float _projectionLift = 0f;
         float _projectionDropMph = 0f;
@@ -1514,7 +1519,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (!WheelTrimUnderPower) return 1f;
 
             float ramp = ARS.Clamp((Control.Throttle - ExitTrimPedalStart) / (1f - ExitTrimPedalStart), 0f, 1f);
-            ramp *= _exitRoomArmed ? _exitRoom01 : 0f;
+            ramp *= _exitRoomArmed ? _gsFloor01 : 0f;
             if (ramp <= 0f) return 1f;
 
             float baseShare = Math.Max(0.05f, AllowedSlipShare(fwdSpeed));
@@ -1774,7 +1779,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         void UpdateExitRoom()
         {
             _exitRoomArmed = false;
-            _exitRoom01 = 0f;
+            _gsFloor01 = 0f;
             if (!ARS.GsLaneThrottleFloor && !WheelTrimUnderPower) return;
 
             if (_projectionOutsideMeters > 0f && _projectionWidening) return;
@@ -1794,14 +1799,24 @@ const float RequirementLookaheadSeconds = 3.95f;
             float inward = projectedOffset * insideSign / room;
 
             _exitRoomArmed = true;
-            _exitRoom01 = 1f - ARS.Clamp(-inward, 0f, 1f);
+            _gsFloor01 = GsFloorShare(inward, room);
+        }
+
+        float GsFloorShare(float inward, float room)
+        {
+            float span = Math.Max(2f * room, 0.1f);
+            float fromInside = ARS.Clamp((1f - inward) * room, 0f, span);
+            float point = span - GsLaneFloorFallMeters + VehicleData.ModelDimensions.X * 0.5f;
+            if (point <= 0f) point = 0.5f * span;
+            if (fromInside <= point) return 1f - (1f - GsLaneFloorLowShare) * (fromInside / point);
+            return GsLaneFloorLowShare * (span - fromInside) / Math.Max(span - point, 0.001f);
         }
 
         float GsLaneThrottleFloorValue(out bool insideRegime)
         {
             insideRegime = TrackSpeed.GsLaneFloor && ARS.GsLaneThrottleFloor && _exitRoomArmed;
             if (!insideRegime) return 0f;
-            return GsLaneOutsideFloor + (GsLaneThrottleMaxFloor - GsLaneOutsideFloor) * _exitRoom01;
+            return GsLaneOutsideFloor + (GsLaneThrottleMaxFloor - GsLaneOutsideFloor) * _gsFloor01;
         }
 
         void ConvertSpeedToPedals()
