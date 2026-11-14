@@ -87,66 +87,53 @@ namespace ARS
         };
 
         public static int RaceReward = 0;
+        public static bool HideHudMode = false;
+        public static bool PlayerParticipating = false;
+        public static bool ForceFillGrid = true;
 
         public static MenuSettings RaceMenuStore;
         public static MenuSettings SettingsMenuStore;
         public static MenuSettings DebugMenuStore;
         public static MenuSettings DevelopmentMenuStore;
 
-        public static bool HideHudMode = false;
+        public static Racer DebugFocusRacer;
+        public static Racer PlayerRacer;
 
-        public static bool PlayerParticipating = false;
-
-        public static bool NitrousEnabled = true;
-
-        public static TipFrequency TipRate = TipFrequency.High;
-
-        public static bool UseMenyooSkins = true;
-
-        public static bool ForceFillGrid = true;
         public static NearbyCarsMode NearbyCars = NearbyCarsMode.Ignore;
         const float NearbyCarsRadius = 30f;
         const int NearbyPreviewRefreshMs = 1000;
         static readonly Vector3 TrackChevronRotation = new Vector3(180f, 0f, 0f);
-        public static float OverspeedCutPerTenthG = 0.2f;
+
+        public static bool NitrousEnabled = true;
         public static bool SmartTuning = true;
+        public static bool UseMenyooSkins = true;
+        public static TipFrequency TipRate = TipFrequency.High;
+        public static bool StagedSpawns = false;
+
+        public static int CornerOffsetMph = 0;
+        public static int RouteOffsetMph = 0;
+        public static int CornerRadiusBlendPct = 20;
+        public static float OverspeedCutPerTenthG = 0.2f;
 
         public static bool BrakeLearning = true;
-
-        public static bool SlideBrakeCap = true;
-
         public static bool BrakeLearningNotify = false;
-        public static bool LaneErrorTelemetry = false;
-
-        public static bool SteerTrace = false;
-
-        public static bool GsLaneThrottleFloor = true;
-
+        public static bool SlideBrakeCap = true;
+        public static float BrakeAimDepth = 0f;
+        public static float MaxCrestLift = 0.4f;
         public static int TargetUnderPowerPct = 45;
 
+        public static float SteerDampingGain = 0.5f;
+        public static float DamperCountersteerMaxDeg = 2f;
+        public static float PeakSlipTarget = 0.9f;
+        public static float PeakSlipToleranceDeg = 0f;
+        public static int SlipCutDepthPct = 60;
+        public const float SlipPeakRatio = 0.4f;
         public static bool SlipFromMemory = true;
 
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = false;
-
-        public static int CornerOffsetMph = 0;
-        public static int CornerRadiusBlendPct = 20;
-        public static int RouteOffsetMph = 0;
-        public static float SteerDampingGain = 0.5f;
-
-        public static float DamperCountersteerMaxDeg = 2f;
-        public static float PeakSlipTarget = 0.9f;
-        public static float PeakSlipToleranceDeg = 0f;
-
-        public static int SlipCutDepthPct = 60;
-
-        public const float SlipPeakRatio = 0.4f;
-
         public static int TcsSlipLimitPct = 100;
         public static int TcsTaperSpanPct = 50;
-
-        public static float MaxCrestLift = 0.4f;
-        public static float BrakeAimDepth = 0f;
 
         public const float LaneDynamicRadius = 400f;
         public const float LanePrepSeconds = 4f;
@@ -160,25 +147,27 @@ namespace ARS
         public const float LaneInsideSign = -1f;
         public static float InsideSign(float cornerAngle) { return LaneInsideSign * Math.Sign(cornerAngle); }
         public const bool AbsoluteLaneEnabled = true;
-                public const float LaneInsetPerRadius = 125f;
+public const float LaneInsetPerRadius = 125f;
         public static readonly string[] LaneShapeStepValues = { "0.50", "0.55", "0.60", "0.65", "0.70", "0.75", "0.80", "0.85", "0.90", "0.95", "1.00" };
+
         public static bool RouteRadiusFar = false;
         public static float SlidRadiusLeadSeconds = 1f;
+
         public static float HillGripEffect = 1f;
         public static int RubberbandingPct = 0;
         public static RubberbandMode CurrentRubberbandMode = RubberbandMode.Natural;
 
-        public static bool StagedSpawns = false;
+        public static bool LaneErrorTelemetry = false;
+        public static bool SteerTrace = false;
+        public static bool GsLaneThrottleFloor = true;
+
         public static bool HotkeysEnabled = true;
         public static Keys MenuModifierKey = Keys.LShiftKey;
         public static Keys MenuKey = Keys.E;
         static readonly Keys[] MenuHotkeyKeys = Enum.GetValues(typeof(Keys)).Cast<Keys>().Where(key => (int)key >= 8 && (int)key <= 255).Distinct().OrderBy(key => (int)key).ToArray();
         public static readonly string[] MenuHotkeyValues = MenuHotkeyKeys.Select(key => ((int)key).ToString(CultureInfo.InvariantCulture)).ToArray();
+
         public static LogImportance LogLevel = LogImportance.Error;
-
-        public static Racer DebugFocusRacer;
-
-        public static Racer PlayerRacer;
 
         public static Dictionary<Options, bool> DebugToggles = new Dictionary<Options, bool>()
     {
