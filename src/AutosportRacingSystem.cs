@@ -2186,7 +2186,7 @@ namespace ARS
                 if (PlayerRacer == null || !Racers.Contains(PlayerRacer)) PlayerRacer = Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer);
                 bool raceLive = RaceIsRunning;
 
-                if (DebugToggles[Options.ShowCheckpoints] && ARS.Corners.Count > 0)
+                if ((raceLive || _routeEditorActive) && DebugToggles[Options.ShowCheckpoints] && ARS.Corners.Count > 0)
                 {
                     if (PlayerRacer != null)
                         TrackVisuals.DrawCornerCheckpoints(PlayerRacer, ARS.Corners, ARS.TrackPoints);
@@ -2194,14 +2194,14 @@ namespace ARS
                         TrackVisuals.DrawCornerCheckpoints(Game.Player.Character.Position, SpectateCheckpointRadiusMeters, ARS.Corners, ARS.TrackPoints);
                 }
                 RefreshCornerBlips();
-                if (DebugToggles[Options.ShowEdgeChevrons])
+                if (raceLive && DebugToggles[Options.ShowEdgeChevrons])
                 {
                     if (PlayerRacer != null)
                         TrackVisuals.DrawEdgeChevrons(PlayerRacer, ARS.TrackPoints);
                     else if (raceLive)
                         TrackVisuals.DrawEdgeChevrons(Game.Player.Character.Position, ARS.TrackPoints);
                 }
-                if (DebugToggles[Options.ShowBumps] && ARS.Bumps.Count > 0 && Game.Player.Character != null)
+                if (raceLive && DebugToggles[Options.ShowBumps] && ARS.Bumps.Count > 0 && Game.Player.Character != null)
                 {
                     Vector3 focus = Game.Player.Character.Position;
                     foreach (Bump bump in ARS.Bumps)
@@ -2215,13 +2215,13 @@ namespace ARS
                         DrawLine(lip - right * 4f, lip + right * 4f, Color.Cyan);
                     }
                 }
-                if (DebugToggles[Options.ShowGLine] && player.Character.IsInVehicle())
+                if (raceLive && DebugToggles[Options.ShowGLine] && player.Character.IsInVehicle())
                 {
                     Vehicle gLineCar = player.Character.CurrentVehicle;
                     if (CanWeUse(gLineCar)) UpdatePlayerGLine(gLineCar);
                 }
 
-                if (DebugToggles[Options.ShowRivalry])
+                if (raceLive && DebugToggles[Options.ShowRivalry])
                 {
                     foreach (Racer cardRacer in Racers)
                     {
@@ -2235,7 +2235,7 @@ namespace ARS
                 if (DebugToggles[Options.ShowThrottleReason])
                     DrawThrottleReason(DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null));
 
-                if (DebugToggles[Options.ShowRouteRadius])
+                if (raceLive && DebugToggles[Options.ShowRouteRadius])
                 {
                     Racer radiusRacer = DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null);
                     if (radiusRacer != null)
@@ -2248,7 +2248,7 @@ namespace ARS
                                      Color.Magenta, 0.55f);
                     }
                 }
-                if (DebugToggles[Options.ShowTrackAnalysis])
+                if (raceLive && DebugToggles[Options.ShowTrackAnalysis])
                 {
                     Racer speedReader = DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null);
                     if (speedReader != null && speedReader.Car.Exists())
@@ -2257,7 +2257,7 @@ namespace ARS
                                  Color.White, 0.5f);
                 }
 
-                if (DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
+                if (raceLive && DebugToggles[Options.ShowTrackAnalysis] && ARS.Corners.Count > 0)
                 {
                     for (int apexIndex = 0; apexIndex < ARS.Corners.Count; apexIndex++)
                     {
