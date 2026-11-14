@@ -4,6 +4,8 @@ How the front-slip guard is built today, what each number means, the evidence be
 
 ## The four pieces
 
+The guard reads the tyre's own slip — a physics measurement, not a plan — and turns it into a ceiling the wheel is allowed. Four quantities run the whole law: what "the peak" means this tick, what survives the cut, what the wheel is allowed, and the one piece of state that chases it. The rest of this file is the evidence for their constants.
+
 | Name | What it is | Rate |
 |---|---|---|
 | `capShare` | what counts as "the peak" this tick, as a multiple of the tyre's own peak: `Peak Slip Target x slow-corner allowance + Peak Slip Tolerance (°) / peak(v)`. `FrontPct` is normalised against it. | none — physics and settings |
@@ -31,7 +33,7 @@ Only the throttle, never below zero, closed between the allowance and `sfTractio
 
 ## The actuator: close and open
 
-The two directions are deliberately different laws, and the asymmetry is the design:
+The two directions are deliberately different laws, and the asymmetry is the design. A sliding tyre is already past its peak and sheds lateral force with every tick the cut is late, so the close is decisive in the gap; angle handed back too fast reloads a tyre that is regaining its force mid-corner, so the open is linear and unhurried:
 
 ```csharp
 if (clampTarget >= chase)                     // OPEN: linear, careful
@@ -108,11 +110,13 @@ The planned speed is theory: corner shapes and grip numbers deciding when to lif
 
 The sections below give the same mechanic its legal form: the exact gate band, the exact lane window, and the caps that still win over it.
 
-`GsLaneThrottleFloor` is on again (2026-10-31, build 1396) with `GsLaneOutsideFloor` in force, and behind a checkbox in `Rival Pace` since build 1398 (ships on): while the car's slide angle runs between half and 1.5 of `LateralPeakAtSpeed` — the traction curve's peak at speed; a committed corner within a reasonable slip, past 1.5 of peak the car slides out and the gate closes again, and the band is grip-free so it fires offroad as on tarmac (2026-11-14, build 1856: the lateral-Gs gate is gone, lateral Gs under-report offroad) — its projected path is inside the road and pointing at the inside, the throttle cannot fall below the room — **a fixed two-metre window over the car's lane: the projected lane two metres further from the inside than the car lane gives nothing, two metres closer gives `GsLaneThrottleMaxFloor`, linear between and clamped outside the window** (2026-11-14, build 1857: the lane-to-inside-edge lerp is gone — the floor is a plain remap around where the car lane sits, so the aid follows how far the aim commits past the car lane, not how far it runs). It is a floor, not a cap: it raises a pedal the plan wanted lifted, and it is clamped to `Control.MaxThrottle`, which folds TCS, stability, overspeed, rival, chill-out, yield, off-track and recovery, so every other cap still wins. It is zeroed while countersteering, and while the projection *or the car itself* is off the road — the cases where accelerating is the wrong answer (2026-11-14, build 1857: the widening qualifier is gone — off the road is enough, widening or not).
+`GsLaneThrottleFloor` is on again (2026-10-31, build 1396) with `GsLaneOutsideFloor` in force, and behind a checkbox in `Rival Pace` since build 1398 (ships on): while the car's slide angle runs between half and 1.5 of `LateralPeakAtSpeed` — the traction curve's peak at speed; a committed corner within a reasonable slip — past the peak the curve is falling but grip only bottoms out at 2.5 peaks (`sfTractionMinAngle`), so at 1.5 the tyre still holds and the power under it helps the car turn in; 1.5 is the band's own early exit before the fall steepens, and the peak being read at speed narrows the band as the car goes quicker, closing it earlier exactly where a wider slip cannot be worn — grip-free both ways, so it fires offroad as on tarmac (2026-11-14, build 1856: the lateral-Gs gate is gone, lateral Gs under-report offroad) — its projected path is inside the road and pointing at the inside, the throttle cannot fall below the room — **a fixed two-metre window over the car's lane: the projected lane two metres further from the inside than the car lane gives nothing, two metres closer gives `GsLaneThrottleMaxFloor`, linear between and clamped outside the window** (2026-11-14, build 1857: the lane-to-inside-edge lerp is gone — the floor is a plain remap around where the car lane sits, so the aid follows how far the aim commits past the car lane, not how far it runs). It is a floor, not a cap: it raises a pedal the plan wanted lifted, and it is clamped to `Control.MaxThrottle`, which folds TCS, stability, overspeed, rival, chill-out, yield, off-track and recovery, so every other cap still wins. It is zeroed while countersteering, and while the projection *or the car itself* is off the road — the cases where accelerating is the wrong answer (2026-11-14, build 1857: the widening qualifier is gone — off the road is enough, widening or not).
 
 The share comes from `UpdateExitRoom` as that lerp, one computation per tick with one writer; the parked wheel trim reads the same field. The projected path's colour is a straight 1:1 map of the floor **as imposed** — `min(ask, every ceiling)` — green at full and white at none, so the line goes pale whenever a cap denies the aid rather than advertising an ask the pedal cannot follow.
 
 ## The two sources
+
+The tyre can report its own slip — the game's wheel memory — or the slip can be computed from geometry. The memory read is the law: it is the measurement itself, on the same axis the wheel code peaks; the theory read is a model of that measurement, and rebuilding a tyre model to avoid reading the tyre defeats the point.
 
 `Slip From Memory` (Development submenu) picks where `FrontPct` comes from:
 
