@@ -459,7 +459,7 @@ namespace ARS
         const ulong MaxDriveGearHash = 0x24910C3D66BA770D;
         const ulong CurrentDriveGearHash = 0x56185A25D45A0DCD;
 
-        const float AssumedFinalDrive = 3.7f;   // a typical differential: the readout's one invented number
+        const float AssumedFinalDrive = 6.2f;   // 100 mph in top gear reads 7000 rpm on a 0.34 m wheel
         static readonly float RpmPerRadPerSecond = (float)(60.0 / (2.0 * Math.PI));
         const ulong FullyChargeNitrousHash = 0x1A2BCC8C636F9226;
         const ulong OverrideNitrousLevelHash = 0xC8E9B6B71B8E660D;
@@ -3416,17 +3416,14 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             int gear = Function.Call<int>((Hash)CurrentDriveGearHash, Car);
             int maxGear = Function.Call<int>((Hash)MaxDriveGearHash, Car);
-            string at = gear >= 1 ? gear.ToString(CultureInfo.InvariantCulture) + "º" : gear == 0 ? "N" : "R";
-            float rev = ARS.GameRevRatio(Car);
-            string revText = float.IsNaN(rev) ? ARS.RevRatioProblem ?? "--" : rev.ToString("0.00", CultureInfo.InvariantCulture);
             if (gear < 1 || maxGear < 2)
             {
-                UI.ShowSubtitle("-- @ " + at + "   " + revText, 50);
+                UI.ShowSubtitle("--", 50);
                 return;
             }
             float rpm = ARS.MeanWheelRotation(Car) * KickGearRatio(gear, maxGear) * AssumedFinalDrive * RpmPerRadPerSecond;
-            string rpmText = float.IsNaN(rpm) || float.IsInfinity(rpm) ? "--" : ((int)Math.Round(rpm)).ToString(CultureInfo.InvariantCulture);
-            UI.ShowSubtitle(rpmText + " @ " + at + "   " + revText + "   " + Car.CurrentRPM.ToString("0.00"), 50);
+            string rpmText = float.IsNaN(rpm) || float.IsInfinity(rpm) ? "--" : ((int)Math.Round(rpm * 0.001f)).ToString(CultureInfo.InvariantCulture) + "K";
+            UI.ShowSubtitle(rpmText, 50);
         }
 
         void DrawWheelSlip()

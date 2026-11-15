@@ -10,7 +10,7 @@ bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hu
 
 ---
 
-## P · 2026-11-14 (1841 → 1857) — the debug panel's six pedal bars
+## P · 2026-11-14 (1841 → 1860) — the debug panel's six pedal bars
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
@@ -29,6 +29,8 @@ bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hu
 | P13 | **STB: the stability throttle cap** (1855) | catch air — crests, bumps, landings — and land again, watching the STB column | the bar dips while wheels are off the ground (more wheels airborne = a faster bite) and climbs back while grounded; it rests at 1; its label reads STB, and the hanging TCS pull in THR is untouched | ⬜ |
 | P14 | **the floor gate rides the slide angle** (1856) | race the floor zones on dirt and on tarmac, plus an oversteer moment | the aid arms only while the absolute slide angle sits within 0.5×…1.5× of `LateralPeakAtSpeed(fwdSpeed)` — under it (not cornering) or past it (sliding out) no floor and no tinted line; the old lateral-Gs gate is gone; offroad a modest committed slide now qualifies | ✅ verified 14-11 · 1856 |
 | P15 | **the floor: a ±2 m window over the car lane, closed off-road** (1857) | race exits; compare aim-inside moments (aim tucking past the car lane) against unwound ones, and on-route dirt vs off-corridor running | the floor runs 0 → 1 as the projected lane moves from 2 m further-out than the car lane to 2 m closer-inside (0.5 when the aim sits level with it), clamped outside the window; the gauge closes the moment the projection or the car is off the road, widening or not | ✅ verified 14-11 · 1857 |
+| P16 | **the TCS ladders: 20-400, step 20** (1859) | open the two TCS rows in `Rival Pace` | both ladders offer 20→400 in 20-steps; the span row's fresh-install seed moved 50→40 (50 is off the grid and the build checker refuses an off-ladder seed); stored ini values win unchanged — if your stored span was 50, the row shows rung 40 until you re-pick | ✅ verified 14-11 · 1859 |
+| P17 | **the TCS ladders reach the game's ceiling** (1860) | open the two rows, run them to the top; then a spin test at an outer rung | both ladders read 20→1200 in 20-steps then a final 1250 rung — the ±5 (`sfAbsActiveSlipRatio`) engine sentinel; at 1250 the cut begins only on raw spin beyond ×12.5 the peak, so an outer rung shows the TCS effectively silent until a real burnout | ⬜ |
 
 ## O · 2026-11-14 (1808 → 1820) — the finish line and the quick join
 

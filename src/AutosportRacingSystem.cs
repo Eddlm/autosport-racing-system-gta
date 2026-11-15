@@ -1319,7 +1319,7 @@ public const float LaneInsetPerRadius = 125f;
             AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the focus car's constant-acceleration path from its roof: a line to 0.5 s and another from there to 1 s; the bend is the acceleration. One colour for both, decided where the path is measured: green fading to white as the Gs lane throttle floor lets go (green at the inside edge, white at the centre), red when the path leaves the road and runs further out than the car (or drifts out with the car still on it), yellow when it leaves the road but cuts inside the car, blue otherwise. The one-second end carries the projection cut in mph: red while it is bleeding, yellow once it has bled and stopped. The subtitle carries the slide angle as a share of the tyre's peak slip at this speed, as a bare percentage: red while the gate is open, blue while it is closed. The gate also needs the wheel pointing into the slide, so a countersteering car reads closed.");
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
             AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is measured from: the car's own, the near sample and the far one at speed/grip and twice that ahead.");
-            AddDebugCheckbox(debugMenu, Options.ShowRpms, "Show RPMs", "Estimate the first racer's engine speed from its own wheels and the gear ladder, in the subtitle as rpm @ gear: the mean wheel rotation read live, the ratio for the gear the game reports and an assumed differential, then the game's own rev ratio beside it as a 0-1 fraction: the estimate moves with wheel slip, the fraction does not.");
+            AddDebugCheckbox(debugMenu, Options.ShowRpms, "Show RPMs", "Estimate the first racer's engine speed from its own wheels and the gear ladder, in the subtitle as rpm @ gear: the mean wheel rotation read live, the ratio for the gear the game reports and an assumed differential, so a spinning or locking wheel moves the number while a stopped car reads zero.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
@@ -3424,57 +3424,6 @@ public const float LaneInsetPerRadius = 125f;
                 total += Math.Abs(*((float*)(wheel + 0x170)));
             }
             return (float)(total / wheelPtrs.Count);
-        }
-
-        static ulong RevRatioOffset = 0;
-        static ulong RevRatioAsked = 0;
-        static public string RevRatioProblem = null;
-        const uint ReverseRatioBits = 0xC0555555;      // 1.0f / -0.3f
-        const uint FirstRatioBits = 0x40555555;        // 1.0f /  0.3f, and halved or quartered by the two gearbox flags
-        const uint HalfFirstRatioBits = 0x3FD55555;
-        const uint QuarterFirstRatioBits = 0x3F555555;
-
-        static public unsafe float GameRevRatio(Vehicle handle)
-        {
-            ulong carAddr = (ulong)handle.MemoryAddress;
-            if (RevRatioOffset == 0)
-            {
-                if (carAddr == RevRatioAsked) return float.NaN;
-                RevRatioAsked = carAddr;
-                if (!LearnRevRatioOffset(handle)) return float.NaN;
-            }
-            float revs = *((float*)(carAddr + RevRatioOffset));
-            if (!(revs >= 0f && revs <= 1.6f))
-            {
-                RevRatioProblem = "!v" + (float.IsNaN(revs) ? "nan" : revs.ToString("0.00")) + " v" + (*((float*)(carAddr + RevRatioOffset - 4))).ToString("0.00");
-                return float.NaN;
-            }
-            return revs;
-        }
-
-        static unsafe bool LearnRevRatioOffset(Vehicle handle)
-        {
-            ulong baseAddr = (ulong)handle.MemoryAddress;
-            ulong near = 0;
-            for (ulong off = 0; off < 0x10000; off += 4)
-            {
-                if (*((uint*)(baseAddr + off)) != ReverseRatioBits)
-                {
-                    if (near == 0 && Math.Abs(*((float*)(baseAddr + off)) + 3.3333333f) <= 0.01f) near = off;
-                    continue;
-                }
-
-                uint firstBits = *((uint*)(baseAddr + off + 4));
-                if (firstBits != FirstRatioBits && firstBits != HalfFirstRatioBits && firstBits != QuarterFirstRatioBits) continue;
-
-                RevRatioOffset = off + 56;
-                Log(LogImportance.Info, "[MEMORY] Rev ratio offset 0x" + RevRatioOffset.ToString("X") + ", gear array 0x" + off.ToString("X") + ", revs " + (*((float*)(baseAddr + RevRatioOffset))).ToString("0.00"));
-                return true;
-            }
-
-            RevRatioProblem = near != 0 ? "!n0x" + near.ToString("X") : "!none";
-            Log(LogImportance.Info, "[MEMORY] Gear array not found: " + RevRatioProblem);
-            return false;
         }
 
         static public unsafe float MaxWheelSideSlip(Vehicle handle)
