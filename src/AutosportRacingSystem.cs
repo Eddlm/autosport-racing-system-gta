@@ -112,7 +112,7 @@ namespace ARS
 
         public static int CornerOffsetMph = 0;
         public static int RouteOffsetMph = 0;
-        public static int CornerRadiusBlendPct = 20;
+
         public static float OverspeedCutPerTenthG = 0.2f;
 
         public static bool BrakeLearning = true;
@@ -128,7 +128,7 @@ namespace ARS
         public static float PeakSlipToleranceDeg = 0f;
         public static int SlipCutDepthPct = 60;
         public const float SlipPeakRatio = 0.4f;
-        public static bool SlipFromMemory = true;
+        public static bool SlipFromMemory = false;
 
         public static bool TcsEnabled = true;
         public static bool AbsEnabled = false;
@@ -949,16 +949,6 @@ public const float LaneInsetPerRadius = 125f;
             rivalPaceMenu.Add(cornerOffsetItem);
             HookListTextPicker(cornerOffsetItem);
 
-            NativeListItem<string> cornerBlendItem = new NativeListItem<string>("Corner Radius Blend (%)", "Blends the corner's speed radius between the standard corner radius (0) and the widest arc that fits the road (100). Higher blends faster and wider. The car still picks its own line: this only sets the radius the speed is computed from.", SettingsRepair.OptionsFor("CornerRadiusBlendPct"));
-            cornerBlendItem.ItemChanged += (sender, args) =>
-            {
-                CornerRadiusBlendPct = int.Parse(cornerBlendItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("CornerRadiusBlendPct", cornerBlendItem.Items[args.Index]);
-            };
-            cornerBlendItem.SelectedIndex = Math.Max(0, cornerBlendItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerRadiusBlendPct", CornerRadiusBlendPct).ToString(CultureInfo.InvariantCulture)));
-            rivalPaceMenu.Add(cornerBlendItem);
-            HookListTextPicker(cornerBlendItem);
-
             NativeListItem<string> routeOffsetItem = new NativeListItem<string>("Road Curvature Offset (mph)", "Raises the speed the road's curvature allows ahead. Only the slower of this and Corner Speed Offset applies.", SettingsRepair.OptionsFor("RouteOffset"));
             routeOffsetItem.ItemChanged += (sender, args) =>
             {
@@ -995,7 +985,7 @@ public const float LaneInsetPerRadius = 125f;
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
 
-            NativeListItem<string> brakeAimItem = new NativeListItem<string>("Brake Aim Depth", "How far into the corner the braking aim sits: 0 aims at the node 0.7 s of corner speed before the apex, so the car is at corner speed with that much to spare; 1 aims at the apex, so it carries speed in and brakes all the way to it. The distance grows, so the brake point moves later.", SettingsRepair.OptionsFor("BrakeAimDepth"));
+            NativeListItem<string> brakeAimItem = new NativeListItem<string>("Brake Aim Depth", "How far into the corner the braking aim sits: 0 aims at the node 1.25 s of corner speed before the apex, so the car is at corner speed with that much to spare; 1 aims at the apex, so it carries speed in and brakes all the way to it. The distance grows, so the brake point moves later.", SettingsRepair.OptionsFor("BrakeAimDepth"));
             brakeAimItem.ItemChanged += (sender, args) =>
             {
                 BrakeAimDepth = float.Parse(brakeAimItem.Items[args.Index], CultureInfo.InvariantCulture);
@@ -3216,7 +3206,7 @@ public const float LaneInsetPerRadius = 125f;
         public static float CornerApexSpeed(CornerPoint c, Racer r)
         {
 
-            float radius = TrackLoader.CornerRadiusForSpeed(c);
+            float radius = c.DetectedRadius;
             if (radius <= 0f) radius = c.GetPreciseRadius();
 
             if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AiConstants.MaxSpeed;
@@ -3670,7 +3660,7 @@ public const float LaneInsetPerRadius = 125f;
             string legacyTcsLimit = retiredPaceSettings.GetValue<string>("MENU", "TcsSlipThreshold", null);
             string legacyTcsSpan = retiredPaceSettings.GetValue<string>("MENU", "TcsTaperSpan", null);
             string legacyOverspeed = retiredPaceSettings.GetValue<string>("MENU", "OverspeedEnabled", null);
-            string legacyCornerBlend = retiredPaceSettings.GetValue<string>("MENU", "CornerLineShare", null);
+
             SettingsRepair.CreateMissingFiles();
             SettingsRepair.PruneOwnedFiles();
 
@@ -3683,7 +3673,6 @@ public const float LaneInsetPerRadius = 125f;
             SettingsMenuStore.Migrate("TcsTaperSpanPct", TcsShareFromSlip(SettingsRepair.OptionsFor("TcsTaperSpanPct"), legacyTcsSpan));
 
             SettingsMenuStore.Migrate("OverspeedCut", legacyOverspeed == null ? null : (legacyOverspeed.Equals("True", StringComparison.OrdinalIgnoreCase) ? "0.2" : "Off"));
-            SettingsMenuStore.Migrate("CornerRadiusBlendPct", legacyCornerBlend);
 
             Log(LogImportance.Info, "Loading per-menu settings (Menu-*.ini) ...");
 
@@ -3715,7 +3704,6 @@ public const float LaneInsetPerRadius = 125f;
             OverspeedCutPerTenthG = ParseOverspeedCut(SettingsMenuStore.Get("OverspeedCut", "0.2"));
             SmartTuning = SettingsMenuStore.GetBool("SmartTuning", SmartTuning);
             CornerOffsetMph = SettingsMenuStore.GetInt("CornerOffset", CornerOffsetMph);
-            CornerRadiusBlendPct = SettingsMenuStore.GetInt("CornerRadiusBlendPct", CornerRadiusBlendPct);
             RouteOffsetMph = SettingsMenuStore.GetInt("RouteOffset", RouteOffsetMph);
             SteerDampingGain = SettingsMenuStore.GetFloat("SteerDampingGain", SteerDampingGain);
             DamperCountersteerMaxDeg = SettingsMenuStore.GetFloat("DamperCountersteerMaxDeg", DamperCountersteerMaxDeg);

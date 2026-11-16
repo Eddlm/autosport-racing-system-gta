@@ -337,7 +337,7 @@ namespace ARS
 
         int _offshootLogAt = 0;
         const float BrakeFactorSeed = 0.75f;
-        const int BrakeFactorSeedJitterHundredths = 5;
+        const int BrakeFactorSeedJitterHundredths = 2;
         const int BrakeConfidenceJitterHundredths = 5;
         float _brakeConfidenceBias;
         const float CornerTightRadius = 50f;
@@ -2228,9 +2228,9 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float GraceHorizonSeconds = 0.3f;
         float GraceBandMps() { return 0.5f * FullBrakeDecelMps2() * GraceHorizonSeconds; }
 
-        // The aim is 0.7 s of corner speed before the apex. The lane shape's start is not a distance
+        // The aim is 1.25 s of corner speed before the apex. The lane shape's start is not a distance
         // the brake plan can land on: the out-in prep pushes it out, and far more on shallow corners.
-        const float BrakeAimLeadSeconds = 0.7f;
+        const float BrakeAimLeadSeconds = 1.25f;
 
         int BrakeAimNode(int apexNode, float apexSpeed)
         {

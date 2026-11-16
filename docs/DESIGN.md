@@ -141,15 +141,13 @@ committed to — deliberately, so a car running wide of the arc may carry more t
 allow. The plan is the smaller of the two, each with an error margin of its own as a menu offset — which is
 how a driver buys caution or commitment without touching either law.
 
-**The corner's radius is a blend, and the driver picks where on it.** The corner term reads one radius per
-apex: the tightest circle the geometry finds there, slid toward the widest arc that still fits the road, by
-`CornerRadiusBlendPct` — none of the slide is the apex's own circle, all of it is the widest arc the road
-allows. It changes the corner's speed and nothing else: the car still chooses its own line, and the route term
-wins the moment it is the lower of the two, so this knob can only buy entry speed, never geometry. Driver-tested
-2026-11-13: the low end of the range reads right across cars and corners — it varies per car and per corner,
-which is why it ships there — and raising it is the move for a car that arrives too slowly. While a brake is
-planned for the corner the route term is stood down, so inside that window it is this number alone that
-decides.
+**The corner's radius is the detected one.** The corner term reads one radius per apex: the tightest circle
+the geometry finds there. The blend against the widest arc the road allows was removed — the blend promised the
+car could ride an arc wider than the corner, and it overshot on every corner tested; the speed now comes from
+exactly the arc the car is judged on. The widest arc is still computed at load and carries no consumer: it is
+kept only as reference data, not used anywhere. The route term still wins when it is lower of the two, so the
+corner speed alone does not set the pace where the route says slower. While a brake is planned for the corner
+the route term is stood down, so inside that window this is the number alone that decides.
 
 **Both terms read the surface.** The corner term always has — a loose corner asks for less. The route term
 now scales by the grip under the window its radius is sampled over, and a node with no sample inherits the

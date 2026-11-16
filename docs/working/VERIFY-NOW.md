@@ -126,9 +126,7 @@ Two items left this list on 13-11 because the code moved under them: `LaneMoverS
 
 The ten bench flags are **compile-time constants**, all `true` in this build (`Racer.cs:16-25`, `TrackSpeed`) —
 there is no switch and no ini key, so nothing here can be restored or forgotten. Ini as this bench was written:
-`CornerCeiling` 500, `CornerRadiusBlendPct` 20, `CornerOffset` 0, `RouteOffset` 0, `BrakeAimDepth` 0. The live
-install holds 25, carried across from the old `CornerLineShare` key by the migration; the rows below were
-judged against 20.
+`CornerCeiling` 500, `CornerOffset` 0, `RouteOffset` 0, `BrakeAimDepth` 0. The blend setting (`CornerRadiusBlendPct`) was removed from the build — the widest-arc speed model lost to the detected radius everywhere it was driven.
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
@@ -190,8 +188,8 @@ Kept for provenance: these are the in-game verdicts and the dispositions. Nothin
 **O · the finish line and the quick join (16-11)**
 - **O3** the chevron is a quick race (1814) — verified 16-11
 - **O4** corner blips live and die with the race (1817-1819) — verified 16-11
-- **O6** the corner radius blend reads right (1805) — verified 16-11
-- **O7** the declaration sweep changed nothing but where things sit (1814-1834) — verified 16-11: the static proof (identical line multiset in `Racer.cs` and `DataStructures.cs`, six enums re-wrapped, the 41 menu rows in the same order) plus a 12-minute race on 1876 — **0** `OnTick error`, 2,989 lines all `(Info)`, no Error or Fatal line in the log
+- **O6** the corner radius blend reads right (1805) — **superseded: the blend is gone from the tree.** The row verified a setting that no longer exists; the corner speed radius is the detected radius. Kept for the record; nothing to test anymore.
+- **O7** the declaration sweep changed nothing but where things sit (1814-1834) — verified 16-11: the static proof (identical line multiset in `Racer.cs` and `DataStructures.cs`, six enums re-wrapped, the menu rows in the same order (41 at the time; the blend row has since been removed)) plus a 12-minute race on 1876 — **0** `OnTick error`, 2,989 lines all `(Info)`, no Error or Fatal line in the log
 
 **P · the debug panel (14-11 → 16-11)**
 - **P1** six throttle bars in the panel (1843) — verified 14-11 · 1843

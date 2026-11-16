@@ -1270,9 +1270,9 @@ namespace ARS
                 SurfaceGrip = CornerSurfaceGrip(scanNodes[startPosition], scanNodes[endPosition], count)
             };
             corner.WidestRadius = WidestArcRadius(apexNode, corner.StartNode, corner.EndNode, detectedRadius);
-            corner.Speed = (float)Math.Sqrt(9.81f * CornerRadiusForSpeed(corner));
+            corner.Speed = (float)Math.Sqrt(9.81f * corner.DetectedRadius);
             ARS.Log(ARS.LogImportance.Info, "Corner open: apex=" + apexNode + " tightestR=" + tightestRadius.ToString("0.0")
-                + " widestR=" + corner.WidestRadius.ToString("0.0") + " speedR=" + CornerRadiusForSpeed(corner).ToString("0.0")
+                + " speedR=" + corner.DetectedRadius.ToString("0.0")
                 + " nodesToDouble=" + nodesToDouble + "/" + exitMaxStep + (nodesToDouble >= exitMaxStep ? " (did not double)" : ""));
 
             if (ARS.Corners.Count > 0 && !IsWorthAnApex(ARS.Corners[ARS.Corners.Count - 1], corner, count))
@@ -1386,7 +1386,7 @@ namespace ARS
             survivor.EndNode = ARS.IsPointToPoint ? survivor.Node + exitDistance : Wrap(survivor.Node + exitDistance, count);
             survivor.SurfaceGrip = CornerSurfaceGrip(survivor.StartNode, survivor.EndNode, count);
             survivor.WidestRadius = WidestArcRadius(survivor.Node, survivor.StartNode, survivor.EndNode, survivor.DetectedRadius);
-            survivor.Speed = (float)Math.Sqrt(9.81f * CornerRadiusForSpeed(survivor));
+            survivor.Speed = (float)Math.Sqrt(9.81f * survivor.DetectedRadius);
             survivor.LengthStart = entranceDistance;
             survivor.LengthEnd = exitDistance;
         }
@@ -1422,15 +1422,6 @@ namespace ARS
             float room = ARS.TrackPoints[startNode].CumulativeDistance - ARS.TrackPoints[before.EndNode].CumulativeDistance;
             if (!ARS.IsPointToPoint && room < 0f && ARS.RouteLengthMeters > 0f) room += ARS.RouteLengthMeters;
             return room;
-        }
-
-        // The corner's speed radius is a blend: 0 is the apex's own circle, 100 the widest arc that fits the road.
-        public static float CornerRadiusForSpeed(CornerPoint corner)
-        {
-            if (corner == null) return 0f;
-            if (corner.WidestRadius <= corner.DetectedRadius) return corner.DetectedRadius;
-            float blend = Math.Min(Math.Max(ARS.CornerRadiusBlendPct, 0), 100) * 0.01f;
-            return corner.DetectedRadius + (corner.WidestRadius - corner.DetectedRadius) * blend;
         }
 
         static float SweptRadius(int node, int count)

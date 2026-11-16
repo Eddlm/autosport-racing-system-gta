@@ -23,7 +23,7 @@
 
 - A corner is admitted on **how far it turns** (10° minimum) instead of the old blur-node gate; the ceiling moved to 500 m.
 - Apex speed reads the circle **fitted to the arc**, not the tightest sample of it. The least-squares fit is gone — it measured tighter, not wider.
-- The speed radius is a share of the way from the apex radius to the widest arc that fits the road: the old *Corner Line Share* row is now **Corner Radius Blend (%)**, 0–100, shipping at 20.
+- The corner-speed radius is the detected apex radius, full stop. A blend against the widest arc existed briefly in development and was removed before release — it promised a speed the car's own line could not carry, and it overshot on every corner driven.
 - An S is the curvature flipping, confirmed a track width either side; a chicane is judged on its own span and gets no out-in and no outside prep.
 - Two bends of different sizes inside two seconds are two corners, and the tighter one governs.
 

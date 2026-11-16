@@ -491,25 +491,9 @@ rate the ramp was drawn. If it is revisited, the shape of the fix is to cap the 
 position (compare against the offset at the lane node rather than at the car), so the field governs once the
 handover is over.
 
-## corner-optimal-radius — one switch, and what it does not touch
+## corner-optimal-radius — built once, rejected, kept as a record
 
-`CornerPoint.OptimalRadius` is the circle of the fastest line through the corner: tangent to the inside edge at
-the apex and to the outside edge where it enters and leaves. `r_in + width / (1 - cos(turn / 2))`.
-
-- **the turn is the corner's total, not the apex's local angle.** `TrackPoint.Angle` is the chord-to-chord turn over
-  `2 * GeometryWindowNodes`, so the total is `sum(Angle over StartNode..EndNode) / (2 * GeometryWindowNodes)`. Using
-  `corner.Angle` directly was wrong by a factor of four on a hairpin (38.7 deg instead of 171) and made the radius,
-  and therefore the corner speed, nonsense.
-- **one switch, `ARS.UseOptimalRadius`, read through `ARS.CornerRadiusForSpeed(c)`.** Every consumer goes through
-  that accessor so the whole thing reverts with one boolean: `CornerApexSpeed` and the table's own `corner.Speed`
-  (which is what the merge logic turns into seconds between corners). Both now agree; before this they did not.
-- **it does not touch the lane field.** `BuildLaneField` still sizes its ramp and its rate from `DetectedRadius`.
-  That is deliberate: the lane was tuned against the road's own geometry, and the field has no speed to reason
-  about. The consequence to remember: on a shallow corner the optimal radius can be several times the detected one,
-  so the car arrives much faster than the lane ramp was drawn for. If the line starts reading late there, the change
-  is to feed the ramp from the same accessor — one line, and it invalidates the lane tuning, so do it on purpose.
-
-Magnitudes, with a 12 m road: 20 deg turn -> x7.7 corner speed, 40 deg -> x3.9, 80 deg -> x2.1, 171 deg (hairpin) -> x1.2.
+**Dead.** No `OptimalRadius` field, no blend key, no switch — this was removed before release and is kept only as a record. The idea: apex speed from the circle through the corner that is tangent to the inside edge at the apex and to the outside edge where it enters and leaves, `r_in + width / (1 - cos(turn / 2))`. It was built as a **blend** between that circle and the apex's detected radius; every blend point tested overshot — the car was sent into corners it could not hold, so the blend was pulled and the whole mechanism removed. The corner speed is now `sqrt(g × DetectedRadius)` everywhere (corner table and `CornerApexSpeed`), and the widest arc is still computed and stored but read by nothing.
 
 ## corner-speed-offset — missing the apex is a speed problem, not a braking one
 
@@ -530,8 +514,7 @@ What exists today, for whoever picks it up:
 
 Sketch: a per-corner `SpeedOffset` seeded at unity, multiplied into the corner speed the plan aims for, stepped down
 when the apex is missed and stepped back up when it is hit cleanly, with the same always-announce rule as the brake
-learner. It needs its own bounds, and it interacts with `OptimalRadius` (which already decides the apex speed), so the
-two must not both answer the same question.
+learner. It needs its own bounds, and whichever radius is chosen for the corner speed (currently `DetectedRadius`) already answers part of this question, so the two must not both answer it.
 
 ## lane-error-diagnostic — follow the tracking error, and compare required with available lateral g
 
@@ -543,8 +526,7 @@ Two caveats before it can be an input rather than a reading:
 - **the error is contaminated by the turn-in transient.** The aim moves and the pursuit always lags it, so every
   corner shows metres of error, including a perfect one. Measure at the apex and the twenty or thirty nodes after it,
   where the line is already still, or the metric punishes all corners equally and distinguishes nothing;
-- **the reference and the speed disagree.** The lane field is built from `DetectedRadius`; the corner speed comes from
-  `OptimalRadius`. Until those are the same line, an error against the field has a bias of unknown sign.
+- **the reference and the speed agree now.** The lane field is built from `DetectedRadius` and the corner speed comes from `DetectedRadius` too, so the error metric compares against the same radius either way — this caveat no longer applies.
 
 The clean version of the same question needs no transient at all:
 
