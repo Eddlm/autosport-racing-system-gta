@@ -1,37 +1,17 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1820**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1876**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Today's work is section P**, at the top: builds 1808 → 1820, every row compile-only. Section N (Nearby Cars)
-is closed except N2. **50 open rows below**, and the 40 already driven or disposed of sit in **Answered** at the
-bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hunt-2026-10-30.md`.
+**Section P is closed** (all eighteen verified). **41 open rows below**; everything already driven or disposed of
+sits in **Answered** at the bottom, out of the way, with **76** closed rows under it. The detail of the 30-10 hunt
+stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
-## P · 2026-11-14 (1841 → 1860) — the debug panel's six pedal bars
+## P · 2026-11-14 (1841 → 1872) — all eighteen verified in game, see **Answered**
 
-| # | What | How | Passes if | State |
-|---|---|---|---|---|
-| P1 | **six throttle bars in the panel** (1843) | launch GTA without racing: the panel must be absent everywhere (menu, freecam, free roam). Then start a race and work the throttle up and down | out of a race: no black band, no bars, nothing top-centre. In a race: six identical amber bars inside the band — bottom edges pinned to the band bottom and never moving, tops rising with the racer's throttle, no bar at rest, filling to the band top at full throttle; the tracked racer is the debug UI's own subject (closest AI racer to you when a debug toggle is on, your car otherwise), and the throttle-reason text never sits under the rect | ✅ verified 14-11 · 1843 |
-| P2 | **the bars split: three throttle, three brake** (1844) | in a race, work both pedals separately | the first three bars stay amber and rise with throttle, the last three turn red and rise with brake — widths, gaps and the bottom edge unchanged from 1843, and brake 1 fills the band | ✅ verified 14-11 · 1844 |
-| P3 | **the bars tell the throttle chain** (1845) | in a race, provoke the two bounds: hammer the throttle on greasy ground or on landing for the TCS cap, brake hard then release to raise the Gs floor; with `Gs Lane Throttle Floor` off, bar 3 stays hidden | bar 1 green rises with the applied throttle; bar 2 amber with the TCS max-throttle cap (1 when TCS is silent, dropping on wheelspin); bar 3 amber with the imposed Gs floor while the setting is on (hidden when off); bars 4-6 still red brake | ✅ verified 14-11 · 1845 |
-| P4 | **the TCS cap pulls from the top** (1846) | watch the first bar's column while TCS works — wheelspin on a greasy exit or a hard landing | an amber ceiling hangs in the first bar's column from the band's top, deepening as the cap drops, its lower edge meeting the green bar's top exactly when the cap binds; absent when TCS is silent; bar 2 keeps the plain TCS feed unchanged, reserved for reuse | ⬜ |
-| P5 | **the throttle bar rides a smooth follower** (1847) | watch bar 1 through a race, especially on throttle jabs and full pedal swaps | bar 1 lags the real pedal slightly and moves continuously (exponential, 6/s, frame-rate independent) instead of snapping; the TCS ceiling, floor bar and brake trio behave exactly as on 1846 | ✅ verified 14-11 · 1847 |
-| P6 | **brake and the TCS ceiling ride followers too** (1848) | work both pedals and provoke TCS as in P3/P4 | the red trio moves like bar 1 (continuous, slightly lagging); the hanging ceiling eases down instead of stepping, and bar 2's amber top stays on the same line as the ceiling's lower edge (one shared TCS follower); bar 3 (Gs floor) stays raw | ✅ verified 14-11 · 1848 |
-| P7 | **corner and route margins as centred white bars** (1849) | accelerate toward and into corners, watch the first two brake columns | they rise above the middle when under the ask, sink below when over it (braking zones pull the corner bar down and peg the route bar full-up, the 999 rule, by your ruling); 30 m/s = a band edge; bar 6 stays the red brake follower | ✅ 14-11 · 1849 — bars move as designed; his drive caught the corner bar riding the braking *ramp*, not the arrival speed → P8 |
-| P8 | **the corner margin measures the arrival speed** (1850) | drive into braking zones | bar 4 measures speed against the binding apex's own arrival target (`NextApexSpeed`, offset included) — low through the whole approach while over the arrival speed, closing to centre at the apex entry, full-up when no braking corner binds (999); the route bar unchanged — its ask is already target-shaped, no ramp to bypass | ✅ verified 14-11 · 1850 |
-| P9 | **the panel rides the Show Pedal Trail toggle** (1851) | mid-race, tick Show Pedal Trail off and on; leave it on and drive into a menu state | the band and all six bars appear only while the toggle is on in a race — alongside the pedal trail itself, reading the same focus racer — and vanish with the toggle off; no panel at menus regardless of the toggle | ✅ verified 14-11 · 1851 |
-| P10 | **the columns are labelled** (1852) | look at the panel with bars moving | THR, TCS, FLR, APEX, ROUT and BRAKE, one per column, drawn inside the band above its bottom edge, white text over the bars; readable even when a bar fills the column (shadowed text), APEX labelling the corner-arrival margin and ROUT the route margin | ✅ verified 14-11 · 1852 |
-| P11 | **APEX and ROUT: orange in range, gray when irrelevant** (1853) | drive normally, then into a braking zone (the 999 rule pegs ROUT), and watch APEX when no braking corner binds | in range the two bars are orange; the moment the margin saturates at the 30 m/s edge the bar and its name both turn gray (out of range = irrelevant, both directions); the other four labels stay white always | ✅ verified 14-11 · 1853 |
-| P12 | **the Gs floor is a lane lerp** (1854) | race the floor zones: exits where the aim tucks inside (the FLR bar holds while the lane heads in), and unwound or pushed-wide moments (no forced pedal) | nothing forces when the projected lane sits at-or-outside the car's lane distance from the inside; the floor rises only as the projected lane travels from the car's lane toward the inside edge, 1 at the edge; no five-metre curve anywhere; the lateral-Gs gate, countersteer zero and the outside-and-widening safety all still apply | ✅ verified 14-11 · 1854 |
-| P13 | **STB: the stability throttle cap** (1855) | catch air — crests, bumps, landings — and land again, watching the STB column | the bar dips while wheels are off the ground (more wheels airborne = a faster bite) and climbs back while grounded; it rests at 1; its label reads STB, and the hanging TCS pull in THR is untouched | ⬜ |
-| P14 | **the floor gate rides the slide angle** (1856) | race the floor zones on dirt and on tarmac, plus an oversteer moment | the aid arms only while the absolute slide angle sits within 0.5×…1.5× of `LateralPeakAtSpeed(fwdSpeed)` — under it (not cornering) or past it (sliding out) no floor and no tinted line; the old lateral-Gs gate is gone; offroad a modest committed slide now qualifies | ✅ verified 14-11 · 1856 |
-| P15 | **the floor: a ±2 m window over the car lane, closed off-road** (1857) | race exits; compare aim-inside moments (aim tucking past the car lane) against unwound ones, and on-route dirt vs off-corridor running | the floor runs 0 → 1 as the projected lane moves from 2 m further-out than the car lane to 2 m closer-inside (0.5 when the aim sits level with it), clamped outside the window; the gauge closes the moment the projection or the car is off the road, widening or not | ✅ verified 14-11 · 1857 |
-| P16 | **the TCS ladders: 20-400, step 20** (1859) | open the two TCS rows in `Rival Pace` | both ladders offer 20→400 in 20-steps; the span row's fresh-install seed moved 50→40 (50 is off the grid and the build checker refuses an off-ladder seed); stored ini values win unchanged — if your stored span was 50, the row shows rung 40 until you re-pick | ✅ verified 14-11 · 1859 |
-| P17 | **the TCS ladders reach the game's ceiling** (1860) | open the two rows, run them to the top; then a spin test at an outer rung | both ladders read 20→1200 in 20-steps then a final 1250 rung — the ±5 (`sfAbsActiveSlipRatio`) engine sentinel; at 1250 the cut begins only on raw spin beyond ×12.5 the peak, so an outer rung shows the TCS effectively silent until a real burnout | ⬜ |
-| P18 | **Show TRlateral drawn** (1872) | toggle it in Debug, drive near any car, look down at it | white side lines along each flank, rear→front; yellow horns from the front tips opening back at TRLateralAtSpeed — wide when the car is slow, lying flat onto the body line at speed; the visual follows the car closest to you, and appears on YOUR car while driving (1871 drew AI-only: the DrawDebug guard excludes ControlledByPlayer — the player's racer now draws in the main tick beside the G Line block) | ⬜ |
 
 ## O · 2026-11-14 (1808 → 1820) — the finish line and the quick join
 
@@ -39,11 +19,7 @@ bottom, out of the way. The detail of the 30-10 hunt stays in `docs/audit/410-hu
 |---|---|---|---|---|
 | O1 | **a failed start heals itself** (1808, 1809) | get a start to fail (empty grid), then press Start again without ending anything | the log says the grid was flagged instanced with no racers and rebuilds, instead of repeating the roster message | ⬜ |
 | O2 | **the save is free after a race** (1811) | run a race, end it (or reload mid-race), then open the pause menu | Save Game is available; the mod no longer marks itself a mission script | ⬜ |
-| O3 | **the chevron is a quick race** (1814) | drive into a track-start chevron with a roster and Absolute PI set in the menu | six rivals around your PI (±4, relative), 7 cars, the whole `cars.txt` fleet — and the menu's own settings are unchanged for the next normal race | ⬜ |
-| O4 | **corner blips live and die with the race** (1817-1819) | corner visual on, start a race, then finish it | a yellow blip on every apex while racing; all gone at the finish, and `Corner blips cleared (N)` in the log | ⬜ |
 | O5 | **nothing race-shaped outlives the race** (1820) | every debug toggle on, finish a race | checkpoints, chevrons, bumps, G-line, rival cards, route radius and track analysis all stop when the race does | ⬜ |
-| O6 | **the corner radius blend reads right** (1805) | the same corner at 0, at 25, at 100 | 0 is the tightest apex circle (slowest), 100 the widest arc (fastest), 25 what you drive today | ⬜ |
-| O7 | **the declaration sweep changed nothing but where things sit** (1814-1834) | run a race on a track you know, open every menu that owns a settings row, then read the log | identical behaviour to before: same values, same menu order, same log lines, and no `OnTick error` — the six commits only moved declarations and blank lines, so any difference at all is a bug | ⬜ |
 
 ---
 
@@ -64,8 +40,6 @@ Ten builds since the section below was written; every row here is **compile-only
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
 | A2 | **atomic settings** | change one row, then make the ini **read-only** and change another | the value persists; with the file locked an `Error` lands in the log instead of the value being lost | ⬜ |
-| A6 | **new roster** (1169) | change the Rivals roster to `cars.txt` and ask for a grid | it indexes **643 models** and builds the grid. Before, it used to hang (or appear to) when the roster changed | ⬜ |
-| A7 | **rotated log** (1171) | start twice in a row | `ARS.prev.log` exists in the **game root** with the previous session | ⬜ |
 
 ## B · One normal lap
 
@@ -89,7 +63,6 @@ Ten builds since the section below was written; every row here is **compile-only
 | C2 | **reload** | **Insert** mid-race | no crash, the race disappears, neutral pedal | ⬜ |
 | C3 | **race after race** | finish one and launch another before the «Ns to end» expires | the new one **does not die on its own lights** | ⬜ |
 | C4 | **creator** | start line + **one** section, save | it refuses and says how many nodes are missing, with no black screen | ⬜ |
-| C5 | **short solo** | **Grid Size 0** on a short circuit | it starts | ⬜ |
 | C6 | **freecam** | enable it and **get into a car** | the freecam **drops out by itself** | ⬜ |
 
 ## D · Decisions and paperwork — both decided, see **Answered**
@@ -101,7 +74,6 @@ Ten builds since the section below was written; every row here is **compile-only
 | E2 | **horizontal slip angle** (1165) | corners with **elevation change** | it detects the slide the same on a slope as on the flat; before, the gradient inflated it | ⬜ |
 | E3 | **chicanes** (1165) | a track with gradient and esses | chicanes are still chicanes (+10 mph); none gets classified by the elevation | ⬜ |
 | E4 | **grid slots** (1165) | look at the cars on the start | none sunk or floating on tracks with gradient | ⬜ |
-| E6 | **air offroad** | not implemented | the signal exists and is reliable (`ARS.WheelsOffGround`, 0-4 wheels reading `0x1C4`), but it only feeds the stability factor. Parked | ⬜ |
 
 ## F · The feedback batch (1294)
 
@@ -144,9 +116,7 @@ Two items left this list on 13-11 because the code moved under them: `LaneMoverS
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
 | I1 | **Projection brake floor** (`ProjectionBrakeFloorMph`) | go wide in a fast bend with `Show Gs Projection` on and read the `Offshoot:` log line | `floor=` moves with the bend — 20 in a tight corner, higher in a fast one — and the car **keeps rolling**: the projection never holds a full brake with the speed under its own floor | ⬜ |
-| I2 | **`ars` cheat** | type `ars` in the console | the ARS menu opens; `arsmenu` no longer does | ⬜ |
 | I3 | **lane timings: identity, two clocks, and no glide** | a lap | the absolute ends when the lane preview crosses the apex and the request **snaps** to the curvature ask (the 1 s and 3 s glides are gone); the next corner's preparation does not claim the car on the apex | ⬜ |
-| I4 | **apex merge raised 5 s → 6 s** | load a track with a close pair of corners, read `Apex table: N corners` | the pair now merges into one corner (count drops by one) and the second no longer runs dynamic-only | ⬜ |
 | I5 | **drive kept off track** (`OffTrackThrottleLevel` 0.35, now a **floor**) | put a car well past the edge at 40+ mph and let it go | off the track the pedal cannot be cut below the ramp by TCS/stability/plan: the car keeps rolling and only arms the reverse recovery if it is genuinely stopped | ⬜ |
 | I6 | **projection is a speed offset** (`ProjectionSlowdownMphPerSecond` 2, floor 30) | run wide on the approach to a fast bend, `Show Gs Projection` on | the car slows **gradually** (2 mph/s on the target, then the pedal law brakes) instead of the old 0.25 s throttle drop + 0.8 brake, and it never goes under 30 mph or the bend's speed less 30; the `Offshoot:` log line now prints `drop=` and `floor=` | ⬜ |
 | I7 | **route turn-in is a pure inset** (`LaneInsetPerRadius` 125, no speed factor) | a slow corner taken fast, and the same corner taken slowly | the aim sits the **same distance inside** in both (2.5 m at R=50, 1.25 at R=100, 5 m clamp under ~25 m); it no longer widens with speed | ⬜ |
@@ -177,6 +147,7 @@ outward). A span holding two corners of different size is refused at the 1.6 rad
 | K3 | **the input gate is gone** | trail brake lightly into a bend | the pedals no longer matter: only the longitudinal Gs decide, so a light brake above 0.05 g keeps the corner selected | ⬜ |
 | K4 | **the lane lets go on its own corner** | the shaped line through a bend taken off the pedals | the shape stops once the car is through the entrance instead of running to the apex: the lane tests the corner it holds, because the queue's head has already moved on by the time steering runs | ⬜ |
 | K5 | **the creep is a clock, not an angle** (1770) | the S where a left corner is approached through a right-hander | the cap opens at 0.1 m and reaches 2 m three seconds after the corner starts being asked, so a counter-turning prep no longer gets the tightest creep for being perfectly placed | ⬜ |
+| K6 | **the line outlives the coast** (1836) | coast through an entrance: the speed ask stays spent, but the line is held to its apex node | the shape does not stop at the entrance any more — coasting spends the speed ask only, and the corner is kept to its apex (`Racer.cs:729`). This is what the K2 above was re-scoped to in 1836 | ⬜ |
 
 The signal is `VehicleData.GetLongitudinalGs`, the same one `UpdateCornerRequirements` already reads.
 `CoastSpentGs` is the only knob (0.05 g ≈ 0.49 m/s², so the tail of a soft brake release counts as spent).
@@ -209,6 +180,39 @@ history.
 
 Kept for provenance: these are the in-game verdicts and the dispositions. Nothing here is work.
 
+**I · 2026-11-02 (1569)**
+- **I2** `ars` cheat — verified 16-11: the console opens the menu, and the code registers only `ars` (`AutosportRacingSystem.cs:390,2388`) — `arsmenu` is gone
+- **I4** apex merge raised 5 s → 6 s — superseded — the old 5→6 s merge window is gone; the live law (Nov-09 corner work) merges on `closeCornerSeconds = 2 s`, or on similar radii within `SpanMergeRadiusGate = 50 m` with the same aim (`TrackLoader.cs:1295-1298`). Compile-verified, not driven
+
+**C · Deliberate abuse**
+- **C5** short solo — verified 16-11: Grid Size 0 on a short circuit starts
+
+**O · the finish line and the quick join (16-11)**
+- **O3** the chevron is a quick race (1814) — verified 16-11
+- **O4** corner blips live and die with the race (1817-1819) — verified 16-11
+- **O6** the corner radius blend reads right (1805) — verified 16-11
+- **O7** the declaration sweep changed nothing but where things sit (1814-1834) — verified 16-11: the static proof (identical line multiset in `Racer.cs` and `DataStructures.cs`, six enums re-wrapped, the 41 menu rows in the same order) plus a 12-minute race on 1876 — **0** `OnTick error`, 2,989 lines all `(Info)`, no Error or Fatal line in the log
+
+**P · the debug panel (14-11 → 16-11)**
+- **P1** six throttle bars in the panel (1843) — verified 14-11 · 1843
+- **P2** the bars split: three throttle, three brake (1844) — verified 14-11 · 1844
+- **P3** the bars tell the throttle chain (1845) — verified 14-11 · 1845
+- **P4** the TCS cap pulls from the top (1846) — verified 16-11
+- **P5** the throttle bar rides a smooth follower (1847) — verified 14-11 · 1847
+- **P6** brake and the TCS ceiling ride followers too (1848) — verified 14-11 · 1848
+- **P7** corner and route margins as centred white bars (1849) — verified 14-11 · 1849 — bars move as designed; the drive caught the corner bar riding the braking *ramp*, not the arrival speed → P8
+- **P8** the corner margin measures the arrival speed (1850) — verified 14-11 · 1850
+- **P9** the panel rides the Show Pedal Trail toggle (1851) — verified 14-11 · 1851
+- **P10** the columns are labelled (1852) — verified 14-11 · 1852
+- **P11** APEX and ROUT: orange in range, gray when irrelevant (1853) — verified 14-11 · 1853
+- **P12** the Gs floor is a lane lerp (1854) — verified 14-11 · 1854
+- **P13** STB: the stability throttle cap (1855) — verified 16-11
+- **P14** the floor gate rides the slide angle (1856) — verified 14-11 · 1856
+- **P15** the floor: a ±2 m window over the car lane, closed off-road (1857) — verified 14-11 · 1857
+- **P16** the TCS ladders: 20-400, step 20 (1859) — verified 14-11 · 1859
+- **P17** the TCS ladders reach the game's ceiling (1860) — verified 16-11
+- **P18** Show TRlateral drawn (1872) — verified 16-11
+
 **N · Nearby Cars (13-11 · 1802)**
 - **N1** the cars around you join the grid (1784) — verified
 - **N3** the toggle is a three-way choice (1794) — verified: «Works, they tune if the setting is chosen»
@@ -226,6 +230,8 @@ Kept for provenance: these are the in-game verdicts and the dispositions. Nothin
 - **A4** preflight — verified 26-10 (1124)
 - **A5** layout · names — verified 26-10
 
+- **A6** new roster (1169) — verified 16-11 — the roster indexes and the grid builds (the row's 643 was the old roster; the current one holds 568)
+- **A7** rotated log (1171) — verified 16-11: `ARS.prev.log` sits in the game root with the previous session
 **B · One normal lap**
 - **B1** corner seam — verified 26-10: 14 corners at El Burro / 18 at Oct1, `apex=0` only in the `skipped`
 - **B4** board · names (1117) — verified 26-10
@@ -249,6 +255,7 @@ Kept for provenance: these are the in-game verdicts and the dispositions. Nothin
 - **E1** off-track: 40 under, floor 20 (1171) — ⛔ superseded by I1 (1569)
 - **E5** the wheel dither — resolved in 1163: it was the delay measured in 3D
 
+- **E6** air offroad — verified 16-11: the signal works — stability reduces mid-air; the feature itself stays parked, never built
 **F · The feedback batch (1294)**
 - **F1** build gate — ✅ 28-10: the race ran, the gate let it through
 - **F2** no storm — ✅ 28-10: 0 across 14 log lines (1.5 KB)
@@ -272,5 +279,4 @@ Kept for provenance: these are the in-game verdicts and the dispositions. Nothin
 
 **K · the corner is spent when the car coasts — for speed only**
 - **K1** coasting inside the corner releases it early (`CornerSpent`) — verified 09-11 · 1769/1770: «the 0.05gs thing works well»
-- **K2** the line outlives the coast: coasting spends the speed ask (queue looks past), the corner is held to its apex node (`Racer.cs:729`) — pending your drive · 1836
 
