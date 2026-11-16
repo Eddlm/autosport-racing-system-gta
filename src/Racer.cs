@@ -3206,6 +3206,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (DebugInputVisuals && ARS.DebugToggles[Options.ShowTrackAnalysis]) DrawSteerAngles();
             if (ARS.DebugToggles[Options.ShowWheelSlip]) DrawWheelSlip();
             if (ARS.DebugToggles[Options.ShowRpms] && ARS.Racers.Count > 0 && ARS.Racers[0] == this) DrawRpmReadout();
+            if (ARS.DebugToggles[Options.ShowTrLateral] && ARS.Racers.Count > 0 && this == ARS.Racers.OrderBy(c => c.Car.Position.DistanceTo(Game.Player.Character.Position)).ToList()[0]) DrawTrLateral();
             if (ARS.DebugToggles[Options.ShowFrontSlip]) DrawFrontSlipReadout();
             if (ARS.DebugToggles[Options.ShowSlideAngle]) DrawSlideAngleReadout();
             if (ARS.DebugToggles[Options.ShowGsProjection])
@@ -3352,6 +3353,22 @@ const float RequirementLookaheadSeconds = 3.95f;
                 ARS.DrawText(full + Vector3.WorldUp * 0.5f,
                              "-" + ((int)Math.Round(_projectionDropMph)).ToString(CultureInfo.InvariantCulture) + " MPH",
                              _projectionCutActive ? Color.Red : Color.Yellow, 0.45f);
+            DrawGReadout();
+        }
+
+        public void DrawGReadout()
+        {
+            Vector3 accel = VehicleData.AverageAcceleration;
+            Vector3 fwd = Car.ForwardVector;
+            fwd.Z = 0f;
+            fwd.Normalize();
+            Vector3 right = Vector3.Cross(fwd, Vector3.WorldUp);
+            float latG = Vector3.Dot(accel, right) / 9.8f;
+            float lonG = Vector3.Dot(accel, fwd) / 9.8f;
+            Vector3 pos = Car.Position + Vector3.WorldUp * (VehicleData.ModelDimensions.Z + 0.5f);
+            string text = "L" + latG.ToString("0.0", CultureInfo.InvariantCulture)
+                        + " D" + lonG.ToString("0.0", CultureInfo.InvariantCulture);
+            ARS.DrawText(pos, text, Color.White, 0.5f);
         }
 
         void DrawProjectionGateSubtitle()
@@ -3424,6 +3441,38 @@ const float RequirementLookaheadSeconds = 3.95f;
             float rpm = ARS.MeanWheelRotation(Car) * KickGearRatio(gear, maxGear) * AssumedFinalDrive * RpmPerRadPerSecond;
             string rpmText = float.IsNaN(rpm) || float.IsInfinity(rpm) ? "--" : ((int)Math.Round(rpm * 0.001f)).ToString(CultureInfo.InvariantCulture) + "K";
             UI.ShowSubtitle(rpmText, 50);
+        }
+
+        public void DrawTrLateral()
+        {
+            float halfWidth = VehicleData.BoundingBox * 0.5f;
+            float bodyLength = VehicleData.ModelDimensions.Y;
+            Vector3 fwd = Car.ForwardVector;
+            fwd.Z = 0f;
+            fwd.Normalize();
+            Vector3 back = -fwd;
+            Vector3 right = Vector3.Cross(fwd, Vector3.WorldUp);
+            Vector3 rear = Car.Position + Vector3.WorldUp * 0.1f + back * (bodyLength * 0.5f);
+            float backCos = (float)Math.Cos(TRLateralAtSpeed * Math.PI / 180.0);
+            float openSin = (float)Math.Sin(TRLateralAtSpeed * Math.PI / 180.0);
+            float slideDeg = VehicleData.SlideAngle;
+            if (float.IsNaN(slideDeg) || float.IsInfinity(slideDeg)) slideDeg = 0f;
+            slideDeg = Math.Abs(slideDeg);
+            float slideCos = (float)Math.Cos(slideDeg * Math.PI / 180.0);
+            float slideSin = (float)Math.Sin(slideDeg * Math.PI / 180.0);
+            for (int i = 0; i < 2; i++)
+            {
+                Vector3 side = i == 0 ? right : -right;
+                Vector3 rearSide = rear + side * halfWidth;
+                Vector3 frontSide = rearSide - back * bodyLength;
+                ARS.DrawLine(rearSide, frontSide, Color.White);
+                Vector3 hornDir = back * backCos + side * openSin;
+                ARS.DrawLine(frontSide, frontSide + hornDir * bodyLength, Color.Yellow);
+                Vector3 slideHornDir = back * slideCos + side * slideSin;
+                ARS.DrawLine(frontSide, frontSide + slideHornDir * bodyLength, Color.Red);
+            }
+            float share = TRLateralAtSpeed > 0.01f ? slideDeg / TRLateralAtSpeed : 0f;
+            UI.ShowSubtitle("~b~" + ((int)Math.Round(share * 100f)).ToString(CultureInfo.InvariantCulture) + "%", 50);
         }
 
         void DrawWheelSlip()

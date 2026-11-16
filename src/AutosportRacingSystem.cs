@@ -32,7 +32,7 @@ namespace ARS
         ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis,
         ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip,
         ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry,
-        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowRpms
+        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowRpms, ShowTrLateral
     }
 
     public partial class ARS : Script
@@ -190,7 +190,8 @@ public const float LaneInsetPerRadius = 125f;
         { Options.ShowGsProjection, false },
         { Options.ShowGLine, false },
         { Options.ShowRouteRadius, false },
-        { Options.ShowRpms, false }
+        { Options.ShowRpms, false },
+        { Options.ShowTrLateral, false }
     };
 
         public const float SpectateCheckpointRadiusMeters = 400f;
@@ -1320,6 +1321,7 @@ public const float LaneInsetPerRadius = 125f;
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
             AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is measured from: the car's own, the near sample and the far one at speed/grip and twice that ahead.");
             AddDebugCheckbox(debugMenu, Options.ShowRpms, "Show RPMs", "Estimate the first racer's engine speed from its own wheels and the gear ladder, in the subtitle as rpm @ gear: the mean wheel rotation read live, the ratio for the gear the game reports and an assumed differential, so a spinning or locking wheel moves the number while a stopped car reads zero.");
+            AddDebugCheckbox(debugMenu, Options.ShowTrLateral, "Show TRlateral", "The tyre's peak slide angle at this speed, drawn on the car closest to the player: a line per side along the car from the rear to the front tip, and from that tip a line of the same length opening back at the angle (LateralTractionCurve / (1 + 0.1·v)) — the horn opens wide when the car is slow and closes onto the body line at speed. A second horn per side (red) opens at the car's live slide angle, so the pair shows the tyre's limit (yellow) against where the car actually sits (red).");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
@@ -2167,6 +2169,13 @@ public const float LaneInsetPerRadius = 125f;
                     Vehicle gLineCar = player.Character.CurrentVehicle;
                     if (CanWeUse(gLineCar)) UpdatePlayerGLine(gLineCar);
                 }
+
+                if (DebugToggles[Options.ShowTrLateral] && PlayerRacer != null && CanWeUse(PlayerRacer.Car)
+                    && PlayerRacer == Racers.OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault())
+                    PlayerRacer.DrawTrLateral();
+                if (DebugToggles[Options.ShowGsProjection] && PlayerRacer != null && CanWeUse(PlayerRacer.Car)
+                    && PlayerRacer == Racers.OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault())
+                    PlayerRacer.DrawGReadout();
 
                 if (raceLive && DebugToggles[Options.ShowRivalry])
                 {
