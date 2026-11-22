@@ -117,6 +117,7 @@ namespace ARS
 
         public static bool BrakeLearning = true;
         public static bool BrakeLearningNotify = false;
+        public static bool CornerSpeedLearning = true;
         public static bool SlideBrakeCap = true;
         public static float BrakeAimDepth = 0f;
         public static float MaxCrestLift = 0.4f;
@@ -966,6 +967,14 @@ public const float LaneInsetPerRadius = 125f;
                 SaveRacerSetting("BrakeLearning", BrakeLearning.ToString());
             };
             rivalPaceMenu.Add(brakeLearningItem);
+
+            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at 0. Inert in this build until the learner is switched on. Off leaves the corner at pure grip physics.", CornerSpeedLearning);
+            cornerSpeedLearningItem.CheckboxChanged += (sender, args) =>
+            {
+                CornerSpeedLearning = cornerSpeedLearningItem.Checked;
+                SaveRacerSetting("CornerSpeedLearning", CornerSpeedLearning.ToString());
+            };
+            rivalPaceMenu.Add(cornerSpeedLearningItem);
 
             NativeCheckboxItem slideBrakeItem = new NativeCheckboxItem("Slide Brake Cap", "From half the car's peak slip angle at that speed to 1.5x it, the brake eases from full down to a third: a sliding tyre has no grip left to brake with, and pressing harder only upsets it. Off leaves the pedal to the plan alone.", SlideBrakeCap);
             slideBrakeItem.CheckboxChanged += (sender, args) =>
@@ -3218,7 +3227,10 @@ public const float LaneInsetPerRadius = 125f;
             float baseSpd = (float)Math.Sqrt(vehicleGripGs * c.SurfaceGrip * r.Handling.Gravity * radius);
             if (float.IsNaN(baseSpd) || float.IsInfinity(baseSpd)) return AiConstants.MaxSpeed;
 
-            return ARS.Clamp(baseSpd, AiConstants.MinSpeed, AiConstants.MaxSpeed);
+            // Corner speed learning rides on the same per-corner record as the brake factor: the racer's
+            // learned offset in m/s, added before the clamp. It reads 0 while inert, so the number is unchanged.
+            float learnedCornerSpeed = r.CornerSpeedOffsetFor(c.Node);
+            return ARS.Clamp(baseSpd + learnedCornerSpeed, AiConstants.MinSpeed, AiConstants.MaxSpeed);
         }
 
         static public float SlidingBoundingBoxWidth(Entity e)
@@ -3713,6 +3725,7 @@ public const float LaneInsetPerRadius = 125f;
             SettingsMenuStore.Migrate("BrakeLearning", legacyBrakeLearning);
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
+            CornerSpeedLearning = SettingsMenuStore.GetBool("CornerSpeedLearning", CornerSpeedLearning);
             SlideBrakeCap = SettingsMenuStore.GetBool("SlideBrakeCap", SlideBrakeCap);
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             ARS.LaneErrorTelemetry = DevelopmentMenuStore.GetBool("LaneErrorTelemetry", ARS.LaneErrorTelemetry);

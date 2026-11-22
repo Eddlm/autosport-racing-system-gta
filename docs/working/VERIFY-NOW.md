@@ -1,10 +1,10 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1890**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1891**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **51 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **52 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
@@ -12,6 +12,12 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ## R · 2026-11-22 (1886 → 1889) — all five verified in game, see **Answered**
 
+
+## T · 2026-11-22 (1891) — the corner speed switch, before anything learns
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| T1 | **the switch exists and holds** (1891) | Rivals menu, pace page: toggle Corner Speed Learning off, restart, reopen | the checkbox reads off after the restart, and the racing is identical with it on or off — this build's learner is inert by design | ⬜ |
 
 ## S · 2026-11-22 (1890) — the boost waits until the corner is behind
 

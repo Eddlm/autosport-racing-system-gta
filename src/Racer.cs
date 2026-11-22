@@ -404,6 +404,9 @@ namespace ARS
         const int BrakeOverSampleMs = 100;
         const float BrakeMaxFactor = 1.25f;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
+        // Corner speed learning: the learned m/s offset for a corner. Zero while no learner writes it, and
+        // zero whenever the switch is off, so the target stays pure grip physics until it is made live.
+        public float CornerSpeedOffsetFor(int apexNode) => ARS.CornerSpeedLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
         float _divebombBrakeBonus;
 
         bool TryGetCornerContext(int apexNode, out CornerContext context)

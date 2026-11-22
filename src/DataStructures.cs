@@ -426,6 +426,7 @@ namespace ARS
     {
         public CornerPoint Point;
         public float BrakeFactor = 0f;
+        public float CornerSpeedOffsetMps = 0f;
         public bool RequiresBraking = false;
     }
     public class TrackStartInfo

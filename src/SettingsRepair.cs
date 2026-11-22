@@ -138,6 +138,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("ForceFillGrid", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("OverspeedCut", "0.2", Kind.Text, new[] { "Off", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0" }));
             settings.Specs.Add(new KeySpec("BrakeLearning", "True", Kind.Bool));
+            settings.Specs.Add(new KeySpec("CornerSpeedLearning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("SlideBrakeCap", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TcsEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("AbsEnabled", "False", Kind.Bool));
