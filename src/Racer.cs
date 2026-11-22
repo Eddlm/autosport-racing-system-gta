@@ -419,6 +419,8 @@ namespace ARS
         const float CornerSpeedLearnReleaseMetres = 40f;
         // A corner keeps the car for this long after its apex before the route term takes over.
         const int CornerSpeedStickyMs = 1000;
+        // The route term is invalid this close to a corner: the corner owns the bend from here until its hold ends.
+        const float RouteSuppressCornerSeconds = 3f;
         // Route speed learning: the percentage the car holds against the track, with the bands and pedal states
         // his spec fixes. It rises only under light throttle, never on the brake; it falls only on power, each
         // inside its own percentage band.
@@ -947,7 +949,7 @@ namespace ARS
                         + " | src " + ARS.SpeedSourceName(this)
                         + " | d " + _thrDelta.ToString("+0.00;-0.00") + " tgt " + _thrTarget.ToString("0.0")
                         + " corner " + (_speedCorner >= 900f ? "-" : _speedCorner.ToString("0.0"))
-                        + " curva " + (_speedRoute >= 900f ? "-" : _speedRoute.ToString("0.0"))
+                        + " route " + (_speedRoute >= 900f ? "-" : _speedRoute.ToString("0.0"))
                         + " now " + _thrActualMps.ToString("0.0") + " (" + _thrTerm + ")"
                         + " | floor " + _thrFloor.ToString("0.00") + (ThrottleSlewLimited ? " slew" : "")
                         + " | tcs " + Control.MaxThrottleFromTCS.ToString("0.00")
@@ -2458,6 +2460,18 @@ const float RequirementLookaheadSeconds = 3.95f;
             return after - before;
         }
 
+        // His spec: the corner owns the bend from three seconds out until its post-apex hold releases. A corner
+        // without a real number of its own cannot own anything, so the suppression only applies beside one.
+        bool RouteSpeedSuppressed(float cornerSpd)
+        {
+            if (_cornerHoldNode >= 0 && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs) return true;
+            if (cornerSpd >= 998f || NextApexNode < 0) return false;
+            float speed = Car.Velocity.Length();
+            if (speed < 1f) return false;
+            int entranceNode = CornerEntranceNode(_nextApexCorner, NextApexNode);
+            return MetresToNode(entranceNode) / speed <= RouteSuppressCornerSeconds;
+        }
+
         // Arms the post-apex hold for one corner. It cannot refresh itself while it is still running, so a corner
         // that stays the queue head gets one second and no more.
         void ArmCornerHold(int apexNode)
@@ -2612,6 +2626,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             float followTrackSpd = TrackSpeed.RouteCurvature
                 ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint) * (float)Math.Sqrt(RouteSurfaceGrip())
                 : 999f;
+            // His spec: inside a corner the route radius answers the same bend the corner term already answers, and
+            // it can win the min() and slow a car the corner has cleared for. Only while the corner term holds a
+            // real number - suppressing the route term beside a no-limit corner would leave nothing at all.
+            if (RouteSpeedSuppressed(cornerSpd)) followTrackSpd = 999f;
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;

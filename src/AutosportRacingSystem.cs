@@ -3998,7 +3998,7 @@ public const float LaneInsetPerRadius = 125f;
                     + " (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
             }
             if (term == SpeedTerm.Route)
-                return "curva (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
+                return "route (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
             if (term == SpeedTerm.Standoff) return "standoff";
             if (term == SpeedTerm.Chicane) return "chicane";
             if (term == SpeedTerm.GridWait) return "grid";
