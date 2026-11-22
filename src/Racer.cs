@@ -427,6 +427,7 @@ namespace ARS
         const float RouteSpeedLearnFallShareOfRate = 0.5f;
         const bool RouteSpeedLearnFallEnabled = false;
         const float RouteSpeedLearnOpenRadius = 998f;
+        const float RouteSpeedLearnStableThrottle = 0.999f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedEndsAt;
         bool _cornerSpeedSawTraffic;
@@ -3622,7 +3623,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             float step = RouteSpeedLearnRateMph * TickScale;
             bool inRiseBand = percent >= RouteSpeedLearnRiseMinPercent && percent <= RouteSpeedLearnRiseMaxPercent;
             bool inFallBand = percent >= RouteSpeedLearnFallMinPercent && percent <= RouteSpeedLearnFallMaxPercent;
-            if (coasting && inRiseBand) _routeSpeedOffsetMph += step;
+            // A car that is stable and under its slip limit is evidence; one that is sliding is not.
+            float slideAbs = Math.Abs(VehicleData.SlideAngle);
+            bool stable = Control.MaxThrottleFromStability >= RouteSpeedLearnStableThrottle;
+            bool underSlipLimit = TRLateralAtSpeed > 0.01f && !float.IsNaN(slideAbs) && slideAbs < TRLateralAtSpeed;
+            if (coasting && inRiseBand && stable && underSlipLimit) _routeSpeedOffsetMph += step;
             else if (onPower && inFallBand) _routeSpeedOffsetMph = Math.Max(0f, _routeSpeedOffsetMph - step * RouteSpeedLearnFallShareOfRate);
         }
 
