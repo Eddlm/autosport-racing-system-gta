@@ -417,10 +417,6 @@ namespace ARS
         const float CornerSpeedLearnBrakeCeiling = 0.05f;
         const int CornerSpeedLearnTrafficMs = 250;
         const float CornerSpeedLearnReleaseMetres = 40f;
-        // A corner keeps the car for this long after its apex before the route term takes over.
-        const int CornerSpeedStickyMs = 1000;
-        // The route term is invalid this close to a corner: the corner owns the bend from here until its hold ends.
-        const float RouteSuppressCornerSeconds = 3f;
         // How close to an apex node counts as having reached it, in metres; the call widens it for fast cars.
         const float ApexReachedMetres = 3f;
         // Route speed learning: the percentage the car holds against the track, with the bands and pedal states
@@ -439,13 +435,11 @@ namespace ARS
         const float RouteSpeedLearnOpenRadius = 998f;
         const float RouteSpeedLearnStableThrottle = 0.999f;
         int _cornerSpeedApexNode = -1;
-        int _cornerHoldNode = -1;
-        int _cornerHoldAt;
-        float _cornerHoldSpeed = 999f;
-        int _cornerDropLoggedNode = -1;
-        int _cornerArmedNode = -1;
-        bool _cornerHoldReleased;
-        bool _cornerHoldCapLogged;
+        // Route is the default authority; a corner is an override that latches while it owns the car.
+        const int CornerModeExitNodes = 50;
+        bool _cornerMode;
+        int _cornerModeNode = -1;
+        float _cornerModeSpeed = 999f;
         readonly HashSet<int> _cornerSpeedLocked = new HashSet<int>();
         int _cornerSpeedEndsAt;
         bool _cornerSpeedSawTraffic;
@@ -2465,13 +2459,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             return after - before;
         }
 
-        // One source of truth for "the corner is holding the car": the arbitration reads it right before the two
-        // terms meet, so the route term cannot take a bend the corner is still holding.
-        bool CornerIsHeld => _cornerHoldNode >= 0 && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs;
-
-        // The corner being approached or just passed, if its entrance is inside the suppression window. The plan only
-        // builds a term where braking is required, and a corner that does not ask for brakes still owns its bend.
-        CornerPoint CornerInOwnership()
+        // The nearest corner ahead, whatever the plan queue is doing: the override needs a corner number to compare
+        // against the route term, and the queue is not reliable enough to supply it.
+        CornerPoint NearestCornerAhead()
         {
             CornerPoint best = null;
             float bestMetres = float.MaxValue;
@@ -2483,55 +2473,38 @@ const float RequirementLookaheadSeconds = 3.95f;
                 best = corner;
                 bestMetres = metres;
             }
-            if (best == null) return null;
-            float speed = Math.Max(Car.Velocity.Length(), 1f);
-            int entranceNode = CornerEntranceNode(best, best.Node);
-            return MetresToNode(entranceNode) / speed <= RouteSuppressCornerSeconds ? best : null;
+            return best;
         }
 
-        // His spec: the corner owns the bend from three seconds out until its post-apex hold releases. A corner
-        // without a real number of its own cannot own anything, so the suppression only applies beside one.
-        bool RouteSpeedSuppressed(float cornerSpd)
-        {
-            if (CornerIsHeld) return true;
-            if (cornerSpd >= 998f || NextApexNode < 0) return false;
-            float speed = Car.Velocity.Length();
-            if (speed < 1f) return false;
-            int entranceNode = CornerEntranceNode(_nextApexCorner, NextApexNode);
-            return MetresToNode(entranceNode) / speed <= RouteSuppressCornerSeconds;
-        }
-
-        // The plan queue only holds corners strictly ahead, so its head leaves at the very tick the car reaches an
-        // apex node. Node counts wrap - a node just behind reads count-k - so the test has to be in metres, and
-        // wide enough that a fast car cannot step over it between ticks.
-        bool ReachedApex(int apexNode)
-        {
-            if (apexNode < 0 || apexNode >= ARS.TrackPoints.Count) return false;
-            float tolerance = Math.Max(ApexReachedMetres, Car.Velocity.Length() * TickScale * 2f);
-            return Math.Abs(MetresToNode(apexNode)) <= tolerance;
-        }
-
-        // Arms the post-apex hold for one corner. It cannot refresh itself while it is still running, so a corner
-        // that stays the queue head gets one second and no more.
-        void ArmCornerHold(int apexNode)
+        // His rules: the override latches on the tick the corner's own ramp crosses below the route term - the
+        // strict number, so latching can only slow the car - and lets go once the car is CornerModeExitNodes past
+        // that corner's apex. Both sides of every flip are logged, pre before the terms are compared and post
+        // after the mode has changed, so a seam can be read back from the log rather than inferred.
+        void EnterCornerMode(int apexNode, float heldSpeed, float cornerTerm, float routeTerm)
         {
             if (apexNode < 0) return;
-            // One hold per pass: without this the same apex re-armed itself every time the second expired, so the
-            // cap outlived its corner and vanished the moment the queue head finally moved.
-            if (_cornerArmedNode == apexNode) return;
-            if (_cornerHoldNode == apexNode && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs) return;
-            CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
-            if (corner == null) return;
-            _cornerHoldNode = apexNode;
-            _cornerHoldAt = Game.GameTime;
-            _cornerHoldSpeed = ARS.CornerApexSpeed(corner, this);
-            _cornerArmedNode = apexNode;
-            _cornerHoldReleased = false;
-            _cornerHoldCapLogged = false;
-            ARS.Log(ARS.LogImportance.Info, "hold " + Name + " (" + Car.DisplayName + "): arm #" + apexNode
-                + " apex at " + MetresToNode(apexNode).ToString("0.0", CultureInfo.InvariantCulture) + " m, held "
-                + _cornerHoldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s, now "
-                + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
+            ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": pre  route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
+                + " corner " + cornerTerm.ToString("0.0", CultureInfo.InvariantCulture)
+                + " car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
+                + " apex at " + MetresToNode(apexNode).ToString("0.0", CultureInfo.InvariantCulture) + " m", true);
+            _cornerMode = true;
+            _cornerModeNode = apexNode;
+            _cornerModeSpeed = heldSpeed;
+            ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": ENTER corner #" + apexNode + ", drinking "
+                + cornerTerm.ToString("0.0", CultureInfo.InvariantCulture) + " m/s, held "
+                + heldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
+        }
+
+        void ExitCornerMode(float routeTerm, string why)
+        {
+            if (!_cornerMode) return;
+            ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": post route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
+                + " car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
+                + " apex at " + MetresToNode(_cornerModeNode).ToString("0.0", CultureInfo.InvariantCulture) + " m", true);
+            _cornerMode = false;
+            ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": EXIT to route (" + why + ")", true);
+            _cornerModeNode = -1;
+            _cornerModeSpeed = 999f;
         }
 
         // A corner is finished for this pass once the car is CornerSpeedLearnReleaseMetres past it, so the same
@@ -2672,17 +2645,13 @@ const float RequirementLookaheadSeconds = 3.95f;
                 }
             }
 
-            // The corner owns the bend even where the plan never asked for brakes: inside its window its own apex
-            // speed is the term, so the route term is never the only candidate on the way in. Placed before the route
-            // suppression on purpose - that test asks whether the corner term carries a number.
+            // The corner number always exists, so the override has something to compare against the route term: the
+            // ramp toward the nearest corner's own apex speed, whether or not the plan asked for brakes.
             if (cornerSpd >= 998f)
             {
-                CornerPoint owned = CornerInOwnership();
+                CornerPoint owned = NearestCornerAhead();
                 if (owned != null)
                 {
-                    // The ramp, not the apex speed on its own: a flat number here would be a step change and the
-                    // approach would stop ramping down. This is the same profile the plan builds for a braking
-                    // corner, aimed at this corner's own apex speed.
                     cornerArrival = ARS.CornerApexSpeed(owned, this);
                     cornerSpd = Math.Max(2f, ApexBrakingSpeed(owned.Node, cornerArrival));
                     cornerSourceNode = owned.Node;
@@ -2692,10 +2661,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             float followTrackSpd = TrackSpeed.RouteCurvature
                 ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint) * (float)Math.Sqrt(RouteSurfaceGrip())
                 : 999f;
-            // His spec: inside a corner the route radius answers the same bend the corner term already answers, and
-            // it can win the min() and slow a car the corner has cleared for. Only while the corner term holds a
-            // real number - suppressing the route term beside a no-limit corner would leave nothing at all.
-            if (RouteSpeedSuppressed(cornerSpd)) followTrackSpd = 999f;
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
@@ -2703,48 +2668,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
                 cornerArrival = cornerSpd;
-            }
-
-            // His spec: passing the apex starts a one second hold on the CORNER itself, not merely on the speed it
-            // had. The plan queue moves to the next corner almost at once, so a hold keyed on the queue head would
-            // release on the very tick it was set: this keeps the corner by node and re-imposes its own speed.
-            int apexHead = NextApexNode;
-            // The queue is not a handover signal: it flickers between a corner and -1 hundreds of metres before the
-            // apex. The apex is one, so the hold is armed from the corner list by proximity, whatever the queue says.
-            foreach (CornerPoint apexCorner in ARS.Corners)
-            {
-                if (!ReachedApex(apexCorner.Node)) continue;
-                ArmCornerHold(apexCorner.Node);
-                break;
-            }
-
-            if (apexHead >= 0 && HasPassedApex(apexHead))
-            {
-                if (_cornerDropLoggedNode != apexHead)
-                {
-                    _cornerDropLoggedNode = apexHead;
-                    ARS.Log(ARS.LogImportance.Info, "plan " + Name + ": corner term dropped for #" + apexHead + " apex at "
-                        + MetresToNode(apexHead).ToString("0.0", CultureInfo.InvariantCulture) + " m, now "
-                        + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
-                }
-                cornerSpd = 999f;
-                cornerArrival = 999f;
-            }
-
-            if (_cornerHoldNode >= 0 && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs
-                && _cornerHoldSpeed < cornerSpd)
-            {
-                if (!_cornerHoldCapLogged)
-                {
-                    _cornerHoldCapLogged = true;
-                    ARS.Log(ARS.LogImportance.Info, "hold " + Name + ": cap #" + _cornerHoldNode + " from "
-                        + cornerSpd.ToString("0.0", CultureInfo.InvariantCulture) + " to "
-                        + _cornerHoldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s, apex at "
-                        + MetresToNode(_cornerHoldNode).ToString("0.0", CultureInfo.InvariantCulture) + " m", true);
-                }
-                cornerSpd = _cornerHoldSpeed;
-                cornerArrival = _cornerHoldSpeed;
-                cornerSourceNode = _cornerHoldNode;
             }
 
             bool chicane = TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane;
@@ -2755,8 +2678,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Brain.CurrentIntention.Term = SpeedTerm.Chicane;
             }
 
-            bool cornerPlansABrake = cornerSpd < 999f;
-            _brakePlanActive = cornerPlansABrake;
 
             // Slope scales the route term only: where the plan holds a corner, the corner term is lower and
             // filters this out, so it bites on straights and fast sections. Deliberate - the corner's own speed
@@ -2791,32 +2712,47 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Brain.CurrentIntention.SteerLimitedSpeed = 999f;
             }
 
-            if (_cornerHoldNode >= 0 && !CornerIsHeld && !_cornerHoldReleased)
-            {
-                _cornerHoldReleased = true;
-                ARS.Log(ARS.LogImportance.Info, "hold " + Name + ": release #" + _cornerHoldNode + " apex at "
-                    + MetresToNode(_cornerHoldNode).ToString("0.0", CultureInfo.InvariantCulture) + " m, now "
-                    + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
-            }
-
-            // His spec: one checkable line right before the two terms meet - while the corner holds the car, the
-            // route term is not a candidate at all, whatever its radius says.
-            // The hold is spent for this pass once the car is well past the apex; only then may the next pass arm it
-            // again, which is what keeps a corner from re-arming itself while the car is still leaving it.
-            if (_cornerArmedNode >= 0 && MetresToNode(_cornerArmedNode) < -CornerSpeedLearnReleaseMetres) _cornerArmedNode = -1;
-
-            if (CornerIsHeld) followTrackSpd = 999f;
-
+            // Route is the default authority; a corner is an override. His rules: the override latches on the tick
+            // the corner's own ramp crosses below the route term - the strict number, so latching can only slow the
+            // car - and lets go once the car is CornerModeExitNodes past that corner's apex.
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
             float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph + _routeSpeedOffsetMph);
-            if (cornerPlansABrake && ARS.GetForwardSpeed(Car) > cornerTerm) routeTerm = 999f;
 
+            if (!_cornerMode)
+            {
+                if (cornerSpd < 998f && cornerSourceNode >= 0 && cornerTerm < routeTerm)
+                    EnterCornerMode(cornerSourceNode, cornerArrival, cornerTerm, routeTerm);
+            }
+            else
+            {
+                if (_cornerModeNode < 0 || MetresToNode(_cornerModeNode) < -CornerModeExitNodes)
+                {
+                    ExitCornerMode(routeTerm, "past the corner");
+                }
+                else if (MetresToNode(_cornerModeNode) < 0f)
+                {
+                    // Apex behind: the corner keeps its own speed for the tail and the ramp is not consulted.
+                    cornerSpd = _cornerModeSpeed;
+                    cornerArrival = _cornerModeSpeed;
+                    cornerSourceNode = _cornerModeNode;
+                    cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
+                    cornerArrivalTerm = cornerTerm;
+                }
+                else if (cornerSpd < 998f && cornerSourceNode >= 0 && cornerSourceNode != _cornerModeNode
+                    && cornerTerm < _cornerModeSpeed)
+                {
+                    // A nearer corner is stricter: hand over without a gap.
+                    EnterCornerMode(cornerSourceNode, cornerArrival, cornerTerm, routeTerm);
+                }
+            }
+
+            _brakePlanActive = _cornerMode;
             _speedCorner = cornerTerm;
             _speedCornerArrival = cornerArrivalTerm;
             _speedRoute = routeTerm;
-            Brain.CurrentIntention.Speed = Math.Min(cornerTerm, routeTerm);
-            if (cornerTerm <= routeTerm)
+            Brain.CurrentIntention.Speed = _cornerMode ? cornerTerm : routeTerm;
+            if (_cornerMode)
             {
                 Brain.CurrentIntention.Term = SpeedTerm.Corner;
                 Brain.CurrentIntention.TermNode = cornerSourceNode;
