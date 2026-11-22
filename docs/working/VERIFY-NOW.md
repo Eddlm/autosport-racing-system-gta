@@ -1,14 +1,25 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1896**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1932**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **58 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **62 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
+
+## X · 2026-11-23 (1926 → 1932) — route is the authority, a corner takes over
+
+The two speed terms no longer meet in a min(): the route term decides, and a corner becomes the sole authority only when its own ramp is stricter, holding until 15 m past its apex. Every takeover and release is logged as a pair, forced past `LogLevel=Error`: `mode <car>: pre route … corner … car … apex at …` then `ENTER corner #n, drinking … held …`; and `post route … car … apex at …` then `EXIT to route (why)`.
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| X1 | **a corner takes the car and keeps it through the exit** (1926-1932) | any braking corner at speed; `mode` lines in `ARS.log` | `pre` shows `corner` below `route`, `ENTER` names that corner, `EXIT` lands 15 m past its apex | ⬜ |
+| X2 | **taking over only ever slows** (1926) | a fast corner where the route term is the higher number | no speed rise at the `ENTER` tick — the `pre` line always has `corner` < `route` | ⬜ |
+| X3 | **the exit is not held into the straight** (1932) | the corner before the longest straight | route speed back 15 m past the apex, not 50 — the car does not carry the corner speed down the straight | ⬜ |
+| X4 | **two close corners hand over without a gap** (1926) | an S-bend or a chicane | a second `ENTER` while the first hold is still live, or an `EXIT` followed immediately by `ENTER` on the next tick — never a tick on the route term in between | ⬜ |
 
 ## R · 2026-11-22 (1886 → 1889) — all five verified in game, see **Answered**
 

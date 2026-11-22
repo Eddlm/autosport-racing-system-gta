@@ -134,32 +134,44 @@ done once and the car only applies its own factor.
 for, rather than the fastest it might get away with — so the plan keeps a promise about the corner while the
 pedals answer the moment.
 
-**Two answers, and the plan takes the lower.** The corner term is worked backwards from the apex: the
-braking map, for the downforce and the learned braking factor this car has. The route term starts as the grip
-circle read from the curvature under and ahead, then gives most of itself to the speed the wheel is already
-committed to — deliberately, so a car running wide of the arc may carry more than the road's own radius would
-allow. The plan is the smaller of the two, each with an error margin of its own as a menu offset — which is
-how a driver buys caution or commitment without touching either law.
+**Route is the authority; a corner takes over.** The route term answers the road under and ahead: a grip
+circle read from the curvature, then most of itself given to the speed the wheel is already committed to, so a
+car running wide of the arc may carry more than the road's own radius would allow. On its own it decides the
+speed, and each term carries an error margin of its own as a menu offset — which is how a driver buys caution
+or commitment without touching either law.
+
+**A corner takes the car only when it is stricter, and keeps it through the exit.** The corner term is worked
+backwards from the apex: the braking map, for the downforce and the learned braking factor this car has. A
+corner becomes the sole authority on the tick its own commitment crosses below the route's number — the strict
+comparison, so taking over can only slow the car and never raise a speed the route has already refused. From
+that tick the route term is not consulted at all: the car drinks the corner's ramp on the way in, and the
+corner's own apex speed after the apex, until it is 15 metres past that apex. Then the route takes the car
+back. A nearer corner that asks for less than the speed being held takes over in the same tick, so there is
+never a tick where neither term answers.
+
+**The corner that holds the car is the corner that answers.** The ramp is recomputed every tick for that
+corner's own apex, from its own apex speed — not from whichever corner the plan queue happens to be looking
+at. Without this, a queue that flips between corners, or briefly holds none, would hand the car a number
+belonging to a different bend, or no number at all, and the hold would leak.
 
 **The corner's radius is the detected one.** The corner term reads one radius per apex: the tightest circle
 the geometry finds there. The blend against the widest arc the road allows was removed — the blend promised the
 car could ride an arc wider than the corner, and it overshot on every corner tested; the speed now comes from
 exactly the arc the car is judged on. The widest arc is still computed at load and carries no consumer: it is
-kept only as reference data, not used anywhere. The route term still wins when it is lower of the two, so the
-corner speed alone does not set the pace where the route says slower. While a brake is planned for the corner
-the route term is stood down, so inside that window this is the number alone that decides.
+kept only as reference data, not used anywhere.
 
 **Both terms read the surface.** The corner term always has — a loose corner asks for less. The route term
 now scales by the grip under the window its radius is sampled over, and a node with no sample inherits the
 surface the car is on rather than assuming tarmac.
 
-**Only the corners this car decided it needs braking for enter the corner term.** Every other bend is the
-route law's business, which is the same division the apex queue already makes: the reserved queue slots feed
-this term alone, and the rest of the track is handled as geometry.
+**Every corner ahead can take over, whether or not it asks for brakes.** The plan builds a ramp for the
+corners it decided to brake for, but a corner that asks for no braking still has an apex speed and still must
+not be undercut by a route term that reads the same bend twice: the term exists for the nearest corner ahead
+whatever the plan says, and taking over is the strict comparison's business, not the plan's.
 
-**Past the braking target the corner term is dropped and the route owns the corner.** The commitment covers
-the approach and nothing else — once the car is inside, the radius under it is the better authority on what
-the tyres will take.
+**Past the apex the corner keeps the car for 15 metres.** Long enough that the route term — whose radius is
+still inside the bend — cannot take the car back while the geometry is still turning, and short enough not to
+hold it slow onto the straight. Fifty was too long in the car; fifteen is the number.
 
 **The road's own shape corrects both terms.** A hill takes grip from both, and both read their hill at the
 follow point — the corner's own grade enters separately, inside its braking map. Vertical curvature takes

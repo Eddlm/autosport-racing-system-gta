@@ -68,8 +68,9 @@ single braking zone.
 ### The curvature term has no time dimension while the corner does
 
 The route's speed reference is a function of radius alone, so its target can step by a large fraction of the whole
-brake range between one node and the next, where the corner plan descends smoothly. Where a corner plan is live this
-is masked on purpose — the curvature is stood down and the corner alone decides. Where no plan covers the corner, the
+brake range between one node and the next, where the corner plan descends smoothly. Where a corner holds the car this
+is masked on purpose — from the tick it takes over, the curvature term is not consulted at all, and it comes back
+15 m past the apex. Where no corner holds the car, the
 step reaches the pedal. **Falsify** by logging the route term per node against the ramp of the corner it is
 approaching.
 
