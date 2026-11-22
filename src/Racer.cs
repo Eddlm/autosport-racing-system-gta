@@ -413,6 +413,12 @@ namespace ARS
         const float CornerSpeedLearnEndThrottle = 0.5f;
         const float CornerSpeedLearnBrakeCeiling = 0.05f;
         const int CornerSpeedLearnTrafficMs = 250;
+        // Route speed learning, his spec: while the car is coasting and the route term is what holds it back, a
+        // percentage under 100 means its path is wider than the track wants and it could carry more.
+        public float RouteSpeedOffsetMph = 0f;
+        const float RouteSpeedLearnThrottle = 0.2f;
+        const float RouteSpeedLearnBrake = 0.2f;
+        const float RouteSpeedLearnRateMph = 1f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedEndsAt;
         bool _cornerSpeedSawTraffic;
@@ -1933,6 +1939,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             UpdateBrakeLearning();
             UpdateCornerSpeedLearning();
+            UpdateRouteSpeedLearning();
 
         }
 
@@ -2584,7 +2591,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
-            float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph);
+            float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph + RouteSpeedOffsetMph);
             if (cornerPlansABrake && ARS.GetForwardSpeed(Car) > cornerTerm) routeTerm = 999f;
 
             _speedCorner = cornerTerm;
@@ -3594,6 +3601,31 @@ const float RequirementLookaheadSeconds = 3.95f;
             ARS.DrawText(pos, text, Color.White, 0.5f);
         }
 
+        // His spec: coasting, the route term in charge, and the car's path wider than the track's radius - the
+        // number climbs a mile per hour per second of that state and rides on the route term from then on.
+        void UpdateRouteSpeedLearning()
+        {
+            if (Control.Throttle >= RouteSpeedLearnThrottle || Control.Brake >= RouteSpeedLearnBrake) return;
+            if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;
+            if (!TryGetCarOverTrack(out float percent)) return;
+            if (percent >= 100f) return;
+            RouteSpeedOffsetMph += RouteSpeedLearnRateMph * TickScale;
+        }
+
+        // The car's own path radius against the track's radius under it, as a percentage. False when the car is
+        // too slow or has no track node yet, so a stationary car never moves the learned number.
+        bool TryGetCarOverTrack(out float percent)
+        {
+            percent = 0f;
+            float speed = ARS.GetForwardSpeed(Car);
+            if (speed < 3f || CurrentTrackPoint == null || ARS.TrackPoints.Count == 0
+                || CurrentTrackPoint.Node < 0 || CurrentTrackPoint.Node >= ARS.TrackPoints.Count) return false;
+            float carRadius = ARS.Clamp(ARS.Circumradius3D(Car.Position, ProjectAhead(1f), ProjectAhead(0.5f)), 5f, 999f);
+            float trackRadius = ARS.Clamp(ARS.TrackPoints[CurrentTrackPoint.Node].SweepCurveRadius, 5f, 999f);
+            percent = 100f * carRadius / Math.Max(trackRadius, 0.01f);
+            return true;
+        }
+
         void DrawProjectionGateSubtitle()
         {
             float slide = Math.Abs(VehicleData.SlideAngle);
@@ -3608,22 +3640,18 @@ const float RequirementLookaheadSeconds = 3.95f;
         // line; under 100% it is holding or tightening. Flattened to 2D: z is height, and height does not steer.
         public void DrawCurveRadiusSubtitle()
         {
-            float speed = ARS.GetForwardSpeed(Car);
-            string text;
-            if (speed < 3f || CurrentTrackPoint == null || ARS.TrackPoints.Count == 0
-                || CurrentTrackPoint.Node < 0 || CurrentTrackPoint.Node >= ARS.TrackPoints.Count)
+            string first = "~w~" + RouteSpeedOffsetMph.ToString("0.0", CultureInfo.InvariantCulture);
+            string second;
+            if (!TryGetCarOverTrack(out float percent))
             {
-                text = "~w~--";
+                second = "~w~--";
             }
             else
             {
-                float carRadius = ARS.Clamp(ARS.Circumradius3D(Car.Position, ProjectAhead(1f), ProjectAhead(0.5f)), 5f, 999f);
-                float trackRadius = ARS.Clamp(ARS.TrackPoints[CurrentTrackPoint.Node].SweepCurveRadius, 5f, 999f);
-                float percent = 100f * carRadius / Math.Max(trackRadius, 0.01f);
                 string colour = percent > 105f ? "~r~" : percent > 95f ? "~y~" : "~g~";
-                text = colour + Math.Round(percent).ToString(CultureInfo.InvariantCulture) + "%";
+                second = colour + Math.Round(percent).ToString(CultureInfo.InvariantCulture) + "%";
             }
-            UI.ShowSubtitle(text, 50);
+            UI.ShowSubtitle(first + "~n~" + second, 50);
         }
 
         void DrawFrontSlipReadout()
