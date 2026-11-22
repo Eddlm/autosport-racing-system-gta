@@ -3613,7 +3613,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (speed < 3f || CurrentTrackPoint == null || ARS.TrackPoints.Count == 0
                 || CurrentTrackPoint.Node < 0 || CurrentTrackPoint.Node >= ARS.TrackPoints.Count)
             {
-                text = "~w~car - / track -";
+                text = "~w~--";
             }
             else
             {
@@ -3621,9 +3621,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 float trackRadius = ARS.Clamp(ARS.TrackPoints[CurrentTrackPoint.Node].SweepCurveRadius, 5f, 999f);
                 float percent = 100f * carRadius / Math.Max(trackRadius, 0.01f);
                 string colour = percent > 105f ? "~r~" : percent > 95f ? "~y~" : "~g~";
-                text = colour + "car " + Math.Round(carRadius).ToString(CultureInfo.InvariantCulture)
-                     + " / track " + Math.Round(trackRadius).ToString(CultureInfo.InvariantCulture)
-                     + " = " + Math.Round(percent).ToString(CultureInfo.InvariantCulture) + "%";
+                text = colour + Math.Round(percent).ToString(CultureInfo.InvariantCulture) + "%";
             }
             UI.ShowSubtitle(text, 50);
         }
