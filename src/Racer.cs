@@ -2460,11 +2460,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             return after - before;
         }
 
+        // One source of truth for "the corner is holding the car": the arbitration reads it right before the two
+        // terms meet, so the route term cannot take a bend the corner is still holding.
+        bool CornerIsHeld => _cornerHoldNode >= 0 && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs;
+
         // His spec: the corner owns the bend from three seconds out until its post-apex hold releases. A corner
         // without a real number of its own cannot own anything, so the suppression only applies beside one.
         bool RouteSpeedSuppressed(float cornerSpd)
         {
-            if (_cornerHoldNode >= 0 && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs) return true;
+            if (CornerIsHeld) return true;
             if (cornerSpd >= 998f || NextApexNode < 0) return false;
             float speed = Car.Velocity.Length();
             if (speed < 1f) return false;
@@ -2707,6 +2711,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 Brain.CurrentIntention.SteerLimitedSpeed = 999f;
             }
+
+            // His spec: one checkable line right before the two terms meet - while the corner holds the car, the
+            // route term is not a candidate at all, whatever its radius says.
+            if (CornerIsHeld) followTrackSpd = 999f;
 
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
