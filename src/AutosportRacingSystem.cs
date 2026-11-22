@@ -2208,7 +2208,7 @@ public const float LaneInsetPerRadius = 125f;
                 if (raceLive && DebugToggles[Options.ShowCurveRadius])
                 {
                     Racer curveRacer = DebugFocusRacer ?? PlayerRacer ?? Racers.OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault();
-                    if (curveRacer != null && CanWeUse(curveRacer.Car)) curveRacer.DrawCurveRadiusSubtitle();
+                    if (curveRacer != null && CanWeUse(curveRacer.Car)) curveRacer.DrawRouteSpeedSubtitle();
                 }
 
                 if (raceLive && DebugToggles[Options.ShowRouteRadius])

@@ -205,6 +205,7 @@ namespace ARS
         float _speedCorner;
         float _speedCornerArrival;
         float _speedRoute;
+        float _routeSpeedOffsetMph;
 
         public float ThrottleWanted { get { return _thrWanted; } }
         public float ThrottleFinal { get { return _thrFinal; } }
@@ -413,9 +414,8 @@ namespace ARS
         const float CornerSpeedLearnEndThrottle = 0.5f;
         const float CornerSpeedLearnBrakeCeiling = 0.05f;
         const int CornerSpeedLearnTrafficMs = 250;
-        // Route speed learning, his spec: while the car is coasting and the route term is what holds it back, a
-        // percentage under 100 means its path is wider than the track wants and it could carry more.
-        public float RouteSpeedOffsetMph = 0f;
+        // Route speed learning: the percentage the car holds against the track, with the bands and pedal states
+        // his spec fixes. It rises only while coasting, falls only on power, each inside its own percentage band.
         const float RouteSpeedLearnThrottle = 0.2f;
         const float RouteSpeedLearnBrake = 0.2f;
         const float RouteSpeedLearnDropThrottle = 0.9f;
@@ -2597,7 +2597,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
-            float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph + RouteSpeedOffsetMph);
+            float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph + _routeSpeedOffsetMph);
             if (cornerPlansABrake && ARS.GetForwardSpeed(Car) > cornerTerm) routeTerm = 999f;
 
             _speedCorner = cornerTerm;
@@ -3616,16 +3616,17 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool onPower = Control.Throttle > RouteSpeedLearnDropThrottle;
             if (!coasting && !onPower) return;
             if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;
-            if (!TryGetCarOverTrack(out float percent)) return;
-            if (coasting && percent >= RouteSpeedLearnRiseMinPercent && percent <= RouteSpeedLearnRiseMaxPercent)
-                RouteSpeedOffsetMph += RouteSpeedLearnRateMph * TickScale;
-            else if (onPower && percent >= RouteSpeedLearnFallMinPercent && percent <= RouteSpeedLearnFallMaxPercent)
-                RouteSpeedOffsetMph = Math.Max(0f, RouteSpeedOffsetMph - RouteSpeedLearnRateMph * RouteSpeedLearnFallShare * TickScale);
+            if (!TryGetCarOverTrackPercent(out float percent)) return;
+            float step = RouteSpeedLearnRateMph * TickScale;
+            bool inRiseBand = percent >= RouteSpeedLearnRiseMinPercent && percent <= RouteSpeedLearnRiseMaxPercent;
+            bool inFallBand = percent >= RouteSpeedLearnFallMinPercent && percent <= RouteSpeedLearnFallMaxPercent;
+            if (coasting && inRiseBand) _routeSpeedOffsetMph += step;
+            else if (onPower && inFallBand) _routeSpeedOffsetMph = Math.Max(0f, _routeSpeedOffsetMph - step * RouteSpeedLearnFallShare);
         }
 
         // The car's own path radius against the track's radius under it, as a percentage. False when the car is
         // too slow or has no track node yet, so a stationary car never moves the learned number.
-        bool TryGetCarOverTrack(out float percent)
+        bool TryGetCarOverTrackPercent(out float percent)
         {
             percent = 0f;
             float speed = ARS.GetForwardSpeed(Car);
@@ -3649,11 +3650,11 @@ const float RequirementLookaheadSeconds = 3.95f;
         // Constant subtitle, for tuning: the radius the car's own path describes against the radius the track
         // asks for at the car's node. Over 100% the car is going wider than the track wants - it is losing the
         // line; under 100% it is holding or tightening. Flattened to 2D: z is height, and height does not steer.
-        public void DrawCurveRadiusSubtitle()
+        public void DrawRouteSpeedSubtitle()
         {
-            string first = "~w~" + RouteSpeedOffsetMph.ToString("0.0", CultureInfo.InvariantCulture);
+            string first = "~w~" + _routeSpeedOffsetMph.ToString("0.0", CultureInfo.InvariantCulture);
             string second;
-            if (!TryGetCarOverTrack(out float percent))
+            if (!TryGetCarOverTrackPercent(out float percent))
             {
                 second = "~w~--";
             }
