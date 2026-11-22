@@ -38,9 +38,9 @@ The difference shows in the preparation. On a tight corner a rival takes the lon
 
 A map can tell a car where the corner is. It cannot tell it how hard *this* car can stop for it, so ARS has the car keep asking the corner instead.
 
-Every rival starts a race on a guess, with a draw of its own confidence and a slightly different draw for each corner — so two cars of the same model do not brake identically, and one car is not evenly bold all the way round. Then it marks its own work. Spend too little of the braking phase at full pedal and it brakes deeper next lap; spend too much and it brakes earlier. Slide through the corner and it learns the blunt way instead — less next lap, without waiting for the numbers — though a pedal sample from an approach that was already sliding is thrown out, because the slide is the evidence and the pedals are not.
+Every rival starts a race on a guess, with a draw of its own confidence and a slightly different draw for each corner — so two cars of the same model do not brake identically, and one car is not evenly bold all the way round. Then it marks its own work. Arrive at the braking point clearly hotter than the corner asked and it brakes earlier next lap; drop below the mark on the approach with road to spare and it brakes deeper; land in between and the number it already has is the number it keeps.
 
-It commits its verdict just after the apex and watches the exit as well as the entry, so a corner taken cleanly and lost on the way out still counts. The lesson is kept per car and per corner rather than averaged into one number, and it is bounded: a rival can only get so brave or so timid before the clamp stops it.
+It commits exactly one verdict per corner, a beat after the apex, picked from three bands — too hot, early with room to spare, or in between — rather than from a curve to read. The lesson is kept per car and per corner rather than averaged into one number, and it is bounded: a rival can only get so brave or so timid before the clamp stops it.
 
 Nothing is carried into the next race. The rivals arrive on the guess and earn their braking again over the laps, which is why the first meeting of a corner is not the one to judge a rival on, and why a longer race is a harder race — by the second meeting the field is braking closer to what the corner will actually take. On a point-to-point stage there is no second meeting, so the guess is what you get. Turn Brake Learning off and everybody is on the same guess, all race.
 
@@ -72,7 +72,7 @@ Side by side is its own problem: the cars match headings to hold a line together
 
 ## Nitrous
 
-Nitrous is a race rule, on or off. With it on, every rival gets a fresh bottle each lap, and they spend it themselves: on a straight, in a fight, or near the finish. It is not a free pass — a rival will not fire mid-corner or on the way in, off the road, at a big steering angle, or from too low a gear, and that last one is a rear-drive problem: an all-wheel-drive car can put the power down and is not held back.
+Nitrous is a race rule, on or off. With it on, every rival gets a fresh bottle each lap, and they spend it themselves: on a straight, in a fight, or near the finish. It is not a free pass — a rival will not fire while braking, off the road, at a big steering angle, in first gear, or where the road reads tighter than an 800 m radius, and it wants eight seconds of road before the next corner's entrance. Near the finish the bottle is spent regardless: a rival within 80 m on the run home will fire even on the way in.
 
 AI Nitrous Power sets their bottle as a percentage of yours, across the `AiNitroValues` ladder. It is the most surgical dial in the file, because it changes what a rival can do on a straight without touching how it drives a corner.
 

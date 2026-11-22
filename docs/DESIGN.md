@@ -100,7 +100,7 @@ approach never starts and its outside line is never asked for.
 **It is also the clock.** Besides the two preparations — a speed and a line — the record is the shared
 answer to *where the car is in the corner*, and it is read through three windows that do not coincide: the
 crossing scale's exemption runs from the braking target to the apex, the brake learner watches that same
-stretch for a slide but measures its pedal share on the approach and stops at the braking target, the
+stretch, sampling the approach and judging its verdict at the braking target — delivered a beat after the apex — the
 permission to start a maneuver counts the time remaining to the entrance, and the ban on nitro mid-corner
 covers the entrance through to the exit. What they share is the record, not one identical span — which is
 the point, because otherwise each would keep its own idea of where the corner is and they would disagree at
@@ -483,10 +483,14 @@ only thing that decides the stop. So the design cannot answer "how hard do I bra
 it does not pretend to.
 
 **What it does instead.** It seeds a per-car, per-corner braking factor from a guess and lets the car earn
-the rest: it measures how much of the braking phase was spent at full pedal, and once past the apex it
-corrects the factor by how far that share missed the target. The evidence has to be clean — a car that
-slid on the way in was already on a tyre that had let go, so that sample is discarded, and a slide on its
-own is a verdict that cuts the factor without waiting for the numbers. The seed carries a per-car draw,
+the rest with a verdict that is deliberately coarse: three bands at the braking target instead of a curve.
+Crossing the target more than 3 m/s hot is an overshoot and drops the factor by 0.02 — the car assumed more
+of the tyre than was there, so next lap it assumes less and comes in earlier. Dropping below the mark with
+more than six track nodes of road still ahead — on a car that was above the mark earlier in the approach — is an
+undershoot and raises it by 0.02 — it left margin on the
+table. Anything between those leaves the factor where it was, and exactly one band speaks per corner, so the
+two ends can never both fire. The evidence has to be clean: a corner whose braking target was never reached
+earns no verdict at all, only a note that the factor stands. The seed carries a per-car draw,
 because identical guesses would produce identical braking errors. The same shape recurs wherever the
 model is the weak part: TCS reads the wheels rather than believing the plan. It was tried on the steering
 ceiling too — taking the lower of the model law and a measured slip allowance — and that one read slower

@@ -1,12 +1,36 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1876**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1889**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **41 open rows below**; everything already driven or disposed of
-sits in **Answered** at the bottom, out of the way, with **76** closed rows under it. The detail of the 30-10 hunt
+**Section P is closed** (all eighteen verified). **49 open rows below**; everything already driven or disposed of
+sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## R · 2026-11-22 (1886 → 1889) — all five verified in game, see **Answered**
+
+
+## Q · 2026-11-16 (1878 → 1885) — the blend is gone, the aim leads further, every verdict speaks
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| Q1 | **the widest-arc blend is gone** (1878) | drive the wide fast sweepers that used to launch you too hot into the apex | cars hold the speed the line asks for; no corner feels out-cornered by its own radius | ⬜ |
+| Q2 | **brake aim leads 1.25 s** (1880) | the same entry you used to brake at | braking starts visibly earlier (~1.79× the old lead distance); the car reaches corner speed with more room to spare | ⬜ |
+| Q3 | **no verdict is rate-limited away** (1882) | `Brake Learn Notify` on, drive a chicane or any two corners < 1.2 s apart | **both** verdicts reach the UI — before the fix the second one was silently dropped | ⬜ |
+| Q4 | **an aborted corner still closes** (1882) | engage a corner (within 50 m of the apex), then spin/stop before the apex so the queue moves on | `corner #n · apex not reached · factor stays x.xx` appears once — no silence, and no second message if the same corner is re-held and passed | ⬜ |
+| Q5 | **a pending verdict survives learning off** (1882) | brake-learn notify on, cross an apex, and untick Brake Learning within 0.75 s | the verdict still fires (saying `learning off · factor stays`), instead of vanishing with the toggle | ⬜ |
+| Q6 | **overshoot deducts** (1884) | a corner where a rival crosses the brakepoint clearly hot (> 3 m/s over target) | one message `overshot by X m/s`, factor **−0.02** exactly (0.75 → 0.73), clamped at 0.25 | ⬜ |
+| Q7 | **undershoot adds** (1884) | a rival that was above target+3 on the approach, then drops below it while still 7+ nodes (≈7 m) before the brakepoint | one message `undershoot, below target+3 with N nodes spare`, factor **+0.02** exactly, clamped at 1.25 | ⬜ |
+| Q8 | **the band holds and still speaks** (1884) | a corner whose crossing is within ±3 m/s of target, or one approached from below without ever being above the bar | message `in the band · 0.75 = holds` — no change, never silent; and never two verdicts for one corner | ⬜ |
+
+Note (1882): the learner runs only for **AI racers** — `UpdateBrakeLearning` sits inside `if (!ControlledByPlayer)`,
+so the player's own car never announces. Pre-existing and by design (the row text says *rivals*), just now checked in code.
+Known limit (1884): the undershoot latch reads speed and distance only — traffic that slows a car below the bar
+more than 6 nodes out, without a spin or contact, can still latch and read as margin. A collision gate is the
+one-line fix; only worth it if it shows up in a drive.
 
 ---
 
@@ -274,6 +298,13 @@ Kept for provenance: these are the in-game verdicts and the dispositions. Nothin
 **J · the corner pipeline**
 - **J1** the prep cap hangs off where the prep started (47e9efd) — verified 09-11 · 1755
 - **J2** release at the apex, four seconds to position (1e8e57c) — 09-11 · 1755, same pass as J1
+
+**R · nitrous straights (22-11 · 1889)** — «all works»
+- **R1** nitrous needs a near-straight (1886) — verified 22-11 · 1889
+- **R2** 2nd gear is enough now (1886) — verified 22-11 · 1889
+- **R3** the faster-rival gate is a 60 m window (1888) — verified 22-11 · 1889
+- **R4** the 8 s gate is honest now (1889) — verified 22-11 · 1889: «the 8 s gate seems to work well»
+- **R5** slide under 1° (1889) — verified 22-11 · 1889
 
 **K · the corner is spent when the car coasts — for speed only**
 - **K1** coasting inside the corner releases it early (`CornerSpent`) — verified 09-11 · 1769/1770: «the 0.05gs thing works well»

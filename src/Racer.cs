@@ -280,7 +280,7 @@ namespace ARS
         const float OffshootMinSpeedMph = 20f;
         public const float FullThrottleSpeedErrorMps = 1f;
         public const float FullBrakeSpeedErrorMps = 4.5f;
-        // Learner tolerance = half the brake: the error at which the pedal asks for 0.5.
+        // Bar for the airborne over-sample: the error at which the pedal asks for 0.5 (half the brake).
         const float BrakeLearnerBarMps = FullBrakeSpeedErrorMps * BrakeEntryBandShare;
 
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
@@ -382,6 +382,11 @@ namespace ARS
         float _brakeCommitApexOffset = 0f;
         bool _brakeCommitCollided = false;
         bool _brakeCommitAimCrossed = false;
+        int _brakeSampleUndershootNodes = -1;
+        int _brakeCommitUndershootNodes = -1;
+        bool _brakeSampleSeenAboveBar = false;
+        int _brakeVerdictDoneNode = -1;
+        int _brakeVerdictDoneLap = -1;
         const float BrakeSkidBrakeShare = 0.25f;
         const bool BrakeSkidPenaltyEnabled = false;
         const float BrakeSkidFactorStep = 0.1f;
@@ -389,7 +394,11 @@ namespace ARS
         const float BrakeCommitDelaySeconds = 0.75f;
         const float BrakeMinFactor = 0.25f;
         const float BrakeEntryBandShare = 0.5f;
-        const float BrakeEntryFallPerMps = 0.02f;
+        // The three verdict zones (spec 2026-11-16): over the tolerance at the brakepoint is an
+        // overshoot, below target+tolerance with room to spare is an undershoot, in between holds.
+        const float BrakeVerdictToleranceMps = 3f;
+        const int BrakeVerdictEarlyNodes = 6;
+        const float BrakeVerdictStep = 0.02f;
         const float BrakeApexMissPenaltyPerMetre = 0.01f;
         const float BrakeOverAllowanceShare = 1.5f;
         const int BrakeOverSampleMs = 100;
@@ -446,6 +455,7 @@ namespace ARS
         const float PlayerNitrousPowerMultiplier = 1f;
         const float NitrousMaxSteerDegrees = 5f;
         const float NitrousMinThrottle = 0.9f;
+        const float NitrousMinRouteRadiusMeters = 800f;
         const int NitrousArmDelayMs = 6000;
         const int NitrousDurationMs = 3000;
         const float NitrousCornerLookaheadSeconds = 8f;
@@ -453,6 +463,8 @@ namespace ARS
         const float NitrousLonelyMinApexDistance = 500f;
         const float NitrousDefenseReachSeconds = 4f;
         const float NitrousNearbyRivalDistance = 80f;
+        const float NitrousFasterReachMeters = 30f;
+        const float NitrousMaxSlideDegrees = 1f;
         const float NitrousFinishExtraDistance = 100f;
         const string NitrousPtfxAsset = "veh_xs_vehicle_mods";
         const ulong CheatPowerIncreaseHash = 0xB59E4BD37AE292DB;
@@ -711,6 +723,13 @@ namespace ARS
             _cornersRevisionSeeded = -1;
             _skippedApexes.Clear();
             _brakeCommitApexNode = -1;
+            _brakeVerdictDoneNode = -1;
+            _brakeVerdictDoneLap = -1;
+            // Force a fresh sample on race 2 same track: without this the sample survives across
+            // Initialize (NextApexNode already equals it, so no reset fires) and drags race 1's
+            // seen-above-bar flag into the new grid start — reopening the standing-start false-latch.
+            _brakeSampleApexNode = -1;
+            _brakeLastApexAnnounced = -1;
             _laneHeldCorner = null;
             _laneTurnSign = 0;
             _laneAskCornerNode = -1;
@@ -2017,12 +2036,8 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         void UpdateBrakeLearning()
         {
-            if (!ARS.BrakeLearning)
-            {
-                _brakeCommitApexNode = -1;
-                return;
-            }
-
+            // A pending verdict outranks the switch: it was scheduled while learning ran, so toggling
+            // learning off mid-corner still lands it (reaching the "learning off" branch) instead of dropping it.
             if (_brakeCommitApexNode >= 0)
             {
                 float exitSlide = Math.Abs(VehicleData.SlideAngle);
@@ -2030,7 +2045,12 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (Game.GameTime >= _brakeCommitAtGameTime) CommitBrakeLearning();
             }
 
-            if (NextApexNode != _brakeSampleApexNode)
+            if (!ARS.BrakeLearning) return;
+
+            // A blanked queue (low-speed/table invalidation clears it to -1 until RefillApexQueue, ≤500 ms)
+            // is transient: keep sampling the corner already engaged instead of resetting into -1 — a reset
+            // there would fire a false close-out and lose the verdict if the same corner is re-held and passed.
+            if (NextApexNode >= 0 && NextApexNode != _brakeSampleApexNode)
             {
 
                 if (_brakeSampleApexNode >= 0 && _brakeSampleApexNode != _brakeLastApexAnnounced
@@ -2039,6 +2059,23 @@ const float RequirementLookaheadSeconds = 3.95f;
                     _brakeLastApexAnnounced = _brakeSampleApexNode;
                     ARS.Log(ARS.LogImportance.Info, "brake sample " + Name + ": apex " + _brakeSampleApexNode
                         + " taken " + _brakeSampleApexGap.ToString("0.0") + " m from the edge");
+                    // Passed, engaged, yet nothing scheduled: both schedule paths were gated off (learning
+                    // toggled mid-corner) — schedule now so the corner still gets its full verdict.
+                    if (_brakeCommitApexNode != _brakeSampleApexNode) ScheduleBrakeCommit();
+                }
+                // Sample replaced by a different real corner with no verdict on the way (aborted or dropped
+                // from the queue with the apex never passed): still owed a close-out, or the corner vanishes
+                // silently. Engaged-only — closest < 50 m — so grid wait and never-approached queue churn
+                // stay quiet; a pending commit owns its corner.
+                else if (_brakeSampleApexNode >= 0 && _brakeSampleApexNode != _brakeLastApexAnnounced
+                    && _brakeSampleApexClosest < float.MaxValue && !HasPassedApex(_brakeSampleApexNode)
+                    && _brakeCommitApexNode != _brakeSampleApexNode)
+                {
+                    _brakeLastApexAnnounced = _brakeSampleApexNode;
+                    _brakeVerdictDoneNode = _brakeSampleApexNode;
+                    _brakeVerdictDoneLap = Lap;
+                    AnnounceBrakeAdjustment(CornerId(_brakeSampleApexNode) + " · apex not reached · factor stays "
+                        + BrakeFactorForApex(_brakeSampleApexNode).ToString("0.00"));
                 }
                 _brakeSampleApexNode = NextApexNode;
                 _brakeSampleMaxSlideDeg = 0f;
@@ -2046,6 +2083,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _brakeSampleApexSpeed = Math.Max(2f, NextApexSpeed);
                 _brakeSampleAimCrossed = false;
                 _brakeSampleAimError = 0f;
+                _brakeSampleUndershootNodes = -1;
+                _brakeSampleSeenAboveBar = false;
                 _brakeSampleApexClosest = float.MaxValue;
                 _brakeSampleCollided = false;
                 _brakeOverNextSampleAt = 0;
@@ -2088,6 +2127,22 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     float toAim = MetresToNode(aimNode);
 
+                    // Undershoot latch: the FIRST DOWNWARD crossing of target+tolerance while still
+                    // more than BrakeVerdictEarlyNodes out — a car that was never above the bar (grid
+                    // start, traffic, a slow corner behind a slow corner) has no braking to judge and
+                    // must not latch. toAim > 0 gates it before the brakepoint: on the crossing tick
+                    // ForwardNodeDistance wraps on a circuit (reads ~count > 6) and would false-fire it.
+                    float bar = _brakeSampleApexSpeed + BrakeVerdictToleranceMps;
+                    float speedNow = ARS.GetForwardSpeed(Car);
+                    if (speedNow >= bar) _brakeSampleSeenAboveBar = true;
+
+                    if (_brakeSampleSeenAboveBar && _brakeSampleUndershootNodes < 0 && toAim > 0f
+                        && speedNow < bar)
+                    {
+                        int nodesOut = ForwardNodeDistance(aimNode);
+                        if (nodesOut > BrakeVerdictEarlyNodes) _brakeSampleUndershootNodes = nodesOut;
+                    }
+
                     if (toAim <= 0f && !_brakeSampleAimCrossed)
                     {
                         _brakeSampleAimCrossed = true;
@@ -2109,6 +2164,16 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         void ScheduleBrakeCommit()
         {
+            // No new verdicts while learning is off: UpdateApexLeapfrog calls this outside the learning gate,
+            // so the gate lives here — otherwise the frozen sample would re-announce on every apex pass.
+            if (!ARS.BrakeLearning) return;
+
+            // One verdict per corner pass: once a node has fired its commit or closed out, the
+            // blank/refill window can present it again with the slot empty — never re-schedule it.
+            // Keyed by lap so a one-corner loop (sample never changes, done never clears) still
+            // learns on lap 2: only the SAME node in the SAME lap is blocked.
+            if (_brakeSampleApexNode >= 0 && _brakeVerdictDoneNode == _brakeSampleApexNode
+                && _brakeVerdictDoneLap == Lap) return;
 
             if (_brakeCommitApexNode >= 0 && _brakeCommitApexNode == _brakeSampleApexNode) return;
 
@@ -2122,6 +2187,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             _brakeCommitCollided = _brakeSampleCollided;
             _brakeCommitAimCrossed = _brakeSampleAimCrossed;
             _brakeCommitAimError = _brakeSampleAimError;
+            _brakeCommitUndershootNodes = _brakeSampleUndershootNodes;
+        }
+
+        // One label writer: "corner #n" resolved against the corner table, raw node as fallback.
+        string CornerId(int apexNode)
+        {
+            for (int i = 0; i < ARS.Corners.Count; i++)
+                if (ARS.Corners[i].Node == apexNode) return "corner #" + (i + 1);
+            return "corner " + apexNode;
         }
 
         void CommitBrakeLearning()
@@ -2130,11 +2204,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             int apexNode = _brakeCommitApexNode;
             float maxSlideDeg = _brakeCommitMaxSlideDeg;
             _brakeCommitApexNode = -1;
+            _brakeVerdictDoneNode = apexNode;
+            _brakeVerdictDoneLap = Lap;
             float before = BrakeFactorForApex(apexNode);
 
             if (!ARS.BrakeLearning)
             {
-                AnnounceBrakeAdjustment("corner " + apexNode + " · learning off · factor stays " + before.ToString("0.00"));
+                AnnounceBrakeAdjustment(CornerId(apexNode) + " · learning off · factor stays " + before.ToString("0.00"));
                 return;
             }
             bool skid = BrakeSkidPenaltyEnabled
@@ -2144,31 +2220,44 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 float skidFactor = ARS.Clamp(before - BrakeSkidFactorStep, BrakeMinFactor, BrakeMaxFactor);
                 if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = skidFactor;
-                AnnounceBrakeAdjustment("corner " + apexNode + " · skid, assuming instability · "
+                AnnounceBrakeAdjustment(CornerId(apexNode) + " · skid, assuming instability · "
                     + before.ToString("0.00") + " → " + skidFactor.ToString("0.00"));
                 return;
             }
             if (!_brakeCommitAimCrossed)
             {
-                AnnounceBrakeAdjustment("corner " + apexNode + " · never reached the aim · factor stays "
+                AnnounceBrakeAdjustment(CornerId(apexNode) + " · never reached the aim · factor stays "
                     + before.ToString("0.00"));
                 return;
             }
-            int cornerIndex = -1;
-            for (int i = 0; i < ARS.Corners.Count; i++)
-                if (ARS.Corners[i].Node == apexNode) { cornerIndex = i; break; }
-            string id = "corner " + (cornerIndex >= 0 ? "#" + (cornerIndex + 1) : "?");
+            string id = CornerId(apexNode);
 
-            float speedError = Math.Max(_brakeCommitAimError, 0f);
-            string where = "speed " + speedError.ToString("0.00") + " m/s over";
-
-            float band = FullBrakeSpeedErrorMps * BrakeEntryBandShare;
-            float step = speedError <= band
-                ? (1f - speedError / band) * BrakeEntryFallPerMps
-                : -(speedError - band) * BrakeEntryFallPerMps;
+            // Three zones, one else-if chain = a corner fires exactly one verdict. Overshoot
+            // wins any tie: the undershoot latch can only be set BEFORE the crossing, and a
+            // crossing more than tolerance over is judged on the crossing alone.
+            float step;
+            string where;
+            if (_brakeCommitAimError > BrakeVerdictToleranceMps)
+            {
+                step = -BrakeVerdictStep;
+                where = "overshot by " + _brakeCommitAimError.ToString("0.0") + " m/s";
+            }
+            else if (_brakeCommitUndershootNodes > BrakeVerdictEarlyNodes)
+            {
+                step = BrakeVerdictStep;
+                where = "undershoot, below target+" + BrakeVerdictToleranceMps.ToString("0")
+                    + " with " + _brakeCommitUndershootNodes + " nodes spare";
+            }
+            else
+            {
+                step = 0f;
+                where = "in the band";
+            }
 
             float missMetres = 0f;
             bool punishedForMiss = false;
+            // Dead (BrakeMissPenaltyEnabled = false): a continuous per-metre term no longer mixes
+            // with the flat zones — if it is ever revived it must quantise to a zone, not add drift.
             if (BrakeMissPenaltyEnabled && !_brakeCommitCollided && _brakeCommitApexClosest < float.MaxValue)
             {
                 CornerPoint missedCorner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
@@ -2188,22 +2277,21 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
             float factor = ARS.Clamp(before + step, BrakeMinFactor, BrakeMaxFactor);
             if (BrakeLearningApplies) CornerContextForWrite(apexNode).BrakeFactor = factor;
-            bool stuck = Math.Abs(factor - before) < 0.001f;
+            // Zone-aware tail: a held band says "holds" (it is not a limit), a moved factor shows
+            // the step, and a flat step that could not move IS at a clamp — that one is a limit.
+            bool held = Math.Abs(factor - before) < 0.001f;
             AnnounceBrakeAdjustment(id + " · " + where
                 + (punishedForMiss ? " · missed by " + missMetres.ToString("0.0") + " m" : string.Empty)
                 + " · " + before.ToString("0.00")
-                + (stuck ? " = at the limit" : " → " + factor.ToString("0.00")));
+                + (step == 0f ? " = holds"
+                    : held ? " = at the limit"
+                    : " → " + factor.ToString("0.00")));
         }
-
-        const int BrakeNotifySpacingMs = 1200;
-        int _brakeNotifyAt;
 
         void AnnounceBrakeAdjustment(string detail)
         {
             ARS.Log(ARS.LogImportance.Info, "brake learn " + Name + " (" + Car.DisplayName + "): " + detail);
             if (!ARS.BrakeLearningNotify) return;
-            if (Game.GameTime < _brakeNotifyAt) return;
-            _brakeNotifyAt = Game.GameTime + BrakeNotifySpacingMs;
             UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + detail);
         }
 
@@ -2888,8 +2976,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (Control.Brake > 0f) return false;
             if (OutOfTrackDistance() > 0f) return false;
             if (Math.Abs(Control.SteerDegrees) >= NitrousMaxSteerDegrees) return false;
+            if (Math.Abs(VehicleData.SlideAngle) >= NitrousMaxSlideDegrees) return false;
             if (Control.Throttle < NitrousMinThrottle) return false;
-            if (!IsAwd() && Function.Call<int>((Hash)MaxDriveGearHash, Car) > 3 && Function.Call<int>((Hash)CurrentDriveGearHash, Car) <= 2) return false;
+            if (Function.Call<int>((Hash)CurrentDriveGearHash, Car) <= 1) return false;
             if (NextApexNode < 0) return false;
 
             float speed = Car.Velocity.Length();
@@ -2901,14 +2990,25 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 CornerPoint corner = _nextApexCorner;
 
-                if (corner != null && IsWithinCorner(corner)) return false;
+                if (LiveRouteRadius <= NitrousMinRouteRadiusMeters) return false;
                 int entranceNode = corner == null
                     ? NextApexNode
                     : (corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(NextApexNode, -corner.LengthStart));
-                if (ForwardNodeDistance(entranceNode) / Math.Max(speed, 1f) < NitrousCornerLookaheadSeconds) return false;
+                // Signed distance: an entrance already behind the car reads negative and blocks, instead of
+                // wrapping to the far side of the circuit and passing as "a full lap away".
+                if (MetresToNode(entranceNode) / Math.Max(speed, 1f) < NitrousCornerLookaheadSeconds) return false;
             }
 
-            bool rivalNearbyFaster = closestRival != null && closestRival.Speed > speed;
+            // "Faster than me" only counts inside 30 m of TRACK around the car — route gap, so it
+            // reaches 30 m behind through 30 m ahead (60 m total). A space distance would include a
+            // car on the other leg of a hairpin; the route gap is the racing gap. Scan the field, not
+            // just the nearest car: a nearer slower rival must not mask a faster one in the window.
+            bool rivalNearbyFaster = false;
+            foreach (Rival r in Brain.Rivals)
+            {
+                if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
+                if (Math.Abs(r.RouteGapAhead) <= NitrousFasterReachMeters && r.Speed > speed) { rivalNearbyFaster = true; break; }
+            }
             bool rivalBehindIncoming = false;
             foreach (Rival r in Brain.Rivals)
             {

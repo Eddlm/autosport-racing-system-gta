@@ -959,7 +959,7 @@ public const float LaneInsetPerRadius = 125f;
             rivalPaceMenu.Add(routeOffsetItem);
             HookListTextPicker(routeOffsetItem);
 
-            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Each corner learns how hard rivals dare to brake: brake late and it brakes harder next lap, slide through and it loses 0.1.", BrakeLearning);
+            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Each corner learns how hard rivals dare to brake: cross the brakepoint more than 3 m/s hot and the factor gives back 0.02, drop below target+3 with more than 6 nodes spare and it takes 0.02, anything in between holds. Every verdict is announced when Brake Learn Notify is on.", BrakeLearning);
             brakeLearningItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearning = brakeLearningItem.Checked;
