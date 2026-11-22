@@ -2976,7 +2976,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (Control.Brake > 0f) return false;
             if (OutOfTrackDistance() > 0f) return false;
             if (Math.Abs(Control.SteerDegrees) >= NitrousMaxSteerDegrees) return false;
-            if (Math.Abs(VehicleData.SlideAngle) >= NitrousMaxSlideDegrees) return false;
+            // Fail closed: a degenerate forward vector makes the angle NaN, and NaN must not read as a straight car.
+            float nitrousSlide = VehicleData.SlideAngle;
+            if (float.IsNaN(nitrousSlide) || Math.Abs(nitrousSlide) >= NitrousMaxSlideDegrees) return false;
             if (Control.Throttle < NitrousMinThrottle) return false;
             if (Function.Call<int>((Hash)CurrentDriveGearHash, Car) <= 1) return false;
             if (NextApexNode < 0) return false;
@@ -2990,7 +2992,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 CornerPoint corner = _nextApexCorner;
 
-                if (LiveRouteRadius <= NitrousMinRouteRadiusMeters) return false;
+                // Both ways: RouteRadiusWindow looks forward only, so a car unwinding out of a corner reads
+                // the exit straight as open road. The trailing second is what proves the corner is behind.
+                if (NitrousRouteRadius() <= NitrousMinRouteRadiusMeters) return false;
                 int entranceNode = corner == null
                     ? NextApexNode
                     : (corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(NextApexNode, -corner.LengthStart));
@@ -3001,12 +3005,14 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             // "Faster than me" only counts inside 30 m of TRACK around the car — route gap, so it
             // reaches 30 m behind through 30 m ahead (60 m total). A space distance would include a
-            // car on the other leg of a hairpin; the route gap is the racing gap. Scan the field, not
-            // just the nearest car: a nearer slower rival must not mask a faster one in the window.
+            // car on the other leg of a hairpin; the route gap is the racing gap. The gap is recomputed below
+            // because the slots refresh every 250 ms and 20 m is most of a 30 m window at speed. The scan
+            // covers the three tracked rivals (nearest in space within 200 m), not the whole field.
             bool rivalNearbyFaster = false;
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || !r.RivalRacer.Car.Exists()) continue;
+                r.UpdateRouteGap(this);
                 if (Math.Abs(r.RouteGapAhead) <= NitrousFasterReachMeters && r.Speed > speed) { rivalNearbyFaster = true; break; }
             }
             bool rivalBehindIncoming = false;
@@ -3162,9 +3168,16 @@ const float RequirementLookaheadSeconds = 3.95f;
         float RemainingRaceDistanceMeters()
         {
             int nodeCount = ARS.TrackPoints.Count;
-            if (ARS.IsPointToPoint) return nodeCount - CurrentTrackPoint.Node;
-            float totalLaps = ARS.RaceMenuStore.GetInt("Laps", 6);
-            return Math.Max(0f, (totalLaps + 1f - Lap) * nodeCount - CurrentTrackPoint.Node);
+            if (nodeCount < 2) return 0f;
+            float nodes = ARS.IsPointToPoint
+                ? nodeCount - CurrentTrackPoint.Node
+                : (ARS.RaceMenuStore.GetInt("Laps", 6) + 1f - Lap) * nodeCount - CurrentTrackPoint.Node;
+            // Node counts are not metres: the route densifies at roughly one node per metre, but the finish
+            // test compares against speed times seconds, so scale by the route's own mean spacing first.
+            float routeLength = ARS.RouteLengthMeters;
+            if (routeLength <= 0f) routeLength = ARS.TrackPoints[nodeCount - 1].CumulativeDistance;
+            float metresPerNode = routeLength > 0f ? routeLength / (nodeCount - 1) : 1f;
+            return Math.Max(0f, nodes) * metresPerNode;
         }
 
         public TimeSpan? BestLap()
@@ -4056,6 +4069,25 @@ const float RequirementLookaheadSeconds = 3.95f;
             nearNode = WrappedNode(carNode + start);
             midNode = tightestNode;
             farNode = WrappedNode(carNode + end);
+            return r;
+        }
+
+        // The card's own sample: RouteRadiusWindow looks forward only, so a car unwinding out of a corner
+        // reads the exit straight as open road. A second each way keeps the corner inside the window until
+        // the car is properly clear of it, and the 8-node floor means a crawling car still samples.
+        float NitrousRouteRadius()
+        {
+            int count = ARS.TrackPoints.Count;
+            if (count < 10) return 999f;
+            float speed = Car.Velocity.Length();
+            int span = Math.Min(Math.Max((int)(speed * RouteRadiusSpanSeconds), 8), count - 1);
+            int carNode = CurrentTrackPoint.Node;
+            float r = 999f;
+            for (int offset = -span; offset <= span; offset++)
+            {
+                float radius = ARS.TrackPoints[WrappedNode(carNode + offset)].SweepCurveRadius;
+                if (radius < r) r = radius;
+            }
             return r;
         }
 

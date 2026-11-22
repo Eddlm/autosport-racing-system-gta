@@ -1,10 +1,10 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1889**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1890**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **49 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **51 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
@@ -12,6 +12,13 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ## R · 2026-11-22 (1886 → 1889) — all five verified in game, see **Answered**
 
+
+## S · 2026-11-22 (1890) — the boost waits until the corner is behind
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| S1 | **a corner exit is not open road** (1890) | a rival unwinding out of a corner onto a long straight, next entrance far away | no burn until about a second after the corner is behind it, then the burn can fire as before | ⬜ |
+| S2 | **the straights still burn** (1890) | a race with several long straights, a fight and a finish | burns still land on the straights, in fights and near the finish: the fix narrows the window, it does not silence the bottle | ⬜ |
 
 ## Q · 2026-11-16 (1878 → 1885) — the blend is gone, the aim leads further, every verdict speaks
 

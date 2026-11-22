@@ -193,7 +193,7 @@ namespace ARS
             UpdateRouteGap(me);
         }
 
-        void UpdateRouteGap(Racer me)
+        public void UpdateRouteGap(Racer me)
         {
             float gap = RivalRacer.CurrentTrackPoint.CumulativeDistance - me.CurrentTrackPoint.CumulativeDistance;
             if (!ARS.IsPointToPoint && ARS.RouteLengthMeters > 0f && Math.Abs(gap) > ARS.RouteLengthMeters * 0.5f)

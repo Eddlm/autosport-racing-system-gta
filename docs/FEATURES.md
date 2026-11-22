@@ -72,7 +72,7 @@ Side by side is its own problem: the cars match headings to hold a line together
 
 ## Nitrous
 
-Nitrous is a race rule, on or off. With it on, every rival gets a fresh bottle each lap, and they spend it themselves: on a straight, in a fight, or near the finish. It is not a free pass — a rival will not fire while braking, off the road, at a big steering angle, in first gear, or where the road reads tighter than an 800 m radius, and it wants eight seconds of road before the next corner's entrance. Near the finish the bottle is spent regardless: a rival within 80 m on the run home will fire even on the way in.
+Nitrous is a race rule, on or off. With it on, every rival gets a fresh bottle each lap, and they spend it themselves: on a straight, in a fight, or near the finish. It is not a free pass — a rival will not fire while braking, off the road, at a big steering angle, sliding more than a degree, in first gear, or where any road within a second either side of it reads tighter than an 800 m radius: that last test is what keeps the burn out of a corner exit, where the road ahead already looks straight. It wants eight seconds of road before the next corner's entrance, measured along the route, so an entrance already behind the car blocks the burn instead of reading as a lap away. Near the finish the bottle is spent regardless: a rival within 80 m on the run home will fire even on the way in.
 
 AI Nitrous Power sets their bottle as a percentage of yours, across the `AiNitroValues` ladder. It is the most surgical dial in the file, because it changes what a rival can do on a straight without touching how it drives a corner.
 
