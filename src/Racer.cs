@@ -2460,12 +2460,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             return after - before;
         }
 
-        // His spec: the corner owns the bend from three seconds out until its post-apex hold releases. A corner
-        // without a real number of its own cannot own anything, so the suppression only applies beside one.
-        bool RouteSpeedSuppressed(float cornerSpd)
+        // His spec: the corner owns the bend from three seconds out until its post-apex hold releases.
+        bool InCornerWindow()
         {
             if (_cornerHoldNode >= 0 && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs) return true;
-            if (cornerSpd >= 998f || NextApexNode < 0) return false;
+            if (NextApexNode < 0) return false;
             float speed = Car.Velocity.Length();
             if (speed < 1f) return false;
             int entranceNode = CornerEntranceNode(_nextApexCorner, NextApexNode);
@@ -2626,10 +2625,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             float followTrackSpd = TrackSpeed.RouteCurvature
                 ? RouteIdealSpeedForRadius(Brain.CurrentPerception.CurveRadiusToFollowPoint) * (float)Math.Sqrt(RouteSurfaceGrip())
                 : 999f;
-            // His spec: inside a corner the route radius answers the same bend the corner term already answers, and
-            // it can win the min() and slow a car the corner has cleared for. Only while the corner term holds a
-            // real number - suppressing the route term beside a no-limit corner would leave nothing at all.
-            if (RouteSpeedSuppressed(cornerSpd)) followTrackSpd = 999f;
+            // His spec: inside a corner the route radius answers the same bend the corner term already answers, so
+            // the route term stands down. The corner is given its own apex speed first, below, so the car is never
+            // left with no limit at all.
+            if (InCornerWindow()) followTrackSpd = 999f;
 
             if (float.IsNaN(cornerSpd) || float.IsInfinity(cornerSpd)) cornerSpd = 999f;
             if (float.IsNaN(followTrackSpd) || float.IsInfinity(followTrackSpd)) followTrackSpd = 999f;
@@ -2637,6 +2636,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
                 cornerArrival = cornerSpd;
+            }
+
+            // The corner owns the bend inside the window, so it needs a number of its own even where the plan never
+            // asked for brakes: the route term has just stood down and this is what holds the car.
+            if (cornerSpd >= 998f && Brain.Corner != null && InCornerWindow())
+            {
+                cornerSpd = ARS.CornerApexSpeed(Brain.Corner.Point, this);
+                cornerArrival = cornerSpd;
+                cornerSourceNode = Brain.Corner.Point.Node;
             }
 
             // His spec: passing the apex starts a one second hold on the CORNER itself, not merely on the speed it
