@@ -2680,8 +2680,11 @@ const float RequirementLookaheadSeconds = 3.95f;
                 CornerPoint owned = CornerInOwnership();
                 if (owned != null)
                 {
-                    cornerSpd = ARS.CornerApexSpeed(owned, this);
-                    cornerArrival = cornerSpd;
+                    // The ramp, not the apex speed on its own: a flat number here would be a step change and the
+                    // approach would stop ramping down. This is the same profile the plan builds for a braking
+                    // corner, aimed at this corner's own apex speed.
+                    cornerArrival = ARS.CornerApexSpeed(owned, this);
+                    cornerSpd = Math.Max(2f, ApexBrakingSpeed(owned.Node, cornerArrival));
                     cornerSourceNode = owned.Node;
                 }
             }
