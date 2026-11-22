@@ -3603,27 +3603,27 @@ const float RequirementLookaheadSeconds = 3.95f;
             UI.ShowSubtitle(_projectionArmed ? "~r~" + percent : "~b~" + percent, 50);
         }
 
-        // Constant subtitle, for tuning: the radius the car's own path describes, against the radius its grip
-        // allows at this speed. Over 100% the path is wider than the limit (margin left), under 100% the car is
-        // asking for more than the tyres have. Flattened to 2D: z is height, and height does not steer.
+        // Constant subtitle, for tuning: the radius the car's own path describes against the radius the track
+        // asks for at the car's node. Over 100% the car is going wider than the track wants - it is losing the
+        // line; under 100% it is holding or tightening. Flattened to 2D: z is height, and height does not steer.
         public void DrawCurveRadiusSubtitle()
         {
             float speed = ARS.GetForwardSpeed(Car);
-            float grip = Math.Max(VehicleData.CurrentMechanicalGrip * Handling.Gravity, 0.1f);
             string text;
-            if (speed < 3f)
+            if (speed < 3f || CurrentTrackPoint == null || ARS.TrackPoints.Count == 0
+                || CurrentTrackPoint.Node < 0 || CurrentTrackPoint.Node >= ARS.TrackPoints.Count)
             {
-                text = "~w~curve - / car -";
+                text = "~w~car - / track -";
             }
             else
             {
-                float carRadius = (speed * speed) / grip;
-                float curveRadius = ARS.Clamp(ARS.Circumradius3D(Car.Position, ProjectAhead(1f), ProjectAhead(0.5f)), 5f, 999f);
-                float percent = 100f * curveRadius / Math.Max(carRadius, 0.01f);
-                string colour = percent >= 100f ? "~g~" : percent >= 85f ? "~y~" : "~r~";
-                text = colour + "curve " + Math.Round(curveRadius).ToString(CultureInfo.InvariantCulture)
-                     + " m / car " + Math.Round(carRadius).ToString(CultureInfo.InvariantCulture)
-                     + " m = " + Math.Round(percent).ToString(CultureInfo.InvariantCulture) + "%";
+                float carRadius = ARS.Clamp(ARS.Circumradius3D(Car.Position, ProjectAhead(1f), ProjectAhead(0.5f)), 5f, 999f);
+                float trackRadius = ARS.Clamp(ARS.TrackPoints[CurrentTrackPoint.Node].SweepCurveRadius, 5f, 999f);
+                float percent = 100f * carRadius / Math.Max(trackRadius, 0.01f);
+                string colour = percent > 105f ? "~r~" : percent > 95f ? "~y~" : "~g~";
+                text = colour + "car " + Math.Round(carRadius).ToString(CultureInfo.InvariantCulture)
+                     + " / track " + Math.Round(trackRadius).ToString(CultureInfo.InvariantCulture)
+                     + " = " + Math.Round(percent).ToString(CultureInfo.InvariantCulture) + "%";
             }
             UI.ShowSubtitle(text, 50);
         }
