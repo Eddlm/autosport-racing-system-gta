@@ -2469,6 +2469,26 @@ const float RequirementLookaheadSeconds = 3.95f;
         // terms meet, so the route term cannot take a bend the corner is still holding.
         bool CornerIsHeld => _cornerHoldNode >= 0 && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs;
 
+        // The corner being approached or just passed, if its entrance is inside the suppression window. The plan only
+        // builds a term where braking is required, and a corner that does not ask for brakes still owns its bend.
+        CornerPoint CornerInOwnership()
+        {
+            CornerPoint best = null;
+            float bestMetres = float.MaxValue;
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                float metres = MetresToNode(corner.Node);
+                if (metres < -ApexReachedMetres * 2f) continue;
+                if (best != null && metres >= bestMetres) continue;
+                best = corner;
+                bestMetres = metres;
+            }
+            if (best == null) return null;
+            float speed = Math.Max(Car.Velocity.Length(), 1f);
+            int entranceNode = CornerEntranceNode(best, best.Node);
+            return MetresToNode(entranceNode) / speed <= RouteSuppressCornerSeconds ? best : null;
+        }
+
         // His spec: the corner owns the bend from three seconds out until its post-apex hold releases. A corner
         // without a real number of its own cannot own anything, so the suppression only applies beside one.
         bool RouteSpeedSuppressed(float cornerSpd)
@@ -2649,6 +2669,20 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     float third = Math.Max(2, ApexBrakingSpeed(NextApexNode3, NextApexSpeed3));
                     if (third < cornerSpd) { cornerSpd = third; cornerSourceNode = NextApexNode3; cornerArrival = NextApexSpeed3; }
+                }
+            }
+
+            // The corner owns the bend even where the plan never asked for brakes: inside its window its own apex
+            // speed is the term, so the route term is never the only candidate on the way in. Placed before the route
+            // suppression on purpose - that test asks whether the corner term carries a number.
+            if (cornerSpd >= 998f)
+            {
+                CornerPoint owned = CornerInOwnership();
+                if (owned != null)
+                {
+                    cornerSpd = ARS.CornerApexSpeed(owned, this);
+                    cornerArrival = cornerSpd;
+                    cornerSourceNode = owned.Node;
                 }
             }
 
