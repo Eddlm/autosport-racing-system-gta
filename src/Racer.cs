@@ -442,7 +442,6 @@ namespace ARS
         int _cornerHoldNode = -1;
         int _cornerHoldAt;
         float _cornerHoldSpeed = 999f;
-        int _planApexHead = -1;
         int _cornerDropLoggedNode = -1;
         int _cornerArmedNode = -1;
         bool _cornerHoldReleased;
@@ -2673,18 +2672,14 @@ const float RequirementLookaheadSeconds = 3.95f;
             // had. The plan queue moves to the next corner almost at once, so a hold keyed on the queue head would
             // release on the very tick it was set: this keeps the corner by node and re-imposes its own speed.
             int apexHead = NextApexNode;
-            if (_planApexHead != apexHead)
+            // The queue is not a handover signal: it flickers between a corner and -1 hundreds of metres before the
+            // apex. The apex is one, so the hold is armed from the corner list by proximity, whatever the queue says.
+            foreach (CornerPoint apexCorner in ARS.Corners)
             {
-                if (_planApexHead >= 0)
-                {
-                    ARS.Log(ARS.LogImportance.Info, "plan " + Name + ": head " + _planApexHead + " -> " + apexHead
-                        + ", old apex at " + MetresToNode(_planApexHead).ToString("0.0", CultureInfo.InvariantCulture)
-                        + " m, reached " + ReachedApex(_planApexHead), true);
-                    if (ReachedApex(_planApexHead)) ArmCornerHold(_planApexHead);
-                }
-                _planApexHead = apexHead;
+                if (!ReachedApex(apexCorner.Node)) continue;
+                ArmCornerHold(apexCorner.Node);
+                break;
             }
-            if (apexHead >= 0 && ReachedApex(apexHead)) ArmCornerHold(apexHead);
 
             if (apexHead >= 0 && HasPassedApex(apexHead))
             {
@@ -4639,6 +4634,16 @@ const float RequirementLookaheadSeconds = 3.95f;
             int first = 0;
             while (first < upcoming.Count && _skippedApexes.Contains(ARS.Corners[upcoming[first]].Node)) first++;
             if (first >= upcoming.Count) first = 0;
+
+            // An empty refill used to commit a queue of -1, which empties the corner plan mid-track and is one of
+            // the ways the car lifted: no corner term at all. With nothing to pick, keep the queue that is running.
+            if (upcoming.Count == 0)
+            {
+                if (NextApexNode >= 0)
+                    ARS.Log(ARS.LogImportance.Info, "plan " + Name + ": refill found no corner ahead, kept head "
+                        + NextApexNode + " (node " + CurrentTrackPoint.Node + " of " + count + ")", true);
+                return;
+            }
 
             List<int> selectedNodes = new List<int>();
             List<float> selectedRadii = new List<float>();
