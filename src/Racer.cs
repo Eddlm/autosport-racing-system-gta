@@ -418,6 +418,7 @@ namespace ARS
         public float RouteSpeedOffsetMph = 0f;
         const float RouteSpeedLearnThrottle = 0.2f;
         const float RouteSpeedLearnBrake = 0.2f;
+        const float RouteSpeedLearnDropThrottle = 0.9f;
         const float RouteSpeedLearnRateMph = 1f;
         const float RouteSpeedLearnRiseMinPercent = 50f;
         const float RouteSpeedLearnRiseMaxPercent = 90f;
@@ -3606,17 +3607,19 @@ const float RequirementLookaheadSeconds = 3.95f;
             ARS.DrawText(pos, text, Color.White, 0.5f);
         }
 
-        // His spec: coasting and the route term in charge. The band decides what happens: under 50 and over 200
-        // the percentage is geometry talking, 90 to 100 is a deadband, and 100 to 200 walks the number back down
-        // at half the rise rate. Never below zero: it is a permission to carry more, not a brake.
+        // His spec: the two bands need different states of the car. It rises only while coasting - throttle and
+        // brake both shut - and falls only on power, throttle over 0.9, because a car flat out that still cannot
+        // hold the track is evidence against the number. Never below zero: a permission to carry more, not a brake.
         void UpdateRouteSpeedLearning()
         {
-            if (Control.Throttle >= RouteSpeedLearnThrottle || Control.Brake >= RouteSpeedLearnBrake) return;
+            bool coasting = Control.Throttle < RouteSpeedLearnThrottle && Control.Brake < RouteSpeedLearnBrake;
+            bool onPower = Control.Throttle > RouteSpeedLearnDropThrottle;
+            if (!coasting && !onPower) return;
             if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;
             if (!TryGetCarOverTrack(out float percent)) return;
-            if (percent >= RouteSpeedLearnRiseMinPercent && percent <= RouteSpeedLearnRiseMaxPercent)
+            if (coasting && percent >= RouteSpeedLearnRiseMinPercent && percent <= RouteSpeedLearnRiseMaxPercent)
                 RouteSpeedOffsetMph += RouteSpeedLearnRateMph * TickScale;
-            else if (percent >= RouteSpeedLearnFallMinPercent && percent <= RouteSpeedLearnFallMaxPercent)
+            else if (onPower && percent >= RouteSpeedLearnFallMinPercent && percent <= RouteSpeedLearnFallMaxPercent)
                 RouteSpeedOffsetMph = Math.Max(0f, RouteSpeedOffsetMph - RouteSpeedLearnRateMph * RouteSpeedLearnFallShare * TickScale);
         }
 
