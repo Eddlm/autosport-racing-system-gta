@@ -1,10 +1,10 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1895**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1896**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **56 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **58 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
@@ -18,6 +18,15 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
 | V1 | **every corner reads 0.70, and holds** (1893) | the apex debug text, with Brake Learning off in the menu | every corner shows `b 0.70`; a restart keeps it and no corner drifts | ⬜ |
+
+## W · 2026-11-22 (1896) — the route band averages its five tightest nodes
+
+The band no longer reports its single tightest node: it averages the five tightest (no cap), so one noisy radius cannot drive the number. Built deliberately to be tested against the prediction that a tight piece narrower than five nodes gets averaged with open road and is under-protected.
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| W1 | **a real tight feature is still safe** (1896) | a short kink or chicane whose tight piece is narrower than the band's five-tightest set, with open road in the same band | the car still makes the kink; running wide or understeering there confirms the average under-protects it | ⬜ |
+| W2 | **the number stops jittering** (1896) | the route radius readout (`ShowRouteRadius`) through a corner | the radius reads steady node to node instead of flicking between the tight node and the open road | ⬜ |
 
 ## U · 2026-11-22 (1892 → 1895) — corner speed learning, live
 
