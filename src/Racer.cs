@@ -416,9 +416,10 @@ namespace ARS
         const int CornerSpeedLearnTrafficMs = 250;
         const float CornerSpeedLearnReleaseMetres = 40f;
         // Route speed learning: the percentage the car holds against the track, with the bands and pedal states
-        // his spec fixes. It rises only while coasting, falls only on power, each inside its own percentage band.
-        const float RouteSpeedLearnThrottle = 0.2f;
-        const float RouteSpeedLearnBrake = 0.2f;
+        // his spec fixes. It rises only under light throttle, never on the brake; it falls only on power, each
+        // inside its own percentage band.
+        const float RouteSpeedLearnThrottle = 0.8f;
+        const float RouteSpeedLearnBrake = 0f;
         const float RouteSpeedLearnDropThrottle = 0.9f;
         const float RouteSpeedLearnRateMph = 1f;
         const float RouteSpeedLearnRiseMinPercent = 50f;
@@ -3636,14 +3637,14 @@ const float RequirementLookaheadSeconds = 3.95f;
             ARS.DrawText(pos, text, Color.White, 0.5f);
         }
 
-        // His spec: the two bands need different states of the car. It rises only while coasting - throttle and
-        // brake both shut - and falls only on power, throttle over 0.9. The fall is switched off for now, its band
-        // and rate left in place so it comes back with one word. Never below zero: a permission, not a brake.
+        // His spec: the two bands need different states of the car. It rises only under light throttle, below
+        // 0.8, and only with the brake fully off; it falls only on power, throttle over 0.9. The fall is switched
+        // off for now, its band and rate left in place so it comes back with one word. Never below zero: a permission, not a brake.
         void UpdateRouteSpeedLearning()
         {
-            bool coasting = Control.Throttle < RouteSpeedLearnThrottle && Control.Brake < RouteSpeedLearnBrake;
+            bool rising = Control.Throttle < RouteSpeedLearnThrottle && Control.Brake <= RouteSpeedLearnBrake;
             bool onPower = RouteSpeedLearnFallEnabled && Control.Throttle > RouteSpeedLearnDropThrottle;
-            if (!coasting && !onPower) return;
+            if (!rising && !onPower) return;
             if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;
             if (!TryGetCarOverTrackPercent(out float percent)) return;
             float step = RouteSpeedLearnRateMph * TickScale;
@@ -3653,7 +3654,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float slideAbs = Math.Abs(VehicleData.SlideAngle);
             bool stable = Control.MaxThrottleFromStability >= RouteSpeedLearnStableThrottle;
             bool underSlipLimit = TRLateralAtSpeed > 0.01f && !float.IsNaN(slideAbs) && slideAbs < TRLateralAtSpeed;
-            if (coasting && inRiseBand && stable && underSlipLimit) _routeSpeedOffsetMph += step;
+            if (rising && inRiseBand && stable && underSlipLimit) _routeSpeedOffsetMph += step;
             else if (onPower && inFallBand) _routeSpeedOffsetMph = Math.Max(0f, _routeSpeedOffsetMph - step * RouteSpeedLearnFallShareOfRate);
         }
 
