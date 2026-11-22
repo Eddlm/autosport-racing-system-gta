@@ -2185,6 +2185,13 @@ public const float LaneInsetPerRadius = 125f;
                     && PlayerRacer == Racers.OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault())
                     PlayerRacer.DrawGReadout();
 
+                // Always on while racing: the tuning readout the driver asked for, in the subtitle slot.
+                if (raceLive && CanWeUse(player.Character.CurrentVehicle))
+                {
+                    Racer subtitleRacer = PlayerRacer ?? Racers.OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault();
+                    if (subtitleRacer != null && CanWeUse(subtitleRacer.Car)) subtitleRacer.DrawCurveRadiusSubtitle();
+                }
+
                 if (raceLive && DebugToggles[Options.ShowRivalry])
                 {
                     foreach (Racer cardRacer in Racers)

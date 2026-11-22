@@ -3603,6 +3603,31 @@ const float RequirementLookaheadSeconds = 3.95f;
             UI.ShowSubtitle(_projectionArmed ? "~r~" + percent : "~b~" + percent, 50);
         }
 
+        // Constant subtitle, for tuning: the radius the car's own path describes, against the radius its grip
+        // allows at this speed. Over 100% the path is wider than the limit (margin left), under 100% the car is
+        // asking for more than the tyres have. Flattened to 2D: z is height, and height does not steer.
+        public void DrawCurveRadiusSubtitle()
+        {
+            float speed = ARS.GetForwardSpeed(Car);
+            float grip = Math.Max(VehicleData.CurrentMechanicalGrip * Handling.Gravity, 0.1f);
+            string text;
+            if (speed < 3f)
+            {
+                text = "~w~curve - / car -";
+            }
+            else
+            {
+                float carRadius = (speed * speed) / grip;
+                float curveRadius = ARS.Clamp(ARS.Circumradius3D(Car.Position, ProjectAhead(1f), ProjectAhead(0.5f)), 5f, 999f);
+                float percent = 100f * curveRadius / Math.Max(carRadius, 0.01f);
+                string colour = percent >= 100f ? "~g~" : percent >= 85f ? "~y~" : "~r~";
+                text = colour + "curve " + Math.Round(curveRadius).ToString(CultureInfo.InvariantCulture)
+                     + " m / car " + Math.Round(carRadius).ToString(CultureInfo.InvariantCulture)
+                     + " m = " + Math.Round(percent).ToString(CultureInfo.InvariantCulture) + "%";
+            }
+            UI.ShowSubtitle(text, 50);
+        }
+
         void DrawFrontSlipReadout()
         {
             float fwdSpeed = Vector3.Dot(Car.Velocity, Car.ForwardVector);
