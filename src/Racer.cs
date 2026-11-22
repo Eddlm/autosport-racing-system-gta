@@ -414,6 +414,7 @@ namespace ARS
         const float CornerSpeedLearnEndThrottle = 0.5f;
         const float CornerSpeedLearnBrakeCeiling = 0.05f;
         const int CornerSpeedLearnTrafficMs = 250;
+        const float CornerSpeedLearnReleaseMetres = 40f;
         // Route speed learning: the percentage the car holds against the track, with the bands and pedal states
         // his spec fixes. It rises only while coasting, falls only on power, each inside its own percentage band.
         const float RouteSpeedLearnThrottle = 0.2f;
@@ -429,6 +430,7 @@ namespace ARS
         const float RouteSpeedLearnOpenRadius = 998f;
         const float RouteSpeedLearnStableThrottle = 0.999f;
         int _cornerSpeedApexNode = -1;
+        readonly HashSet<int> _cornerSpeedLocked = new HashSet<int>();
         int _cornerSpeedEndsAt;
         bool _cornerSpeedSawTraffic;
         bool _cornerSpeedSawSlide;
@@ -2343,6 +2345,10 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             if (!ARS.CornerSpeedLearning) return;
 
+            // One verdict per pass: a corner stays locked until the car is well past it, so the same corner is
+            // never measured twice on the way in.
+            ReleaseCornerSpeedLocks();
+
             if (_cornerSpeedApexNode >= 0)
             {
                 if (Game.GameTime - _laneAvoidAt <= CornerSpeedLearnTrafficMs
@@ -2354,11 +2360,13 @@ const float RequirementLookaheadSeconds = 3.95f;
 
                 if (OutOfTrackDistance() > 0f) _cornerSpeedSawOffTrack = true;
 
-                // The passage is over when the car is back on the power, or when the window runs out. The
+                // The passage is over when the car is back on the power past the apex, or when the window runs
+                // out. Power before the apex proves nothing about the corner, so it cannot close the window; the
                 // lift latch stops a flat-out corner committing on its first tick with nothing observed.
                 if (Control.Throttle <= CornerSpeedLearnEndThrottle) _cornerSpeedSawLift = true;
+                bool pastApex = HasPassedApex(_cornerSpeedApexNode);
                 if (Game.GameTime >= _cornerSpeedEndsAt
-                    || (_cornerSpeedSawLift && Control.Throttle > CornerSpeedLearnEndThrottle))
+                    || (pastApex && _cornerSpeedSawLift && Control.Throttle > CornerSpeedLearnEndThrottle))
                     CommitCornerSpeedLearning();
                 return;
             }
@@ -2371,6 +2379,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             int entranceNode = CornerEntranceNode(_nextApexCorner, NextApexNode);
             float secondsToCorner = MetresToNode(entranceNode) / speed;
             if (secondsToCorner <= 0f || secondsToCorner >= CornerSpeedLearnStartSeconds) return;
+            if (_cornerSpeedLocked.Contains(NextApexNode)) return;
 
             _cornerSpeedApexNode = NextApexNode;
             _cornerSpeedEndsAt = Game.GameTime + (int)(CornerSpeedLearnWindowSeconds * 1000f);
@@ -2385,6 +2394,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             int apexNode = _cornerSpeedApexNode;
             _cornerSpeedApexNode = -1;
             if (apexNode < 0) return;
+            _cornerSpeedLocked.Add(apexNode);
 
             float before = TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
             string id = CornerId(apexNode);
@@ -2413,6 +2423,22 @@ const float RequirementLookaheadSeconds = 3.95f;
         }
 
         static string FormatCornerSpeedOffset(float offset) => offset.ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " m/s";
+
+        // A corner is finished for this pass once the car is CornerSpeedLearnReleaseMetres past it, so the same
+        // apex cannot be re-armed while the car is still on its way out of the corner.
+        void ReleaseCornerSpeedLocks()
+        {
+            if (_cornerSpeedLocked.Count == 0) return;
+            List<int> released = null;
+            foreach (int node in _cornerSpeedLocked)
+            {
+                if (MetresToNode(node) >= -CornerSpeedLearnReleaseMetres) continue;
+                if (released == null) released = new List<int>();
+                released.Add(node);
+            }
+            if (released == null) return;
+            foreach (int node in released) _cornerSpeedLocked.Remove(node);
+        }
 
         void AnnounceCornerSpeedAdjustment(string detail)
         {
