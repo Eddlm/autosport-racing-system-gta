@@ -424,7 +424,9 @@ namespace ARS
         const float RouteSpeedLearnRiseMaxPercent = 90f;
         const float RouteSpeedLearnFallMinPercent = 100f;
         const float RouteSpeedLearnFallMaxPercent = 200f;
-        const float RouteSpeedLearnFallShare = 0.5f;
+        const float RouteSpeedLearnFallShareOfRate = 0.5f;
+        const bool RouteSpeedLearnFallEnabled = false;
+        const float RouteSpeedLearnOpenRadius = 998f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedEndsAt;
         bool _cornerSpeedSawTraffic;
@@ -3608,12 +3610,12 @@ const float RequirementLookaheadSeconds = 3.95f;
         }
 
         // His spec: the two bands need different states of the car. It rises only while coasting - throttle and
-        // brake both shut - and falls only on power, throttle over 0.9, because a car flat out that still cannot
-        // hold the track is evidence against the number. Never below zero: a permission to carry more, not a brake.
+        // brake both shut - and falls only on power, throttle over 0.9. The fall is switched off for now, its band
+        // and rate left in place so it comes back with one word. Never below zero: a permission, not a brake.
         void UpdateRouteSpeedLearning()
         {
             bool coasting = Control.Throttle < RouteSpeedLearnThrottle && Control.Brake < RouteSpeedLearnBrake;
-            bool onPower = Control.Throttle > RouteSpeedLearnDropThrottle;
+            bool onPower = RouteSpeedLearnFallEnabled && Control.Throttle > RouteSpeedLearnDropThrottle;
             if (!coasting && !onPower) return;
             if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;
             if (!TryGetCarOverTrackPercent(out float percent)) return;
@@ -3621,7 +3623,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool inRiseBand = percent >= RouteSpeedLearnRiseMinPercent && percent <= RouteSpeedLearnRiseMaxPercent;
             bool inFallBand = percent >= RouteSpeedLearnFallMinPercent && percent <= RouteSpeedLearnFallMaxPercent;
             if (coasting && inRiseBand) _routeSpeedOffsetMph += step;
-            else if (onPower && inFallBand) _routeSpeedOffsetMph = Math.Max(0f, _routeSpeedOffsetMph - step * RouteSpeedLearnFallShare);
+            else if (onPower && inFallBand) _routeSpeedOffsetMph = Math.Max(0f, _routeSpeedOffsetMph - step * RouteSpeedLearnFallShareOfRate);
         }
 
         // The car's own path radius against the track's radius under it, as a percentage. False when the car is
@@ -3634,7 +3636,10 @@ const float RequirementLookaheadSeconds = 3.95f;
                 || CurrentTrackPoint.Node < 0 || CurrentTrackPoint.Node >= ARS.TrackPoints.Count) return false;
             float carRadius = ARS.Clamp(ARS.Circumradius3D(Car.Position, ProjectAhead(1f), ProjectAhead(0.5f)), 5f, 999f);
             float trackRadius = ARS.Clamp(ARS.TrackPoints[CurrentTrackPoint.Node].SweepCurveRadius, 5f, 999f);
-            percent = 100f * carRadius / Math.Max(trackRadius, 0.01f);
+            // A clamped-open radius is not a measurement: both read 999 on a straight and would land on exactly
+            // 100%, which sits inside a band and would teach from a straight line.
+            if (carRadius >= RouteSpeedLearnOpenRadius || trackRadius >= RouteSpeedLearnOpenRadius) return false;
+            percent = 100f * carRadius / trackRadius;
             return true;
         }
 
