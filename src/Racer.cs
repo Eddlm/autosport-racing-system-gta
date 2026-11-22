@@ -409,7 +409,8 @@ namespace ARS
         const float CornerSpeedLearnLimitMps = 10f;
         const float CornerSpeedLearnStartSeconds = 3f;
         const float CornerSpeedLearnWindowSeconds = 6f;
-        const float CornerSpeedLearnSlipMultiple = 1.25f;
+        const float CornerSpeedLearnSlideDegrees = 10f;
+        const float CornerSpeedLearnEndThrottle = 0.5f;
         const float CornerSpeedLearnBrakeCeiling = 0.05f;
         const int CornerSpeedLearnTrafficMs = 250;
         int _cornerSpeedApexNode = -1;
@@ -417,6 +418,7 @@ namespace ARS
         bool _cornerSpeedSawTraffic;
         bool _cornerSpeedSawSlide;
         bool _cornerSpeedSawOffTrack;
+        bool _cornerSpeedSawLift;
         int _laneAvoidAt;
         int _sideBySideSteerAt;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
@@ -2332,13 +2334,16 @@ const float RequirementLookaheadSeconds = 3.95f;
                     _cornerSpeedSawTraffic = true;
 
                 float slide = Math.Abs(VehicleData.SlideAngle);
-                if (!float.IsNaN(slide) && TRLateralAtSpeed > 0.01f
-                    && slide > TRLateralAtSpeed * CornerSpeedLearnSlipMultiple)
-                    _cornerSpeedSawSlide = true;
+                if (!float.IsNaN(slide) && slide >= CornerSpeedLearnSlideDegrees) _cornerSpeedSawSlide = true;
 
                 if (OutOfTrackDistance() > 0f) _cornerSpeedSawOffTrack = true;
 
-                if (Game.GameTime >= _cornerSpeedEndsAt) CommitCornerSpeedLearning();
+                // The passage is over when the car is back on the power, or when the window runs out. The
+                // lift latch stops a flat-out corner committing on its first tick with nothing observed.
+                if (Control.Throttle <= CornerSpeedLearnEndThrottle) _cornerSpeedSawLift = true;
+                if (Game.GameTime >= _cornerSpeedEndsAt
+                    || (_cornerSpeedSawLift && Control.Throttle > CornerSpeedLearnEndThrottle))
+                    CommitCornerSpeedLearning();
                 return;
             }
 
@@ -2356,6 +2361,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedSawTraffic = false;
             _cornerSpeedSawSlide = false;
             _cornerSpeedSawOffTrack = false;
+            _cornerSpeedSawLift = false;
         }
 
         void CommitCornerSpeedLearning()
@@ -2379,7 +2385,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;
 
             string why = _cornerSpeedSawSlide && _cornerSpeedSawOffTrack ? "slid and left the road"
-                : _cornerSpeedSawSlide ? "slid past " + (TRLateralAtSpeed * CornerSpeedLearnSlipMultiple).ToString("0.0", CultureInfo.InvariantCulture) + " deg"
+                : _cornerSpeedSawSlide ? "slide at " + CornerSpeedLearnSlideDegrees.ToString("0", CultureInfo.InvariantCulture) + " deg or more"
                 : _cornerSpeedSawOffTrack ? "left the road"
                 : "clean";
 

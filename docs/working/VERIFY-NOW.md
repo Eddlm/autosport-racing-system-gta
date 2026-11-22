@@ -1,10 +1,10 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1893**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1895**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **57 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **58 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
@@ -19,14 +19,15 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 |---|---|---|---|---|
 | V1 | **every corner reads 0.70, and holds** (1893) | the apex debug text, with Brake Learning off in the menu | every corner shows `b 0.70`; a restart keeps it and no corner drifts | ⬜ |
 
-## U · 2026-11-22 (1892) — corner speed learning, live
+## U · 2026-11-22 (1892 → 1894) — corner speed learning, live
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
 | U1 | **a clean corner pays 2 m/s** (1892) | a corner taken cleanly, brakes released before the entry, no traffic nearby | a notice reads `corner #n · clean · +0.0 → +2.0 m/s`, and the apex debug line for that car shows `+2.0 m/s` | ⬜ |
-| U2 | **a slide or a wheel off takes 2 back** (1892) | a corner where the car slides past the tyre's lateral peak x1.25, or puts a wheel off the road | `slid past N deg` or `left the road`, and the offset drops 2 m/s | ⬜ |
+| U2 | **a slide or a wheel off takes 2 back** (1892) | a corner where the car reaches 10 degrees of slide or more, or puts a wheel off the road | `slide at 10 deg or more` or `left the road`, and the offset drops 2 m/s | ⬜ |
 | U3 | **traffic voids the verdict** (1892) | a corner taken while avoiding a car: a lane taken to pass, or the side-by-side push on the nose | `traffic · offset stays`; the corner's number does not move either way | ⬜ |
 | U4 | **the number is used next pass, and stops at 10** (1892) | the same corner on following laps, offset at +2 or more | the car carries visibly more speed through it, and repeated clean passes stop at +10 m/s (`= at the limit`) | ⬜ |
+| U5 | **the window ends when the car is back on the power** (1895) | a corner the car takes and then goes above half throttle out of | the verdict lands at the throttle pickup, not at the six-second cap; a corner that never lifts still runs the full window | ⬜ |
 
 ## T · 2026-11-22 (1891) — the corner speed switch, before anything learns
 
