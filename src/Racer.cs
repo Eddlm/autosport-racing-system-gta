@@ -2905,6 +2905,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _gsFloorApplied = raised;
             _gsFloorActiveThisTick = raised > baseThrottle;
             if (_gsFloorActiveThisTick) baseThrottle = raised;
+            Control.ThrottleDemand = baseThrottle;
 
             float binding = baseThrottle;
             ThrottleReason reason = ThrottleReason.Plan;
@@ -2922,6 +2923,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             Control.ThrottleReason = reason;
             Control.ThrottleReasonLevel = binding;
+            Control.ThrottleLimited = binding < baseThrottle - 0.001f;
             return binding;
         }
 
@@ -3642,7 +3644,9 @@ const float RequirementLookaheadSeconds = 3.95f;
         // off for now, its band and rate left in place so it comes back with one word. Never below zero: a permission, not a brake.
         void UpdateRouteSpeedLearning()
         {
-            bool rising = Control.Throttle < RouteSpeedLearnThrottle && Control.Brake <= RouteSpeedLearnBrake;
+            // The ask, not the pedal: a cap that pulled the pedal down is not the car choosing light throttle.
+            bool rising = Control.ThrottleDemand < RouteSpeedLearnThrottle && !Control.ThrottleLimited
+                && Control.Brake <= RouteSpeedLearnBrake;
             bool onPower = RouteSpeedLearnFallEnabled && Control.Throttle > RouteSpeedLearnDropThrottle;
             if (!rising && !onPower) return;
             if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;

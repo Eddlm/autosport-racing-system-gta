@@ -344,6 +344,9 @@ namespace ARS
         public float MaxThrottleFromTCS = 1f;
         public ThrottleReason ThrottleReason = ThrottleReason.Plan;
         public float ThrottleReasonLevel = 1f;
+        // What the plan asked the pedal for, before any cap, and whether a cap actually cut it this tick.
+        public float ThrottleDemand = 0f;
+        public bool ThrottleLimited = false;
         public BrakeReason BrakeReason = BrakeReason.Plan;
         public float BrakeReasonLevel = 1f;
 
