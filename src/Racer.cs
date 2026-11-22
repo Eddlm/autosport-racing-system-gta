@@ -2480,6 +2480,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             return MetresToNode(entranceNode) / speed <= RouteSuppressCornerSeconds;
         }
 
+        // The plan queue only ever holds corners strictly ahead, so its head leaves at the very tick the car reaches
+        // an apex node - while HasPassedApex still says false there. Reached is the test that catches the handover.
+        bool ReachedApex(int apexNode)
+        {
+            if (apexNode < 0) return false;
+            if (ARS.IsPointToPoint) return CurrentTrackPoint.Node >= apexNode;
+            return ForwardNodeDistance(apexNode) <= 1;
+        }
+
         // Arms the post-apex hold for one corner. It cannot refresh itself while it is still running, so a corner
         // that stays the queue head gets one second and no more.
         void ArmCornerHold(int apexNode)
@@ -2663,10 +2672,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             int apexHead = NextApexNode;
             if (_planApexHead != apexHead)
             {
-                if (_planApexHead >= 0 && HasPassedApex(_planApexHead)) ArmCornerHold(_planApexHead);
+                if (_planApexHead >= 0 && ReachedApex(_planApexHead)) ArmCornerHold(_planApexHead);
                 _planApexHead = apexHead;
             }
-            if (apexHead >= 0 && HasPassedApex(apexHead)) ArmCornerHold(apexHead);
+            if (apexHead >= 0 && ReachedApex(apexHead)) ArmCornerHold(apexHead);
 
             if (apexHead >= 0 && HasPassedApex(apexHead))
             {
