@@ -438,7 +438,7 @@ namespace ARS
         // Route is the default authority; a corner is an override that latches while it owns the car.
         // Metres past the apex at which the corner lets go - not node indices, though at 1 m node spacing the two
         // read the same.
-        const int CornerModeExitMetres = 50;
+        const int CornerModeExitMetres = 15;
         bool _cornerMode;
         int _cornerModeNode = -1;
         float _cornerModeSpeed = 999f;
