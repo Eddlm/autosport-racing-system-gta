@@ -436,7 +436,9 @@ namespace ARS
         const float RouteSpeedLearnStableThrottle = 0.999f;
         int _cornerSpeedApexNode = -1;
         // Route is the default authority; a corner is an override that latches while it owns the car.
-        const int CornerModeExitNodes = 50;
+        // Metres past the apex at which the corner lets go - not node indices, though at 1 m node spacing the two
+        // read the same.
+        const int CornerModeExitMetres = 50;
         bool _cornerMode;
         int _cornerModeNode = -1;
         float _cornerModeSpeed = 999f;
@@ -2477,7 +2479,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         }
 
         // His rules: the override latches on the tick the corner's own ramp crosses below the route term - the
-        // strict number, so latching can only slow the car - and lets go once the car is CornerModeExitNodes past
+        // strict number, so latching can only slow the car - and lets go once the car is CornerModeExitMetres past
         // that corner's apex. Both sides of every flip are logged, pre before the terms are compared and post
         // after the mode has changed, so a seam can be read back from the log rather than inferred.
         void EnterCornerMode(int apexNode, float heldSpeed, float cornerTerm, float routeTerm)
@@ -2714,7 +2716,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             // Route is the default authority; a corner is an override. His rules: the override latches on the tick
             // the corner's own ramp crosses below the route term - the strict number, so latching can only slow the
-            // car - and lets go once the car is CornerModeExitNodes past that corner's apex.
+            // car - and lets go once the car is CornerModeExitMetres past that corner's apex.
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
             float cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
             float routeTerm = followTrackSpd + ARS.MphToMps(ARS.RouteOffsetMph + _routeSpeedOffsetMph);
@@ -2726,7 +2728,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
             else
             {
-                if (_cornerModeNode < 0 || MetresToNode(_cornerModeNode) < -CornerModeExitNodes)
+                if (_cornerModeNode < 0 || MetresToNode(_cornerModeNode) < -CornerModeExitMetres)
                 {
                     ExitCornerMode(routeTerm, "past the corner");
                 }
@@ -2751,7 +2753,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                 }
             }
 
-            _brakePlanActive = _cornerMode;
+            // "The corner asks for brakes", not "a corner holds the car": this flag drives the countersteer pedal
+            // cap elsewhere, so it keeps its old meaning and only gains the hold as an extra reason to be set.
+            _brakePlanActive = _cornerMode || (NextApexNode >= 0 && CornerRequiresBraking(NextApexNode));
             _speedCorner = cornerTerm;
             _speedCornerArrival = cornerArrivalTerm;
             _speedRoute = routeTerm;
