@@ -415,6 +415,8 @@ namespace ARS
         const float CornerSpeedLearnBrakeCeiling = 0.05f;
         const int CornerSpeedLearnTrafficMs = 250;
         const float CornerSpeedLearnReleaseMetres = 40f;
+        // A corner keeps the car for this long after its apex before the route term takes over.
+        const int CornerSpeedStickyMs = 1000;
         // Route speed learning: the percentage the car holds against the track, with the bands and pedal states
         // his spec fixes. It rises only under light throttle, never on the brake; it falls only on power, each
         // inside its own percentage band.
@@ -431,6 +433,9 @@ namespace ARS
         const float RouteSpeedLearnOpenRadius = 998f;
         const float RouteSpeedLearnStableThrottle = 0.999f;
         int _cornerSpeedApexNode = -1;
+        int _cornerStickyApex = -1;
+        int _cornerStickyAt;
+        bool _cornerApexPassedLast;
         readonly HashSet<int> _cornerSpeedLocked = new HashSet<int>();
         int _cornerSpeedEndsAt;
         bool _cornerSpeedSawTraffic;
@@ -2575,7 +2580,18 @@ const float RequirementLookaheadSeconds = 3.95f;
                 cornerArrival = cornerSpd;
             }
 
-            if (NextApexNode >= 0 && HasPassedApex(NextApexNode))
+            // His spec: passing the apex arms a one second sticky and the corner keeps the car for that second. The
+            // value held is the corner term of the tick, which once the braking distance is behind the car equals
+            // the speed it is carrying: the exit keeps its number instead of being handed to the route term.
+            // Armed on the transition into "passed", so the same apex arms again on the next lap.
+            bool apexPassed = NextApexNode >= 0 && HasPassedApex(NextApexNode);
+            if (apexPassed && (!_cornerApexPassedLast || _cornerStickyApex != NextApexNode))
+            {
+                _cornerStickyApex = NextApexNode;
+                _cornerStickyAt = Game.GameTime;
+            }
+            _cornerApexPassedLast = apexPassed;
+            if (apexPassed && Game.GameTime - _cornerStickyAt >= CornerSpeedStickyMs)
             {
                 cornerSpd = 999f;
                 cornerArrival = 999f;
