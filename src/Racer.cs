@@ -406,8 +406,9 @@ namespace ARS
         const float BrakeMaxFactor = 1.25f;
         // Corner speed learning: one flat step in m/s, clamped both ways. The switch is a boolean; the step
         // and the limit are code, not settings. The analyser opens on the approach and closes a window later.
-        const float CornerSpeedLearnRiseMps = 6f;
-        const float CornerSpeedLearnDropMps = 2f;
+        const float CornerSpeedLearnRiseMps = 3f;
+        const float CornerSpeedLearnDropMps = 3f;
+        const float CornerSpeedLearnAheadShare = 0.5f;
         const float CornerSpeedLearnLimitMps = 10f;
         const float CornerSpeedLearnStartSeconds = 3f;
         const float CornerSpeedLearnWindowSeconds = 6f;
@@ -2416,6 +2417,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             float after = ARS.Clamp(before + (trouble ? -CornerSpeedLearnDropMps : CornerSpeedLearnRiseMps),
                 -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
             CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;
+            float aheadGain = 0f;
+            if (!trouble && after > before) aheadGain = NudgeFollowingCorner(apexNode, CornerSpeedLearnRiseMps * CornerSpeedLearnAheadShare);
 
             string why = _cornerSpeedSawSlide && _cornerSpeedSawOffTrack ? "slid and left the road"
                 : _cornerSpeedSawSlide ? "slide at " + CornerSpeedLearnSlideDegrees.ToString("0", CultureInfo.InvariantCulture) + " deg or more"
@@ -2426,10 +2429,33 @@ const float RequirementLookaheadSeconds = 3.95f;
                 AnnounceCornerSpeedAdjustment(id + " · " + why + " · " + FormatCornerSpeedOffset(before) + " = at the limit");
             else
                 AnnounceCornerSpeedAdjustment(id + " · " + why + " · " + FormatCornerSpeedOffset(before)
-                    + " → " + FormatCornerSpeedOffset(after));
+                    + " → " + FormatCornerSpeedOffset(after)
+                    + (aheadGain > 0f ? " · ahead " + FormatCornerSpeedOffset(aheadGain) : ""));
         }
 
         static string FormatCornerSpeedOffset(float offset) => offset.ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " m/s";
+
+        // His spec: a clean rise hands half of itself to the corner ahead, because the speed carried out of this
+        // one is speed the next one was entered with. Returns the gain actually given, for the log line.
+        float NudgeFollowingCorner(int apexNode, float gain)
+        {
+            CornerPoint ahead = null;
+            foreach (CornerPoint corner in ARS.Corners)
+            {
+                if (corner.Node <= apexNode) continue;
+                if (ahead == null || corner.Node < ahead.Node) ahead = corner;
+            }
+            // On a closed circuit the corner ahead of the last one is the first one.
+            if (ahead == null && !ARS.IsPointToPoint)
+                foreach (CornerPoint corner in ARS.Corners)
+                    if (corner.Node != apexNode && (ahead == null || corner.Node < ahead.Node)) ahead = corner;
+            if (ahead == null || ahead.Node == apexNode) return 0f;
+
+            float before = TryGetCornerContext(ahead.Node, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
+            float after = ARS.Clamp(before + gain, -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
+            CornerContextForWrite(ahead.Node).CornerSpeedOffsetMps = after;
+            return after - before;
+        }
 
         // A corner is finished for this pass once the car is CornerSpeedLearnReleaseMetres past it, so the same
         // apex cannot be re-armed while the car is still on its way out of the corner.
