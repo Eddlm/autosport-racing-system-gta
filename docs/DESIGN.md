@@ -135,10 +135,9 @@ for, rather than the fastest it might get away with — so the plan keeps a prom
 pedals answer the moment.
 
 **Route is the authority; a corner takes over.** The route term answers the road under and ahead: a grip
-circle read from the curvature, then most of itself given to the speed the wheel is already committed to, so a
-car running wide of the arc may carry more than the road's own radius would allow. On its own it decides the
-speed, and each term carries an error margin of its own as a menu offset — which is how a driver buys caution
-or commitment without touching either law.
+circle read from the curvature at the follow point, then scaled by the surface under the window it is sampled
+over and by any crest ahead. On its own it decides the speed, and each term carries an error margin of its own
+as a menu offset — which is how a driver buys caution or commitment without touching either law.
 
 **A corner takes the car only when it is stricter, and keeps it through the exit.** The corner term is worked
 backwards from the apex: the braking map, for the downforce and the learned braking factor this car has. A
@@ -164,22 +163,22 @@ kept only as reference data, not used anywhere.
 now scales by the grip under the window its radius is sampled over, and a node with no sample inherits the
 surface the car is on rather than assuming tarmac.
 
-**Every corner ahead can take over, whether or not it asks for brakes.** The plan builds a ramp for the
-corners it decided to brake for, but a corner that asks for no braking still has an apex speed and still must
-not be undercut by a route term that reads the same bend twice: the term exists for the nearest corner ahead
-whatever the plan says, and taking over is the strict comparison's business, not the plan's.
+**Where the plan has no number, the nearest corner ahead gets one.** The plan builds ramps only for the
+corners it decided to brake for; where it produces nothing — and there is always a stretch where it does — the
+nearest corner ahead is installed with a ramp toward its own apex speed, because a corner that asks for no
+brakes still has one, and a route term reading the same bend twice must not undercut it. Where the plan does
+have a number, that number stands: it already accounts for the braking the car needs.
 
 **Past the apex the corner keeps the car for 15 metres.** Long enough that the route term — whose radius is
 still inside the bend — cannot take the car back while the geometry is still turning, and short enough not to
 hold it slow onto the straight. Fifty was too long in the car; fifteen is the number.
 
-**The road's own shape corrects both terms.** A hill takes grip from both, and both read their hill at the
-follow point — the corner's own grade enters separately, inside its braking map. Vertical curvature takes
-grip too, applied at each term's own centre, the follow point for the route and the apex for the corner,
-which is how a crest that unloads the car is felt before it is met; the route side's share of that shrinks
-while the car is steering, because the part of it derived from the wheel carries no vertical term at all. A
-chicane is the one automatic relaxation: both terms get a boost, because a flick is not a corner in the sense
-the geometry takes it for.
+**The road's own shape corrects both terms.** A hill takes grip from both — the route term at the follow
+point, the corner at its apex inside its braking map, where its grade enters as a deceleration change rather
+than a speed factor. Vertical curvature is a route-side term only: a speed factor from the hill's grip delta
+over a window ahead of the car, so a crest that unloads it is felt before it is met, and the corner side has no
+such term. A chicane is the one automatic relaxation: both terms get a boost, because a flick is not a corner
+in the sense the geometry takes it for.
 
 **Where the plan meets the moment.** The pedals are not the plan's number. They map the speed error through
 one linear law — with a single deliberate exception below a walking pace, where a sub-split throttle is
