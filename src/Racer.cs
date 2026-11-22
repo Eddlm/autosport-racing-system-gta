@@ -421,6 +421,8 @@ namespace ARS
         const int CornerSpeedStickyMs = 1000;
         // The route term is invalid this close to a corner: the corner owns the bend from here until its hold ends.
         const float RouteSuppressCornerSeconds = 3f;
+        // How close to an apex node counts as having reached it, in metres; the call widens it for fast cars.
+        const float ApexReachedMetres = 3f;
         // Route speed learning: the percentage the car holds against the track, with the bands and pedal states
         // his spec fixes. It rises only under light throttle, never on the brake; it falls only on power, each
         // inside its own percentage band.
@@ -2480,13 +2482,14 @@ const float RequirementLookaheadSeconds = 3.95f;
             return MetresToNode(entranceNode) / speed <= RouteSuppressCornerSeconds;
         }
 
-        // The plan queue only ever holds corners strictly ahead, so its head leaves at the very tick the car reaches
-        // an apex node - while HasPassedApex still says false there. Reached is the test that catches the handover.
+        // The plan queue only holds corners strictly ahead, so its head leaves at the very tick the car reaches an
+        // apex node. Node counts wrap - a node just behind reads count-k - so the test has to be in metres, and
+        // wide enough that a fast car cannot step over it between ticks.
         bool ReachedApex(int apexNode)
         {
-            if (apexNode < 0) return false;
-            if (ARS.IsPointToPoint) return CurrentTrackPoint.Node >= apexNode;
-            return ForwardNodeDistance(apexNode) <= 1;
+            if (apexNode < 0 || apexNode >= ARS.TrackPoints.Count) return false;
+            float tolerance = Math.Max(ApexReachedMetres, Car.Velocity.Length() * TickScale * 2f);
+            return Math.Abs(MetresToNode(apexNode)) <= tolerance;
         }
 
         // Arms the post-apex hold for one corner. It cannot refresh itself while it is still running, so a corner
@@ -2672,7 +2675,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             int apexHead = NextApexNode;
             if (_planApexHead != apexHead)
             {
-                if (_planApexHead >= 0 && ReachedApex(_planApexHead)) ArmCornerHold(_planApexHead);
+                if (_planApexHead >= 0)
+                {
+                    ARS.Log(ARS.LogImportance.Info, "plan " + Name + ": head " + _planApexHead + " -> " + apexHead
+                        + ", old apex at " + MetresToNode(_planApexHead).ToString("0.0", CultureInfo.InvariantCulture)
+                        + " m, reached " + ReachedApex(_planApexHead), true);
+                    if (ReachedApex(_planApexHead)) ArmCornerHold(_planApexHead);
+                }
                 _planApexHead = apexHead;
             }
             if (apexHead >= 0 && ReachedApex(apexHead)) ArmCornerHold(apexHead);
