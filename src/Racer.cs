@@ -441,6 +441,10 @@ namespace ARS
         int _cornerHoldAt;
         float _cornerHoldSpeed = 999f;
         int _planApexHead = -1;
+        int _cornerDropLoggedNode = -1;
+        int _cornerArmedNode = -1;
+        bool _cornerHoldReleased;
+        bool _cornerHoldCapLogged;
         readonly HashSet<int> _cornerSpeedLocked = new HashSet<int>();
         int _cornerSpeedEndsAt;
         bool _cornerSpeedSawTraffic;
@@ -2481,12 +2485,22 @@ const float RequirementLookaheadSeconds = 3.95f;
         void ArmCornerHold(int apexNode)
         {
             if (apexNode < 0) return;
+            // One hold per pass: without this the same apex re-armed itself every time the second expired, so the
+            // cap outlived its corner and vanished the moment the queue head finally moved.
+            if (_cornerArmedNode == apexNode) return;
             if (_cornerHoldNode == apexNode && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs) return;
             CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
             if (corner == null) return;
             _cornerHoldNode = apexNode;
             _cornerHoldAt = Game.GameTime;
             _cornerHoldSpeed = ARS.CornerApexSpeed(corner, this);
+            _cornerArmedNode = apexNode;
+            _cornerHoldReleased = false;
+            _cornerHoldCapLogged = false;
+            ARS.Log(ARS.LogImportance.Info, "hold " + Name + " (" + Car.DisplayName + "): arm #" + apexNode
+                + " apex at " + MetresToNode(apexNode).ToString("0.0", CultureInfo.InvariantCulture) + " m, held "
+                + _cornerHoldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s, now "
+                + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
         }
 
         // A corner is finished for this pass once the car is CornerSpeedLearnReleaseMetres past it, so the same
@@ -2656,6 +2670,13 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             if (apexHead >= 0 && HasPassedApex(apexHead))
             {
+                if (_cornerDropLoggedNode != apexHead)
+                {
+                    _cornerDropLoggedNode = apexHead;
+                    ARS.Log(ARS.LogImportance.Info, "plan " + Name + ": corner term dropped for #" + apexHead + " apex at "
+                        + MetresToNode(apexHead).ToString("0.0", CultureInfo.InvariantCulture) + " m, now "
+                        + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
+                }
                 cornerSpd = 999f;
                 cornerArrival = 999f;
             }
@@ -2663,6 +2684,14 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (_cornerHoldNode >= 0 && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs
                 && _cornerHoldSpeed < cornerSpd)
             {
+                if (!_cornerHoldCapLogged)
+                {
+                    _cornerHoldCapLogged = true;
+                    ARS.Log(ARS.LogImportance.Info, "hold " + Name + ": cap #" + _cornerHoldNode + " from "
+                        + cornerSpd.ToString("0.0", CultureInfo.InvariantCulture) + " to "
+                        + _cornerHoldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s, apex at "
+                        + MetresToNode(_cornerHoldNode).ToString("0.0", CultureInfo.InvariantCulture) + " m", true);
+                }
                 cornerSpd = _cornerHoldSpeed;
                 cornerArrival = _cornerHoldSpeed;
                 cornerSourceNode = _cornerHoldNode;
@@ -2712,8 +2741,20 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Brain.CurrentIntention.SteerLimitedSpeed = 999f;
             }
 
+            if (_cornerHoldNode >= 0 && !CornerIsHeld && !_cornerHoldReleased)
+            {
+                _cornerHoldReleased = true;
+                ARS.Log(ARS.LogImportance.Info, "hold " + Name + ": release #" + _cornerHoldNode + " apex at "
+                    + MetresToNode(_cornerHoldNode).ToString("0.0", CultureInfo.InvariantCulture) + " m, now "
+                    + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
+            }
+
             // His spec: one checkable line right before the two terms meet - while the corner holds the car, the
             // route term is not a candidate at all, whatever its radius says.
+            // The hold is spent for this pass once the car is well past the apex; only then may the next pass arm it
+            // again, which is what keeps a corner from re-arming itself while the car is still leaving it.
+            if (_cornerArmedNode >= 0 && MetresToNode(_cornerArmedNode) < -CornerSpeedLearnReleaseMetres) _cornerArmedNode = -1;
+
             if (CornerIsHeld) followTrackSpd = 999f;
 
             float cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
