@@ -336,9 +336,9 @@ namespace ARS
         bool _gsFloorActiveThisTick = false;
 
         int _offshootLogAt = 0;
-        const float BrakeFactorSeed = 0.75f;
-        const int BrakeFactorSeedJitterHundredths = 2;
-        const int BrakeConfidenceJitterHundredths = 5;
+        const float BrakeFactorSeed = 0.70f;
+        const int BrakeFactorSeedJitterHundredths = 0;
+        const int BrakeConfidenceJitterHundredths = 0;
         float _brakeConfidenceBias;
         const float CornerTightRadius = 50f;
         const float RequirementExtrapolationScale = 0.9f;

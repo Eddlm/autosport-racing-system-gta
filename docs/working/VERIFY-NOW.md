@@ -1,10 +1,10 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1892**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1893**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **56 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **57 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
@@ -12,6 +12,12 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ## R · 2026-11-22 (1886 → 1889) — all five verified in game, see **Answered**
 
+
+## V · 2026-11-22 (1893) — the brake factor is pinned
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| V1 | **every corner reads 0.70, and holds** (1893) | the apex debug text, with Brake Learning off in the menu | every corner shows `b 0.70`; a restart keeps it and no corner drifts | ⬜ |
 
 ## U · 2026-11-22 (1892) — corner speed learning, live
 
