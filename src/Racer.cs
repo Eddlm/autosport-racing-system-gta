@@ -419,6 +419,11 @@ namespace ARS
         const float RouteSpeedLearnThrottle = 0.2f;
         const float RouteSpeedLearnBrake = 0.2f;
         const float RouteSpeedLearnRateMph = 1f;
+        const float RouteSpeedLearnRiseMinPercent = 50f;
+        const float RouteSpeedLearnRiseMaxPercent = 90f;
+        const float RouteSpeedLearnFallMinPercent = 100f;
+        const float RouteSpeedLearnFallMaxPercent = 200f;
+        const float RouteSpeedLearnFallShare = 0.5f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedEndsAt;
         bool _cornerSpeedSawTraffic;
@@ -3601,15 +3606,18 @@ const float RequirementLookaheadSeconds = 3.95f;
             ARS.DrawText(pos, text, Color.White, 0.5f);
         }
 
-        // His spec: coasting, the route term in charge, and the car's path wider than the track's radius - the
-        // number climbs a mile per hour per second of that state and rides on the route term from then on.
+        // His spec: coasting and the route term in charge. The band decides what happens: under 50 and over 200
+        // the percentage is geometry talking, 90 to 100 is a deadband, and 100 to 200 walks the number back down
+        // at half the rise rate. Never below zero: it is a permission to carry more, not a brake.
         void UpdateRouteSpeedLearning()
         {
             if (Control.Throttle >= RouteSpeedLearnThrottle || Control.Brake >= RouteSpeedLearnBrake) return;
             if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;
             if (!TryGetCarOverTrack(out float percent)) return;
-            if (percent >= 100f) return;
-            RouteSpeedOffsetMph += RouteSpeedLearnRateMph * TickScale;
+            if (percent >= RouteSpeedLearnRiseMinPercent && percent <= RouteSpeedLearnRiseMaxPercent)
+                RouteSpeedOffsetMph += RouteSpeedLearnRateMph * TickScale;
+            else if (percent >= RouteSpeedLearnFallMinPercent && percent <= RouteSpeedLearnFallMaxPercent)
+                RouteSpeedOffsetMph = Math.Max(0f, RouteSpeedOffsetMph - RouteSpeedLearnRateMph * RouteSpeedLearnFallShare * TickScale);
         }
 
         // The car's own path radius against the track's radius under it, as a percentage. False when the car is
