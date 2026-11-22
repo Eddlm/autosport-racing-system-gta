@@ -1,10 +1,10 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1891**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1892**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **52 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **56 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
@@ -12,6 +12,15 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ## R · 2026-11-22 (1886 → 1889) — all five verified in game, see **Answered**
 
+
+## U · 2026-11-22 (1892) — corner speed learning, live
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| U1 | **a clean corner pays 2 m/s** (1892) | a corner taken cleanly, brakes released before the entry, no traffic nearby | a notice reads `corner #n · clean · +0.0 → +2.0 m/s`, and the apex debug line for that car shows `+2.0 m/s` | ⬜ |
+| U2 | **a slide or a wheel off takes 2 back** (1892) | a corner where the car slides past the tyre's lateral peak x1.25, or puts a wheel off the road | `slid past N deg` or `left the road`, and the offset drops 2 m/s | ⬜ |
+| U3 | **traffic voids the verdict** (1892) | a corner taken while avoiding a car: a lane taken to pass, or the side-by-side push on the nose | `traffic · offset stays`; the corner's number does not move either way | ⬜ |
+| U4 | **the number is used next pass, and stops at 10** (1892) | the same corner on following laps, offset at +2 or more | the car carries visibly more speed through it, and repeated clean passes stop at +10 m/s (`= at the limit`) | ⬜ |
 
 ## T · 2026-11-22 (1891) — the corner speed switch, before anything learns
 

@@ -403,6 +403,22 @@ namespace ARS
         const float BrakeOverAllowanceShare = 1.5f;
         const int BrakeOverSampleMs = 100;
         const float BrakeMaxFactor = 1.25f;
+        // Corner speed learning: one flat step in m/s, clamped both ways. The switch is a boolean; the step
+        // and the limit are code, not settings. The analyser opens on the approach and closes a window later.
+        const float CornerSpeedLearnStepMps = 2f;
+        const float CornerSpeedLearnLimitMps = 10f;
+        const float CornerSpeedLearnStartSeconds = 3f;
+        const float CornerSpeedLearnWindowSeconds = 6f;
+        const float CornerSpeedLearnSlipMultiple = 1.25f;
+        const float CornerSpeedLearnBrakeCeiling = 0.05f;
+        const int CornerSpeedLearnTrafficMs = 250;
+        int _cornerSpeedApexNode = -1;
+        int _cornerSpeedEndsAt;
+        bool _cornerSpeedSawTraffic;
+        bool _cornerSpeedSawSlide;
+        bool _cornerSpeedSawOffTrack;
+        int _laneAvoidAt;
+        int _sideBySideSteerAt;
         public float BrakeFactorForApex(int apexNode) => ARS.BrakeLearning && TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
         // Corner speed learning: the learned m/s offset for a corner. Zero while no learner writes it, and
         // zero whenever the switch is off, so the target stays pure grip physics until it is made live.
@@ -885,6 +901,7 @@ namespace ARS
             if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneReason = LaneReason.DebugLock; }
             _laneRequest = laneRequest;
             _laneRequestReason = laneReason;
+            if (laneReason == LaneReason.Avoidance) _laneAvoidAt = Game.GameTime;
             _carriedLane = laneRequest;
             if (Game.GameTime > _laneTraceAt)
             {
@@ -944,6 +961,7 @@ namespace ARS
             _steerPursuitDeg = laneSteerDeg;
 
             float sideBySideSteerDeg = ComputeSideBySideSteerCorrection(courseDir);
+            if (Math.Abs(sideBySideSteerDeg) > 0.001f) _sideBySideSteerAt = Game.GameTime;
 
             const float ContactPushOuterGapMeters = 5f;
 
@@ -1912,6 +1930,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _projectionPathColor = ProjectionPathColour(_gsFloorApplied, gsInsideRegime);
 
             UpdateBrakeLearning();
+            UpdateCornerSpeedLearning();
 
         }
 
@@ -2295,6 +2314,88 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             ARS.Log(ARS.LogImportance.Info, "brake learn " + Name + " (" + Car.DisplayName + "): " + detail);
             if (!ARS.BrakeLearningNotify) return;
+            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + detail);
+        }
+
+        // Corner speed learning: watches one corner passage and moves that corner's offset by one flat step.
+        // The window opens inside three seconds of the corner with the brakes already released and closes six
+        // seconds later; traffic voids the verdict, a slide or leaving the road takes a step off, and every
+        // other passage adds one. The next pass uses the new number.
+        void UpdateCornerSpeedLearning()
+        {
+            if (!ARS.CornerSpeedLearning) return;
+
+            if (_cornerSpeedApexNode >= 0)
+            {
+                if (Game.GameTime - _laneAvoidAt <= CornerSpeedLearnTrafficMs
+                    || Game.GameTime - _sideBySideSteerAt <= CornerSpeedLearnTrafficMs)
+                    _cornerSpeedSawTraffic = true;
+
+                float slide = Math.Abs(VehicleData.SlideAngle);
+                if (!float.IsNaN(slide) && TRLateralAtSpeed > 0.01f
+                    && slide > TRLateralAtSpeed * CornerSpeedLearnSlipMultiple)
+                    _cornerSpeedSawSlide = true;
+
+                if (OutOfTrackDistance() > 0f) _cornerSpeedSawOffTrack = true;
+
+                if (Game.GameTime >= _cornerSpeedEndsAt) CommitCornerSpeedLearning();
+                return;
+            }
+
+            if (NextApexNode < 0) return;
+            if (Control.Brake >= CornerSpeedLearnBrakeCeiling) return;
+
+            float speed = Car.Velocity.Length();
+            if (speed < 1f) return;
+            int entranceNode = CornerEntranceNode(_nextApexCorner, NextApexNode);
+            float secondsToCorner = MetresToNode(entranceNode) / speed;
+            if (secondsToCorner <= 0f || secondsToCorner >= CornerSpeedLearnStartSeconds) return;
+
+            _cornerSpeedApexNode = NextApexNode;
+            _cornerSpeedEndsAt = Game.GameTime + (int)(CornerSpeedLearnWindowSeconds * 1000f);
+            _cornerSpeedSawTraffic = false;
+            _cornerSpeedSawSlide = false;
+            _cornerSpeedSawOffTrack = false;
+        }
+
+        void CommitCornerSpeedLearning()
+        {
+            int apexNode = _cornerSpeedApexNode;
+            _cornerSpeedApexNode = -1;
+            if (apexNode < 0) return;
+
+            float before = TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
+            string id = CornerId(apexNode);
+
+            if (_cornerSpeedSawTraffic)
+            {
+                AnnounceCornerSpeedAdjustment(id + " · traffic · offset stays " + FormatCornerSpeedOffset(before));
+                return;
+            }
+
+            bool trouble = _cornerSpeedSawSlide || _cornerSpeedSawOffTrack;
+            float after = ARS.Clamp(before + (trouble ? -CornerSpeedLearnStepMps : CornerSpeedLearnStepMps),
+                -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
+            CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;
+
+            string why = _cornerSpeedSawSlide && _cornerSpeedSawOffTrack ? "slid and left the road"
+                : _cornerSpeedSawSlide ? "slid past " + (TRLateralAtSpeed * CornerSpeedLearnSlipMultiple).ToString("0.0", CultureInfo.InvariantCulture) + " deg"
+                : _cornerSpeedSawOffTrack ? "left the road"
+                : "clean";
+
+            if (Math.Abs(after - before) < 0.001f)
+                AnnounceCornerSpeedAdjustment(id + " · " + why + " · " + FormatCornerSpeedOffset(before) + " = at the limit");
+            else
+                AnnounceCornerSpeedAdjustment(id + " · " + why + " · " + FormatCornerSpeedOffset(before)
+                    + " → " + FormatCornerSpeedOffset(after));
+        }
+
+        static string FormatCornerSpeedOffset(float offset) => offset.ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " m/s";
+
+        void AnnounceCornerSpeedAdjustment(string detail)
+        {
+            ARS.Log(ARS.LogImportance.Info, "corner speed " + Name + " (" + Car.DisplayName + "): " + detail);
+            if (!ARS.CornerSpeedLearnNotify) return;
             UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + detail);
         }
 

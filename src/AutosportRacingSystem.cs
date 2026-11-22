@@ -118,6 +118,7 @@ namespace ARS
         public static bool BrakeLearning = true;
         public static bool BrakeLearningNotify = false;
         public static bool CornerSpeedLearning = true;
+        public static bool CornerSpeedLearnNotify = true;
         public static bool SlideBrakeCap = true;
         public static float BrakeAimDepth = 0f;
         public static float MaxCrestLift = 0.4f;
@@ -1377,6 +1378,14 @@ public const float LaneInsetPerRadius = 125f;
             };
             developmentMenu.Add(brakeLearnNotifyItem);
 
+            NativeCheckboxItem cornerSpeedNotifyItem = new NativeCheckboxItem("Corner Speed Learn Notify", "Announce every corner-speed verdict: corner, reason, before and after. On by default while the learner is being tuned; it fires once per corner pass.", CornerSpeedLearnNotify);
+            cornerSpeedNotifyItem.CheckboxChanged += (sender, args) =>
+            {
+                CornerSpeedLearnNotify = cornerSpeedNotifyItem.Checked;
+                DevelopmentMenuStore.Set("CornerSpeedLearnNotify", CornerSpeedLearnNotify.ToString());
+            };
+            developmentMenu.Add(cornerSpeedNotifyItem);
+
             NativeCheckboxItem laneErrorItem = new NativeCheckboxItem("Lane Error Telemetry", "Parked: measures each car's distance from the shaped lane it follows, per node, and announces the average once the corner's exit is behind it. Costs a dot product per node, so it is off unless needed.");
             laneErrorItem.Checked = ARS.LaneErrorTelemetry;
             laneErrorItem.CheckboxChanged += (sender, args) =>
@@ -2225,9 +2234,12 @@ public const float LaneInsetPerRadius = 125f;
                         string brakeLine = apexReader != null
                             ? "~n~b " + apexReader.BrakeFactorForApex(marked.Node).ToString("0.00", CultureInfo.InvariantCulture)
                             : string.Empty;
+                        string cornerSpeedLine = apexReader != null
+                            ? "~n~" + apexReader.CornerSpeedOffsetFor(marked.Node).ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " m/s"
+                            : string.Empty;
                         DrawText(apexPos, "Apex #" + (apexIndex + 1) + "~n~"
                             + Math.Round(marked.DetectedRadius) + "r"
-                            + brakeLine,
+                            + brakeLine + cornerSpeedLine,
                             Color.White, 0.5f);
                     }
 
@@ -3726,6 +3738,7 @@ public const float LaneInsetPerRadius = 125f;
             SettingsMenuStore.Migrate("StagedSpawns", legacyStagedSpawns);
             BrakeLearning = SettingsMenuStore.GetBool("BrakeLearning", BrakeLearning);
             CornerSpeedLearning = SettingsMenuStore.GetBool("CornerSpeedLearning", CornerSpeedLearning);
+            CornerSpeedLearnNotify = DevelopmentMenuStore.GetBool("CornerSpeedLearnNotify", CornerSpeedLearnNotify);
             SlideBrakeCap = SettingsMenuStore.GetBool("SlideBrakeCap", SlideBrakeCap);
             BrakeLearningNotify = DevelopmentMenuStore.GetBool("BrakeLearningNotify", BrakeLearningNotify);
             ARS.LaneErrorTelemetry = DevelopmentMenuStore.GetBool("LaneErrorTelemetry", ARS.LaneErrorTelemetry);

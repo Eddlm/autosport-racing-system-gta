@@ -171,6 +171,7 @@ namespace ARS
 
             FileSpec development = Owned("Menu-Development.ini");
             development.Specs.Add(new KeySpec("BrakeLearningNotify", "False", Kind.Bool));
+            development.Specs.Add(new KeySpec("CornerSpeedLearnNotify", "True", Kind.Bool));
             development.Specs.Add(new KeySpec("LaneErrorTelemetry", "False", Kind.Bool));
 development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             development.Specs.Add(new KeySpec("SlipFromMemory", "False", Kind.Bool));
