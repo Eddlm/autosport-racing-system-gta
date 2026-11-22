@@ -2730,20 +2730,24 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     ExitCornerMode(routeTerm, "past the corner");
                 }
-                else if (MetresToNode(_cornerModeNode) < 0f)
+                else
                 {
-                    // Apex behind: the corner keeps its own speed for the tail and the ramp is not consulted.
-                    cornerSpd = _cornerModeSpeed;
+                    // A nearer corner that wants less than the held speed takes over without a gap.
+                    if (cornerSpd < 998f && cornerSourceNode >= 0 && cornerSourceNode != _cornerModeNode
+                        && cornerTerm < _cornerModeSpeed)
+                        EnterCornerMode(cornerSourceNode, cornerArrival, cornerTerm, routeTerm);
+
+                    // The latched corner owns the number: nobody else may hand the car a speed while it holds.
+                    // Its ramp on the way in, its own apex speed after - recomputed for THIS node every tick,
+                    // never whatever the queue happened to be looking at.
+                    float toApex = MetresToNode(_cornerModeNode);
                     cornerArrival = _cornerModeSpeed;
+                    cornerSpd = toApex < 0f
+                        ? _cornerModeSpeed
+                        : Math.Max(2f, ApexBrakingSpeed(_cornerModeNode, _cornerModeSpeed));
                     cornerSourceNode = _cornerModeNode;
                     cornerTerm = cornerSpd + ARS.MphToMps(ARS.CornerOffsetMph);
-                    cornerArrivalTerm = cornerTerm;
-                }
-                else if (cornerSpd < 998f && cornerSourceNode >= 0 && cornerSourceNode != _cornerModeNode
-                    && cornerTerm < _cornerModeSpeed)
-                {
-                    // A nearer corner is stricter: hand over without a gap.
-                    EnterCornerMode(cornerSourceNode, cornerArrival, cornerTerm, routeTerm);
+                    cornerArrivalTerm = cornerArrival + ARS.MphToMps(ARS.CornerOffsetMph);
                 }
             }
 
