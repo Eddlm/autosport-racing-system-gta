@@ -32,7 +32,7 @@ namespace ARS
         ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis,
         ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip,
         ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry,
-        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowRpms, ShowTrLateral
+        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowRpms, ShowTrLateral, ShowCurveRadius
     }
 
     public partial class ARS : Script
@@ -193,7 +193,8 @@ public const float LaneInsetPerRadius = 125f;
         { Options.ShowGLine, false },
         { Options.ShowRouteRadius, false },
         { Options.ShowRpms, false },
-        { Options.ShowTrLateral, false }
+        { Options.ShowTrLateral, false },
+        { Options.ShowCurveRadius, false }
     };
 
         public const float SpectateCheckpointRadiusMeters = 400f;
@@ -1322,6 +1323,7 @@ public const float LaneInsetPerRadius = 125f;
             AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is measured from: the car's own, the near sample and the far one at speed/grip and twice that ahead.");
             AddDebugCheckbox(debugMenu, Options.ShowRpms, "Show RPMs", "Estimate the first racer's engine speed from its own wheels and the gear ladder, in the subtitle as rpm @ gear: the mean wheel rotation read live, the ratio for the gear the game reports and an assumed differential, so a spinning or locking wheel moves the number while a stopped car reads zero.");
             AddDebugCheckbox(debugMenu, Options.ShowTrLateral, "Show TRlateral", "The tyre's peak slide angle at this speed, drawn on the car closest to the player: a line per side along the car from the rear to the front tip, and from that tip a line of the same length opening back at the angle (LateralTractionCurve / (1 + 0.1·v)) — the horn opens wide when the car is slow and closes onto the body line at speed. A second horn per side (red) opens at the car's live slide angle, so the pair shows the tyre's limit (yellow) against where the car actually sits (red).");
+            AddDebugCheckbox(debugMenu, Options.ShowCurveRadius, "Show Curve %", "The focus car's own path radius against the track's radius under it, as a bare percentage in the subtitle: over 100 the car is running wider than the track asks, under 100 it is holding or tightening. The path radius is a 2D circle through the car and its own projections at half a second and one second; the track radius is the sweep radius at the car's node.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
@@ -2185,12 +2187,6 @@ public const float LaneInsetPerRadius = 125f;
                     && PlayerRacer == Racers.OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault())
                     PlayerRacer.DrawGReadout();
 
-                // Always on: the tuning readout the driver asked for, in the subtitle slot, and last so no other
-                // subtitle draw in this pass can overwrite it.
-                Racer subtitleRacer = PlayerRacer ?? Racers.OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault();
-                if (subtitleRacer != null && CanWeUse(subtitleRacer.Car) && CanWeUse(player.Character.CurrentVehicle))
-                    subtitleRacer.DrawCurveRadiusSubtitle();
-
                 if (raceLive && DebugToggles[Options.ShowRivalry])
                 {
                     foreach (Racer cardRacer in Racers)
@@ -2206,6 +2202,14 @@ public const float LaneInsetPerRadius = 125f;
 
                 if (DebugToggles[Options.ShowThrottleReason])
                     DrawThrottleReason(DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null));
+
+                // The car's own path against the track's radius at its node, as a bare percentage: over 100 the car
+                // is running wider than the track asks. Measured on the car closest to the player, like every readout.
+                if (raceLive && DebugToggles[Options.ShowCurveRadius])
+                {
+                    Racer curveRacer = DebugFocusRacer ?? PlayerRacer ?? Racers.OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault();
+                    if (curveRacer != null && CanWeUse(curveRacer.Car)) curveRacer.DrawCurveRadiusSubtitle();
+                }
 
                 if (raceLive && DebugToggles[Options.ShowRouteRadius])
                 {
