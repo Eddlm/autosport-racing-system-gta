@@ -435,9 +435,10 @@ namespace ARS
         const float RouteSpeedLearnOpenRadius = 998f;
         const float RouteSpeedLearnStableThrottle = 0.999f;
         int _cornerSpeedApexNode = -1;
-        int _cornerStickyApex = -1;
-        int _cornerStickyAt;
-        bool _cornerApexPassedLast;
+        int _cornerHoldNode = -1;
+        int _cornerHoldAt;
+        float _cornerHoldSpeed = 999f;
+        int _planApexHead = -1;
         readonly HashSet<int> _cornerSpeedLocked = new HashSet<int>();
         int _cornerSpeedEndsAt;
         bool _cornerSpeedSawTraffic;
@@ -2457,6 +2458,19 @@ const float RequirementLookaheadSeconds = 3.95f;
             return after - before;
         }
 
+        // Arms the post-apex hold for one corner. It cannot refresh itself while it is still running, so a corner
+        // that stays the queue head gets one second and no more.
+        void ArmCornerHold(int apexNode)
+        {
+            if (apexNode < 0) return;
+            if (_cornerHoldNode == apexNode && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs) return;
+            CornerPoint corner = ARS.Corners.FirstOrDefault(c => c.Node == apexNode);
+            if (corner == null) return;
+            _cornerHoldNode = apexNode;
+            _cornerHoldAt = Game.GameTime;
+            _cornerHoldSpeed = ARS.CornerApexSpeed(corner, this);
+        }
+
         // A corner is finished for this pass once the car is CornerSpeedLearnReleaseMetres past it, so the same
         // apex cannot be re-armed while the car is still on its way out of the corner.
         void ReleaseCornerSpeedLocks()
@@ -2607,21 +2621,29 @@ const float RequirementLookaheadSeconds = 3.95f;
                 cornerArrival = cornerSpd;
             }
 
-            // His spec: passing the apex arms a one second sticky and the corner keeps the car for that second. The
-            // value held is the corner term of the tick, which once the braking distance is behind the car equals
-            // the speed it is carrying: the exit keeps its number instead of being handed to the route term.
-            // Armed on the transition into "passed", so the same apex arms again on the next lap.
-            bool apexPassed = NextApexNode >= 0 && HasPassedApex(NextApexNode);
-            if (apexPassed && (!_cornerApexPassedLast || _cornerStickyApex != NextApexNode))
+            // His spec: passing the apex starts a one second hold on the CORNER itself, not merely on the speed it
+            // had. The plan queue moves to the next corner almost at once, so a hold keyed on the queue head would
+            // release on the very tick it was set: this keeps the corner by node and re-imposes its own speed.
+            int apexHead = NextApexNode;
+            if (_planApexHead != apexHead)
             {
-                _cornerStickyApex = NextApexNode;
-                _cornerStickyAt = Game.GameTime;
+                if (_planApexHead >= 0 && HasPassedApex(_planApexHead)) ArmCornerHold(_planApexHead);
+                _planApexHead = apexHead;
             }
-            _cornerApexPassedLast = apexPassed;
-            if (apexPassed && Game.GameTime - _cornerStickyAt >= CornerSpeedStickyMs)
+            if (apexHead >= 0 && HasPassedApex(apexHead)) ArmCornerHold(apexHead);
+
+            if (apexHead >= 0 && HasPassedApex(apexHead))
             {
                 cornerSpd = 999f;
                 cornerArrival = 999f;
+            }
+
+            if (_cornerHoldNode >= 0 && Game.GameTime - _cornerHoldAt < CornerSpeedStickyMs
+                && _cornerHoldSpeed < cornerSpd)
+            {
+                cornerSpd = _cornerHoldSpeed;
+                cornerArrival = _cornerHoldSpeed;
+                cornerSourceNode = _cornerHoldNode;
             }
 
             bool chicane = TrackSpeed.ChicaneBoost && Brain.Corner != null && Brain.Corner.Point.IsChicane;
