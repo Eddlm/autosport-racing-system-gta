@@ -406,7 +406,8 @@ namespace ARS
         const float BrakeMaxFactor = 1.25f;
         // Corner speed learning: one flat step in m/s, clamped both ways. The switch is a boolean; the step
         // and the limit are code, not settings. The analyser opens on the approach and closes a window later.
-        const float CornerSpeedLearnStepMps = 2f;
+        const float CornerSpeedLearnRiseMps = 6f;
+        const float CornerSpeedLearnDropMps = 2f;
         const float CornerSpeedLearnLimitMps = 10f;
         const float CornerSpeedLearnStartSeconds = 3f;
         const float CornerSpeedLearnWindowSeconds = 6f;
@@ -2412,7 +2413,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             bool trouble = _cornerSpeedSawSlide || _cornerSpeedSawOffTrack;
-            float after = ARS.Clamp(before + (trouble ? -CornerSpeedLearnStepMps : CornerSpeedLearnStepMps),
+            float after = ARS.Clamp(before + (trouble ? -CornerSpeedLearnDropMps : CornerSpeedLearnRiseMps),
                 -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
             CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;
 
