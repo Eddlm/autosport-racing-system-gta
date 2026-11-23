@@ -58,7 +58,6 @@
 ## New debug tools
 
 - A centred screen-space **debug panel**: six throttle bars, brake and TCS followers, margin meters, the Gs floor and a stability bar.
-- **Show RPMs**: engine rpm derived from wheel speed, gear, and the game's own rev ratio.
 - **Show TRlateral** (experimental): the tyre's peak slide angle as a horn against the car's live slide angle.
 
 ## Settings and menus

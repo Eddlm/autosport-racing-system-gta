@@ -331,7 +331,6 @@ namespace ARS
         float _projectionCenterOffset = 0f;
         float _projectionHalfWidth = 0.1f;
         int _projectionMeasuredAt = -1;
-        bool _projectionValid;
         float _carOutsideMeters = 0f;
         bool _projectionWidening = false;
         float _projectionWidenMeters;
@@ -495,8 +494,6 @@ namespace ARS
         const ulong MaxDriveGearHash = 0x24910C3D66BA770D;
         const ulong CurrentDriveGearHash = 0x56185A25D45A0DCD;
 
-        const float AssumedFinalDrive = 6.2f;   // 100 mph in top gear reads 7000 rpm on a 0.34 m wheel
-        static readonly float RpmPerRadPerSecond = (float)(60.0 / (2.0 * Math.PI));
         const ulong FullyChargeNitrousHash = 0x1A2BCC8C636F9226;
         const ulong OverrideNitrousLevelHash = 0xC8E9B6B71B8E660D;
 
@@ -2040,7 +2037,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             _projectionOutsideMeters = 0f;
             _projectionCenterOffset = 0f;
             _projectionHalfWidth = 0.1f;
-            _projectionValid = false;
             _projectionMeasuredAt = Game.GameTime;
             _carOutsideMeters = 0f;
             _projectionWidening = false;
@@ -2067,7 +2063,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _projectionOutsideMeters = outsideOffset - halfWidth;
                 _projectionCenterOffset = signedOffset;
                 _projectionHalfWidth = halfWidth;
-                _projectionValid = true;
                 float projectionSigned = ARS.SignedLaneOffset(proj, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
                 _projectionWidenMeters = Math.Abs(projectionSigned) - carOffset;
                 _projectionWidenSign = Math.Sign(projectionSigned);
@@ -2111,7 +2106,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             string detail = string.IsNullOrEmpty(reason) ? string.Empty : " (" + reason + ")";
             ARS.Log(ARS.LogImportance.Info, source + (chose ? " chose apex " : " released apex ")
-                + apexNode + " at " + Game.GameTime + " ms" + detail, true);
+                + apexNode + " at " + Game.GameTime + " ms" + detail);
         }
 
         float PlannedCornerArrivalSpeed(CornerPoint corner)
@@ -2163,14 +2158,19 @@ const float RequirementLookaheadSeconds = 3.95f;
             string factorText = Math.Abs(after - before) < 0.0005f
                 ? "factor " + after.ToString("0.00", CultureInfo.InvariantCulture) + " holds"
                 : "factor " + before.ToString("0.00", CultureInfo.InvariantCulture) + " -> " + after.ToString("0.00", CultureInfo.InvariantCulture);
-            AnnounceBrakeRamp(CornerId(apex) + " · " + deltaText + " m/s vs target · " + factorText);
+            // His spec: two lines, reason then the number it changed to. The log keeps the whole story.
+            // Carrying more speed than the corner wants is the issue the factor answers, so the reason takes the red.
+            string brakeReason = deltaText + " m/s";
+            if (delta > 0f) brakeReason = "~r~" + brakeReason + "~w~";
+            AnnounceBrakeRamp(CornerId(apex) + " · " + deltaText + " m/s vs target · " + factorText,
+                brakeReason + " - " + after.ToString("0.00", CultureInfo.InvariantCulture));
         }
 
-        void AnnounceBrakeRamp(string detail)
+        void AnnounceBrakeRamp(string detail, string notified)
         {
             ARS.Log(ARS.LogImportance.Info, "brake ramp " + Name + " (" + Car.DisplayName + "): " + detail);
             if (!ARS.BrakeLearningNotify) return;
-            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + detail);
+            UI.Notify("~b~[BRAKE]~w~ " + Car.DisplayName + "~n~" + notified);
         }
 
         // Corner speed learning: the corner-mode latch opens the window. Past the apex, keep the least
@@ -2246,8 +2246,13 @@ const float RequirementLookaheadSeconds = 3.95f;
                 : "no slide";
             string offtrack = hadSlipSample && clearance < 0f ? " · ~r~offtrack~w~" : "";
 
+            // The notice carries the reason, not the stored offset: how much room the outside had decides the change.
+            string reasonText = hadSlipSample ? clearance.ToString("0.0", CultureInfo.InvariantCulture) + " m" : "no slide";
+            // The reason carries the colour, not the value: a deduction is read off the room the corner left.
+            if (applied < 0f) reasonText = "~r~" + reasonText + "~w~";
             AnnounceCornerSpeedAdjustment(id + " · " + peakText + " · " + deltaText + offtrack
-                + (aheadGain > 0f ? " · ahead " + FormatCornerSpeedOffset2(aheadGain) : ""));
+                + (aheadGain > 0f ? " · ahead " + FormatCornerSpeedOffset2(aheadGain) : ""),
+                reasonText + " - " + deltaText);
         }
 
         static string FormatCornerSpeedOffset2(float offset) => offset.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture) + " m/s";
@@ -2307,7 +2312,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": pre  route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
                 + " corner " + cornerTerm.ToString("0.0", CultureInfo.InvariantCulture)
                 + " car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
-                + " apex at " + MetresToNode(apexNode).ToString("0.0", CultureInfo.InvariantCulture) + " m", true);
+                + " apex at " + MetresToNode(apexNode).ToString("0.0", CultureInfo.InvariantCulture) + " m");
             _cornerMode = true;
             _cornerSpeedAuthority = true;
             _apexRampActive = false;
@@ -2321,7 +2326,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             StartCornerSpeedLearning(apexNode);
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": ENTER corner #" + apexNode + ", drinking "
                 + cornerTerm.ToString("0.0", CultureInfo.InvariantCulture) + " m/s, held "
-                + heldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
+                + heldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s");
         }
 
         // `judge: false` is the early release: the corner stopped asking for a lift before its apex, so it was never
@@ -2333,13 +2338,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             else _cornerSpeedApexNode = -1;
             int postApexMs = _cornerModeApexPassedAt >= 0 ? Game.GameTime - _cornerModeApexPassedAt : -1;
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": corner mode lifted for #" + _cornerModeNode
-                + (postApexMs >= 0 ? " " + postApexMs + " ms after apex" : " before apex was marked"), true);
+                + (postApexMs >= 0 ? " " + postApexMs + " ms after apex" : " before apex was marked"));
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": post route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
                 + " car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
-                + " apex at " + MetresToNode(_cornerModeNode).ToString("0.0", CultureInfo.InvariantCulture) + " m", true);
+                + " apex at " + MetresToNode(_cornerModeNode).ToString("0.0", CultureInfo.InvariantCulture) + " m");
             _cornerMode = false;
             _cornerSpeedAuthority = false;
-            ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": EXIT to route (" + why + ")", true);
+            ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": EXIT to route (" + why + ")");
             _cornerModeNode = -1;
             _cornerModeSpeed = 999f;
             _cornerModeApexPassedAt = -1;
@@ -2378,11 +2383,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             foreach (int node in released) _cornerSpeedLocked.Remove(node);
         }
 
-        void AnnounceCornerSpeedAdjustment(string detail)
+        void AnnounceCornerSpeedAdjustment(string detail, string notified)
         {
             ARS.Log(ARS.LogImportance.Info, "corner speed " + Name + " (" + Car.DisplayName + "): " + detail);
             if (!ARS.CornerSpeedLearnNotify) return;
-            UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + detail);
+            UI.Notify("~b~[CORNER SPEED]~w~ " + Car.DisplayName + "~n~" + notified);
         }
 
         int CornerEntranceNode(CornerPoint corner, int apexNode)
@@ -2606,7 +2611,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                     ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": APEX corner #" + _cornerModeNode
                         + " passed, car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
                         + " m/s, held " + _cornerModeSpeed.ToString("0.0", CultureInfo.InvariantCulture)
-                        + " m/s, route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
+                        + " m/s, route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture) + " m/s");
                 }
 
                 if (_cornerModeNode < 0 || (_cornerModeApexPassedAt >= 0 && Game.GameTime - _cornerModeApexPassedAt >= CornerVerdictMs))
@@ -3009,7 +3014,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     ARS.Log(ARS.LogImportance.Info, "Card divebomb: " + Name + " released"
                         + (HasPassedApex(_divebombApexNode) ? " at apex" : " partner lost")
-                        + " after " + (Game.GameTime - ActiveManeuver.LastEnabled) + " ms", true);
+                        + " after " + (Game.GameTime - ActiveManeuver.LastEnabled) + " ms");
                     EndCard();
                     _divebombApexNode = -1;
                 }
@@ -3257,7 +3262,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _divebombBrakeBonus = ARS.GetRandomInt(2, 9) / 100f;
             ARS.Log(ARS.LogImportance.Info, "Card divebomb: " + Name + " armed on " + diveTarget.RivalRacer.Name
                 + " apex " + apexNode + " bonus +" + _divebombBrakeBonus.ToString("0.00") + " gap " + diveTarget.RouteGapAhead.ToString("0.0")
-                + " dT " + (timeToEntrance - diveTarget.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(diveTarget.Speed, 1f)).ToString("0.00"), true);
+                + " dT " + (timeToEntrance - diveTarget.RivalRacer.ForwardNodeDistance(entranceNode) / Math.Max(diveTarget.Speed, 1f)).ToString("0.00"));
             return true;
         }
 
@@ -3452,17 +3457,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             return Car.Position + Car.Velocity * seconds + 0.5f * VehicleData.AverageAcceleration * seconds * seconds;
         }
 
-        static Vector3 RotateZ(Vector3 v, float degrees)
-        {
-            float rad = degrees * (float)Math.PI / 180f;
-            float cos = (float)Math.Cos(rad);
-            float sin = (float)Math.Sin(rad);
-            return new Vector3(v.X * cos - v.Y * sin, v.X * sin + v.Y * cos, v.Z);
-        }
-        const bool DebugInputVisuals = false;
 
         void DrawDebug()
         {
+            // TRlateral is the one readout that picks its own car - the one nearest the player - so it needs neither
+            // a focus racer nor another toggle to be on. Every other per-car visual follows the focus.
+            if (!ControlledByPlayer && ARS.DebugToggles[Options.ShowTrLateral] && ARS.Racers.Count > 0
+                && this == ARS.Racers.OrderBy(c => c.Car.Position.DistanceTo(Game.Player.Character.Position)).First())
+                DrawTrLateral();
+
             if (ControlledByPlayer || ARS.DebugFocusRacer != this) return;
 
             CornerPoint shapedCorner = _laneShapeApexNode >= 0 ? ARS.Corners.FirstOrDefault(c => c.Node == _laneShapeApexNode) : null;
@@ -3499,10 +3502,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             if (ARS.DebugToggles[Options.ShowInputs]) DrawInputTrail();
-            if (DebugInputVisuals && ARS.DebugToggles[Options.ShowTrackAnalysis]) DrawSteerAngles();
             if (ARS.DebugToggles[Options.ShowWheelSlip]) DrawWheelSlip();
-            if (ARS.DebugToggles[Options.ShowRpms] && ARS.Racers.Count > 0 && ARS.Racers[0] == this) DrawRpmReadout();
-            if (ARS.DebugToggles[Options.ShowTrLateral] && ARS.Racers.Count > 0 && this == ARS.Racers.OrderBy(c => c.Car.Position.DistanceTo(Game.Player.Character.Position)).ToList()[0]) DrawTrLateral();
             if (ARS.DebugToggles[Options.ShowFrontSlip]) DrawFrontSlipReadout();
             if (ARS.DebugToggles[Options.ShowSlideAngle]) DrawSlideAngleReadout();
             if (ARS.DebugToggles[Options.ShowGsProjection])
@@ -3511,34 +3511,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 DrawProjectionGateSubtitle();
             }
         }
-        const float FanLineLength = 5f;
-        const float FanPursuitHeight = 0.05f;
-        const float FanDamperHeight = 0.10f;
-        const float FanSteerHeight = 0.15f;
-        const float FanCeilingHeight = 0.20f;
-
-        void DrawSteerAngles()
-        {
-            Vector3 origin = Car.Position + new Vector3(0, 0, VehicleData.ModelDimensions.Z + 0.2f);
-            Vector3 fwd = Car.ForwardVector;
-
-            ARS.DrawLine(origin + new Vector3(0, 0, FanPursuitHeight), origin + new Vector3(0, 0, FanPursuitHeight) + RotateZ(fwd, _steerPursuitDeg) * FanLineLength, Color.Yellow);
-
-            ARS.DrawLine(origin + new Vector3(0, 0, FanDamperHeight), origin + new Vector3(0, 0, FanDamperHeight) + RotateZ(fwd, _steerPursuitDeg + _damperTermDeg) * FanLineLength, Color.Red);
-
-            Vector3 steerBase = origin + new Vector3(0, 0, FanSteerHeight);
-            Vector3 steerDir = RotateZ(fwd, Control.SteerDegrees);
-            ARS.DrawLine(steerBase, steerBase + steerDir * FanLineLength, Color.White);
-
-            DrawSteerLineSphere(steerBase, steerDir, FanLineLength, Math.Abs(Control.Throttle), SteerLinePedalSize, Color.Green);
-            DrawSteerLineSphere(steerBase, steerDir, FanLineLength, Control.Brake, SteerLinePedalSize, Color.Red);
-            DrawPedalLimits(steerBase, steerDir, FanLineLength);
-
-            float ceilingDeg = ResolveSteerCeiling(ARS.GetForwardSpeed(Car));
-            ARS.DrawLine(origin + new Vector3(0, 0, FanCeilingHeight), origin + new Vector3(0, 0, FanCeilingHeight) + RotateZ(fwd, ceilingDeg) * FanLineLength, Color.Cyan);
-            ARS.DrawLine(origin + new Vector3(0, 0, FanCeilingHeight), origin + new Vector3(0, 0, FanCeilingHeight) + RotateZ(fwd, -ceilingDeg) * FanLineLength, Color.Cyan);
-        }
-
         public void ProcessTick()
         {
             UpdateTickData();
@@ -3603,12 +3575,6 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Color colour = fade < InputTrailFadeCount ? Color.FromArgb(255 * (fade + 1) / (InputTrailFadeCount + 1), InputColour(input)) : InputColour(input);
                 World.DrawMarker(MarkerType.ChevronUpx1, position, direction, new Vector3(89f, 90f, -90f), new Vector3(InputTrailChevronSize, InputTrailChevronSize, InputTrailChevronSize), colour, false, false, 2, false, "", "", false);
             }
-        }
-        const float SteerLinePedalSize = 0.08f;
-
-        void DrawSteerLineSphere(Vector3 basePt, Vector3 dir, float length, float level, float size, Color color)
-        {
-            World.DrawMarker(MarkerType.DebugSphere, basePt + dir * length * ARS.Clamp(level, 0f, 1f), Vector3.Zero, Vector3.Zero, new Vector3(size, size, size), color);
         }
         static readonly Color SlipRestColor = Color.White;
         static readonly Color SlipPeakColor = Color.Lime;
@@ -3803,20 +3769,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             UI.ShowSubtitle(slide.ToString("0.0") + "°~n~" + steer.ToString("0.0") + "°", 50);
         }
 
-        void DrawRpmReadout()
-        {
-            int gear = Function.Call<int>((Hash)CurrentDriveGearHash, Car);
-            int maxGear = Function.Call<int>((Hash)MaxDriveGearHash, Car);
-            if (gear < 1 || maxGear < 2)
-            {
-                UI.ShowSubtitle("--", 50);
-                return;
-            }
-            float rpm = ARS.MeanWheelRotation(Car) * KickGearRatio(gear, maxGear) * AssumedFinalDrive * RpmPerRadPerSecond;
-            string rpmText = float.IsNaN(rpm) || float.IsInfinity(rpm) ? "--" : ((int)Math.Round(rpm * 0.001f)).ToString(CultureInfo.InvariantCulture) + "K";
-            UI.ShowSubtitle(rpmText, 50);
-        }
-
         public void DrawTrLateral()
         {
             float halfWidth = VehicleData.BoundingBox * 0.5f;
@@ -3878,14 +3830,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             t = ARS.Clamp(t, 0f, 1f);
             return Color.FromArgb((int)(from.A + (to.A - from.A) * t), (int)(from.R + (to.R - from.R) * t), (int)(from.G + (to.G - from.G) * t), (int)(from.B + (to.B - from.B) * t));
         }
-        const float PedalLimitReasonSize = 0.1f;
-        const float PedalLimitCapSize = 0.09f;
-        static readonly Color NonDangerousReasonColor = Color.FromArgb(255, 120, 200, 255);
-        static readonly Color GripReasonColor = Color.Yellow;
-        static readonly Color OverspeedReasonColor = Color.Black;
-        static readonly Color CountersteerReasonColor = Color.Orange;
-        static readonly Color StabilityReasonColor = Color.FromArgb(255, 190, 80, 255);
-        static readonly Color RecoveryReasonColor = Color.Cyan;
         const float LaneStillMps = 0.2f;
 
         public static Color LaneMotionColor(LaneReason reason, float rateMps, int cornerDir)
@@ -3893,61 +3837,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (reason == LaneReason.OwnLane) return Color.Gray;
             if (cornerDir == 0 || Math.Abs(rateMps) < LaneStillMps) return Color.DodgerBlue;
             return rateMps * cornerDir < 0f ? Color.Lime : Color.Yellow;
-        }
-
-        struct PedalLimitSphere
-        {
-            public float Level;
-            public Color Color;
-            public float Size;
-        }
-
-        readonly PedalLimitSphere[] _pedalLimits = new PedalLimitSphere[12];
-
-        void DrawPedalLimits(Vector3 basePt, Vector3 dir, float length)
-        {
-            int count = 0;
-            AddPedalLimit(Control.MaxThrottleFromTCS, GripReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxThrottleFromStability, StabilityReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxThrottleFromOverspeed, OverspeedReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxThrottleFromRival, NonDangerousReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxThrottleFromChillOut, NonDangerousReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxThrottleFromYield, NonDangerousReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxThrottleFromOffTrack, Color.White, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxThrottleFromRecovery, RecoveryReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxBrakeFromABS, GripReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxBrakeFromCountersteer, CountersteerReasonColor, PedalLimitReasonSize, ref count);
-            AddPedalLimit(Control.MaxBrakeFromSlide, CountersteerReasonColor, PedalLimitReasonSize, ref count);
-            if (IsFullCountersteer()) AddPedalLimit(CountersteerPedalCap, Color.White, PedalLimitCapSize, ref count);
-
-
-            SortPedalLimits(count);
-            for (int i = 0; i < count; i++)
-                DrawSteerLineSphere(basePt, dir, length, _pedalLimits[i].Level, _pedalLimits[i].Size, _pedalLimits[i].Color);
-        }
-
-        void AddPedalLimit(float level, Color color, float size, ref int count)
-        {
-            if (level >= 1f || count >= _pedalLimits.Length) return;
-            _pedalLimits[count].Level = level;
-            _pedalLimits[count].Color = color;
-            _pedalLimits[count].Size = size;
-            count++;
-        }
-
-        void SortPedalLimits(int count)
-        {
-            for (int i = 1; i < count; i++)
-            {
-                PedalLimitSphere cap = _pedalLimits[i];
-                int j = i - 1;
-                while (j >= 0 && _pedalLimits[j].Level < cap.Level)
-                {
-                    _pedalLimits[j + 1] = _pedalLimits[j];
-                    j--;
-                }
-                _pedalLimits[j + 1] = cap;
-            }
         }
 
         public static Color InputColour(float input)
@@ -4592,7 +4481,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 if (NextApexNode >= 0)
                     ARS.Log(ARS.LogImportance.Info, "plan " + Name + ": refill found no corner ahead, kept head "
-                        + NextApexNode + " (node " + CurrentTrackPoint.Node + " of " + count + ")", true);
+                        + NextApexNode + " (node " + CurrentTrackPoint.Node + " of " + count + ")");
                 return;
             }
 
@@ -5106,7 +4995,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 int entryGearCount = Function.Call<int>((Hash)MaxDriveGearHash, Car);
                 float entryThrust = VehicleMemory.GetInitialDriveForce(Car) * KickGearRatio(Math.Max(entryGear, 1), entryGearCount) / 2f;
                 float entryBudget = VehicleData.CurrentMechanicalGrip * KickWheelLoadShare * KickGripMargin;
-                ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": recovery drive — bearing " + _steerAimBearingDegrees.ToString("0") + " deg, lock " + VehicleData.SteeringLock.ToString("0") + " deg, bias " + VehicleMemory.GetDriveBiasFront(Car).ToString("0.00") + ", close " + KickCloseSeconds().ToString("0.0") + " s, forward " + ARS.MpsToMph(ARS.GetForwardSpeed(Car)).ToString("0") + " mph, gear " + entryGear + "/" + entryGearCount + ", thrust " + entryThrust.ToString("0.00") + ", budget " + entryBudget.ToString("0.00"), true);
+                ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": recovery drive — bearing " + _steerAimBearingDegrees.ToString("0") + " deg, lock " + VehicleData.SteeringLock.ToString("0") + " deg, bias " + VehicleMemory.GetDriveBiasFront(Car).ToString("0.00") + ", close " + KickCloseSeconds().ToString("0.0") + " s, forward " + ARS.MpsToMph(ARS.GetForwardSpeed(Car)).ToString("0") + " mph, gear " + entryGear + "/" + entryGearCount + ", thrust " + entryThrust.ToString("0.00") + ", budget " + entryBudget.ToString("0.00"));
             }
         }
 
@@ -5208,7 +5097,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             string foldReason = rotated ? "rotated" : "window spent";
             ARS.Log(ARS.LogImportance.Info,
-                "Kick " + Name + ": folded " + foldReason + " after " + (now - _kickPlayingSince) + " ms, ask " + _kickAskDegrees.ToString("0") + " deg, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
+                "Kick " + Name + ": folded " + foldReason + " after " + (now - _kickPlayingSince) + " ms, ask " + _kickAskDegrees.ToString("0") + " deg, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"));
             _kickPlaying = false;
             _kickCooldownUntil = now + KickCooldownMs;
         }
@@ -5244,7 +5133,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _kickWindowEnd = now + KickWindowMs;
             _kickArmSince = 0;
             _kickSteerSign = Math.Sign(_steerPreLimitDegrees);
-            ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, ask " + _steerPreLimitDegrees.ToString("0") + " deg past granted " + _steerGrantedCeiling.ToString("0") + " deg at " + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + " mph, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"), true);
+            ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": playing, ask " + _steerPreLimitDegrees.ToString("0") + " deg past granted " + _steerGrantedCeiling.ToString("0") + " deg at " + ARS.MpsToMph(Car.Velocity.Length()).ToString("0") + " mph, slip " + ARS.MaxWheelSlip(Car).ToString("0.00"));
         }
 
         bool RecoveryExitHolds()

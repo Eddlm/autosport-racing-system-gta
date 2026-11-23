@@ -10,6 +10,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using System.Xml;
@@ -32,7 +33,7 @@ namespace ARS
         ShowEdgeChevrons, ShowLeaderboard, ShowDriverNames, ShowTrackAnalysis,
         ShowAiLapTimes, LockLaneCentre, ShowBumps, ShowWheelSlip,
         ShowGsProjection, ShowGLine, ShowRouteRadius, ShowRivalry,
-        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowRpms, ShowTrLateral, ShowCurveRadius
+        ShowFrontSlip, ShowSlideAngle, ShowThrottleReason, ShowTrLateral, ShowCurveRadius
     }
 
     public partial class ARS : Script
@@ -192,7 +193,6 @@ public const float LaneInsetPerRadius = 125f;
         { Options.ShowGsProjection, false },
         { Options.ShowGLine, false },
         { Options.ShowRouteRadius, false },
-        { Options.ShowRpms, false },
         { Options.ShowTrLateral, false },
         { Options.ShowCurveRadius, false }
     };
@@ -299,7 +299,7 @@ public const float LaneInsetPerRadius = 125f;
             {
                 _loaded = false;
                 Exception ex = _loadScriptTask.Exception?.GetBaseException();
-                Log(LogImportance.Error, "Initialization failed: " + (ex != null ? ex.Message : "Unknown error"), true);
+                Log(LogImportance.Error, "Initialization failed: " + (ex != null ? ex.Message : "Unknown error"));
                 DisplayHelpTextTimed("~r~ARS failed to load. Check log.", 4000);
             }
             else
@@ -310,7 +310,7 @@ public const float LaneInsetPerRadius = 125f;
                     RefreshPowerControls();
                     FillCachedCandidates(_intendedOpponents);
                     RefreshTrackList();
-                    Log(LogImportance.Info, "Initialization complete.", true);
+                    Log(LogImportance.Info, "Initialization complete.");
                     DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
                     HelpMessages.Add("Press ~INPUT_SPRINT~ + ~INPUT_CONTEXT~ to open the ~b~ARS~w~ menu.");
                     _loaded = true;
@@ -318,7 +318,7 @@ public const float LaneInsetPerRadius = 125f;
                 catch (Exception loadError)
                 {
                     _loaded = false;
-                    Log(LogImportance.Error, "Initialization failed after the background load: " + loadError.Message, true);
+                    Log(LogImportance.Error, "Initialization failed after the background load: " + loadError.Message);
                     DisplayHelpTextTimed("~r~ARS failed to load. Check log.", 4000);
                 }
             }
@@ -344,7 +344,8 @@ public const float LaneInsetPerRadius = 125f;
             catch (Exception) { }
             File.WriteAllText(LogPath, "----------------------------");
 
-            Log(LogImportance.Info, "Script initialized - " + DateTime.Now + " - build " + ReadBuildNumber(), true);
+            Log(LogImportance.Info, "Script initialized - " + DateTime.Now + " - build " + ReadBuildNumber());
+            FlushLog();
             File.AppendAllText(LogPath, "\n----------------------------");
             VerifyScriptBridge();
             LoadSettings();
@@ -394,7 +395,7 @@ public const float LaneInsetPerRadius = 125f;
             }
             catch (Exception ex)
             {
-                Log(LogImportance.Error, "ScriptHookVDotNet2.dll is not usable with this ScriptHookVDotNet.asi build (" + ex.GetType().Name + ") - install ScriptHookVDotNet as one complete, matching set.", true);
+                Log(LogImportance.Error, "ScriptHookVDotNet2.dll is not usable with this ScriptHookVDotNet.asi build (" + ex.GetType().Name + ") - install ScriptHookVDotNet as one complete, matching set.");
                 throw;
             }
         }
@@ -1312,11 +1313,10 @@ public const float LaneInsetPerRadius = 125f;
             AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the focus car's constant-acceleration path from its roof: a line to 0.5 s and another from there to 1 s; the bend is the acceleration. One colour for both, decided where the path is measured: green fading to white as the Gs lane throttle floor lets go (green at the inside edge, white at the centre), red when the path leaves the road and runs further out than the car (or drifts out with the car still on it), yellow when it leaves the road but cuts inside the car, blue otherwise. The one-second end carries the projection cut in mph: red while it is bleeding, yellow once it has bled and stopped. The subtitle carries the slide angle as a share of the tyre's peak slip at this speed, as a bare percentage: red while the gate is open, blue while it is closed. The gate also needs the wheel pointing into the slide, so a countersteering car reads closed.");
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
             AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is measured from: the car's own, the near sample and the far one at speed/grip and twice that ahead.");
-            AddDebugCheckbox(debugMenu, Options.ShowRpms, "Show RPMs", "Estimate the first racer's engine speed from its own wheels and the gear ladder, in the subtitle as rpm @ gear: the mean wheel rotation read live, the ratio for the gear the game reports and an assumed differential, so a spinning or locking wheel moves the number while a stopped car reads zero.");
-            AddDebugCheckbox(debugMenu, Options.ShowTrLateral, "Show TRlateral", "The tyre's peak slide angle at this speed, drawn on the car closest to the player: a line per side along the car from the rear to the front tip, and from that tip a line of the same length opening back at the angle (LateralTractionCurve / (1 + 0.1·v)) — the horn opens wide when the car is slow and closes onto the body line at speed. A second horn per side (red) opens at the car's live slide angle, so the pair shows the tyre's limit (yellow) against where the car actually sits (red).");
+            AddDebugCheckbox(debugMenu, Options.ShowTrLateral, "Show TRlateral", "The tyre's peak slide angle at this speed, drawn on the focus car: a line per side along the car from the rear to the front tip, and from that tip a line of the same length opening back at the angle (LateralTractionCurve / (1 + 0.1·v)) — the horn opens wide when the car is slow and closes onto the body line at speed. A second horn per side (red) opens at the car's live slide angle, so the pair shows the tyre's limit (yellow) against where the car actually sits (red).");
             AddDebugCheckbox(debugMenu, Options.ShowCurveRadius, "Show Curve %", "The focus car's own path radius against the track's radius under it, as a bare percentage in the subtitle: over 100 the car is running wider than the track asks, under 100 it is holding or tightening. The path radius is a 2D circle through the car and its own projections at half a second and one second; the track radius is the sweep radius at the car's node.");
 
-            NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Fatal keeps only forced diagnostics.", EnumLabels<LogImportance>());
+            NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Nothing is forced past the level, so Error keeps only errors.", EnumLabels<LogImportance>());
             logLevelItem.ItemChanged += (sender, args) =>
             {
                 LogLevel = ParseEnum(logLevelItem.Items[args.Index], LogLevel);
@@ -1859,7 +1859,7 @@ public const float LaneInsetPerRadius = 125f;
             AddPowerValues(_powerTargetValues, min, max, 2.0f);
 
             if (_powerTargetValues.Count == 0) _powerTargetValues.Add(RoundToNearestEven(Clamp(PowerTargetScale, min, max)));
-            Log(LogImportance.Info, "Pace span " + min.ToString("0.0") + ".." + max.ToString("0.0") + " over " + ModelPaceIndexCache.Count + " models, " + _powerTargetValues.Count + " PI Target value(s).", true);
+            Log(LogImportance.Info, "Pace span " + min.ToString("0.0") + ".." + max.ToString("0.0") + " over " + ModelPaceIndexCache.Count + " models, " + _powerTargetValues.Count + " PI Target value(s).");
 
             _powerTargetItem.Items.Clear();
             foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0"));
@@ -2529,7 +2529,7 @@ public const float LaneInsetPerRadius = 125f;
             }
             catch (Exception ex)
             {
-                Log(LogImportance.Error, "OnTick error: " + ex, true);
+                Log(LogImportance.Error, "OnTick error: " + ex);
             }
         }
         public static TimeSpan ParseToTimeSpan(int gameTime)
@@ -2916,7 +2916,7 @@ public const float LaneInsetPerRadius = 125f;
                     catch (Exception ex)
                     {
                         probeErrors++;
-                        if (probeErrors == 1) Log(LogImportance.Error, "GET_IS_VEHICLE_ELECTRIC probe failed: " + ex.Message, true);
+                        if (probeErrors == 1) Log(LogImportance.Error, "GET_IS_VEHICLE_ELECTRIC probe failed: " + ex.Message);
                     }
                 }
                 rows.Add(new[]
@@ -3424,18 +3424,6 @@ public const float LaneInsetPerRadius = 125f;
             return min;
         }
 
-        static public unsafe float MeanWheelRotation(Vehicle handle)
-        {
-            List<ulong> wheelPtrs = GetWheelPtrs(handle);
-            if (wheelPtrs.Count == 0) return 0f;
-            double total = 0d;
-            foreach (var wheel in wheelPtrs)
-            {
-                total += Math.Abs(*((float*)(wheel + 0x170)));
-            }
-            return (float)(total / wheelPtrs.Count);
-        }
-
         static public unsafe float MaxWheelSideSlip(Vehicle handle)
         {
             List<ulong> wheelPtrs = GetWheelPtrs(handle);
@@ -3566,6 +3554,7 @@ public const float LaneInsetPerRadius = 125f;
 
         void OnAbort(object sourc, EventArgs e)
         {
+            FlushLog();
 
             try
             {
@@ -3862,12 +3851,31 @@ public const float LaneInsetPerRadius = 125f;
             return mode;
         }
 
-        public static void Log(LogImportance i, string text, bool forced = false)
-        {
+        // The level is the only gate: there is no way to force a line past it, so a log left at Error costs
+        // nothing but the arguments already built at the call site. The write is the expensive part - a
+        // synchronous open/append/close on the game thread costs more than the message it stores, and a burst of
+        // corner lines (a racer choosing an apex) was a felt frame hitch - so lines are buffered and the file is
+        // appended once a second. An Error flushes at once, and OnAbort flushes whatever is left, so a hard crash
+        // costs at most the last second of lines.
+        const int LogFlushMs = 1000;
+        static readonly StringBuilder _logBuffer = new StringBuilder();
+        static int _logFlushedAtMs;
 
-            if (LogLevel > i && !forced) return;
-            string log = "\n[" + DateTime.Now + "](" + i.ToString() + "): " + text;
-            File.AppendAllText(LogPath, log);
+        static void FlushLog()
+        {
+            _logFlushedAtMs = Environment.TickCount;
+            if (_logBuffer.Length == 0) return;
+            string pending = _logBuffer.ToString();
+            _logBuffer.Length = 0;
+            try { File.AppendAllText(LogPath, pending); }
+            catch (Exception) { }
+        }
+
+        public static void Log(LogImportance i, string text)
+        {
+            if (LogLevel > i) return;
+            _logBuffer.Append('\n').Append('[').Append(DateTime.Now).Append("](").Append(i.ToString()).Append("): ").Append(text);
+            if (i >= LogImportance.Error || Environment.TickCount - _logFlushedAtMs >= LogFlushMs) FlushLog();
         }
 
         public static bool CanWeUse(Entity entity)
@@ -4261,7 +4269,7 @@ public const float LaneInsetPerRadius = 125f;
 
                 if (!vehicleModel.IsLoaded)
                 {
-                    Log(LogImportance.Error, "Model " + modelName + " failed to load after 5s, skipping.", true);
+                    Log(LogImportance.Error, "Model " + modelName + " failed to load after 5s, skipping.");
                     return vehicleModel;
                 }
 
@@ -4290,7 +4298,7 @@ public const float LaneInsetPerRadius = 125f;
                     Model vehicleModel = LoadVehicleModel(modelKey);
                     if (!vehicleModel.IsLoaded)
                     {
-                        Log(LogImportance.Error, "Skipping " + modelKey + " - model not loaded", true);
+                        Log(LogImportance.Error, "Skipping " + modelKey + " - model not loaded");
                         return false;
                     }
 
@@ -4308,7 +4316,7 @@ public const float LaneInsetPerRadius = 125f;
                     driverPed = CreateDriverPed(car);
                     if (driverPed == null)
                     {
-                        Log(LogImportance.Error, "Skipping " + modelKey + " - no driver ped.", true);
+                        Log(LogImportance.Error, "Skipping " + modelKey + " - no driver ped.");
                         car.Delete();
                         return false;
                     }
@@ -4316,7 +4324,7 @@ public const float LaneInsetPerRadius = 125f;
                 }
                 catch (Exception ex)
                 {
-                    Log(LogImportance.Error, "Failed to load racer: " + ex.Message, true);
+                    Log(LogImportance.Error, "Failed to load racer: " + ex.Message);
                     try { if (driverPed != null) driverPed.Delete(); } catch (Exception) { }
                     try { if (car != null) car.Delete(); } catch (Exception) { }
                 }
@@ -4363,7 +4371,7 @@ public const float LaneInsetPerRadius = 125f;
             }
             catch (Exception ex)
             {
-                Log(LogImportance.Error, "Failed to create ped: " + ex.Message, true);
+                Log(LogImportance.Error, "Failed to create ped: " + ex.Message);
                 return null;
             }
 

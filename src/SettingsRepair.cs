@@ -199,7 +199,7 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
             }
             catch (Exception ex)
             {
-                ARS.Log(ARS.LogImportance.Error, "Settings repair: could not create missing files - " + ex.Message, true);
+                ARS.Log(ARS.LogImportance.Error, "Settings repair: could not create missing files - " + ex.Message);
             }
         }
 
@@ -233,12 +233,12 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
                     }
                     if (stale.Count == 0 && unusable.Count == 0) continue;
                     WriteAtomic(file.Path, kept);
-                    if (stale.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped stale " + string.Join(", ", stale.ToArray()), true);
-                    if (unusable.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped unusable " + string.Join(", ", unusable.ToArray()), true);
+                    if (stale.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped stale " + string.Join(", ", stale.ToArray()));
+                    if (unusable.Count > 0) ARS.Log(ARS.LogImportance.Info, "Settings repair: " + file.Name + " dropped unusable " + string.Join(", ", unusable.ToArray()));
                 }
                 catch (Exception ex)
                 {
-                    ARS.Log(ARS.LogImportance.Error, "Settings repair: could not prune " + file.Name + " - " + ex.Message, true);
+                    ARS.Log(ARS.LogImportance.Error, "Settings repair: could not prune " + file.Name + " - " + ex.Message);
                 }
             }
         }
@@ -269,7 +269,7 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
                     }
                     catch (Exception ex)
                     {
-                        ARS.Log(ARS.LogImportance.Error, "Settings repair: could not fix " + file.Name + " " + spec.Key + " - " + ex.Message, true);
+                        ARS.Log(ARS.LogImportance.Error, "Settings repair: could not fix " + file.Name + " " + spec.Key + " - " + ex.Message);
                     }
                 }
             }
@@ -324,7 +324,7 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
         public static void ReportUndeclared(string fileName, string key, string operation)
         {
             if (!ReportedUndeclared.Add(fileName + "|" + key)) return;
-            ARS.Log(ARS.LogImportance.Error, "Settings: " + fileName + " declares no key '" + key + "', so the menu's " + operation + " was refused - an undeclared key is dropped on the next load, which would revert the setting silently.", true);
+            ARS.Log(ARS.LogImportance.Error, "Settings: " + fileName + " declares no key '" + key + "', so the menu's " + operation + " was refused - an undeclared key is dropped on the next load, which would revert the setting silently.");
         }
 
         public static void DeleteLegacyFiles()
@@ -340,7 +340,7 @@ development.Specs.Add(new KeySpec("SteerTrace", "False", Kind.Bool));
                 }
                 catch (Exception ex)
                 {
-                    ARS.Log(ARS.LogImportance.Error, "Settings repair: could not remove " + name + " - " + ex.Message, true);
+                    ARS.Log(ARS.LogImportance.Error, "Settings repair: could not remove " + name + " - " + ex.Message);
                 }
             }
         }

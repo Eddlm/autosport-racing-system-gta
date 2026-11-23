@@ -65,14 +65,14 @@ namespace ARS
         {
             if (_controlPatternReported) return;
             _controlPatternReported = true;
-            ARS.Log(ARS.LogImportance.Error, "[MEMORY] The vehicle control pattern was not found on game build " + Game.Version + "; ARS cannot drive the cars.", true);
+            ARS.Log(ARS.LogImportance.Error, "[MEMORY] The vehicle control pattern was not found on game build " + Game.Version + "; ARS cannot drive the cars.");
         }
 
         static void ReportMissingHandlingPattern()
         {
             if (_handlingPatternReported) return;
             _handlingPatternReported = true;
-            ARS.Log(ARS.LogImportance.Error, "[MEMORY] The handling-pointer pattern was not found on game build " + Game.Version + "; grip, steering lock, downforce and handling flags all read as zero.", true);
+            ARS.Log(ARS.LogImportance.Error, "[MEMORY] The handling-pointer pattern was not found on game build " + Game.Version + "; grip, steering lock, downforce and handling flags all read as zero.");
         }
 
         public static string UnsupportedBuildReason()

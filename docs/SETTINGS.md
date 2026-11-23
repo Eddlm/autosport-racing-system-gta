@@ -67,7 +67,6 @@ Debug overlays (not the ini schema — the `DebugToggles` dictionary, live value
 |---|---|---|---|
 | `ShowSlideAngle` | **NEW** | False | — |
 | `ShowThrottleReason` | **NEW** | False | — |
-| `ShowRpms` | **NEW** | False | — |
 | `ShowTrLateral` | **NEW** | False | — |
 | `ShowCheckpoints` | yes | True | True |
 | `ShowLeaderboard` | yes | True | True |
@@ -186,5 +185,4 @@ Not in the repair schema — written by the Debug menu itself. Defaults from `De
 | `ShowGsProjection` | False | False |
 | `ShowGLine` | False | False |
 | `ShowRouteRadius` | False | False |
-| `ShowRpms` | False | False |
 | `ShowTrLateral` | False | False |

@@ -81,7 +81,7 @@ namespace ARS
             }
             catch (Exception ex)
             {
-                ARS.Log(ARS.LogImportance.Error, "Settings: could not write " + _fileName + " - " + ex.Message, true);
+                ARS.Log(ARS.LogImportance.Error, "Settings: could not write " + _fileName + " - " + ex.Message);
             }
         }
 
