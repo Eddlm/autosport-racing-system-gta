@@ -19,7 +19,7 @@ namespace ARS
         public static readonly bool ProjectionCut = true;
         public static readonly bool OffTrackThrottle = true;
         public static readonly bool CrestGate = true;
-        public static readonly bool StabilityCap = false;
+        public static readonly bool StabilityCap = true;
         public static readonly bool GsLaneFloor = true;
         public static readonly bool OverspeedCorrection = true;
         public static readonly bool SlopeGrip = true;
@@ -3551,15 +3551,6 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         void DrawDebug()
         {
-            // TEMPORARY, hardcoded (owner, 2026-11-23): the player's overspeed penalty on screen while the cut is
-            // judged in game. No toggle, no menu row - grep TEMPORARY to find it when it comes out.
-            if (ControlledByPlayer)
-            {
-                float cutPct = (1f - _overspeedPowerLevel) * 100f;
-                UI.ShowSubtitle("OS " + _overspeedPowerLevel.ToString("0.00", CultureInfo.InvariantCulture)
-                    + " (-" + cutPct.ToString("0", CultureInfo.InvariantCulture) + "%) exc "
-                    + VehicleData.OverspeedExcessGs.ToString("+0.00;-0.00", CultureInfo.InvariantCulture) + "g", 50);
-            }
             // TRlateral is the one readout that picks its own car - the one nearest the player - so it needs neither
             // a focus racer nor another toggle to be on. Every other per-car visual follows the focus.
             if (!ControlledByPlayer && ARS.DebugToggles[Options.ShowTrLateral] && ARS.Racers.Count > 0

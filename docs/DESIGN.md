@@ -214,8 +214,8 @@ in the sense the geometry takes it for.
 one linear law — with a single deliberate exception below a walking pace, where a sub-split throttle is
 rounded up to full so the car can get off the line — and then every reason cap, traction, instability,
 overspeed, traffic, the track edge and the recovery, can only ever take authority away from it — the instability
-cap among them, which is parked off for now (`TrackSpeed.StabilityCap`, build 2003), so a lifted wheel currently
-lifts no throttle. That ordering
+cap among them, which was parked off for two builds (`TrackSpeed.StabilityCap`, 2003-2008) and is live again, so a
+lifted wheel costs throttle. That ordering
 is what lets the plan be conservative by construction without making the car slow: the plan promises what it
 can keep, and the caps are what answer when the promise turns out to have been wrong.
 
