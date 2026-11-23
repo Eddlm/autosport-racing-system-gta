@@ -2843,7 +2843,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float StabilityRisePerSecond = 0.5f;
         const float OverspeedArmMaxSlideDegrees = 2f;
         const float OverspeedArmMinSpeedMph = 30f;
-        const float OverspeedArmMaxLateralGs = 0.25f;
+        const float OverspeedArmMinForwardGs = 0.1f;
         const float OverspeedCutStartGs = 0.2f;
         const float ReasonCapRecoveryScale = 0.5f;
 
@@ -2871,11 +2871,10 @@ const float RequirementLookaheadSeconds = 3.95f;
         float OverspeedThrottleLevel()
         {
             if (!TrackSpeed.OverspeedCorrection) return 1f;
-            // One arm test for every car, player or AI: the lateral acceleration it is actually pulling, never the
-            // steer angle somebody asked for. Two branches let the human and the field disagree about what "straight"
-            // means; the measured number is what both actually did.
-            bool straight = Math.Abs(VehicleData.GetLateralGs(Car.ForwardVector)) < OverspeedArmMaxLateralGs;
-            bool armed = straight
+            // The excess being judged is a forward one, so the arm is the same axis and the same measurement: the car
+            // is genuinely pulling forward. Nothing here asks whether it is going straight.
+            bool pulling = VehicleData.GetLongitudinalGs(Car.ForwardVector) > OverspeedArmMinForwardGs;
+            bool armed = pulling
                 && Math.Abs(VehicleData.SlideAngle) < OverspeedArmMaxSlideDegrees
                 && Car.Velocity.Length() > ARS.MphToMps(OverspeedArmMinSpeedMph);
 
