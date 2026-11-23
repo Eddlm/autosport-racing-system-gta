@@ -1173,19 +1173,20 @@ namespace ARS
                 : 1f;
 
             _pursuitRawBearingDeg = bearing;
-            // The route ask may not point more than RouteSteerAngleCapDegrees off the car's own track direction while
-            // corner mode is not engaged: a lane change is then bounded in time - lateral rate = speed * sin(cap) -
-            // whatever asked for it. The bearing is measured off the car's course, so the window shifts by however
-            // far that course itself already sits off the route.
+            // The aim may not point more than RouteSteerAngleCapDegrees off the route at the car's own track point. It
+            // is absolute: the limit holds whatever angle the car itself is carrying, so a car already crossways does
+            // not get a wider ask - the aim is pulled back inside the band instead. The bearing the pursuit consumes is
+            // measured off the car's course, so the capped angle is converted back into that frame afterwards.
+            // Lateral rate = speed * sin(cap): a lane change is bounded in time, whatever asked for it.
             if (!_cornerMode && Car.Velocity.Length() > ARS.MphToMps(RouteSteerAngleCapMinMph))
             {
                 Vector3 trackFlat = new Vector3(CurrentTrackPoint.Direction.X, CurrentTrackPoint.Direction.Y, 0f);
                 if (trackFlat.LengthSquared() > 0.0001f && headingFlat.LengthSquared() > 0.0001f)
                 {
+                    float aimVsTrack = Vector3.SignedAngle(trackFlat, toAimFlat, Vector3.WorldUp);
                     float headingVsTrack = Vector3.SignedAngle(trackFlat, headingFlat, Vector3.WorldUp);
-                    bearing = ARS.Clamp(bearing,
-                        -RouteSteerAngleCapDegrees - headingVsTrack,
-                        RouteSteerAngleCapDegrees - headingVsTrack);
+                    bearing = ARS.Clamp(aimVsTrack, -RouteSteerAngleCapDegrees, RouteSteerAngleCapDegrees)
+                        - headingVsTrack;
                 }
             }
             _pursuitAimDistanceM = distance;
