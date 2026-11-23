@@ -865,7 +865,13 @@ namespace ARS
                     _shapeErrLastNode = hereNode;
                 }
             }
-            float dynamicInset = Math.Min(laneLimit, ARS.LaneInsetPerRadius / Math.Max(1f, aimRadius));
+            // TEMPORARY, hardcoded (owner, 2026-11-23): the dynamic lean asks the whole lane instead of a share of it,
+            // so the degrees cap is the only thing shaping how fast the car takes the inside. false restores 125 /
+            // radius. grep TEMPORARY to find it.
+            const bool LaneInsideFullLean = true;
+            float dynamicInset = LaneInsideFullLean
+                ? laneLimit
+                : Math.Min(laneLimit, ARS.LaneInsetPerRadius / Math.Max(1f, aimRadius));
             bool dynamicOwns = false;
             float dynamicAsk = steerRefOffset + ARS.LaneInsideSign * LaneTurnSignToAim(ARS.TrackPoints[steerRefPoint.Node]) * dynamicInset;
             dynamicOwns = !following && Lap > 0 && aimRadius <= ARS.LaneDynamicRadius;
