@@ -244,7 +244,7 @@ neither changes what "on the lane" means.
 
 **A ceiling stated in degrees.** How fast a lane change may happen is bounded as an **angle**, not as a metre
 budget: while corner mode is not engaged and the car is quick, the ask may not point more than a cap off
-the route at the car's own track point, and the cap ramps with speed — inert below twenty mph, forty-five degrees
+the route at the aim's own node, and the cap ramps with speed — inert below twenty mph, forty-five degrees
 there, five by sixty, flat above. A slow car placing itself needs the wheel it has; a fast one does not need a fifth
 of it. It stands down off the track, where climbing back is the ask that matters. It is **absolute**: the limit holds whatever angle the car itself is
 carrying, so a car already crossways has its aim pulled back inside the band rather than earning a wider ask. Lateral rate is then speed times the sine of the cap, so the limit is a

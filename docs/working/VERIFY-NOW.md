@@ -1,6 +1,6 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2015** (`20cbbfa20dd89806`). The six changes described here are 1981's, **AL** is the newest, then **AJ**, **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2.5 m/s per pass since 1999 (`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 in 1997, 2 before that, 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2.5 m/s (`CornerSpeedLearnDeltaLimitMps`), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2016** (`435a6a30a28df343`). The six changes described here are 1981's, **AL** is the newest, then **AJ**, **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2.5 m/s per pass since 1999 (`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 in 1997, 2 before that, 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2.5 m/s (`CornerSpeedLearnDeltaLimitMps`), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
@@ -14,14 +14,17 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ⬜ Not driven. Compile-only.
 
-Two changes on one pass. **The route ask may not point more than a speed-ramped cap off the car's own track
-direction**: inert below `20 mph` (`RouteSteerAngleCapMinMph`), `45°` there (`RouteSteerAngleCapWideDegrees`),
+Two changes on one pass. **The route ask may not point more than a speed-ramped cap off the route at the aim's own node**:
+inert below `20 mph` (`RouteSteerAngleCapMinMph`), `45°` there (`RouteSteerAngleCapWideDegrees`),
 tightening linearly to `5°` at `60 mph` (`RouteSteerAngleCapTightMph`, `RouteSteerAngleCapTightDegrees`) and flat
 above it. It stands down while the car is off the track (`OutOfTrackDistance() > 0`) and while corner mode holds,
-and it is **absolute**: the angle is measured at the car's own track point, whatever angle the car itself carries,
-so a car already crossways has its aim pulled back inside the band rather than earning a wider one. The pursuit
-consumes a bearing measured off the car's course, so the capped angle is converted afterwards
-(`bearing = clamp(aimVsTrack) − headingVsTrack`).
+and it is **absolute**: the angle is measured at the aim's own node, whatever angle the car itself carries,
+so a car already crossways has its aim pulled back inside the band rather than earning a wider one. The angle is measured against the track direction at the **aim's own node** (`steerRefPoint.Direction`), not the
+tangent under the car: on a 100 m bend the tangent turns 7.7° across a 13 m lookahead at 60 mph, 12.8° on a 60 m
+bend, so capping against the car's node trimmed the racing line itself and held every car out of the corner — the
+reported "can't steer in". Against the aim's node, following the road costs nothing and only real lateral
+positioning is capped. The pursuit consumes a bearing measured off the car's course, so the capped angle is
+converted afterwards (`bearing = clamp(aimVsRoute) − headingVsRoute`).
 
 Both ranges are written low-to-high because `Remap`'s clamp is `Clamp(r, out_min, out_max)`: passing a descending
 output range (`45` → `5`) makes the clamp collapse to a single value. Lateral budget = speed × sin(cap): `7.7 m/s`

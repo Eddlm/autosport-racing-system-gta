@@ -960,7 +960,7 @@ namespace ARS
             Vector3 aimPoint = steerRefPoint.Position + steerRight * aimPointOffset;
             _pursuitAimLateralM = ARS.SignedLaneOffset(aimPoint, Car.Position, Car.ForwardVector);
 
-            float laneSteerDeg = PursuitSteerDegrees(aimPoint, courseDir);
+            float laneSteerDeg = PursuitSteerDegrees(aimPoint, courseDir, steerRefPoint.Direction);
             _kickAskDegrees = laneSteerDeg;
             if (LaneCrossingScale)
             {
@@ -1159,7 +1159,7 @@ namespace ARS
             return ARS.RadToDeg((float)Math.Atan(PursuitGain * Math.Sin(ARS.DegToRad(bearing)) * VehicleData.WheelBase / distance));
         }
 
-        float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading)
+        float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading, Vector3 refDirection)
         {
             Vector3 toAim = aimPoint - Car.Position;
 
@@ -1183,24 +1183,22 @@ namespace ARS
                 : 1f;
 
             _pursuitRawBearingDeg = bearing;
-            // The aim may not point more than the cap off the route at the car's own track point. It is absolute: the
-            // limit holds whatever angle the car itself is carrying, so a car already crossways does not get a wider
-            // ask - the aim is pulled back inside the band instead. The bearing the pursuit consumes is measured off
-            // the car's course, so the capped angle is converted back into that frame afterwards. Inert below the wide
-            // end, off the road it stands down (climbing back to the track is the ask that matters there), and corner
-            // mode keeps its own arc.
+            // The aim may not point more than the cap off the route. It is absolute - the angle is measured against
+            // a track direction, not the car's - and it is measured at the aim's OWN node, not the car's: the tangent
+            // under the car has already turned away from the one at the aim by up to 20 degrees on a quick bend, and
+            // capping against the stale one trims the racing line itself and pulls the car out of every corner.
             float speedMph = ARS.MpsToMph(Car.Velocity.Length());
             if (!_cornerMode && speedMph >= RouteSteerAngleCapMinMph && OutOfTrackDistance() <= 0f)
             {
-                Vector3 trackFlat = new Vector3(CurrentTrackPoint.Direction.X, CurrentTrackPoint.Direction.Y, 0f);
-                if (trackFlat.LengthSquared() > 0.0001f && headingFlat.LengthSquared() > 0.0001f)
+                Vector3 refFlat = new Vector3(refDirection.X, refDirection.Y, 0f);
+                if (refFlat.LengthSquared() > 0.0001f && headingFlat.LengthSquared() > 0.0001f)
                 {
                     // Ascending on both sides: 20 mph is the wide end, 60 mph the tight one.
                     float capDeg = ARS.Remap(speedMph, RouteSteerAngleCapTightMph, RouteSteerAngleCapMinMph,
                         RouteSteerAngleCapTightDegrees, RouteSteerAngleCapWideDegrees, true);
-                    float aimVsTrack = Vector3.SignedAngle(trackFlat, toAimFlat, Vector3.WorldUp);
-                    float headingVsTrack = Vector3.SignedAngle(trackFlat, headingFlat, Vector3.WorldUp);
-                    bearing = ARS.Clamp(aimVsTrack, -capDeg, capDeg) - headingVsTrack;
+                    float aimVsRoute = Vector3.SignedAngle(refFlat, toAimFlat, Vector3.WorldUp);
+                    float headingVsRoute = Vector3.SignedAngle(refFlat, headingFlat, Vector3.WorldUp);
+                    bearing = ARS.Clamp(aimVsRoute, -capDeg, capDeg) - headingVsRoute;
                 }
             }
             _pursuitAimDistanceM = distance;
