@@ -1,6 +1,6 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1995** (`b679dc5d8afed99c`). The six changes described here are 1981's, **AG** is the newest law, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2 m/s per pass (`CornerSpeedLearnNoSlideRiseMps`, was 0.05); clearance converts at 0.66 m/s per metre, one scale both ways (`CornerSpeedLearnMetreToOffset`, was 0.05); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1997** (`f3423907941566f5`). The six changes described here are 1981's, **AG** is the newest law, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 4 m/s per pass since 1997 (`CornerSpeedLearnNoSlideRiseMps` `4`, was 2, and 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
@@ -10,7 +10,7 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
-## AG · 2026-11-23 (1995) — the corner verdict's balance sits a car's width short of the line, and the side comes from the corner
+## AG · 2026-11-23 (1995 → 1997) — the corner verdict's balance sits a car's width short of the line, and the side comes from the corner
 
 ⬜ Not driven. Compile-only.
 
@@ -20,6 +20,11 @@ plus one metre (`CornerSpeedLearnVerdictMarginMetres` `1`, read with `VehicleDat
 with the flank that far short of the line, and inside that room the pass is already a deduction. The stored
 clearance stays raw — it is what the reason line quotes — and the margin is applied once, where the delta is
 computed.
+
+The cadence is coarse on purpose (1996, 1997): one metre of room is one metre per second of offset in either
+direction (`CornerSpeedLearnMetreToOffset` `1`, was 0.66), and a pass that never slid at all earns `4 m/s`
+(`CornerSpeedLearnNoSlideRiseMps` `4`, was 2) — a corner that produced no slide taught nothing about its limit,
+so it moves by the coarse step rather than by a measured clearance.
 
 The side is read from the corner doing the judging (`CornerOutsideSign`, the corner's own `Angle` through
 `ARS.InsideSign`), never from the curvature the car happens to sit on when the sample lands: an S-bend flips the

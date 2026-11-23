@@ -380,11 +380,15 @@ namespace ARS
         const float CornerSpeedLearnAheadShare = 0.5f;
         const float CornerSpeedLearnLimitMps = 10f;
         const float CornerSpeedLearnMinSlideShare = 0.75f;
-        const float CornerSpeedLearnMetreToOffset = 0.66f;
+        // One metre of room past the verdict margin is one metre per second of offset, both ways: a pass a metre
+        // clear of the balance line earns 1 m/s, one that lands a metre short of it pays the same.
+        const float CornerSpeedLearnMetreToOffset = 1f;
         // The verdict's zero sits a car's width plus this much short of the white line: the rise only runs while
         // that room is genuinely there, so the balance never pays for a pass that was half offtrack already.
         const float CornerSpeedLearnVerdictMarginMetres = 1f;
-        const float CornerSpeedLearnNoSlideRiseMps = 2f;
+        // A pass that never slid at all earns this much: nothing was learned about the corner, so it is credited as
+        // clean and moves by the coarse step rather than by a measured clearance.
+        const float CornerSpeedLearnNoSlideRiseMps = 4f;
         const float CornerSpeedLearnReleaseMetres = 40f;
         // How close to an apex node counts as having reached it, in metres; the call widens it for fast cars.
         const float ApexReachedMetres = 3f;
