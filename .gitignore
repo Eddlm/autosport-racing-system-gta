@@ -62,3 +62,6 @@ Dist/AutosportRacingSystem/Settings/*.ini
 AutosportRacingSystem-*.zip
 Dist/AutosportRacingSystem-*.zip
 AGENTS/AGENTS-BACKLOG.md
+
+# Local working notes, never committed (owner, 2026-11-23).
+AGENTS.md
