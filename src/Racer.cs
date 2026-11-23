@@ -363,12 +363,6 @@ namespace ARS
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
         int _planLogApexNode = -1;
-        float _laneLead;
-        float _laneOutCap;
-        int _laneAskCornerNode = -1;
-        int _laneAskStartMs;
-        int _laneAskLastMs;
-        const int LaneAskGapMs = 1000;
 
         readonly HashSet<int> _skippedApexes = new HashSet<int>();
         int _brakeAnalysisApexNode = -1;
@@ -779,9 +773,6 @@ namespace ARS
             _brakeAnalysisFired = false;
             _laneHeldCorner = null;
             _laneTurnSign = 0;
-            _laneAskCornerNode = -1;
-            _laneAskStartMs = 0;
-            _laneAskLastMs = 0;
 
             Car.Repair();
         }
@@ -887,27 +878,9 @@ namespace ARS
                 float aim = beforeEntrance
                     ? ClampShapedLane(ARS.TrackPoints[entranceNode].LaneLineShare * laneEdge, laneEdge, laneApex)
                     : laneShapeNow;
-                // Out is a lead over the car, never a destination: the ask cannot sit further out than the cap, and
-                // the car keeps taking up the lead until it sits on the line. In is the aim itself, uncapped.
-                // The creep opens at 0.1 m and reaches the full cap over LanePrepRampSeconds of asking for this
-                // corner, so the first tick of a corner cannot throw the car outward, whatever the road did behind it.
-                float outward = TrackTurnSign(CurrentTrackPoint.Node, laneApex.Node, 0);
-                if (outward == 0f) outward = -ARS.InsideSign(laneApex.Angle);
-                // A new corner, or the same one a lap later: either way the gap since the last asking tick is what
-                // separates them. A flicker shorter than the gap keeps the clock it had.
-                int now = Game.GameTime;
-                if (laneApex.Node != _laneAskCornerNode || now - _laneAskLastMs > LaneAskGapMs)
-                {
-                    _laneAskCornerNode = laneApex.Node;
-                    _laneAskStartMs = now;
-                }
-                _laneAskLastMs = now;
-                _laneOutCap = beforeEntrance
-                    ? ARS.Clamp(ARS.Remap(now - _laneAskStartMs, 0f, ARS.LanePrepRampSeconds * 1000f,
-                        ARS.LanePrepCreepMetres, ARS.LanePrepOutsideCapMetres), ARS.LanePrepCreepMetres, ARS.LanePrepOutsideCapMetres)
-                    : ARS.LanePrepOutsideCapMetres;
-                _laneLead = (aim - steerRefOffset) * outward;
-                laneRequest = _laneLead > _laneOutCap ? steerRefOffset + outward * _laneOutCap : aim;
+                // The ask is the aim itself: the metre cap and its creep are gone, so how quickly a car may take up
+                // a lane change is the degrees limit on the route ask (PursuitSteerDegrees), not a metre budget here.
+                laneRequest = aim;
                 laneReason = LaneReason.CurveLean;
             }
             else if (dynamicOwns) laneReason = LaneReason.CurveLean;
@@ -969,7 +942,6 @@ namespace ARS
                     + ", asked " + _laneRequest.ToString("0.00") + " (" + _laneRequestReason + ")"
                     + " | " + mode
                     + " apex " + (lineCorner != null ? lineCorner.Node.ToString() + " in " + toApex.ToString("0") : "-")
-                    + " lead " + _laneLead.ToString("0.00") + " cap " + _laneOutCap.ToString("0.00")
                     + " gs " + VehicleData.GetLongitudinalGs(Car.ForwardVector).ToString("+0.00;-0.00"));
             }
             _laneOverride = laneReason != LaneReason.OwnLane || Math.Abs(_carriedLane - steerRefOffset) > LaneOverrideHoldMeters;
@@ -1151,6 +1123,10 @@ namespace ARS
         const float LaneLockTestOffsetMeters = 0.1f;
         const float PursuitGain = 2f;
         const float MaxPursuitBearingDegrees = 90f;
+        // A degrees-based limit on how far the route ask may point off the car's own track direction. It bounds
+        // lateral movement in time rather than in metres: lateral rate = speed * sin(cap).
+        const float RouteSteerAngleCapDegrees = 15f;
+        const float RouteSteerAngleCapMinMph = 20f;
         const float SmallAimBearingDegrees = 1f;
         const float LaneCrossingLateralSpeedMps = 1f;
         static readonly bool LaneCrossingScale = false;
@@ -1197,6 +1173,21 @@ namespace ARS
                 : 1f;
 
             _pursuitRawBearingDeg = bearing;
+            // The route ask may not point more than RouteSteerAngleCapDegrees off the car's own track direction while
+            // corner mode is not engaged: a lane change is then bounded in time - lateral rate = speed * sin(cap) -
+            // whatever asked for it. The bearing is measured off the car's course, so the window shifts by however
+            // far that course itself already sits off the route.
+            if (!_cornerMode && Car.Velocity.Length() > ARS.MphToMps(RouteSteerAngleCapMinMph))
+            {
+                Vector3 trackFlat = new Vector3(CurrentTrackPoint.Direction.X, CurrentTrackPoint.Direction.Y, 0f);
+                if (trackFlat.LengthSquared() > 0.0001f && headingFlat.LengthSquared() > 0.0001f)
+                {
+                    float headingVsTrack = Vector3.SignedAngle(trackFlat, headingFlat, Vector3.WorldUp);
+                    bearing = ARS.Clamp(bearing,
+                        -RouteSteerAngleCapDegrees - headingVsTrack,
+                        RouteSteerAngleCapDegrees - headingVsTrack);
+                }
+            }
             _pursuitAimDistanceM = distance;
             _steerAimBearingDegrees = bearing;
             _steerAimCurvature = 2f * (float)Math.Sin(ARS.DegToRad(bearing)) / reach;
