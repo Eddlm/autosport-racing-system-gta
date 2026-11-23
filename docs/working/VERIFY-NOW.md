@@ -1,6 +1,6 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2005** (`6ddb36d26795e723`). The six changes described here are 1981's, **AJ** is the newest, then **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2.5 m/s per pass since 1999 (`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 in 1997, 2 before that, 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2.5 m/s (`CornerSpeedLearnDeltaLimitMps`), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2007** (`9afbe71eb0ed8189`). The six changes described here are 1981's, **AJ** is the newest, then **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2.5 m/s per pass since 1999 (`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 in 1997, 2 before that, 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2.5 m/s (`CornerSpeedLearnDeltaLimitMps`), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
@@ -10,7 +10,7 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
-## AJ · 2026-11-23 (2004 → 2005) — the overspeed detector arms on forward acceleration, one piece of code for player and AI
+## AJ · 2026-11-23 (2004 → 2007) — the overspeed detector arms on forward acceleration, one piece of code for player and AI
 
 ⬜ Not driven. Compile-only.
 
@@ -30,6 +30,11 @@ The level is still *spent* differently, and that is structural rather than styli
 pedal (`UpdateThrottleReasonCaps` runs for AI only, where `Control.MaxThrottleFromOverspeed` is one of the
 ceilings), while the player's cuts engine power (`UpdatePowerCompensation`, the `if (ControlledByPlayer)` branch),
 because the mod never writes a player's pedals — `ApplyInputs` is AI-only. Same detector, different lever.
+
+Recovery is its own law since 2007: the penalty heals at `OverspeedRecoveryPerSecond` (`1.0`/s) on the AI's pedal
+cap and at `OverspeedPlayerRecoveryPerSecond` (`0.5`/s) on the player's power cut, where every other reason cap
+heals at `1.75`/s (`ReasonCapSlewRate` `3.5` × `ReasonCapRecoveryScale` `0.5`). `GlideCap` gained a rise-rate
+overload for it; no other cap moved, and the onset is still `3.5`/s.
 
 ---
 

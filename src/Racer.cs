@@ -2846,6 +2846,10 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float OverspeedArmMinForwardGs = 0.1f;
         const float OverspeedCutStartGs = 0.2f;
         const float ReasonCapRecoveryScale = 0.5f;
+        // The overspeed penalty heals slower than the other caps, and slower still on the player's car: a cut the
+        // driver feels should not flicker, while the field is held by its plan anyway.
+        const float OverspeedRecoveryPerSecond = 1f;
+        const float OverspeedPlayerRecoveryPerSecond = 0.5f;
 
         static float Glide(float current, float level, float fallRate, float riseRate, float tickScale)
         {
@@ -2856,7 +2860,13 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float GlideCap(float current, float level)
         {
-            return Glide(current, level, ReasonCapSlewRate, ReasonCapSlewRate * ReasonCapRecoveryScale, TickScale);
+            return GlideCap(current, level, ReasonCapSlewRate * ReasonCapRecoveryScale);
+        }
+
+        // A cap with its own recovery rate: the fall is the shared one, only the way back differs.
+        float GlideCap(float current, float level, float risePerSecond)
+        {
+            return Glide(current, level, ReasonCapSlewRate, risePerSecond, TickScale);
         }
 
         // The slide cap, read off how far past its peak the tyre is: 1 at half the peak slip, the cap
@@ -2900,7 +2910,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             Control.MaxThrottleFromOverspeed = Game.GameTime < _nitrousActiveUntil
                 ? 1f
-                : GlideCap(Control.MaxThrottleFromOverspeed, OverspeedThrottleLevel());
+                : GlideCap(Control.MaxThrottleFromOverspeed, OverspeedThrottleLevel(), OverspeedRecoveryPerSecond);
 
             float rivalLevel = 1f;
             foreach (Rival r in Brain.Rivals)
@@ -4021,7 +4031,8 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             if (ControlledByPlayer)
             {
-                _overspeedPowerLevel = GlideCap(_overspeedPowerLevel, OverspeedThrottleLevel());
+                _overspeedPowerLevel = GlideCap(_overspeedPowerLevel, OverspeedThrottleLevel(),
+                    OverspeedPlayerRecoveryPerSecond);
                 counter *= _overspeedPowerLevel;
             }
 
