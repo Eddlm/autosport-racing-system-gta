@@ -1124,10 +1124,13 @@ namespace ARS
         const float PursuitGain = 2f;
         const float MaxPursuitBearingDegrees = 90f;
         // A degrees-based limit on how far the route ask may point off the car's own track direction. It bounds
-        // lateral movement in time rather than in metres: lateral rate = speed * sin(cap). Set low (5) so the effect
-        // is visible by eye; at 15 it only bit for a lane deficit of two metres or more.
-        const float RouteSteerAngleCapDegrees = 5f;
+        // lateral movement in time rather than in metres: lateral rate = speed * sin(cap). The cap tightens with
+        // speed: inert below the wide end, 45 degrees there, 5 by the tight end. Both ranges are written low-to-high
+        // because Remap's clamp is Clamp(r, out_min, out_max) - a descending output range would collapse to one value.
         const float RouteSteerAngleCapMinMph = 20f;
+        const float RouteSteerAngleCapTightMph = 60f;
+        const float RouteSteerAngleCapWideDegrees = 45f;
+        const float RouteSteerAngleCapTightDegrees = 5f;
         const float SmallAimBearingDegrees = 1f;
         const float LaneCrossingLateralSpeedMps = 1f;
         static readonly bool LaneCrossingScale = false;
@@ -1174,20 +1177,24 @@ namespace ARS
                 : 1f;
 
             _pursuitRawBearingDeg = bearing;
-            // The aim may not point more than RouteSteerAngleCapDegrees off the route at the car's own track point. It
-            // is absolute: the limit holds whatever angle the car itself is carrying, so a car already crossways does
-            // not get a wider ask - the aim is pulled back inside the band instead. The bearing the pursuit consumes is
-            // measured off the car's course, so the capped angle is converted back into that frame afterwards.
-            // Lateral rate = speed * sin(cap): a lane change is bounded in time, whatever asked for it.
-            if (!_cornerMode && Car.Velocity.Length() > ARS.MphToMps(RouteSteerAngleCapMinMph))
+            // The aim may not point more than the cap off the route at the car's own track point. It is absolute: the
+            // limit holds whatever angle the car itself is carrying, so a car already crossways does not get a wider
+            // ask - the aim is pulled back inside the band instead. The bearing the pursuit consumes is measured off
+            // the car's course, so the capped angle is converted back into that frame afterwards. Inert below the wide
+            // end, off the road it stands down (climbing back to the track is the ask that matters there), and corner
+            // mode keeps its own arc.
+            float speedMph = ARS.MpsToMph(Car.Velocity.Length());
+            if (!_cornerMode && speedMph >= RouteSteerAngleCapMinMph && OutOfTrackDistance() <= 0f)
             {
                 Vector3 trackFlat = new Vector3(CurrentTrackPoint.Direction.X, CurrentTrackPoint.Direction.Y, 0f);
                 if (trackFlat.LengthSquared() > 0.0001f && headingFlat.LengthSquared() > 0.0001f)
                 {
+                    // Ascending on both sides: 20 mph is the wide end, 60 mph the tight one.
+                    float capDeg = ARS.Remap(speedMph, RouteSteerAngleCapTightMph, RouteSteerAngleCapMinMph,
+                        RouteSteerAngleCapTightDegrees, RouteSteerAngleCapWideDegrees, true);
                     float aimVsTrack = Vector3.SignedAngle(trackFlat, toAimFlat, Vector3.WorldUp);
                     float headingVsTrack = Vector3.SignedAngle(trackFlat, headingFlat, Vector3.WorldUp);
-                    bearing = ARS.Clamp(aimVsTrack, -RouteSteerAngleCapDegrees, RouteSteerAngleCapDegrees)
-                        - headingVsTrack;
+                    bearing = ARS.Clamp(aimVsTrack, -capDeg, capDeg) - headingVsTrack;
                 }
             }
             _pursuitAimDistanceM = distance;

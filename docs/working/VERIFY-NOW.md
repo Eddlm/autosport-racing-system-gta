@@ -10,15 +10,23 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
-## AL · 2026-11-23 (2011) — the route ask is capped by angle, and the outside metre cap is gone
+## AL · 2026-11-23 (2011 → 2014) — the route ask is capped by a speed-ramped angle, and the outside metre cap is gone
 
 ⬜ Not driven. Compile-only.
 
-Two changes on one pass. **The route ask may not point more than `5°` off the car's own track direction**
-(`RouteSteerAngleCapDegrees`, lowered from 15 for a visual test) while corner mode is not engaged and the car is over `20 mph`
-(`RouteSteerAngleCapMinMph`): lateral movement is then bounded in time rather than in metres — rate = speed ×
-sin(5°) = 0.087 × speed, so 3 m of lane takes 3.85 s at 20 mph, 1.28 s at 60, 0.77 s at 100 — and the cap bites
-from a deficit of about 0.7 m at 30 mph, where the 15° setting needed two metres or more and so was never seen. `headingVsTrack` — the aim's angle off the route, not the bearing's.
+Two changes on one pass. **The route ask may not point more than a speed-ramped cap off the car's own track
+direction**: inert below `20 mph` (`RouteSteerAngleCapMinMph`), `45°` there (`RouteSteerAngleCapWideDegrees`),
+tightening linearly to `5°` at `60 mph` (`RouteSteerAngleCapTightMph`, `RouteSteerAngleCapTightDegrees`) and flat
+above it. It stands down while the car is off the track (`OutOfTrackDistance() > 0`) and while corner mode holds,
+and it is **absolute**: the angle is measured at the car's own track point, whatever angle the car itself carries,
+so a car already crossways has its aim pulled back inside the band rather than earning a wider one. The pursuit
+consumes a bearing measured off the car's course, so the capped angle is converted afterwards
+(`bearing = clamp(aimVsTrack) − headingVsTrack`).
+
+Both ranges are written low-to-high because `Remap`'s clamp is `Clamp(r, out_min, out_max)`: passing a descending
+output range (`45` → `5`) makes the clamp collapse to a single value. Lateral budget = speed × sin(cap): `7.7 m/s`
+at 30-40 mph, `2.3 m/s` at 60, `3.9` at 100 — the tightest point is 60 mph, and above it the flat 5° floor lets the
+budget creep back up with speed.
 
 **The outside metre cap and its creep are deleted**, not parked: `LanePrepOutsideCapMetres` (`2`),
 `LanePrepCreepMetres` (`0.1`), `LanePrepRampSeconds` (`3`), `_laneOutCap`, `_laneLead`, `_laneAskCornerNode`,
