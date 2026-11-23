@@ -1124,8 +1124,9 @@ namespace ARS
         const float PursuitGain = 2f;
         const float MaxPursuitBearingDegrees = 90f;
         // A degrees-based limit on how far the route ask may point off the car's own track direction. It bounds
-        // lateral movement in time rather than in metres: lateral rate = speed * sin(cap).
-        const float RouteSteerAngleCapDegrees = 15f;
+        // lateral movement in time rather than in metres: lateral rate = speed * sin(cap). Set low (5) so the effect
+        // is visible by eye; at 15 it only bit for a lane deficit of two metres or more.
+        const float RouteSteerAngleCapDegrees = 5f;
         const float RouteSteerAngleCapMinMph = 20f;
         const float SmallAimBearingDegrees = 1f;
         const float LaneCrossingLateralSpeedMps = 1f;

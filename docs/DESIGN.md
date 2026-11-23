@@ -243,7 +243,7 @@ both ends:
 neither changes what "on the lane" means.
 
 **A ceiling stated in degrees.** How fast a lane change may happen is bounded as an **angle**, not as a metre
-budget: while corner mode is not engaged and the car is quick, the ask may not point more than fifteen degrees off
+budget: while corner mode is not engaged and the car is quick, the ask may not point more than five degrees off
 the route at the car's own track point. It is **absolute**: the limit holds whatever angle the car itself is
 carrying, so a car already crossways has its aim pulled back inside the band rather than earning a wider ask. Lateral rate is then speed times the sine of the cap, so the limit is a
 *time* per metre of lane rather than a fixed distance — the metre cap the outside procedure used to carry, and its
