@@ -36,15 +36,11 @@ The difference shows in the preparation. On a tight corner a rival takes the lon
 
 ## And they learn it
 
-A map can tell a car where the corner is. It cannot tell it how hard *this* car can stop for it, so ARS has the car keep asking the corner instead.
+A map can tell a car where the corner is, but not how hard this car will brake for it. ARS gives each braking corner one learned factor: the car aims to cross the fixed ramp-end node 1.5 m/s over the corner’s target speed, and each pass moves that corner’s factor by one hundredth of the miss, clamped to 0.70–1.30. Too hot and it brakes earlier next pass; too gentle and it accepts a later, harder brake point.
 
-Every rival starts a race on a guess, with a draw of its own confidence and a slightly different draw for each corner — so two cars of the same model do not brake identically, and one car is not evenly bold all the way round. Then it marks its own work. Arrive at the braking point clearly hotter than the corner asked and it brakes earlier next lap; drop below the mark on the approach with road to spare and it brakes deeper; land in between and the number it already has is the number it keeps.
+The correction is per corner, not per race — one corner can learn a deeper or shallower stop without changing the rest — and it never applies to corners the plan did not ask to brake. Turn Brake Ramp Analysis off and the factors stop moving where they are; they are not reset.
 
-It commits exactly one verdict per corner, a beat after the apex, picked from three bands — too hot, early with room to spare, or in between — rather than from a curve to read. The lesson is kept per car and per corner rather than averaged into one number, and it is bounded: a rival can only get so brave or so timid before the clamp stops it.
-
-Nothing is carried into the next race. The rivals arrive on the guess and earn their braking again over the laps, which is why the first meeting of a corner is not the one to judge a rival on, and why a longer race is a harder race — by the second meeting the field is braking closer to what the corner will actually take. On a point-to-point stage there is no second meeting, so the guess is what you get. Turn Brake Learning off and everybody is on the same guess, all race.
-
-**What you notice:** pick one heavy braking zone and watch the same rival across laps. It brakes deeper on lap two than it did on lap one, or earlier if it was over-braking.
+**What you notice:** rivals settle into their own braking points over a few passes through the same corner, instead of all braking at the same built-in guess.
 
 ## The plan asks, the tyres answer
 
@@ -124,7 +120,7 @@ Auto Styling dresses the field before a race: it reads each car's own livery nam
 
 ## Tuning and setup
 
-The menu has a Race section (track, laps, grid size and the performance index the field is drawn from), a Rivals section (who races you, the grid sorting, the cars standing around you that can join as they are or styled, plus their pace, traction and steering dials), Race Rules (timing, damage, DNFs, collision, nitrous, rubberbanding), Interface, Controls (the menu chord and the `ars` fallback), and the Track Creator entry. The Rivals dials are the ones that change character: corner and road-curvature speed offsets, brake learning on or off, crest lift, slope loss, overspeed correction, TCS and ABS and how soft their cuts are, steering damping, and the steering limit at speed, and corner speed learning, where each corner teaches itself how much speed a rival can actually carry through it. Between them you can make a field braver, tidier or sloppier corner by corner. Rubberbanding is worth its own line: on at full strength by default, and when you turn it down it stops packing the field — the leaders are slowed, and at the artificial setting the backmarkers also get a boost.
+The menu has a Race section (track, laps, grid size and the performance index the field is drawn from), a Rivals section (who races you, the grid sorting, the cars standing around you that can join as they are or styled, plus their pace, traction and steering dials), Race Rules (timing, damage, DNFs, collision, nitrous, rubberbanding), Interface, Controls (the menu chord and the `ars` fallback), and the Track Creator entry. The Rivals dials are the ones that change character: corner and road-curvature speed offsets, brake ramp analysis on or off, crest lift, slope loss, overspeed correction, TCS and ABS and how soft their cuts are, steering damping, and the steering limit at speed, and corner speed learning, where each corner teaches itself how much speed a rival can actually carry through it. Between them you can make a field braver, tidier or sloppier corner by corner. Rubberbanding is worth its own line: on at full strength by default, and when you turn it down it stops packing the field — the leaders are slowed, and at the artificial setting the backmarkers also get a boost.
 
 Corner speed learning is the quietest of them: each corner carries one learned offset, in m/s, on the speed rivals plan to carry through it. A pass that stays clean raises that corner's number by 2 m/s; a slide of 10 degrees or more, or a wheel off the road, takes 2 m/s back; a pass in which the car had to steer around traffic voids the verdict and changes nothing. The verdict lands when the car is back on the power out of the corner, or six seconds after the analyser opened, whichever comes first. The number starts at 0, is held inside plus or minus 10 m/s, and the next pass at that corner uses it.
 

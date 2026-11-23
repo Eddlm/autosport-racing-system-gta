@@ -99,8 +99,8 @@ approach never starts and its outside line is never asked for.
 
 **It is also the clock.** Besides the two preparations — a speed and a line — the record is the shared
 answer to *where the car is in the corner*, and it is read through three windows that do not coincide: the
-crossing scale's exemption runs from the braking target to the apex, the brake learner watches that same
-stretch, sampling the approach and judging its verdict at the braking target — delivered a beat after the apex — the
+crossing scale's exemption runs from the braking target to the apex, the brake-ramp correction reads that same
+stretch at its fixed crossing and moves that corner's factor, the
 permission to start a maneuver counts the time remaining to the entrance, and the ban on nitro mid-corner
 covers the entrance through to the exit. What they share is the record, not one identical span — which is
 the point, because otherwise each would keep its own idea of where the corner is and they would disagree at
@@ -140,7 +140,7 @@ over and by any crest ahead. On its own it decides the speed, and each term carr
 as a menu offset — which is how a driver buys caution or commitment without touching either law.
 
 **A corner takes the car only when it is stricter, and keeps it through the exit.** The corner term is worked
-backwards from the apex: the braking map, for the downforce and the learned braking factor this car has. A
+backwards from the apex: the braking map, for the downforce and fixed braking factor this car has. A
 corner becomes the sole authority on the tick its own commitment crosses below the route's number — the strict
 comparison, so taking over can only slow the car and never raise a speed the route has already refused. From
 that tick the route term is not consulted at all: the car drinks the corner's ramp on the way in, and the
@@ -493,20 +493,7 @@ cannot know what the surface under the wheels is really offering at that moment,
 only thing that decides the stop. So the design cannot answer "how hard do I brake here" from theory, and
 it does not pretend to.
 
-**What it does instead.** It seeds a per-car, per-corner braking factor from a guess and lets the car earn
-the rest with a verdict that is deliberately coarse: three bands at the braking target instead of a curve.
-Crossing the target more than 3 m/s hot is an overshoot and drops the factor by 0.02 — the car assumed more
-of the tyre than was there, so next lap it assumes less and comes in earlier. Dropping below the mark with
-more than six track nodes of road still ahead — on a car that was above the mark earlier in the approach — is an
-undershoot and raises it by 0.02 — it left margin on the
-table. Anything between those leaves the factor where it was, and exactly one band speaks per corner, so the
-two ends can never both fire. The evidence has to be clean: a corner whose braking target was never reached
-earns no verdict at all, only a note that the factor stands. The seed carries a per-car draw,
-because identical guesses would produce identical braking errors. The same shape recurs wherever the
-model is the weak part: TCS reads the wheels rather than believing the plan. It was tried on the steering
-ceiling too — taking the lower of the model law and a measured slip allowance — and that one read slower
-swerves and was parked, which is why the ceiling today is the model law with a geometry fallback and the
-parked law is cited here as a shape rather than as a live consumer.
+**What it does instead.** It uses a deliberately simple one-dimensional correction. Each corner keeps its own brake factor, starts at `0.90`, and is clamped to `0.70–1.30`. At the fixed ramp-end node the car reads its signed speed error against the corner’s commanded arrival speed; `1.5 m/s` over target is treated as ideal. Every past that, the factor moves by one hundredth of the excess in the direction that closes it: hot arrivals brake earlier next pass, slow arrivals allow a later brake point. Nothing is shared between corners, and corners the plan did not ask to brake are not adjusted. It is not a model of the tyre; it is a bounded calibration of the one place the model is deliberately weakest. The same shape recurs wherever the model is the weak part: TCS reads the wheels rather than believing the plan. It was tried on the steering ceiling too — taking the lower of the model law and a measured slip allowance — and that one read slower swerves and was parked, which is why the ceiling today is the model law with a geometry fallback and the parked law is cited here as a shape rather than as a live consumer.
 
 **Three buckets, sorted by staleness.** Everything the car acts on sorts by whether the truth goes stale,
 and by how fast. An unknown that never changes is *known* and precomputed — where the corners are, how they
@@ -590,8 +577,8 @@ itself exactly once, when the car steps over it, and the sample is contaminated 
 it. So the usable evidence is two-sided and comes from events that happen anyway: sustaining a lateral g
 without breaking away proves the model is not too high by at least that much, and breaking away at a demand
 below the model's promise proves it is too high. Bracketing needs no test track and no clean room — it needs
-a filter that decides when a sample was *honest*, which is the same requirement the brake learner already
-meets by discarding a sample taken while the car was sliding. Asking for a flat, solitary corner would be
+a filter that decides when a sample was *honest*, which is the same requirement any brake analyser must
+meet by refusing samples it cannot interpret. Asking for a flat, solitary corner would be
 asking for a laboratory this game cannot provide; ask instead for events that can be recognised.
 
 **Except in the braking zone, where the car is at the limit by choice.** The stop is the one manoeuvre the

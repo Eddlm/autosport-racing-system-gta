@@ -1,14 +1,32 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1932**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1939**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **62 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **57 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
+
+## Y · 2026-11-23 (1934) — the brake aim is a fixed 15 m node
+
+`BrakeAimDepth` is gone from the menu and settings; the plan brakes toward the first node centre at least 15 m behind the apex, selected by route distance. The lag law is unchanged, so the speed floor starts `L` metres before that fixed node. A stale `BrakeAimDepth` key is pruned by the settings repair.
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| Y1 | **the fixed target changes the braking entry** (1934) | one familiar braking corner | the plan starts from the fixed 15 m-back node; the car is not given the old speed-derived aim | ⬜ |
+| Y2 | **the retired row stays gone** (1934) | open Rivals > Rival Pace after load | no `Brake Aim Depth` row is present, and `Menu-Settings.ini` has no `BrakeAimDepth` | ⬜ |
+
+## Z · 2026-11-23 (1939) — brake ramp learner with a single ideal
+
+The old three-band learner is gone. Each braking corner now keeps its own `BrakeFactor`: seed `0.90`, clamp `0.70`–`1.30`. At the fixed 15 m ramp-end node the car compares actual forward speed to the corner's commanded arrival speed. The adjustment is `(1.5 - delta) * 0.01`, so 1.5 m/s over target is the ideal; `BrakeLearning` gates it and `BrakeLearningNotify` gates the notice.
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| Z1 | **the learner fires and adjusts one braking corner** (1939) | drive one braking corner with `Brake Ramp Notify` on, then revisit it | one line per pass with signed delta and `before → after`; under 1.5 m/s raises factor, over 1.5 lowers it, each by delta excess × 0.01 | ⬜ |
+| Z2 | **non-braking corners stay silent** (1939) | drive a fast sweeper that does not ask for braking | no `brake ramp` line and factor stays at seed | ⬜ |
 
 ## X · 2026-11-23 (1926 → 1932) — route is the authority, a corner takes over
 
@@ -28,7 +46,7 @@ The two speed terms no longer meet in a min(): the route term decides, and a cor
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| V1 | **every corner reads 0.70, and holds** (1893) | the apex debug text, with Brake Learning off in the menu | every corner shows `b 0.70`; a restart keeps it and no corner drifts | ⬜ |
+| V1 | **each corner seeds at 0.90** (1893, factor now learned in 1939) | the apex debug text before any brake-learn pass | every untouched corner shows `b 0.90`; changed corners show their learned factor | ⬜ |
 
 ## W · 2026-11-22 (1896) — the route band averages its five tightest nodes
 
@@ -70,19 +88,17 @@ The band no longer reports its single tightest node: it averages the five tighte
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
 | Q1 | **the widest-arc blend is gone** (1878) | drive the wide fast sweepers that used to launch you too hot into the apex | cars hold the speed the line asks for; no corner feels out-cornered by its own radius | ⬜ |
-| Q2 | **brake aim leads 1.25 s** (1880) | the same entry you used to brake at | braking starts visibly earlier (~1.79× the old lead distance); the car reaches corner speed with more room to spare | ⬜ |
-| Q3 | **no verdict is rate-limited away** (1882) | `Brake Learn Notify` on, drive a chicane or any two corners < 1.2 s apart | **both** verdicts reach the UI — before the fix the second one was silently dropped | ⬜ |
-| Q4 | **an aborted corner still closes** (1882) | engage a corner (within 50 m of the apex), then spin/stop before the apex so the queue moves on | `corner #n · apex not reached · factor stays x.xx` appears once — no silence, and no second message if the same corner is re-held and passed | ⬜ |
-| Q5 | **a pending verdict survives learning off** (1882) | brake-learn notify on, cross an apex, and untick Brake Learning within 0.75 s | the verdict still fires (saying `learning off · factor stays`), instead of vanishing with the toggle | ⬜ |
-| Q6 | **overshoot deducts** (1884) | a corner where a rival crosses the brakepoint clearly hot (> 3 m/s over target) | one message `overshot by X m/s`, factor **−0.02** exactly (0.75 → 0.73), clamped at 0.25 | ⬜ |
-| Q7 | **undershoot adds** (1884) | a rival that was above target+3 on the approach, then drops below it while still 7+ nodes (≈7 m) before the brakepoint | one message `undershoot, below target+3 with N nodes spare`, factor **+0.02** exactly, clamped at 1.25 | ⬜ |
-| Q8 | **the band holds and still speaks** (1884) | a corner whose crossing is within ±3 m/s of target, or one approached from below without ever being above the bar | message `in the band · 0.75 = holds` — no change, never silent; and never two verdicts for one corner | ⬜ |
+| Q2 | **brake aim leads 1.25 s** (1880) | the same entry you used to brake at | braking starts visibly earlier (~1.79× the old lead distance); the car reaches corner speed with more room to spare | — obsolete (1936) |
+| Q3 | **no verdict is rate-limited away** (1882) | `Brake Learn Notify` on, drive a chicane or any two corners < 1.2 s apart | **both** verdicts reach the UI — before the fix the second one was silently dropped | — obsolete (1936) |
+| Q4 | **an aborted corner still closes** (1882) | engage a corner (within 50 m of the apex), then spin/stop before the apex so the queue moves on | `corner #n · apex not reached · factor stays x.xx` appears once — no silence, and no second message if the same corner is re-held and passed | — obsolete (1936) |
+| Q5 | **a pending verdict survives learning off** (1882) | brake-learn notify on, cross an apex, and untick Brake Learning within 0.75 s | the verdict still fires (saying `learning off · factor stays`), instead of vanishing with the toggle | — obsolete (1936) |
+| Q6 | **overshoot deducts** (1884) | a corner where a rival crosses the brakepoint clearly hot (> 3 m/s over target) | one message `overshot by X m/s`, factor **−0.02** exactly (0.75 → 0.73), clamped at 0.25 | — obsolete (1936) |
+| Q7 | **undershoot adds** (1884) | a rival that was above target+3 on the approach, then drops below it while still 7+ nodes (≈7 m) before the brakepoint | one message `undershoot, below target+3 with N nodes spare`, factor **+0.02** exactly, clamped at 1.25 | — obsolete (1936) |
+| Q8 | **the band holds and still speaks** (1884) | a corner whose crossing is within ±3 m/s of target, or one approached from below without ever being above the bar | message `in the band · 0.75 = holds` — no change, never silent; and never two verdicts for one corner | — obsolete (1936) |
 
-Note (1882): the learner runs only for **AI racers** — `UpdateBrakeLearning` sits inside `if (!ControlledByPlayer)`,
-so the player's own car never announces. Pre-existing and by design (the row text says *rivals*), just now checked in code.
-Known limit (1884): the undershoot latch reads speed and distance only — traffic that slows a car below the bar
-more than 6 nodes out, without a spin or contact, can still latch and read as margin. A collision gate is the
-one-line fix; only worth it if it shows up in a drive.
+Note (1882): the old brake learner ran only for **AI racers** — its update lived inside `if (!ControlledByPlayer)`.
+The 1936 ramp analyser retains that same player boundary: it is driven inside the AI path.
+Known limit (1884): superseded in 1936 — the old undershoot latch no longer exists.
 
 ---
 
@@ -121,14 +137,14 @@ Ten builds since the section below was written; every row here is **compile-only
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| B2 | **brake learner** (1126) | an entry overshot under braking with `Brake Learn Notify` | the notice **comes out without Show Track Analysis** and the cut is **0.15 at most** | ⬜ |
+| B2 | **brake learner** (1126) | an entry overshot under braking with `Brake Learn Notify` | the notice **comes out without Show Track Analysis** and the cut is **0.15 at most** | — obsolete (1936) |
 | B3 | **walls at three** | Show Rivalry, a rival on each side | both walls stay drawn | ⬜ |
 | B6 | **board · position** (1125) | look at the top-left corner | `POS` no longer overlaps the hints/tips | ⬜ |
 | B7 | **slow allowance** (1127) | a 5-15 mph corner with `Show Front Slip` | the car turns and the token `x1.5`/`x2.0` appears | ⬜ |
 | B8 | **Peak Slip Target** (1128) | token `x0.9` and `F` in a fast corner | the cut starts before the peak (F 100 = 90 % of the peak) | ⬜ |
 | B9 | **Deepest Cut (%)** (1385) | raise it from 60 to 80 in a long slide | it cuts more than before; at 0 it cuts nothing; at 60 identical to 1384 | ⬜ |
 | B10 | **the reference is the outer wheel** (1391, alive in `MeasureSlipFromMemory`) | `Show Front Slip` with `Slip From Memory` **on**: steer one way in a fast corner and watch the token's `F` | the number follows the **outer** wheel (the one slipping less); with the wheel straight it is the average of the two | ⬜ |
-| B13 | **Brake Aim Depth** (1397) | a corner where it already braked, raising it to 0.4 and then 0.8 | it brakes **later** and enters faster; if after a few laps it brakes where it used to, that is the learner lowering the factor | ⬜ |
+| B13 | **Brake Aim Depth** (1397) | a corner where it already braked, raising it to 0.4 and then 0.8 | it brakes **later** and enters faster; if after a few laps it brakes where it used to, that is the learner lowering the factor | — obsolete (1936) |
 | B17 | **exponential close** (1132) | `Slip From Memory` **off**: the readout is the proportion | at 500 % it reaches 100 % in ~0.27 s (8 ticks); at 1000 % ~0.3 s | ⬜ |
 
 ## C · Deliberate abuse

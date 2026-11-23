@@ -157,7 +157,6 @@ namespace ARS
             settings.Specs.Add(new KeySpec("GsLaneThrottleFloor", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("RouteRadiusFar", "False", Kind.Bool));
             settings.Specs.Add(new KeySpec("SlidRadiusLeadSeconds", "1.0", Kind.Number, new[] { "0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5" }));
-            settings.Specs.Add(new KeySpec("BrakeAimDepth", "0.0", Kind.Number, new[] { "0.0", "0.2", "0.4", "0.6", "0.8", "1.0" }));
             settings.Specs.Add(new KeySpec("Rubberbanding", "100", Kind.Number, new[] { "0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100" }));
             settings.Specs.Add(new KeySpec("RubberbandMode", RubberbandMode.Natural.ToString(), Kind.Text, Enum.GetNames(typeof(RubberbandMode))));
             settings.Specs.Add(new KeySpec("StagedSpawns", "False", Kind.Bool));

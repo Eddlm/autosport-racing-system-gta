@@ -120,7 +120,6 @@ namespace ARS
         public static bool CornerSpeedLearning = true;
         public static bool CornerSpeedLearnNotify = true;
         public static bool SlideBrakeCap = true;
-        public static float BrakeAimDepth = 0f;
         public static float MaxCrestLift = 0.4f;
         public static int TargetUnderPowerPct = 45;
 
@@ -962,7 +961,7 @@ public const float LaneInsetPerRadius = 125f;
             rivalPaceMenu.Add(routeOffsetItem);
             HookListTextPicker(routeOffsetItem);
 
-            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Learning", "Each corner learns how hard rivals dare to brake: cross the brakepoint more than 3 m/s hot and the factor gives back 0.02, drop below target+3 with more than 6 nodes spare and it takes 0.02, anything in between holds. Every verdict is announced when Brake Learn Notify is on.", BrakeLearning);
+            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Ramp Analysis", "Adjusts each braking corner's brake factor toward the 1.5 m/s ideal at the fixed ramp target: too hot lowers it, too slow raises it. One pass per corner, clamped to 0.70–1.30.", BrakeLearning);
             brakeLearningItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearning = brakeLearningItem.Checked;
@@ -995,16 +994,6 @@ public const float LaneInsetPerRadius = 125f;
             maxCrestLiftItem.SelectedIndex = Math.Max(0, maxCrestLiftItem.Items.IndexOf(SettingsMenuStore.GetFloat("MaxCrestLift", 0.4f).ToString("0.0", CultureInfo.InvariantCulture)));
             rivalPaceMenu.Add(maxCrestLiftItem);
             HookListTextPicker(maxCrestLiftItem);
-
-            NativeListItem<string> brakeAimItem = new NativeListItem<string>("Brake Aim Depth", "How far into the corner the braking aim sits: 0 aims at the node 1.25 s of corner speed before the apex, so the car is at corner speed with that much to spare; 1 aims at the apex, so it carries speed in and brakes all the way to it. The distance grows, so the brake point moves later.", SettingsRepair.OptionsFor("BrakeAimDepth"));
-            brakeAimItem.ItemChanged += (sender, args) =>
-            {
-                BrakeAimDepth = float.Parse(brakeAimItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("BrakeAimDepth", brakeAimItem.Items[args.Index]);
-            };
-            brakeAimItem.SelectedIndex = Math.Max(0, brakeAimItem.Items.IndexOf(SettingsMenuStore.GetFloat("BrakeAimDepth", BrakeAimDepth).ToString("0.0", CultureInfo.InvariantCulture)));
-            rivalPaceMenu.Add(brakeAimItem);
-            HookListTextPicker(brakeAimItem);
 
             NativeCheckboxItem gsLaneFloorItem = new NativeCheckboxItem("Gs Lane Throttle Floor", "Corner exit aid: while the projected path is inside the road and pointing at the inside, the throttle cannot fall below a floor that runs from full at the inside edge to nothing at the outer one. It never exceeds what TCS, stability and the off-track caps allow.", GsLaneThrottleFloor);
             gsLaneFloorItem.CheckboxChanged += (sender, args) =>
@@ -1372,7 +1361,7 @@ public const float LaneInsetPerRadius = 125f;
             };
             developmentMenu.Add(steerTraceItem);
 
-            NativeCheckboxItem brakeLearnNotifyItem = new NativeCheckboxItem("Brake Learn Notify", "Announce every brake-learner verdict: corner, before, change and after. Off by default, it prints once per corner per lap.", BrakeLearningNotify);
+            NativeCheckboxItem brakeLearnNotifyItem = new NativeCheckboxItem("Brake Ramp Notify", "Show each brake-ramp adjustment as it is logged. The log always receives it; this only controls the notice.", BrakeLearningNotify);
             brakeLearnNotifyItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearningNotify = brakeLearnNotifyItem.Checked;
@@ -3755,7 +3744,6 @@ public const float LaneInsetPerRadius = 125f;
             SteerTrace = DevelopmentMenuStore.GetBool("SteerTrace", SteerTrace);
             SlipFromMemory = DevelopmentMenuStore.GetBool("SlipFromMemory", SlipFromMemory);
             TrackLoader.LaneShapeAngleScale = DevelopmentMenuStore.GetFloat("ShapeAngleScale", TrackLoader.LaneShapeAngleScale);
-            BrakeAimDepth = SettingsMenuStore.GetFloat("BrakeAimDepth", BrakeAimDepth);
             GsLaneThrottleFloor = SettingsMenuStore.GetBool("GsLaneThrottleFloor", GsLaneThrottleFloor);
             RouteRadiusFar = SettingsMenuStore.GetBool("RouteRadiusFar", RouteRadiusFar);
             SlidRadiusLeadSeconds = SettingsMenuStore.GetFloat("SlidRadiusLeadSeconds", SlidRadiusLeadSeconds);

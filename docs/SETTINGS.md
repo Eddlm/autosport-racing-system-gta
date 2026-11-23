@@ -23,7 +23,6 @@
 | `AIRacerAutofix` | Menu-Settings.ini | yes | AutoRepair | AutoRepair |
 | `AbsEnabled` | Menu-Settings.ini | yes | False | False |
 | `AiNitroPct` | Menu-Settings.ini | yes | 100 | 100 |
-| `BrakeAimDepth` | Menu-Settings.ini | **NEW** | 0.0 | — |
 | `BrakeLearning` | Menu-Settings.ini | yes | True | True |
 | `CornerCeiling` | Menu-Settings.ini | yes | **500** | 200 |
 | `CornerOffset` | Menu-Settings.ini | yes | **0** | 4 |
@@ -144,7 +143,6 @@ build where code reads or writes a key the schema does not declare.
 | `GsLaneThrottleFloor` | True | True |  |
 | `RouteRadiusFar` | False | True |  |
 | `SlidRadiusLeadSeconds` | 1.0 | 1.5 | 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5 |
-| `BrakeAimDepth` | 0.0 | 0.0 | 0.0, 0.2, 0.4, 0.6, 0.8, 1.0 |
 | `Rubberbanding` | 100 | 100 | 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 |
 | `RubberbandMode` | Natural | Natural | Natural, Artificial |
 | `StagedSpawns` | False | False |  |
