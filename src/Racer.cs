@@ -390,8 +390,9 @@ namespace ARS
         // that room is genuinely there, so the balance never pays for a pass that was half offtrack already.
         const float CornerSpeedLearnVerdictMarginMetres = 1f;
         // A pass that never slid at all earns this much: nothing was learned about the corner, so it is credited as
-        // clean and moves by the coarse step rather than by a measured clearance.
-        const float CornerSpeedLearnNoSlideRiseMps = 4f;
+        // clean and moves by the coarse step rather than by a measured clearance. Set equal to the step limit, so the
+        // credit is what the number says and not a value the clamp quietly trims.
+        const float CornerSpeedLearnNoSlideRiseMps = 2.5f;
         const float CornerSpeedLearnReleaseMetres = 40f;
         // How close to an apex node counts as having reached it, in metres; the call widens it for fast cars.
         const float ApexReachedMetres = 3f;
