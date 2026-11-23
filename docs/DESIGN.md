@@ -134,23 +134,38 @@ done once and the car only applies its own factor.
 for, rather than the fastest it might get away with — so the plan keeps a promise about the corner while the
 pedals answer the moment.
 
-**Route is the authority; a corner takes over.** The route term answers the road under and ahead: a grip
+**Route is the default; a corner takes over when its ramp demands a lift.** The route term answers the road under and ahead: a grip
 circle read from the curvature at the follow point, then scaled by the surface under the window it is sampled
 over and by any crest ahead. On its own it decides the speed, and each term carries an error margin of its own
 as a menu offset — which is how a driver buys caution or commitment without touching either law.
 
-**A corner takes the car only when it is stricter, and keeps it through the exit.** The corner term is worked
+**A corner takes the car when its own ramp asks for a lift, and owns the speed only to its apex.** The corner term is worked
 backwards from the apex: the braking map, for the downforce and fixed braking factor this car has. A
-corner becomes the sole authority on the tick its own commitment crosses below the route's number — the strict
-comparison, so taking over can only slow the car and never raise a speed the route has already refused. From
-that tick the route term is not consulted at all: the car drinks the corner's ramp on the way in, and the
-corner’s own apex speed after the apex, until two seconds after the car passes that apex. The pass is
+corner becomes the sole authority on the tick its own braking envelope — `cornerSpd`, the ramp down to the latched
+apex — drops below the car's forward speed: the moment the rampdown asks for a lift. The route term plays no
+part in that entry, and since the envelope sits below the car's own speed on the takeover tick, taking over
+can only slow the car. From
+that tick the route term is not consulted at all: the car drinks the corner's ramp on the way in, and it still
+carries the corner's apex speed at the apex itself. Build 1971 splits the one flag that used to do three jobs at
+once: the speed authority ends at the apex, while the corner state stays open two seconds past it (`CornerVerdictMs`)
+as the verdict window — the corner-speed learner's sampling window, and the reason the brake-plan flag stays
+set — with the verdict committing on the tick the window closes. The pass is
 counted in track nodes from the corner's entry, not in metres and not from the lap-aware leaderboard key: the
 corner keeps its own node odometer, advanced every tick by the wrapped node delta since the last node the car
 was on, and the apex counts as passed once that count reaches the forward node distance to the apex latched at
-entry — clamped to zero where a point-to-point route has already left it behind. Then the
-route takes the car back. A nearer corner that asks for less than the speed being held takes over in the same tick, so there is
-never a tick where neither term answers.
+entry — clamped to zero where a point-to-point route has already left it behind. Past the
+apex the corner does not keep the car: the speed hands back on the ramp described below, while the corner state
+keeps the verdict window open. Before the apex the corner lets go on exactly one condition: the car falling 25 m/s
+below the corner's own demand (`CornerDeselectMps` — untimed, no duration, read every tick), logged as
+`EXIT to route (car fell well under the corner)` and committing no corner-speed verdict, because the corner was never
+driven at its own speed. The envelope sits far above the car through most of the approach, so the gap to the
+demand starts near zero at takeover and a 25 m/s gap means the car has since fallen well under what the corner
+asks — something else is already keeping it slow. There is no route-side release either: the route term rising
+above the corner does not lift it, and a route term above the corner's demand at the takeover tick does not
+block the entry — the envelope's crossing of the car is the whole test. The takeover test is one test, with no
+special case for a follower, so a following corner, a chicane or an S-bend, latches while the previous corner's
+verdict window is still open, and a corner taking over cancels the ramp. There is never a
+tick where neither term answers.
 
 **The corner that holds the car is the corner that answers.** The ramp is recomputed every tick for that
 corner's own apex, from its own apex speed — not from whichever corner the plan queue happens to be looking
@@ -176,9 +191,17 @@ lap's: corners beyond the last corner are ignored until that apex has passed, so
 next lap's first corner cannot skip the last corner of the one being driven. Where the plan does have a number,
 that number stands: it already accounts for the braking the car needs.
 
-**Past the apex the corner keeps the car for two seconds.** Long enough that the route term — whose radius is
-still inside the bend — cannot take the car back while the geometry is still turning, and short enough not to
-hold it slow onto the straight. Fifteen metres was the earlier rule; it bunched the release on fast sweepers.
+**Past the apex the corner hands the speed back on a slope, not a step.** The route term reads the tightest
+radius in a 1-2 s band ahead, so just past the apex that band still spans the corner and the route term sits at
+its tightest — handing back at the apex without a ramp would step the speed down on every exit, and the band
+can just as well sit above the held speed, so a flat handover would step it up instead. The held speed ramps
+into the live route term over one second (`ApexRampMs`), with the ramp's value at its start the held speed
+itself; while it runs the term reads `SpeedTerm.CornerToRoute`, so neither pure term owns the car and the
+route-speed learner, which reads only the pure route term, cannot learn off a blend. The corner state outlives
+the speed on purpose: two seconds past the apex (`CornerVerdictMs`) the verdict window closes and the corner's
+verdict commits. The flat hold it replaced — `CornerModePostApexHoldMs`, the three quarters of a second of
+build 1969 — released the route in one step; fifteen metres was the earlier rule, and it bunched the release on
+fast sweepers.
 
 **The road's own shape corrects both terms.** A hill takes grip from both — the route term at the follow
 point, the corner at its apex inside its braking map, where its grade enters as a deceleration change rather

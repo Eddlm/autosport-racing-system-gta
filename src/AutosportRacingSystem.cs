@@ -43,8 +43,9 @@ namespace ARS
 
         public static List<CornerPoint> Corners = new List<CornerPoint>();
         public static int CornersRevision = 0;
-        public static int CornerCeilingMeters = 500;
-        public static readonly string[] CornerCeilingValues = { "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "250", "300", "350", "400", "450", "500" };
+        // Hardcoded on purpose: the radius treated as a straight. The row and its ladder are gone so no stored value
+        // can drift from the number the corner table is built with.
+        public const int CornerCeilingMeters = 150;
 
         public static List<Bump> Bumps = new List<Bump>();
         public static List<Crest> Crests = new List<Crest>();
@@ -970,7 +971,7 @@ public const float LaneInsetPerRadius = 125f;
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at 0. Past the apex, while sliding past three quarters of the modelled peak slip, the pass keeps the least clearance between the car's outer side and that corner's outer road edge; more clearance raises the offset, less lowers it, at 0.05 m/s per metre. Off leaves the corner at pure grip physics.", CornerSpeedLearning);
+            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at 0. Past the apex, while sliding past three quarters of the modelled peak slip, the pass keeps the least clearance between the car's outer side and that corner's outer road edge; more clearance raises the offset, less lowers it, at 0.66 m/s per metre. Off leaves the corner at pure grip physics.", CornerSpeedLearning);
             cornerSpeedLearningItem.CheckboxChanged += (sender, args) =>
             {
                 CornerSpeedLearning = cornerSpeedLearningItem.Checked;
@@ -1324,20 +1325,6 @@ public const float LaneInsetPerRadius = 125f;
             logLevelItem.SelectedIndex = Math.Max(0, logLevelItem.Items.IndexOf(EnumLabel(LogLevel)));
             debugMenu.Add(logLevelItem);
             HookListTextPicker(logLevelItem);
-
-            NativeListItem<string> cornerCeilingItem = new NativeListItem<string>("Corner Ceiling", "The radius treated as a straight: regions are cut where the road opens past it. A change rebuilds the table at once.", CornerCeilingValues);
-            cornerCeilingItem.SelectedIndex = Math.Max(0, cornerCeilingItem.Items.IndexOf(SettingsMenuStore.GetInt("CornerCeiling", CornerCeilingMeters).ToString(CultureInfo.InvariantCulture)));
-            CornerCeilingMeters = int.Parse(cornerCeilingItem.Items[cornerCeilingItem.SelectedIndex], CultureInfo.InvariantCulture);
-            cornerCeilingItem.ItemChanged += (sender, args) =>
-            {
-                if (args.Index < 0 || args.Index >= cornerCeilingItem.Items.Count) return;
-                CornerCeilingMeters = int.Parse(cornerCeilingItem.Items[args.Index], CultureInfo.InvariantCulture);
-                SaveRacerSetting("CornerCeiling", CornerCeilingMeters.ToString(CultureInfo.InvariantCulture));
-                TrackLoader.BuildApexTable();
-                Log(LogImportance.Info, "Corner ceiling " + CornerCeilingMeters + " m: " + Corners.Count + " corner(s) in the table.");
-            };
-            debugMenu.Add(cornerCeilingItem);
-            HookListTextPicker(cornerCeilingItem);
 
             if (!StagedSpawns)
             {
@@ -3789,7 +3776,6 @@ public const float LaneInsetPerRadius = 125f;
             MenuModifierKey = ParseMenuHotkey(SettingsMenuStore.GetInt("MenuModifierKey", (int)MenuModifierKey), MenuModifierKey);
             MenuKey = ParseMenuHotkey(SettingsMenuStore.GetInt("MenuKey", (int)MenuKey), MenuKey);
             LogLevel = ParseEnum(SettingsMenuStore.Get("LogLevel", LogLevel.ToString()), LogLevel);
-            CornerCeilingMeters = SettingsMenuStore.GetInt("CornerCeiling", CornerCeilingMeters);
             AiNitroPct = SettingsMenuStore.GetInt("AiNitroPct", AiNitroPct);
             foreach (Options option in DebugToggles.Keys.ToArray())
                 DebugToggles[option] = DebugMenuStore.GetBool(option.ToString(), DebugToggles[option]);
@@ -3986,6 +3972,8 @@ public const float LaneInsetPerRadius = 125f;
                     + " @" + Math.Round(racer.SpeedSourceMetres).ToString(CultureInfo.InvariantCulture) + "m"
                     + " (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
             }
+            if (term == SpeedTerm.CornerToRoute)
+                return "corner-route (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
             if (term == SpeedTerm.Route)
                 return "route (R" + Math.Round(racer.SpeedSourceRadius).ToString(CultureInfo.InvariantCulture) + ")";
             if (term == SpeedTerm.Standoff) return "standoff";
@@ -4001,7 +3989,10 @@ public const float LaneInsetPerRadius = 125f;
             string label;
             if (reason == ThrottleReason.Plan)
             {
-                if (wanted >= 0.995f) label = "full";
+                // The one term that is neither a corner nor the route: name it outright, because during the exit
+                // ramp that is the fact worth reading, whatever the pedal is doing.
+                if (term == SpeedTerm.CornerToRoute) label = "corner-route";
+                else if (wanted >= 0.995f) label = "full";
                 else if (delta <= 0f) label = "over " + SpeedTermName(term);
                 else if (slew) label = "rising";
                 else label = "error " + delta.ToString("0.0", CultureInfo.InvariantCulture) + "/"
@@ -4022,6 +4013,7 @@ public const float LaneInsetPerRadius = 125f;
             switch (term)
             {
                 case SpeedTerm.Corner: return "corner";
+                case SpeedTerm.CornerToRoute: return "corner-route";
                 case SpeedTerm.Route: return "route";
                 case SpeedTerm.Standoff: return "standoff";
                 case SpeedTerm.Chicane: return "chicane";

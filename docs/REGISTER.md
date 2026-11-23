@@ -69,8 +69,9 @@ single braking zone.
 
 The route's speed reference is a function of radius alone, so its target can step by a large fraction of the whole
 brake range between one node and the next, where the corner plan descends smoothly. Where a corner holds the car this
-is masked on purpose — from the tick it takes over, the curvature term is not consulted at all, and it comes back
-two seconds after the apex. Where no corner holds the car, the
+is masked on purpose — from the tick it takes over until its apex, the curvature term is not consulted at all;
+past the apex it comes back over `ApexRampMs` (one second) as the ramp's slope — reading `SpeedTerm.CornerToRoute`
+while it runs — instead of landing all at once. Where no corner holds the car, the
 step reaches the pedal. **Falsify** by logging the route term per node against the ramp of the corner it is
 approaching.
 

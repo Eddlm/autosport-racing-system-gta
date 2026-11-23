@@ -270,6 +270,7 @@ namespace ARS
         GridWait,
         Finished,
         Corner,
+        CornerToRoute,
         Route,
         Standoff,
         Chicane,

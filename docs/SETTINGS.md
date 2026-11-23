@@ -24,7 +24,6 @@
 | `AbsEnabled` | Menu-Settings.ini | yes | False | False |
 | `AiNitroPct` | Menu-Settings.ini | yes | 100 | 100 |
 | `BrakeLearning` | Menu-Settings.ini | yes | True | True |
-| `CornerCeiling` | Menu-Settings.ini | yes | **500** | 200 |
 | `CornerOffset` | Menu-Settings.ini | yes | **0** | 4 |
 | `DNFUnderTrack` | Menu-Settings.ini | yes | True | True |
 | `DamperCountersteerMaxDeg` | Menu-Settings.ini | yes | 2.00 | 2.00 |
@@ -150,7 +149,6 @@ build where code reads or writes a key the schema does not declare.
 | `MenuModifierKey` | 160 | 160 | `Keys.LShiftKey` — the number is the enum value |
 | `MenuKey` | 69 | 69 | `Keys.E` — the number is the enum value |
 | `LogLevel` | Error | Info | Info, Error, Fatal, None |
-| `CornerCeiling` | 500 | 500 | 20…200 step 20, then 250, 300, 350, 400, 450, 500 |
 | `AiNitroPct` | 100 | 100 | 50, 100, 150, 200 |
 
 ## `Menu-Development.ini`
