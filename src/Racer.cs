@@ -19,7 +19,7 @@ namespace ARS
         public static readonly bool ProjectionCut = true;
         public static readonly bool OffTrackThrottle = true;
         public static readonly bool CrestGate = true;
-        public static readonly bool StabilityCap = true;
+        public static readonly bool StabilityCap = false;
         public static readonly bool GsLaneFloor = true;
         public static readonly bool OverspeedCorrection = true;
         public static readonly bool SlopeGrip = true;

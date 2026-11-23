@@ -1,12 +1,21 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2001** (`6415685720e30ff9`). The six changes described here are 1981's, **AH** is the newest law, then **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2.5 m/s per pass since 1999 (`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 in 1997, 2 before that, 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2.5 m/s (`CornerSpeedLearnDeltaLimitMps`), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2003** (`57528373b6b4805e`). The six changes described here are 1981's, **AI** is the newest, then **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2.5 m/s per pass since 1999 (`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 in 1997, 2 before that, 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2.5 m/s (`CornerSpeedLearnDeltaLimitMps`), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **73 open rows below**; everything already driven or disposed of
+**Section P is closed** (all eighteen verified). **74 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **80** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## AI · 2026-11-23 (2003) — the throttle stability cap is off for now
+
+⬜ Parked, not deleted. `TrackSpeed.StabilityCap` reads `false`, so lifting a wheel no longer lowers
+`Control.MaxThrottleFromStability`: that cap sits at 1, never binds against TCS, and the route learner's stability
+test always reads stable. Off to judge what the rest of the pedal set does without it. One word brings it back; if it
+stays off and is not missed, the sweep deletes the mechanism rather than leaving the flag as its record.
 
 ---
 
