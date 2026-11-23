@@ -68,9 +68,16 @@ namespace ARS
 
         public TrackPoint CurrentTrackPoint = new TrackPoint();
         public float AlongTrackSpeed = 0f;
-        public int RaceProgress = 0;
-        int _trackProgress = 0;
-        int _lastProgressNode = -1;
+        // Leaderboard sort key: lap-aware node count, not a continuous odometer.
+        public int RaceOrderKey = 0;
+        // Node count from the latched corner's entry to its apex, for the corner-mode release.
+        int _cornerModeDistanceNodes = 0;
+        int _cornerModeApexTargetNodes = 0;
+        int _cornerModeLastNode = -1;
+        int _lapOdometer = 0;
+        int _lastLapNode = -1;
+        int _lapStartNode = -1;
+        int _lapStartOdometer = 0;
         public int LiveRouteCrestNode = -1;
         public int LiveRouteCrestFarNode = -1;
         public int LiveRouteRadiusNearNode = -1;
@@ -321,6 +328,10 @@ namespace ARS
         float _steerGrantedCeiling = 0f;
 
         float _projectionOutsideMeters = 0f;
+        float _projectionCenterOffset = 0f;
+        float _projectionHalfWidth = 0.1f;
+        int _projectionMeasuredAt = -1;
+        bool _projectionValid;
         float _carOutsideMeters = 0f;
         bool _projectionWidening = false;
         bool _projectionCutActive = false;
@@ -362,18 +373,14 @@ namespace ARS
         int _brakeAnalysisLap = -1;
         bool _brakeAnalysisArmed;
         bool _brakeAnalysisFired;
-        // Corner speed learning: one flat step in m/s, clamped both ways. The switch is a boolean; the step
-        // and the limit are code, not settings. The analyser opens on the approach and closes a window later.
-        const float CornerSpeedLearnRiseMps = 3f;
-        const float CornerSpeedLearnDropMps = 3f;
+        // Corner speed learning: the car's own clearance from the corner's outer edge decides the offset,
+        // measured once past the apex. Scaled by metres, clamped both ways; the switch is a boolean, the scale and
+        // the limit are code.
         const float CornerSpeedLearnAheadShare = 0.5f;
         const float CornerSpeedLearnLimitMps = 10f;
-        const float CornerSpeedLearnStartSeconds = 3f;
-        const float CornerSpeedLearnWindowSeconds = 6f;
-        const float CornerSpeedLearnSlideDegrees = 10f;
-        const float CornerSpeedLearnEndThrottle = 0.5f;
-        const float CornerSpeedLearnBrakeCeiling = 0.05f;
-        const int CornerSpeedLearnTrafficMs = 250;
+        const float CornerSpeedLearnMinSlideShare = 0.75f;
+        const float CornerSpeedLearnMetreToOffset = 0.05f;
+        const float CornerSpeedLearnNoSlideRiseMps = 0.05f;
         const float CornerSpeedLearnReleaseMetres = 40f;
         // How close to an apex node counts as having reached it, in metres; the call widens it for fast cars.
         const float ApexReachedMetres = 3f;
@@ -393,6 +400,9 @@ namespace ARS
         const float RouteSpeedLearnOpenRadius = 998f;
         const float RouteSpeedLearnStableThrottle = 0.999f;
         int _cornerSpeedApexNode = -1;
+        int _cornerSpeedLastSampleMs = -1;
+        float _cornerSpeedWorstOutsideClear = float.MaxValue;
+        int _cornerSpeedOutsideSamples;
         // Route is the default authority; a corner is an override that latches while it owns the car.
         // Milliseconds after the apex passes before the corner lets go.
         const int CornerModePostApexHoldMs = 2000;
@@ -400,13 +410,7 @@ namespace ARS
         int _cornerModeNode = -1;
         float _cornerModeSpeed = 999f;
         int _cornerModeApexPassedAt = -1;
-        int _cornerModeApexProgress = -1;
         readonly HashSet<int> _cornerSpeedLocked = new HashSet<int>();
-        int _cornerSpeedEndsAt;
-        bool _cornerSpeedSawTraffic;
-        bool _cornerSpeedSawSlide;
-        bool _cornerSpeedSawOffTrack;
-        bool _cornerSpeedSawLift;
         int _laneAvoidAt;
         int _sideBySideSteerAt;
         public float BrakeFactorForApex(int apexNode) => TryGetCornerContext(apexNode, out CornerContext context) ? context.BrakeFactor : BrakeFactorSeed;
@@ -691,8 +695,13 @@ namespace ARS
             Car.FreezePosition = false;
             CanRegisterNewLap = false;
             _previousNode = -1;
-            _trackProgress = 0;
-            _lastProgressNode = -1;
+            _cornerModeDistanceNodes = 0;
+            _cornerModeApexTargetNodes = 0;
+            _cornerModeLastNode = -1;
+            _lapOdometer = 0;
+            _lastLapNode = -1;
+            _lapStartNode = -1;
+            _lapStartOdometer = 0;
             ActiveManeuver.Type = ManeuverType.None;
             ActiveManeuver.Target = null;
             ActiveManeuver.LastEnabled = 0;
@@ -766,13 +775,19 @@ namespace ARS
             LaneReason laneReason = LaneReason.OwnLane;
 
             CornerPoint candidate = NearestApexAhead();
-            // The corner in play is the one the lane holds; NextApexNode has already moved past a spent corner by
-            // the time this runs, because the queue refills in the same tick that skips it. Coasting spends the
-            // corner's SPEED requirement only: the line keeps the corner until the car is past its apex node.
-            if (_laneHeldCorner == null || HasPassedApex(_laneHeldCorner.Node))
+            // The lane latch owns the line; the planner queue refills independently of it.
+            CornerPoint previousLaneCorner = _laneHeldCorner;
+            if (previousLaneCorner == null || HasPassedApex(previousLaneCorner.Node))
             {
-                if (_laneHeldCorner != null) FinishShapeError(_laneHeldCorner);
+                if (previousLaneCorner != null)
+                {
+                    FinishShapeError(previousLaneCorner);
+                    LogApexEvent("Lane", false, previousLaneCorner.Node,
+                        "apex passed · lap " + Lap + " · node " + CurrentTrackPoint.Node);
+                }
                 _laneHeldCorner = candidate;
+                if (_laneHeldCorner != null)
+                    LogApexEvent("Lane", true, _laneHeldCorner.Node, null);
             }
             CornerPoint lineCorner = _laneHeldCorner;
 
@@ -1202,10 +1217,27 @@ const float RequirementLookaheadSeconds = 3.95f;
 
 
 
+        CornerPoint LastCornerOfLap()
+        {
+            CornerPoint last = null;
+            foreach (CornerPoint corner in ARS.Corners)
+                if (last == null || corner.Node > last.Node) last = corner;
+            return last;
+        }
+
+        bool CornerBeyondLastLapCorner(int node, CornerPoint lastLapCorner, bool lastLapCornerPassed)
+        {
+            if (node < 0 || lastLapCorner == null || lastLapCornerPassed) return false;
+            return ForwardNodeDistance(node) > ForwardNodeDistance(lastLapCorner.Node);
+        }
+
         CornerPoint NearestApexAhead()
         {
             int count = ARS.TrackPoints.Count;
             if (count < 10) return null;
+
+            CornerPoint lastLapCorner = LastCornerOfLap();
+            bool lastLapCornerPassed = lastLapCorner == null || HasPassedApex(lastLapCorner.Node);
 
             CornerPoint best = null;
             float bestMeters = float.MaxValue;
@@ -1216,6 +1248,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 float reach = Math.Max(Math.Max(Car.Velocity.Length(), 1f) * ARS.LanePreviewSeconds, ARS.LaneApexMinReachMeters);
                 if (!ApexAheadOfLookahead(corner, reach)) continue;
                 if (metres < 0f || metres >= bestMeters) continue;
+                if (CornerBeyondLastLapCorner(corner.Node, lastLapCorner, lastLapCornerPassed)) continue;
                 if (_skippedApexes.Contains(corner.Node)) continue;
                 bestMeters = metres;
                 best = corner;
@@ -1986,6 +2019,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             float mph = ARS.MpsToMph(Car.Velocity.Length());
             float signedOffset = 0f;
             _projectionOutsideMeters = 0f;
+            _projectionCenterOffset = 0f;
+            _projectionHalfWidth = 0.1f;
+            _projectionValid = false;
+            _projectionMeasuredAt = Game.GameTime;
             _carOutsideMeters = 0f;
             _projectionWidening = false;
             float halfWidth = 0f;
@@ -2007,6 +2044,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                 carOffset = Math.Abs(ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction));
                 _carOutsideMeters = carOffset - Math.Max(CurrentTrackPoint.TrackHalfWidth, 0.1f);
                 _projectionOutsideMeters = outsideOffset - halfWidth;
+                _projectionCenterOffset = signedOffset;
+                _projectionHalfWidth = halfWidth;
+                _projectionValid = true;
                 float projectionLocal = Math.Abs(ARS.SignedLaneOffset(proj, CurrentTrackPoint.Position, CurrentTrackPoint.Direction));
                 _projectionWidening = projectionLocal > carOffset;
             }
@@ -2042,6 +2082,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             for (int i = 0; i < ARS.Corners.Count; i++)
                 if (ARS.Corners[i].Node == apexNode) return "corner #" + (i + 1);
             return "corner " + apexNode;
+        }
+
+        void LogApexEvent(string source, bool chose, int apexNode, string reason)
+        {
+            string detail = string.IsNullOrEmpty(reason) ? string.Empty : " (" + reason + ")";
+            ARS.Log(ARS.LogImportance.Info, source + (chose ? " chose apex " : " released apex ")
+                + apexNode + " at " + Game.GameTime + " ms" + detail, true);
         }
 
         float PlannedCornerArrivalSpeed(CornerPoint corner)
@@ -2103,56 +2150,52 @@ const float RequirementLookaheadSeconds = 3.95f;
             UI.Notify("~b~[ARS]~w~ (" + Car.DisplayName + ") " + detail);
         }
 
-        // Corner speed learning: watches one corner passage and moves that corner's offset by one flat step.
-        // The window opens inside three seconds of the corner with the brakes already released and closes six
-        // seconds later; traffic voids the verdict, a slide or leaving the road takes a step off, and every
-        // other passage adds one. The next pass uses the new number.
+        // Corner speed learning: the corner-mode latch opens the window. Past the apex, keep the least
+        // clearance from the car's outer side to that corner's outer road edge; when the corner lets go,
+        // that clearance becomes the offset delta. No qualifying slide samples: +0.05 m/s.
         void UpdateCornerSpeedLearning()
         {
             if (!ARS.CornerSpeedLearning) return;
 
-            // One verdict per pass: a corner stays locked until the car is well past it, so the same corner is
-            // never measured twice on the way in.
             ReleaseCornerSpeedLocks();
 
-            if (_cornerSpeedApexNode >= 0)
+            if (_cornerSpeedApexNode < 0) return;
+            if (!HasPassedApex(_cornerSpeedApexNode)) return;
+            if (VehicleData.LastAccelSampleTime == _cornerSpeedLastSampleMs || TRLateralAtSpeed <= 0.01f) return;
+
+            if (!TryGetCornerContext(_cornerSpeedApexNode, out CornerContext context) || context.Point == null) return;
+            float outsideSign = Math.Sign(context.Point.Angle);
+            if (outsideSign == 0f) return;
+
+            _cornerSpeedLastSampleMs = VehicleData.LastAccelSampleTime;
+            float slide = Math.Abs(VehicleData.SlideAngle);
+            if (float.IsNaN(slide) || float.IsInfinity(slide)) return;
+            if (slide / TRLateralAtSpeed < CornerSpeedLearnMinSlideShare) return;
+
+            float signedOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
+            float outsideReach = signedOffset * outsideSign + VehicleData.BoundingBox * 0.5f;
+            float clearance = Math.Max(CurrentTrackPoint.TrackHalfWidth, 0.1f) - outsideReach;
+            _cornerSpeedWorstOutsideClear = Math.Min(_cornerSpeedWorstOutsideClear, clearance);
+            _cornerSpeedOutsideSamples++;
+        }
+
+        void StartCornerSpeedLearning(int apexNode)
+        {
+            if (apexNode < 0 || _cornerSpeedLocked.Contains(apexNode))
             {
-                if (Game.GameTime - _laneAvoidAt <= CornerSpeedLearnTrafficMs
-                    || Game.GameTime - _sideBySideSteerAt <= CornerSpeedLearnTrafficMs)
-                    _cornerSpeedSawTraffic = true;
-
-                float slide = Math.Abs(VehicleData.SlideAngle);
-                if (!float.IsNaN(slide) && slide >= CornerSpeedLearnSlideDegrees) _cornerSpeedSawSlide = true;
-
-                if (OutOfTrackDistance() > 0f) _cornerSpeedSawOffTrack = true;
-
-                // The passage is over when the car is back on the power past the apex, or when the window runs
-                // out. Power before the apex proves nothing about the corner, so it cannot close the window; the
-                // lift latch stops a flat-out corner committing on its first tick with nothing observed.
-                if (Control.Throttle <= CornerSpeedLearnEndThrottle) _cornerSpeedSawLift = true;
-                bool pastApex = HasPassedApex(_cornerSpeedApexNode);
-                if (Game.GameTime >= _cornerSpeedEndsAt
-                    || (pastApex && _cornerSpeedSawLift && Control.Throttle > CornerSpeedLearnEndThrottle))
-                    CommitCornerSpeedLearning();
+                _cornerSpeedApexNode = -1;
                 return;
             }
+            _cornerSpeedApexNode = apexNode;
+            _cornerSpeedLastSampleMs = -1;
+            _cornerSpeedWorstOutsideClear = float.MaxValue;
+            _cornerSpeedOutsideSamples = 0;
+        }
 
-            if (NextApexNode < 0) return;
-            if (Control.Brake >= CornerSpeedLearnBrakeCeiling) return;
-
-            float speed = Car.Velocity.Length();
-            if (speed < 1f) return;
-            int entranceNode = CornerEntranceNode(_nextApexCorner, NextApexNode);
-            float secondsToCorner = MetresToNode(entranceNode) / speed;
-            if (secondsToCorner <= 0f || secondsToCorner >= CornerSpeedLearnStartSeconds) return;
-            if (_cornerSpeedLocked.Contains(NextApexNode)) return;
-
-            _cornerSpeedApexNode = NextApexNode;
-            _cornerSpeedEndsAt = Game.GameTime + (int)(CornerSpeedLearnWindowSeconds * 1000f);
-            _cornerSpeedSawTraffic = false;
-            _cornerSpeedSawSlide = false;
-            _cornerSpeedSawOffTrack = false;
-            _cornerSpeedSawLift = false;
+        void CommitCornerSpeedLearningFor(int apexNode)
+        {
+            if (_cornerSpeedApexNode != apexNode) return;
+            CommitCornerSpeedLearning();
         }
 
         void CommitCornerSpeedLearning()
@@ -2164,34 +2207,27 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             float before = TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
             string id = CornerId(apexNode);
+            bool hadSlipSample = _cornerSpeedOutsideSamples > 0;
+            float clearance = hadSlipSample ? _cornerSpeedWorstOutsideClear : float.NaN;
+            float delta = hadSlipSample ? clearance * CornerSpeedLearnMetreToOffset : CornerSpeedLearnNoSlideRiseMps;
+            float after = ARS.Clamp(before + delta, -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
 
-            if (_cornerSpeedSawTraffic)
-            {
-                AnnounceCornerSpeedAdjustment(id + " · traffic · offset stays " + FormatCornerSpeedOffset(before));
-                return;
-            }
-
-            bool trouble = _cornerSpeedSawSlide || _cornerSpeedSawOffTrack;
-            float after = ARS.Clamp(before + (trouble ? -CornerSpeedLearnDropMps : CornerSpeedLearnRiseMps),
-                -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
             CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;
+            float applied = after - before;
             float aheadGain = 0f;
-            if (!trouble && after > before) aheadGain = NudgeFollowingCorner(apexNode, CornerSpeedLearnRiseMps * CornerSpeedLearnAheadShare);
+            if (applied > 0f) aheadGain = NudgeFollowingCorner(apexNode, applied * CornerSpeedLearnAheadShare);
 
-            string why = _cornerSpeedSawSlide && _cornerSpeedSawOffTrack ? "slid and left the road"
-                : _cornerSpeedSawSlide ? "slide at " + CornerSpeedLearnSlideDegrees.ToString("0", CultureInfo.InvariantCulture) + " deg or more"
-                : _cornerSpeedSawOffTrack ? "left the road"
-                : "clean";
+            string deltaText = (applied >= 0f ? "+" : "") + applied.ToString("0.00", CultureInfo.InvariantCulture) + " m/s";
+            string peakText = hadSlipSample
+                ? "closest " + clearance.ToString("0.0", CultureInfo.InvariantCulture) + " m"
+                : "no slide";
+            string offtrack = hadSlipSample && clearance < 0f ? " · ~r~offtrack~w~" : "";
 
-            if (Math.Abs(after - before) < 0.001f)
-                AnnounceCornerSpeedAdjustment(id + " · " + why + " · " + FormatCornerSpeedOffset(before) + " = at the limit");
-            else
-                AnnounceCornerSpeedAdjustment(id + " · " + why + " · " + FormatCornerSpeedOffset(before)
-                    + " → " + FormatCornerSpeedOffset(after)
-                    + (aheadGain > 0f ? " · ahead " + FormatCornerSpeedOffset(aheadGain) : ""));
+            AnnounceCornerSpeedAdjustment(id + " · " + peakText + " · " + deltaText + offtrack
+                + (aheadGain > 0f ? " · ahead " + FormatCornerSpeedOffset2(aheadGain) : ""));
         }
 
-        static string FormatCornerSpeedOffset(float offset) => offset.ToString("+0.0;-0.0;0", CultureInfo.InvariantCulture) + " m/s";
+        static string FormatCornerSpeedOffset2(float offset) => offset.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture) + " m/s";
 
         // His spec: a clean rise hands half of itself to the corner ahead, because the speed carried out of this
         // one is speed the next one was entered with. Returns the gain actually given, for the log line.
@@ -2239,6 +2275,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         void EnterCornerMode(int apexNode, float heldSpeed, float cornerTerm, float routeTerm)
         {
             if (apexNode < 0) return;
+            if (_cornerMode && _cornerModeNode >= 0 && _cornerModeNode != apexNode)
+                CommitCornerSpeedLearningFor(_cornerModeNode);
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": pre  route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
                 + " corner " + cornerTerm.ToString("0.0", CultureInfo.InvariantCulture)
                 + " car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
@@ -2247,7 +2285,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerModeNode = apexNode;
             _cornerModeSpeed = heldSpeed;
             _cornerModeApexPassedAt = -1;
-            _cornerModeApexProgress = ApexProgressFromCurrent(apexNode);
+            _cornerModeDistanceNodes = 0;
+            _cornerModeLastNode = CurrentTrackPoint.Node;
+            _cornerModeApexTargetNodes = ForwardNodeDistance(apexNode);
+            if (ARS.IsPointToPoint && _cornerModeApexTargetNodes < 0) _cornerModeApexTargetNodes = 0;
+            StartCornerSpeedLearning(apexNode);
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": ENTER corner #" + apexNode + ", drinking "
                 + cornerTerm.ToString("0.0", CultureInfo.InvariantCulture) + " m/s, held "
                 + heldSpeed.ToString("0.0", CultureInfo.InvariantCulture) + " m/s", true);
@@ -2256,6 +2298,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         void ExitCornerMode(float routeTerm, string why)
         {
             if (!_cornerMode) return;
+            CommitCornerSpeedLearningFor(_cornerModeNode);
             int postApexMs = _cornerModeApexPassedAt >= 0 ? Game.GameTime - _cornerModeApexPassedAt : -1;
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": corner mode lifted for #" + _cornerModeNode
                 + (postApexMs >= 0 ? " " + postApexMs + " ms after apex" : " before apex was marked"), true);
@@ -2267,7 +2310,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerModeNode = -1;
             _cornerModeSpeed = 999f;
             _cornerModeApexPassedAt = -1;
-            _cornerModeApexProgress = -1;
+            _cornerModeDistanceNodes = 0;
+            _cornerModeApexTargetNodes = 0;
+            _cornerModeLastNode = -1;
         }
 
         // A corner is finished for this pass once the car is CornerSpeedLearnReleaseMetres past it, so the same
@@ -2402,32 +2447,36 @@ const float RequirementLookaheadSeconds = 3.95f;
             float cornerSpd = 999f;
             float cornerArrival = 999f;
             int cornerSourceNode = -1;
+            CornerPoint lastLapCorner = LastCornerOfLap();
+            bool lastLapCornerPassed = lastLapCorner == null || HasPassedApex(lastLapCorner.Node);
             if (TrackSpeed.CornerPlan && NextApexNode >= 0)
             {
 
-                if (CornerRequiresBraking(NextApexNode))
+                if (NextApexNode >= 0 && !CornerBeyondLastLapCorner(NextApexNode, lastLapCorner, lastLapCornerPassed) && CornerRequiresBraking(NextApexNode))
                 {
                     cornerSpd = Math.Max(2, ApexBrakingSpeed(NextApexNode, NextApexSpeed));
                     cornerSourceNode = NextApexNode;
                     cornerArrival = NextApexSpeed;
                 }
-                if (NextApexNode2 >= 0 && CornerRequiresBraking(NextApexNode2))
+                if (NextApexNode2 >= 0 && !CornerBeyondLastLapCorner(NextApexNode2, lastLapCorner, lastLapCornerPassed) && CornerRequiresBraking(NextApexNode2))
                 {
                     float second = Math.Max(2, ApexBrakingSpeed(NextApexNode2, NextApexSpeed2));
                     if (second < cornerSpd) { cornerSpd = second; cornerSourceNode = NextApexNode2; cornerArrival = NextApexSpeed2; }
                 }
-                if (NextApexNode3 >= 0 && CornerRequiresBraking(NextApexNode3))
+                if (NextApexNode3 >= 0 && !CornerBeyondLastLapCorner(NextApexNode3, lastLapCorner, lastLapCornerPassed) && CornerRequiresBraking(NextApexNode3))
                 {
                     float third = Math.Max(2, ApexBrakingSpeed(NextApexNode3, NextApexSpeed3));
                     if (third < cornerSpd) { cornerSpd = third; cornerSourceNode = NextApexNode3; cornerArrival = NextApexSpeed3; }
                 }
             }
 
-            // The corner number always exists, so the override has something to compare against the route term: the
-            // ramp toward the nearest corner's own apex speed, whether or not the plan asked for brakes.
+            // The queue head supplies the ceiling even before its braking flag is set; else the nearest corner.
             if (cornerSpd >= 998f)
             {
-                CornerPoint owned = NearestCornerAhead();
+                CornerPoint owned = NextApexNode >= 0 && !CornerBeyondLastLapCorner(NextApexNode, lastLapCorner, lastLapCornerPassed)
+                    ? ARS.Corners.FirstOrDefault(corner => corner.Node == NextApexNode)
+                    : null;
+                if (owned == null) owned = NearestCornerAhead();
                 if (owned != null)
                 {
                     cornerArrival = ARS.CornerApexSpeed(owned, this);
@@ -2504,7 +2553,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
             else
             {
-                if (_cornerModeApexPassedAt < 0 && _cornerModeApexProgress >= 0 && _trackProgress >= _cornerModeApexProgress)
+                if (_cornerModeApexPassedAt < 0 && _cornerModeDistanceNodes >= _cornerModeApexTargetNodes)
                 {
                     _cornerModeApexPassedAt = Game.GameTime;
                     ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": APEX corner #" + _cornerModeNode
@@ -4009,36 +4058,61 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             CurrentTrackPoint = closestPoint;
-            UpdateRaceProgress();
+            UpdateRaceOrderKey();
         }
 
-        void UpdateTrackProgress(int node)
+        int WrappedNodeDelta(int fromNode, int toNode)
+        {
+            int delta = toNode - fromNode;
+            if (ARS.IsPointToPoint) return delta;
+
+            int count = ARS.TrackPoints.Count;
+            if (delta > count / 2) delta -= count;
+            else if (delta < -count / 2) delta += count;
+            return delta;
+        }
+
+        void UpdateLapOdometer(int node)
         {
             int count = ARS.TrackPoints.Count;
-            if (count <= 0)
+            if (count <= 0) return;
+            if (_lastLapNode < 0 || _lapStartNode < 0)
             {
-                _trackProgress = 0;
-                _lastProgressNode = node;
+                _lapOdometer = 0;
+                _lastLapNode = node;
+                _lapStartNode = node;
+                _lapStartOdometer = 0;
                 return;
             }
 
-            if (_lastProgressNode >= 0)
+            _lapOdometer += WrappedNodeDelta(_lastLapNode, node);
+            float previousPct = ARS.GetPercent(_lastLapNode, count);
+            float currentPct = ARS.GetPercent(node, count);
+            if (!ARS.IsPointToPoint && previousPct > 90f && currentPct < 10f)
             {
-                int step = node - _lastProgressNode;
-                if (!ARS.IsPointToPoint)
-                {
-                    if (step > count / 2) step -= count;
-                    else if (step < -count / 2) step += count;
-                }
-                _trackProgress += step;
+                _lapStartNode = 0;
+                _lapStartOdometer = _lapOdometer;
             }
 
-            _lastProgressNode = node;
+            _lastLapNode = node;
         }
 
-        void UpdateRaceProgress()
+        void UpdateCornerModeOdometer(int node)
         {
-            RaceProgress = Lap * ARS.TrackPoints.Count + CurrentTrackPoint.Node;
+            if (!_cornerMode)
+            {
+                _cornerModeLastNode = -1;
+                return;
+            }
+
+            if (_cornerModeLastNode >= 0)
+                _cornerModeDistanceNodes += WrappedNodeDelta(_cornerModeLastNode, node);
+            _cornerModeLastNode = node;
+        }
+
+        void UpdateRaceOrderKey()
+        {
+            RaceOrderKey = Lap * ARS.TrackPoints.Count + CurrentTrackPoint.Node;
         }
 
         public void UpdateTrackPosition()
@@ -4097,7 +4171,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
 
             CurrentTrackPoint = closestPoint;
-            UpdateTrackProgress(closestPoint.Node);
+            UpdateLapOdometer(closestPoint.Node);
+            UpdateCornerModeOdometer(closestPoint.Node);
             Brain.CurrentPerception.CurrentNodeOffset = ARS.SignedLaneOffset(carPosition, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
 
             LookAheads.Clear();
@@ -4135,7 +4210,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool wrappedStartLine = !ARS.IsPointToPoint && _previousNode >= 0 && previousPct > 90f && currentPct < 10f;
             UpdateLapRegistration(currentNode, nodeCount, currentPct, wrappedStartLine);
 
-            UpdateRaceProgress();
+            UpdateRaceOrderKey();
 
             _previousNode = currentNode;
 
@@ -4317,7 +4392,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool lowSpeedInvalidation = heldNodes[0] >= 0 && Car.Velocity.Length() < NextApexSpeed * 0.5f;
             if (heldTableChanged || lowSpeedInvalidation)
             {
-                for (int i = 0; i < heldNodes.Length; i++) heldNodes[i] = -1;
+                for (int i = 0; i < heldNodes.Length; i++)
+                {
+                    if (heldNodes[i] >= 0) LogApexEvent("Plan", false, heldNodes[i], lowSpeedInvalidation ? "queue invalidated by low speed" : "queue invalidated by missing corner");
+                    heldNodes[i] = -1;
+                }
             }
             else
             {
@@ -4327,6 +4406,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (shift > 0 && ControlledByPlayer) Tips.ApexPassed(shift);
                 if (shift > 0)
                 {
+                    for (int i = 0; i < shift; i++)
+                        if (heldNodes[i] >= 0) LogApexEvent("Plan", false, heldNodes[i], "apex passed");
                     for (int i = 0; i < heldNodes.Length - shift; i++)
                     {
                         heldNodes[i] = heldNodes[i + shift];
@@ -4348,14 +4429,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             float speed = Math.Max(Car.Velocity.Length(), 1f);
             float forwardGs = VehicleData.GetLongitudinalGs(Car.ForwardVector);
             bool flipped = false;
-
-            // Coasting past the entrance spends the corner's speed requirement, not its line: the queue looks past it
-            // here, and the picker keeps holding it until the apex.
-            if (CornerSpent(NextApexNode) && _skippedApexes.Add(NextApexNode))
-            {
-                flipped = true;
-                ARS.Log(ARS.LogImportance.Info, "Queue pass " + Name + ": corner " + NextApexNode + " spent coasting past its entrance");
-            }
 
             foreach (CornerPoint corner in ARS.Corners)
             {
@@ -4385,6 +4458,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                         flipped = true;
                         ARS.Log(ARS.LogImportance.Info, "Queue skip " + Name + ": corner " + corner.Node + " ignored (wide "
                             + corner.DetectedRadius.ToString("0") + " m, no braking asked), the picker looks past it");
+                        LogApexEvent("Plan", false, corner.Node, "wide, no braking asked");
                     }
                 }
 
@@ -4506,6 +4580,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         void CommitApexQueue(int[] nodes, float[] radii)
         {
+            int previousHead = NextApexNode;
             NextApexNode = nodes[0];
             NextApexRadius = radii[0];
             NextApexSpeed = NextApexNode >= 0 ? ApexSpeedFor(NextApexNode, NextApexRadius) : 999f;
@@ -4515,6 +4590,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             NextApexNode3 = nodes[2];
             NextApexRadius3 = radii[2];
             NextApexSpeed3 = NextApexNode3 >= 0 ? ApexSpeedFor(NextApexNode3, NextApexRadius3) : 999f;
+            if (NextApexNode != previousHead)
+            {
+                if (NextApexNode >= 0)
+                    LogApexEvent("Plan", true, NextApexNode, previousHead >= 0 ? "from " + previousHead : null);
+                else if (previousHead >= 0)
+                    LogApexEvent("Plan", false, previousHead, "queue emptied");
+            }
 
             if (NextApexNode >= 0)
             {
@@ -4546,47 +4628,22 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Brain.Corner = null;
             }
         }
-        int ApexProgressFromCurrent(int apexNode)
-        {
-            int count = ARS.TrackPoints.Count;
-            if (apexNode < 0 || apexNode >= count) return _trackProgress;
-
-            int offset = apexNode - CurrentTrackPoint.Node;
-            if (!ARS.IsPointToPoint)
-            {
-                // Pick the occurrence nearest to the car: behind it stays a passed apex,
-                // ahead across the lap line stays a future apex.
-                offset %= count;
-                if (offset > count / 2) offset -= count;
-                else if (offset < -count / 2) offset += count;
-            }
-            return _trackProgress + offset;
-        }
-
         bool HasPassedApex(int apexNode)
         {
             if (apexNode < 0) return false;
             if (ARS.IsPointToPoint) return CurrentTrackPoint.Node >= apexNode;
 
-            return ForwardNodeDistance(apexNode) > ARS.TrackPoints.Count / 2;
-        }
+            int count = ARS.TrackPoints.Count;
+            if (count <= 0) return false;
+            int startNode = _lapStartNode >= 0 ? _lapStartNode : CurrentTrackPoint.Node;
+            int delta = apexNode - startNode;
+            delta %= count;
+            if (delta < 0) delta += count;
+            if (_lapOdometer - _lapStartOdometer < delta) return false;
 
-        // A corner is spent once the car is moving through it and coasting: no longitudinal load means the car is
-        // sitting at the corner's speed with nothing left to do. A stopped car reads zero on the same signal, so
-        // motion is part of the test, not an assumption.
-        bool CornerSpent(int apexNode)
-        {
-            if (apexNode < 0) return false;
-            if (Car.Velocity.Length() < CoastSpentMinSpeedMps) return false;
-            CornerPoint corner = null;
-            foreach (CornerPoint known in ARS.Corners)
-                if (known.Node == apexNode) { corner = known; break; }
-            int entranceNode = CornerEntranceNode(corner, apexNode);
-            if (entranceNode < 0 || MetresToNode(entranceNode) > 0f) return false;
-            return Math.Abs(VehicleData.GetLongitudinalGs(Car.ForwardVector)) < CoastSpentGs;
+            // The apex repeats next lap: behind the lap start is not yet behind the car.
+            return ForwardNodeDistance(apexNode) > count / 2;
         }
-        const float CoastSpentGs = 0.05f;
-        const float CoastSpentMinSpeedMps = 1f;
 
         // One writer, so the ramp and the learner that grades it cannot aim at different nodes.
         int BrakeTargetDistance(int apexNode, int fallbackNode)

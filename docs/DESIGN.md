@@ -145,8 +145,10 @@ corner becomes the sole authority on the tick its own commitment crosses below t
 comparison, so taking over can only slow the car and never raise a speed the route has already refused. From
 that tick the route term is not consulted at all: the car drinks the corner's ramp on the way in, and the
 corner’s own apex speed after the apex, until two seconds after the car passes that apex. The pass is
-measured against cumulative track progress captured when the corner is entered, not by a half-lap guess or
-lap-count progress that is not armed until mid-lap. Then the
+counted in track nodes from the corner's entry, not in metres and not from the lap-aware leaderboard key: the
+corner keeps its own node odometer, advanced every tick by the wrapped node delta since the last node the car
+was on, and the apex counts as passed once that count reaches the forward node distance to the apex latched at
+entry — clamped to zero where a point-to-point route has already left it behind. Then the
 route takes the car back. A nearer corner that asks for less than the speed being held takes over in the same tick, so there is
 never a tick where neither term answers.
 
@@ -165,11 +167,14 @@ kept only as reference data, not used anywhere.
 now scales by the grip under the window its radius is sampled over, and a node with no sample inherits the
 surface the car is on rather than assuming tarmac.
 
-**Where the plan has no number, the nearest corner ahead gets one.** The plan builds ramps only for the
-corners it decided to brake for; where it produces nothing — and there is always a stretch where it does — the
-nearest corner ahead is installed with a ramp toward its own apex speed, because a corner that asks for no
-brakes still has one, and a route term reading the same bend twice must not undercut it. Where the plan does
-have a number, that number stands: it already accounts for the braking the car needs.
+**Where the plan has no number, the queue head gets one — but never a corner past this lap's last one.**
+The plan builds ramps only for the corners it decided to brake for; where it produces nothing — and there is
+always a stretch where it does — the queue head is installed with a ramp toward its own apex speed, falling
+back to the nearest corner ahead only when the queue is empty, because a corner that asks for no brakes still
+has one, and a route term reading the same bend twice must not undercut it. The head still has to be the current
+lap's: corners beyond the last corner are ignored until that apex has passed, so a stale braking flag on the
+next lap's first corner cannot skip the last corner of the one being driven. Where the plan does have a number,
+that number stands: it already accounts for the braking the car needs.
 
 **Past the apex the corner keeps the car for two seconds.** Long enough that the route term — whose radius is
 still inside the bend — cannot take the car back while the geometry is still turning, and short enough not to
@@ -553,14 +558,17 @@ believed, but it cannot discover that the braking-distance law has the wrong sha
 it may move is the single number that law multiplies. When a learner keeps landing against its own limit,
 the shape is what wants re-deriving, not the factor.
 
-**What actually learns, and for how long.** Exactly one behavioural learner exists: the braking factor, per
-car and per corner. It does not survive the race — the reset that prepares a car clears it — so the field
-arrives at every race on the seed and earns its braking again over the laps that follow, and nothing carries
-between sessions. Two other mechanisms are often mistaken for learning and are not: the memory layer
+**What actually learns, and for how long.** Two behavioural learners exist, both per car and per corner: the
+braking factor, which arrives on its seed, and the corner-speed offset, which arrives at zero and is earned from
+the clearance between the car's actual outer side past the apex and that corner's outer road edge, not from how
+tidy the pass looked.
+Neither survives the race — the reset that prepares a car clears both — so the field earns its braking and its
+corner speeds again over the laps that follow, and nothing carries between sessions. Two other mechanisms are
+often mistaken for learning and are not: the memory layer
 *discovers* the game's own offsets once and caches them, and the stability check *calibrates* a car's
 at-rest ride height while the car is standing still, both of which are one-shot measurements rather than
 accumulating corrections. The pedal-side glides and the parked slip allowance are not learners either: they
-adapt within a tick or within a corner and forget immediately. Persisting the braking factor per car and per
+adapt within a tick or within a corner and forget immediately. Persisting either learner per car and per
 track is therefore a real and separable feature — and it would need an invalidation rule first, because a
 lesson is only worth keeping while the car and the track are still the same.
 

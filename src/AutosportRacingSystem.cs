@@ -970,7 +970,7 @@ public const float LaneInsetPerRadius = 125f;
             };
             rivalPaceMenu.Add(brakeLearningItem);
 
-            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at 0. Inert in this build until the learner is switched on. Off leaves the corner at pure grip physics.", CornerSpeedLearning);
+            NativeCheckboxItem cornerSpeedLearningItem = new NativeCheckboxItem("Corner Speed Learning", "Each corner learns how much speed rivals dare to carry through it: the learned number is an offset in m/s on the corner's target, starting at 0. Past the apex, while sliding past three quarters of the modelled peak slip, the pass keeps the least clearance between the car's outer side and that corner's outer road edge; more clearance raises the offset, less lowers it, at 0.05 m/s per metre. Off leaves the corner at pure grip physics.", CornerSpeedLearning);
             cornerSpeedLearningItem.CheckboxChanged += (sender, args) =>
             {
                 CornerSpeedLearning = cornerSpeedLearningItem.Checked;
@@ -2508,7 +2508,7 @@ public const float LaneInsetPerRadius = 125f;
                     if (unfinished.Any())
                     {
                         var sorted = unfinished
-                            .OrderByDescending(r => r.RaceProgress)
+                            .OrderByDescending(r => r.RaceOrderKey)
                             .ToList();
                         for (int i = 0; i < sorted.Count; i++)
                             sorted[i].RacePosition = i + 1;
@@ -2518,7 +2518,7 @@ public const float LaneInsetPerRadius = 125f;
                 bool raceCompleted = LeaderboardFinish.Count > 0 || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs);
                 if (raceCompleted && (LeaderboardFinish.Count == Racers.Count(r => !r.IsDNF) || (_raceTimedFinishMs != 0 && Game.GameTime > _raceTimedFinishMs)))
                 {
-                    foreach (Racer r in Racers.Where(r => r.FinalPosition == 0).OrderByDescending(r => r.RaceProgress))
+                    foreach (Racer r in Racers.Where(r => r.FinalPosition == 0).OrderByDescending(r => r.RaceOrderKey))
                         r.FinalPosition = LeaderboardFinish.Count + 1;
                     if (LeaderboardFinish.Count > 0 && LeaderboardFinish[0].Driver.IsPlayer) Game.Player.Money += RaceReward;
                     RaceStatus = RaceState.Finished;
@@ -2638,7 +2638,7 @@ public const float LaneInsetPerRadius = 125f;
                 pos++;
             }
 
-            List<Racer> racing = Racers.Where(v => v.FinalPosition == 0).OrderByDescending(v => v.RaceProgress).ToList();
+            List<Racer> racing = Racers.Where(v => v.FinalPosition == 0).OrderByDescending(v => v.RaceOrderKey).ToList();
             foreach (Racer r in racing)
             {
                 Color c = r.Driver != null && r.Driver.IsPlayer ? Color.Yellow : Color.White;

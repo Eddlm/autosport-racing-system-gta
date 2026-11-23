@@ -1,14 +1,49 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1948**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1962** (`7304bb07a6c7`). This adds the speed-side last-corner gate and fixes the speed plan's fallback to prefer the queue head; the 1957 diagnostic lines and 1956 learner behaviour are unchanged. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
-**Section P is closed** (all eighteen verified). **57 open rows below**; everything already driven or disposed of
-sits in **Answered** at the bottom, out of the way, with **75** closed rows under it. The detail of the 30-10 hunt
+**Section P is closed** (all eighteen verified). **63 open rows below**; everything already driven or disposed of
+sits in **Answered** at the bottom, out of the way, with **80** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
+
+## AD · 2026-11-23 (1960 → 1962) — the apex pass is wrap-aware, and both pickers stop at the last corner
+
+`HasPassedApex` now keeps the lap-local odometer test and adds the occurrence test: the apex must also be behind the car (`ForwardNodeDistance(apexNode) > TrackPoints.Count / 2`), so the first corner of the next lap is not read as already passed while the car is still on the run to the line. `NearestApexAhead` also finds the current lap's last corner and refuses to consider corners beyond it until that last corner's apex has passed; once it has, the first corner of the next lap is allowed. `ComputeTargetSpeed` applies the same last-corner gate to the queue's second and third corners, and its empty-table fallback now prefers the queue head's ramp, so a stale braking flag on the next lap's first corner cannot skip the last corner of the current lap.
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| AD1 | **no next-lap corner is released as passed** (1960) | a circuit whose last corner sits just before the line; drive the final corner and the run to the line with `Plan/Lane chose/released apex` visible | the lane chooses the next lap's first corner only after the last corner's apex; no repeated choose/released pair for the same upcoming corner at the line | ⬜ |
+| AD2 | **the line still lets go at the apex** (1960) | a corner followed by a long straight | the lane releases on the apex tick, as before; the extra occurrence test does not hold the line past the apex | ⬜ |
+| AD3 | **the speed plan does not skip the last corner** (1962) | a circuit whose last corner sits just before the line; drive the last corner with `mode` and `Plan chose apex` visible | the plan enters corner mode on the last lap corner (for this track, node 2164) while it is still ahead, not on the next lap's first corner (252); no `ENTER corner #252` with the last apex still ahead | ✅ — «You fixed it now, very nice» |
+
+## AC · 2026-11-23 (1954 → 1956) — corner speed learning measures the car's actual clearance past the apex
+
+The peak-slip-share verdict is gone. `UpdateCornerSpeedLearning` and `CommitCornerSpeedLearning` (`Racer.cs:2125-2197`) keep one offset per corner (`CornerContext.CornerSpeedOffsetMps`): it starts at 0, is held inside ±10 m/s, and is added to that corner's planned speed. The window is the corner-mode latch itself (see **X**): the learner tracks the corner that corner mode entered, under the same lock rules, and commits when corner mode lifts or hands off to a stricter corner. Inside it a sample is taken only once `HasPassedApex(_cornerSpeedApexNode)` says the car is past the apex, on a new acceleration sample (`VehicleData.LastAccelSampleTime` has advanced), with `TRLateralAtSpeed` usable (`> 0.01`) and `|SlideAngle| / TRLateralAtSpeed >= 0.75` (`CornerSpeedLearnMinSlideShare`). The sample is the car's own position, not a projection: `outsideSign = Math.Sign(context.Point.Angle)` picks the corner's outside, `signedOffset` is `SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction)`, `outsideReach = signedOffset * outsideSign + VehicleData.BoundingBox * 0.5`, and `clearance = max(CurrentTrackPoint.TrackHalfWidth, 0.1) - outsideReach`; the pass keeps the smallest clearance. At commit `delta = leastClearance * CornerSpeedLearnMetreToOffset` (0.05 m/s per metre; negative when the car's outer side was off the road, positive when inside); the resulting offset is clamped to ±10 m/s, and a pass with no qualifying slide sample earns `+0.05 m/s` (`CornerSpeedLearnNoSlideRiseMps`). There is no upper slip-share cap, no six-second cap, no back-on-power test, no ±3 m/s step and no traffic or off-track veto. `CornerSpeedLearning` gates the learner and `CornerSpeedLearnNotify` only the notice — the log always receives the line. The line is brief: `<corner> · closest N.N m · <signed delta> m/s`, where the metres are the least clearance over the qualifying samples and the delta is the move actually applied after the clamp; the red `· ~r~offtrack~w~` suffix follows when that least clearance was negative, and `· ahead +N m/s` when a rise was shared. A pass with no qualifying sample reads `<corner> · no slide · +0.05 m/s`. The lock clears 40 m past the corner.
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| AC1 | **the verdict is the car's actual clearance** (1956) | one corner driven twice, once held comfortably inside and once with the car's outer side running off the edge past the apex, `Corner Speed Learn Notify` on | each line names the corner, then `closest N.N m` and a signed delta; the pass whose `closest` figure is negative appends the red `~r~offtrack~w~` marker; no `projection` or `projected` wording and no `peak slip`, percentage or band word appears | ⬜ |
+| AC2 | **off the road costs speed, room earns it** (1956) | the same corner on consecutive laps, the first pass sliding wide of the edge and the second sliding with room to spare inside | the off-road pass announces a negative delta with the offtrack marker, the inside pass a positive one; each move is the least clearance times 0.05 m/s per metre, added to the offset and clamped to ±10 m/s, and the next pass starts from the number just written | ⬜ |
+| AC3 | **no slide sample still nudges** (1956) | a corner taken at ordinary pace with the slide under three quarters of the modelled peak | the line reads `<corner> · no slide · +0.05 m/s`, and the offset rises from 0 to +0.05 | ⬜ |
+| AC4 | **the clamp holds at ±10** (1956) | a corner already at +10 m/s whose pass keeps a positive clearance, and one at −10 m/s whose pass still runs its outer side off the road | both announce `+0.00 m/s` — the move is clamped away — and stay at ±10 m/s; the −10 pass still carries the offtrack marker | ⬜ |
+| AC5 | **the verdict lands at the corner-mode lift, once** (1956) | one corner on consecutive laps; compare the notice with the `mode … EXIT to route` lines | exactly one `corner speed` line per pass, at the lift or the handoff to a stricter corner — not at a six-second mark, not on throttle pickup — and the next pass starts from the number just written | ⬜ |
+
+## AA · 2026-11-23 (1951 → 1952) — superseded by 1954, see **AC**
+
+The peak-slip-share verdict these rows tested is gone; none was driven, and all five sit in **Answered** as superseded.
+
+## AB · 2026-11-23 (1953) — the apex-pass test is a lap odometer, not a half-route split
+
+`HasPassedApex` no longer asks whether the apex lies in the rear half of the route (`ForwardNodeDistance(apexNode) > TrackPoints.Count / 2`). Each car now keeps a lap-local node odometer: `UpdateLapOdometer` adds the wrapped node delta between consecutive nodes to `_lapOdometer`, remembers the node and the odometer reading the lap started on (`_lapStartNode`, `_lapStartOdometer`), and resets that start on the 90%→10% line crossing (`_lapStartNode = 0`, `_lapStartOdometer = _lapOdometer`); the reset that prepares a car zeroes all four. `HasPassedApex` compares the odometer advance since the lap start with the apex's wrapped node offset from the start node, so a corner counts as passed only once the car has driven past it on this lap. The old test read any apex more than half a route ahead as already passed — just after the line, the corners from the end of the previous lap read passed for the first part of the new lap — and the lane's held-corner latch, the crossing-scale turn-in exemption, the apex queue shift (with `Tips.ApexPassed`), the skip-flag clear in `UpdateCornerRequirements` and the two card exits all read it — the corner-speed learner's window is the corner-mode latch, and since 1956 its samples wait for `HasPassedApex` too. The corner-mode counter in **X** is a different instrument and is unchanged, and `RaceOrderKey` is only the leaderboard sort key; point-to-point still compares nodes directly. Before the first line crossing the lap starts at the node the car initialized on, so a corner behind that node reads not-passed until the car comes round to it. Build 1960 adds the missing occurrence check: the same node repeats next lap, so the lap-local pass must also be behind the car (`ForwardNodeDistance(apexNode) > TrackPoints.Count / 2`), and the picker stops at the current lap's last corner until that apex has passed.
+
+| # | What | How | Passes if | State |
+|---|---|---|---|---|
+| AB1 | **a lap boundary is not a corner boundary** (1953) | a circuit whose last corner sits just before the line; drive two laps at racing speed with the corner line visible and `Show Track Analysis` on | the corner line arms and releases at the same points on both laps, and no corner ahead of the car is treated as passed at the seam — the second lap reads like the first, with no dropped line and no skipped approach | ⬜ |
+| AB2 | **the line still lets go at the apex** (1953) | a corner followed by a long straight | the corner line releases on the apex tick and the lean resumes, as before — the lap odometer neither holds the line past the apex nor drops it early | ⬜ |
 
 ## Y · 2026-11-23 (1934) — the brake aim is a fixed 15 m node
 
@@ -28,9 +63,9 @@ The old three-band learner is gone. Each braking corner now keeps its own `Brake
 | Z1 | **the learner fires and adjusts one braking corner** (1939 → 1944) | drive one braking corner with `Brake Ramp Notify` on, then revisit it | one line per pass with signed delta and `before → after`; below the shared ideal overshoot raises factor, above it lowers it, each by `(ideal - delta) / 50` | ⬜ |
 | Z2 | **non-braking corners stay silent** (1939) | drive a fast sweeper that does not ask for braking | no `brake ramp` line and factor stays at seed | ⬜ |
 
-## X · 2026-11-23 (1926 → 1948) — route is the authority, a corner takes over
+## X · 2026-11-23 (1926 → 1950) — route is the authority, a corner takes over
 
-The two speed terms no longer meet in a min(): the route term decides, and a corner becomes the sole authority only when its own ramp is stricter. Build 1945 makes the hold **two seconds after the car passes the apex** (it was 15 m in 1926-1944). Build 1946 added forced `Info` lines for the apex-pass and corner-mode lift; build 1947/1948 make the apex test track cumulative track progress captured when the corner is entered, instead of the old half-route `HasPassedApex` guess and instead of lap-count progress that is not armed until mid-lap. Every takeover and release is logged as a pair, forced past `LogLevel=Error`: `mode <car>: pre route … corner … car … apex at …` then `ENTER corner #n, drinking … held …`; and `post route … car … apex at …` then `EXIT to route (why)`.
+The two speed terms no longer meet in a min(): the route term decides, and a corner becomes the sole authority only when its own ramp is stricter. Build 1945 makes the hold **two seconds after the car passes the apex** (it was 15 m in 1926-1944). Build 1946 added forced `Info` lines for the apex-pass and corner-mode lift. The apex test is now a corner-local node odometer (build 1950; the global `_raceOdometer` of 1948/1949 is gone): `EnterCornerMode` zeroes `_cornerModeDistanceNodes`, latches `_cornerModeLastNode` at the car's current node and sets `_cornerModeApexTargetNodes = ForwardNodeDistance(apexNode)`, with a negative point-to-point target clamped to 0; each tick `_cornerModeDistanceNodes` is advanced by `WrappedNodeDelta(_cornerModeLastNode, currentNode)`, and the apex counts as passed once that count reaches the target. It is counted in track nodes, not metres, and it is not `RaceOrderKey`, lap progress or any global odometer. The shared `HasPassedApex` is a different test and was rebuilt on its own lap-local odometer in 1953 — see **AB**. The public `RaceProgress` field is now `RaceOrderKey` (lap-aware leaderboard sort only). Every takeover and release is logged as a pair, forced past `LogLevel=Error`: `mode <car>: pre route … corner … car … apex at …` then `ENTER corner #n, drinking … held …`; and `post route … car … apex at …` then `EXIT to route (why)`.
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
@@ -59,22 +94,24 @@ The band no longer reports its single tightest node: it averages the five tighte
 
 ## U · 2026-11-22 (1892 → 1895) — corner speed learning, live
 
+**Superseded by build 1951, and the verdict was rewritten again in 1954 and 1956 — see AC.** These rows tested the 1892–1895 verdict: a clean pass raised the corner 2 m/s, a slide of 10° or more or a wheel off dropped 2, and traffic voided the change. U1 and U4 were signed off under that rule; all five are superseded and none is open. The current rule is in **AC**.
+
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| U1 | **a clean corner pays 2 m/s** (1892) | a corner taken cleanly, brakes released before the entry, no traffic nearby | a notice reads `corner #n · clean · +0.0 → +2.0 m/s`, and the apex debug line for that car shows `+2.0 m/s` | ✅ |
-| U2 | **a slide or a wheel off takes 2 back** (1892) | a corner where the car reaches 10 degrees of slide or more, or puts a wheel off the road | `slide at 10 deg or more` or `left the road`, and the offset drops 2 m/s | ⬜ |
-| U3 | **traffic voids the verdict** (1892) | a corner taken while avoiding a car: a lane taken to pass, or the side-by-side push on the nose | `traffic · offset stays`; the corner's number does not move either way | ⬜ |
-| U4 | **the number is used next pass, and stops at 10** (1892) | the same corner on following laps, offset at +2 or more | the car carries visibly more speed through it, and repeated clean passes stop at +10 m/s (`= at the limit`) | ✅ |
-| U5 | **the window ends when the car is back on the power** (1895) | a corner the car takes and then goes above half throttle out of | the verdict lands at the throttle pickup, not at the six-second cap; a corner that never lifts still runs the full window | ⬜ |
+| U1 | **a clean corner pays 2 m/s** (1892) | a corner taken cleanly, brakes released before the entry, no traffic nearby | a notice reads `corner #n · clean · +0.0 → +2.0 m/s`, and the apex debug line for that car shows `+2.0 m/s` | — superseded (1951) |
+| U2 | **a slide or a wheel off takes 2 back** (1892) | a corner where the car reaches 10 degrees of slide or more, or puts a wheel off the road | `slide at 10 deg or more` or `left the road`, and the offset drops 2 m/s | — superseded (1951) |
+| U3 | **traffic voids the verdict** (1892) | a corner taken while avoiding a car: a lane taken to pass, or the side-by-side push on the nose | `traffic · offset stays`; the corner's number does not move either way | — superseded (1951) |
+| U4 | **the number is used next pass, and stops at 10** (1892) | the same corner on following laps, offset at +2 or more | the car carries visibly more speed through it, and repeated clean passes stop at +10 m/s (`= at the limit`) | — superseded (1951) |
+| U5 | **the window ends when the car is back on the power** (1895) | a corner the car takes and then goes above half throttle out of | the verdict lands at the throttle pickup, not at the six-second cap; a corner that never lifts still runs the full window | — superseded (1951) |
 
-**Left as-is at his word, 2026-11-22 (drive verdict on 1895):** it works — the number moves and the car uses it — but where the route curvature term is the smaller of the two the offset is superseded and nothing in the car changes. U2, U3 and U5 were never exercised. Parked means shipped and left alone: the switch stays on by default, nothing is disabled.
+**Left as-is at his word, 2026-11-22 (drive verdict on 1895, the old rule; superseded 1951):** it works — the number moves and the car uses it — but where the route curvature term is the smaller of the two the offset is superseded and nothing in the car changes. U2, U3 and U5 were never exercised. Parked means shipped and left alone: the switch stays on by default, nothing is disabled.
 
 
 ## T · 2026-11-22 (1891) — the corner speed switch, before anything learns
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| T1 | **the switch exists and holds** (1891) | Rivals menu, pace page: toggle Corner Speed Learning off, restart, reopen | the checkbox reads off after the restart, and the racing is identical with it on or off — this build's learner is inert by design | ⬜ |
+| T1 | **the switch exists and holds** (1891) | Rivals menu, pace page: toggle Corner Speed Learning off, restart, reopen | the checkbox reads off after the restart; the learner is live now (see AC), so on/off racing is no longer identical | ⬜ |
 
 ## S · 2026-11-22 (1890) — the boost waits until the corner is behind
 
@@ -258,7 +295,8 @@ including the ones I judged false or not worth a change, are in the reports.
 
 Left alone on purpose, each one a verdict rather than a fix: the refill's `first = 0` fallback still commits a corner
 the plan skipped — a queue needs a head, and `CornerRequiresBraking` keeps that head out of the braking table, so it is
-a placeholder and not a decision to brake. The lane can adopt the next corner while the plan still brakes for the
+a placeholder and not a decision to brake. Build 1962 uses that head in the empty-table fallback as a speed ceiling, so a
+skipped wide head cannot hide the next tight corner; its ramp is high enough not to bind. The lane can adopt the next corner while the plan still brakes for the
 current apex: that is what an S asks for, and the ramp is what keeps the first ask small. `UpdateCornerRequirements`
 runs every frame because it is the detector, not the refill. `_cornerContexts` does prune on a revision change
 (`SyncCornerContexts`), so that audit row was false. AGENTS/ now carries dated CURRENT blocks; its history stays as
@@ -376,4 +414,11 @@ Kept for provenance: these are the in-game verdicts and the dispositions. Nothin
 
 **K · the corner is spent when the car coasts — for speed only**
 - **K1** coasting inside the corner releases it early (`CornerSpent`) — verified 09-11 · 1769/1770: «the 0.05gs thing works well»
+
+**AA · corner speed learning, the peak slip share (23-11)**
+- **AA1** the verdict is the peak slip share (1951) — superseded (1954): the share verdict is gone, never driven; see **AC**
+- **AA2** the two thresholds move it, the band holds (1951) — superseded (1954): there is no ±3 m/s step any more
+- **AA3** traffic and a wheel off no longer void it (1951) — superseded (1954): no traffic or off-track veto exists, but the row was never driven and its subject is now AC1-AC5
+- **AA4** one verdict per pass (1951) — superseded (1954): the once-per-pass rule survives as AC5, still undriven
+- **AA5** the line says why it stayed (1952) — superseded (1954): `stays at the limit` survives in AC4
 
