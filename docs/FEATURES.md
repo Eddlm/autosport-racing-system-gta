@@ -36,7 +36,7 @@ The difference shows in the preparation. On a tight corner a rival takes the lon
 
 ## And they learn it
 
-A map can tell a car where the corner is, but not how hard this car will brake for it. ARS gives each braking corner one learned factor: the car aims to cross the fixed ramp-end node 1.5 m/s over the corner’s target speed, and each pass moves that corner’s factor by one hundredth of the miss, clamped to 0.70–1.30. Too hot and it brakes earlier next pass; too gentle and it accepts a later, harder brake point.
+A map can tell a car where the corner is, but not how hard this car will brake for it. ARS gives each braking corner one learned factor: the car aims to cross the fixed ramp-end node 0.5 m/s over the corner’s commanded speed, and each pass moves that corner’s factor by one fiftieth of the miss, clamped to 0.50–1.30. Too hot and it brakes earlier next pass; too gentle and it accepts a later, harder brake point.
 
 The correction is per corner, not per race — one corner can learn a deeper or shallower stop without changing the rest — and it never applies to corners the plan did not ask to brake. Turn Brake Ramp Analysis off and the factors stop moving where they are; they are not reset.
 

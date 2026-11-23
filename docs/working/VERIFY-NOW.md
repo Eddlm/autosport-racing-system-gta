@@ -1,6 +1,6 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **1939**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **1948**. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
@@ -12,31 +12,31 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ## Y · 2026-11-23 (1934) — the brake aim is a fixed 15 m node
 
-`BrakeAimDepth` is gone from the menu and settings; the plan brakes toward the first node centre at least 15 m behind the apex, selected by route distance. The lag law is unchanged, so the speed floor starts `L` metres before that fixed node. A stale `BrakeAimDepth` key is pruned by the settings repair.
+`BrakeAimDepth` is gone from the menu and settings; the plan brakes toward the first node centre at least 15 m behind the apex, selected by route distance. The old lag correction is gone as of build 1940; the ramp is a straight constant-deceleration solve from the selected node distance, with a provisional 4.5 m reduction applied to that distance. A stale `BrakeAimDepth` key is pruned by the settings repair.
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
 | Y1 | **the fixed target changes the braking entry** (1934) | one familiar braking corner | the plan starts from the fixed 15 m-back node; the car is not given the old speed-derived aim | ⬜ |
 | Y2 | **the retired row stays gone** (1934) | open Rivals > Rival Pace after load | no `Brake Aim Depth` row is present, and `Menu-Settings.ini` has no `BrakeAimDepth` | ⬜ |
 
-## Z · 2026-11-23 (1939) — brake ramp learner with a single ideal
+## Z · 2026-11-23 (1939 → 1944) — brake ramp learner with a single ideal
 
-The old three-band learner is gone. Each braking corner now keeps its own `BrakeFactor`: seed `0.90`, clamp `0.70`–`1.30`. At the fixed 15 m ramp-end node the car compares actual forward speed to the corner's commanded arrival speed. The adjustment is `(1.5 - delta) * 0.01`, so 1.5 m/s over target is the ideal; `BrakeLearning` gates it and `BrakeLearningNotify` gates the notice.
+The old three-band learner is gone. Each braking corner now keeps its own `BrakeFactor`: seed `0.60`, clamp `0.50`–`1.30`. The ideal overshoot is the shared hard-coded `Racer.BrakeRampIdealDeltaMps`, currently `0.5 m/s` over target at the fixed 15 m ramp-end node. The adjustment is `(BrakeRampIdealDeltaMps - delta) / 50`, so an arrival exactly at the ideal overshoot holds the factor; hotter arrivals lower it, cooler arrivals raise it. `BrakeLearning` gates it and `BrakeLearningNotify` gates the notice. Build 1940 removed the old lag compensation and solved the ramp directly from the remaining node distance, after a provisional 4.5 m reduction; build 1941 made zero the ideal, made the learning step `error / 50`, and changed the seed to `0.60`; build 1942 made the ideal `0.5 m/s` over target; build 1943 shared that value through one code constant used by the learner and menu description; build 1944 lowered the clamp floor to `0.50` so a fresh `0.60` seed can be corrected downward.
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| Z1 | **the learner fires and adjusts one braking corner** (1939) | drive one braking corner with `Brake Ramp Notify` on, then revisit it | one line per pass with signed delta and `before → after`; under 1.5 m/s raises factor, over 1.5 lowers it, each by delta excess × 0.01 | ⬜ |
+| Z1 | **the learner fires and adjusts one braking corner** (1939 → 1944) | drive one braking corner with `Brake Ramp Notify` on, then revisit it | one line per pass with signed delta and `before → after`; below the shared ideal overshoot raises factor, above it lowers it, each by `(ideal - delta) / 50` | ⬜ |
 | Z2 | **non-braking corners stay silent** (1939) | drive a fast sweeper that does not ask for braking | no `brake ramp` line and factor stays at seed | ⬜ |
 
-## X · 2026-11-23 (1926 → 1932) — route is the authority, a corner takes over
+## X · 2026-11-23 (1926 → 1948) — route is the authority, a corner takes over
 
-The two speed terms no longer meet in a min(): the route term decides, and a corner becomes the sole authority only when its own ramp is stricter, holding until 15 m past its apex. Every takeover and release is logged as a pair, forced past `LogLevel=Error`: `mode <car>: pre route … corner … car … apex at …` then `ENTER corner #n, drinking … held …`; and `post route … car … apex at …` then `EXIT to route (why)`.
+The two speed terms no longer meet in a min(): the route term decides, and a corner becomes the sole authority only when its own ramp is stricter. Build 1945 makes the hold **two seconds after the car passes the apex** (it was 15 m in 1926-1944). Build 1946 added forced `Info` lines for the apex-pass and corner-mode lift; build 1947/1948 make the apex test track cumulative track progress captured when the corner is entered, instead of the old half-route `HasPassedApex` guess and instead of lap-count progress that is not armed until mid-lap. Every takeover and release is logged as a pair, forced past `LogLevel=Error`: `mode <car>: pre route … corner … car … apex at …` then `ENTER corner #n, drinking … held …`; and `post route … car … apex at …` then `EXIT to route (why)`.
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| X1 | **a corner takes the car and keeps it through the exit** (1926-1932) | any braking corner at speed; `mode` lines in `ARS.log` | `pre` shows `corner` below `route`, `ENTER` names that corner, `EXIT` lands 15 m past its apex | ⬜ |
+| X1 | **a corner takes the car and keeps it through the exit** (1926-1932, hold retimed 1945) | any braking corner at speed; `mode` lines in `ARS.log` | `pre` shows `corner` below `route`, `ENTER` names that corner, `EXIT` lands two seconds after its apex | ⬜ |
 | X2 | **taking over only ever slows** (1926) | a fast corner where the route term is the higher number | no speed rise at the `ENTER` tick — the `pre` line always has `corner` < `route` | ⬜ |
-| X3 | **the exit is not held into the straight** (1932) | the corner before the longest straight | route speed back 15 m past the apex, not 50 — the car does not carry the corner speed down the straight | ⬜ |
+| X3 | **the exit is not held into the straight** (1932; retimed 1945) | the corner before the longest straight | route speed back two seconds after the apex, not fifteen metres after it — the car does not carry the corner speed down the straight | ⬜ |
 | X4 | **two close corners hand over without a gap** (1926) | an S-bend or a chicane | a second `ENTER` while the first hold is still live, or an `EXIT` followed immediately by `ENTER` on the next tick — never a tick on the route term in between | ⬜ |
 
 ## R · 2026-11-22 (1886 → 1889) — all five verified in game, see **Answered**
@@ -46,7 +46,7 @@ The two speed terms no longer meet in a min(): the route term decides, and a cor
 
 | # | What | How | Passes if | State |
 |---|---|---|---|---|
-| V1 | **each corner seeds at 0.90** (1893, factor now learned in 1939) | the apex debug text before any brake-learn pass | every untouched corner shows `b 0.90`; changed corners show their learned factor | ⬜ |
+| V1 | **each corner seeds at 0.60** (1893, factor now learned in 1944) | the apex debug text before any brake-learn pass | every untouched corner shows `b 0.60`; changed corners show their learned factor | ⬜ |
 
 ## W · 2026-11-22 (1896) — the route band averages its five tightest nodes
 

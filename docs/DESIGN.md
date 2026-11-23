@@ -144,8 +144,10 @@ backwards from the apex: the braking map, for the downforce and fixed braking fa
 corner becomes the sole authority on the tick its own commitment crosses below the route's number — the strict
 comparison, so taking over can only slow the car and never raise a speed the route has already refused. From
 that tick the route term is not consulted at all: the car drinks the corner's ramp on the way in, and the
-corner's own apex speed after the apex, until it is 15 metres past that apex. Then the route takes the car
-back. A nearer corner that asks for less than the speed being held takes over in the same tick, so there is
+corner’s own apex speed after the apex, until two seconds after the car passes that apex. The pass is
+measured against cumulative track progress captured when the corner is entered, not by a half-lap guess or
+lap-count progress that is not armed until mid-lap. Then the
+route takes the car back. A nearer corner that asks for less than the speed being held takes over in the same tick, so there is
 never a tick where neither term answers.
 
 **The corner that holds the car is the corner that answers.** The ramp is recomputed every tick for that
@@ -169,9 +171,9 @@ nearest corner ahead is installed with a ramp toward its own apex speed, because
 brakes still has one, and a route term reading the same bend twice must not undercut it. Where the plan does
 have a number, that number stands: it already accounts for the braking the car needs.
 
-**Past the apex the corner keeps the car for 15 metres.** Long enough that the route term — whose radius is
+**Past the apex the corner keeps the car for two seconds.** Long enough that the route term — whose radius is
 still inside the bend — cannot take the car back while the geometry is still turning, and short enough not to
-hold it slow onto the straight. Fifty was too long in the car; fifteen is the number.
+hold it slow onto the straight. Fifteen metres was the earlier rule; it bunched the release on fast sweepers.
 
 **The road's own shape corrects both terms.** A hill takes grip from both — the route term at the follow
 point, the corner at its apex inside its braking map, where its grade enters as a deceleration change rather
@@ -493,7 +495,7 @@ cannot know what the surface under the wheels is really offering at that moment,
 only thing that decides the stop. So the design cannot answer "how hard do I brake here" from theory, and
 it does not pretend to.
 
-**What it does instead.** It uses a deliberately simple one-dimensional correction. Each corner keeps its own brake factor, starts at `0.90`, and is clamped to `0.70–1.30`. At the fixed ramp-end node the car reads its signed speed error against the corner’s commanded arrival speed; `1.5 m/s` over target is treated as ideal. Every past that, the factor moves by one hundredth of the excess in the direction that closes it: hot arrivals brake earlier next pass, slow arrivals allow a later brake point. Nothing is shared between corners, and corners the plan did not ask to brake are not adjusted. It is not a model of the tyre; it is a bounded calibration of the one place the model is deliberately weakest. The same shape recurs wherever the model is the weak part: TCS reads the wheels rather than believing the plan. It was tried on the steering ceiling too — taking the lower of the model law and a measured slip allowance — and that one read slower swerves and was parked, which is why the ceiling today is the model law with a geometry fallback and the parked law is cited here as a shape rather than as a live consumer.
+**What it does instead.** It uses a deliberately simple one-dimensional correction. Each corner keeps its own brake factor; fresh corners seed at `0.60`, learn against a `0.50–1.30` clamp, and the shared hard-coded `Racer.BrakeRampIdealDeltaMps` (`0.5 m/s` over target) is treated as ideal. At the fixed ramp-end node the car reads its signed speed error against the corner’s commanded arrival speed. Every miss from that ideal moves the factor by one fiftieth of the error in the direction that closes it: hot arrivals brake earlier next pass, slow arrivals allow a later brake point. Nothing is shared between corners, and corners the plan did not ask to brake are not adjusted. It is not a model of the tyre; it is a bounded calibration of the one place the model is deliberately weakest. The same shape recurs wherever the model is the weak part: TCS reads the wheels rather than believing the plan. It was tried on the steering ceiling too — taking the lower of the model law and a measured slip allowance — and that one read slower swerves and was parked, which is why the ceiling today is the model law with a geometry fallback and the parked law is cited here as a shape rather than as a live consumer.
 
 **Three buckets, sorted by staleness.** Everything the car acts on sorts by whether the truth goes stale,
 and by how fast. An unknown that never changes is *known* and precomputed — where the corners are, how they
