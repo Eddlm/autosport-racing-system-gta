@@ -379,6 +379,9 @@ namespace ARS
         // the limit are code.
         const float CornerSpeedLearnAheadShare = 0.5f;
         const float CornerSpeedLearnLimitMps = 10f;
+        // One pass moves a corner by at most this much either way. The scale converts metres of clearance, and on a
+        // wide track a single pass reads enough of them to swing the corner by a dozen metres a second at once.
+        const float CornerSpeedLearnDeltaLimitMps = 2.5f;
         const float CornerSpeedLearnMinSlideShare = 0.75f;
         // One metre of room past the verdict margin is one metre per second of offset, both ways: a pass a metre
         // clear of the balance line earns 1 m/s, one that lands a metre short of it pays the same.
@@ -2260,6 +2263,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                 ? clearance - VehicleData.BoundingBox - CornerSpeedLearnVerdictMarginMetres
                 : float.NaN;
             float delta = hadSlipSample ? verdictClearance * CornerSpeedLearnMetreToOffset : CornerSpeedLearnNoSlideRiseMps;
+            // Per pass, never more than the step limit: the stored offset keeps its own ±10 clamp, this one only
+            // bounds how far one corner can travel in one go.
+            delta = ARS.Clamp(delta, -CornerSpeedLearnDeltaLimitMps, CornerSpeedLearnDeltaLimitMps);
             float after = ARS.Clamp(before + delta, -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
 
             CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;

@@ -587,7 +587,9 @@ the clearance between the car's actual outer side past the apex and that corner'
 tidy the pass looked. That balance point sits a car's width plus a metre short of the edge rather than on it, so
 the rise only pays while that room is genuinely there and a pass that hugs the paint is already a deduction; and
 the side is read from the corner doing the judging, never from the curvature under the car, because an S-bend
-flips it between the apex and the sample.
+flips it between the apex and the sample. One pass may only move it so far — a step limit, not the stored
+clamp — because a wide track hands a single pass enough clearance to swing the corner by a dozen metres a second
+at once.
 Neither survives the race — the reset that prepares a car clears both — so the field earns its braking and its
 corner speeds again over the laps that follow, and nothing carries between sessions. Two other mechanisms are
 often mistaken for learning and are not: the memory layer
