@@ -584,7 +584,10 @@ the shape is what wants re-deriving, not the factor.
 **What actually learns, and for how long.** Two behavioural learners exist, both per car and per corner: the
 braking factor, which arrives on its seed, and the corner-speed offset, which arrives at zero and is earned from
 the clearance between the car's actual outer side past the apex and that corner's outer road edge, not from how
-tidy the pass looked.
+tidy the pass looked. That balance point sits a car's width plus a metre short of the edge rather than on it, so
+the rise only pays while that room is genuinely there and a pass that hugs the paint is already a deduction; and
+the side is read from the corner doing the judging, never from the curvature under the car, because an S-bend
+flips it between the apex and the sample.
 Neither survives the race — the reset that prepares a car clears both — so the field earns its braking and its
 corner speeds again over the laps that follow, and nothing carries between sessions. Two other mechanisms are
 often mistaken for learning and are not: the memory layer

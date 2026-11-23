@@ -381,6 +381,9 @@ namespace ARS
         const float CornerSpeedLearnLimitMps = 10f;
         const float CornerSpeedLearnMinSlideShare = 0.75f;
         const float CornerSpeedLearnMetreToOffset = 0.66f;
+        // The verdict's zero sits a car's width plus this much short of the white line: the rise only runs while
+        // that room is genuinely there, so the balance never pays for a pass that was half offtrack already.
+        const float CornerSpeedLearnVerdictMarginMetres = 1f;
         const float CornerSpeedLearnNoSlideRiseMps = 2f;
         const float CornerSpeedLearnReleaseMetres = 40f;
         // How close to an apex node counts as having reached it, in metres; the call widens it for fast cars.
@@ -2173,6 +2176,21 @@ const float RequirementLookaheadSeconds = 3.95f;
             UI.Notify("~b~[BRAKE]~w~ " + Car.DisplayName + "~n~" + notified);
         }
 
+        // The verdict reads its outside from the corner it is judging, never from the ground the car happens to be
+        // on when the sample lands: an S-bend flips the curvature under the car, and the corner that asked for the
+        // lift still owns the side. The convention itself is the lane's (`InsideSign`) so the two cannot drift.
+        static float CornerOutsideSign(CornerPoint corner)
+        {
+            float angle = corner.Angle;
+            if (Math.Sign(angle) == 0f && corner.StartNode >= 0 && corner.EndNode >= 0)
+            {
+                Vector3 entry = ARS.TrackPoints[corner.StartNode].Direction;
+                Vector3 exit = ARS.TrackPoints[corner.EndNode].Direction;
+                angle = Vector3.SignedAngle(entry, exit, Vector3.WorldUp);
+            }
+            return -ARS.InsideSign(angle);
+        }
+
         // Corner speed learning: the corner-mode latch opens the window. Past the apex, keep the least
         // clearance from the car's outer side to that corner's outer road edge; when the corner lets go,
         // that clearance becomes the offset delta. No qualifying slide samples: +2 m/s.
@@ -2187,7 +2205,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (VehicleData.LastAccelSampleTime == _cornerSpeedLastSampleMs || TRLateralAtSpeed <= 0.01f) return;
 
             if (!TryGetCornerContext(_cornerSpeedApexNode, out CornerContext context) || context.Point == null) return;
-            float outsideSign = Math.Sign(context.Point.Angle);
+            float outsideSign = CornerOutsideSign(context.Point);
             if (outsideSign == 0f) return;
 
             _cornerSpeedLastSampleMs = VehicleData.LastAccelSampleTime;
@@ -2232,7 +2250,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             string id = CornerId(apexNode);
             bool hadSlipSample = _cornerSpeedOutsideSamples > 0;
             float clearance = hadSlipSample ? _cornerSpeedWorstOutsideClear : float.NaN;
-            float delta = hadSlipSample ? clearance * CornerSpeedLearnMetreToOffset : CornerSpeedLearnNoSlideRiseMps;
+            // The comparison carries a car's width plus a metre, so the balance sits short of the white line and a
+            // pass still near the paint is already a deduction rather than a rise.
+            float verdictClearance = hadSlipSample
+                ? clearance - VehicleData.BoundingBox - CornerSpeedLearnVerdictMarginMetres
+                : float.NaN;
+            float delta = hadSlipSample ? verdictClearance * CornerSpeedLearnMetreToOffset : CornerSpeedLearnNoSlideRiseMps;
             float after = ARS.Clamp(before + delta, -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
 
             CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;
@@ -2248,9 +2271,12 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             // The notice carries the reason, not the stored offset: how much room the outside had decides the change.
             string reasonText = hadSlipSample ? clearance.ToString("0.0", CultureInfo.InvariantCulture) + " m" : "no slide";
+            string verdictText = hadSlipSample
+                ? " · verdict " + verdictClearance.ToString("0.0", CultureInfo.InvariantCulture) + " m"
+                : "";
             // The reason carries the colour, not the value: a deduction is read off the room the corner left.
             if (applied < 0f) reasonText = "~r~" + reasonText + "~w~";
-            AnnounceCornerSpeedAdjustment(id + " · " + peakText + " · " + deltaText + offtrack
+            AnnounceCornerSpeedAdjustment(id + " · " + peakText + verdictText + " · " + deltaText + offtrack
                 + (aheadGain > 0f ? " · ahead " + FormatCornerSpeedOffset2(aheadGain) : ""),
                 reasonText + " - " + deltaText);
         }
