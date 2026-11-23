@@ -387,6 +387,9 @@ namespace ARS
         // A slide past this many degrees is the car out of control rather than the corner running out of road, so a
         // pass that reached it cannot be used to take speed away.
         const float CornerSpeedLearnLostControlDegrees = 20f;
+        // A contact inside this much time poisons the pass: the acceleration trace is the measurement, so a hit
+        // makes the numbers untrustworthy. No contact ever reads as infinite and passes.
+        const int CornerSpeedLearnQuietContactMs = 4000;
         // One metre of room past the verdict margin is one metre per second of offset, both ways: a pass a metre
         // clear of the balance line earns 1 m/s, one that lands a metre short of it pays the same.
         const float CornerSpeedLearnMetreToOffset = 1f;
@@ -418,7 +421,6 @@ namespace ARS
         int _cornerSpeedLastSampleMs = -1;
         float _cornerSpeedWorstOutsideClear = float.MaxValue;
         float _cornerSpeedWorstSlideDeg;
-        int _cornerSpeedStartedMs = -1;
         int _cornerSpeedOutsideSamples;
         // Route is the default authority; a corner is an override that latches while it owns the car.
         // The corner owns the speed to its apex; past it the held speed ramps to the live route term, and the
@@ -2247,7 +2249,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedWorstOutsideClear = float.MaxValue;
             _cornerSpeedOutsideSamples = 0;
             _cornerSpeedWorstSlideDeg = 0f;
-            _cornerSpeedStartedMs = Game.GameTime;
         }
 
         void CommitCornerSpeedLearningFor(int apexNode)
@@ -2262,9 +2263,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedApexNode = -1;
             if (apexNode < 0) return;
 
-            // A hit voids the pass outright: the clearance it measured says nothing about the corner, so neither a
-            // deduction nor a rise is earned. Nothing is written and nothing is locked, so a later pass still judges it.
-            if (_cornerSpeedStartedMs >= 0 && LastContactTime >= _cornerSpeedStartedMs)
+            // A hit poisons the pass: everything the verdict reads is motion, and a contact inside the last few
+            // seconds makes it untrustworthy. Four quiet seconds and the pass is good; no contact ever passes too.
+            if (MsSinceContact() < CornerSpeedLearnQuietContactMs)
             {
                 AnnounceCornerSpeedAdjustment(CornerId(apexNode) + " · voided, contact " + MsSinceContact() + " ms ago",
                     "hit - no change");
