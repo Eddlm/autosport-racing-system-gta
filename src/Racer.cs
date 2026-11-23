@@ -62,6 +62,7 @@ namespace ARS
         public HandlingData Handling = new HandlingData();
         public float GroundGripMultiplier = 1f;
         Vector3 _lastSpeed;
+        Vector3 _lastAccel;
         int _lastGsCheck = 0;
         bool _gripLogged = false;
         float _restHeightAboveGround = -1f;
@@ -383,6 +384,9 @@ namespace ARS
         // wide track a single pass reads enough of them to swing the corner by a dozen metres a second at once.
         const float CornerSpeedLearnDeltaLimitMps = 2.5f;
         const float CornerSpeedLearnMinSlideShare = 0.75f;
+        // A slide past this many degrees is the car out of control rather than the corner running out of road, so a
+        // pass that reached it cannot be used to take speed away.
+        const float CornerSpeedLearnLostControlDegrees = 20f;
         // One metre of room past the verdict margin is one metre per second of offset, both ways: a pass a metre
         // clear of the balance line earns 1 m/s, one that lands a metre short of it pays the same.
         const float CornerSpeedLearnMetreToOffset = 1f;
@@ -413,6 +417,8 @@ namespace ARS
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedLastSampleMs = -1;
         float _cornerSpeedWorstOutsideClear = float.MaxValue;
+        float _cornerSpeedWorstSlideDeg;
+        int _cornerSpeedStartedMs = -1;
         int _cornerSpeedOutsideSamples;
         // Route is the default authority; a corner is an override that latches while it owns the car.
         // The corner owns the speed to its apex; past it the held speed ramps to the live route term, and the
@@ -2219,6 +2225,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedLastSampleMs = VehicleData.LastAccelSampleTime;
             float slide = Math.Abs(VehicleData.SlideAngle);
             if (float.IsNaN(slide) || float.IsInfinity(slide)) return;
+            if (slide > _cornerSpeedWorstSlideDeg) _cornerSpeedWorstSlideDeg = slide;
             if (slide / TRLateralAtSpeed < CornerSpeedLearnMinSlideShare) return;
 
             float signedOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
@@ -2239,6 +2246,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedLastSampleMs = -1;
             _cornerSpeedWorstOutsideClear = float.MaxValue;
             _cornerSpeedOutsideSamples = 0;
+            _cornerSpeedWorstSlideDeg = 0f;
+            _cornerSpeedStartedMs = Game.GameTime;
         }
 
         void CommitCornerSpeedLearningFor(int apexNode)
@@ -2252,6 +2261,16 @@ const float RequirementLookaheadSeconds = 3.95f;
             int apexNode = _cornerSpeedApexNode;
             _cornerSpeedApexNode = -1;
             if (apexNode < 0) return;
+
+            // A hit voids the pass outright: the clearance it measured says nothing about the corner, so neither a
+            // deduction nor a rise is earned. Nothing is written and nothing is locked, so a later pass still judges it.
+            if (_cornerSpeedStartedMs >= 0 && LastContactTime >= _cornerSpeedStartedMs)
+            {
+                AnnounceCornerSpeedAdjustment(CornerId(apexNode) + " · voided, contact " + MsSinceContact() + " ms ago",
+                    "hit - no change");
+                return;
+            }
+
             _cornerSpeedLocked.Add(apexNode);
 
             float before = TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
@@ -2267,6 +2286,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             // Per pass, never more than the step limit: the stored offset keeps its own ±10 clamp, this one only
             // bounds how far one corner can travel in one go.
             delta = ARS.Clamp(delta, -CornerSpeedLearnDeltaLimitMps, CornerSpeedLearnDeltaLimitMps);
+            // Lost control voids the deduction only: a wide line under a spin says nothing about where the corner's
+            // limit is, while a pass that was clean enough earns its rise as usual.
+            bool lostControl = _cornerSpeedWorstSlideDeg > CornerSpeedLearnLostControlDegrees && delta < 0f;
+            if (lostControl) delta = 0f;
             float after = ARS.Clamp(before + delta, -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
 
             CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;
@@ -2282,12 +2305,15 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             // The notice carries the reason, not the stored offset: how much room the outside had decides the change.
             string reasonText = hadSlipSample ? clearance.ToString("0.0", CultureInfo.InvariantCulture) + " m" : "no slide";
+            if (lostControl)
+                reasonText = "lost control " + _cornerSpeedWorstSlideDeg.ToString("0", CultureInfo.InvariantCulture) + "°";
             string verdictText = hadSlipSample
                 ? " · verdict " + verdictClearance.ToString("0.0", CultureInfo.InvariantCulture) + " m"
                 : "";
             // The reason carries the colour, not the value: a deduction is read off the room the corner left.
             if (applied < 0f) reasonText = "~r~" + reasonText + "~w~";
             AnnounceCornerSpeedAdjustment(id + " · " + peakText + verdictText + " · " + deltaText + offtrack
+                + (lostControl ? " · lost control, deduction voided" : "")
                 + (aheadGain > 0f ? " · ahead " + FormatCornerSpeedOffset2(aheadGain) : ""),
                 reasonText + " - " + deltaText);
         }
@@ -3468,6 +3494,16 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
             else EndCard();
         }
+        // A collision reads as a step in the acceleration trace rather than as a level: grip alone never moves the
+        // two horizontal axes three g inside one 20 ms sample, while a hit does. Stamped so the corner learner can
+        // tell a measured pass from a pass that was interrupted.
+        const float ContactJumpGs = 3f;
+
+        // Game.GameTime of the last contact, -1 before the first one. The accessor reports how long ago it was, so
+        // callers read one number rather than doing clock arithmetic of their own.
+        public int LastContactTime = -1;
+        public int MsSinceContact() => LastContactTime < 0 ? int.MaxValue : Game.GameTime - LastContactTime;
+
         public void UpdateTickData()
         {
             Vector3 cSpeed = Function.Call<Vector3>(Hash.GET_ENTITY_SPEED_VECTOR, Car, false);
@@ -3479,6 +3515,14 @@ const float RequirementLookaheadSeconds = 3.95f;
                 VehicleData.LastAccelSampleTime = now;
                 float dt = Math.Max(elapsed * 0.001f, 0.001f);
                 Vector3 accel = (cSpeed - _lastSpeed) / dt;
+                // The first sample has no predecessor to compare with; every later one is checked for a contact step.
+                if (VehicleData.AccelCount > 0)
+                {
+                    float jumpX = accel.X - _lastAccel.X;
+                    float jumpY = accel.Y - _lastAccel.Y;
+                    if (Math.Sqrt(jumpX * jumpX + jumpY * jumpY) > ContactJumpGs * 9.8f) LastContactTime = now;
+                }
+                _lastAccel = accel;
                 VehicleData.AccelSamples[VehicleData.AccelHead] = accel;
                 VehicleData.AccelHead = (VehicleData.AccelHead + 1) % VehicleState.AccelWindow;
                 if (VehicleData.AccelCount < VehicleState.AccelWindow) VehicleData.AccelCount++;
