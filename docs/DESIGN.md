@@ -451,7 +451,9 @@ The ceiling is a ladder rather than one number: the tyre's live peak slip at thi
 grip-circle law — grip and gravity over speed squared, through the wheelbase — as the fallback, and a
 slow-speed ramp that can only *raise* the ceiling so a crawling car can still place itself. Two
 deliberate escapes exist, both on the answering side only: a countersteer earns authority towards the
-slide it is correcting, and a damper term that is fighting the rotation is not capped.
+slide it is correcting, and a damper term that is fighting the rotation is not capped. One more trim applies
+with the whole car in the air: the ceiling drops to a quarter of the slide it already carries, because with no
+tyre under it a full countersteer is a rotation spring, and the car lands snapped round rather than settled.
 
 **The speed level: the same law read the other way.** The grip circle also exists as a speed — the fastest
 a car could take a radius with the wheel it is allowed — and that speed is blended into the plan, so a car

@@ -1527,6 +1527,10 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float SlideBrakeCapEndShare = 1.5f;
         const float SlideBrakeCap = 0.33f;
         const float SteerSlewRate = 120f;
+        // Mid-air, with no tyre under the car, the wheel is only worth a quarter of the slide already carried: a full
+        // countersteer there is a rotation spring, and the car lands snapped round instead of settled.
+        const int AirborneSteerMinWheelsOff = 4;
+        const float AirborneSteerShareOfSlide = 0.25f;
         static readonly bool SlowCornerSlipAllowance = true;
         const float SlowCornerSlipFullMph = 15f;
         const float SlowCornerSlipDoubleMph = 5f;
@@ -1771,6 +1775,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 if (requestedSteer > 0f) steerLimitLeft = VehicleData.SteeringLock;
                 else if (requestedSteer < 0f) steerLimitRight = VehicleData.SteeringLock;
+            }
+
+            // Airborne the whole car is in the air, so the limits above are trimmed to a quarter of the slide it
+            // already carries; the one clamp below still has the only word on what the wheel is asked for.
+            if (ARS.WheelsOffGround(Car) >= AirborneSteerMinWheelsOff)
+            {
+                float airLimit = Math.Abs(VehicleData.SlideAngle) * AirborneSteerShareOfSlide;
+                steerLimitRight = Math.Min(steerLimitRight, airLimit);
+                steerLimitLeft = Math.Min(steerLimitLeft, airLimit);
             }
 
             Control.SteerDegrees = ARS.Clamp(requestedSteer, -steerLimitRight, steerLimitLeft);
