@@ -4822,7 +4822,22 @@ const float RequirementLookaheadSeconds = 3.95f;
             return sum / samples * ElevationToSlopeSine;
         }
 
-        float RouteIdealSpeedForRadius(float r) => ApexSpeedWithDownforce(r);
+        // The tyre root answers a circle, and on a wide radius it asks for more than any car can use. Above
+        // the knee the ask bends into a ceiling, with tanh matching the root's own slope there so nothing
+        // below the knee moves at all; the ceiling is the most the plan may ever ask, flat out included.
+        const float RouteSpeedTaperKneeMph = 120f;
+        const float RouteSpeedTaperCeilingMph = 190f;
+
+        float RouteIdealSpeedForRadius(float r) => RouteSpeedTaper(ApexSpeedWithDownforce(r));
+
+        float RouteSpeedTaper(float rootMps)
+        {
+            float knee = ARS.MphToMps(RouteSpeedTaperKneeMph);
+            float ceiling = ARS.MphToMps(RouteSpeedTaperCeilingMph);
+            float excess = rootMps - knee;
+            if (excess <= 0f) return rootMps;
+            return knee + (ceiling - knee) * (float)Math.Tanh(excess / (ceiling - knee));
+        }
 
         // The grip of the road under the bend the route term is about to ask for: the radius is sampled over a
         // window, so the worst surface in that window decides, the same rule CornerSurfaceGrip uses for a corner.
