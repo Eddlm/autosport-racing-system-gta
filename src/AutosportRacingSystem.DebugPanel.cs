@@ -26,6 +26,8 @@ namespace ARS
         const float PanelLabelScale = 0.35f;
         const float PanelIntendedY = 0.008f; // the intended speed, at the top of the APEX and ROUT columns
         const float PanelIntendedScale = 0.30f;
+        const float PanelRadiusY = 0.032f; // under the route speed: the radius that produced it, in metres
+        const float PanelRadiusScale = 0.26f;
         const float SpeedSentinelMps = 998f; // the term's own open sentinel: no corner ahead, or no finite radius
         static readonly string[] PanelLabels = { "THR", "STB", "FLR", "APEX", "ROUT", "BRAKE" };
 
@@ -109,6 +111,9 @@ namespace ARS
                 float intended = i == BarsPerPedal ? racer.CornerArrivalMps : racer.RouteTermMps;
                 string intendedMph = intended >= SpeedSentinelMps ? "-" : ARS.MpsToMph(intended).ToString("0", CultureInfo.InvariantCulture);
                 DrawText(new Vector2(centreX, PanelIntendedY), intendedMph, colour, DrawTextFont.Standard, DrawTextAlign.Center, PanelIntendedScale);
+                if (i != BarsPerPedal + 1) continue;
+                string radiusText = Math.Round(racer.LiveRouteRadius).ToString("0", CultureInfo.InvariantCulture) + "m";
+                DrawText(new Vector2(centreX, PanelRadiusY), radiusText, colour, DrawTextFont.Standard, DrawTextAlign.Center, PanelRadiusScale);
             }
         }
     }
