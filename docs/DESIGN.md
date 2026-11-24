@@ -219,6 +219,13 @@ lifted wheel costs throttle — any lifted wheel, one rate however many are up, 
 is what lets the plan be conservative by construction without making the car slow: the plan promises what it
 can keep, and the caps are what answer when the promise turns out to have been wrong.
 
+**The route feathers the brake; the corner stands on it.** The route term's number is a speed to follow, not a
+place to stop, so a car answering a wide bend a little fast should lift and drag, never stab. While the route
+owns the speed the brake cannot pass `0.33`: the pedal is there to trim a small excess, and a large one is a
+sign the plan has already lost the corner rather than a reason to bury the pedal. The cap is keyed to the term
+and not to the car, so the instant the corner ramp takes over the pedal is free again — standing on the brakes
+is exactly what a ramp is for, and nothing else is.
+
 ## The lane law
 
 **Goal:** put the car on the lane it was told to be on — as directly as the geometry allows and no
