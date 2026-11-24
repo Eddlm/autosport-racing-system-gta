@@ -4802,14 +4802,18 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         // The tyre root answers a circle and over-asks on a wide radius. The trim is linear from the knee to
         // the crossover - the curve dialled by eye - and then exponential at the SAME slope into a floor it
-        // approaches and never reaches, so every wider radius still loses a little more speed.
+        // approaches and never reaches, so every wider radius still loses a little more speed. 999 m is the
+        // route's "no bend in the band" code rather than a radius, and it takes no trim at all.
         const float RouteSpeedTaperKneeRadiusM = 100f;
         const float RouteSpeedTaperCrossoverRadiusM = 400f;
         const float RouteSpeedTaperCrossoverShare = 0.5f;
         const float RouteSpeedTaperFloorShare = 0.4f;
+        const float RouteRadiusOpenM = 999f;
 
         float RouteIdealSpeedForRadius(float r)
         {
+            float root = ApexSpeedWithDownforce(r);
+            if (r >= RouteRadiusOpenM) return root;
             float trim;
             if (r <= RouteSpeedTaperCrossoverRadiusM)
             {
@@ -4822,7 +4826,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 float length = tail * (RouteSpeedTaperCrossoverRadiusM - RouteSpeedTaperKneeRadiusM) / (1f - RouteSpeedTaperCrossoverShare);
                 trim = RouteSpeedTaperCrossoverShare - tail * (1f - (float)Math.Exp(-(r - RouteSpeedTaperCrossoverRadiusM) / length));
             }
-            return ApexSpeedWithDownforce(r) * ARS.Clamp(trim, 0f, 1f);
+            return root * ARS.Clamp(trim, 0f, 1f);
         }
 
         // The grip of the road under the bend the route term is about to ask for: the radius is sampled over a
