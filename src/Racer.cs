@@ -292,6 +292,9 @@ namespace ARS
         const float ProjectionMinSpeedMph = 20f;
         public const float FullThrottleSpeedErrorMps = 1f;
         public const float FullBrakeSpeedErrorMps = 4.5f;
+        // While the route owns the speed it may only feather the brakes: a sweep that answers a little fast
+        // gets a lift, never a stab. Standing on the pedal is the corner ramp's job alone.
+        const float RouteSpeedBrakeCap = 0.33f;
 
         readonly List<InputTrailSample> _inputTrail = new List<InputTrailSample>();
         const float InputTrailSampleSpacing = 0.5f;
@@ -3083,14 +3086,18 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float ComposeBrakeCap(float baseBrake, bool countersteering)
         {
+            float routeCap = Brain.CurrentIntention.Term == SpeedTerm.Route ? RouteSpeedBrakeCap : 1f;
+
             Control.MaxBrake = Math.Min(Control.MaxBrakeFromABS, Control.MaxBrakeFromCountersteer);
             Control.MaxBrake = Math.Min(Control.MaxBrake, Control.MaxBrakeFromSlide);
+            Control.MaxBrake = Math.Min(Control.MaxBrake, routeCap);
 
             float binding = baseBrake;
             BrakeReason reason = BrakeReason.Plan;
             if (Control.MaxBrakeFromABS < binding) { binding = Control.MaxBrakeFromABS; reason = BrakeReason.Abs; }
             if (Control.MaxBrakeFromCountersteer < binding) { binding = Control.MaxBrakeFromCountersteer; reason = BrakeReason.Countersteer; }
             if (Control.MaxBrakeFromSlide < binding) { binding = Control.MaxBrakeFromSlide; reason = BrakeReason.Slide; }
+            if (routeCap < binding) { binding = routeCap; reason = BrakeReason.RouteSpeed; }
             if (countersteering) reason = BrakeReason.Countersteer;
             if (BaseBehavior == RacerBaseBehavior.GridWait) reason = BrakeReason.GridWait;
 

@@ -299,6 +299,7 @@ namespace ARS
         Abs,
         Countersteer,
         Slide,
+        RouteSpeed,
 
         Projection,
         GridWait,
