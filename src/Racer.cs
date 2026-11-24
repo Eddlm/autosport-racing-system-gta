@@ -351,7 +351,7 @@ namespace ARS
         bool _gsFloorActiveThisTick = false;
 
         int _projectionLogAtMs = 0;
-        const float BrakeFactorSeed = 0.60f;
+        const float BrakeFactorSeed = 0.90f;
         const float BrakeFactorMin = 0.33f;
         const float BrakeFactorMax = 1.30f;
         public const float BrakeRampIdealDeltaMps = 0.5f;

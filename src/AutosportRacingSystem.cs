@@ -960,7 +960,7 @@ namespace ARS
             HookListTextPicker(routeOffsetItem);
 
             string brakeRampIdeal = Racer.BrakeRampIdealDeltaMps.ToString("0.0", CultureInfo.InvariantCulture);
-            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Ramp Analysis", "Adjusts each braking corner's brake factor toward " + brakeRampIdeal + " m/s over the target at the fixed ramp point: more over lowers it, less or under raises it. One pass per corner, clamped to 0.50–1.30.", BrakeLearning);
+            NativeCheckboxItem brakeLearningItem = new NativeCheckboxItem("Brake Ramp Analysis", "Adjusts each braking corner's brake factor toward " + brakeRampIdeal + " m/s over the target at the fixed ramp point: more over lowers it, less or under raises it. One pass per corner, clamped to 0.33–1.30.", BrakeLearning);
             brakeLearningItem.CheckboxChanged += (sender, args) =>
             {
                 BrakeLearning = brakeLearningItem.Checked;
