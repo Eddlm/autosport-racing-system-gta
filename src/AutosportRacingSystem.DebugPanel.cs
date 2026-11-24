@@ -20,7 +20,7 @@ namespace ARS
         static readonly Color ThrottleBoundColour = Color.FromArgb(235, 210, 60); // the hanging TCS pull, the stability cap and the Gs floor
         static readonly Color BrakeBarColour = Color.Red;
         static readonly Color SpeedMarginColour = Color.Orange; // the APEX and ROUT bars
-        static readonly Color OfflineColour = Color.Gray; // a margin meter out of range: bar and label gray out
+        static readonly Color FollowedSpeedColour = Color.DodgerBlue; // the column whose term is driving the speed
         static readonly Color PanelLabelColour = Color.White;
         const float PanelLabelY = 0.272f; // the label row, inside the band above its bottom edge
         const float PanelLabelScale = 0.35f;
@@ -42,17 +42,17 @@ namespace ARS
             float barWidth = (DebugPanelRight - DebugPanelLeft - (2 * BarsPerPedal - 1) * PanelBarGap) / (2 * BarsPerPedal);
             float speed = racer != null && CanWeUse(racer.Car) ? ARS.GetForwardSpeed(racer.Car) : 0f;
             DrawPanelBars(racer, barWidth, speed);
-            DrawPanelLabels(racer, barWidth, speed);
+            DrawPanelLabels(racer, barWidth);
         }
 
         // Six bars in the panel band, bottom edge pinned to DebugPanelBottom, an input of 1 filling the
         // band: applied throttle, the stability cap and the brake bar ride SmoothFloat followers; the Gs
         // floor bar shows the imposed floor (hidden when the Gs floor setting is off). Columns 4-5 are
         // margins against the corner's arrival speed and the route ask, centred on the middle: margin
-        // above, deficit below, 30 m/s reaches a band edge; orange in range, grayed out beyond it both in
-        // bar and name; columns 4-5 carry their intended speed at the top of the band in mph, so a learned
-        // change reads as a number even when the bar has re-settled. Column 0 also carries a bar hanging from the
-        // band top down to the TCS cap line.
+        // above, deficit below, 30 m/s reaches a band edge. They never grey out, and the one whose term is
+        // driving the speed turns blue; the intended speed rides at the top of the band in mph, so a
+        // learned change reads as a number even when the bar has re-settled. Column 0 also carries a bar
+        // hanging from the band top down to the TCS cap line.
         static void DrawPanelBars(Racer racer, float barWidth, float speed)
         {
             if (racer == null) return;
@@ -60,8 +60,9 @@ namespace ARS
             DrawHangingBar(racer.TcsSmooth, ThrottleBoundColour, barWidth, 0);
             DrawBar(racer.StabSmooth, ThrottleBoundColour, barWidth, 1);
             DrawBar(GsLaneThrottleFloor ? racer.ThrottleFloorLevel : 0f, ThrottleBoundColour, barWidth, 2);
-            DrawDeltaBar(racer.CornerArrivalMps - speed, SpeedMarginColour, barWidth, BarsPerPedal);
-            DrawDeltaBar(racer.RouteTermMps - speed, SpeedMarginColour, barWidth, BarsPerPedal + 1);
+            SpeedTerm followed = racer.ThrottleTerm;
+            DrawDeltaBar(racer.CornerArrivalMps - speed, followed == SpeedTerm.Corner ? FollowedSpeedColour : SpeedMarginColour, barWidth, BarsPerPedal);
+            DrawDeltaBar(racer.RouteTermMps - speed, followed == SpeedTerm.Route ? FollowedSpeedColour : SpeedMarginColour, barWidth, BarsPerPedal + 1);
             DrawBar(racer.BrakeSmooth, BrakeBarColour, barWidth, BarsPerPedal + 2);
         }
 
@@ -81,8 +82,8 @@ namespace ARS
         }
 
         // A bar centred on the band's middle: a positive margin rises above the middle, a negative one
-        // sinks below it, and |margin| = SpeedDeltaFullSpanMps reaches a band edge. At or beyond that span
-        // the bar grays out: the meter is out of range and irrelevant.
+        // sinks below it, and |margin| = SpeedDeltaFullSpanMps reaches a band edge. Past that span the bar
+        // pins to the edge and keeps its colour: an out-of-range margin is told apart by the bar being full.
         static void DrawDeltaBar(float marginMps, Color colour, float barWidth, int bar)
         {
             float clamped = Math.Min(Math.Max(marginMps, -SpeedDeltaFullSpanMps), SpeedDeltaFullSpanMps);
@@ -91,23 +92,23 @@ namespace ARS
             float top = mid - (clamped >= 0f ? clamped / SpeedDeltaFullSpanMps : 0f) * halfBand;
             float bottom = mid + (clamped < 0f ? -clamped / SpeedDeltaFullSpanMps : 0f) * halfBand;
             float left = DebugPanelLeft + bar * (barWidth + PanelBarGap);
-            DrawScreenRect(left, top, left + barWidth, bottom, Math.Abs(marginMps) >= SpeedDeltaFullSpanMps ? OfflineColour : colour);
+            DrawScreenRect(left, top, left + barWidth, bottom, colour);
         }
 
-        static void DrawPanelLabels(Racer racer, float barWidth, float speed)
+        static void DrawPanelLabels(Racer racer, float barWidth)
         {
-            bool apexOffline = racer == null || Math.Abs(racer.CornerArrivalMps - speed) >= SpeedDeltaFullSpanMps;
-            bool routOffline = racer == null || Math.Abs(racer.RouteTermMps - speed) >= SpeedDeltaFullSpanMps;
+            SpeedTerm followed = racer != null ? racer.ThrottleTerm : SpeedTerm.None;
             for (int i = 0; i < PanelLabels.Length; i++)
             {
-                bool offline = i == BarsPerPedal && apexOffline || i == BarsPerPedal + 1 && routOffline;
-                Color colour = offline ? OfflineColour : PanelLabelColour;
+                bool followedHere = i == BarsPerPedal && followed == SpeedTerm.Corner
+                    || i == BarsPerPedal + 1 && followed == SpeedTerm.Route;
+                Color colour = followedHere ? FollowedSpeedColour : PanelLabelColour;
                 float centreX = DebugPanelLeft + i * (barWidth + PanelBarGap) + barWidth * 0.5f;
                 DrawText(new Vector2(centreX, PanelLabelY), PanelLabels[i], colour, DrawTextFont.Standard, DrawTextAlign.Center, PanelLabelScale);
                 if (racer == null || i != BarsPerPedal && i != BarsPerPedal + 1) continue;
                 float intended = i == BarsPerPedal ? racer.CornerArrivalMps : racer.RouteTermMps;
                 string intendedMph = intended >= SpeedSentinelMps ? "-" : ARS.MpsToMph(intended).ToString("0", CultureInfo.InvariantCulture);
-                DrawText(new Vector2(centreX, PanelIntendedY), intendedMph, PanelLabelColour, DrawTextFont.Standard, DrawTextAlign.Center, PanelIntendedScale);
+                DrawText(new Vector2(centreX, PanelIntendedY), intendedMph, colour, DrawTextFont.Standard, DrawTextAlign.Center, PanelIntendedScale);
             }
         }
     }
