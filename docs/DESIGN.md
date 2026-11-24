@@ -215,7 +215,7 @@ one linear law — with a single deliberate exception below a walking pace, wher
 rounded up to full so the car can get off the line — and then every reason cap, traction, instability,
 overspeed, traffic, the track edge and the recovery, can only ever take authority away from it — the instability
 cap among them, which was parked off for two builds (`TrackSpeed.StabilityCap`, 2003-2008) and is live again, so a
-lifted wheel costs throttle — any lifted wheel, one rate however many are up, and it returns at its own steady rise. That ordering
+lifted wheel costs throttle — any lifted wheel, one rate however many are up, and it returns at its own steady rise. Below zero the cap is a hold rather than a pedal — its depth is how long the throttle stays down once the wheels are back — and off the road, where a wheel is up much of the time, stability's own output is floored so the hold can never take the pedal to nothing. That ordering
 is what lets the plan be conservative by construction without making the car slow: the plan promises what it
 can keep, and the caps are what answer when the promise turns out to have been wrong.
 

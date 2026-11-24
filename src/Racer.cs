@@ -376,7 +376,7 @@ namespace ARS
         const float CornerSpeedLearnLimitMps = 10f;
         // One pass moves a corner by at most this much either way. The scale converts metres of clearance, and on a
         // wide track a single pass reads enough of them to swing the corner by a dozen metres a second at once.
-        const float CornerSpeedLearnDeltaLimitMps = 2.5f;
+        const float CornerSpeedLearnDeltaLimitMps = 2f;
         const float CornerSpeedLearnMinSlideShare = 0.75f;
         // A slide past this many degrees is the car out of control rather than the corner running out of road, so a
         // pass that reached it cannot be used to take speed away.
@@ -389,31 +389,29 @@ namespace ARS
         const int CornerSpeedLearnHitOffTrackMs = 1000;
         // One metre of room past the verdict margin is one metre per second of offset, both ways: a pass a metre
         // clear of the balance line earns 1 m/s, one that lands a metre short of it pays the same.
-        const float CornerSpeedLearnMetreToOffset = 1f;
+        const float CornerSpeedLearnMetreToOffset = 0.5f;
         // The verdict's zero sits a car's width plus this much short of the white line: the rise only runs while
         // that room is genuinely there, so the balance never pays for a pass that was half offtrack already.
         const float CornerSpeedLearnVerdictMarginMetres = 1f;
         // A pass that never slid at all earns this much: nothing was learned about the corner, so it is credited as
         // clean and moves by the coarse step rather than by a measured clearance. Set equal to the step limit, so the
         // credit is what the number says and not a value the clamp quietly trims.
-        const float CornerSpeedLearnNoSlideRiseMps = 2.5f;
+        const float CornerSpeedLearnNoSlideRiseMps = 2f;
         const float CornerSpeedLearnReleaseMetres = 40f;
         // How close to an apex node counts as having reached it, in metres; the call widens it for fast cars.
         const float ApexReachedMetres = 3f;
         // Route speed learning: the percentage the car holds against the track, with the bands and pedal states
         // his spec fixes. It rises only under light throttle, never on the brake; it falls only at full throttle
         // while the car steers into the bend and its projection still lands outside.
-        const float RouteSpeedLearnThrottle = 0.8f;
+        const float RouteSpeedLearnThrottle = 0.9f;
         const float RouteSpeedLearnBrake = 0f;
         const float RouteSpeedLearnFullThrottle = 0.9f;
         const float RouteSpeedLearnRateMph = 1f;
-        const float RouteSpeedLearnRiseMinPercent = 50f;
-        const float RouteSpeedLearnRiseMaxPercent = 90f;
+                const float RouteSpeedLearnMinSlideShare = 0.2f;
         const float RouteSpeedLearnSteerMin = 0.05f;
         const float RouteSpeedLearnWidenM = 0.5f;
         const float RouteSpeedLearnFallShareOfRate = 0.5f;
-        const float RouteSpeedLearnOpenRadius = 998f;
-        const float RouteSpeedLearnStableThrottle = 0.999f;
+                const float RouteSpeedLearnStableThrottle = 0.999f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedLastSampleMs = -1;
         float _cornerSpeedWorstOutsideClear = float.MaxValue;
@@ -2891,8 +2889,11 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float OffTrackSafeSpeedMph = 20f;
         const float OffTrackFullThrottleMph = 15f;
         const float OffTrackRecoverThrottle = 0.25f;
-        const float StabilityFallPerSecond = 2f;
+        const float StabilityFallPerWheelPerSecond = 0.5f;
         const float StabilityRisePerSecond = 1f;
+        // Below zero the cap is a hold, not a pedal: its depth is how long the throttle stays at the floor.
+        const float StabilityFloor = -0.5f;
+        const float StabilityThrottleFloor = 0.1f;
         const float OverspeedArmMaxSlideDegrees = 2f;
         const float OverspeedArmMinSpeedMph = 30f;
         const float OverspeedArmMinForwardGs = 0.1f;
@@ -2953,10 +2954,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             _tcsSmooth.Advance(TickScale);
             int wheelsOffGround = ARS.WheelsOffGround(Car);
             if (TrackSpeed.StabilityCap && wheelsOffGround > 0)
-                Control.MaxThrottleFromStability -= StabilityFallPerSecond * TickScale;
+                Control.MaxThrottleFromStability -= StabilityFallPerWheelPerSecond * wheelsOffGround * TickScale;
             else
                 Control.MaxThrottleFromStability += StabilityRisePerSecond * TickScale;
-            Control.MaxThrottleFromStability = ARS.Clamp(Control.MaxThrottleFromStability, 0f, 1f);
+            Control.MaxThrottleFromStability = ARS.Clamp(Control.MaxThrottleFromStability, StabilityFloor, 1f);
             _stabSmooth.Target = Control.MaxThrottleFromStability;
             _stabSmooth.Advance(TickScale);
 
@@ -3049,7 +3050,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool kickRaises = _kickPlaying && baseThrottle < KickPedalLevel;
             if (kickRaises) baseThrottle = KickPedalLevel;
 
-            float ceiling = Math.Min(Control.MaxThrottleFromTCS, Control.MaxThrottleFromStability);
+            float stabilityCap = Math.Max(StabilityThrottleFloor, Control.MaxThrottleFromStability);
+            float ceiling = Math.Min(Control.MaxThrottleFromTCS, stabilityCap);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromOverspeed);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromRival);
             ceiling = Math.Min(ceiling, Control.MaxThrottleFromChillOut);
@@ -3068,7 +3070,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float binding = baseThrottle;
             ThrottleReason reason = ThrottleReason.Plan;
             if (Control.MaxThrottleFromTCS < binding) { binding = Control.MaxThrottleFromTCS; reason = ThrottleReason.Tcs; }
-            if (Control.MaxThrottleFromStability < binding) { binding = Control.MaxThrottleFromStability; reason = ThrottleReason.Stability; }
+            if (stabilityCap < binding) { binding = stabilityCap; reason = ThrottleReason.Stability; }
             if (Control.MaxThrottleFromOverspeed < binding) { binding = Control.MaxThrottleFromOverspeed; reason = ThrottleReason.Overspeed; }
             if (Control.MaxThrottleFromRival < binding) { binding = Control.MaxThrottleFromRival; reason = ThrottleReason.Rival; }
             if (Control.MaxThrottleFromChillOut < binding) { binding = Control.MaxThrottleFromChillOut; reason = ThrottleReason.ChillOut; }
@@ -3776,30 +3778,38 @@ const float RequirementLookaheadSeconds = 3.95f;
             ARS.DrawText(pos, text, Color.White, 0.5f);
         }
 
-        // His spec: it rises only under light throttle, below 0.8, and only with the brake fully off; it falls at
-        // full throttle while the car's own projection lands further out than the car and the wheel is turned
-        // towards the inside - half the rise's rate. Never below zero: a permission, not a brake.
+        // His rules, remade: the fall is unchanged (washing out), the rise reads the car's own trajectory
+        // instead of a car-over-track band. It rises off corner mode only, under a route demand below the
+        // full-throttle line, with the half-second projection nearer the inside than the car is, a slide worth
+        // at least a fifth of the peak, and a stability cap nobody has cut.
         void UpdateRouteSpeedLearning()
         {
-            // The ask, not the pedal: a cap that pulled the pedal down is not the car choosing light throttle.
-            bool rising = Control.ThrottleDemand < RouteSpeedLearnThrottle && !Control.ThrottleLimited
-                && Control.Brake <= RouteSpeedLearnBrake;
-            bool washingOut = IsWashingOut();
-            if (!rising && !washingOut) return;
-            if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;
             float step = RouteSpeedLearnRateMph * TickScale;
-            if (washingOut)
+
+            if (IsWashingOut())
             {
+                if (Brain.CurrentIntention.Term != SpeedTerm.Route) return;
                 _routeSpeedOffsetMph = Math.Max(0f, _routeSpeedOffsetMph - step * RouteSpeedLearnFallShareOfRate);
                 return;
             }
-            if (!TryGetCarOverTrackPercent(out float percent)) return;
-            bool inRiseBand = percent >= RouteSpeedLearnRiseMinPercent && percent <= RouteSpeedLearnRiseMaxPercent;
-            // A car that is stable and under its slip limit is evidence; one that is sliding is not.
+
+            if (_cornerMode || Brain.CurrentIntention.Term != SpeedTerm.Route) return;
+            // The ask, not the pedal: a cap that pulled the pedal down is not the car choosing light throttle.
+            if (Control.ThrottleDemand >= RouteSpeedLearnThrottle || Control.ThrottleLimited) return;
+            if (Control.Brake > RouteSpeedLearnBrake) return;
+            if (!ProjectionWideningWithinLimit()) return;
             float slideAbs = Math.Abs(VehicleData.SlideAngle);
-            bool stable = Control.MaxThrottleFromStability >= RouteSpeedLearnStableThrottle;
-            bool underSlipLimit = TRLateralAtSpeed > 0.01f && !float.IsNaN(slideAbs) && slideAbs < TRLateralAtSpeed;
-            if (rising && inRiseBand && stable && underSlipLimit) _routeSpeedOffsetMph += step;
+            if (TRLateralAtSpeed <= 0.01f || float.IsNaN(slideAbs)) return;
+            if (slideAbs < TRLateralAtSpeed * RouteSpeedLearnMinSlideShare) return;
+            if (Control.MaxThrottleFromStability < RouteSpeedLearnStableThrottle) return;
+            _routeSpeedOffsetMph += step;
+        }
+
+        // The rise reads the same measurement as the fall, from below its threshold: the projection is outside the
+        // car - the car is using the road - but by less than the widen line. Past that same line the fall answers.
+        bool ProjectionWideningWithinLimit()
+        {
+            return _projectionWidenMeters > 0f && _projectionWidenMeters < RouteSpeedLearnWidenM;
         }
 
         // His law: it falls when the car's own PROJECTION lands further out than the car, while the wheel is
@@ -3818,23 +3828,6 @@ const float RequirementLookaheadSeconds = 3.95f;
             return Math.Sign(steer) == _projectionWidenSign;
         }
 
-        // The car's own path radius against the track's radius under it, as a percentage. False when the car is
-        // too slow or has no track node yet, so a stationary car never moves the learned number.
-        bool TryGetCarOverTrackPercent(out float percent)
-        {
-            percent = 0f;
-            float speed = ARS.GetForwardSpeed(Car);
-            if (speed < 3f || CurrentTrackPoint == null || ARS.TrackPoints.Count == 0
-                || CurrentTrackPoint.Node < 0 || CurrentTrackPoint.Node >= ARS.TrackPoints.Count) return false;
-            float carRadius = ARS.Clamp(ARS.Circumradius3D(Car.Position, ProjectAhead(1f), ProjectAhead(0.5f)), 5f, 999f);
-            float trackRadius = ARS.Clamp(ARS.TrackPoints[CurrentTrackPoint.Node].SweepCurveRadius, 5f, 999f);
-            // A clamped-open radius is not a measurement: both read 999 on a straight and would land on exactly
-            // 100%, which sits inside a band and would teach from a straight line.
-            if (carRadius >= RouteSpeedLearnOpenRadius || trackRadius >= RouteSpeedLearnOpenRadius) return false;
-            percent = 100f * carRadius / trackRadius;
-            return true;
-        }
-
         void DrawProjectionGateSubtitle()
         {
             float slide = Math.Abs(VehicleData.SlideAngle);
@@ -3844,22 +3837,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             UI.ShowSubtitle(_projectionArmed ? "~r~" + percent : "~b~" + percent, 50);
         }
 
-        // Constant subtitle, for tuning: the radius the car's own path describes against the radius the track
-        // asks for at the car's node. Over 100% the car is going wider than the track wants - it is losing the
-        // line; under 100% it is holding or tightening. Flattened to 2D: z is height, and height does not steer.
+        // Constant subtitle, for tuning: the learned offset, and the number that now decides it - the car's
+        // own projection against the car, in lateral metres. Positive but under the widen threshold is what earns
+        // a rise; at or past that threshold it is the wash-out the fall answers.
         public void DrawRouteSpeedSubtitle()
         {
             string first = "~w~" + _routeSpeedOffsetMph.ToString("0.0", CultureInfo.InvariantCulture);
-            string second;
-            if (!TryGetCarOverTrackPercent(out float percent))
-            {
-                second = "~w~--";
-            }
-            else
-            {
-                string colour = percent > 105f ? "~r~" : percent > 95f ? "~y~" : "~g~";
-                second = colour + Math.Round(percent).ToString(CultureInfo.InvariantCulture) + "%";
-            }
+            string colour = _projectionWidenMeters > 0f && _projectionWidenMeters < RouteSpeedLearnWidenM ? "~g~"
+                : _projectionWidenMeters >= RouteSpeedLearnWidenM ? "~r~" : "~w~";
+            string second = colour + _projectionWidenMeters.ToString("0.0", CultureInfo.InvariantCulture) + " m";
             UI.ShowSubtitle(first + "~n~" + second, 50);
         }
 

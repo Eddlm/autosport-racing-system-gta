@@ -1,6 +1,6 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2020** (`7ab15895e264ead8`). The seven changes described here are 1981's, **AM** is the newest, then **AJ**, **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2.5 m/s per pass since 1999 (`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 in 1997, 2 before that, 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2.5 m/s (`CornerSpeedLearnDeltaLimitMps`), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2030** (`393504e67490a56a`). The nine changes described here are 1981's, **AO** is the newest, then **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2 m/s per pass since 2025 (`CornerSpeedLearnNoSlideRiseMps` `2`, was 2.5 from 1999, 4 in 1997, 0.05 before that); clearance converts at half a metre per second per metre since 2026 (`CornerSpeedLearnMetreToOffset` `0.5`, was 1 from 1996, 0.66 before that, 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2 m/s (`CornerSpeedLearnDeltaLimitMps`, 2.5 until 2025), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
@@ -10,20 +10,67 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
-## AM · 2026-11-24 (2020) — the stability cap drains on any wheel, at one rate
+## AO · 2026-11-24 (2027 → 2030) — the route speed rise reads the projection, not a radius band
 
 ⬜ Not driven. Compile-only.
 
-The fall was per wheel: `StabilityFallPerWheelPerSecond` charged one rate for *each* wheel reading off the ground, so
-a single lifted wheel barely moved the cap while four of them emptied it four times as fast. It is now one rate for
-the whole car — `StabilityFallPerSecond` applies whenever `ARS.WheelsOffGround(Car)` reads above zero, and nothing
-scales it by the count. Since the old rate at four wheels was already the new one, what moves on the track is the
-single lifted wheel: it now closes the throttle as hard as a full airborne moment did. The rise,
-`StabilityRisePerSecond`, is halved to a steady return at half the fall's rate, so a kerb or a crest costs throttle
-quickly and gives it back slowly.
+The rise had a proxy: the car's own path radius against the track's under it, rising while that sat in a middle
+band. It now reads the same quantity the fall reads, from the other side. `ProjectionWideningWithinLimit` takes the car's own
+projection against the car in lateral metres — the same `_projectionWidenMeters` the fall reads, measured a second
+ahead — and rises while that number is above zero and under `RouteSpeedLearnWidenM`: the projection outside the
+car, so the car is using the road, but short of the wash-out line. At or past that line the fall answers. One
+measurement, one threshold, and its two sides.
+The band, its two constants and the car-over-track percentage are gone with it: the radius pair, its clamped-open sentinel and the helper that measured them are deleted, and the tuning subtitle prints the widen itself in metres — green when it is inside the rise threshold, red when it is past the fall's.
 
-What to judge: whether a lifted wheel on a kerb now closes the pedal too hard, and whether the cap comes back fast
-enough after a crest to keep the car driving off it.
+The gates, in order: off corner mode, the route term in charge, `ThrottleDemand` under `RouteSpeedLearnThrottle`
+(the ask, never the pedal, and nothing already limited by a cap), brake off, the projection inside, a slide of at
+least `RouteSpeedLearnMinSlideShare` of the peak — a car that is not loading its tyres is not evidence — and the
+stability cap whole. The rise is `RouteSpeedLearnRateMph` per second with no upper clamp.
+
+The fall is untouched: washing out, at half the rise's rate, floored at zero. It still runs in corner mode, which
+is where washing out mostly happens; only the rise is kept off the corners.
+
+What to judge: whether the offset now climbs on roads it used to leave alone, and whether a car merely pointing
+inside at low slide earns speed it has not demonstrated.
+
+---
+
+## AN · 2026-11-24 (2025) — one verdict moves a corner by 2 m/s at most
+
+⬜ Not driven. Compile-only.
+
+The per-pass step is `CornerSpeedLearnDeltaLimitMps`, now 2 m/s in both directions, so a deduction is capped at 2
+as well — the off-track hit pays the same limit and deducts 2 for it. The clean-pass credit
+`CornerSpeedLearnNoSlideRiseMps` comes down with it: it was already clamped by the step limit, so the clamp did the
+work while the constant claimed a rise it never got.
+
+The scale underneath is unchanged in shape and halved in rate: the verdict reads the pass's worst outside clearance in metres, takes off the
+car's width and the verdict margin, and converts at `CornerSpeedLearnMetreToOffset` — half a metre per second for each
+metre of room, so it takes four metres of clearance to reach the step limit. The stored offset keeps its ±10 m/s clamp.
+
+What to judge: whether a corner now takes too many passes to walk up to its limit, and whether a genuinely wide
+pass still reads as a deduction rather than a nudge.
+
+---
+
+## AM · 2026-11-24 (2020 → 2024) — the throttle stability cap: per wheel down, a bounded hold, one rate up
+
+⬜ Not driven. Compile-only.
+
+The cap falls at `StabilityFallPerWheelPerSecond` for every wheel off the ground, so one lifted wheel costs a
+quarter of the range per second and four of them cost the whole range at once. Its bottom is `StabilityFloor`
+below zero, and that depth is not a pedal but a memory: the deeper it goes the longer the throttle stays down
+once the wheels are back, at one second per unit of `StabilityRisePerSecond`, which is the only rate the return
+has. Stability's own output is floored at `StabilityThrottleFloor` where it enters the composition, so however
+deep the hold goes the pedal it asks for is never below a tenth and never negative; every other cap keeps its
+own right to cut to nothing.
+
+Both bounds answer the same case: off the road a supercar keeps a wheel up much of the time, so an unbounded cut
+would hold the pedal at nothing for seconds at a stretch, and a cut with no depth to it would forget the lift
+the moment the wheel landed.
+
+What to judge: whether the hold now reads as a real cut after a kerb without strangling the car off the road,
+and whether the per-wheel fall is too slow to notice when only one wheel is skipping.
 
 ---
 
@@ -120,8 +167,8 @@ change`. Four quiet seconds and the pass is good, and never having been hit read
 **The exception (2019):** a hit that landed while the car was **off the road** is not bad data to discard — it is
 the corner being too fast, and voiding it is what keeps a wrong speed stuck on that corner for good. So
 `MsSinceContact() < 1000` (`CornerSpeedLearnHitOffTrackMs`) together with off the track is **latched** for the
-pass, and at the commit it pays the step limit (`-2.5 m/s`) instead of being voided; the notice reads
-`hit off track - -2.50 m/s`. It is latched while the window ticks rather than tested at the commit, because by
+pass, and at the commit it pays the step limit (`-2 m/s`) instead of being voided; the notice reads
+`hit off track - -2.00 m/s`. It is latched while the window ticks rather than tested at the commit, because by
 then the car may be back on the surface and the contact older than a second. No lock is taken, so a later pass
 still judges the corner normally. It cannot tell a wall the car chose from a rival that punted it off — both pay.
 
@@ -143,10 +190,10 @@ clearance stays raw — it is what the reason line quotes — and the margin is 
 computed.
 
 The cadence is coarse on purpose (1996, 1997): one metre of room is one metre per second of offset in either
-direction (`CornerSpeedLearnMetreToOffset` `1`, was 0.66), and a pass that never slid at all earns `2.5 m/s`
-(`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 for one build) — a corner that produced no slide taught nothing
+direction (`CornerSpeedLearnMetreToOffset` `1`, was 0.66), and a pass that never slid at all earns `2 m/s`
+(`CornerSpeedLearnNoSlideRiseMps` `2`, was 2.5 from 1999, 4 for one build) — a corner that produced no slide taught nothing
 about its limit, so it moves by the coarse step rather than by a measured clearance. Since 1998 one pass may only
-move a corner by `±2.5 m/s` (`CornerSpeedLearnDeltaLimitMps`): a step limit on the move, separate from the `±10`
+move a corner by `±2 m/s` (`CornerSpeedLearnDeltaLimitMps`, 2.5 until 2025): a step limit on the move, separate from the `±10`
 the stored offset keeps, because a wide track hands a single pass enough clearance to swing a corner by a dozen
 metres a second at once. The no-slide credit is set to that same limit, so the number in the code is the number
 applied.
