@@ -410,7 +410,7 @@ namespace ARS
         const float RouteSpeedLearnSteerMin = 0.05f;
         const float RouteSpeedLearnWidenMetres = 0.5f;
         const float RouteSpeedLearnFallShareOfRate = 0.5f;
-        const float RouteSpeedLearnLimitMph = 10f;
+        const float RouteSpeedLearnLimitMph = 20f;
                 const float RouteSpeedLearnMinStabilityCap = 0.999f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedLastSampleMs = -1;
@@ -729,8 +729,8 @@ namespace ARS
             _cornerModeApexPassedAt = -1;
             _cornerSpeedAuthority = false;
             _apexRampActive = false;
-            _routeOffsetSeedMph = ARS.RouteOffsetMph;
-            _routeSpeedOffsetMph = _routeOffsetSeedMph;
+            _routeOffsetSeedMph = ARS.Clamp(ARS.RouteOffsetMph, -RouteSpeedLearnLimitMph, RouteSpeedLearnLimitMph);
+            SetRouteSpeedOffset(_routeOffsetSeedMph);
             _lapOdometer = 0;
             _lastLapNode = -1;
             _lapStartNode = -1;

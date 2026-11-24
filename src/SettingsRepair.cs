@@ -130,7 +130,7 @@ namespace ARS
             settings.Specs.Add(new KeySpec("TimeoutSeconds", "30", Kind.Number, new[] { "15", "30", "45", "60" }));
             settings.Specs.Add(new KeySpec("AIRacerAutofix", AutofixMode.AutoRepair.ToString(), Kind.Text, Enum.GetNames(typeof(AutofixMode))));
             settings.Specs.Add(new KeySpec("CornerOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
-            settings.Specs.Add(new KeySpec("RouteOffset", "0", Kind.Number, new[] { "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10" }));
+            settings.Specs.Add(new KeySpec("RouteOffset", "0", Kind.Number, new[] { "-20", "-18", "-16", "-14", "-12", "-10", "-8", "-6", "-4", "-2", "0", "2", "4", "6", "8", "10", "12", "14", "16", "18", "20" }));
             settings.Specs.Add(new KeySpec("SmartTuning", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("NitrousEnabled", "True", Kind.Bool));
             settings.Specs.Add(new KeySpec("TipRate", TipFrequency.High.ToString(), Kind.Text, Enum.GetNames(typeof(TipFrequency))));
