@@ -4802,8 +4802,8 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         // The tyre root answers a circle and over-asks on a wide radius: the ask is scaled down across the
         // band, from no trim at the knee to half speed at the clamp.
-        const float RouteSpeedTaperKneeRadiusM = 50f;
-        const float RouteSpeedTaperCeilingRadiusM = 250f;
+        const float RouteSpeedTaperKneeRadiusM = 100f;
+        const float RouteSpeedTaperCeilingRadiusM = 300f;
         const float RouteSpeedTaperFloorShare = 0.5f;
 
         float RouteIdealSpeedForRadius(float r)
