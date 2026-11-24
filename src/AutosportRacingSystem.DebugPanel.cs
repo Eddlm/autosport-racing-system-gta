@@ -3,6 +3,7 @@ using GTA.Math;
 using GTA.Native;
 using System;
 using System.Drawing;
+using System.Globalization;
 
 namespace ARS
 {
@@ -23,6 +24,9 @@ namespace ARS
         static readonly Color PanelLabelColour = Color.White;
         const float PanelLabelY = 0.272f; // the label row, inside the band above its bottom edge
         const float PanelLabelScale = 0.35f;
+        const float PanelIntendedY = 0.008f; // the intended speed, at the top of the APEX and ROUT columns
+        const float PanelIntendedScale = 0.30f;
+        const float SpeedSentinelMps = 998f; // the term's own open sentinel: no corner ahead, or no finite radius
         static readonly string[] PanelLabels = { "THR", "STB", "FLR", "APEX", "ROUT", "BRAKE" };
 
         public static void DrawScreenRect(float left, float top, float right, float bottom, Color colour)
@@ -46,7 +50,8 @@ namespace ARS
         // floor bar shows the imposed floor (hidden when the Gs floor setting is off). Columns 4-5 are
         // margins against the corner's arrival speed and the route ask, centred on the middle: margin
         // above, deficit below, 30 m/s reaches a band edge; orange in range, grayed out beyond it both in
-        // bar and name. Column 0 also carries a bar hanging from the
+        // bar and name; columns 4-5 carry their intended speed at the top of the band in mph, so a learned
+        // change reads as a number even when the bar has re-settled. Column 0 also carries a bar hanging from the
         // band top down to the TCS cap line.
         static void DrawPanelBars(Racer racer, float barWidth, float speed)
         {
@@ -99,6 +104,10 @@ namespace ARS
                 Color colour = offline ? OfflineColour : PanelLabelColour;
                 float centreX = DebugPanelLeft + i * (barWidth + PanelBarGap) + barWidth * 0.5f;
                 DrawText(new Vector2(centreX, PanelLabelY), PanelLabels[i], colour, DrawTextFont.Standard, DrawTextAlign.Center, PanelLabelScale);
+                if (racer == null || i != BarsPerPedal && i != BarsPerPedal + 1) continue;
+                float intended = i == BarsPerPedal ? racer.CornerArrivalMps : racer.RouteTermMps;
+                string intendedMph = intended >= SpeedSentinelMps ? "-" : ARS.MpsToMph(intended).ToString("0", CultureInfo.InvariantCulture);
+                DrawText(new Vector2(centreX, PanelIntendedY), intendedMph, PanelLabelColour, DrawTextFont.Standard, DrawTextAlign.Center, PanelIntendedScale);
             }
         }
     }
