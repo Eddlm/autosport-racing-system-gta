@@ -2891,8 +2891,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float OffTrackSafeSpeedMph = 20f;
         const float OffTrackFullThrottleMph = 15f;
         const float OffTrackRecoverThrottle = 0.25f;
-        const float StabilityFallPerWheelPerSecond = 0.5f;
-        const float StabilityRisePerSecond = 2f;
+        const float StabilityFallPerSecond = 2f;
+        const float StabilityRisePerSecond = 1f;
         const float OverspeedArmMaxSlideDegrees = 2f;
         const float OverspeedArmMinSpeedMph = 30f;
         const float OverspeedArmMinForwardGs = 0.1f;
@@ -2953,7 +2953,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _tcsSmooth.Advance(TickScale);
             int wheelsOffGround = ARS.WheelsOffGround(Car);
             if (TrackSpeed.StabilityCap && wheelsOffGround > 0)
-                Control.MaxThrottleFromStability -= StabilityFallPerWheelPerSecond * wheelsOffGround * TickScale;
+                Control.MaxThrottleFromStability -= StabilityFallPerSecond * TickScale;
             else
                 Control.MaxThrottleFromStability += StabilityRisePerSecond * TickScale;
             Control.MaxThrottleFromStability = ARS.Clamp(Control.MaxThrottleFromStability, 0f, 1f);

@@ -1,12 +1,29 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2019** (`aa865edfc7eb222f`). The six changes described here are 1981's, **AL** is the newest, then **AJ**, **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2.5 m/s per pass since 1999 (`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 in 1997, 2 before that, 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2.5 m/s (`CornerSpeedLearnDeltaLimitMps`), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2020** (`7ab15895e264ead8`). The seven changes described here are 1981's, **AM** is the newest, then **AJ**, **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2.5 m/s per pass since 1999 (`CornerSpeedLearnNoSlideRiseMps` `2.5`, was 4 in 1997, 2 before that, 0.05 before that); clearance converts at 1 m/s per metre since 1996 (`CornerSpeedLearnMetreToOffset` `1`, was 0.66, and 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2.5 m/s (`CornerSpeedLearnDeltaLimitMps`), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
 **Section P is closed** (all eighteen verified). **76 open rows below**; everything already driven or disposed of
 sits in **Answered** at the bottom, out of the way, with **81** closed rows under it. The detail of the 30-10 hunt
 stays in `docs/audit/410-hunt-2026-10-30.md`.
+
+---
+
+## AM · 2026-11-24 (2020) — the stability cap drains on any wheel, at one rate
+
+⬜ Not driven. Compile-only.
+
+The fall was per wheel: `StabilityFallPerWheelPerSecond` charged one rate for *each* wheel reading off the ground, so
+a single lifted wheel barely moved the cap while four of them emptied it four times as fast. It is now one rate for
+the whole car — `StabilityFallPerSecond` applies whenever `ARS.WheelsOffGround(Car)` reads above zero, and nothing
+scales it by the count. Since the old rate at four wheels was already the new one, what moves on the track is the
+single lifted wheel: it now closes the throttle as hard as a full airborne moment did. The rise,
+`StabilityRisePerSecond`, is halved to a steady return at half the fall's rate, so a kerb or a crest costs throttle
+quickly and gives it back slowly.
+
+What to judge: whether a lifted wheel on a kerb now closes the pedal too hard, and whether the cap comes back fast
+enough after a crest to keep the car driving off it.
 
 ---
 
