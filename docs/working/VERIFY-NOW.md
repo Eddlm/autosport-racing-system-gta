@@ -1,6 +1,6 @@
 # VERIFY IN GAME — outstanding
 
-Build deployed: **2030** (`393504e67490a56a`). The nine changes described here are 1981's, **AO** is the newest, then **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2 m/s per pass since 2025 (`CornerSpeedLearnNoSlideRiseMps` `2`, was 2.5 from 1999, 4 in 1997, 0.05 before that); clearance converts at half a metre per second per metre since 2026 (`CornerSpeedLearnMetreToOffset` `0.5`, was 1 from 1996, 0.66 before that, 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2 m/s (`CornerSpeedLearnDeltaLimitMps`, 2.5 until 2025), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
+Build deployed: **2048** (`1740ca1c1c7900e0`). The ten changes described here are 1981's, **AP** is the newest, then **AO**, **AN**, **AM**, **AL**, **AJ**, **AI**, **AH**, **AG**, and 1983-1994 carried the log buffer and the debug-menu sweep without touching a driving law. This is 1962 plus six changes: the corner-mode latch is split into a speed authority that ends at the apex and a two-second verdict window past it, with the held speed ramping back to the route term over one second (`ApexRampMs` `1000`, `CornerVerdictMs` `2000`; `CornerModePostApexHoldMs`, the `750`-ms hold of 1969, is deleted — the split law in **AF**); the corner takes over the tick its own braking envelope drops below the car's forward speed — the rampdown asking for a lift — with the route term ignored while the corner holds, and the only pre-apex exit the car falling 25 m/s under the corner's demand, untimed (build 1980; `RouteHoldReleaseMs`, the 250 ms route-side release, is deleted — the law in **AF**); the corner-speed learner's no-slide rise is 2 m/s per pass since 2025 (`CornerSpeedLearnNoSlideRiseMps` `2`, was 2.5 from 1999, 4 in 1997, 0.05 before that); clearance converts at half a metre per second per metre since 2026 (`CornerSpeedLearnMetreToOffset` `0.5`, was 1 from 1996, 0.66 before that, 0.05 before that); the route band averages its two tightest nodes (`RouteRadiusMeanCount` `2`, was `5`); and the route-speed offset has a live fall again — the projection law in **AE**. The ±10 corner clamp is unchanged, and since 1998 one pass moves a corner by at most ±2 m/s (`CornerSpeedLearnDeltaLimitMps`, 2.5 until 2025), because a wide track reads enough clearance in a single pass to swing it by a dozen at once. What is ✅ is yours, verified in game; what is ⬜ is still **compile-only**.
 Tick a line with `[x]` or tell me «verified N» and I update this file. Quotes in «…» are your own words,
 translated where you spoke Spanish.
 
@@ -10,7 +10,7 @@ stays in `docs/audit/410-hunt-2026-10-30.md`.
 
 ---
 
-## AO · 2026-11-24 (2027 → 2030) — the route speed rise reads the projection, not a radius band
+## AO · 2026-11-24 (2027 → 2048) — the route speed rise reads the projection, not a radius band
 
 ⬜ Not driven. Compile-only.
 
@@ -20,6 +20,14 @@ projection against the car in lateral metres — the same `_projectionWidenMeter
 ahead — and rises while that number is above zero and under `RouteSpeedLearnWidenM`: the projection outside the
 car, so the car is using the road, but short of the wash-out line. At or past that line the fall answers. One
 measurement, one threshold, and its two sides.
+
+**The two offsets are lane against lane (2032).** The widen first compared the projection against the car's own
+node frame, where the road's curvature dominates: a ballistic projection a second out on a tight bend reads several
+metres off the centreline while the car reads near it, so the number sat past the widen line on every corner, the
+rise band was unreachable, and the subtitle stayed red while the fall stayed armed. Both offsets now come from their
+own nearest node — the projection's lane against the car's lane — so the number moves only when the car's own line
+does. The subtitle changed with it, since it prints the same number.
+
 The band, its two constants and the car-over-track percentage are gone with it: the radius pair, its clamped-open sentinel and the helper that measured them are deleted, and the tuning subtitle prints the widen itself in metres — green when it is inside the rise threshold, red when it is past the fall's.
 
 The gates, in order: off corner mode, the route term in charge, `ThrottleDemand` under `RouteSpeedLearnThrottle`
@@ -33,6 +41,32 @@ is where washing out mostly happens; only the rise is kept off the corners.
 What to judge: whether the offset now climbs on roads it used to leave alone, and whether a car merely pointing
 inside at low slide earns speed it has not demonstrated.
 
+**What changed after the first drives (2035 → 2048):** the demand gate became "the route is lifting the car" — a
+demand pinned at full means the car is still chasing its target — and the steering gate is gone, because the
+projection test already implies the wheel is doing something. The widen itself is now read at
+`SteerPreviewSeconds`, the horizon the steering aims at, instead of a full second: a ballistic second cuts metres
+inside any bend (the sagitta, `v²t²/2R`), which made the band unreachable and the subtitle red. The node is the
+nearest in 2D within two seconds of travel. Measured after the change: the offset climbs 0.0 → 0.2 mph in 37 s of
+ordinary driving — it works, it is simply starved of windows, which is the open question.
+
+---
+
+## AP · 2026-11-24 (2046) — the verdict's metre is a deadzone, and the width stops being subtracted twice
+
+⬜ Not driven. Compile-only.
+
+`CornerSpeedLearnVerdictMarginMetres` no longer shifts the balance, it silences it: a pass whose worst clearance sits
+between zero and the margin — inside the paint, within a metre of it — writes nothing and announces nothing. Past the
+margin the room beyond it is the rise, at `CornerSpeedLearnMetreToOffset`; a clearance under zero, the car's outer side
+over the line, is the deduction at the same scale. Off the track is clearance under zero, not under the margin: the
+clearance is already measured from the outer flank.
+
+The old expression also took `VehicleData.BoundingBox` off the clearance a second time — `outsideReach` already carries
+half the bounding box — so the width is now counted once, where it is measured, and the metre is the only band left.
+
+What to judge: whether a car holding the paint now learns nothing at all, which is the point, and whether the
+deductions begin where the tyre actually crosses the line.
+
 ---
 
 ## AN · 2026-11-24 (2025) — one verdict moves a corner by 2 m/s at most
@@ -44,9 +78,7 @@ as well — the off-track hit pays the same limit and deducts 2 for it. The clea
 `CornerSpeedLearnNoSlideRiseMps` comes down with it: it was already clamped by the step limit, so the clamp did the
 work while the constant claimed a rise it never got.
 
-The scale underneath is unchanged in shape and halved in rate: the verdict reads the pass's worst outside clearance in metres, takes off the
-car's width and the verdict margin, and converts at `CornerSpeedLearnMetreToOffset` — half a metre per second for each
-metre of room, so it takes four metres of clearance to reach the step limit. The stored offset keeps its ±10 m/s clamp.
+The scale underneath is unchanged in shape and halved in rate: the verdict reads the pass's worst outside clearance in metres — the gap from the car's outer side to the paint — and converts at `CornerSpeedLearnMetreToOffset` — half a metre per second for each metre of room past the margin, so it takes six metres of clearance to reach the step limit. The stored offset keeps its ±10 m/s clamp.
 
 What to judge: whether a corner now takes too many passes to walk up to its limit, and whether a genuinely wide
 pass still reads as a deduction rather than a nudge.

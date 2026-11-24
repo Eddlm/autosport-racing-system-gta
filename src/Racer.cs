@@ -351,10 +351,10 @@ namespace ARS
 
         int _offshootLogAt = 0;
         const float BrakeFactorSeed = 0.60f;
-        const float BrakeFactorMin = 0.50f;
+        const float BrakeFactorMin = 0.33f;
         const float BrakeFactorMax = 1.30f;
         public const float BrakeRampIdealDeltaMps = 0.5f;
-        const float BrakeRampErrorDivisor = 50f;
+        const float BrakeRampErrorDivisor = 20f;
         const float CornerTightRadius = 50f;
         const float RequirementExtrapolationScale = 0.9f;
         const float PositionExcessMph = 10f;
@@ -372,7 +372,6 @@ namespace ARS
         // Corner speed learning: the car's own clearance from the corner's outer edge decides the offset,
         // measured once past the apex. Scaled by metres, clamped both ways; the switch is a boolean, the scale and
         // the limit are code.
-        const float CornerSpeedLearnAheadShare = 0.5f;
         const float CornerSpeedLearnLimitMps = 10f;
         // One pass moves a corner by at most this much either way. The scale converts metres of clearance, and on a
         // wide track a single pass reads enough of them to swing the corner by a dozen metres a second at once.
@@ -400,14 +399,13 @@ namespace ARS
         const float CornerSpeedLearnReleaseMetres = 40f;
         // How close to an apex node counts as having reached it, in metres; the call widens it for fast cars.
         const float ApexReachedMetres = 3f;
-        // Route speed learning: the percentage the car holds against the track, with the bands and pedal states
-        // his spec fixes. It rises only under light throttle, never on the brake; it falls only at full throttle
-        // while the car steers into the bend and its projection still lands outside.
-        const float RouteSpeedLearnThrottle = 0.9f;
-        const float RouteSpeedLearnBrake = 0f;
+        // Route speed learning: the pedal states his spec fixes. It rises only while the route is lifting the car,
+        // never on the brake; it falls only at full throttle while the car steers into the bend and its projection
+        // still lands outside.
+        const float RouteSpeedLearnBrake = 0.5f;
         const float RouteSpeedLearnFullThrottle = 0.9f;
         const float RouteSpeedLearnRateMph = 1f;
-                const float RouteSpeedLearnMinSlideShare = 0.2f;
+        const float RouteSpeedLearnMinSlideShare = 0.2f;
         const float RouteSpeedLearnSteerMin = 0.05f;
         const float RouteSpeedLearnWidenM = 0.5f;
         const float RouteSpeedLearnFallShareOfRate = 0.5f;
@@ -2097,7 +2095,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 Vector3 proj = ProjectAhead(seconds);
 
-                int projectionWindow = (int)(Car.Velocity.Length() * seconds) + 10;
+                // Nearest node in 2D over the next two seconds: the projection cuts corners, so the node at its
+                // own distance is not the node beside it, and the lane that decides is the one it lands on.
+                int projectionWindow = (int)(Car.Velocity.Length() * 2f);
                 TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node, 0, projectionWindow);
                 signedOffset = ARS.SignedLaneOffset(proj, tp.Position, tp.Direction);
                 halfWidth = Math.Max(tp.TrackHalfWidth, 0.1f);
@@ -2109,9 +2109,14 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _projectionOutsideMeters = outsideOffset - halfWidth;
                 _projectionCenterOffset = signedOffset;
                 _projectionHalfWidth = halfWidth;
-                float projectionSigned = ARS.SignedLaneOffset(proj, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
-                _projectionWidenMeters = Math.Abs(projectionSigned) - carOffset;
-                _projectionWidenSign = Math.Sign(projectionSigned);
+                // The widen reads the car's own line at the horizon the steering aims at, not the cut's: a ballistic
+                // second is metres inside any bend, half a second is decimetres. Window is twice that horizon.
+                Vector3 widenProj = ProjectAhead(SteerPreviewSeconds);
+                int widenWindow = (int)(Car.Velocity.Length() * SteerPreviewSeconds * 2f);
+                TrackPoint widenNode = ARS.FindNearestTrackPoint(widenProj, CurrentTrackPoint.Node, 0, widenWindow);
+                float widenSigned = ARS.SignedLaneOffset(widenProj, widenNode.Position, widenNode.Direction);
+                _projectionWidenMeters = Math.Abs(widenSigned) - carOffset;
+                _projectionWidenSign = Math.Sign(widenSigned);
                 _projectionWidening = _projectionWidenMeters > 0f;
             }
 
@@ -2132,7 +2137,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             Vector3 proj = ProjectAhead(1f);
 
-            int projectionWindow = (int)(Car.Velocity.Length()) + 10;
+            // Nearest node in 2D over the next two seconds - the same search the widen uses.
+            int projectionWindow = (int)(Car.Velocity.Length() * 2f);
             TrackPoint tp = ARS.FindNearestTrackPoint(proj, CurrentTrackPoint.Node, 0, projectionWindow);
             float carOffset = Math.Abs(ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction));
             float projectionOffset = Math.Abs(ARS.SignedLaneOffset(proj, tp.Position, tp.Direction));
@@ -2328,12 +2334,21 @@ const float RequirementLookaheadSeconds = 3.95f;
             string id = CornerId(apexNode);
             bool hadSlipSample = _cornerSpeedOutsideSamples > 0;
             float clearance = hadSlipSample ? _cornerSpeedWorstOutsideClear : float.NaN;
-            // The comparison carries a car's width plus a metre, so the balance sits short of the white line and a
-            // pass still near the paint is already a deduction rather than a rise.
-            float verdictClearance = hadSlipSample
-                ? clearance - VehicleData.BoundingBox - CornerSpeedLearnVerdictMarginMetres
-                : float.NaN;
-            float delta = hadSlipSample ? verdictClearance * CornerSpeedLearnMetreToOffset : CornerSpeedLearnNoSlideRiseMps;
+            // His law: the metre is a deadzone, not a subtraction. The clearance is already the gap from the car's
+            // outer side to the paint, so inside-but-within-a-metre teaches nothing; past the metre the gap is room
+            // to spend, and a side over the line - clearance under zero - is a deduction.
+            float verdictClearance = float.NaN;
+            float delta = CornerSpeedLearnNoSlideRiseMps;
+            if (hadSlipSample)
+            {
+                if (clearance > CornerSpeedLearnVerdictMarginMetres)
+                    verdictClearance = clearance - CornerSpeedLearnVerdictMarginMetres;
+                else if (clearance < 0f)
+                    verdictClearance = clearance;
+                else
+                    return;
+                delta = verdictClearance * CornerSpeedLearnMetreToOffset;
+            }
             // Per pass, never more than the step limit: the stored offset keeps its own ±10 clamp, this one only
             // bounds how far one corner can travel in one go.
             delta = ARS.Clamp(delta, -CornerSpeedLearnDeltaLimitMps, CornerSpeedLearnDeltaLimitMps);
@@ -2345,8 +2360,6 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             CornerContextForWrite(apexNode).CornerSpeedOffsetMps = after;
             float applied = after - before;
-            float aheadGain = 0f;
-            if (applied > 0f) aheadGain = NudgeFollowingCorner(apexNode, applied * CornerSpeedLearnAheadShare);
 
             string deltaText = (applied >= 0f ? "+" : "") + applied.ToString("0.00", CultureInfo.InvariantCulture) + " m/s";
             string peakText = hadSlipSample
@@ -2364,34 +2377,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             // The reason carries the colour, not the value: a deduction is read off the room the corner left.
             if (applied < 0f) reasonText = "~r~" + reasonText + "~w~";
             AnnounceCornerSpeedAdjustment(id + " · " + peakText + verdictText + " · " + deltaText + offtrack
-                + (lostControl ? " · lost control, deduction voided" : "")
-                + (aheadGain > 0f ? " · ahead " + FormatCornerSpeedOffset2(aheadGain) : ""),
+                + (lostControl ? " · lost control, deduction voided" : ""),
                 reasonText + " - " + deltaText);
         }
 
-        static string FormatCornerSpeedOffset2(float offset) => offset.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture) + " m/s";
-
-        // His spec: a clean rise hands half of itself to the corner ahead, because the speed carried out of this
-        // one is speed the next one was entered with. Returns the gain actually given, for the log line.
-        float NudgeFollowingCorner(int apexNode, float gain)
-        {
-            CornerPoint ahead = null;
-            foreach (CornerPoint corner in ARS.Corners)
-            {
-                if (corner.Node <= apexNode) continue;
-                if (ahead == null || corner.Node < ahead.Node) ahead = corner;
-            }
-            // On a closed circuit the corner ahead of the last one is the first one.
-            if (ahead == null && !ARS.IsPointToPoint)
-                foreach (CornerPoint corner in ARS.Corners)
-                    if (corner.Node != apexNode && (ahead == null || corner.Node < ahead.Node)) ahead = corner;
-            if (ahead == null || ahead.Node == apexNode) return 0f;
-
-            float before = TryGetCornerContext(ahead.Node, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
-            float after = ARS.Clamp(before + gain, -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
-            CornerContextForWrite(ahead.Node).CornerSpeedOffsetMps = after;
-            return after - before;
-        }
 
         // The nearest corner ahead, whatever the plan queue is doing: the override needs a corner number to compare
         // against the route term, and the queue is not reliable enough to supply it.
@@ -3795,7 +3784,8 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             if (_cornerMode || Brain.CurrentIntention.Term != SpeedTerm.Route) return;
             // The ask, not the pedal: a cap that pulled the pedal down is not the car choosing light throttle.
-            if (Control.ThrottleDemand >= RouteSpeedLearnThrottle || Control.ThrottleLimited) return;
+            // The route has to be lifting the car: a demand pinned at full is the car still chasing its target.
+            if (Control.ThrottleDemand >= 1f || Control.ThrottleLimited) return;
             if (Control.Brake > RouteSpeedLearnBrake) return;
             if (!ProjectionWideningWithinLimit()) return;
             float slideAbs = Math.Abs(VehicleData.SlideAngle);

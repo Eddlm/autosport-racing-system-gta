@@ -2176,11 +2176,13 @@ namespace ARS
                 if (DebugToggles[Options.ShowThrottleReason])
                     DrawThrottleReason(DebugFocusRacer ?? PlayerRacer ?? (Racers.Count > 0 ? Racers[0] : null));
 
-                // The car's own path against the track's radius at its node, as a bare percentage: over 100 the car
-                // is running wider than the track asks. Measured on the car closest to the player, like every readout.
+                // The learner only runs in the AI pedal path, so the readout picks a car that learns: the focus car
+                // if one is set, else the nearest rival - never the player's racer, whose offset can only stay zero.
                 if (raceLive && DebugToggles[Options.ShowCurveRadius])
                 {
-                    Racer curveRacer = DebugFocusRacer ?? PlayerRacer ?? Racers.OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault();
+                    Racer curveRacer = DebugFocusRacer
+                        ?? Racers.Where(c => !c.ControlledByPlayer).OrderBy(c => c.Car.Position.DistanceTo(player.Character.Position)).FirstOrDefault()
+                        ?? PlayerRacer;
                     if (curveRacer != null && CanWeUse(curveRacer.Car)) curveRacer.DrawRouteSpeedSubtitle();
                 }
 
