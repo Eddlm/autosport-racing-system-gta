@@ -865,13 +865,16 @@ namespace ARS
                     _shapeErrLastNode = hereNode;
                 }
             }
-            // TEMPORARY, hardcoded (owner, 2026-11-23): the dynamic lean asks the whole lane instead of a share of it,
-            // so the degrees cap is the only thing shaping how fast the car takes the inside. false restores 125 /
-            // radius. grep TEMPORARY to find it.
-            const bool LaneInsideFullLean = true;
-            float dynamicInset = LaneInsideFullLean
-                ? laneLimit
-                : Math.Min(laneLimit, ARS.LaneInsetPerRadius / Math.Max(1f, aimRadius));
+            // The lean is an angle ramped by radius now: nothing at LaneLeanMaxRadius, LaneLeanMaxDegrees by
+            // LaneLeanMinRadius and flat inside it. The angle is walked into an offset over the lookahead, so the ask
+            // scales with speed and saturates at the lane wall - it can never exceed the bound. Remap is called with
+            // the input descending (400 to 100) so its clamp gets an ascending output pair.
+            float leanDeg = ARS.Remap(aimRadius, LaneLeanMaxRadius, LaneLeanMinRadius, 0f, LaneLeanMaxDegrees, true);
+            Vector3 toSteerRef = steerRefPoint.Position - Car.Position;
+            toSteerRef.Z = 0f;
+            float leanLookahead = Math.Max(toSteerRef.Length(), 1f);
+            float dynamicInset = Math.Min(laneLimit,
+                leanLookahead * (float)Math.Sin(ARS.DegToRad(leanDeg)));
             bool dynamicOwns = false;
             float dynamicAsk = steerRefOffset + ARS.LaneInsideSign * LaneTurnSignToAim(ARS.TrackPoints[steerRefPoint.Node]) * dynamicInset;
             dynamicOwns = !following && Lap > 0 && aimRadius <= ARS.LaneDynamicRadius;
@@ -1221,6 +1224,11 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float IdealLineBlendWidthFactor = 6f;
         const float IdealLineBlendMinMeters = 20f;
         public const float IdealLineMaxRadiusMeters = 50f;
+        // The inside lean is an angle ramped by radius: nothing at the wide end, the maximum by the tight end, flat
+        // inside it. Walked into an offset over the lookahead, it scales with speed and saturates at the lane wall.
+        const float LaneLeanMaxRadius = 400f;
+        const float LaneLeanMinRadius = 100f;
+        const float LaneLeanMaxDegrees = 20f;
 
         bool CornerIsLaned(CornerPoint corner) => corner.DetectedRadius < IdealLineMaxRadiusMeters;
 

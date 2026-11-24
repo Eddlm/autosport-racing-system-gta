@@ -258,9 +258,9 @@ converges, so the *bearing* would have to grow as the car falls short. The corne
 of target, because it is a function of the distance to the apex and the car has to arrive somewhere.
 
 The lane is the other kind whenever it is a **lean into a bend**: the lean stays alive for as long as the bend
-lasts, the bound is the edge rather than the answer, and nothing has to be unwound when the bend ends. The share
-is proportional to how tight the bend is — nothing where a bend has stopped mattering, the whole share
-inside the tight end, and the far edge only ever the bound. This is not the standing-error failure
+lasts, the bound is the edge rather than the answer, and nothing has to be unwound when the bend ends. The lean is stated as an **angle** — nothing at four hundred metres of radius, twenty degrees by a
+hundred, flat inside that — and walked into an offset over the lookahead, so the ask grows with speed and
+saturates at the lane wall instead of naming a position the car is told to reach. This is not the standing-error failure
 above: there the error never closed, whereas here the bound is what ends the move.
 
 **Three shapes were rejected on the way, each because of what the geometry actually is.** Answering
