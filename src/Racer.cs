@@ -384,6 +384,9 @@ namespace ARS
         // A contact inside this much time poisons the pass: the acceleration trace is the measurement, so a hit
         // makes the numbers untrustworthy. No contact ever reads as infinite and passes.
         const int CornerSpeedLearnQuietContactMs = 4000;
+        // A hit this soon after going off the road is the corner being too fast, not bad data to discard: that case
+        // pays the step limit instead of being voided, or the wrong speed would be stuck on the corner for good.
+        const int CornerSpeedLearnHitOffTrackMs = 1000;
         // One metre of room past the verdict margin is one metre per second of offset, both ways: a pass a metre
         // clear of the balance line earns 1 m/s, one that lands a metre short of it pays the same.
         const float CornerSpeedLearnMetreToOffset = 1f;
@@ -415,6 +418,7 @@ namespace ARS
         int _cornerSpeedLastSampleMs = -1;
         float _cornerSpeedWorstOutsideClear = float.MaxValue;
         float _cornerSpeedWorstSlideDeg;
+        bool _cornerSpeedHitOffTrack;
         int _cornerSpeedOutsideSamples;
         // Route is the default authority; a corner is an override that latches while it owns the car.
         // The corner owns the speed to its apex; past it the held speed ramps to the live route term, and the
@@ -2242,6 +2246,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             ReleaseCornerSpeedLocks();
 
             if (_cornerSpeedApexNode < 0) return;
+
+            // A hit while off the road is the corner being too fast, so it is latched rather than sampled: by the
+            // commit the car may be back on the surface and the contact older than a second, and the latch is what
+            // survives that.
+            if (!_cornerSpeedHitOffTrack && MsSinceContact() < CornerSpeedLearnHitOffTrackMs && OutOfTrackDistance() > 0f)
+                _cornerSpeedHitOffTrack = true;
             if (!HasPassedApex(_cornerSpeedApexNode)) return;
             if (VehicleData.LastAccelSampleTime == _cornerSpeedLastSampleMs || TRLateralAtSpeed <= 0.01f) return;
 
@@ -2274,6 +2284,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _cornerSpeedWorstOutsideClear = float.MaxValue;
             _cornerSpeedOutsideSamples = 0;
             _cornerSpeedWorstSlideDeg = 0f;
+            _cornerSpeedHitOffTrack = false;
         }
 
         void CommitCornerSpeedLearningFor(int apexNode)
@@ -2292,6 +2303,22 @@ const float RequirementLookaheadSeconds = 3.95f;
             // seconds makes it untrustworthy. Four quiet seconds and the pass is good; no contact ever passes too.
             if (MsSinceContact() < CornerSpeedLearnQuietContactMs)
             {
+                // The exception: a hit that landed off the road is the verdict being right, not the data being bad.
+                // Deduct the step limit, because voiding here is what keeps a too-fast corner too fast forever.
+                if (_cornerSpeedHitOffTrack)
+                {
+                    float hitBefore = TryGetCornerContext(apexNode, out CornerContext hitContext) ? hitContext.CornerSpeedOffsetMps : 0f;
+                    float hitAfter = ARS.Clamp(hitBefore - CornerSpeedLearnDeltaLimitMps,
+                        -CornerSpeedLearnLimitMps, CornerSpeedLearnLimitMps);
+                    CornerContextForWrite(apexNode).CornerSpeedOffsetMps = hitAfter;
+                    float hitApplied = hitAfter - hitBefore;
+                    string hitDelta = (hitApplied >= 0f ? "+" : "")
+                        + hitApplied.ToString("0.00", CultureInfo.InvariantCulture) + " m/s";
+                    AnnounceCornerSpeedAdjustment(CornerId(apexNode) + " · hit off track, " + MsSinceContact()
+                        + " ms ago · " + hitDelta, "~r~hit off track~w~ - " + hitDelta);
+                    return;
+                }
+
                 AnnounceCornerSpeedAdjustment(CornerId(apexNode) + " · voided, contact " + MsSinceContact() + " ms ago",
                     "hit - no change");
                 return;
