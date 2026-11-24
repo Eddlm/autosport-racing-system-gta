@@ -1230,8 +1230,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         public const float IdealLineMaxRadiusMeters = 50f;
         // The inside lean is an angle ramped by radius: nothing at the wide end, the maximum by the tight end, flat
         // inside it. Walked into an offset over the lookahead, it scales with speed and saturates at the lane wall.
-        const float LaneLeanMaxRadius = 400f;
-        const float LaneLeanMinRadius = 100f;
+        const float LaneLeanMaxRadius = 800f;
+        const float LaneLeanMinRadius = 200f;
         const float LaneLeanMaxDegrees = 20f;
 
         bool CornerIsLaned(CornerPoint corner) => corner.DetectedRadius < IdealLineMaxRadiusMeters;
