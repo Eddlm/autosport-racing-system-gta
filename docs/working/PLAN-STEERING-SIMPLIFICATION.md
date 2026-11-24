@@ -46,7 +46,7 @@ time this map is quoted.
 
 **Command — `ComputeSteering`**
 
-- **`_slidePriority`** (584) — the blend's weight: zero at a quarter of the authored peak slip, one at half of it.
+- **`_countersteerDemand01`** (584) — the blend's weight: zero at a quarter of the authored peak slip, one at half of it.
   Consumers: the blend (610), the limiter's countersteer allowance (1186), `IsFullCountersteer`.
 - **Aim reference** (587-589) — `yawTarget` from the aim point's curvature, gated off once the slide passes
   `SlidingFraction` of the peak slip.
@@ -54,7 +54,7 @@ time this map is quoted.
   then the part past neutral, where it is countersteering, keeps **half** its authority.
 - **Assembly** (604) — side-by-side + damper + lane.
 - **Slide blend** (606-611) — a lerp of the **whole** command toward `side-by-side − slide × share`, weighted by
-  `_slidePriority`. It is a lerp, not an addition, so it can both raise and cut.
+  `_countersteerDemand01`. It is a lerp, not an addition, so it can both raise and cut.
 - **Aligned-wheel deadband** (616) — the command is zeroed when the aim bearing is small and no slide is steering it.
 
 **Limit — `ApplySteerLimits`**

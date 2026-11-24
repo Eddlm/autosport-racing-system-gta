@@ -26,7 +26,7 @@ look like they describe the same number when they describe two.
 | # | What it is | Today | Proposed | Note |
 |---|---|---|---|---|
 | 1 | Where the car is, in the steer reference's frame | `carOffset` (`Racer.cs:547`, passed at `:553`, `:568`) | `referenceOffset` | the chain, the mover, the lean and the pursuit all use this one |
-| 2 | Where the car is, in the current track node's frame | `Brain.CurrentPerception.DeviationFromCenter` (`DataStructures.cs:123`, set `Racer.cs:2966`, read `:998`, `:2865`, `:3815`, `:3918`, `DataStructures.cs:200`, `:276`, `AutosportRacingSystem.cs:1808`) | `CurrentNodeOffset` | the debug green line and a rival's occupied lane read this one; in a bend the two frames differ by about the lookahead squared over the radius |
+| 2 | Where the car is, in the current track node's frame | `Brain.CurrentPerception.DeviationFromCenter` (`DataStructures.cs:123`, set `Racer.cs:2966`, read `:998`, `:2865`, `:3815`, `:3918`, `DataStructures.cs:200`, `:276`, `AutosportRacingSystem.cs:1808`) | `CurrentLaneOffsetMetres` | the debug green line and a rival's occupied lane read this one; in a bend the two frames differ by about the lookahead squared over the radius |
 | 3 | What the chain asks for | `_laneRequest` / `LaneRequestReason` (`Racer.cs:155`) | unchanged | already the right word, and the reason tag belongs to it |
 | 4 | What the mover carries, and what steering aims at | `_targetLane` / `TargetLane` (`Racer.cs:154`) | `_aimedLane` / `AimedLane` | the prose already says "the aimed lane" everywhere |
 | 5 | The offset the aim point carries, after the Gs lead | `aimLane` (`Racer.cs:575`, `:579`, `:582`) | `aimPointOffset` | a fifth thing, absent from the user's list of three |
@@ -64,7 +64,7 @@ Lead has to resolve. Each block ends in the call it asks for.
 
 > REV: row 1 — right quantity, wrong name. `carOffset` at `:547` is correct and the note is right that the chain, the mover, the lean and the pursuit all use it. But `referenceOffset` collides in a direction the map does not check: "reference" is already spent twice in this file's own tree — `SteerDampingAimReference` (`Racer.cs:1147`) and `SteerCapGripReference` (`:1164`) — while the frame's own local is `steerRefPoint`, so `steerRefOffset` says which reference and matches the code. Consumer list for the rename: `:551` (the seed), `:553` (the lean), `:561` (the recovery), `:568` (the mover), `:569` (the flag), `:579` (the preview), `:892` (the interval clamp). Call: rename to `steerRefOffset`.
 
-> REV: row 2 — right, with two additions. The frame diagnosis and the "lookahead squared over the radius" note are both correct and the line set checks out. Add: the quantity has a third name in the tree, `currentLaneMeters` (`Racer.cs:1024`, a parameter of `TryPickAvoidanceSide`, passed from `ComputeAvoidAheadLane`), so a rename has three names to fix, not one. `CurrentNodeOffset` is acceptable — the project does say "node" (`CurrentTrackPoint.Node`, `OffsetCornerNode`) — though the field it renames lives on `CurrentPerception`; the code's own word would be `CurrentTrackPointOffset`. Call: accept `CurrentNodeOffset`, and note `currentLaneMeters` in the row.
+> REV: row 2 — right, with two additions. The frame diagnosis and the "lookahead squared over the radius" note are both correct and the line set checks out. Add: the quantity has a third name in the tree, `currentLaneMeters` (`Racer.cs:1024`, a parameter of `TryPickAvoidanceSide`, passed from `ComputeAvoidAheadLane`), so a rename has three names to fix, not one. `CurrentLaneOffsetMetres` is acceptable — the project does say "node" (`CurrentTrackPoint.Node`, `OffsetCornerNode`) — though the field it renames lives on `CurrentPerception`; the code's own word would be `CurrentTrackPointOffset`. Call: accept `CurrentLaneOffsetMetres`, and note `currentLaneMeters` in the row.
 
 > REV: row 3 — right, leave it. `_laneRequest`/`LaneRequestReason` is the one place the word is exact, and folding the tag into this row is right: the tag is not a lane at all, only its owner is. Call: no change.
 
@@ -106,7 +106,7 @@ Every block above is resolved here, in the file's own order. Where a proposal wa
 |---|---|
 | map errors | fixed: row 11's `insideBound` cite is `:835`, and row 10 is settled below |
 | row 1 | accepted `steerRefOffset`; refused `referenceOffset`, because "reference" is already spent twice |
-| row 2 | accepted `CurrentNodeOffset`; `currentLaneMeters` stands as the third name and is renamed with it |
+| row 2 | accepted `CurrentLaneOffsetMetres`; `currentLaneMeters` stands as the third name and is renamed with it |
 | row 3 | no change |
 | row 4 | accepted `CarriedLane` / `_carriedLane`; refused `AimedLane`, which would put a fourth "aim" on the quantity the old flag was about |
 | row 5 | no rename; `laneAtProjection` is recorded as a quantity of its own and named `offsetAtProjection` |
@@ -129,7 +129,7 @@ Every block above is resolved here, in the file's own order. Where a proposal wa
 | Today | Becomes |
 |---|---|
 | `carOffset` | `steerRefOffset` |
-| `Brain.CurrentPerception.DeviationFromCenter` | `CurrentNodeOffset` |
+| `Brain.CurrentPerception.DeviationFromCenter` | `CurrentLaneOffsetMetres` |
 | `Rival.OccupiedLane` | `Rival.NodeOffset` |
 | `Rival.OccupiedLaneWidth` | `Rival.CombinedWidth` |
 | `currentLaneMeters` (parameter) | `nodeOffset` |

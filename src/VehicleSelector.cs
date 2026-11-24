@@ -8,7 +8,7 @@ namespace ARS
     public static class VehicleSelector
     {
 
-        public static List<string> SelectClosestByPace(List<string> pool, Dictionary<string, float> paceIndex, int maxCars, Func<int, int, int> random, Action<string> log, float powerTarget, int maxDeviation)
+        public static List<string> SelectClosestByPace(List<string> pool, Dictionary<string, float> paceIndex, int maxCars, Func<int, int, int> random, Action<string> log, float paceTarget, int maxDeviation)
         {
             List<KeyValuePair<float, string>> ranked = new List<KeyValuePair<float, string>>();
             int inspected = 0;
@@ -21,12 +21,12 @@ namespace ARS
                 if (paceIndex.TryGetValue(key, out pace))
                 {
 
-                    if (maxDeviation > 0 && Math.Abs(Math.Round(pace) - Math.Round(powerTarget)) > maxDeviation) outsideLimit++;
-                    else ranked.Add(new KeyValuePair<float, string>(Math.Abs(pace - powerTarget), key));
+                    if (maxDeviation > 0 && Math.Abs(Math.Round(pace) - Math.Round(paceTarget)) > maxDeviation) outsideLimit++;
+                    else ranked.Add(new KeyValuePair<float, string>(Math.Abs(pace - paceTarget), key));
                 }
                 if (++inspected % 10 == 0) log("Ranking progress: " + inspected + "/" + pool.Count);
             }
-            if (maxDeviation > 0) log("PI limit " + maxDeviation + " around " + Math.Round(powerTarget) + ": " + ranked.Count + " of " + (ranked.Count + outsideLimit) + " paced models are inside it");
+            if (maxDeviation > 0) log("PI limit " + maxDeviation + " around " + Math.Round(paceTarget) + ": " + ranked.Count + " of " + (ranked.Count + outsideLimit) + " paced models are inside it");
 
             Shuffle(ranked, random);
             List<KeyValuePair<float, string>> ordered = ranked.OrderBy(pair => pair.Key).ToList();

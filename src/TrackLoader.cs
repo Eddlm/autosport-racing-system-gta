@@ -89,15 +89,15 @@ namespace ARS
                     int.TryParse(prop.SelectSingleNode("Model").InnerText, out hash);
                     if (hash != 0 && new Model(hash).IsValid)
                     {
-                        Prop myprop = World.CreateProp(hash, pos, rot, false, false);
-                        myprop.Position = pos;
-                        Function.Call(Hash.SET_ENTITY_DYNAMIC, myprop, isDynamic);
-                        Function.Call(Hash.FREEZE_ENTITY_POSITION, myprop, !isDynamic);
-                        Function.Call(Hash.SET_OBJECT_PHYSICS_PARAMS, myprop, 200f * myprop.Model.GetDimensions().Length(), 1f);
+                        Prop createdProp = World.CreateProp(hash, pos, rot, false, false);
+                        createdProp.Position = pos;
+                        Function.Call(Hash.SET_ENTITY_DYNAMIC, createdProp, isDynamic);
+                        Function.Call(Hash.FREEZE_ENTITY_POSITION, createdProp, !isDynamic);
+                        Function.Call(Hash.SET_OBJECT_PHYSICS_PARAMS, createdProp, 200f * createdProp.Model.GetDimensions().Length(), 1f);
 
-                        if (prop.SelectSingleNode("TextureVariation") != null) Function.Call(Hash._0x971DA0055324D033, myprop, int.Parse(prop.SelectSingleNode("TextureVariation").InnerText));
+                        if (prop.SelectSingleNode("TextureVariation") != null) Function.Call(Hash._0x971DA0055324D033, createdProp, int.Parse(prop.SelectSingleNode("TextureVariation").InnerText));
 
-                        ARS.CustomProps.Add(myprop);
+                        ARS.CustomProps.Add(createdProp);
                     }
                 }
             }
@@ -110,8 +110,8 @@ namespace ARS
             }
 
             int i = 0;
-            float W = 5;
-            float oldW = 0;
+            float nodeHalfWidth = 5;
+            float previousNodeHalfWidth = 0;
             foreach (XmlElement e in routeNodes)
             {
                 string x = e.SelectSingleNode("X").InnerText;
@@ -126,13 +126,13 @@ namespace ARS
                 float.TryParse(z, out fz);
                 Vector3 pos = new Vector3(fx, fy, fz);
 
-                float.TryParse(e.SelectSingleNode("Wide").InnerText, out W);
+                float.TryParse(e.SelectSingleNode("Wide").InnerText, out nodeHalfWidth);
 
-                if (ARS.RouteNodes.Count > 5) W = ARS.Clamp(W, oldW - 0.25f, oldW + 0.25f);
+                if (ARS.RouteNodes.Count > 5) nodeHalfWidth = ARS.Clamp(nodeHalfWidth, previousNodeHalfWidth - 0.25f, previousNodeHalfWidth + 0.25f);
 
                 ARS.RouteNodes.Add(pos);
-                ARS.NodeHalfWidths.Add(i, W);
-                oldW = W;
+                ARS.NodeHalfWidths.Add(i, nodeHalfWidth);
+                previousNodeHalfWidth = nodeHalfWidth;
                 i++;
             }
 
@@ -151,7 +151,7 @@ namespace ARS
             Script.Wait(1000);
             ARS.Log(ARS.LogImportance.Info, "Loading props");
             ars.SetLoadingPromptText("Loading props...");
-            BuildTrackLimits(ARS.RouteNodes, ARS.NodeHalfWidths, ARS.CurrentFile, ref ARS.IsPointToPoint, ARS.StartLineFlares);
+            SpawnStartGateFlares(ARS.RouteNodes, ARS.NodeHalfWidths, ARS.CurrentFile, ref ARS.IsPointToPoint, ARS.StartLineFlares);
 
             if (ARS.CanWeUse(Game.Player.Character.CurrentVehicle))
             {
@@ -174,7 +174,7 @@ namespace ARS
             if (ARS.CanWeUse(ARS.FreeCamRide)) ARS.FreeCamRide.Position = ARS.RouteNodes[Math.Min(5, ARS.RouteNodes.Count - 1)] + new Vector3(0, 0, 20);
             ars.SetLoadingPromptText("Finished loading props");
             Function.Call(Hash._0x10D373323E5B9C0D);
-            ars.SetSPLVisibility(false);
+            ars.SetStartBannerPropAlpha(false);
 
             ARS.Log(ARS.LogImportance.Info, "Loaded track");
             return true;
@@ -208,17 +208,17 @@ namespace ARS
 
         static void ComputePointGeometry(TrackPoint point, int nodeCount)
         {
-            int average = GeometryWindowNodes;
+            int windowNodes = GeometryWindowNodes;
             bool canCompute = ARS.IsPointToPoint
                 ? nodeCount > PointToPointEndBandNodes && point.Node > PointToPointEndBandNodes && point.Node < nodeCount - PointToPointEndBandNodes
                 : point.Node >= 0 && point.Node < nodeCount;
 
             if (canCompute)
             {
-                Vector3 left = (ARS.RouteNodes[point.Node] - ARS.RouteNodes[Wrap(point.Node - average, nodeCount)]).Normalized;
-                Vector3 forward = (ARS.RouteNodes[Wrap(point.Node + average, nodeCount)] - ARS.RouteNodes[point.Node]).Normalized;
+                Vector3 left = (ARS.RouteNodes[point.Node] - ARS.RouteNodes[Wrap(point.Node - windowNodes, nodeCount)]).Normalized;
+                Vector3 forward = (ARS.RouteNodes[Wrap(point.Node + windowNodes, nodeCount)] - ARS.RouteNodes[point.Node]).Normalized;
                 point.Direction = (ARS.RouteNodes[Wrap(point.Node + 2, nodeCount)] - ARS.RouteNodes[Wrap(point.Node - 2, nodeCount)]).Normalized;
-                point.Elevation = (ARS.RouteNodes[Wrap(point.Node + 3, nodeCount)] - ARS.RouteNodes[Wrap(point.Node - 3, nodeCount)]).Normalized.Z * 90f;
+                point.SlopeSineTimes90 = (ARS.RouteNodes[Wrap(point.Node + 3, nodeCount)] - ARS.RouteNodes[Wrap(point.Node - 3, nodeCount)]).Normalized.Z * 90f;
                 left.Z = 0f;
                 forward.Z = 0f;
                 point.Angle = Vector3.SignedAngle(left, forward, Vector3.WorldUp);
@@ -233,7 +233,7 @@ namespace ARS
 
                 point.Angle = 0f;
                 point.Direction = nodeCount > 10 ? (ARS.RouteNodes[10] - ARS.RouteNodes[5]).Normalized : Vector3.Zero;
-                point.Elevation = 0f;
+                point.SlopeSineTimes90 = 0f;
                 point.GeneralCurveRadius = 999f;
                 point.PreciseCurveRadius = 999f;
                 point.ExactRadius = 999f;
@@ -341,7 +341,7 @@ namespace ARS
                 text.Append(" | ").Append(corner.Node).Append(':').Append(corner.StartNode).Append('-').Append(corner.EndNode)
                     .Append('@').Append(corner.Angle.ToString("0.###", CultureInfo.InvariantCulture))
                     .Append('x').Append(corner.Speed.ToString("0.##", CultureInfo.InvariantCulture))
-                    .Append('l').Append(corner.LengthStart).Append(',').Append(corner.LengthEnd)
+                    .Append('l').Append(corner.EntranceNodes).Append(',').Append(corner.ExitNodes)
                     .Append(corner.IsChicane ? "C" : "c")
                     .Append('/').Append(corner.SupposedRadius.ToString("0.##", CultureInfo.InvariantCulture))
                     .Append('/').Append(corner.DetectedRadius.ToString("0.##", CultureInfo.InvariantCulture));
@@ -862,8 +862,8 @@ namespace ARS
                 ARS.Log(ARS.LogImportance.Info, "Chicane: apex " + corner.Node + " moved to " + flipAt
                     + ", halves R " + leftRadius.ToString("0.0") + " and " + rightRadius.ToString("0.0"));
                 corner.Node = flipAt;
-                corner.LengthStart = Math.Max(0, ARS.IsPointToPoint ? corner.Node - corner.StartNode : ArcSpan(corner.StartNode, corner.Node, nodeCount));
-                corner.LengthEnd = Math.Max(0, span - corner.LengthStart);
+                corner.EntranceNodes = Math.Max(0, ARS.IsPointToPoint ? corner.Node - corner.StartNode : ArcSpan(corner.StartNode, corner.Node, nodeCount));
+                corner.ExitNodes = Math.Max(0, span - corner.EntranceNodes);
             }
 
             AssignCrests(nodeCount);
@@ -1017,7 +1017,7 @@ namespace ARS
 
                 int from = corner.StartNode;
                 corner.StartNode = ARS.IsPointToPoint ? from - back : Wrap(from - back, count);
-                corner.LengthStart = apexBehind + back;
+                corner.EntranceNodes = apexBehind + back;
                 ARS.Log(ARS.LogImportance.Info, "Entrance moved for " + featureKind + ": apex=" + corner.Node + " from=" + from + " to=" + corner.StartNode + " featureNode=" + featureNode + " back=" + back + " (" + bound + ")");
             }
         }
@@ -1263,8 +1263,8 @@ namespace ARS
                 Angle = ARS.TrackPoints[apexNode].Angle,
                 StartNode = scanNodes[startPosition],
                 EndNode = scanNodes[endPosition],
-                LengthStart = apexPosition - startPosition,
-                LengthEnd = endPosition - apexPosition,
+                EntranceNodes = apexPosition - startPosition,
+                ExitNodes = endPosition - apexPosition,
                 SupposedRadius = tightestRadius,
                 DetectedRadius = detectedRadius,
                 SurfaceGrip = CornerSurfaceGrip(scanNodes[startPosition], scanNodes[endPosition], count)
@@ -1305,7 +1305,7 @@ namespace ARS
                         + "): keptApex=" + survivor.Node + " R=" + survivor.DetectedRadius.ToString("0.0")
                         + " absorbedApex=" + absorbed.Node + " R=" + absorbed.DetectedRadius.ToString("0.0")
                         + " gap=" + gap + " nodes " + gapSeconds.ToString("0.00") + "s"
-                        + " span=" + survivor.LengthStart + "+" + survivor.LengthEnd + " from node " + survivor.StartNode);
+                        + " span=" + survivor.EntranceNodes + "+" + survivor.ExitNodes + " from node " + survivor.StartNode);
                     return;
                 }
             }
@@ -1329,7 +1329,7 @@ namespace ARS
             float threshold = apexRadius * SpanDoublingMultiple;
             for (int step = 1; step <= maxStep; step++)
             {
-                if (IsOpenedFor(apexNode, 1, step, SpanConsecutiveNodes, count, threshold)) return step;
+                if (RadiusOpenedOverNodes(apexNode, 1, step, SpanConsecutiveNodes, count, threshold)) return step;
             }
             return maxStep;
         }
@@ -1339,7 +1339,7 @@ namespace ARS
             float threshold = apexRadius * SpanEntranceRadiusMultiple;
             for (int step = 1; step <= maxStep; step++)
             {
-                if (IsOpenedFor(apexNode, -1, step, SpanConsecutiveNodes, count, threshold)) return step;
+                if (RadiusOpenedOverNodes(apexNode, -1, step, SpanConsecutiveNodes, count, threshold)) return step;
             }
             return maxStep;
         }
@@ -1358,12 +1358,12 @@ namespace ARS
             float threshold = apexRadius * SpanExitRadiusMultiple;
             for (int step = 1; step <= maxStep; step++)
             {
-                if (IsOpenedFor(apexNode, 1, step, SpanConsecutiveNodes, count, threshold)) return step;
+                if (RadiusOpenedOverNodes(apexNode, 1, step, SpanConsecutiveNodes, count, threshold)) return step;
             }
             return maxStep;
         }
 
-        static bool IsOpenedFor(int apexNode, int direction, int step, int consecutive, int count, float threshold)
+        static bool RadiusOpenedOverNodes(int apexNode, int direction, int step, int consecutive, int count, float threshold)
         {
             for (int offset = 0; offset < consecutive; offset++)
             {
@@ -1387,8 +1387,8 @@ namespace ARS
             survivor.SurfaceGrip = CornerSurfaceGrip(survivor.StartNode, survivor.EndNode, count);
             survivor.WidestRadius = WidestArcRadius(survivor.Node, survivor.StartNode, survivor.EndNode, survivor.DetectedRadius);
             survivor.Speed = (float)Math.Sqrt(9.81f * survivor.DetectedRadius);
-            survivor.LengthStart = entranceDistance;
-            survivor.LengthEnd = exitDistance;
+            survivor.EntranceNodes = entranceDistance;
+            survivor.ExitNodes = exitDistance;
         }
 
         // The widest arc that still stays on the road: tangent to the inside at the apex and the outside where it
@@ -1404,7 +1404,7 @@ namespace ARS
             if (turn < 1f || turn > 179f) return tightest;
             float halfWidth = Math.Max(1f, ARS.TrackPoints[apexNode].TrackHalfWidth);
             float widest = Math.Max(1f, tightest - halfWidth) + 2f * halfWidth / (1f - (float)Math.Cos(turn * Math.PI / 360f));
-            float room = OptimalRoomMetres(startNode);
+            float room = StraightRunBeforeMetres(startNode);
             if (room > 5f)
             {
                 float capped = 2f * room / (turn * (float)Math.PI / 180f);
@@ -1413,7 +1413,7 @@ namespace ARS
             return Math.Max(tightest, Math.Min(widest, 5000f));
         }
 
-        static float OptimalRoomMetres(int startNode)
+        static float StraightRunBeforeMetres(int startNode)
         {
             int previous = ARS.Corners.Count - 1;
             if (previous < 0 || startNode < 0) return 0f;
@@ -1466,9 +1466,9 @@ namespace ARS
             return (float)Math.Atan2(offset.Y, offset.X);
         }
 
-        public static float Circumradius3D(Vector3 a, Vector3 b, Vector3 midpoint)
+        public static float Circumradius3D(Vector3 a, Vector3 b, Vector3 thirdVertex)
         {
-            return Circumradius2D(new Vector2(a.X, a.Y), new Vector2(b.X, b.Y), new Vector2(midpoint.X, midpoint.Y));
+            return Circumradius2D(new Vector2(a.X, a.Y), new Vector2(b.X, b.Y), new Vector2(thirdVertex.X, thirdVertex.Y));
         }
 
         public static float FittedCircleRadius(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
@@ -1503,15 +1503,15 @@ namespace ARS
             return float.IsNaN(radius) || float.IsInfinity(radius) ? 999f : radius;
         }
 
-        public static float Circumradius2D(Vector2 a, Vector2 b, Vector2 midpoint)
+        public static float Circumradius2D(Vector2 a, Vector2 b, Vector2 thirdVertex)
         {
             Vector2 midpoint1 = (a + b) / 2;
             float dx1 = b.X - a.X;
             float slope1 = dx1 != 0f ? (b.Y - a.Y) / dx1 : float.PositiveInfinity;
             float perpendicular1 = slope1 != 0f ? -1 / slope1 : float.PositiveInfinity;
-            Vector2 midpoint2 = (b + midpoint) / 2;
-            float dx2 = midpoint.X - b.X;
-            float slope2 = dx2 != 0f ? (midpoint.Y - b.Y) / dx2 : float.PositiveInfinity;
+            Vector2 midpoint2 = (b + thirdVertex) / 2;
+            float dx2 = thirdVertex.X - b.X;
+            float slope2 = dx2 != 0f ? (thirdVertex.Y - b.Y) / dx2 : float.PositiveInfinity;
             float perpendicular2 = slope2 != 0f ? -1 / slope2 : float.PositiveInfinity;
             float denominator = perpendicular2 - perpendicular1;
             if (denominator == 0f || float.IsNaN(denominator) || float.IsInfinity(denominator)) return 999f;
@@ -1527,7 +1527,7 @@ namespace ARS
             return wrapped < 0 ? wrapped + count : wrapped;
         }
 
-        public static void BuildTrackLimits(List<Vector3> nodes, Dictionary<int, float> widths, XmlDocument trackFile, ref bool isPointToPoint, List<Prop> startFlares)
+        public static void SpawnStartGateFlares(List<Vector3> nodes, Dictionary<int, float> widths, XmlDocument trackFile, ref bool isPointToPoint, List<Prop> startFlares)
         {
             if (nodes.Count == 0) return;
             isPointToPoint |= nodes[0].DistanceTo(nodes[nodes.Count - 1]) > 20f;

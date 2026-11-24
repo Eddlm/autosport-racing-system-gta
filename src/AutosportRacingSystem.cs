@@ -304,7 +304,7 @@ namespace ARS
                 {
                     BuildPowerCache();
                     RefreshPowerControls();
-                    FillCachedCandidates(_intendedOpponents);
+                    SelectGridCandidateModels(_intendedOpponents);
                     RefreshTrackList();
                     Log(LogImportance.Info, "Initialization complete.");
                     DisplayHelpTextTimed("~g~ARS has loaded.", 2000);
@@ -1309,7 +1309,7 @@ namespace ARS
             AddDebugCheckbox(debugMenu, Options.ShowGsProjection, "Show Gs Projection", "Draw the focus car's constant-acceleration path from its roof: a line to 0.5 s and another from there to 1 s; the bend is the acceleration. One colour for both, decided where the path is measured: green fading to white as the Gs lane throttle floor lets go (green at the inside edge, white at the centre), red when the path leaves the road and runs further out than the car (or drifts out with the car still on it), yellow when it leaves the road but cuts inside the car, blue otherwise. The one-second end carries the projection cut in mph: red while it is bleeding, yellow once it has bled and stopped. The subtitle carries the slide angle as a share of the tyre's peak slip at this speed, as a bare percentage: red while the gate is open, blue while it is closed. The gate also needs the wheel pointing into the slide, so a countersteering car reads closed.");
             AddDebugCheckbox(debugMenu, Options.ShowGLine, "Show G Line", "Draw a line from your own car's roof along the horizontal acceleration it pulls, one metre per G, with a cross at the tail. Your car only.");
             AddDebugCheckbox(debugMenu, Options.ShowRouteRadius, "Show Route Radius", "Draw the three nodes the route radius is measured from: the car's own, the near sample and the far one at speed/grip and twice that ahead.");
-            AddDebugCheckbox(debugMenu, Options.ShowTrLateral, "Show TRlateral", "The tyre's peak slide angle at this speed, drawn on the focus car: a line per side along the car from the rear to the front tip, and from that tip a line of the same length opening back at the angle (LateralTractionCurve / (1 + 0.1·v)) — the horn opens wide when the car is slow and closes onto the body line at speed. A second horn per side (red) opens at the car's live slide angle, so the pair shows the tyre's limit (yellow) against where the car actually sits (red).");
+            AddDebugCheckbox(debugMenu, Options.ShowTrLateral, "Show TRlateral", "The tyre's peak slide angle at this speed, drawn on the focus car: a line per side along the car from the rear to the front tip, and from that tip a line of the same length opening back at the angle (LateralTractionCurveDegrees / (1 + 0.1·v)) — the horn opens wide when the car is slow and closes onto the body line at speed. A second horn per side (red) opens at the car's live slide angle, so the pair shows the tyre's limit (yellow) against where the car actually sits (red).");
             AddDebugCheckbox(debugMenu, Options.ShowCurveRadius, "Show Curve %", "The focus car's own path radius against the track's radius under it, as a bare percentage in the subtitle: over 100 the car is running wider than the track asks, under 100 it is holding or tightening. The path radius is a 2D circle through the car and its own projections at half a second and one second; the track radius is the sweep radius at the car's node.");
 
             NativeListItem<string> logLevelItem = new NativeListItem<string>("Log Level", "Write this importance and higher to Log.log. Nothing is forced past the level, so Error keeps only errors.", EnumLabels<LogImportance>());
@@ -1633,7 +1633,7 @@ namespace ARS
             TrackLoader.BuildGridSlots(RouteNodes, NodeHalfWidths, IsPointToPoint, _intendedOpponents + 1, GridPositions);
             int gridSize = Math.Min(_intendedOpponents, Math.Max(0, GridSlotsAvailable - 1));
             if (gridSize != _intendedOpponents) Log(LogImportance.Info, "Grid: the track only yielded " + GridSlotsAvailable + " slots, so " + _intendedOpponents + " was capped to " + gridSize);
-            GridFill fill = FillCachedCandidates(gridSize);
+            GridFill fill = SelectGridCandidateModels(gridSize);
             LoadGrid(gridSize);
 
             if (Racers.Count == 0 && _intendedOpponents > 0)
@@ -1728,7 +1728,7 @@ namespace ARS
             if (_intendedOpponents > 0)
             {
                 ResolvePaceTargetForGrid();
-                FillCachedCandidates(_intendedOpponents + 1);
+                SelectGridCandidateModels(_intendedOpponents + 1);
                 if (_cachedCandidates.Count == 0)
                 {
                     reason = PaceDeviationLimit > 0
@@ -1852,18 +1852,18 @@ namespace ARS
             PowerTargetScale = RoundToNearestEven(Clamp(PowerTargetScale, min, max));
 
             _powerTargetValues.Clear();
-            AddPowerValues(_powerTargetValues, min, max, 2.0f);
+            AddPaceIndexValues(_powerTargetValues, min, max, 2.0f);
 
             if (_powerTargetValues.Count == 0) _powerTargetValues.Add(RoundToNearestEven(Clamp(PowerTargetScale, min, max)));
             Log(LogImportance.Info, "Pace span " + min.ToString("0.0") + ".." + max.ToString("0.0") + " over " + ModelPaceIndexCache.Count + " models, " + _powerTargetValues.Count + " PI Target value(s).");
 
             _powerTargetItem.Items.Clear();
             foreach (float value in _powerTargetValues) _powerTargetItem.Items.Add(value.ToString("0"));
-            _powerTargetItem.SelectedIndex = !targetStored ? _powerTargetValues.Count / 2 : FindNearestPowerValue(_powerTargetValues, PowerTargetScale);
+            _powerTargetItem.SelectedIndex = !targetStored ? _powerTargetValues.Count / 2 : FindNearestValueIndex(_powerTargetValues, PowerTargetScale);
             if (_powerTargetValues.Count > 0) PowerTargetScale = _powerTargetValues[_powerTargetItem.SelectedIndex];
             _resolvedPaceTarget = PowerTargetScale;
 
-            if (_paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = FindNearestPowerValue(_paceOffsetValues, PaceOffsetScale);
+            if (_paceOffsetValues.Count > 0) _paceOffsetItem.SelectedIndex = FindNearestValueIndex(_paceOffsetValues, PaceOffsetScale);
             _paceModeItem.SelectedIndex = Math.Max(0, _paceModeItem.Items.IndexOf(EnumLabel(CurrentPaceMode)));
             RaceMenuStore.Migrate("PaceTarget", PowerTargetScale.ToString(CultureInfo.InvariantCulture));
             RaceMenuStore.Migrate("PaceOffset", PaceOffsetScale.ToString(CultureInfo.InvariantCulture));
@@ -1915,7 +1915,7 @@ namespace ARS
             if (!names.Contains(name)) names.Add(name);
         }
 
-        static void AddPowerValues(List<float> values, float min, float max, float step)
+        static void AddPaceIndexValues(List<float> values, float min, float max, float step)
         {
 
             int startIndex = (int)Math.Ceiling(min / step);
@@ -1926,7 +1926,7 @@ namespace ARS
 
         static float RoundToNearestEven(float value) => (float)(2 * Math.Round(value / 2f, MidpointRounding.AwayFromZero));
 
-        static int FindNearestPowerValue(List<float> values, float target)
+        static int FindNearestValueIndex(List<float> values, float target)
         {
             int nearest = 0;
             float distance = float.MaxValue;
@@ -1937,9 +1937,9 @@ namespace ARS
             }
             return nearest;
         }
-        public static float MpsToMph(float ms)
+        public static float MpsToMph(float mps)
         {
-            return (float)Math.Round(ms * 2.236936f, 3);
+            return (float)Math.Round(mps * 2.236936f, 3);
         }
         public static float MphToMps(float mph)
         {
@@ -2000,8 +2000,8 @@ namespace ARS
             _gridInstanced = false;
         }
 
-        int _nextInLine = 0;
-        int _gameTimeNextInLine = 0;
+        int _nextTimedCoreRacerIndex = 0;
+        int _nextTimedCoreBatchDueMs = 0;
 
         void OnKeyDown(object sender, KeyEventArgs e)
         {
@@ -2246,7 +2246,7 @@ namespace ARS
                         Racer racer = DebugFocusRacer;
                         int currentNode = racer.CurrentTrackPoint.Node;
                         int count = ARS.TrackPoints.Count;
-                        float nodeOffset = racer.Brain.CurrentPerception.CurrentNodeOffset;
+                        float nodeOffset = racer.Brain.CurrentPerception.CurrentLaneOffsetMetres;
                         float carriedOffset = racer.CarriedLane;
                         float requestOffset = racer.LaneRequest;
                         Color laneColor = Racer.LaneMotionColor(racer.LaneRequestReason, 0f, 0);
@@ -2442,17 +2442,17 @@ namespace ARS
 
                 if (Racers.Count > 0)
                 {
-                    if (_gameTimeNextInLine <= Game.GameTime)
+                    if (_nextTimedCoreBatchDueMs <= Game.GameTime)
                     {
 
                         int count = (int)Clamp(Racers.Count, 1, 6);
                         for (int i = 0; i < count; i++)
                         {
 
-                            if (_nextInLine >= Racers.Count) _nextInLine = 0;
-                            Racers[_nextInLine]?.RunTimedCore();
-                            _nextInLine++;
-                            _gameTimeNextInLine = Game.GameTime + Math.Max(1, 10 / (Racers.Count / count));
+                            if (_nextTimedCoreRacerIndex >= Racers.Count) _nextTimedCoreRacerIndex = 0;
+                            Racers[_nextTimedCoreRacerIndex]?.RunTimedCore();
+                            _nextTimedCoreRacerIndex++;
+                            _nextTimedCoreBatchDueMs = Game.GameTime + Math.Max(1, 10 / (Racers.Count / count));
                         }
                     }
 
@@ -2650,7 +2650,7 @@ namespace ARS
         {
             return (current / max) * 100;
         }
-        internal void SetSPLVisibility(bool state)
+        internal void SetStartBannerPropAlpha(bool state)
         {
             try { foreach (Prop p in World.GetAllProps()) if (p.Model == "prop_mp_max_out_lrg") if (state) p.Alpha = 255; else p.Alpha = 0; } catch (Exception) { }
         }
@@ -2753,9 +2753,9 @@ namespace ARS
             }
             Racers.Clear();
 
-            _nextInLine = 0;
+            _nextTimedCoreRacerIndex = 0;
             _raceTimedFinishMs = 0;
-            _gameTimeNextInLine = 0;
+            _nextTimedCoreBatchDueMs = 0;
             LeaderboardFinish.Clear();
             RaceStatus = RaceState.None;
             PlayerParticipating = false;
@@ -3215,19 +3215,19 @@ namespace ARS
             float radius = c.DetectedRadius;
             if (radius <= 0f) radius = c.GetPreciseRadius();
 
-            if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AiConstants.MaxSpeed;
+            if (float.IsInfinity(radius) || float.IsNaN(radius) || radius == 0f) return AiConstants.MaxIntendedSpeedMps;
 
             float vehicleGripGs = r.VehicleData.CurrentMechanicalGrip;
 
             // A loose corner cannot be taken at tarmac speed: lateral grip scales with the surface, so the
             // speed scales with the square root of it.
             float baseSpd = (float)Math.Sqrt(vehicleGripGs * c.SurfaceGrip * r.Handling.Gravity * radius);
-            if (float.IsNaN(baseSpd) || float.IsInfinity(baseSpd)) return AiConstants.MaxSpeed;
+            if (float.IsNaN(baseSpd) || float.IsInfinity(baseSpd)) return AiConstants.MaxIntendedSpeedMps;
 
             // Corner speed learning rides on the same per-corner record as the brake factor: the racer's
             // learned offset in m/s, added before the clamp. It reads 0 while inert, so the number is unchanged.
             float learnedCornerSpeed = r.CornerSpeedOffsetFor(c.Node);
-            return ARS.Clamp(baseSpd + learnedCornerSpeed, AiConstants.MinSpeed, AiConstants.MaxSpeed);
+            return ARS.Clamp(baseSpd + learnedCornerSpeed, AiConstants.MinIntendedSpeedMps, AiConstants.MaxIntendedSpeedMps);
         }
 
         static public float SlidingBoundingBoxWidth(Entity e)
@@ -4176,7 +4176,7 @@ namespace ARS
 
         enum GridFill { Filled, NoPaceIndex, NoneInBand }
 
-        GridFill FillCachedCandidates(int maxcars)
+        GridFill SelectGridCandidateModels(int maxcars)
         {
             if (HardcodedRoster != null && HardcodedRoster.Count > 0)
             {
@@ -4206,28 +4206,28 @@ namespace ARS
             }
             return GridFill.Filled;
         }
-        static readonly List<string> _sillyNames = new List<string>();
+        static readonly List<string> _driverNamePool = new List<string>();
         static readonly Random _sillyNameRandom = new Random();
 
         static void ResetSillyNames()
         {
-            _sillyNames.Clear();
+            _driverNamePool.Clear();
             try
             {
 
                 string names = Path.Combine(ScriptsFolder, "Drivers", "names.txt");
                 if (!File.Exists(names)) names = Path.Combine(ScriptsFolder, "sillynames.txt");
-                _sillyNames.AddRange(File.ReadAllLines(names).Select(l => l.Trim()).Where(l => l.Length > 0));
+                _driverNamePool.AddRange(File.ReadAllLines(names).Select(l => l.Trim()).Where(l => l.Length > 0));
             }
             catch (Exception) { }
-            for (int i = _sillyNames.Count - 1; i > 0; i--) { int j = _sillyNameRandom.Next(i + 1); string t = _sillyNames[i]; _sillyNames[i] = _sillyNames[j]; _sillyNames[j] = t; }
+            for (int i = _driverNamePool.Count - 1; i > 0; i--) { int j = _sillyNameRandom.Next(i + 1); string t = _driverNamePool[i]; _driverNamePool[i] = _driverNamePool[j]; _driverNamePool[j] = t; }
         }
 
         static string NextSillyName()
         {
-            if (_sillyNames.Count == 0) return null;
-            string name = _sillyNames[_sillyNames.Count - 1];
-            _sillyNames.RemoveAt(_sillyNames.Count - 1);
+            if (_driverNamePool.Count == 0) return null;
+            string name = _driverNamePool[_driverNamePool.Count - 1];
+            _driverNamePool.RemoveAt(_driverNamePool.Count - 1);
             return name;
         }
 

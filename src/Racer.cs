@@ -101,8 +101,8 @@ namespace ARS
         public bool CanRegisterNewLap = false;
         int _previousNode = -1;
         public bool FinishedPointToPoint = false;
-        int _halfSecondTick = 0;
-        int _oneSecondTick = 0;
+        int _halfSecondDueMs = 0;
+        int _oneSecondDueMs = 0;
         int _phaseOffsetMs = 0;
         const int RivalRefreshMs = 250;
         int _rivalTick = 0;
@@ -110,7 +110,7 @@ namespace ARS
         int _apexUpdateTick = 0;
         int _rivalInfoTick = 0;
         int _lastCoreTick = 100;
-        int TimeSince_lastCoreTick => (int)ARS.Clamp(Game.GameTime - _lastCoreTick, 1, 9999);
+        int TimeSinceLastCoreTick => (int)ARS.Clamp(Game.GameTime - _lastCoreTick, 1, 9999);
 
         List<TrackPoint> _trackPositionScratch = new List<TrackPoint>(13);
         const int StuckRecoveryTimeMs = 6000;
@@ -237,9 +237,9 @@ namespace ARS
         public float CornerTermMps { get { return _speedCorner; } }
         public float CornerArrivalMps { get { return _speedCornerArrival; } }
         public float RouteTermMps { get { return _speedRoute; } }
-        float _probeDeepest;
+        float _probeMaxInwardOffsetMetres;
         int _probeNode = -1;
-        float _probeApexOffset;
+        float _probeOffsetAtApexMetres;
         bool _probeAtApex;
 
         void UpdateApexProbe(CornerPoint corner, float ownOffset)
@@ -247,14 +247,14 @@ namespace ARS
             int turn = TrackTurnSign(corner.StartNode, corner.Node, Math.Sign(corner.Angle));
             if (turn == 0) return;
             float inward = ownOffset * ARS.LaneInsideSign * turn;
-            if (inward > _probeDeepest)
+            if (inward > _probeMaxInwardOffsetMetres)
             {
-                _probeDeepest = inward;
+                _probeMaxInwardOffsetMetres = inward;
                 _probeNode = CurrentTrackPoint.Node;
             }
             if (!_probeAtApex && Math.Abs(CurrentTrackPoint.Node - corner.Node) <= 1)
             {
-                _probeApexOffset = ownOffset;
+                _probeOffsetAtApexMetres = ownOffset;
                 _probeAtApex = true;
             }
         }
@@ -262,8 +262,8 @@ namespace ARS
         void LogApexProbe(int apexNode)
         {
             ARS.Log(ARS.LogImportance.Info, "apex probe " + apexNode
-                + ": offset at the apex " + (_probeAtApex ? _probeApexOffset.ToString("0.00") : "missed")
-                + ", deepest inward " + _probeDeepest.ToString("0.00")
+                + ": offset at the apex " + (_probeAtApex ? _probeOffsetAtApexMetres.ToString("0.00") : "missed")
+                + ", deepest inward " + _probeMaxInwardOffsetMetres.ToString("0.00")
                 + " at node " + _probeNode
                 + (_probeNode >= 0 ? " (" + (_probeNode - apexNode) + " nodes past the apex)" : ""));
         }
@@ -288,7 +288,7 @@ namespace ARS
         const float ProjectionArmSlideShare = 0.6f;
         const float ProjectionMaxLift = 1f + 0.5f;
         const float OffTrackSpeedFloorMph = 0f;
-        const float OffshootMinSpeedMph = 20f;
+        const float ProjectionMinSpeedMph = 20f;
         public const float FullThrottleSpeedErrorMps = 1f;
         public const float FullBrakeSpeedErrorMps = 4.5f;
 
@@ -305,7 +305,7 @@ namespace ARS
 
         float _damperTermDeg = 0f;
 
-        float _slidePriority = 0f;
+        float _countersteerDemand01 = 0f;
         float _slideShare = 0f;
         float _steerPursuitDeg = 0f;
         float _steerAimBearingDegrees = 0f;
@@ -338,7 +338,7 @@ namespace ARS
         int _projectionWidenSign;
         bool _projectionCutActive = false;
         bool _projectionArmed = false;
-        float _gsFloor01;
+        float _gsLaneFloorShare01;
         // The floor as it is actually imposed: the ask, capped by every ceiling that binds. The line reads this one.
         float _gsFloorApplied;
         bool _exitRoomArmed;
@@ -349,17 +349,17 @@ namespace ARS
 
         bool _gsFloorActiveThisTick = false;
 
-        int _offshootLogAt = 0;
+        int _projectionLogAtMs = 0;
         const float BrakeFactorSeed = 0.60f;
         const float BrakeFactorMin = 0.33f;
         const float BrakeFactorMax = 1.30f;
         public const float BrakeRampIdealDeltaMps = 0.5f;
         const float BrakeRampErrorDivisor = 20f;
-        const float CornerTightRadius = 50f;
+        const float CornerTightRadiusMetres = 50f;
         const float RequirementExtrapolationScale = 0.9f;
-        const float PositionExcessMph = 10f;
-        const float BrakeExcessMph = 25f;
-        const float BrakeHorizonMargin = 40f;
+        const float TightCornerArmExcessMph = 10f;
+        const float WideCornerArmExcessMph = 25f;
+        const float BrakeHorizonMarginMetres = 40f;
         readonly Dictionary<int, CornerContext> _cornerContexts = new Dictionary<int, CornerContext>();
         int _cornersRevisionSeeded = -1;
         int _planLogApexNode = -1;
@@ -407,12 +407,12 @@ namespace ARS
         const float RouteSpeedLearnRateMph = 1f;
         const float RouteSpeedLearnMinSlideShare = 0.2f;
         const float RouteSpeedLearnSteerMin = 0.05f;
-        const float RouteSpeedLearnWidenM = 0.5f;
+        const float RouteSpeedLearnWidenMetres = 0.5f;
         const float RouteSpeedLearnFallShareOfRate = 0.5f;
-                const float RouteSpeedLearnStableThrottle = 0.999f;
+                const float RouteSpeedLearnMinStabilityCap = 0.999f;
         int _cornerSpeedApexNode = -1;
         int _cornerSpeedLastSampleMs = -1;
-        float _cornerSpeedWorstOutsideClear = float.MaxValue;
+        float _cornerSpeedMinOutsideClearanceMetres = float.MaxValue;
         float _cornerSpeedWorstSlideDeg;
         bool _cornerSpeedHitOffTrack;
         int _cornerSpeedOutsideSamples;
@@ -545,7 +545,7 @@ namespace ARS
         public float DivebombBrakeBonus => _divebombBrakeBonus;
 
         bool CardCooled(ManeuverType type) => Game.GameTime >= _cardCooldownUntil[(int)type];
-        bool CardMayEnd => Game.GameTime - ActiveManeuver.LastEnabled >= CardMinDwellMs;
+        bool CardMayEnd => Game.GameTime - ActiveManeuver.EnabledAtMs >= CardMinDwellMs;
         void EndCard()
         {
 
@@ -558,7 +558,7 @@ namespace ARS
         int _nitrousGsLoggedAt = 0;
         int _nitrousLapUsed = -1;
         int _nitroRefusalLoggedAt = 0;
-        float _powerCounter = 1f;
+        float _powerMultiplier = 1f;
         float _overspeedPowerLevel = 1f;
         const float SlideAverageSeconds = 0.5f;
         const int SlideAverageSlots = 128;
@@ -596,7 +596,7 @@ namespace ARS
             CarModelName = Name;
 
             if (Driver.IsPlayer) ControlledByPlayer = true;
-            _halfSecondTick = Game.GameTime + (ARS.GetRandomInt(10, 50));
+            _halfSecondDueMs = Game.GameTime + (ARS.GetRandomInt(10, 50));
             _phaseOffsetMs = ARS.GetRandomInt(0, 500);
 
             _pressureTick = Game.GameTime;
@@ -680,30 +680,30 @@ namespace ARS
         {
             Handling.Downforce = VehicleMemory.GetDownforce(Car);
 
-            Handling.LateralTractionCurve = ARS.RadToDeg(VehicleMemory.GetLateralTraction(Car));
-            if (Handling.LateralTractionCurve < 1 || Handling.LateralTractionCurve > 100) Handling.LateralTractionCurve = 22;
-            ARS.Log(ARS.LogImportance.Info, "TRlat for " + Car.DisplayName + ":" + Handling.LateralTractionCurve + "º");
+            Handling.LateralTractionCurveDegrees = ARS.RadToDeg(VehicleMemory.GetLateralTraction(Car));
+            if (Handling.LateralTractionCurveDegrees < 1 || Handling.LateralTractionCurveDegrees > 100) Handling.LateralTractionCurveDegrees = 22;
+            ARS.Log(ARS.LogImportance.Info, "TRlat for " + Car.DisplayName + ":" + Handling.LateralTractionCurveDegrees + "º");
 
             Handling.BrakingAbility = Car.MaxBraking;
-            Handling.EstimatedTopSpeed = ARS.EngineTopSpeed(Car);
+            Handling.EstimatedTopSpeedMps = ARS.EngineTopSpeed(Car);
 
             ARS.Log(ARS.LogImportance.Info, "Top speed " + Car.DisplayName + ": geared "
                 + Function.Call<float>(Hash._0x53AF99BAA671CA47, Car).ToString("0.0") + " m/s, estimate "
-                + ARS.MpsToMph(Handling.EstimatedTopSpeed).ToString("0") + " mph");
+                + ARS.MpsToMph(Handling.EstimatedTopSpeedMps).ToString("0") + " mph");
             Handling.Acceleration = Function.Call<float>(Hash.GET_VEHICLE_ACCELERATION, Car);
 
             VehicleData.SteeringLock = ARS.RadToDeg(VehicleMemory.GetSteerLock(Car));
             if (VehicleData.SteeringLock < 1 || VehicleData.SteeringLock > 100) VehicleData.SteeringLock = 40;
             ARS.Log(ARS.LogImportance.Info, "Steerlock for " + Car.DisplayName + ":" + VehicleData.SteeringLock + "º");
 
-            VehicleData.WheelBase = ARS.GetWheelBase(Car);
+            VehicleData.WheelBaseMetres = ARS.GetWheelBase(Car);
 
-            ARS.Log(ARS.LogImportance.Info, "Wheelbase for " + Car.DisplayName + ":" + VehicleData.WheelBase + " m");
+            ARS.Log(ARS.LogImportance.Info, "Wheelbase for " + Car.DisplayName + ":" + VehicleData.WheelBaseMetres + " m");
             Control.SteerDegrees = 0f;
             CurrentTrackPoint = ARS.TrackPoints.Last();
             Control.Brake = 0f;
             Control.Throttle = 0f;
-            _powerCounter = 1f;
+            _powerMultiplier = 1f;
             _appliedThrottleLastFrame = 1f;
             Function.Call((Hash)CheatPowerIncreaseHash, Car, 1.0f);
 
@@ -733,7 +733,7 @@ namespace ARS
             _lapStartOdometer = 0;
             ActiveManeuver.Type = ManeuverType.None;
             ActiveManeuver.Target = null;
-            ActiveManeuver.LastEnabled = 0;
+            ActiveManeuver.EnabledAtMs = 0;
             Array.Clear(_cardCooldownUntil, 0, _cardCooldownUntil.Length);
             _inputTrail.Clear();
             _inputTrailChevronDistance = 0f;
@@ -758,10 +758,10 @@ namespace ARS
 
             float livePace = ARS.ComputePaceIndex(modelTopSpeedMph, modelGrip, modelAccel, modelElectric);
             if (float.IsNaN(livePace) || float.IsInfinity(livePace)) ARS.ModelPaceIndexCache.TryGetValue(Car.Model.Hash.ToString(), out livePace);
-            VehicleData.PowerScale = livePace;
-            VehicleData.TextPerformanceIndex = VehicleData.PowerScale.ToString("0.0");
+            VehicleData.PaceIndex = livePace;
+            VehicleData.TextPerformanceIndex = VehicleData.PaceIndex.ToString("0.0");
 
-            if (!ControlledByPlayer) Name = _baseName + " (" + VehicleData.PowerScale.ToString("0.00") + ")";
+            if (!ControlledByPlayer) Name = _baseName + " (" + VehicleData.PaceIndex.ToString("0.00") + ")";
             DriverName = _baseName;
 
             _cornerContexts.Clear();
@@ -779,10 +779,10 @@ namespace ARS
 
         public void ComputeSteering()
         {
-            _slidePriority = 0f;
+            _countersteerDemand01 = 0f;
             _slideShare = 0f;
 
-            if (!TryGetSteerContext(out TrackPoint steerRefPoint, out float roadWide))
+            if (!TryGetSteerContext(out TrackPoint steerRefPoint, out float roadHalfWidthMetres))
             {
                 Control.SteerDegrees = 0f;
                 return;
@@ -793,7 +793,7 @@ namespace ARS
             Vector3 courseDir = Car.ForwardVector;
             if (Car.Velocity.LengthSquared() > 0.01f) courseDir = Car.Velocity.Normalized;
 
-            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
+            float carHalfWidth = VehicleData.SlidingWidthMetres * 0.5f;
 
             float steerRefOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
 
@@ -817,36 +817,36 @@ namespace ARS
             }
             CornerPoint lineCorner = _laneHeldCorner;
 
-            float laneLimit = Math.Max(roadWide - carHalfWidth - (IsWithinCorner(lineCorner) ? 0f : EdgeEmptySpaceMeters), 0f);
+            float laneLimit = Math.Max(roadHalfWidthMetres - carHalfWidth - (IsWithinCorner(lineCorner) ? 0f : EdgeEmptySpaceMeters), 0f);
 
             int probeApexNode = lineCorner != null ? lineCorner.Node : -1;
             if (probeApexNode != _probeApexNode)
             {
                 if (_probeApexNode >= 0) LogApexProbe(_probeApexNode);
                 _probeApexNode = probeApexNode;
-                _probeDeepest = 0f;
+                _probeMaxInwardOffsetMetres = 0f;
                 _probeNode = -1;
-                _probeApexOffset = 0f;
+                _probeOffsetAtApexMetres = 0f;
                 _probeAtApex = false;
             }
             if (lineCorner != null) UpdateApexProbe(lineCorner, steerRefOffset);
 
             int laneNode = TrackLoader.NodeAhead(CurrentTrackPoint.Node, speedMps * ARS.LanePreviewSeconds, ARS.TrackPoints.Count);
-            float laneEdge = Math.Max(roadWide - carHalfWidth, 0f);
+            float laneEdge = Math.Max(roadHalfWidthMetres - carHalfWidth, 0f);
             _laneField = ARS.TrackPoints[laneNode].LaneLineShare * laneEdge;
             int laneShapeNode = TrackLoader.NodeAhead(CurrentTrackPoint.Node, speedMps * ARS.LaneShapePreviewSeconds, ARS.TrackPoints.Count);
             float laneShapeNow = ClampShapedLane(ARS.TrackPoints[laneShapeNode].LaneLineShare * laneEdge, laneEdge, lineCorner);
             float aimRadius = ARS.TrackPoints[steerRefPoint.Node].PreciseCurveRadius;
             CornerPoint laneApex = lineCorner;
-            float toApex = laneApex != null ? MetresToNode(laneApex.Node) : 0f;
+            float toApex = laneApex != null ? SignedMetresToNode(laneApex.Node) : 0f;
             _laneApexNode = laneApex != null ? laneApex.Node : -1;
             _laneShapeApexNode = _laneApexNode;
             // One ask, in two phases. Until the lookahead crosses the entrance the aim is the field AT the entrance
             // itself; from there on it is the field under the lookahead. Out is a 2 m lead over the car in both.
             int entranceNode = laneApex != null ? CornerEntranceNode(laneApex, laneApex.Node) : -1;
-            float toEntrance = entranceNode >= 0 ? MetresToNode(entranceNode) : 0f;
+            float toEntrance = entranceNode >= 0 ? SignedMetresToNode(entranceNode) : 0f;
             bool following = ARS.AbsoluteLaneEnabled && Lap > 0
-                && lineCorner != null && MetresToNode(lineCorner.Node) > 0f
+                && lineCorner != null && SignedMetresToNode(lineCorner.Node) > 0f
                 && entranceNode >= 0 && toEntrance <= speedMps * ARS.LanePrepSeconds
                 && _laneApexNode >= 0 && ARS.TrackPoints[_laneApexNode].LaneShapeStart >= 0;
 
@@ -855,9 +855,9 @@ namespace ARS
                 int hereNode = CurrentTrackPoint.Node;
                 TrackPoint here = ARS.TrackPoints[hereNode];
                 if (hereNode != _shapeErrLastNode && here.LaneShaped && here.LaneShapeApex == _laneApexNode
-                    && lineCorner != null && MetresToNode(lineCorner.Node) > 0f)
+                    && lineCorner != null && SignedMetresToNode(lineCorner.Node) > 0f)
                 {
-                    float half = Math.Max(here.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f);
+                    float half = Math.Max(here.TrackHalfWidth - VehicleData.SlidingWidthMetres * 0.5f, 0f);
                     Vector3 hereRight = Vector3.Normalize(Vector3.Cross(here.Direction, Vector3.WorldUp));
                     float carLane = Vector3.Dot(Car.Position - here.Position, hereRight);
                     _shapeErrSum += Math.Abs(carLane - here.LaneLineShare * half);
@@ -903,15 +903,15 @@ namespace ARS
             float requestLimit = following ? laneEdge : laneLimit;
             laneRequest = ARS.Clamp(laneRequest, -requestLimit, requestLimit);
 
-            if (ActiveManeuver.Type == ManeuverType.DefendLane && MetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
+            if (ActiveManeuver.Type == ManeuverType.DefendLane && SignedMetresToNode(_defendApexNode) > OutsideGateMeters(steerRefPoint))
             {
                 laneRequest = ARS.Clamp(_defendLaneOffset, -laneLimit, laneLimit);
                 laneReason = LaneReason.CommitCard;
             }
-            float avoidAheadLane = ComputeAvoidanceLane(roadWide);
+            float avoidAheadLane = ComputeAvoidanceLane(roadHalfWidthMetres);
             if (avoidAheadLane != 0f) { laneRequest = avoidAheadLane; laneReason = LaneReason.Avoidance; }
-            if (_stuckPhase == StuckPhase.Drive && OutOfTrackDistance() > 0f) { laneRequest = NearestEdgeLane(steerRefOffset, laneLimit); laneReason = LaneReason.RecoveryEdge; }
-            float walledLane = ApplyRivalWalls(laneRequest, roadWide);
+            if (_stuckPhase == StuckPhase.Drive && SignedMetresBeyondTrackEdge() > 0f) { laneRequest = NearestEdgeLane(steerRefOffset, laneLimit); laneReason = LaneReason.RecoveryEdge; }
+            float walledLane = ApplyRivalWalls(laneRequest, roadHalfWidthMetres);
             if (walledLane != laneRequest) laneReason = LaneReason.WallClamp;
             laneRequest = walledLane;
             if (ARS.DebugToggles[Options.LockLaneCentre]) { laneRequest = LaneLockTestOffsetMeters; laneReason = LaneReason.DebugLock; }
@@ -1000,7 +1000,7 @@ namespace ARS
                 if (Vector3.Dot(delta, velDir) > 0f)
                     longGate += Math.Min(speedMps * ContactPushReachSeconds, ContactPushReachMaxMeters);
 
-                float combinedHalfWidth = (VehicleData.BoundingBox + r.RivalRacer.VehicleData.BoundingBox) * 0.5f;
+                float combinedHalfWidth = (VehicleData.SlidingWidthMetres + r.RivalRacer.VehicleData.SlidingWidthMetres) * 0.5f;
                 if (longDist > longGate || latDist > combinedHalfWidth + ContactPushOuterGapMeters) continue;
                 Vector3 rivalVel = r.RivalRacer.Car.Velocity;
                 float latSide = Vector3.Dot(delta, velRight);
@@ -1019,7 +1019,7 @@ namespace ARS
             float fwdSpeed = ARS.GetForwardSpeed(Car);
 
             float yawTarget = 0f;
-            if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurve * SlidingFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
+            if (SteerDampingAimReference && fwdSpeed > 0f && Math.Abs(VehicleData.SlideAngle) < Handling.LateralTractionCurveDegrees * SlidingFraction) yawTarget = ARS.RadToDeg(fwdSpeed * _steerAimCurvature);
             float yawRateToDamp = VehicleData.YawRotationPerSecondDegrees - yawTarget;
             float damperGain = SteerDampingFor();
             float nonDamperSteerDeg = (steerKP * sideBySideSteerDeg) + (steerKP * laneSteerDeg);
@@ -1070,11 +1070,11 @@ namespace ARS
             bool rotationReversed = VehicleData.YawRotationPerSecondDegrees * Math.Sign(slideDeg) < 0f;
             if (rotationReversed && countersteerAmount > 0f) countersteerAmount *= CountersteerRecoilShare;
 
-            _slidePriority = countersteerAmount;
+            _countersteerDemand01 = countersteerAmount;
             if (countersteerAmount > 0f && !KickWantsSlide())
                 Control.SteerDegrees -= Math.Sign(slideDeg) * countersteerAmount * Math.Abs(slideDeg);
 
-            if (Math.Abs(_steerAimBearingDegrees) < SmallAimBearingDegrees && _slidePriority <= 0f) Control.SteerDegrees = 0f;
+            if (Math.Abs(_steerAimBearingDegrees) < SmallAimBearingDegrees && _countersteerDemand01 <= 0f) Control.SteerDegrees = 0f;
             Control.SteerDegrees += steerKP * contactSteerDeg;
 
             if (float.IsNaN(Control.SteerDegrees) || float.IsInfinity(Control.SteerDegrees))
@@ -1159,7 +1159,7 @@ namespace ARS
         float PursuitSteerFromBearing(float bearing, float distance)
         {
             bearing = ARS.Clamp(bearing, -MaxPursuitBearingDegrees, MaxPursuitBearingDegrees);
-            return ARS.RadToDeg((float)Math.Atan(PursuitGain * Math.Sin(ARS.DegToRad(bearing)) * VehicleData.WheelBase / distance));
+            return ARS.RadToDeg((float)Math.Atan(PursuitGain * Math.Sin(ARS.DegToRad(bearing)) * VehicleData.WheelBaseMetres / distance));
         }
 
         float PursuitSteerDegrees(Vector3 aimPoint, Vector3 heading, Vector3 refDirection)
@@ -1191,7 +1191,7 @@ namespace ARS
             // under the car has already turned away from the one at the aim by up to 20 degrees on a quick bend, and
             // capping against the stale one trims the racing line itself and pulls the car out of every corner.
             float speedMph = ARS.MpsToMph(Car.Velocity.Length());
-            if (!_cornerMode && speedMph >= RouteSteerAngleCapMinMph && OutOfTrackDistance() <= 0f)
+            if (!_cornerMode && speedMph >= RouteSteerAngleCapMinMph && SignedMetresBeyondTrackEdge() <= 0f)
             {
                 Vector3 refFlat = new Vector3(refDirection.X, refDirection.Y, 0f);
                 if (refFlat.LengthSquared() > 0.0001f && headingFlat.LengthSquared() > 0.0001f)
@@ -1291,7 +1291,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             foreach (CornerPoint corner in ARS.Corners)
             {
                 if (!CornerIsLaned(corner)) continue;
-                float metres = MetresToNode(corner.Node);
+                float metres = SignedMetresToNode(corner.Node);
                 float reach = Math.Max(Math.Max(Car.Velocity.Length(), 1f) * ARS.LanePreviewSeconds, ARS.LaneApexMinReachMeters);
                 if (!ApexAheadOfLookahead(corner, reach)) continue;
                 if (metres < 0f || metres >= bestMeters) continue;
@@ -1316,11 +1316,11 @@ const float RequirementLookaheadSeconds = 3.95f;
         internal static bool IsRaceFit(Vehicle car) =>
             car.EngineHealth >= EngineHealthHalf && car.BodyHealth >= Math.Max(car.MaxHealth, 1) * BodyHealthShare;
 
-        float ComputeAvoidanceLane(float roadWide)
+        float ComputeAvoidanceLane(float roadHalfWidthMetres)
         {
 
             bool avoidHoldEnabled = false;
-            float passLane = ComputeAvoidAheadLane(roadWide);
+            float passLane = ComputeAvoidAheadLane(roadHalfWidthMetres);
             if (!avoidHoldEnabled) return passLane;
             if (passLane != 0f)
             {
@@ -1331,7 +1331,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
             if (!_avoidHoldActive) return 0f;
 
-            if (Game.GameTime > _avoidHoldUntil || Math.Abs(_avoidHoldLane) > roadWide)
+            if (Game.GameTime > _avoidHoldUntil || Math.Abs(_avoidHoldLane) > roadHalfWidthMetres)
             {
                 _avoidHoldActive = false;
                 return 0f;
@@ -1349,12 +1349,12 @@ const float RequirementLookaheadSeconds = 3.95f;
             return 0f;
         }
 
-        float ComputeAvoidAheadLane(float roadWide)
+        float ComputeAvoidAheadLane(float roadHalfWidthMetres)
         {
-            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-            float trackBound = roadWide - carHalfWidth;
+            float carHalfWidth = VehicleData.SlidingWidthMetres * 0.5f;
+            float trackBound = roadHalfWidthMetres - carHalfWidth;
             float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
-            float nodeOffset = Brain.CurrentPerception.CurrentNodeOffset;
+            float nodeOffset = Brain.CurrentPerception.CurrentLaneOffsetMetres;
 
             Rival target = Brain.AvoidanceTarget;
             if (target == null || target.RivalRacer == null) { _passLaneLatched = false; return 0f; }
@@ -1374,8 +1374,8 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (r.RivalRacer == null || r == target) continue;
                 if (r.RelativePosition != RelativePos.Ahead) continue;
                 if (!ARS.IsBetween(r.RouteGapAhead, 0f, SameSectionMaxGapMeters)) continue;
-                if (!ARS.IsBetween(Math.Abs(r.DirectionDiff), 0f, AvoidAngleGateDegrees)) continue;
-                if (!ARS.IsBetween(r.FrontGap, 0f, 3f) && !ARS.IsBetween(r.TimeToReach, 0f, 5f)) continue;
+                if (!ARS.IsBetween(Math.Abs(r.DirectionDiffDegrees), 0f, AvoidAngleGateDegrees)) continue;
+                if (!ARS.IsBetween(r.FrontGapMetres, 0f, 3f) && !ARS.IsBetween(r.TimeToReachSeconds, 0f, 5f)) continue;
 
                 if (!TryPickAvoidanceSide(r, trackBound, aggroBuffer, carHalfWidth, nodeOffset, out float secondTarget, out bool secondGoLeft))
                     continue;
@@ -1400,7 +1400,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             float rivalLane = rival.NodeOffset;
 
-            float buffer = rival.RivalRacer.VehicleData.BoundingBox * 0.5f + aggroBuffer;
+            float buffer = rival.RivalRacer.VehicleData.SlidingWidthMetres * 0.5f + aggroBuffer;
 
             Vector3 predHalf = ProjectAhead(0.5f);
             Vector3 predDir = ProjectAhead(1f) - predHalf;
@@ -1429,11 +1429,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             return true;
         }
 
-        float ClampLaneToWalls(float lane, float roadWide, bool leftConstrained, bool rightConstrained)
+        float ClampLaneToWalls(float lane, float roadHalfWidthMetres, bool leftConstrained, bool rightConstrained)
         {
 
-            float carHalfWidth = VehicleData.BoundingBox * 0.5f;
-            float trackBound = roadWide;
+            float carHalfWidth = VehicleData.SlidingWidthMetres * 0.5f;
+            float trackBound = roadHalfWidthMetres;
             float clampLeft = leftConstrained ? Math.Max(_avoidLeftWall + carHalfWidth, -trackBound) : Math.Max(_avoidLeftWall, -trackBound);
             float clampRight = rightConstrained ? Math.Min(_avoidRightWall - carHalfWidth, trackBound) : Math.Min(_avoidRightWall, trackBound);
             if (clampLeft > clampRight)
@@ -1445,10 +1445,10 @@ const float RequirementLookaheadSeconds = 3.95f;
             return ARS.Clamp(lane, clampLeft, clampRight);
         }
 
-        float ApplyRivalWalls(float requestLane, float roadWide)
+        float ApplyRivalWalls(float requestLane, float roadHalfWidthMetres)
         {
 
-            float trackBound = roadWide;
+            float trackBound = roadHalfWidthMetres;
 
             if (!_avoidWallsInitialized)
             {
@@ -1468,12 +1468,12 @@ const float RequirementLookaheadSeconds = 3.95f;
 
                 bool overlaps = Math.Abs(r.RouteGapAhead) < r.CombinedSize.Y;
 
-                bool approaching = r.TimeToReach < WallApproachSeconds;
+                bool approaching = r.TimeToReachSeconds < WallApproachSeconds;
                 if (!overlaps && !approaching) continue;
 
                 float aggroBuffer = ARS.Remap(Aggression, 100f, 0f, 0.2f, 1.2f, true);
 
-                float rivalBuffer = r.RivalRacer.VehicleData.BoundingBox * 0.5f + aggroBuffer;
+                float rivalBuffer = r.RivalRacer.VehicleData.SlidingWidthMetres * 0.5f + aggroBuffer;
 
                 bool rivalOnRight = r.LateralGap > WallSideDeadbandMeters;
 
@@ -1502,11 +1502,11 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             _leftWallHeld = leftConstrained;
             _rightWallHeld = rightConstrained;
-            _wallRoadWide = roadWide;
+            _wallRoadWide = roadHalfWidthMetres;
 
             float wallCloseRate = 10f * TickScale;
             float wallOpenRate = 5f * TickScale;
-            float wallSnapMeters = VehicleData.BoundingBox;
+            float wallSnapMeters = VehicleData.SlidingWidthMetres;
 
             _avoidLeftWall = Math.Min(_avoidLeftWall, trackBound);
             _avoidRightWall = Math.Max(_avoidRightWall, -trackBound);
@@ -1524,7 +1524,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             _avoidRightWall = ARS.Clamp(rightTarget, _avoidRightWall - rightStep, _avoidRightWall + rightStep);
             _activeRivalWallCount = (_avoidLeftWall > -trackBound ? 1 : 0) + (_avoidRightWall < trackBound ? 1 : 0);
 
-            return ClampLaneToWalls(requestLane, roadWide, leftConstrained, rightConstrained);
+            return ClampLaneToWalls(requestLane, roadHalfWidthMetres, leftConstrained, rightConstrained);
         }
         const float SlidingFraction = 0.3f;
         // Countersteer: half a peak starts it, geometric by 2.5x, halved when the slide comes back.
@@ -1578,7 +1578,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             float grip = VehicleData.CurrentMechanicalGrip;
             if (float.IsNaN(grip) || fwdSpeed <= 0f) return VehicleData.SteeringLock;
-            float ratio = VehicleData.WheelBase * grip * Handling.Gravity / (fwdSpeed * fwdSpeed);
+            float ratio = VehicleData.WheelBaseMetres * grip * Handling.Gravity / (fwdSpeed * fwdSpeed);
             if (float.IsNaN(ratio) || ratio <= 0f) return VehicleData.SteeringLock;
             return ARS.RadToDeg((float)Math.Atan(ratio));
         }
@@ -1594,7 +1594,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         float LateralPeakAtSpeed(float speed)
         {
-            float lat = Handling.LateralTractionCurve;
+            float lat = Handling.LateralTractionCurveDegrees;
             return lat <= 0.01f ? 0f : lat / (1f + Math.Min(5f, 0.1f * speed));
         }
 
@@ -1642,7 +1642,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (!WheelTrimUnderPower) return 1f;
 
             float ramp = ARS.Clamp((Control.Throttle - ExitTrimPedalStart) / (1f - ExitTrimPedalStart), 0f, 1f);
-            ramp *= _exitRoomArmed ? _gsFloor01 : 0f;
+            ramp *= _exitRoomArmed ? _gsLaneFloorShare01 : 0f;
             if (ramp <= 0f) return 1f;
 
             float baseShare = Math.Max(0.05f, AllowedSlipShare(fwdSpeed));
@@ -1678,7 +1678,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             SlipState s = new SlipState();
             float gripGs = VehicleData.CurrentMechanicalGrip;
             float speed = Math.Abs(fwdSpeed);
-            float wheelBase = Math.Max(VehicleData.WheelBase, 0.5f);
+            float wheelBase = Math.Max(VehicleData.WheelBaseMetres, 0.5f);
 
             if (float.IsNaN(speed) || float.IsNaN(gripGs) || float.IsNaN(wheelBase)) return s;
             if (speed < FrontSlipTheoryMinSpeedMps || gripGs <= 0.01f || wheelBase <= 0.5f) return s;
@@ -1717,11 +1717,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             float endSpeed = ARS.MphToMps(SteerLimitRampEndMph);
             float endCeiling = LateralPeakAtSpeed(endSpeed) > 0.01f ? PeakSlipCeilingAt(AllowedSlipDegrees(endSpeed)) : GeometrySteerCeiling(endSpeed);
 
-            return Math.Max(ceiling, ManeuverRamp(speedMph, endCeiling));
+            return Math.Max(ceiling, SteerLimitRamp(speedMph, endCeiling));
         }
         static readonly bool SpeedSteerCeiling = false;
 
-        float ManeuverRamp(float speedMph, float ceiling)
+        float SteerLimitRamp(float speedMph, float ceiling)
         {
             if (speedMph >= SteerLimitRampEndMph) return ceiling;
 
@@ -1774,9 +1774,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             float steerLimitRight = speedCeiling;
             float steerLimitLeft = speedCeiling;
 
-            if (countersteering && _slidePriority > 0f)
+            if (countersteering && _countersteerDemand01 > 0f)
             {
-                float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle) * _slidePriority, VehicleData.SteeringLock);
+                float countersteerAllowance = Math.Min(Math.Abs(VehicleData.SlideAngle) * _countersteerDemand01, VehicleData.SteeringLock);
                 if (requestedSteer > 0f) steerLimitLeft = Math.Max(steerLimitLeft, countersteerAllowance);
                 else steerLimitRight = Math.Max(steerLimitRight, countersteerAllowance);
             }
@@ -1807,7 +1807,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             if (KickWantsSlide()) return false;
             if (Vector3.Dot(Car.Velocity, Car.ForwardVector) < ARS.MphToMps(CountersteerMinSpeedMph)) return false;
-            return _slidePriority >= 1f;
+            return _countersteerDemand01 >= 1f;
         }
 
         bool KickWantsSlide()
@@ -1854,7 +1854,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             float restHeight = Car.HeightAboveGround;
             if (restHeight > 0f) _restHeightAboveGround = restHeight;
-            Control.HandBrakeTime = 0;
+            Control.HandBrakeUntilMs = 0;
             Control.MaxThrottle = 1f;
             Control.MaxBrake = 1f;
             Control.MaxBrakeFromABS = 1f;
@@ -1874,9 +1874,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             _avoidHoldLane = 0f;
             _avoidHoldUntil = 0;
 
-            Control.ThrottleReasonLevel = 1f;
+            Control.ThrottleReasonCap = 1f;
             Control.BrakeReason = BrakeReason.Plan;
-            Control.BrakeReasonLevel = 1f;
+            Control.BrakeReasonCap = 1f;
             _stuckPhase = StuckPhase.None;
             _stuckPhaseEndTime = 0;
             _stuckRecoveryStartTime = 0;
@@ -1918,7 +1918,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         void UpdateExitRoom()
         {
             _exitRoomArmed = false;
-            _gsFloor01 = 0f;
+            _gsLaneFloorShare01 = 0f;
             if (!ARS.GsLaneThrottleFloor && !WheelTrimUnderPower) return;
 
             if (_projectionOutsideMeters > 0f || _carOutsideMeters > 0f) return;
@@ -1937,14 +1937,14 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             float floor01 = ARS.Clamp((laneVsLane + GsLaneFloorSpreadMeters) / (2f * GsLaneFloorSpreadMeters), 0f, 1f);
             _exitRoomArmed = floor01 > 0f;
-            _gsFloor01 = floor01;
+            _gsLaneFloorShare01 = floor01;
         }
 
         float GsLaneThrottleFloorValue(out bool insideRegime)
         {
             insideRegime = TrackSpeed.GsLaneFloor && ARS.GsLaneThrottleFloor && _exitRoomArmed;
             if (!insideRegime) return 0f;
-            return GsLaneOutsideFloor + (GsLaneThrottleMaxFloor - GsLaneOutsideFloor) * _gsFloor01;
+            return GsLaneOutsideFloor + (GsLaneThrottleMaxFloor - GsLaneOutsideFloor) * _gsLaneFloorShare01;
         }
 
         void ConvertSpeedToPedals()
@@ -1954,7 +1954,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float newThrottle = 0f;
             float newBrake = 0f;
 
-            FindLowestIntendedSpeed();
+            ClampIntendedSpeedToCeiling();
             ApplyProjectionSpeedCut();
 
             float intendedSpeedChange = Brain.CurrentIntention.Speed - currentForwardSpeed;
@@ -2032,11 +2032,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (combinedInput < 0f) newBrake = -combinedInput;
         }
 
-        void FindLowestIntendedSpeed()
+        void ClampIntendedSpeedToCeiling()
         {
             if (Brain.CurrentIntention.Speed >= 0f)
             {
-                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, AiConstants.MaxSpeed);
+                Brain.CurrentIntention.Speed = Math.Min(Brain.CurrentIntention.Speed, AiConstants.MaxIntendedSpeedMps);
             }
         }
 
@@ -2057,7 +2057,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             bool projectionSliding = TRLateralAtSpeed > 0.01f
                 && projectionSlide >= TRLateralAtSpeed * ProjectionArmSlideShare
                 && steeringIntoSlide;
-            bool projectionMovingAhead = ARS.MpsToMph(Car.Velocity.Length()) >= OffshootMinSpeedMph
+            bool projectionMovingAhead = ARS.MpsToMph(Car.Velocity.Length()) >= ProjectionMinSpeedMph
                 && ARS.GetForwardSpeed(Car) > 0f;
             _projectionArmed = projectionSliding && projectionMovingAhead;
             _projectionCutActive = _projectionArmed && _projectionOutsideMeters > 0f;
@@ -2091,7 +2091,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float carOffset = 0f;
             float turnDirection = 0f;
 
-            if (mph >= OffshootMinSpeedMph)
+            if (mph >= ProjectionMinSpeedMph)
             {
                 Vector3 proj = ProjectAhead(seconds);
 
@@ -2120,9 +2120,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                 _projectionWidening = _projectionWidenMeters > 0f;
             }
 
-            if (ARS.DebugToggles[Options.ShowGsProjection] && ARS.DebugFocusRacer == this && Game.GameTime >= _offshootLogAt)
+            if (ARS.DebugToggles[Options.ShowGsProjection] && ARS.DebugFocusRacer == this && Game.GameTime >= _projectionLogAtMs)
             {
-                _offshootLogAt = Game.GameTime + 500;
+                _projectionLogAtMs = Game.GameTime + 500;
                 ARS.Log(ARS.LogImportance.Info, "Offshoot: override=" + laneOverride + " mph=" + mph.ToString("0") + " turn=" + turnDirection + " signed=" + signedOffset.ToString("0.00") + " car=" + carOffset.ToString("0.00") + " half=" + halfWidth.ToString("0.00") + " outside=" + outsideOffset.ToString("0.00") + " drop=" + _projectionDropMph.ToString("0.0") + " floor=" + ProjectionSpeedFloorMph().ToString("0"));
             }
 
@@ -2187,7 +2187,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             int targetNode = BrakeTargetBaseNode(apex, CornerEntranceNode(corner, apex));
             if (targetNode >= 0)
             {
-                float distance = MetresToNode(targetNode);
+                float distance = SignedMetresToNode(targetNode);
                 if (distance > 0f)
                 {
                     _brakeAnalysisArmed = true;
@@ -2254,7 +2254,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             // A hit while off the road is the corner being too fast, so it is latched rather than sampled: by the
             // commit the car may be back on the surface and the contact older than a second, and the latch is what
             // survives that.
-            if (!_cornerSpeedHitOffTrack && MsSinceContact() < CornerSpeedLearnHitOffTrackMs && OutOfTrackDistance() > 0f)
+            if (!_cornerSpeedHitOffTrack && MsSinceContact() < CornerSpeedLearnHitOffTrackMs && SignedMetresBeyondTrackEdge() > 0f)
                 _cornerSpeedHitOffTrack = true;
             if (!HasPassedApex(_cornerSpeedApexNode)) return;
             if (VehicleData.LastAccelSampleTime == _cornerSpeedLastSampleMs || TRLateralAtSpeed <= 0.01f) return;
@@ -2270,9 +2270,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (slide / TRLateralAtSpeed < CornerSpeedLearnMinSlideShare) return;
 
             float signedOffset = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
-            float outsideReach = signedOffset * outsideSign + VehicleData.BoundingBox * 0.5f;
+            float outsideReach = signedOffset * outsideSign + VehicleData.SlidingWidthMetres * 0.5f;
             float clearance = Math.Max(CurrentTrackPoint.TrackHalfWidth, 0.1f) - outsideReach;
-            _cornerSpeedWorstOutsideClear = Math.Min(_cornerSpeedWorstOutsideClear, clearance);
+            _cornerSpeedMinOutsideClearanceMetres = Math.Min(_cornerSpeedMinOutsideClearanceMetres, clearance);
             _cornerSpeedOutsideSamples++;
         }
 
@@ -2285,7 +2285,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
             _cornerSpeedApexNode = apexNode;
             _cornerSpeedLastSampleMs = -1;
-            _cornerSpeedWorstOutsideClear = float.MaxValue;
+            _cornerSpeedMinOutsideClearanceMetres = float.MaxValue;
             _cornerSpeedOutsideSamples = 0;
             _cornerSpeedWorstSlideDeg = 0f;
             _cornerSpeedHitOffTrack = false;
@@ -2333,7 +2333,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float before = TryGetCornerContext(apexNode, out CornerContext context) ? context.CornerSpeedOffsetMps : 0f;
             string id = CornerId(apexNode);
             bool hadSlipSample = _cornerSpeedOutsideSamples > 0;
-            float clearance = hadSlipSample ? _cornerSpeedWorstOutsideClear : float.NaN;
+            float clearance = hadSlipSample ? _cornerSpeedMinOutsideClearanceMetres : float.NaN;
             // His law: the metre is a deadzone, not a subtraction. The clearance is already the gap from the car's
             // outer side to the paint, so inside-but-within-a-metre teaches nothing; past the metre the gap is room
             // to spend, and a side over the line - clearance under zero - is a deduction.
@@ -2390,7 +2390,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float bestMetres = float.MaxValue;
             foreach (CornerPoint corner in ARS.Corners)
             {
-                float metres = MetresToNode(corner.Node);
+                float metres = SignedMetresToNode(corner.Node);
                 if (metres < -ApexReachedMetres * 2f) continue;
                 if (best != null && metres >= bestMetres) continue;
                 best = corner;
@@ -2409,13 +2409,13 @@ const float RequirementLookaheadSeconds = 3.95f;
             // An apex behind the car is never a corner to take: the picker keeps a six-metre tail, so a corner just
             // passed can still be the source, and aiming the apex count at a node behind the car wraps it to a whole
             // lap - which would hold that corner for one.
-            if (MetresToNode(apexNode) < 0f) return;
+            if (SignedMetresToNode(apexNode) < 0f) return;
             if (_cornerMode && _cornerModeNode >= 0 && _cornerModeNode != apexNode)
                 CommitCornerSpeedLearningFor(_cornerModeNode);
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": pre  route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
                 + " corner " + cornerTerm.ToString("0.0", CultureInfo.InvariantCulture)
                 + " car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
-                + " apex at " + MetresToNode(apexNode).ToString("0.0", CultureInfo.InvariantCulture) + " m");
+                + " apex at " + SignedMetresToNode(apexNode).ToString("0.0", CultureInfo.InvariantCulture) + " m");
             _cornerMode = true;
             _cornerSpeedAuthority = true;
             _apexRampActive = false;
@@ -2444,7 +2444,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 + (postApexMs >= 0 ? " " + postApexMs + " ms after apex" : " before apex was marked"));
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": post route " + routeTerm.ToString("0.0", CultureInfo.InvariantCulture)
                 + " car " + Car.Velocity.Length().ToString("0.0", CultureInfo.InvariantCulture)
-                + " apex at " + MetresToNode(_cornerModeNode).ToString("0.0", CultureInfo.InvariantCulture) + " m");
+                + " apex at " + SignedMetresToNode(_cornerModeNode).ToString("0.0", CultureInfo.InvariantCulture) + " m");
             _cornerMode = false;
             _cornerSpeedAuthority = false;
             ARS.Log(ARS.LogImportance.Info, "mode " + Name + ": EXIT to route (" + why + ")");
@@ -2478,7 +2478,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             List<int> released = null;
             foreach (int node in _cornerSpeedLocked)
             {
-                if (MetresToNode(node) >= -CornerSpeedLearnReleaseMetres) continue;
+                if (SignedMetresToNode(node) >= -CornerSpeedLearnReleaseMetres) continue;
                 if (released == null) released = new List<int>();
                 released.Add(node);
             }
@@ -2502,13 +2502,13 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (shaped >= 0) return shaped;
             }
             if (corner == null) return apexNode;
-            return corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(apexNode, -corner.LengthStart);
+            return corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(apexNode, -corner.EntranceNodes);
         }
 
         int CornerExitNode(CornerPoint corner)
         {
             if (corner == null || corner.Node < 0) return -1;
-            return corner.EndNode >= 0 ? corner.EndNode : OffsetCornerNode(corner.Node, corner.LengthEnd);
+            return corner.EndNode >= 0 ? corner.EndNode : OffsetCornerNode(corner.Node, corner.ExitNodes);
         }
         // Fixed brake-ramp aim: first node centre at least 15 m behind the apex, by route distance.
         const float BrakeRampTargetLeadMetres = 15f;
@@ -2556,7 +2556,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             return targetDistance <= 0 || (!ARS.IsPointToPoint && targetDistance > apexDistance);
         }
 
-        float TickScale => (0.001f * TimeSince_lastCoreTick);
+        float TickScale => (0.001f * TimeSinceLastCoreTick);
 
         void TranslateSteerToInput()
         {
@@ -2596,7 +2596,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 Brain.CurrentIntention.Term = SpeedTerm.Finished;
                 return;
             }
-            Brain.CurrentIntention.Speed = AiConstants.MaxSpeed;
+            Brain.CurrentIntention.Speed = AiConstants.MaxIntendedSpeedMps;
             Brain.CurrentIntention.Term = SpeedTerm.None;
 
             float cornerSpd = 999f;
@@ -2685,7 +2685,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float steerRad = Math.Abs(Control.SteerDegrees) * (float)Math.PI / 180f;
             if (steerRad > 0.001f)
             {
-                float turnRadius = VehicleData.WheelBase / (float)Math.Tan(steerRad);
+                float turnRadius = VehicleData.WheelBaseMetres / (float)Math.Tan(steerRad);
                 Brain.CurrentIntention.SteerLimitedSpeed = (float)Math.Sqrt(Handling.Gravity * VehicleData.CurrentMechanicalGrip * Math.Max(turnRadius, 1f));
                 if (steerLimitedSpeedGovernsRoute) followTrackSpd = 0.7f * Brain.CurrentIntention.SteerLimitedSpeed + 0.3f * followTrackSpd;
             }
@@ -2725,7 +2725,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     // The latched corner owns the number until its apex: its ramp on the way in, recomputed for
                     // THIS node every tick, never whatever the queue happened to be looking at.
-                    float toApex = MetresToNode(_cornerModeNode);
+                    float toApex = SignedMetresToNode(_cornerModeNode);
                     cornerArrival = _cornerModeSpeed;
                     cornerSpd = toApex < 0f
                         ? _cornerModeSpeed
@@ -2765,7 +2765,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 Brain.CurrentIntention.Term = SpeedTerm.Corner;
                 Brain.CurrentIntention.TermNode = cornerSourceNode;
-                Brain.CurrentIntention.TermMetres = cornerSourceNode >= 0 ? MetresToNode(cornerSourceNode) : 0f;
+                Brain.CurrentIntention.TermMetres = cornerSourceNode >= 0 ? SignedMetresToNode(cornerSourceNode) : 0f;
                 CornerPoint source = cornerSourceNode >= 0 ? ARS.Corners.Find(c => c.Node == cornerSourceNode) : null;
                 Brain.CurrentIntention.TermRadius = source != null ? source.DetectedRadius : 0f;
             }
@@ -2775,7 +2775,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 CornerPoint ramped = _cornerModeNode >= 0 ? ARS.Corners.Find(c => c.Node == _cornerModeNode) : null;
                 Brain.CurrentIntention.Term = SpeedTerm.CornerToRoute;
                 Brain.CurrentIntention.TermNode = _cornerModeNode;
-                Brain.CurrentIntention.TermMetres = _cornerModeNode >= 0 ? MetresToNode(_cornerModeNode) : 0f;
+                Brain.CurrentIntention.TermMetres = _cornerModeNode >= 0 ? SignedMetresToNode(_cornerModeNode) : 0f;
                 Brain.CurrentIntention.TermRadius = ramped != null ? ramped.DetectedRadius : 0f;
             }
             else
@@ -2808,8 +2808,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (!burning && rbFactor < 1f && !rbFreeZone && !(ARS.CurrentRubberbandMode == RubberbandMode.Natural && rbNearbyRival))
                 Brain.CurrentIntention.Speed *= rbFactor;
         }
-        const float nearSeconds = 1.0f;
-        const float farSeconds = 2.0f;
+        const float CrestNearSeconds = 1.0f;
+        const float CrestFarSeconds = 2.0f;
         float CrestGripSpeedFactor(int carNode, int count, out int nearNode, out int farNode, out float rawDeltaGs)
         {
             nearNode = -1;
@@ -2820,8 +2820,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             float v = Car.Velocity.Length();
             if (v < 0.5f) return 1f;
 
-            int near = TrackLoader.NodeAhead(carNode, nearSeconds * v, count);
-            int far = TrackLoader.NodeAhead(carNode, farSeconds * v, count);
+            int near = TrackLoader.NodeAhead(carNode, CrestNearSeconds * v, count);
+            int far = TrackLoader.NodeAhead(carNode, CrestFarSeconds * v, count);
             if (near < 0 || far < 0) return 1f;
             if (near == carNode || far == carNode || near == far) return 1f;
             nearNode = near;
@@ -2958,7 +2958,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             foreach (Rival r in Brain.Rivals)
             {
                 if (r.RivalRacer == null || r.RelativePosition != RelativePos.Ahead) continue;
-                rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.FrontGap, 0f, RivalLiftMeters, RivalLiftFloor, 1f, true));
+                rivalLevel = Math.Min(rivalLevel, ARS.Remap(r.FrontGapMetres, 0f, RivalLiftMeters, RivalLiftFloor, 1f, true));
             }
             Control.MaxThrottleFromRival = GlideCap(Control.MaxThrottleFromRival, rivalLevel);
 
@@ -2966,7 +2966,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             Control.MaxThrottleFromYield = GlideCap(Control.MaxThrottleFromYield, ActiveManeuver.Type == ManeuverType.Yield && ActiveManeuver.Target != null ? YieldThrottleLevel : 1f);
 
             float offTrackThrottle = 1f;
-            if (TrackSpeed.OffTrackThrottle && OutOfTrackDistance() > 0f)
+            if (TrackSpeed.OffTrackThrottle && SignedMetresBeyondTrackEdge() > 0f)
             {
                 float level = ProjectionClosingOnCentre() ? OffTrackRecoverThrottle : OffTrackWideningThrottle;
                 offTrackThrottle = ARS.Remap(ARS.MpsToMph(Car.Velocity.Length()), OffTrackSafeSpeedMph, OffTrackFullThrottleMph, level, 1f, true);
@@ -2988,7 +2988,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (!ARS.TcsEnabled) return 1f;
             float wheelspin = ARS.MaxWheelSlip(Car);
 
-            float slipTarget = -SlipForShare(ARS.TcsSlipLimitPct) * (OutOfTrackDistance() > 0f ? OffTrackTargetShare : 1f);
+            float slipTarget = -SlipForShare(ARS.TcsSlipLimitPct) * (SignedMetresBeyondTrackEdge() > 0f ? OffTrackTargetShare : 1f);
             float spinDepth = Math.Max(0f, slipTarget - wheelspin);
             float depthShare = TaperShare(spinDepth, SlipForShare(ARS.TcsTaperSpanPct));
             return 1f - depthShare * (1f - TcsCapFloor);
@@ -3071,7 +3071,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (_kickPlaying && reason == ThrottleReason.Plan) reason = ThrottleReason.Kick;
 
             Control.ThrottleReason = reason;
-            Control.ThrottleReasonLevel = binding;
+            Control.ThrottleReasonCap = binding;
             Control.ThrottleLimited = binding < baseThrottle - 0.001f;
             return binding;
         }
@@ -3090,7 +3090,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (BaseBehavior == RacerBaseBehavior.GridWait) reason = BrakeReason.GridWait;
 
             Control.BrakeReason = reason;
-            Control.BrakeReasonLevel = binding;
+            Control.BrakeReasonCap = binding;
             return binding;
         }
         Rival NearestRival()
@@ -3109,7 +3109,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             if (ControlledByPlayer || BaseBehavior != RacerBaseBehavior.Race || ARS.Racers.Count < 1) return;
 
-            if (ActiveManeuver.Type != ManeuverType.None && Game.GameTime - ActiveManeuver.LastEnabled > 8000)
+            if (ActiveManeuver.Type != ManeuverType.None && Game.GameTime - ActiveManeuver.EnabledAtMs > 8000)
             {
                 EndCard();
                 _divebombApexNode = -1;
@@ -3124,13 +3124,13 @@ const float RequirementLookaheadSeconds = 3.95f;
                     divePartner = r;
                     break;
                 }
-                bool partnerLost = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || divePartner == null || Math.Abs(divePartner.RouteGapAhead) > DivebombReleaseGapMeters || Math.Abs(divePartner.DirectionDiff) > DivebombReleaseAngleDegrees;
+                bool partnerLost = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || divePartner == null || Math.Abs(divePartner.RouteGapAhead) > DivebombReleaseGapMeters || Math.Abs(divePartner.DirectionDiffDegrees) > DivebombReleaseAngleDegrees;
 
                 if ((partnerLost || HasPassedApex(_divebombApexNode)) && CardMayEnd)
                 {
                     ARS.Log(ARS.LogImportance.Info, "Card divebomb: " + Name + " released"
                         + (HasPassedApex(_divebombApexNode) ? " at apex" : " partner lost")
-                        + " after " + (Game.GameTime - ActiveManeuver.LastEnabled) + " ms");
+                        + " after " + (Game.GameTime - ActiveManeuver.EnabledAtMs) + " ms");
                     EndCard();
                     _divebombApexNode = -1;
                 }
@@ -3149,7 +3149,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                     foreach (Rival back in r.RivalRacer.Brain.Rivals)
                     {
                         if (back.RivalRacer != this) continue;
-                        hisTimeToReachMe = back.TimeToReach;
+                        hisTimeToReachMe = back.TimeToReachSeconds;
                         break;
                     }
                     float combinedLength = Math.Abs(VehicleData.ModelDimensions.Y) + Math.Abs(r.RivalRacer.VehicleData.ModelDimensions.Y);
@@ -3161,7 +3161,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 }
                 bool lostTarget = ActiveManeuver.Target == null || !ActiveManeuver.Target.Car.Exists() || !targetTrails;
 
-                bool outsideOver = MetresToNode(_defendApexNode) <= OutsideGateMeters(CurrentTrackPoint);
+                bool outsideOver = SignedMetresToNode(_defendApexNode) <= OutsideGateMeters(CurrentTrackPoint);
 
                 if ((lostTarget || threatGone || outsideOver || HasPassedApex(_defendApexNode)) && CardMayEnd)
                 {
@@ -3197,7 +3197,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 {
                     ActiveManeuver.Type = ManeuverType.ChillOut;
                     ActiveManeuver.Target = closestRival.RivalRacer;
-                    ActiveManeuver.LastEnabled = Game.GameTime;
+                    ActiveManeuver.EnabledAtMs = Game.GameTime;
                 }
             }
         }
@@ -3209,7 +3209,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             return fwd;
         }
 
-        float MetresToNode(int node)
+        float SignedMetresToNode(int node)
         {
             if (node < 0 || node >= ARS.TrackPoints.Count) return 0f;
             float metres = ARS.TrackPoints[node].CumulativeDistance - CurrentTrackPoint.CumulativeDistance;
@@ -3243,7 +3243,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         bool ApexAheadOfLookahead(CornerPoint corner, float lookaheadMetres)
         {
-            return corner != null && corner.Node >= 0 && MetresToNode(corner.Node) - lookaheadMetres > 0f;
+            return corner != null && corner.Node >= 0 && SignedMetresToNode(corner.Node) - lookaheadMetres > 0f;
         }
 
         bool IsWithinCorner(CornerPoint corner)
@@ -3278,7 +3278,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (!ARS.NitrousEnabled || Lap <= _nitrousLapUsed) return false;
             if (ARS.RaceStartTime > 0 && Game.GameTime - ARS.RaceStartTime < NitrousArmDelayMs) return false;
             if (Control.Brake > 0f) return false;
-            if (OutOfTrackDistance() > 0f) return false;
+            if (SignedMetresBeyondTrackEdge() > 0f) return false;
             if (Math.Abs(Control.SteerDegrees) >= NitrousMaxSteerDegrees) return false;
             // Fail closed: a degenerate forward vector makes the angle NaN, and NaN must not read as a straight car.
             float nitrousSlide = VehicleData.SlideAngle;
@@ -3301,10 +3301,10 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (NitrousRouteRadius() <= NitrousMinRouteRadiusMeters) return false;
                 int entranceNode = corner == null
                     ? NextApexNode
-                    : (corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(NextApexNode, -corner.LengthStart));
+                    : (corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(NextApexNode, -corner.EntranceNodes));
                 // Signed distance: an entrance already behind the car reads negative and blocks, instead of
                 // wrapping to the far side of the circuit and passing as "a full lap away".
-                if (MetresToNode(entranceNode) / Math.Max(speed, 1f) < NitrousCornerLookaheadSeconds) return false;
+                if (SignedMetresToNode(entranceNode) / Math.Max(speed, 1f) < NitrousCornerLookaheadSeconds) return false;
             }
 
             // "Faster than me" only counts inside 30 m of TRACK around the car — route gap, so it
@@ -3326,7 +3326,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (r.Distance / (r.Speed - speed) < NitrousDefenseReachSeconds) { rivalBehindIncoming = true; break; }
             }
             bool lonelyClear = closestRival == null
-                && speed < Handling.EstimatedTopSpeed * NitrousLonelySpeedFraction
+                && speed < Handling.EstimatedTopSpeedMps * NitrousLonelySpeedFraction
                 && ForwardNodeDistance(NextApexNode) > NitrousLonelyMinApexDistance;
             if (!rivalNearbyFaster && !rivalBehindIncoming && !lonelyClear && !finishSpender) return false;
 
@@ -3365,7 +3365,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (r.RouteGapAhead <= 0f || r.RouteGapAhead > SameSectionMaxGapMeters) continue;
                 if (r.ForwardSpeedGap <= 0f) continue;
 
-                if (Math.Abs(r.DirectionDiff) > AvoidAngleGateDegrees) continue;
+                if (Math.Abs(r.DirectionDiffDegrees) > AvoidAngleGateDegrees) continue;
                 if (!CardFree(r.RivalRacer, ManeuverType.DiveBomb)) continue;
                 if (r.Distance < nearestDive) { nearestDive = r.Distance; diveTarget = r; }
             }
@@ -3373,7 +3373,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             ActiveManeuver.Type = ManeuverType.DiveBomb;
             ActiveManeuver.Target = diveTarget.RivalRacer;
-            ActiveManeuver.LastEnabled = Game.GameTime;
+            ActiveManeuver.EnabledAtMs = Game.GameTime;
             _divebombApexNode = apexNode;
             _divebombBrakeBonus = ARS.GetRandomInt(2, 9) / 100f;
             ARS.Log(ARS.LogImportance.Info, "Card divebomb: " + Name + " armed on " + diveTarget.RivalRacer.Name
@@ -3394,7 +3394,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float myTimeToEntrance = ForwardNodeDistance(entranceNode) / Math.Max(Car.Velocity.Length(), 1f);
             if (!ARS.IsBetween(myTimeToEntrance, FightWindowMinSeconds, FightWindowMaxSeconds)) return false;
 
-            if (MetresToNode(apexNode) <= OutsideGateMeters(CurrentTrackPoint)) return false;
+            if (SignedMetresToNode(apexNode) <= OutsideGateMeters(CurrentTrackPoint)) return false;
 
             Rival defenderTarget = null;
             float nearestDefender = float.MaxValue;
@@ -3408,7 +3408,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 foreach (Rival back in r.RivalRacer.Brain.Rivals)
                 {
                     if (back.RivalRacer != this) continue;
-                    timeToReachMe = back.TimeToReach;
+                    timeToReachMe = back.TimeToReachSeconds;
                     break;
                 }
 
@@ -3430,15 +3430,15 @@ const float RequirementLookaheadSeconds = 3.95f;
             Racer defender = defenderTarget.RivalRacer;
             float hisLane = ARS.SignedLaneOffset(defender.Car.Position, defender.CurrentTrackPoint.Position, defender.CurrentTrackPoint.Direction);
             float combinedWidth = Math.Abs(VehicleData.ModelDimensions.X) + Math.Abs(defender.VehicleData.ModelDimensions.X);
-            float clearance = (Math.Abs(VehicleData.BoundingBox) + Math.Abs(defender.VehicleData.BoundingBox)) * 0.5f;
-            float reachable = Math.Abs(CurrentTrackPoint.TrackHalfWidth) - Math.Abs(VehicleData.BoundingBox) * 0.5f - EdgeEmptySpaceMeters;
+            float clearance = (Math.Abs(VehicleData.SlidingWidthMetres) + Math.Abs(defender.VehicleData.SlidingWidthMetres)) * 0.5f;
+            float reachable = Math.Abs(CurrentTrackPoint.TrackHalfWidth) - Math.Abs(VehicleData.SlidingWidthMetres) * 0.5f - EdgeEmptySpaceMeters;
             float inward = -defendTurn;
 
             if (Math.Abs(hisLane + inward * clearance) > reachable) return false;
 
             ActiveManeuver.Type = ManeuverType.DefendLane;
             ActiveManeuver.Target = defender;
-            ActiveManeuver.LastEnabled = Game.GameTime;
+            ActiveManeuver.EnabledAtMs = Game.GameTime;
             _defendApexNode = apexNode;
 
             _defendLaneOffset = ARS.Clamp(hisLane + inward * combinedWidth, -reachable, reachable);
@@ -3465,7 +3465,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             ActiveManeuver.Type = ManeuverType.Yield;
             ActiveManeuver.Target = closestRival.RivalRacer;
-            ActiveManeuver.LastEnabled = Game.GameTime;
+            ActiveManeuver.EnabledAtMs = Game.GameTime;
             return true;
         }
 
@@ -3620,14 +3620,14 @@ const float RequirementLookaheadSeconds = 3.95f;
                         if (!nodePoint.LaneShaped || nodePoint.LaneShapeApex != _laneShapeApexNode) break;
                         lastShaped = n;
                         if ((n & 1) == 0) continue;
-                        float half = Math.Max(nodePoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f);
+                        float half = Math.Max(nodePoint.TrackHalfWidth - VehicleData.SlidingWidthMetres * 0.5f, 0f);
                         Vector3 right = Vector3.Normalize(Vector3.Cross(nodePoint.Direction, Vector3.WorldUp));
                         World.DrawMarker(MarkerType.DebugSphere, nodePoint.Position + Vector3.WorldUp * 0.6f + right * (nodePoint.LaneLineShare * half), Vector3.Zero, Vector3.Zero, new Vector3(0.25f, 0.25f, 0.25f), Color.Black);
                     }
                     if (lastShaped != _laneShapeApexNode)
                     {
                         TrackPoint end = ARS.TrackPoints[lastShaped];
-                        float half = Math.Max(end.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f);
+                        float half = Math.Max(end.TrackHalfWidth - VehicleData.SlidingWidthMetres * 0.5f, 0f);
                         Vector3 right = Vector3.Normalize(Vector3.Cross(end.Direction, Vector3.WorldUp));
                         Vector3 at = end.Position + Vector3.WorldUp * 0.6f + right * (end.LaneLineShare * half);
                         World.DrawMarker(MarkerType.DebugSphere, at, Vector3.Zero, Vector3.Zero, new Vector3(0.9f, 0.9f, 0.9f), direction < 0 ? Color.Red : Color.Green);
@@ -3791,7 +3791,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             float slideAbs = Math.Abs(VehicleData.SlideAngle);
             if (TRLateralAtSpeed <= 0.01f || float.IsNaN(slideAbs)) return;
             if (slideAbs < TRLateralAtSpeed * RouteSpeedLearnMinSlideShare) return;
-            if (Control.MaxThrottleFromStability < RouteSpeedLearnStableThrottle) return;
+            if (Control.MaxThrottleFromStability < RouteSpeedLearnMinStabilityCap) return;
             _routeSpeedOffsetMph += step;
         }
 
@@ -3799,7 +3799,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         // car - the car is using the road - but by less than the widen line. Past that same line the fall answers.
         bool ProjectionWideningWithinLimit()
         {
-            return _projectionWidenMeters > 0f && _projectionWidenMeters < RouteSpeedLearnWidenM;
+            return _projectionWidenMeters > 0f && _projectionWidenMeters < RouteSpeedLearnWidenMetres;
         }
 
         // His law: it falls when the car's own PROJECTION lands further out than the car, while the wheel is
@@ -3814,7 +3814,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (Control.ThrottleDemand < RouteSpeedLearnFullThrottle) return false;
             float steer = Control.SteerInput;
             if (Math.Abs(steer) < RouteSpeedLearnSteerMin) return false;
-            if (_projectionWidenMeters < RouteSpeedLearnWidenM) return false;
+            if (_projectionWidenMeters < RouteSpeedLearnWidenMetres) return false;
             return Math.Sign(steer) == _projectionWidenSign;
         }
 
@@ -3833,8 +3833,8 @@ const float RequirementLookaheadSeconds = 3.95f;
         public void DrawRouteSpeedSubtitle()
         {
             string first = "~w~" + _routeSpeedOffsetMph.ToString("0.0", CultureInfo.InvariantCulture);
-            string colour = _projectionWidenMeters > 0f && _projectionWidenMeters < RouteSpeedLearnWidenM ? "~g~"
-                : _projectionWidenMeters >= RouteSpeedLearnWidenM ? "~r~" : "~w~";
+            string colour = _projectionWidenMeters > 0f && _projectionWidenMeters < RouteSpeedLearnWidenMetres ? "~g~"
+                : _projectionWidenMeters >= RouteSpeedLearnWidenMetres ? "~r~" : "~w~";
             string second = colour + _projectionWidenMeters.ToString("0.0", CultureInfo.InvariantCulture) + " m";
             UI.ShowSubtitle(first + "~n~" + second, 50);
         }
@@ -3890,7 +3890,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         public void DrawTrLateral()
         {
-            float halfWidth = VehicleData.BoundingBox * 0.5f;
+            float halfWidth = VehicleData.SlidingWidthMetres * 0.5f;
             float bodyLength = VehicleData.ModelDimensions.Y;
             Vector3 fwd = Car.ForwardVector;
             fwd.Z = 0f;
@@ -3926,7 +3926,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             if (slips.Count < 4) return;
 
             float halfWidth = VehicleData.ModelDimensions.X * 0.5f;
-            float halfBase = VehicleData.WheelBase * 0.5f;
+            float halfBase = VehicleData.WheelBaseMetres * 0.5f;
             for (int i = 0; i < 4; i++)
             {
                 float lateral = i % 2 == 0 ? -halfWidth : halfWidth;
@@ -3978,7 +3978,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         void UpdateSlideAndBoundingBox()
         {
-            VehicleData.BoundingBox = ARS.SlidingBoundingBoxWidth(Car);
+            VehicleData.SlidingWidthMetres = ARS.SlidingBoundingBoxWidth(Car);
 
             VehicleData.SlideAngle = Car.Velocity.LengthSquared() > 0.01f
                 ? (float)Math.Round(Vector3.SignedAngle(new Vector3(Car.Velocity.X, Car.Velocity.Y, 0f).Normalized, new Vector3(Car.ForwardVector.X, Car.ForwardVector.Y, 0f).Normalized, Car.UpVector), 3)
@@ -4028,7 +4028,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 UpdatePassengerSeat();
                 EnsureEngineRunning();
 
-                Car.HandbrakeOn = Control.HandBrakeTime > Game.GameTime;
+                Car.HandbrakeOn = Control.HandBrakeUntilMs > Game.GameTime;
 
                 VehicleMemory.SetThrottle(Car, ARS.Clamp(Control.Throttle, -1, 1));
                 VehicleMemory.SetBrakes(Car, ARS.Clamp(Control.Brake, 0f, 1f));
@@ -4055,7 +4055,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 counter *= _overspeedPowerLevel;
             }
 
-            _powerCounter = counter;
+            _powerMultiplier = counter;
 
             if (ControlledByPlayer && _overspeedPowerLevel < 0.99f && Game.GameTime > _powerCounterLoggedAt)
             {
@@ -4068,7 +4068,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         void ApplyPowerMultiplier()
         {
 
-            float multiplier = _powerCounter;
+            float multiplier = _powerMultiplier;
             if (Game.GameTime < _nitrousActiveUntil)
             {
                 multiplier = ControlledByPlayer
@@ -4118,9 +4118,9 @@ const float RequirementLookaheadSeconds = 3.95f;
             return wrapped < 0 ? wrapped + count : wrapped;
         }
 
-        float OutOfTrackDistance()
+        float SignedMetresBeyondTrackEdge()
         {
-            return Math.Abs(Brain.CurrentPerception.CurrentNodeOffset) - CurrentTrackPoint.TrackHalfWidth;
+            return Math.Abs(Brain.CurrentPerception.CurrentLaneOffsetMetres) - CurrentTrackPoint.TrackHalfWidth;
         }
 
         void UpdateRivalInfo()
@@ -4130,7 +4130,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 r.Update(this);
 
-                bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead && ARS.IsBetween(r.RouteGapAhead, 0f, SameSectionMaxGapMeters) && (ARS.IsBetween(r.FrontGap, 0f, 3f) || ARS.IsBetween(r.TimeToReach, 0f, 5f));
+                bool isAvoidanceCandidate = r.RelativePosition == RelativePos.Ahead && ARS.IsBetween(r.RouteGapAhead, 0f, SameSectionMaxGapMeters) && (ARS.IsBetween(r.FrontGapMetres, 0f, 3f) || ARS.IsBetween(r.TimeToReachSeconds, 0f, 5f));
                 if (Brain.AvoidanceTarget == null && isAvoidanceCandidate)
                 {
                     Brain.AvoidanceTarget = r;
@@ -4271,7 +4271,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             CurrentTrackPoint = closestPoint;
             UpdateLapOdometer(closestPoint.Node);
             UpdateCornerModeOdometer(closestPoint.Node);
-            Brain.CurrentPerception.CurrentNodeOffset = ARS.SignedLaneOffset(carPosition, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
+            Brain.CurrentPerception.CurrentLaneOffsetMetres = ARS.SignedLaneOffset(carPosition, CurrentTrackPoint.Position, CurrentTrackPoint.Direction);
 
             LookAheads.Clear();
             Vector3 velocity = Car.Velocity;
@@ -4479,7 +4479,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 : ((node % count) + count) % count;
         }
         const float ApexBufferSeconds = ARS.LanePrepSeconds;
-        const float SecondaryApexSpeedDifference = 5f;
+        const float SecondaryApexMinSpeedGapMps = 5f;
 
         void UpdateApexLeapfrog()
         {
@@ -4530,7 +4530,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             foreach (CornerPoint corner in ARS.Corners)
             {
-                int entranceNode = corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(corner.Node, -corner.LengthStart);
+                int entranceNode = corner.StartNode >= 0 ? corner.StartNode : OffsetCornerNode(corner.Node, -corner.EntranceNodes);
                 int distance = ForwardNodeDistance(entranceNode);
                 if (!TryGetCornerContext(corner.Node, out CornerContext context)) continue;
 
@@ -4541,13 +4541,13 @@ const float RequirementLookaheadSeconds = 3.95f;
 
                 if (distance <= 0) continue;
 
-                bool tight = corner.DetectedRadius < CornerTightRadius;
+                bool tight = corner.DetectedRadius < CornerTightRadiusMetres;
 
                 float intended = ARS.CornerApexSpeed(corner, this);
                 float timeToEntrance = distance / speed;
                 float decel = Math.Max(BrakingDecelBase(corner.Node), 0.1f);
                 float brakingDistance = (speed * speed - intended * intended) / (2f * decel);
-                bool inBrakingRange = distance <= brakingDistance + BrakeHorizonMargin;
+                bool inBrakingRange = distance <= brakingDistance + BrakeHorizonMarginMetres;
 
                 if (!tight && !context.RequiresBraking && timeToEntrance <= RequirementLookaheadSeconds)
                 {
@@ -4565,7 +4565,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 float arrival = speed + forwardGs * Handling.Gravity * timeToEntrance * RequirementExtrapolationScale;
                 float excess = arrival - intended;
 
-                if (!context.RequiresBraking && inBrakingRange && excess > ARS.MphToMps(tight ? PositionExcessMph : BrakeExcessMph))
+                if (!context.RequiresBraking && inBrakingRange && excess > ARS.MphToMps(tight ? TightCornerArmExcessMph : WideCornerArmExcessMph))
                 {
                     context.RequiresBraking = true;
                     _skippedApexes.Remove(corner.Node);
@@ -4672,7 +4672,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 }
             }
             if (nearestGap > Math.Max(5f, nearestSpeed * ApexBufferSeconds)) return true;
-            return nearestSpeed - candidateSpeed >= SecondaryApexSpeedDifference;
+            return nearestSpeed - candidateSpeed >= SecondaryApexMinSpeedGapMps;
         }
 
 
@@ -4800,7 +4800,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             {
                 int node = CurrentTrackPoint.Node + (int)(spanNodes * (float)i / samples);
                 int sample = ARS.IsPointToPoint ? (int)ARS.Clamp(node, 0, count - 1) : ((node % count) + count) % count;
-                sum += ARS.TrackPoints[sample].Elevation;
+                sum += ARS.TrackPoints[sample].SlopeSineTimes90;
             }
             return sum / samples * ElevationToSlopeSine;
         }
@@ -4872,9 +4872,9 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             int now = Game.GameTime;
 
-            if (_halfSecondTick + _phaseOffsetMs < now)
+            if (_halfSecondDueMs + _phaseOffsetMs < now)
             {
-                _halfSecondTick = now + 500 + (int)ARS.Remap(Car.Velocity.Length(), 0, 100, -250, 250, true);
+                _halfSecondDueMs = now + 500 + (int)ARS.Remap(Car.Velocity.Length(), 0, 100, -250, 250, true);
             }
 
             if (_rivalTick + _phaseOffsetMs < now)
@@ -4883,9 +4883,9 @@ const float RequirementLookaheadSeconds = 3.95f;
                 if (!ControlledByPlayer && BaseBehavior == RacerBaseBehavior.Race && ARS.Racers.Count >= 1) UpdateRivals();
             }
 
-            if (_oneSecondTick + _phaseOffsetMs < now)
+            if (_oneSecondDueMs + _phaseOffsetMs < now)
             {
-                _oneSecondTick = now + 1000;
+                _oneSecondDueMs = now + 1000;
 
                 if (!ControlledByPlayer)
                 {
@@ -4939,7 +4939,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 UpdatePressure();
             }
 
-            if (BaseBehavior == RacerBaseBehavior.GridWait && Control.HandBrakeTime < now) Control.HandBrakeTime = now + (100 * ARS.GetRandomInt(2, 6));
+            if (BaseBehavior == RacerBaseBehavior.GridWait && Control.HandBrakeUntilMs < now) Control.HandBrakeUntilMs = now + (100 * ARS.GetRandomInt(2, 6));
 
             if (!ControlledByPlayer)
             {
@@ -5015,7 +5015,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         {
             if (IsDNF)
             {
-                Control.HandBrakeTime = Game.GameTime + 1000;
+                Control.HandBrakeUntilMs = Game.GameTime + 1000;
                 return;
             }
             if (BaseBehavior != RacerBaseBehavior.Race || Car.EngineHealth > 0f) return;
@@ -5074,7 +5074,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             }
             else _stuckStationarySince = 0;
 
-            if (OutOfTrackDistance() > 0f)
+            if (SignedMetresBeyondTrackEdge() > 0f)
             {
                 if (_stuckOffTrackSince == 0) _stuckOffTrackSince = now;
             }
@@ -5115,7 +5115,7 @@ const float RequirementLookaheadSeconds = 3.95f;
                 int entryGearCount = Function.Call<int>((Hash)MaxDriveGearHash, Car);
                 float entryThrust = VehicleMemory.GetInitialDriveForce(Car) * KickGearRatio(Math.Max(entryGear, 1), entryGearCount) / 2f;
                 float entryBudget = VehicleData.CurrentMechanicalGrip * KickWheelLoadShare * KickGripMargin;
-                ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": recovery drive — bearing " + _steerAimBearingDegrees.ToString("0") + " deg, lock " + VehicleData.SteeringLock.ToString("0") + " deg, bias " + VehicleMemory.GetDriveBiasFront(Car).ToString("0.00") + ", close " + KickCloseSeconds().ToString("0.0") + " s, forward " + ARS.MpsToMph(ARS.GetForwardSpeed(Car)).ToString("0") + " mph, gear " + entryGear + "/" + entryGearCount + ", thrust " + entryThrust.ToString("0.00") + ", budget " + entryBudget.ToString("0.00"));
+                ARS.Log(ARS.LogImportance.Info, "Kick " + Name + ": recovery drive — bearing " + _steerAimBearingDegrees.ToString("0") + " deg, lock " + VehicleData.SteeringLock.ToString("0") + " deg, bias " + VehicleMemory.GetDriveBiasFront(Car).ToString("0.00") + ", close " + KickBearingCloseSeconds().ToString("0.0") + " s, forward " + ARS.MpsToMph(ARS.GetForwardSpeed(Car)).ToString("0") + " mph, gear " + entryGear + "/" + entryGearCount + ", thrust " + entryThrust.ToString("0.00") + ", budget " + entryBudget.ToString("0.00"));
             }
         }
 
@@ -5174,11 +5174,11 @@ const float RequirementLookaheadSeconds = 3.95f;
             return steerRefOffset >= 0f ? laneLimit : -laneLimit;
         }
 
-        float KickCloseSeconds()
+        float KickBearingCloseSeconds()
         {
             if (float.IsNaN(VehicleData.SteeringLock) || float.IsInfinity(VehicleData.SteeringLock)) return 0f;
             float lockRad = ARS.DegToRad(VehicleData.SteeringLock);
-            float yawDegPerSecAtLock = ARS.RadToDeg(ARS.GetForwardSpeed(Car) * (float)Math.Tan(lockRad) / Math.Max(VehicleData.WheelBase, 0.1f));
+            float yawDegPerSecAtLock = ARS.RadToDeg(ARS.GetForwardSpeed(Car) * (float)Math.Tan(lockRad) / Math.Max(VehicleData.WheelBaseMetres, 0.1f));
             return Math.Abs(_steerAimBearingDegrees) / Math.Max(yawDegPerSecAtLock, 1f);
         }
 
@@ -5258,7 +5258,7 @@ const float RequirementLookaheadSeconds = 3.95f;
 
         bool RecoveryExitHolds()
         {
-            bool onTrack = Math.Abs(Brain.CurrentPerception.CurrentNodeOffset) <= CurrentTrackPoint.TrackHalfWidth + VehicleData.BoundingBox * 0.5f;
+            bool onTrack = Math.Abs(Brain.CurrentPerception.CurrentLaneOffsetMetres) <= CurrentTrackPoint.TrackHalfWidth + VehicleData.SlidingWidthMetres * 0.5f;
             bool movingForward = ARS.MpsToMph(Vector3.Dot(Car.Velocity, Car.ForwardVector)) > RecoveryExitMph;
             if (!onTrack || !movingForward)
             {
@@ -5287,9 +5287,9 @@ const float RequirementLookaheadSeconds = 3.95f;
 
             Control.Brake = 0f;
             Control.BrakeReason = BrakeReason.StuckRecovery;
-            Control.BrakeReasonLevel = 0f;
+            Control.BrakeReasonCap = 0f;
             Control.ThrottleReason = ThrottleReason.StuckRecovery;
-            Control.ThrottleReasonLevel = 0f;
+            Control.ThrottleReasonCap = 0f;
             Control.Throttle = -0.5f;
             Control.SteerDegrees = 0f;
         }
@@ -5301,7 +5301,7 @@ const float RequirementLookaheadSeconds = 3.95f;
             direction.Normalize();
             Vector3 right = Vector3.Cross(direction, Vector3.WorldUp);
             float side = ARS.SignedLaneOffset(Car.Position, CurrentTrackPoint.Position, CurrentTrackPoint.Direction) >= 0f ? 1f : -1f;
-            float laneOffset = Math.Max(CurrentTrackPoint.TrackHalfWidth - VehicleData.BoundingBox * 0.5f, 0f) * side;
+            float laneOffset = Math.Max(CurrentTrackPoint.TrackHalfWidth - VehicleData.SlidingWidthMetres * 0.5f, 0f) * side;
             Car.Position = CurrentTrackPoint.Position + right * laneOffset + new Vector3(0f, 0f, 0.5f);
             Car.Heading = direction.ToHeading();
             Car.Velocity = direction * ARS.MphToMps(10f);
@@ -5325,8 +5325,8 @@ const float RequirementLookaheadSeconds = 3.95f;
             float dfGs = ARS.GetDownforceGsAtSpeed(this, forwardMs, lateralMs);
 
             VehicleData.BaseMechanicalGrip = handlingGrip;
-            VehicleData.DownforceGripBonus = dfGs;
-            VehicleData.CurrentMechanicalGrip = (VehicleData.BaseMechanicalGrip + VehicleData.DownforceGripBonus) * GroundGripMultiplier;
+            VehicleData.DownforceGripBonusGs = dfGs;
+            VehicleData.CurrentMechanicalGrip = (VehicleData.BaseMechanicalGrip + VehicleData.DownforceGripBonusGs) * GroundGripMultiplier;
 
             if (!_gripLogged)
             {

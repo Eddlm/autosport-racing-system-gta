@@ -73,16 +73,16 @@ namespace ARS
             ARS.FreeCamRide.Rotation = new Vector3(0f, 0f, ARS.FreeCamRide.Rotation.Z);
             ARS.FreeCamRide.Rotation += new Vector3(0, 0, GameplayCamera.RelativeHeading);
 
-            float speed = 0.01f;
+            float moveStep = 0.01f;
             float heightAboveGround = ARS.FreeCamRide.HeightAboveGround;
             Game.Player.Character.Position = ARS.FreeCamRide.Position + new Vector3(0, 0, -1.5f);
             Game.Player.Character.Rotation = ARS.FreeCamRide.Rotation + new Vector3(0, 0, 180f);
 
-            bool reduce = true;
+            bool decayMovement = true;
             if (_movement.Length() < 7f)
             {
-                if (!_droneMode) speed = 0.02f;
-                if (Game.IsControlPressed(2, Control.Sprint)) speed += 0.05f;
+                if (!_droneMode) moveStep = 0.02f;
+                if (Game.IsControlPressed(2, Control.Sprint)) moveStep += 0.05f;
 
                 if (GameplayCamera.IsRendering)
                 {
@@ -96,23 +96,23 @@ namespace ARS
                     if (Game.IsControlPressed(2, Control.Cover)) _intendedHeight -= 0.2f;
                     if (Game.IsControlPressed(2, Control.VehicleAccelerate))
                     {
-                        reduce = false;
-                        _movement += (_droneMode ? Game.Player.Character.ForwardVector : GameplayCamera.Direction) * speed;
+                        decayMovement = false;
+                        _movement += (_droneMode ? Game.Player.Character.ForwardVector : GameplayCamera.Direction) * moveStep;
                     }
                     if (Game.IsControlPressed(2, Control.VehicleBrake))
                     {
-                        reduce = false;
-                        _movement -= (_droneMode ? Game.Player.Character.ForwardVector : GameplayCamera.Direction) * speed;
+                        decayMovement = false;
+                        _movement -= (_droneMode ? Game.Player.Character.ForwardVector : GameplayCamera.Direction) * moveStep;
                     }
                     if (Game.IsControlPressed(2, Control.MoveLeftOnly))
                     {
-                        reduce = false;
-                        _movement += Game.Player.Character.RightVector * -speed;
+                        decayMovement = false;
+                        _movement += Game.Player.Character.RightVector * -moveStep;
                     }
                     if (Game.IsControlPressed(2, Control.MoveRightOnly))
                     {
-                        reduce = false;
-                        _movement += Game.Player.Character.RightVector * speed;
+                        decayMovement = false;
+                        _movement += Game.Player.Character.RightVector * moveStep;
                     }
                 }
 
@@ -132,7 +132,7 @@ namespace ARS
                 }
             }
 
-            if (reduce) ApplyMovementDecay(speed, heightAboveGround);
+            if (decayMovement) ApplyMovementDecay(moveStep, heightAboveGround);
         }
 
         public void Toggle()
@@ -213,12 +213,12 @@ namespace ARS
                 Function.Call<string>(Hash._0x0499D7B09FC9B407, 2, (int)control), text);
         }
 
-        void ApplyMovementDecay(float speed, float heightAboveGround)
+        void ApplyMovementDecay(float moveStep, float heightAboveGround)
         {
-            float multiplier = _droneMode && _movement.Length() > 0.2f ? 1 - (speed * 0.5f) : 1 - (speed * 2f);
+            float multiplier = _droneMode && _movement.Length() > 0.2f ? 1 - (moveStep * 0.5f) : 1 - (moveStep * 2f);
             _movement.X *= multiplier;
             _movement.Y *= multiplier;
-            if (!_droneMode || Math.Abs(heightAboveGround) < 1f) _movement.Z *= 1 - (speed * 2f);
+            if (!_droneMode || Math.Abs(heightAboveGround) < 1f) _movement.Z *= 1 - (moveStep * 2f);
         }
     }
 }

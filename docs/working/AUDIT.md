@@ -97,7 +97,7 @@ these live violations:
 - **`Racer.cs:2259 ApplyRivalThrottleCap`** also writes `Brain.CurrentIntention.Speed` (`:2282`). It is a
   follow-distance *limit*, not a throttle cap. Widen the name (`ApplyRivalFollowLimits`) or split the
   speed write out.
-- **`TrackLoader.cs:463 BuildTrackLimits`** builds no limits at all: it re-detects point-to-point via a
+- **`TrackLoader.cs:463 SpawnStartGateFlares`** builds no limits at all: it re-detects point-to-point via a
   `ref bool` (duplicating `LoadTrack:143`), reads the flare colour, spawns the start-line flare pair and
   clears focus. Rename `SpawnStartLineDecorations` and drop the `ref`.
 - **`TrackCreator.cs:352 PlayerOrCameraNearPos`** tests exactly one position per branch, and the branches
@@ -130,7 +130,7 @@ these live violations:
   (`ForwardSpeedGap`, `absoluteSpeedGap`, `closingLong`) feeding three different laws (`SecondsToReach`,
   `TimeToContact`, `SecondsToHit`). Nothing says which law is which, or which is legacy.
 - **`Racer.cs:1591 IdealWheelspinBase`, `:1594 deepest`** — PascalCase locals against the file's camelCase.
-- **`TrackCreator.cs:541 GetPerpendicular(a, b, length, bool clockwise)`** — callers pass `(pos, oldpos)`, so
+- **`TrackCreator.cs:541 OffsetPerpendicularPoint(a, b, length, bool clockwise)`** — callers pass `(pos, oldpos)`, so
   the reference direction is backwards, and the bool means "which side of the track". `SideOffset(from,
   towards, distance, bool rightSide)`.
 - **`GridBuilder.cs:10-13` — `PowerDescendent` / `TopSpeedDescendent`** — a typo **shown to the user** in
@@ -149,7 +149,7 @@ these live violations:
 - `TrackCreator.cs:443 chevcolor` and the discarded `col.ToArgb()` at `:441`; dead locals `countmax`/`count`/`lastline`
   (`:368-372`, `:466-470`); the `fidelity` parameter (`:360`) is unused; `dd` (`:370/453`) is redundant with `ph`;
   `oldrWidepos`/`oldlWidepos` (`:495-496`, and `:401-402` in the dead twin) are computed with two
-  `GetPerpendicular` calls per node and never read.
+  `OffsetPerpendicularPoint` calls per node and never read.
 - `TrackCreator.cs:18 _bezierStartAnchor` — assigned at `:217`, never read. `:200-201` — the identical
   `World.DrawMarker(ChevronUpx3, …)` issued **twice** with identical arguments, per frame.
 - `TrackFile.cs:93` — the dead serialiser assigns `_pathWidth`, the **creator's live width knob**
@@ -196,13 +196,13 @@ actually doing:
 | **193** | `AutosportRacingSystem.cs:3466 LoadGrid` | Already split into 5 local functions (`LoadVehicleModel`, `RandomizeCarColour`, `CreateDriverPed`, `AddRacer`, `SpawnRacer`) — good names, but nested, so the outer method is still a 193-line scroll. |
 | **189** | `Racer.cs:1335 ComputeTargetSpeed` | Apex plan (4 apexes), route speed, NaN guards, hill grip, crest grip **twice**, apex-speed reuse, steer-limited blend, chicane boost, the final `min`, yield cap, chillout standoff, rubber band. |
 | **186** | `TrackCreator.cs:55 HandleTrackCreator` | Closure status + visuals, pending-section draw, width keys, per-state help text, node deletion, section apply, aim-preview arc + terrain + markers, start-line preview, half-width sync. |
-| **153** | `TrackLoader.cs:23 LoadTrack` | Guards/prompt/fade; teardown of 3 prop lists + 6 statics; a **thread-culture switch**; prop spawn (4 natives each); route parse + width clamp; debug reverse; circuit detection; `GenerateRouteInfo`; `BuildTrackLimits`; player/camera placement. |
+| **153** | `TrackLoader.cs:23 LoadTrack` | Guards/prompt/fade; teardown of 3 prop lists + 6 statics; a **thread-culture switch**; prop spawn (4 natives each); route parse + width clamp; debug reverse; circuit detection; `GenerateRouteInfo`; `SpawnStartGateFlares`; player/camera placement. |
 | **149** | `Racer.cs:2314 UpdateTrackPosition` | Windowed node search, global rescan fallback, lookahead build, deviation, the whole **lap-registration block** (blips, lap times, peak logging), route radius, apex leapfrog, refill tick, two more radius windows. |
 | **149** | `Racer.cs:421 ComputeSteering` | Course error, lane override chain, off-track recovery, lane P + rival repulsion, side-by-side, PD assembly, slide blend, NaN guard — plus a `TryGetSteerContext` local function declared at the *bottom* (`:558`) and called at the *top* (`:423`). |
 | **119** | `TrackLoader.cs:230 BuildApexTable` | Region-scan state machine + flush + log, then a wholly separate chicane pass (`:323-347`). |
 | **106** | `FreeCamController.cs:24 Update` | HUD reset, ride keep-alive teleport, hide-HUD native, toggle, instruction gate, 6 `DisableControlThisFrame`, time-scale toggle, position/rotation integration, height control, decay. |
 | **104** | `AutosportRacingSystem.cs:2243 HandleCheats` | Three unrelated cheat handlers inline; the first is 47 lines of tabular dump. Called **every frame**. |
-| **79** | `DataStructures.cs:172 Rival.Update` | 9 jobs: relative offset, combined size, lane occupancy, distance, forward speed gap, `SecondsToReach`, `TimeToContact`, position classification, `SecondsToHit` + `DirectionDiff`. |
+| **79** | `DataStructures.cs:172 Rival.Update` | 9 jobs: relative offset, combined size, lane occupancy, distance, forward speed gap, `SecondsToReach`, `TimeToContact`, position classification, `SecondsToHit` + `DirectionDiffDegrees`. |
 | **78** | `Racer.cs:2750 UpdateRouteTarget` | Dead (§5.2) — 78 lines with no caller. |
 
 Structural notes:
@@ -285,7 +285,7 @@ objects.
 - **`Racer.cs:2153` writes `Car.HandbrakeOn` every frame per car** — a native `SET_VEHICLE_HANDBRAKE` for
   a value that rarely changes (and, per the IL, it cannot be read back). Keep the last written bool and
   call the setter only on a flip. The line is also the `if/else` that should just be an assignment:
-  `Car.HandbrakeOn = Control.HandBrakeTime > Game.GameTime;`.
+  `Car.HandbrakeOn = Control.HandBrakeUntilMs > Game.GameTime;`.
 - **The player racer is re-found by LINQ with a native predicate per racer, twice per frame**:
   `AutosportRacingSystem.cs:1630` (unconditional) and `:1910` (`DrawRaceHud`), both
   `Racers.FirstOrDefault(r => r.Driver != null && r.Driver.IsPlayer)`. Cache it when the grid is built,
@@ -441,7 +441,7 @@ enum.
 - **`VehicleMemory.cs:109-122 ScanModule`** walks the module byte-by-byte; it is correctly memoised
   (including misses), but its first call happens on the main thread inside a per-frame control write
   (`:46`) — worst case a multi-hundred-ms hitch if a pattern is absent. Anchor the scan.
-- **`SetSPLVisibility` (`AutosportRacingSystem.cs:2001-2003`) calls `World.GetAllProps()`** — one-shot per
+- **`SetStartBannerPropAlpha` (`AutosportRacingSystem.cs:2001-2003`) calls `World.GetAllProps()`** — one-shot per
   track load (`TrackLoader.cs:172`), but a whole-world enumeration during setup.
 - **`AutosportRacingSystem.cs:434-435` / `TrackRepository.cs:22-67`** — each track file is loaded and parsed
   3× per list build, and `SaveRoute` triggers the whole-folder refresh with no `Script.Yield()`

@@ -12,10 +12,10 @@ namespace ARS
         public static Dictionary<int, float> EditNodeHalfWidths = new Dictionary<int, float>();
         static bool _routeEditorActive = false;
         List<Vector3> _routeSection = new List<Vector3>();
-        int _pathWidth = 5;
+        int _pathHalfWidthMetres = 5;
 
         Vector3 _previewAim = Vector3.Zero;
-        int _previewRouteNodes = -1;
+        int _previewRouteNodeCount = -1;
         int _previewWidth = 0;
         const float PreviewRebuildDistance = 1f;
 
@@ -55,7 +55,7 @@ namespace ARS
         void HandleTrackCreator()
         {
 
-            int cool = -1;
+            int circuitClosureStatus = -1;
             int rebuildFrom = -1;
             int routeCountAtStart = RouteNodes.Count;
 
@@ -68,16 +68,16 @@ namespace ARS
                     {
                         if (RouteNodes[0].DistanceTo(RouteNodes[RouteNodes.Count - 1]) < 2f)
                         {
-                            cool = 1;
+                            circuitClosureStatus = 1;
                             DrawLine(RouteNodes[RouteNodes.Count - 1], RouteNodes[0], Color.Green);
                         }
                         else
                         {
-                            cool = 0;
+                            circuitClosureStatus = 0;
                             DrawLine(RouteNodes[RouteNodes.Count - 1], RouteNodes[0], Color.Red);
                         }
                     }
-                    if (cool < 1 && last.DistanceTo(RouteNodes[0]) < 20f)
+                    if (circuitClosureStatus < 1 && last.DistanceTo(RouteNodes[0]) < 20f)
                     {
                         World.DrawMarker(MarkerType.DebugSphere, last + new Vector3(0, 0, 0.2f), Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), Color.Blue);
                         World.DrawMarker(MarkerType.DebugSphere, RouteNodes[0] + new Vector3(0, 0, 0.2f), Vector3.Zero, Vector3.Zero, new Vector3(0.5f, 0.5f, 0.5f), Color.Black);
@@ -93,21 +93,21 @@ namespace ARS
                 }
             }
 
-            if (cool < 1) DrawSection(_routeSection, EditNodeHalfWidths);
+            if (circuitClosureStatus < 1) DrawSection(_routeSection, EditNodeHalfWidths);
 
             if (_routeEditorActive && _freeCam.IsActive)
             {
                 RaycastResult ray = World.Raycast(GameplayCamera.Position, GameplayCamera.Position + ((GameplayCamera.Direction.Normalized) * 100), IntersectOptions.Everything);
 
-                if (Game.IsControlJustPressed(2, GTA.Control.NextWeapon)) _pathWidth--;
-                if (Game.IsControlJustPressed(2, GTA.Control.PrevWeapon)) _pathWidth++;
-                if (_pathWidth < 1) _pathWidth = 1;
+                if (Game.IsControlJustPressed(2, GTA.Control.NextWeapon)) _pathHalfWidthMetres--;
+                if (Game.IsControlJustPressed(2, GTA.Control.PrevWeapon)) _pathHalfWidthMetres++;
+                if (_pathHalfWidthMetres < 1) _pathHalfWidthMetres = 1;
 
                 if (RouteNodes.Count > 0)
                 {
-                    if (cool == -1) DisplayHelpTextThisFrame("Create the rest of the route. ~n~- Looped: ~b~Circuit~n~~w~- Open: ~b~Point to Point");
-                    if (cool == 0) DisplayHelpTextThisFrame("Close the circuit near the ~b~Start Line.");
-                    if (cool == 1) DisplayHelpTextThisFrame("~g~The circuit is closed.");
+                    if (circuitClosureStatus == -1) DisplayHelpTextThisFrame("Create the rest of the route. ~n~- Looped: ~b~Circuit~n~~w~- Open: ~b~Point to Point");
+                    if (circuitClosureStatus == 0) DisplayHelpTextThisFrame("Close the circuit near the ~b~Start Line.");
+                    if (circuitClosureStatus == 1) DisplayHelpTextThisFrame("~g~The circuit is closed.");
 
                     if (Game.IsControlJustPressed(2, GTA.Control.Aim))
                     {
@@ -136,7 +136,7 @@ namespace ARS
                         }
                     }
 
-                    if (Game.IsControlJustPressed(2, GTA.Control.Attack) && cool < 1)
+                    if (Game.IsControlJustPressed(2, GTA.Control.Attack) && circuitClosureStatus < 1)
                     {
                         rebuildFrom = RouteNodes.Count;
                         for (int i = 1; i < _routeSection.Count; i++)
@@ -152,12 +152,12 @@ namespace ARS
 
                 if (RouteNodes.Count > 1)
                 {
-                    if (ray.DitHitAnything && cool < 1)
+                    if (ray.DitHitAnything && circuitClosureStatus < 1)
                     {
 
                         World.DrawMarker(MarkerType.DebugSphere, ray.HitCoords, Vector3.Zero, -Vector3.WorldDown, new Vector3(0.25f, 0.25f, 0.25f), Color.Blue);
 
-                        bool aimMoved = _previewRouteNodes != RouteNodes.Count || Vector3.Distance(_previewAim, ray.HitCoords) > PreviewRebuildDistance;
+                        bool aimMoved = _previewRouteNodeCount != RouteNodes.Count || Vector3.Distance(_previewAim, ray.HitCoords) > PreviewRebuildDistance;
                         if (aimMoved)
                         {
                             Vector3 sStart = RouteNodes[RouteNodes.Count - 1];
@@ -170,17 +170,17 @@ namespace ARS
                             _routeSection.Clear();
                             _routeSection.AddRange(temporaryRouteNodes);
                             _previewAim = ray.HitCoords;
-                            _previewRouteNodes = RouteNodes.Count;
+                            _previewRouteNodeCount = RouteNodes.Count;
                         }
 
-                        if (aimMoved || _previewWidth != _pathWidth)
+                        if (aimMoved || _previewWidth != _pathHalfWidthMetres)
                         {
                             EditNodeHalfWidths.Clear();
                             for (int d = 0; d < _routeSection.Count - 1; d++)
                             {
-                                EditNodeHalfWidths.Add(d, _pathWidth);
+                                EditNodeHalfWidths.Add(d, _pathHalfWidthMetres);
                             }
-                            _previewWidth = _pathWidth;
+                            _previewWidth = _pathHalfWidthMetres;
                         }
 
                         foreach (Vector3 p in _routeSection)
@@ -201,8 +201,8 @@ namespace ARS
                     World.DrawMarker(MarkerType.ChevronUpx3, ray.HitCoords, FreeCamRide.ForwardVector, new Vector3(-90, 0, 0), new Vector3(1, 1, 1), Color.Blue);
                     DrawLine(ray.HitCoords, ray.HitCoords - (FreeCamRide.ForwardVector * 10), Color.Blue);
 
-                    Vector3 right = ray.HitCoords + (FreeCamRide.RightVector * _pathWidth);
-                    Vector3 left = ray.HitCoords - (FreeCamRide.RightVector * _pathWidth);
+                    Vector3 right = ray.HitCoords + (FreeCamRide.RightVector * _pathHalfWidthMetres);
+                    Vector3 left = ray.HitCoords - (FreeCamRide.RightVector * _pathHalfWidthMetres);
 
                     World.DrawMarker(MarkerType.UpsideDownCone, right + new Vector3(0, 0, 1), FreeCamRide.ForwardVector, new Vector3(0, 0, 0), new Vector3(1, 1, 1), Color.Blue);
                     World.DrawMarker(MarkerType.UpsideDownCone, left + new Vector3(0, 0, 1), FreeCamRide.ForwardVector, new Vector3(0, 0, 0), new Vector3(1, 1, 1), Color.Blue);
@@ -224,7 +224,7 @@ namespace ARS
                     {
                         if (!NodeHalfWidths.ContainsKey(i))
                         {
-                            NodeHalfWidths.Add(i, _pathWidth);
+                            NodeHalfWidths.Add(i, _pathHalfWidthMetres);
                         }
                     }
                 }
@@ -335,14 +335,14 @@ namespace ARS
             return World.RenderingCamera.Position.DistanceTo(pos) < dist;
         }
 
-        public void DrawSection(List<Vector3> nodes, Dictionary<int, float> widedict)
+        public void DrawSection(List<Vector3> nodes, Dictionary<int, float> halfWidthByNode)
         {
             if (nodes.Count == 0) return;
-            int closestnode = ClosestNodeToPlace(Game.Player.Character.Position, nodes);
+            int nearestRouteNodeIndex = ClosestNodeToPlace(Game.Player.Character.Position, nodes);
             Vector3 oldpos = nodes[nodes.Count - 1];
 
-            int start = closestnode - 100;
-            int end = closestnode + 100;
+            int start = nearestRouteNodeIndex - 100;
+            int end = nearestRouteNodeIndex + 100;
             Vector3 pos = Vector3.Zero;
             if (start < 0) start = 0;
             if (end > nodes.Count - 1) end = nodes.Count - 1;
@@ -350,16 +350,16 @@ namespace ARS
             {
                     pos = nodes[ph];
                     float w = 0f;
-                    if (widedict != null)
+                    if (halfWidthByNode != null)
                     {
-                        widedict.TryGetValue(ph, out w);
+                        halfWidthByNode.TryGetValue(ph, out w);
                     }
 
                     if (PlayerOrCameraNearPos(nodes[ph], 120))
                     {
 
-                            Vector3 rWidepos = GetPerpendicular(pos, oldpos, w, true);
-                            Vector3 lWidepos = GetPerpendicular(pos, oldpos, w, false);
+                            Vector3 rWidepos = OffsetPerpendicularPoint(pos, oldpos, w, true);
+                            Vector3 lWidepos = OffsetPerpendicularPoint(pos, oldpos, w, false);
 
                             Color col = Color.Green;
 
@@ -393,7 +393,7 @@ namespace ARS
                 oldpos = pos;
             }
         }
-        Vector3 GetPerpendicular(Vector3 a, Vector3 b, float length, bool clockwise)
+        Vector3 OffsetPerpendicularPoint(Vector3 a, Vector3 b, float length, bool clockwise)
         {
             Vector3 ab = (b - a).Normalized;
             Vector3 abCw = Vector3.Zero;

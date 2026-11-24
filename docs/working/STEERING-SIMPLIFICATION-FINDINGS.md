@@ -47,26 +47,26 @@ request.
 
 | stage | anchor | input | output / consumer |
 |---|---|---|---|
-| priority reset | `:496` | — | `_slidePriority = 0` before the gate, so a failed gate leaves the blend and the allowance off |
+| priority reset | `:496` | — | `_countersteerDemand01 = 0` before the gate, so a failed gate leaves the blend and the allowance off |
 | context gate | `:498`, body `:630-640` | `BaseBehavior`, `CurrentTrackPoint.Node >= 3`, `LookAheads[SteerRef]` | returns `SteerDegrees = 0` (`:500`) |
 | travel direction | `:509-510` | `Car.Velocity` | `courseDir` — velocity when `LengthSquared() > 0.01`, forward otherwise |
-| high-speed lane | `:517` → `:791-811` | `roadWide`, speed, node at `speed × 1.01` m, its `PreciseCurveRadius < 500` (`:748`, `:802`) | `defaultLane`; **0 on a straight** |
+| high-speed lane | `:517` → `:791-811` | `roadHalfWidthMetres`, speed, node at `speed × 1.01` m, its `PreciseCurveRadius < 500` (`:748`, `:802`) | `defaultLane`; **0 on a straight** |
 | corner lane | `:520` → `:835`, `IdealLineOffset` `:826` | `Brain.Corner`, `Lap > 0`, `steerRefPoint` | overrides `defaultLane` when non-zero (`:521`) |
 | avoidance lane | `:523` → `:886` | `Brain.AvoidanceTarget` and the rest of `Brain.Rivals` | overrides when non-zero (`:524`) |
-| rival walls | `:526` → `:952-1011` | `_avoidLeftWall`/`_avoidRightWall`, `roadWide` | clamps the lane to the walls |
+| rival walls | `:526` → `:952-1011` | `_avoidLeftWall`/`_avoidRightWall`, `roadHalfWidthMetres` | clamps the lane to the walls |
 | debug lane override | `:527` | `Options.LockLaneCentre` (default false, `AutosportRacingSystem.cs:194`) | replaces the whole lane with 0.1 m |
 | aim assembly | `:533-542` | `targetLane`, `GsAwarePreview` toggle (`:535`), `ProjectAhead`, `SignedLaneOffset` | `_debugLaneAimPoint`; clamped to the drivable edge at `:541` |
 | corner log | `:544` → `:703-745` | corner table, current node | log lines only |
-| **lane pursuit** | `:548` → `:771-789` → `:765-769` | `_debugLaneAimPoint`, `courseDir`, `WheelBase`, `PursuitGain` (`:755`) | `laneSteerDeg`, `_steerAimBearingDegrees`, `_steerAimCurvature` |
+| **lane pursuit** | `:548` → `:771-789` → `:765-769` | `_debugLaneAimPoint`, `courseDir`, `WheelBaseMetres`, `PursuitGain` (`:755`) | `laneSteerDeg`, `_steerAimBearingDegrees`, `_steerAimCurvature` |
 | rival repulsion | `:554-572` | rivals within the long/lat gates, their relative lateral velocity | **added** into `laneSteerDeg` (`:571`) |
 | side-by-side | `:577` → `:645-677` | overlapping rivals, `courseDir`, `SideBySide*` (`:302-304`) | `sideBySideSteerDeg` |
 | forward speed | `:585` | `ARS.GetForwardSpeed` (`AutosportRacingSystem.cs:3365`) | damper and blend gating |
-| blend weight | `:589-592` | `Handling.LateralTractionCurve`, `SlideAngle`, `SlideBlendStartFraction`/`FullFraction` (`:1018-1019`), `fwdSpeed >= 2` | `_slidePriority` → blend `:617`, limiter `:1193`, `IsFullCountersteer` `:1238` |
-| damper reference | `:593-595` | `SteerDampingAimReference`, `fwdSpeed`, `SlideAngle` vs `LateralTractionCurve × SlidingFraction` (`:1015`), `_steerAimCurvature` | `yawTarget` |
+| blend weight | `:589-592` | `Handling.LateralTractionCurveDegrees`, `SlideAngle`, `SlideBlendStartFraction`/`FullFraction` (`:1018-1019`), `fwdSpeed >= 2` | `_countersteerDemand01` → blend `:617`, limiter `:1193`, `IsFullCountersteer` `:1238` |
+| damper reference | `:593-595` | `SteerDampingAimReference`, `fwdSpeed`, `SlideAngle` vs `LateralTractionCurveDegrees × SlidingFraction` (`:1015`), `_steerAimCurvature` | `yawTarget` |
 | damper gain | `:596` → `:1040-1045` | `SteerDampingGain`, `SteerDampingReferenceMps` (`:1039`), `fwdSpeed`, `BaseMechanicalGrip`, `SteerDampingEnabled` | `damperGain` |
 | damper term + 2 subtraction rules | `:601-609` | `YawRotationPerSecondDegrees`, `yawTarget`, `nonDamperSteerDeg`, `DamperCrossingShare` (`:1028`) | `damperTermDeg`, `_damperTermDeg` (limiter bypass `:1217`, debug `:2508`) |
 | assembly | `:600`, `:610-611` | side-by-side, damper, lane | `Control.SteerDegrees` |
-| slide blend | `:613-618` | `_slidePriority`, `sideBySideSteerDeg`, `SlideAngle`, `CountersteerShare()` (`:1228-1233`) | lerps the whole command |
+| slide blend | `:613-618` | `_countersteerDemand01`, `sideBySideSteerDeg`, `SlideAngle`, `CountersteerShare()` (`:1228-1233`) | lerps the whole command |
 | aligned-wheel deadband | `:623` | `_steerAimBearingDegrees < SmallAimBearingDegrees` (`:760`), no slide | zeroes the command |
 | NaN guard | `:625-626` | — | zeroes the command |
 
@@ -83,11 +83,11 @@ here so the next reader does not have to re-derive why it is harmless.
 |---|---|---|---|
 | NaN guard | `:1164-1168` | — | command zeroed, returns |
 | reverse / standstill | `:1171`, `:1178-1179` | `Dot(Velocity, ForwardVector)` | not > 0 → `speedCeiling = SteeringLock` |
-| cornering ceiling | `:1181` → `:1133-1144` | `TRLateralAtSpeed` (`:1088`), `PeakSlipCeilingAt` (`:1109-1112`), `GeometrySteerCeiling` fallback (`:1103-1107`), `ManeuverRamp` (`:1148-1153`) | base ceiling |
+| cornering ceiling | `:1181` → `:1133-1144` | `TRLateralAtSpeed` (`:1088`), `PeakSlipCeilingAt` (`:1109-1112`), `GeometrySteerCeiling` fallback (`:1103-1107`), `SteerLimitRamp` (`:1148-1153`) | base ceiling |
 | slide addition | `:1184` | `SlideAngle`, `SlideLimitSlideShare`/`FreeplayDegrees` (`:1158-1159`) | **raise**, Slide-Governed only |
 | both sides set | `:1186-1187` | — | `SteerLimitLeft`/`SteerLimitRight` |
-| countersteer allowance | `:1191-1196` | `countersteering` (`:1176`), `_slidePriority`, `SlideAngle` | **raise** to `|slide| × weight` on the answering side |
-| yaw envelope | `:1199-1211` | `YawUsagePercent` (`:1117-1128`), `YawTurnInMinimumPercent`/`Maximum` | **cut** of the commanded side, then `ManeuverRamp` (`:1208`) |
+| countersteer allowance | `:1191-1196` | `countersteering` (`:1176`), `_countersteerDemand01`, `SlideAngle` | **raise** to `|slide| × weight` on the answering side |
+| yaw envelope | `:1199-1211` | `YawUsagePercent` (`:1117-1128`), `YawTurnInMinimumPercent`/`Maximum` | **cut** of the commanded side, then `SteerLimitRamp` (`:1208`) |
 | damper bypass | `:1217-1221` | `countersteering`, `_damperTermDeg`, yaw rate | **raise** to full lock |
 | one clamp | `:1223` | both side limits | `Control.SteerDegrees` |
 
@@ -101,7 +101,7 @@ Consumed by `ApplyInputs` (`:2587`). `Control.LastAppliedSteerDegrees` is reset 
 
 `VehicleData.YawRotationPerSecondDegrees` is a raw native read written in `UpdatePerceivedGrip` (`:3696`), which
 `RunTimedCore` calls at `:2521` — once per core tick, before `ProcessAI`. `VehicleData.SlideAngle` and
-`VehicleData.BoundingBox` are written by `UpdateSlideAndBoundingBox` (`:2520`, body `:2531-2535`), and
+`VehicleData.SlidingWidthMetres` are written by `UpdateSlideAndBoundingBox` (`:2520`, body `:2531-2535`), and
 `TRLateralAtSpeed` by `UpdateTRLateralAtSpeed` (`:2522`, body `:1090-1094`). All three are therefore fresh for the
 chain within its own tick, and stale for every consumer outside it — `IsUnstable` (`:1812`) and `YawUsagePercent` are
 in the same core-tick world; nothing reads them per frame.
@@ -116,7 +116,7 @@ in the same core-tick world; nothing reads them per frame.
 | debug lane lines | `AutosportRacingSystem.cs:1760` | `CarriedLane` property (`Racer.cs:141`) |
 | debug steer fan | `Racer.cs:2274-2280` | `_steerPursuitDeg`, `_damperTermDeg`, `Control.SteerDegrees` |
 | debug yaw panel | `Racer.cs:2502-2515` | `_debugYawTargetPerSecond`, `_debugDamperGainSeconds`, `_debugDamperSpeedScale`, `_damperTermDeg`, `YawUsagePercent()` |
-| pedal bar reason | `Racer.cs:2454`, `:1323`, `:1850` | `IsFullCountersteer()` → `_slidePriority` |
+| pedal bar reason | `Racer.cs:2454`, `:1323`, `:1850` | `IsFullCountersteer()` → `_countersteerDemand01` |
 
 ---
 
@@ -154,7 +154,7 @@ command half gives the full picture:
    modes differ *inside* the 5–30 mph band rather than meeting on the ramp's value — see **Q3**.
 2. **Two different slide-derived ramps feed the countersteer.** The command's share ramps 0.5 → 1.0 across
    0.5× → 1.0× the **static** authored peak (`CountersteerShare` `:1232`, constants `:1019-1021`), while the
-   limiter's allowance is `|slide| × _slidePriority`, whose weight is already full at 0.5× the peak
+   limiter's allowance is `|slide| × _countersteerDemand01`, whose weight is already full at 0.5× the peak
    (`:590`, `:1193`). At every slide the allowance is a superset of the command's own countersteer component; the two
    laws are not one law — see **Q8**.
 
@@ -203,7 +203,7 @@ reader, or only a debug draw.
 | `CountersteerFullSlideFraction` | decl `:1021`, use `:1232` | multiplies `peak` by exactly 1f — cannot change the expression |
 | `SteerDampingEnabled` / `SteerDampingAimReference` | `:1031`, `:1034` | `const … = true`, so the guarded branches are fixed; behaviour-identical to inline the kept path |
 | corner diagnostic | call `:544`, body `:693-745`, `ForwardNodes` `:685-691` | log-only; its own comment says to remove it with its call (`:679-680`); `ForwardNodes` has no other caller (checked) |
-| `GeometrySteerCeiling` block | `:1064-1073`, `:1077-1084`, `:1103-1107`, constants `:1050-1053`, callers `:1135`, `:1141` | taken only when `TRLateralAtSpeed <= 0.01f` / `endPeak <= 0.01f`; `LateralTractionCurve` is clamped to 22 outside 1..100 at `:426-427` and defaults to 22 (`DataStructures.cs:105`), so both conditions need a NaN velocity length (`:1092-1093`) |
+| `GeometrySteerCeiling` block | `:1064-1073`, `:1077-1084`, `:1103-1107`, constants `:1050-1053`, callers `:1135`, `:1141` | taken only when `TRLateralAtSpeed <= 0.01f` / `endPeak <= 0.01f`; `LateralTractionCurveDegrees` is clamped to 22 outside 1..100 at `:426-427` and defaults to 22 (`DataStructures.cs:105`), so both conditions need a NaN velocity length (`:1092-1093`) |
 | `_steerPursuitDeg`, `_debugYawTargetPerSecond`, `_debugDamperGainSeconds`, `_debugDamperSpeedScale` | `:178-180`, `:172-174` | written for the debug draws at `:2274-2280` and `:2502-2515` only; dead only if those drawings go |
 | `CurveRadiusAfterFollowPoint` | `DataStructures.cs:130` | adjacent, not in this chain: marked `NEVER USED` in place and read nowhere |
 
@@ -306,7 +306,7 @@ fallback ternaries `:1135` and `:1141`, and the comments that tie them to `Steer
 `:1060-1063`, `:1075-1076`). Roughly 30 lines and 3 constants.
 **Reachability, checked:** the fallback fires only when `TRLateralAtSpeed <= 0.01f` (`:1135`) or `endPeak <= 0.01f`
 (`:1141`). `TRLateralAtSpeed` is `LateralPeakAtSpeed(Velocity.Length())` (`:1090-1094`, `:1097-1101`), which is zero
-only if `Handling.LateralTractionCurve <= 0.01f` — impossible, because `Initialize` clamps it to 22 when outside
+only if `Handling.LateralTractionCurveDegrees <= 0.01f` — impossible, because `Initialize` clamps it to 22 when outside
 1..100 (`:426-427`) and the field defaults to 22 (`DataStructures.cs:105`) — or if the velocity length is NaN
 (`:1093`). So no finite state reaches it.
 **Behavioural cost:** none for every finite state. In the NaN-velocity state the fallback currently yields a

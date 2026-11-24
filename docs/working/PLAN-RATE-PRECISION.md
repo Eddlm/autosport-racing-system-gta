@@ -120,7 +120,7 @@ the batch rate multiplies through everything below it.
 | 7 | Apex-queue refill | 500 ms | `Racer.cs:2811-2814` | braking-plan refill 500 → 83 ms | a managed sort/filter | queue churn; partly moot — `UpdateCornerRequirements()` forces a refill on a flip |
 | 8 | Speed-scale the track-node search window | per core tick | `Racer.cs:2713-2714` | removes a systematic node lag: a car covers `v · TickScale` per tick (11 m at 134 m/s) against a ±6 m window, so it loses the car above ~72 m/s | ~0 natives (managed compares) | wrong deck on a stacked track — clamp to half a lap |
 | 9 | HUD standings (`_posUpdateTickMs`) | 200 ms | `AutosportRacingSystem.cs:1924` | standings lag 200 → 16 ms | a managed sort of 30 | none, display-only; **low value** |
-| 10 | `_halfSecondTick` | 500 ms | `Racer.cs:3289` | **nothing — write-only; set and never read** | — | free deletion |
+| 10 | `_halfSecondDueMs` | 500 ms | `Racer.cs:3289` | **nothing — write-only; set and never read** | — | free deletion |
 
 Also dead: `GetLateralGs` (`DataStructures.cs:52`) has no callers.
 
@@ -150,7 +150,7 @@ at script init (`AGENTS.md`).
 - Reset `_lastSpeed` and the acceleration ring in `Launch` and `SnapToTrack`.
 - Window the acceleration samples by elapsed time so the configured window is the real window at every
   frame rate.
-- Delete `_halfSecondTick`.
+- Delete `_halfSecondDueMs`.
 
 ### Stage 2 — pay for stage 3 (cost-negative)
 
@@ -194,7 +194,7 @@ constant instead.
 - **Smoothed cost** — drive admission from an exponential average of ms per core tick, never the
   instantaneous measurement: one OS preemption or one heavy tick would otherwise collapse the batch to a
   single car. The tail above is why the average must be respected rather than raced against.
-- **Round-robin admission** — reuse the existing `_nextInLine` cursor so no car is favoured.
+- **Round-robin admission** — reuse the existing `_nextTimedCoreRacerIndex` cursor so no car is favoured.
 - **Ceilings and floors** — always at least one core per frame, and never more than `Racers.Count` per
   frame, so no car is double-ticked on a machine with time to spare.
 - **Staleness deadline** — a pure budget starves: if the slice affords four of thirty cars, every car's
@@ -240,7 +240,7 @@ precision work must stay separable from it.
 
 The route frame is only a third migrated. Three pieces, and only the first is done:
 
-1. **The hit test** (`TimeToReach`, `FrontGap`, `RouteGapAhead`) — route frame, done.
+1. **The hit test** (`TimeToReachSeconds`, `FrontGapMetres`, `RouteGapAhead`) — route frame, done.
 2. **The candidate scan** (`UpdateRivals`, `Racer.cs:3699-3711`) — world distance, 39 native position reads
    per racer per second at a 40-car grid. The route value is already cached per racer, so the filter costs
    no natives at all.
@@ -271,7 +271,7 @@ The split is by **time constant**, not by convenience:
 - **The assignment is shared and slow.** Which three rivals are nearest a car changes over seconds, not
   ticks. One manager owns it: read every racer's position **once per frame** into a snapshot, then give
   each car its three nearest, ordered by route distance.
-- **The details stay per car and fast.** `RouteGapAhead`, `TimeToReach`, the corridor and relative position
+- **The details stay per car and fast.** `RouteGapAhead`, `TimeToReachSeconds`, the corridor and relative position
   are referenced to that car's own frame and heading and change every tick, so they stay in the car's own
   core tick, computed over the three chosen rivals only.
 
@@ -296,7 +296,7 @@ is the thing the round-robin was built to avoid. It usually lowers total work, b
 native reads, but it raises the per-frame floor — which is why the number comes first.
 
 **Much of the self-state reuse this implies already exists**, and it is worth knowing how much: `NodeOffset`
-is the rival's own `CurrentNodeOffset` (`DataStructures.cs:200`), `CombinedSize` is built from both cars'
+is the rival's own `CurrentLaneOffsetMetres` (`DataStructures.cs:200`), `CombinedSize` is built from both cars'
 own cached dimensions (`:197-198`), the route gap is the rival's own `CumulativeDistance` and the closure is
 its own `AlongTrackSpeed`. What is *not* reused is the raw pose — the relative-offset helper takes both cars
 (`:192`) and the rival's position and velocity are read directly (`:190`, `:178`). Those are relations no car

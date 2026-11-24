@@ -66,7 +66,7 @@ speed work.
   and a raw 3D dot (`Racer.cs:1175`, `:1238`, `:3581`). Unifying them changes what the steer ceiling and the
   pedal plan read on a slope.
 - **`TryPlayNitrousCard` re-derives a closure time the route frame already publishes** (`Racer.cs:2056`
-  against `Rival.TimeToReach`, `DataStructures.cs:283`) — world scalars against a route-frame gap with a lane
+  against `Rival.TimeToReachSeconds`, `DataStructures.cs:283`) — world scalars against a route-frame gap with a lane
   gate, so not equivalent.
 - **`UpdatePressure` rescans every racer while the three nearest already publish `Distance`**
   (`Racer.cs:3394-3400` against `DataStructures.cs:201`) — a different set, so not equivalent.
@@ -76,7 +76,7 @@ speed work.
 Not cost. These are cases where a value or a law exists twice, or where one of the copies is dead. The first
 is the highest-value item in the whole audit precisely because it is not about speed.
 
-- **`PowerScale` is re-derived at `Racer.Initialize`** (`Racer.cs:481-487`) from three live model natives, while
+- **`PaceIndex` is re-derived at `Racer.Initialize`** (`Racer.cs:481-487`) from three live model natives, while
   `ARS.ModelPaceIndexCache` (`AutosportRacingSystem.cs:84`, filled `:493`) already holds the value the grid was
   selected on, and `TryComputePlayerCarPaceIndex` (`:3186`) already implements cache-first with a native
   fallback. **The comment above the line states the intent — "Cache first so the spawn-time PI matches the metric
@@ -114,7 +114,7 @@ is the highest-value item in the whole audit precisely because it is not about s
 
 ## Already obeying the principle — do not "fix" these
 
-`NodeOffset` is the rival's own `CurrentNodeOffset` (`DataStructures.cs:200`); `CombinedSize` is built from
+`NodeOffset` is the rival's own `CurrentLaneOffsetMetres` (`DataStructures.cs:200`); `CombinedSize` is built from
 both cars' own cached dimensions (`:197-198`); the route gap reads the rival's own `CumulativeDistance` (`:209`)
 and the closure its own `AlongTrackSpeed`; `Rival.Update` reads each entity vector once and hands it down
 (`:175-183`). `Entity.Handle` is a stored value in SHVDN2, not a native, so handle comparisons cost nothing.

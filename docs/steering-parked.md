@@ -26,7 +26,7 @@ open item 1 in the law file; before it ships, its gate needs re-measurement — 
 tells why).
 
 **`SpeedSteerCeiling` and its helpers.** Compiled but inert: `ResolveSteerCeiling`, `PeakSlipCeilingAt`,
-`GeometrySteerCeiling`, `ManeuverRamp` and the ramp `SteerLimitRampStartMph`→`SteerLimitRampEndMph` return the
+`GeometrySteerCeiling`, `SteerLimitRamp` and the ramp `SteerLimitRampStartMph`→`SteerLimitRampEndMph` return the
 full lock before any of their law is reached (`Racer.cs:1601`, re-verified 2026-11-14). Decided for 0.11: revive
 the law or delete it and its leftovers together (open item 5 in the law file).
 

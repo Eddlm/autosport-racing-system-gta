@@ -7,8 +7,8 @@ namespace ARS
     public static class AiConstants
     {
 
-        public static float MaxSpeed = ARS.MphToMps(999f);
-        public static float MinSpeed = ARS.MphToMps(10f);
+        public static float MaxIntendedSpeedMps = ARS.MphToMps(999f);
+        public static float MinIntendedSpeedMps = ARS.MphToMps(10f);
     }
     public class VehicleState
     {
@@ -19,11 +19,11 @@ namespace ARS
         public int AccelCount = 0;
         public int LastAccelSampleTime = 0;
         public Vector3 SpeedVectorLocal = Vector3.Zero;
-        public float WheelBase = 2.7f;
+        public float WheelBaseMetres = 2.7f;
         public float YawRotationPerSecondDegrees = 1f;
         public float SlideAngle = 22f;
         public float BaseMechanicalGrip = 1f;
-        public float DownforceGripBonus = 0f;
+        public float DownforceGripBonusGs = 0f;
         public float CurrentMechanicalGrip = 1f;
 
         public float OverspeedExcessGs;
@@ -89,18 +89,18 @@ namespace ARS
             PeakTopSpeedMps = 0f;
         }
 
-        public float PowerScale = 0;
+        public float PaceIndex = 0;
         public string TextPerformanceIndex = "0";
-        public float BoundingBox = 0f;
+        public float SlidingWidthMetres = 0f;
         public Vector3 ModelDimensions = Vector3.Zero;
         public float SteeringLock = 0f;
     }
     public class HandlingData
     {
-        public float LateralTractionCurve = 22f;
+        public float LateralTractionCurveDegrees = 22f;
         public float Downforce = 1f;
         public float BrakingAbility = 1f;
-            public float EstimatedTopSpeed = 1f;
+            public float EstimatedTopSpeedMps = 1f;
         public float Grip = 1f;
         public float Gravity = 9.8f;
         public float Acceleration = 1;
@@ -116,7 +116,7 @@ namespace ARS
 
         public class Perception
         {
-            public float CurrentNodeOffset = 0f;
+            public float CurrentLaneOffsetMetres = 0f;
             public float CurveRadiusToFollowPoint = 0f;
 
             public float HighSpeedCurveRadius = 0f;
@@ -144,15 +144,15 @@ namespace ARS
         public RelativePos RelativePosition = RelativePos.Unreachable;
 
         public float Distance = 99;
-        public float DirectionDiff = 99f;
+        public float DirectionDiffDegrees = 99f;
         public Vector3 RelativeOffset = Vector3.Zero;
 
         public float LongitudinalGap = 99f;
         public float LateralGap = 0f;
         public float ForwardSpeedGap = 0f;
         public float Speed;
-        public float TimeToReach = float.PositiveInfinity;
-        public float FrontGap = float.PositiveInfinity;
+        public float TimeToReachSeconds = float.PositiveInfinity;
+        public float FrontGapMetres = float.PositiveInfinity;
         public float RouteGapAhead = 0f;
 
         public Vector2 CombinedSize = Vector2.Zero;
@@ -186,9 +186,9 @@ namespace ARS
 
             float yBuffer = RelativeOffset.Y >= 0f ? 1f : 0.25f;
             CombinedSize.Y = Math.Abs((me.VehicleData.ModelDimensions.Y / 2) + (RivalRacer.VehicleData.ModelDimensions.Y / 2)) + yBuffer;
-            CombinedSize.X = (me.VehicleData.BoundingBox + RivalRacer.VehicleData.BoundingBox) / 2;
+            CombinedSize.X = (me.VehicleData.SlidingWidthMetres + RivalRacer.VehicleData.SlidingWidthMetres) / 2;
             CombinedWidth = CombinedSize.X;
-            NodeOffset = RivalRacer.Brain.CurrentPerception.CurrentNodeOffset;
+            NodeOffset = RivalRacer.Brain.CurrentPerception.CurrentLaneOffsetMetres;
             Distance = (myPosition - rivalPosition).Length();
             UpdateRouteGap(me);
         }
@@ -228,32 +228,32 @@ namespace ARS
 
         void UpdateClosingTime(Racer me, Vector3 myVelocity, Vector3 rivalVelocity)
         {
-            TimeToReach = ComputeTimeToReach(me);
+            TimeToReachSeconds = ComputeTimeToReach(me);
 
             float mySpeedSquared = myVelocity.LengthSquared();
             if (mySpeedSquared < 0.01f || rivalVelocity.Length() < SlowRivalMps)
             {
-                DirectionDiff = 0f;
+                DirectionDiffDegrees = 0f;
             }
             else
             {
 
-                DirectionDiff = Vector3.SignedAngle(new Vector3(myVelocity.X, myVelocity.Y, 0f), new Vector3(rivalVelocity.X, rivalVelocity.Y, 0f), me.Car.UpVector);
+                DirectionDiffDegrees = Vector3.SignedAngle(new Vector3(myVelocity.X, myVelocity.Y, 0f), new Vector3(rivalVelocity.X, rivalVelocity.Y, 0f), me.Car.UpVector);
             }
         }
 
         float ComputeTimeToReach(Racer me)
         {
-            FrontGap = float.PositiveInfinity;
+            FrontGapMetres = float.PositiveInfinity;
             if (RouteGapAhead <= 0f) return float.PositiveInfinity;
-            if (Math.Abs(NodeOffset - me.Brain.CurrentPerception.CurrentNodeOffset) > CombinedSize.X) return float.PositiveInfinity;
+            if (Math.Abs(NodeOffset - me.Brain.CurrentPerception.CurrentLaneOffsetMetres) > CombinedSize.X) return float.PositiveInfinity;
 
-            FrontGap = RouteGapAhead - CombinedSize.Y;
+            FrontGapMetres = RouteGapAhead - CombinedSize.Y;
             float closingAlong = me.AlongTrackSpeed - RivalRacer.AlongTrackSpeed;
             if (closingAlong <= 0.001f) return float.PositiveInfinity;
-            if (FrontGap <= 2f) return 0f;
+            if (FrontGapMetres <= 2f) return 0f;
 
-            return FrontGap / closingAlong;
+            return FrontGapMetres / closingAlong;
         }
     }
 
@@ -344,14 +344,14 @@ namespace ARS
         public float MaxThrottleFromRecovery = 1f;
         public float MaxThrottleFromTCS = 1f;
         public ThrottleReason ThrottleReason = ThrottleReason.Plan;
-        public float ThrottleReasonLevel = 1f;
+        public float ThrottleReasonCap = 1f;
         // What the plan asked the pedal for, before any cap, and whether a cap actually cut it this tick.
         public float ThrottleDemand = 0f;
         public bool ThrottleLimited = false;
         public BrakeReason BrakeReason = BrakeReason.Plan;
-        public float BrakeReasonLevel = 1f;
+        public float BrakeReasonCap = 1f;
 
-        public int HandBrakeTime = 0;
+        public int HandBrakeUntilMs = 0;
     }
 
     public class TrackPoint
@@ -364,7 +364,7 @@ namespace ARS
         public float PreciseCurveRadius = 999f;
         public float SweepCurveRadius = 999f;
         public float ExactRadius = 999f;
-        public float Elevation = 0f;
+        public float SlopeSineTimes90 = 0f;
         public float TrackHalfWidth = 5f;
         public float CumulativeDistance = 0f;
         public float LaneLineShare;
@@ -383,10 +383,10 @@ namespace ARS
         public float Angle = 0f;
         public int StartNode = -1;
         public int EndNode = -1;
-        public int LengthStart = 5;
-        public int LengthEnd = 5;
+        public int EntranceNodes = 5;
+        public int ExitNodes = 5;
         public float Speed = 999;
-        public float Elevation = 0f;
+        public float SlopeSineTimes90 = 0f;
         public bool IsChicane = false;
         public float SupposedRadius = 999f;
         public float DetectedRadius = 999f;
@@ -443,7 +443,7 @@ namespace ARS
     public class Maneuver
     {
         public ManeuverType Type = ManeuverType.None;
-        public int LastEnabled = 0;
+        public int EnabledAtMs = 0;
         public Racer Target = null;
     }
 

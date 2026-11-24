@@ -30,7 +30,7 @@ namespace ARS
         public static void DrawCornerCheckpoints(Racer player, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             if (corners.Count == 0 || trackPoints.Count == 0) return;
-            int playerNode = player.CurrentTrackPoint.Node;
+            int centreNode = player.CurrentTrackPoint.Node;
 
             for (int i = 0; i < corners.Count; i++)
             {
@@ -39,7 +39,7 @@ namespace ARS
                 if (node < 0 || node >= trackPoints.Count) continue;
                 Vector3 apexGround = trackPoints[node].Position;
 
-                int delta = ARS.IsPointToPoint ? node - playerNode : ((node - playerNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
+                int delta = ARS.IsPointToPoint ? node - centreNode : ((node - centreNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
                 if (!ARS.IsBetween(delta, -10, 400)) continue;
 
                 DrawCornerApexMarker(i, apexGround, corners, trackPoints);
@@ -93,7 +93,7 @@ namespace ARS
         public static void DrawCornerRegions(Racer player, List<CornerPoint> corners, List<TrackPoint> trackPoints)
         {
             if (corners.Count == 0 || trackPoints.Count == 0) return;
-            int playerNode = player.CurrentTrackPoint.Node;
+            int centreNode = player.CurrentTrackPoint.Node;
 
             for (int i = 0; i < corners.Count; i++)
             {
@@ -101,7 +101,7 @@ namespace ARS
                 int apexNode = corner.Node;
                 if (apexNode < 0 || apexNode >= trackPoints.Count) continue;
 
-                int delta = ARS.IsPointToPoint ? apexNode - playerNode : ((apexNode - playerNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
+                int delta = ARS.IsPointToPoint ? apexNode - centreNode : ((apexNode - centreNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
                 if (!ARS.IsBetween(delta, -10, 400)) continue;
 
                 Color startColor = Color.FromArgb(200, 0, 255, 0);
@@ -142,14 +142,14 @@ namespace ARS
         public static void DrawCrests(Racer player, List<Crest> crests, List<TrackPoint> trackPoints)
         {
             if (crests.Count == 0 || trackPoints.Count == 0) return;
-            int playerNode = player.CurrentTrackPoint.Node;
+            int centreNode = player.CurrentTrackPoint.Node;
 
             for (int i = 0; i < crests.Count; i++)
             {
                 Crest c = crests[i];
                 if (c.Node < 0 || c.Node >= trackPoints.Count) continue;
 
-                int delta = ARS.IsPointToPoint ? c.Node - playerNode : ((c.Node - playerNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
+                int delta = ARS.IsPointToPoint ? c.Node - centreNode : ((c.Node - centreNode) % trackPoints.Count + trackPoints.Count) % trackPoints.Count;
                 if (!ARS.IsBetween(delta, -10, 400)) continue;
 
                 Color peakLineColor = c.Type == CrestType.Crest ? Color.FromArgb(255, 255, 140, 0) : Color.FromArgb(255, 0, 200, 255);
@@ -223,12 +223,12 @@ namespace ARS
             DrawEdgeChevronsAround(node, trackPoints);
         }
 
-        static void DrawEdgeChevronsAround(int playerNode, List<TrackPoint> trackPoints)
+        static void DrawEdgeChevronsAround(int centreNode, List<TrackPoint> trackPoints)
         {
             if (trackPoints.Count == 0) return;
             Color color = Color.FromArgb(128, 0, 120, 255);
 
-            for (int node = playerNode - 30; node <= playerNode + 30; node++)
+            for (int node = centreNode - 30; node <= centreNode + 30; node++)
             {
                 if (ARS.IsPointToPoint && (node < 0 || node >= trackPoints.Count)) continue;
                 int index = ARS.IsPointToPoint ? node : ((node % trackPoints.Count) + trackPoints.Count) % trackPoints.Count;

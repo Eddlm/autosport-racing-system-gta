@@ -19,7 +19,7 @@ namespace ARS
             _fileName = Path.GetFileName(path);
         }
 
-        ScriptSettings File
+        ScriptSettings SettingsFile
         {
             get { return _file ?? (_file = ScriptSettings.Load(_path)); }
         }
@@ -35,28 +35,28 @@ namespace ARS
         {
             if (!Declared(key, "read")) return fallback;
             SeedIfMissing(key, fallback);
-            return File.GetValue<string>("MENU", key, fallback);
+            return SettingsFile.GetValue<string>("MENU", key, fallback);
         }
 
         public bool GetBool(string key, bool fallback)
         {
             if (!Declared(key, "read")) return fallback;
             SeedIfMissing(key, fallback.ToString());
-            return File.GetValue<bool>("MENU", key, fallback);
+            return SettingsFile.GetValue<bool>("MENU", key, fallback);
         }
 
         public int GetInt(string key, int fallback)
         {
             if (!Declared(key, "read")) return fallback;
             SeedIfMissing(key, fallback.ToString(CultureInfo.InvariantCulture));
-            return File.GetValue<int>("MENU", key, fallback);
+            return SettingsFile.GetValue<int>("MENU", key, fallback);
         }
 
         public float GetFloat(string key, float fallback)
         {
             if (!Declared(key, "read")) return fallback;
             SeedIfMissing(key, fallback.ToString(CultureInfo.InvariantCulture));
-            return File.GetValue<float>("MENU", key, fallback);
+            return SettingsFile.GetValue<float>("MENU", key, fallback);
         }
 
         public bool TryGetFloat(string key, out float value)
@@ -72,7 +72,7 @@ namespace ARS
             lines.Add("[MENU]");
             foreach (string key in SettingsRepair.DeclaredKeys(_fileName))
             {
-                string value = File.GetValue<string>("MENU", key, null);
+                string value = SettingsFile.GetValue<string>("MENU", key, null);
                 if (value != null) lines.Add(key + "=" + value);
             }
             try
@@ -87,16 +87,16 @@ namespace ARS
 
         void SeedIfMissing(string key, string value)
         {
-            if (value == null || File.GetValue<string>("MENU", key, null) != null) return;
-            File.SetValue("MENU", key, value);
+            if (value == null || SettingsFile.GetValue<string>("MENU", key, null) != null) return;
+            SettingsFile.SetValue("MENU", key, value);
             Save();
         }
 
         public void Set(string key, string value)
         {
             if (!Declared(key, "write")) return;
-            if (File.GetValue<string>("MENU", key, null) == value) return;
-            File.SetValue("MENU", key, value);
+            if (SettingsFile.GetValue<string>("MENU", key, null) == value) return;
+            SettingsFile.SetValue("MENU", key, value);
             Save();
         }
 

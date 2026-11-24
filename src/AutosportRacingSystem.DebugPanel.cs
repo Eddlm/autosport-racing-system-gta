@@ -13,7 +13,7 @@ namespace ARS
         const float DebugPanelTop = 0f;
         const float DebugPanelBottom = 0.3f;
         const int BarsPerPedal = 3;
-        const float ThrottleBarGap = 0.004f; // gap between bars, screen width fraction
+        const float PanelBarGap = 0.004f; // gap between bars, screen width fraction
         const float SpeedDeltaFullSpanMps = 30f; // margin-bar scale: 30 m/s of margin reaches a band edge
         static readonly Color ThrottleAppliedColour = Color.LimeGreen;
         static readonly Color ThrottleBoundColour = Color.FromArgb(235, 210, 60); // the hanging TCS pull, the stability cap and the Gs floor
@@ -35,7 +35,7 @@ namespace ARS
         public static void DrawDebugPanel(Racer racer)
         {
             DrawScreenRect(DebugPanelLeft, DebugPanelTop, DebugPanelRight, DebugPanelBottom, Color.Black);
-            float barWidth = (DebugPanelRight - DebugPanelLeft - (2 * BarsPerPedal - 1) * ThrottleBarGap) / (2 * BarsPerPedal);
+            float barWidth = (DebugPanelRight - DebugPanelLeft - (2 * BarsPerPedal - 1) * PanelBarGap) / (2 * BarsPerPedal);
             float speed = racer != null && CanWeUse(racer.Car) ? ARS.GetForwardSpeed(racer.Car) : 0f;
             DrawPanelBars(racer, barWidth, speed);
             DrawPanelLabels(racer, barWidth, speed);
@@ -63,7 +63,7 @@ namespace ARS
         static void DrawBar(float input, Color colour, float barWidth, int bar)
         {
             float top = DebugPanelBottom - Math.Min(Math.Max(input, 0f), 1f) * (DebugPanelBottom - DebugPanelTop);
-            float left = DebugPanelLeft + bar * (barWidth + ThrottleBarGap);
+            float left = DebugPanelLeft + bar * (barWidth + PanelBarGap);
             DrawScreenRect(left, top, left + barWidth, DebugPanelBottom, colour);
         }
 
@@ -71,7 +71,7 @@ namespace ARS
         static void DrawHangingBar(float level, Color colour, float barWidth, int bar)
         {
             float bottom = DebugPanelTop + (1f - Math.Min(Math.Max(level, 0f), 1f)) * (DebugPanelBottom - DebugPanelTop);
-            float left = DebugPanelLeft + bar * (barWidth + ThrottleBarGap);
+            float left = DebugPanelLeft + bar * (barWidth + PanelBarGap);
             DrawScreenRect(left, DebugPanelTop, left + barWidth, bottom, colour);
         }
 
@@ -85,7 +85,7 @@ namespace ARS
             float mid = (DebugPanelTop + DebugPanelBottom) * 0.5f;
             float top = mid - (clamped >= 0f ? clamped / SpeedDeltaFullSpanMps : 0f) * halfBand;
             float bottom = mid + (clamped < 0f ? -clamped / SpeedDeltaFullSpanMps : 0f) * halfBand;
-            float left = DebugPanelLeft + bar * (barWidth + ThrottleBarGap);
+            float left = DebugPanelLeft + bar * (barWidth + PanelBarGap);
             DrawScreenRect(left, top, left + barWidth, bottom, Math.Abs(marginMps) >= SpeedDeltaFullSpanMps ? OfflineColour : colour);
         }
 
@@ -97,7 +97,7 @@ namespace ARS
             {
                 bool offline = i == BarsPerPedal && apexOffline || i == BarsPerPedal + 1 && routOffline;
                 Color colour = offline ? OfflineColour : PanelLabelColour;
-                float centreX = DebugPanelLeft + i * (barWidth + ThrottleBarGap) + barWidth * 0.5f;
+                float centreX = DebugPanelLeft + i * (barWidth + PanelBarGap) + barWidth * 0.5f;
                 DrawText(new Vector2(centreX, PanelLabelY), PanelLabels[i], colour, DrawTextFont.Standard, DrawTextAlign.Center, PanelLabelScale);
             }
         }

@@ -181,7 +181,7 @@ Report any single contact as a failure — that is the exact symptom the old sys
 ## 13. Rival detection — now the ROUTE frame
 
 The old hit test measured a straight line through the car, so a corner bent the racing line away from it and the
-call bailed out; `FrontGap` was also written only after the closing guards, so it was a remembered value carried
+call bailed out; `FrontGapMetres` was also written only after the closing guards, so it was a remembered value carried
 across rivals and races. Both are gone in **`0623276`**: the gap is the route arc (`CumulativeDistance`, exact metres,
 lap-agnostic), the closure is each car's own along-track speed (`Dot(Velocity, Direction)`), and the corridor is the
 difference of the two cars' track-relative offsets — so no corner geometry can distort any of it.
@@ -193,12 +193,12 @@ difference of the two cars' track-relative offsets — so no corner geometry can
 45. Rival walls must not appear from a rival more than 30 m of route ahead.
 46. **The discriminator**: follow an AI into a ~50 m corner at ~90 km/h holding ~20 m of arc, and have it brake at
     the apex. The blue Rival sphere on the white steer line must appear and the throttle glide down. On the old model this
-    was invisible — 3.99 m of lateral offset, bail-out, `FrontGap` 14.5 m — and the follower closed to contact.
+    was invisible — 3.99 m of lateral offset, bail-out, `FrontGapMetres` 14.5 m — and the follower closed to contact.
 47. **Negative control for 46**: the same 20 m of arc at matched speed → no sphere. Without this, "it lifted" does
     not distinguish the model from "always reacts to a car ahead".
 48. **Nose-to-tail through the same corner**: two cars enter on the racing line one behind the other. The rear must
     keep tracking the front through the whole arc, and must lift for real if the front one brakes mid-corner.
-49. **A stopped car on a tight hairpin's opposite leg** — known residual. `DirectionDiff` is forced to 0 below
+49. **A stopped car on a tight hairpin's opposite leg** — known residual. `DirectionDiffDegrees` is forced to 0 below
     1 m/s, so a wreck on the other leg's line within 30 m of route can become an avoidance target. Watch for
     avoidance across the infield; the guard is a route-direction gate for slow cars.
 50. **Stacked track (bridge / underpass / near-parallel legs)** — the other known residual: the off-track node
@@ -245,7 +245,7 @@ flattening was the defect, and the single rate is the 180 the old countersteer d
 tenths of a second. The blend was re-cut (`Racer.cs:594`) at the same time:
 
 - the weight ramps from zero at **0.25 × the authored peak slip** to full at **0.5 ×** it — the static
-  `LateralTractionCurve`, not the speed-scaled peak, so it no longer moves with speed;
+  `LateralTractionCurveDegrees`, not the speed-scaled peak, so it no longer moves with speed;
 - the rear-led sign gate is **gone**: a slide of either sign now gets countersteer;
 - the countersteer's share of the slide then ramps from **half to all of it** across **0.5 × to 1.0 ×** the peak.
 
@@ -255,7 +255,7 @@ Watch:
    the blend is not the limit.
 2. **A deep understeer** — the rear-led gate was there because body slip alone cannot tell an oversteer from an
    understeer, and steering against the latter deepens it. Watch a front washing wide for exactly that.
-3. **Brake release** — the pedal override is still gated on `_slidePriority >= 1`, which now arrives at **0.5 ×**
+3. **Brake release** — the pedal override is still gated on `_countersteerDemand01 >= 1`, which now arrives at **0.5 ×**
    the peak instead of 2.5 × the speed-scaled peak, so the brake lets go earlier in a slide. If that reads
    premature, re-anchor it to the share reaching full.
 4. **A straight** — the actuator is fast again, so any weaving on the straight is the damper's and not the slew's;
@@ -590,7 +590,7 @@ The evidence so far, from four shaped versions driven: the burst itself is prove
 
 ## The blend refuses an outward ask (driver-observed: the entry reads better)
 
-Below the corner line's far clamp — the `ApexLine` phase — the demand is refused when it lies outward of the car's own lane, so a car already inside the line is never sent back out to meet it and an entry cannot read as out and then in. The profile itself is untouched and still absolute; what is dropped is its outward half once the blend has begun (`ComputeCornerLane`, `Racer.cs`). Three exemptions are deliberate: the hold at the far clamp (`OutsideLine`), because reaching the outer edge is what the outside approach is for and the driver-verified 1.5 m bound above lives on it; every phase that is not the blend; and a car off the road, whose way back to the track is this line. The comparison is against the car's own lane — `CurrentNodeOffset`, the green debug line — and not the mover's `steerRefOffset`, which reads inward by the bend's sagitta (about 2.25 m at 30 m/s and 6.25 m at 50 m/s on a 50 m radius) and would refuse the line outright on the fast tight corners it exists for. One imprecision is inherent and left in: the demand is computed at the steer reference's station while `own` is the car's, so on a tight corner the two differ by the profile's own change over the lookahead — the reason the top-edge refusals below carry gaps of centimetres.
+Below the corner line's far clamp — the `ApexLine` phase — the demand is refused when it lies outward of the car's own lane, so a car already inside the line is never sent back out to meet it and an entry cannot read as out and then in. The profile itself is untouched and still absolute; what is dropped is its outward half once the blend has begun (`ComputeCornerLane`, `Racer.cs`). Three exemptions are deliberate: the hold at the far clamp (`OutsideLine`), because reaching the outer edge is what the outside approach is for and the driver-verified 1.5 m bound above lives on it; every phase that is not the blend; and a car off the road, whose way back to the track is this line. The comparison is against the car's own lane — `CurrentLaneOffsetMetres`, the green debug line — and not the mover's `steerRefOffset`, which reads inward by the bend's sagitta (about 2.25 m at 30 m/s and 6.25 m at 50 m/s on a 50 m radius) and would refuse the line outright on the fast tight corners it exists for. One imprecision is inherent and left in: the demand is computed at the steer reference's station while `own` is the car's, so on a tight corner the two differ by the profile's own change over the lookahead — the reason the top-edge refusals below carry gaps of centimetres.
 
 1. **The refusal is in the log**, at most once a second per car while it bites, and never as a tag: `Corner line refused <car>: demand X, own Y, Zm to apex`. A tag was rejected because a refusal leaves the request where the chain had it, and `_laneOverride` arms on the tag — tagging it would arm the offshoot pedal cap for a car that is holding its own line.
 2. **On the line it reads as the dashed ask sitting on the green own-lane line** while the car is inside the demand, with `ApexLine` still appearing and stepping the ask inward once the sweep crosses the car.
@@ -671,7 +671,7 @@ When two corners merge, the survivor's span was re-walked on the radius criterio
 
 ## The slide response batch (driver-verified — the slides answered)
 
-Builds 694–699 cut the damper's authority back and moved the blend's band and the countersteer's share in one run, driven as one batch. The blend ramps linearly across the car's own `LateralTractionCurve`, from half of the authored peak slip to four-fifths of it, and the countersteer answers the whole slide angle, so the blend's weight is the only modulator and the limiter's countersteer allowance reads the same weight. The damper's whole term is halved (`DamperEffectScale`) while its crossing overshoot past neutral is kept whole (`DamperCrossingShare`); the pair is one decision, because halving only the crossing left the base term at full strength and the slide still did not answer.
+Builds 694–699 cut the damper's authority back and moved the blend's band and the countersteer's share in one run, driven as one batch. The blend ramps linearly across the car's own `LateralTractionCurveDegrees`, from half of the authored peak slip to four-fifths of it, and the countersteer answers the whole slide angle, so the blend's weight is the only modulator and the limiter's countersteer allowance reads the same weight. The damper's whole term is halved (`DamperEffectScale`) while its crossing overshoot past neutral is kept whole (`DamperCrossingShare`); the pair is one decision, because halving only the crossing left the base term at full strength and the slide still did not answer.
 
 **The driver's verdict: good enough — the batch is crossed.** What it does not claim: the band and the share are a taste cut rather than a derivation, so a car whose tyres read differently may want a different band; and the damper's scale is a global trade, since the term is load-bearing for holding centre — a car that reads unstable at half authority is answered with the damping dial, not by restoring the scale.
 
@@ -679,7 +679,7 @@ Builds 694–699 cut the damper's authority back and moved the blend's band and 
 
 ## The picker looks past an ignored corner (build 704, driver-verified on the reported corner; review fixes shipped in build 706, drive owed)
 
-A wide corner the car passes flat was still taken as the promotion reference for the tight corner behind it: at the sweeper's apex the tight corner was promoted already inside its own window, so the whole approach was skipped and its outside line never ran — every lap, not only the first. Now the requirements scan flags a corner that cannot ask for positioning by its own radius (`DetectedRadius >= CornerTightRadius`) and has not asked for braking by the time the car is inside its 3.95 s window; `RefillApexQueue` gives slot one to the next corner instead, and the flag holds until that apex is behind. The driver confirmed the fix on the corner that showed the bug.
+A wide corner the car passes flat was still taken as the promotion reference for the tight corner behind it: at the sweeper's apex the tight corner was promoted already inside its own window, so the whole approach was skipped and its outside line never ran — every lap, not only the first. Now the requirements scan flags a corner that cannot ask for positioning by its own radius (`DetectedRadius >= CornerTightRadiusMetres`) and has not asked for braking by the time the car is inside its 3.95 s window; `RefillApexQueue` gives slot one to the next corner instead, and the flag holds until that apex is behind. The driver confirmed the fix on the corner that showed the bug.
 
 1. **The hairpin behind the sweeper takes its approach, every lap.** On the track that showed it, the tight corner after the fast one must show the outside line for the same number of seconds it has on the laps where it worked.
 2. **The log names the skip.** With `ARS.log` at Info, one `Queue skip <name>: corner N ignored (wide R m, no braking asked)` per approach, once — a repeat each scan would be the flag failing to latch.
@@ -692,14 +692,14 @@ A wide corner the car passes flat was still taken as the promotion reference for
 
 **Superseded by `7de3022` (build 739):** the ceiling no longer screens corners. It delimits the corner *region*, and a region that does not open to twice its radius within 60 nodes is dropped as a blur — so the table shrinks rather than grows, and the section below is the history of the radius screen.
 
-The table's ceiling and the region scan both drop from 100 m to 50 m (they already sat equal): a bend wider than 50 m on its tightest node is no longer a corner at all, so it gets no apex entry, no braking plan, no chevron and no card anchor, and route speed is the only law that slows a car for it. At 50 m every corner the table keeps is under `CornerTightRadius`, so the "wide" class the picker skip exists for disappears — the skip stays as the guard for a ceiling that produces one. The cost to watch: bends of 50-100 m lose their braking plan and are driven on route speed alone.
+The table's ceiling and the region scan both drop from 100 m to 50 m (they already sat equal): a bend wider than 50 m on its tightest node is no longer a corner at all, so it gets no apex entry, no braking plan, no chevron and no card anchor, and route speed is the only law that slows a car for it. At 50 m every corner the table keeps is under `CornerTightRadiusMetres`, so the "wide" class the picker skip exists for disappears — the skip stays as the guard for a ceiling that produces one. The cost to watch: bends of 50-100 m lose their braking plan and are driven on route speed alone.
 
 1. **The corner table shrinks.** At Info, the `Apex table:` aggregate line should count fewer corners on a track with sweepers; the ones left are hairpins, kinks and tight bends.
 2. **The sweepers are driven on route speed.** A bend that used to have a braking plan should now come on the route limiter's speed; the tell of a problem is a late, sharp brake rather than a prepared approach.
 3. **The tight corners keep their braking and their outside lines.** No corner the table still holds may read slower or miss its approach — that would be the ceiling cutting into the population it should keep.
 4. **The lap times tell the trade.** Fewer braking plans can read faster (less over-preparation) or slower (more reactive braking); which way this track goes is the judgement.
 
-**Shipped default: 200 m (build 724).** The ladder was written at 50, moved to 80, and settled at 200 once the field drove the range: at 80 m real corners were missing, at 180 m fewer problems, and 200 — the top of the ladder — has every corner the AI needs. Corners between `CornerTightRadius` (50 m) and 200 m are the "wide" class the picker skip is live for, and nothing wider than 200 m reaches the table at all.
+**Shipped default: 200 m (build 724).** The ladder was written at 50, moved to 80, and settled at 200 once the field drove the range: at 80 m real corners were missing, at 180 m fewer problems, and 200 — the top of the ladder — has every corner the AI needs. Corners between `CornerTightRadiusMetres` (50 m) and 200 m are the "wide" class the picker skip is live for, and nothing wider than 200 m reaches the table at all.
 
 **Observed on By The Highway (build 722)**: the 90° left the field expected is absent at 80 m and returns at 100 m, and the widest apex the table kept at 80 m was 70 m — so that stretch is driven on route speed alone with no braking plan, which is exactly the cost this section named. The merge was cleared as the cause in the same run: zero `Corners merged` and zero `Corner skipped` lines, all nine corners logged as `Corner add`.
 

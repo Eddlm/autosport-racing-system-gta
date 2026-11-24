@@ -104,7 +104,7 @@ namespace ARS
             }
         }
 
-        static int Denominator
+        static int ApexesPerTip
         {
             get
             {
@@ -126,7 +126,7 @@ namespace ARS
             for (int i = 0; i < passedApexes; i++)
             {
 
-                if (ARS.GetRandomInt(1, Denominator + 1) != 1) continue;
+                if (ARS.GetRandomInt(1, ApexesPerTip + 1) != 1) continue;
                 string tip = NextTip();
                 if (tip == null) return;
                 ARS.HelpMessages.Add(tip);

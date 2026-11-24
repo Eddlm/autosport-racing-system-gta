@@ -48,7 +48,7 @@ One session, build 1178 (ARS.log: 30,980 messages, 4.96 MB, ~7 minutes of play).
 
 | Site | Method | Message | Lines | Gate |
 |---|---|---|---:|---|
-| `Racer.cs:671` | `Initialize` | TRlat for  | 24 | `if (Handling.LateralTractionCurve ` |
+| `Racer.cs:671` | `Initialize` | TRlat for  | 24 | `if (Handling.LateralTractionCurveDegrees ` |
 | `Racer.cs:677` | `Initialize` | Top speed  | 24 |  |
 | `Racer.cs:685` | `Initialize` | Steerlock for  | 24 | `if (VehicleData.SteeringLock < 1 |` |
 | `Racer.cs:688` | `Initialize` | Wheelbase for  | 24 |  |

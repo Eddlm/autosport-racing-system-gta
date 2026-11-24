@@ -45,13 +45,13 @@ namespace ARS
             Vector3 forward = (ahead - behind).Normalized;
             forward.Z = 0f;
             Vector3 left = Vector3.Cross(Vector3.WorldUp, forward).Normalized;
-            float fullWidth = Math.Max(widths[0], 2f);
+            float startHalfWidthMetres = Math.Max(widths[0], 2f);
 
             return new TrackStartInfo
             {
                 TrackPath = path,
                 StartPosition = start,
-                JoinPosition = start + left * fullWidth
+                JoinPosition = start + left * startHalfWidthMetres
             };
         }
 
