@@ -4836,10 +4836,6 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float RouteSpeedTaperStrength = 0.5f;
         const float RouteRadiusOpenM = 999f;
 
-        // Ask in mph against the radius the band reports, at 1 g and strength 0.50; 999 m is open road and
-        // untrimmed. Recompute these after moving any constant above.
-        //   100 m  70 | 200 m  91 | 300 m 101 | 400 m 105 | 500 m 114 | 700 m 129
-
         float RouteIdealSpeedForRadius(float r)
         {
             float root = ApexSpeedWithDownforce(r);
