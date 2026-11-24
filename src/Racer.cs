@@ -4808,7 +4808,7 @@ const float RequirementLookaheadSeconds = 3.95f;
         const float RouteSpeedTaperCrossoverRadiusM = 400f;
         const float RouteSpeedTaperCrossoverShare = 0.5f;
         const float RouteSpeedTaperTailDecay = 0.45f;
-        const float RouteSpeedTaperStrength = 1f;
+        const float RouteSpeedTaperStrength = 0.875f;
         const float RouteRadiusOpenM = 999f;
 
         float RouteIdealSpeedForRadius(float r)
